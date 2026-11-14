@@ -383,7 +383,7 @@ pub open spec fn ce_c0() -> Connection {
 /// counters 1 and (the number of connections opened) `nc`, an empty jar at
 /// time 0.
 pub open spec fn ce_state(rs: Seq<Renderer>, cs: Seq<Connection>, nid: nat, nc: nat) -> State {
-    State { renderers: rs, jar: Seq::<clazel_cookie::storage::spec::Cookie>::empty(), storage: Map::empty(), next_id: nid, conns: cs, next_conn: nc, now: 0 }
+    State { renderers: rs, jar: Seq::<clazel_cookie::storage::spec::Cookie>::empty(), storage: Map::empty(), next_id: nid, conns: cs, next_conn: nc, now: 0, viewports: seq![], titles: seq![], subfetches: seq![], subcounts: seq![] }
 }
 
 /// Filtering one element.
@@ -412,12 +412,13 @@ pub proof fn lemma_co_commit_spawn(urls: UrlFns, s: State, tab: nat, href: Seq<u
             let old = s.renderers[i];
             commit_navigation(urls, s, tab, href, body)
                 == (
-                State { renderers: s.renderers.update(i, Renderer { committed: true, id: s.next_id, tab, url: href, lock: l, pending: None }), next_id: s.next_id + 1, ..s },
-                seq![
-                    Output::Kill { id: old.id },
-                    Output::Spawn { id: s.next_id, policy: Policy::Renderer },
-                    Output::ToRenderer { id: s.next_id, bytes: commit_frames(href, body) },
-                ],
+                State {
+                    renderers: s.renderers.update(i, Renderer { committed: true, id: s.next_id, tab, url: href, lock: l, pending: None }),
+                    next_id: s.next_id + 1,
+                    titles: forget_title(s.titles, old.id, old.lock),
+                    ..s
+                },
+                replace_outputs(old.id, s.next_id, find_viewport(s.viewports, tab, 0), commit_frames(href, body)),
             )
         }),
 {
@@ -436,8 +437,9 @@ pub proof fn lemma_ce_e0(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
         ce_fetch_ok(fetch),
     ensures
         step(rules, ce_urls(), fetch, init_state(), ce_ev0()).0 == ce_state(seq![ce_r0()], Seq::<Connection>::empty(), 1, 0),
-        step(rules, ce_urls(), fetch, init_state(), ce_ev0()).1.len() == 2,
-        step(rules, ce_urls(), fetch, init_state(), ce_ev0()).1[0] is Spawn && step(rules, ce_urls(), fetch, init_state(), ce_ev0()).1[1] is ToRenderer,
+        step(rules, ce_urls(), fetch, init_state(), ce_ev0()).1.len() == 3,
+        step(rules, ce_urls(), fetch, init_state(), ce_ev0()).1[0] is Spawn && step(rules, ce_urls(), fetch, init_state(), ce_ev0()).1[1] is Spawn
+            && step(rules, ce_urls(), fetch, init_state(), ce_ev0()).1[2] is ToRenderer,
 {
     assert(lock_of_url(ce_urls(), Seq::<u32>::empty(), 0) == Some(clazel_origin::spec::Origin::Opaque(0nat)));
     assert(step(rules, ce_urls(), fetch, init_state(), ce_ev0()).0.renderers =~= seq![ce_r0()]);
@@ -508,6 +510,9 @@ pub proof fn lemma_ce_e2(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
     assert(seq![Output::Close { conn: 0 }] + Seq::<Output>::empty() =~= seq![Output::Close { conn: 0 }]);
     assert(ce_ev2() == (Event::FromRenderer { id: 0, bytes: Seq::<u8>::empty() }));
     assert(s2.renderers.remove(0) =~= Seq::<Renderer>::empty());
+    assert(forget_title(Seq::<Titled>::empty(), 0, ce_r0().lock) =~= Seq::<Titled>::empty()) by {
+        reveal(Seq::filter);
+    }
 }
 
 /// A `Net` event on a connection the kernel does not have changes nothing.
@@ -556,8 +561,8 @@ pub proof fn lemma_ce_e4(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
     ensures
         step(rules, ce_urls(), fetch, ce_state(seq![Renderer { pending: Some(ce_nav1()), ..ce_r0() }], seq![ce_c0()], 1, 1), ce_ev4()).0.renderers
             == seq![Renderer { committed: true, id: 1, tab: 0, url: ce_href(), lock: clazel_origin::spec::Origin::Opaque(1nat), pending: None }],
-        step(rules, ce_urls(), fetch, ce_state(seq![Renderer { pending: Some(ce_nav1()), ..ce_r0() }], seq![ce_c0()], 1, 1), ce_ev4()).1.len() == 4,
-        step(rules, ce_urls(), fetch, ce_state(seq![Renderer { pending: Some(ce_nav1()), ..ce_r0() }], seq![ce_c0()], 1, 1), ce_ev4()).1[2] == (Output::Spawn { id: 1, policy: Policy::Renderer }),
+        step(rules, ce_urls(), fetch, ce_state(seq![Renderer { pending: Some(ce_nav1()), ..ce_r0() }], seq![ce_c0()], 1, 1), ce_ev4()).1.len() == 5,
+        step(rules, ce_urls(), fetch, ce_state(seq![Renderer { pending: Some(ce_nav1()), ..ce_r0() }], seq![ce_c0()], 1, 1), ce_ev4()).1[2] == (Output::Spawn { id: 1, policy: Policy::Gpu }),
 {
     lemma_ce_href();
     let urls = ce_urls();
@@ -582,8 +587,9 @@ pub proof fn lemma_ce_e4(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
     assert(lock_of_url(urls, ce_href(), 1) == Some(clazel_origin::spec::Origin::Opaque(1nat)));
     assert(find_by_tab(m2.renderers, 0, 0) == Some(0int));
     lemma_co_commit_spawn(urls, m2, 0, ce_href(), response_document(a2[1]->Done_response), 0, clazel_origin::spec::Origin::Opaque(1nat));
+    assert(find_viewport(m2.viewports, 0, 0) is None);
     let out = commit_navigation(urls, m2, 0, ce_href(), response_document(a2[1]->Done_response)).1;
-    assert(out.len() == 3 && out[1] == (Output::Spawn { id: 1, policy: Policy::Renderer }));
+    assert(out.len() == 4 && out[1] == (Output::Spawn { id: 1, policy: Policy::Gpu }));
 }
 
 /// The states of the original run.

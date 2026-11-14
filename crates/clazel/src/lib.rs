@@ -4,27 +4,27 @@
 //! never anything in a frame. A frame over `MAX_FRAME` (refused from its first 4 bytes) or a
 //! closed channel becomes `RendererExited`. Outputs are carried out in order, and every frame,
 //! exit and stderr (which names a failed sandbox layer) goes to stderr. The network (item 3.7) is
-//! `clazel-net`'s Driver. A `Show` (item 4.12) waits in `shown` for the command loop.
+//! `clazel-net`'s Driver. A `Show` (item 4.12) or `Paint` (5.18) waits in `shown` for the loop.
+//! Item 5.23: GPU processes are `launch::Gpus`, which `with_gpu` turns on; the shell routes.
+//! Item 5.19: sub-fetch connections run on the same Driver, numbered by `clazel_net::SubConns`.
 
 use std::collections::HashMap;
 use std::process::Command;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::{Duration, Instant};
 
-use clazel_ipc::{
-    frame::codec::payload_length,
-    message::codec::{Msg, decode_framed},
-};
+use clazel_ipc::frame::codec::payload_length;
 use clazel_kernel::exec::real_urls::{RealFetch, step_real};
 use clazel_kernel::exec::records::{EventRecord, OutputRecord, StateRecord, init_record};
-use clazel_net::{ChainVerifier, Driver, Op, Report, read_frames};
-use clazel_renderer::launch::{self, Link};
+use clazel_net::{ChainVerifier, Driver, Op, Report, SubConns, read_frames};
+use clazel_renderer::launch::{self, GpuReport, Gpus, Link, describe};
 
-/// What a socket's reader thread reports; the id is the socket's.
+/// What a socket's reader thread reports; the id is the socket's (a GPU process's, its renderer's).
 enum Ev {
     Frame(u64, Vec<u8>),
     Gone(u64, String),
     Net(u64, Report),
+    Gpu(u64, GpuReport),
 }
 
 /// The host: the kernel state and the renderers (socket and process) it runs.
@@ -35,43 +35,22 @@ pub struct Host {
     pub route: Option<std::net::SocketAddr>,
     /// The kernel's connections, on sockets (`clazel-net`).
     net: Driver<Ev>,
+    sub: SubConns,
     /// A fixed kernel clock (seconds since 1601) for tests; `None`: wall clock.
     pub clock: Option<u64>,
     table: HashMap<u64, Link>,
     tx: Sender<Ev>,
     rx: Receiver<Ev>,
     command: Box<dyn FnMut(u64) -> Command>,
+    gpus: Gpus<Ev>,
     /// Every line the host has printed.
     pub log: Vec<String>,
-    /// The kernel's `Show` outputs not yet taken, oldest first.
+    /// The kernel's `Show` and `Paint` outputs not yet taken, oldest first.
     pub shown: Vec<OutputRecord>,
 }
 
 fn code_points(s: &str) -> Vec<u32> {
     s.chars().map(u32::from).collect()
-}
-
-/// The first frame of one write (a document is `Commit`, `Body`s,
-/// `BodyEnd`) as the call or answer it carries.
-fn describe(frame: &[u8]) -> String {
-    let q = |b: &[u8]| format!("{:?}", String::from_utf8_lossy(b));
-    let len = frame.get(..4).and_then(payload_length);
-    let first = len.and_then(|n| frame.get(..n.checked_add(4)?));
-    match first.and_then(decode_framed) {
-        None => format!("undecodable frame of {} bytes", frame.len()),
-        Some(Msg::Commit { url, kind, .. }) => format!("commit {} (kind {kind})", q(&url)),
-        Some(Msg::CookieGet) => "document.cookie".to_owned(),
-        Some(Msg::CookieSet { cookie_string: c }) => format!("document.cookie = {}", q(&c)),
-        Some(Msg::StorageGetItem { key }) => format!("localStorage.getItem({})", q(&key)),
-        Some(Msg::StorageSetItem { key: k, value: v }) => {
-            format!("localStorage.setItem({}, {})", q(&k), q(&v))
-        }
-        Some(Msg::StorageRemoveItem { key }) => format!("localStorage.removeItem({})", q(&key)),
-        Some(Msg::CookieValue { cookie_string: c }) => format!("result {}", q(&c)),
-        Some(Msg::StorageValue { value: Some(v) }) => format!("result {}", q(&v)),
-        Some(Msg::StorageValue { value: None }) => "result null".to_owned(),
-        Some(other) => format!("{other:?}"),
-    }
 }
 
 impl Host {
@@ -83,6 +62,8 @@ impl Host {
             state: init_record::<RealFetch>(),
             route: None,
             net: Driver::new(tx.clone(), Ev::Net),
+            sub: SubConns::default(),
+            gpus: Gpus::new(tx.clone(), Ev::Gpu),
             clock: None,
             table: HashMap::new(),
             tx,
@@ -91,6 +72,12 @@ impl Host {
             log: Vec::new(),
             shown: Vec::new(),
         }
+    }
+
+    /// Start GPU processes with `gpu(id)` (item 5.23); without, the host is in text mode.
+    pub fn with_gpu(mut self, gpu: impl FnMut(u64) -> Command + 'static) -> Host {
+        self.gpus.start_with(gpu);
+        self
     }
 
     /// Test hook, like `route`: validate TLS certificates against the
@@ -126,9 +113,15 @@ impl Host {
     /// Give the kernel an event, after a `Tick`, and carry out its outputs.
     pub fn event(&mut self, e: EventRecord) {
         let time = self.clock.unwrap_or_else(clazel_net::now_1601);
-        self.step(EventRecord::Tick { time });
+        // The `Tick`'s own outputs too: its sweep fails timed-out sub-fetches (item 5.19).
+        let mut outputs = self.step(EventRecord::Tick { time });
+        outputs.extend(self.step(e));
         let (mut dead, mut failed) = (Vec::new(), Vec::new());
-        for output in self.step(e) {
+        for output in outputs {
+            if let Some((conn, op)) = self.sub.op(&output) {
+                self.net_op(conn, op, &mut failed);
+                continue;
+            }
             match output {
                 OutputRecord::Spawn { id } => {
                     if let Err(e) = self.spawn(id) {
@@ -142,6 +135,10 @@ impl Host {
                     }
                 }
                 OutputRecord::Kill { id } => self.reap(id, "killed by the kernel", Duration::ZERO),
+                OutputRecord::SpawnGpu { id } => {
+                    self.gpus.spawn(id).unwrap_or_else(|e| self.say(e))
+                }
+                OutputRecord::ToGpu { id, bytes } => self.gpus.send(id, &bytes),
                 OutputRecord::Connect {
                     conn,
                     host,
@@ -153,6 +150,10 @@ impl Host {
                 }
                 OutputRecord::Close { conn } => self.net_op(conn, Op::Close, &mut failed),
                 show @ OutputRecord::Show { .. } => self.shown.push(show),
+                OutputRecord::SubConnect { .. }
+                | OutputRecord::SubSend { .. }
+                | OutputRecord::SubClose { .. } => {} // carried out above
+                paint @ OutputRecord::Paint { .. } => self.shown.push(paint),
             }
         }
         for (id, why) in dead {
@@ -176,9 +177,10 @@ impl Host {
     fn net_report(&mut self, conn: u64, report: Report) {
         let (input, note) = self.net.accept(conn, report);
         note.into_iter().for_each(|l| self.say(l));
-        input
-            .into_iter()
-            .for_each(|input| self.event(EventRecord::Net { conn, input }));
+        if let Some(input) = input {
+            let e = self.sub.event(conn, input);
+            self.event(e);
+        }
     }
 
     /// The user opens a tab at `url` with a script (`clazel-renderer`'s
@@ -195,6 +197,11 @@ impl Host {
         tab
     }
 
+    /// The pixels slot `slot` of renderer `id`'s GPU process holds, taken out (item 5.23).
+    pub fn take_frame(&mut self, id: u64, slot: u32) -> Option<clazel_gpu::channel::SurfaceFrame> {
+        self.gpus.take_frame(id, slot)
+    }
+
     /// The user navigates tab `tab` to `url`: the kernel asks for the page,
     /// and the document is what the network serves.
     pub fn navigate_tab(&mut self, tab: u64, url: &str) {
@@ -203,7 +210,7 @@ impl Host {
     }
 
     fn spawn(&mut self, id: u64) -> std::io::Result<()> {
-        let (link, reader) = launch::spawn((self.command)(id))?;
+        let (link, reader) = launch::spawn_paired((self.command)(id), self.gpus.take_list(id))?;
         let tx = self.tx.clone();
         std::thread::spawn(move || {
             let on = |frame| tx.send(Ev::Frame(id, frame)).is_ok();
@@ -226,16 +233,18 @@ impl Host {
     }
 
     /// Close the socket, wait up to `grace` for the process to exit on its
-    /// own, then kill it; report how it ended and what it wrote to stderr.
+    /// own, then kill it; report how it ended and what it wrote to stderr. Its GPU process too.
     fn reap(&mut self, id: u64, why: &str, grace: Duration) {
+        let gpu = self.gpus.finish(id, why, grace);
+        gpu.into_iter().for_each(|l| self.say(l));
         let Some(link) = self.table.remove(&id) else {
             return;
         };
         let (status, stderr) = link.finish(grace);
-        let note = Some(stderr.trim())
-            .filter(|s| !s.is_empty())
-            .map_or(String::new(), |s| format!("; stderr: {s}"));
-        self.say(format!("renderer {id} exited: {why}; {status}{note}"));
+        self.say(format!(
+            "renderer {id} exited: {why}; {status}{}",
+            launch::note(&stderr)
+        ));
     }
 
     /// A renderer is gone (or never started): tell the kernel.
@@ -254,8 +263,17 @@ impl Host {
             }
             Ok(Ev::Gone(id, why)) if self.table.contains_key(&id) => self.exit(id, &why),
             Ok(Ev::Net(conn, report)) => self.net_report(conn, report),
+            Ok(Ev::Gpu(id, GpuReport::Frame(bytes))) if self.gpus.has(id) => {
+                self.event(EventRecord::FromGpu { id, bytes });
+            }
+            Ok(Ev::Gpu(id, GpuReport::Pixels(frame))) => self.gpus.keep(id, frame),
             Ok(_) => {}
-            Err(_) => return false,
+            Err(_) => {
+                // Idle, the kernel's clock still moves, so its timeouts fire.
+                let time = self.clock.unwrap_or_else(clazel_net::now_1601);
+                self.event(EventRecord::Tick { time });
+                return false;
+            }
         }
         true
     }

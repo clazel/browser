@@ -51,6 +51,10 @@ pub proof fn lemma_rel_same_table(rules: Seq<clazel_psl::spec::Rule>, urls: UrlF
         forall|o: clazel_origin::spec::Origin| o is Tuple && crate::domain::domain_of_lock(rules, o) == d ==> storage_of(s1b, o) == storage_of(s2b, o),
         crate::invariant::jar_no_public_suffix(rules, s1b.jar),
         crate::invariant::jar_no_public_suffix(rules, s2b.jar),
+        s1b.viewports == s2b.viewports,
+        crate::domain::titles_of_domain(rules, s1b.titles, d) == crate::domain::titles_of_domain(rules, s2b.titles, d),
+        crate::domain::subfetches_of_domain(rules, s1b.subfetches, d) == crate::domain::subfetches_of_domain(rules, s2b.subfetches, d),
+        crate::domain::subcounts_of_domain(rules, s1b.subcounts, d) == crate::domain::subcounts_of_domain(rules, s2b.subcounts, d),
     ensures
         crate::noninterference::rel(rules, urls, d, s1b, s2b),
 {
@@ -261,7 +265,58 @@ pub proof fn lemma_d_kill(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetc
     crate::net_rel::lemma_renderer_outs_kill(id, s1.conns, r.tab);
     crate::net_rel::lemma_renderer_outs_kill(id, s2.conns, r.tab);
     crate::net_rel::lemma_rel_conn_exit_both(rules, urls, s1, s2, i1, i2);
+    crate::surface_rel::lemma_titles_forget_same(rules, s1.titles, s2.titles, r.id, r.lock, d);
+    crate::net_rel::lemma_rel_conn_ext(
+        State { conns: without_tab(s1.conns, s1.renderers[i1].tab), renderers: s1.renderers.remove(i1), ..s1 },
+        State { conns: without_tab(s2.conns, s2.renderers[i2].tab), renderers: s2.renderers.remove(i2), ..s2 },
+        s1b,
+        s2b,
+    );
     crate::unwinding::lemma_rel_from_sets(rules, urls, d, s1b, s2b);
+}
+
+/// A `FetchStyle` of a renderer of `d` (item 5.19): the same outputs, and
+/// related states.
+#[verifier::spinoff_prover]
+pub proof fn lemma_d_fetch_style(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns,
+    fetch: FetchFns,
+    d: crate::domain::Domain,
+    s1: State,
+    s2: State,
+    id: nat,
+    bytes: Seq<u8>,
+    request: u64,
+    url: Seq<u8>,
+)
+    requires
+        crate::noninterference::rel(rules, urls, d, s1, s2),
+        crate::domain::event_domain(rules, s1, Event::FromRenderer { id, bytes }) == Some(d),
+        accepted_message(s1.renderers[find_by_id(s1.renderers, id, 0)->Some_0], bytes) == Some(
+            clazel_ipc::message::spec::Message::FetchStyle { request, url },
+        ),
+    ensures
+        crate::noninterference::renderer_outs(step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).1) == crate::noninterference::renderer_outs(step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).1),
+        crate::noninterference::rel(rules, urls, d, step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).0, step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).0),
+{
+    let e = Event::FromRenderer { id, bytes };
+    lemma_d_sender(rules, urls, d, s1, s2, id, bytes);
+    let i1 = find_by_id(s1.renderers, id, 0)->Some_0;
+    let i2 = find_by_id(s2.renderers, id, 0)->Some_0;
+    let r = s1.renderers[i1];
+    assert(step(rules, urls, fetch, s1, e) == fetch_style(rules, urls, fetch, s1, r, request, url));
+    assert(step(rules, urls, fetch, s2, e) == fetch_style(rules, urls, fetch, s2, r, request, url));
+    crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s1, e);
+    crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s2, e);
+    crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, fetch, s1, e);
+    crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, fetch, s2, e);
+    crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s1, r, request, url);
+    crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s2, r, request, url);
+    crate::subfetch_rel::lemma_fetch_style_domain(rules, urls, fetch, d, s1, s2, r, request, url);
+    let (s1b, o1) = step(rules, urls, fetch, s1, e);
+    let (s2b, o2) = step(rules, urls, fetch, s2, e);
+    lemma_rel_same_table(rules, urls, d, s1, s2, s1b, s2b);
 }
 
 /// Any other message a renderer may send is not served: nothing changes.
@@ -285,6 +340,20 @@ pub proof fn lemma_d_event(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fet
             _ => {
                 if crate::statements::is_storage_message(m) {
                     lemma_d_storage(rules, urls, fetch, d, s1, s2, id, bytes, m);
+                } else if let clazel_ipc::message::spec::Message::Title { title } = m {
+                    // Item 5.18: the same title set under the same lock in
+                    // both runs, and nothing sent.
+                    let (s1b, o1) = step(rules, urls, fetch, s1, e);
+                    let (s2b, o2) = step(rules, urls, fetch, s2, e);
+                    crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s1, e);
+                    crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s2, e);
+                    crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, fetch, s1, e);
+                    crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, fetch, s2, e);
+                    crate::surface_rel::lemma_titles_set_same(rules, s1.titles, s2.titles, r.id, r.lock, title, d);
+                    lemma_rel_same_table(rules, urls, d, s1, s2, s1b, s2b);
+                    assert(o1 == o2);
+                } else if let clazel_ipc::message::spec::Message::FetchStyle { request, url } = m {
+                    lemma_d_fetch_style(rules, urls, fetch, d, s1, s2, id, bytes, request, url);
                 } else {
                     // `Display` (item 4.12) changes nothing and shows the same
                     // on the same tab in both runs: the sender is the same

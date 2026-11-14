@@ -353,6 +353,127 @@ pub proof fn lemma_storage_view_dom(v: Seq<StorageBucket>, o: clazel_origin::spe
 // The state.
 // ---------------------------------------------------------------------
 
+/// A tab's viewport (item 5.18), viewed as [`TabViewport`].
+pub struct TabViewportRecord {
+    /// The tab.
+    pub tab: u64,
+    /// The width, in device pixels.
+    pub width: u64,
+    /// The height, in device pixels.
+    pub height: u64,
+    /// Device pixels per CSS pixel.
+    pub scale: u64,
+}
+
+impl View for TabViewportRecord {
+    type V = TabViewport;
+
+    open spec fn view(&self) -> TabViewport {
+        TabViewport { tab: self.tab as nat, viewport: Viewport { width: self.width, height: self.height, scale: self.scale } }
+    }
+}
+
+/// The view of the tabs' viewports.
+pub open spec fn viewports_view(v: Seq<TabViewportRecord>) -> Seq<TabViewport> {
+    v.map_values(|x: TabViewportRecord| x@)
+}
+
+/// A renderer's title (item 5.18), viewed as [`Titled`].
+pub struct TitledRecord {
+    /// The renderer's id.
+    pub id: u64,
+    /// The renderer's lock.
+    pub lock: ParsedOrigin,
+    /// The title.
+    pub title: Vec<u8>,
+}
+
+impl View for TitledRecord {
+    type V = Titled;
+
+    open spec fn view(&self) -> Titled {
+        Titled { id: self.id as nat, lock: self.lock@, title: self.title@ }
+    }
+}
+
+/// The view of the renderers' titles.
+pub open spec fn titles_view(v: Seq<TitledRecord>) -> Seq<Titled> {
+    v.map_values(|x: TitledRecord| x@)
+}
+
+/// A style sheet fetch in flight (item 5.19), viewed as [`SubFetch`].
+pub struct SubFetchRecord {
+    /// The renderer that asked.
+    pub renderer: u64,
+    /// Its lock.
+    pub lock: ParsedOrigin,
+    /// The renderer's serial number for it.
+    pub serial: u64,
+    /// The renderer's own id for it.
+    pub request: u64,
+    /// The renderer's tab.
+    pub tab: u64,
+    /// The transducer's state.
+    pub fetch: StateBuf,
+    /// The connection the transducer last asked for.
+    pub hop: u64,
+    /// When it started.
+    pub started: u64,
+    /// The partition key of its connections.
+    pub partition: DomainRecord,
+    /// Whether its document has been replaced.
+    pub ended: bool,
+}
+
+impl View for SubFetchRecord {
+    type V = SubFetch;
+
+    open spec fn view(&self) -> SubFetch {
+        SubFetch {
+            renderer: self.renderer as nat,
+            lock: self.lock@,
+            serial: self.serial as nat,
+            request: self.request,
+            tab: self.tab as nat,
+            fetch: self.fetch@,
+            hop: self.hop as nat,
+            started: self.started as int,
+            partition: self.partition@,
+            ended: self.ended,
+        }
+    }
+}
+
+/// The view of the sub-fetches.
+pub open spec fn subfetches_view(v: Seq<SubFetchRecord>) -> Seq<SubFetch> {
+    v.map_values(|x: SubFetchRecord| x@)
+}
+
+/// A renderer's count of sub-fetches (item 5.19), viewed as [`SubCount`].
+pub struct SubCountRecord {
+    /// The renderer.
+    pub renderer: u64,
+    /// Its lock.
+    pub lock: ParsedOrigin,
+    /// Sub-fetches it has started.
+    pub serial: u64,
+    /// Sub-fetches it has started since its last commit.
+    pub in_document: u64,
+}
+
+impl View for SubCountRecord {
+    type V = SubCount;
+
+    open spec fn view(&self) -> SubCount {
+        SubCount { renderer: self.renderer as nat, lock: self.lock@, serial: self.serial as nat, in_document: self.in_document as nat }
+    }
+}
+
+/// The view of the counts.
+pub open spec fn subcounts_view(v: Seq<SubCountRecord>) -> Seq<SubCount> {
+    v.map_values(|x: SubCountRecord| x@)
+}
+
 /// The kernel's state, viewed as [`State`].
 pub struct StateRecord {
     /// The live renderers.
@@ -369,6 +490,14 @@ pub struct StateRecord {
     pub next_conn: u64,
     /// The current time (seconds since 1601-01-01T00:00:00Z).
     pub now: u64,
+    /// The tabs' viewports (item 5.18).
+    pub viewports: Vec<TabViewportRecord>,
+    /// The renderers' titles (item 5.18).
+    pub titles: Vec<TitledRecord>,
+    /// The style sheet fetches in flight (item 5.19).
+    pub subfetches: Vec<SubFetchRecord>,
+    /// The renderers' counts of style sheet fetches (item 5.19).
+    pub subcounts: Vec<SubCountRecord>,
 }
 
 impl View for StateRecord {
@@ -383,6 +512,10 @@ impl View for StateRecord {
             conns: conns_view(self.conns@),
             next_conn: self.next_conn as nat,
             now: self.now as int,
+            viewports: viewports_view(self.viewports@),
+            titles: titles_view(self.titles@),
+            subfetches: subfetches_view(self.subfetches@),
+            subcounts: subcounts_view(self.subcounts@),
         }
     }
 }
@@ -396,6 +529,7 @@ impl StateRecord {
     pub open spec fn exec_wf<F: super::fetch::FetchFnsExec>(&self) -> bool {
         &&& buckets_wf(self.storage@)
         &&& super::step::renderers_ok::<F>(self.renderers@)
+        &&& super::subfetch::subfetches_ok::<F>(self.subfetches@)
     }
 }
 
@@ -405,8 +539,24 @@ pub fn init_record<F: super::fetch::FetchFnsExec>() -> (s: StateRecord)
         s@ == init_state(),
         s.exec_wf::<F>(),
 {
-    let s = StateRecord { renderers: Vec::new(), jar: Vec::new(), storage: Vec::new(), next_id: 0, conns: Vec::new(), next_conn: 0, now: 0 };
+    let s = StateRecord {
+        renderers: Vec::new(),
+        jar: Vec::new(),
+        storage: Vec::new(),
+        next_id: 0,
+        conns: Vec::new(),
+        next_conn: 0,
+        now: 0,
+        viewports: Vec::new(),
+        titles: Vec::new(),
+        subfetches: Vec::new(),
+        subcounts: Vec::new(),
+    };
     proof {
+        assert(subfetches_view(s.subfetches@) =~= Seq::<SubFetch>::empty());
+        assert(subcounts_view(s.subcounts@) =~= Seq::<SubCount>::empty());
+        assert(viewports_view(s.viewports@) =~= Seq::<TabViewport>::empty());
+        assert(titles_view(s.titles@) =~= Seq::<Titled>::empty());
         assert(conns_view(s.conns@) =~= Seq::<Connection>::empty());
         assert(renderers_view(s.renderers@) =~= Seq::<Renderer>::empty());
         assert(clazel_cookie::storage::exec::jar_view(s.jar@) =~= Seq::<clazel_cookie::storage::spec::Cookie>::empty());
@@ -459,6 +609,53 @@ pub enum EventRecord {
         /// The time.
         time: u64,
     },
+    /// A whole frame from the socket of the GPU process of renderer `id`
+    /// (item 5.18).
+    FromGpu {
+        /// The renderer.
+        id: u64,
+        /// The frame.
+        bytes: Vec<u8>,
+    },
+    /// The host sized a tab's content area (item 5.18).
+    Resize {
+        /// The tab.
+        tab: u64,
+        /// The width, in device pixels.
+        width: u64,
+        /// The height, in device pixels.
+        height: u64,
+        /// Device pixels per CSS pixel.
+        scale: u64,
+    },
+    /// The network shell reports on a sub-fetch connection (item 5.19).
+    SubNet {
+        /// The renderer.
+        renderer: u64,
+        /// The sub-fetch's serial number.
+        serial: u64,
+        /// The connection.
+        hop: u64,
+        /// What happened to it.
+        input: InputBuf,
+    },
+    /// The user's input on a tab's content area (item 5.18).
+    Input {
+        /// The tab.
+        tab: u64,
+        /// 0 a click, 1 a scroll, 2 a key.
+        kind: u64,
+        /// The position's x.
+        x: u64,
+        /// The position's y.
+        y: u64,
+        /// Whether the scroll delta is negative.
+        negative: bool,
+        /// The scroll delta's magnitude.
+        delta: u64,
+        /// The key's code.
+        key: u64,
+    },
 }
 
 impl View for EventRecord {
@@ -478,11 +675,24 @@ impl View for EventRecord {
             EventRecord::Net { conn, input } => Event::Net { conn: *conn as nat, input: input@ },
             EventRecord::RendererExited { id } => Event::RendererExited { id: *id as nat },
             EventRecord::Tick { time } => Event::Tick { time: *time as int },
+            EventRecord::FromGpu { id, bytes } => Event::FromGpu { id: *id as nat, bytes: bytes@ },
+            EventRecord::SubNet { renderer, serial, hop, input } => Event::SubNet {
+                renderer: *renderer as nat,
+                serial: *serial as nat,
+                hop: *hop as nat,
+                input: input@,
+            },
+            EventRecord::Resize { tab, width, height, scale } => Event::Resize { tab: *tab as nat, width: *width, height: *height, scale: *scale },
+            EventRecord::Input { tab, kind, x, y, negative, delta, key } => Event::Input {
+                tab: *tab as nat,
+                input: UserInput { kind: *kind, x: *x, y: *y, negative: *negative, delta: *delta, key: *key },
+            },
         }
     }
 }
 
-/// An output, viewed as [`Output`]. A spawn names the one [`Policy`].
+/// An output, viewed as [`Output`]. `Spawn` is a renderer's spawn and
+/// `SpawnGpu` its GPU process's (item 5.18).
 pub enum OutputRecord {
     /// Send a whole frame to the renderer.
     ToRenderer {
@@ -496,7 +706,12 @@ pub enum OutputRecord {
         /// The new renderer.
         id: u64,
     },
-    /// Kill the renderer process.
+    /// Start the GPU process paired with renderer `id` (item 5.18).
+    SpawnGpu {
+        /// The renderer.
+        id: u64,
+    },
+    /// Kill the renderer process and its GPU process.
     Kill {
         /// The renderer.
         id: u64,
@@ -537,6 +752,64 @@ pub enum OutputRecord {
         /// The links.
         links: Vec<Vec<u8>>,
     },
+    /// Open a sub-fetch connection (item 5.19).
+    SubConnect {
+        /// The renderer.
+        renderer: u64,
+        /// The sub-fetch.
+        serial: u64,
+        /// The connection.
+        hop: u64,
+        /// The host.
+        host: Vec<u8>,
+        /// The port.
+        port: u64,
+        /// Whether to speak TLS.
+        tls: bool,
+    },
+    /// Write to a sub-fetch connection (item 5.19).
+    SubSend {
+        /// The renderer.
+        renderer: u64,
+        /// The sub-fetch.
+        serial: u64,
+        /// The connection.
+        hop: u64,
+        /// The octets.
+        bytes: Vec<u8>,
+    },
+    /// Close a sub-fetch connection (item 5.19).
+    SubClose {
+        /// The renderer.
+        renderer: u64,
+        /// The sub-fetch.
+        serial: u64,
+        /// The connection.
+        hop: u64,
+    },
+    /// Send a whole frame to the GPU process of renderer `id` (item 5.18).
+    ToGpu {
+        /// The renderer.
+        id: u64,
+        /// The frame.
+        bytes: Vec<u8>,
+    },
+    /// Show a buffer of a tab's GPU process under the kernel's URL and title
+    /// (item 5.18).
+    Paint {
+        /// The tab.
+        tab: u64,
+        /// Its renderer's committed URL.
+        url: Vec<u32>,
+        /// Its renderer's title.
+        title: Vec<u8>,
+        /// The buffer's id in the ring.
+        buffer: u64,
+        /// The frame's width.
+        width: u64,
+        /// The frame's height.
+        height: u64,
+    },
 }
 
 impl View for OutputRecord {
@@ -546,6 +819,7 @@ impl View for OutputRecord {
         match self {
             OutputRecord::ToRenderer { id, bytes } => Output::ToRenderer { id: *id as nat, bytes: bytes@ },
             OutputRecord::Spawn { id } => Output::Spawn { id: *id as nat, policy: Policy::Renderer },
+            OutputRecord::SpawnGpu { id } => Output::Spawn { id: *id as nat, policy: Policy::Gpu },
             OutputRecord::Kill { id } => Output::Kill { id: *id as nat },
             OutputRecord::Connect { conn, host, port, tls } => Output::Connect { conn: *conn as nat, host: host@, port: *port as nat, tls: *tls },
             OutputRecord::Send { conn, bytes } => Output::Send { conn: *conn as nat, bytes: bytes@ },
@@ -556,6 +830,30 @@ impl View for OutputRecord {
                 title: title@,
                 text: text@,
                 links: clazel_ipc::message::codec::strings_view(links@),
+            },
+            OutputRecord::ToGpu { id, bytes } => Output::ToGpu { id: *id as nat, bytes: bytes@ },
+            OutputRecord::SubConnect { renderer, serial, hop, host, port, tls } => Output::SubConnect {
+                renderer: *renderer as nat,
+                serial: *serial as nat,
+                hop: *hop as nat,
+                host: host@,
+                port: *port as nat,
+                tls: *tls,
+            },
+            OutputRecord::SubSend { renderer, serial, hop, bytes } => Output::SubSend {
+                renderer: *renderer as nat,
+                serial: *serial as nat,
+                hop: *hop as nat,
+                bytes: bytes@,
+            },
+            OutputRecord::SubClose { renderer, serial, hop } => Output::SubClose { renderer: *renderer as nat, serial: *serial as nat, hop: *hop as nat },
+            OutputRecord::Paint { tab, url, title, buffer, width, height } => Output::Paint {
+                tab: *tab as nat,
+                url: url@,
+                title: title@,
+                buffer: *buffer,
+                width: *width,
+                height: *height,
             },
         }
     }

@@ -191,23 +191,28 @@ struct Tab {
     url: String,
 }
 
-/// Whether the outputs are exactly a spawn and the commit of `url` to the
-/// spawned renderer (and, if `old` is given, the kill of that renderer first).
+/// Whether the outputs are exactly a spawn (the renderer's GPU process, item
+/// 5.18, then the renderer) and the commit of `url` to the spawned renderer
+/// (and, if `old` is given, the kill of that renderer first).
 fn spawn_and_commit(out: &[Out], old: Option<u64>, url: &str) -> Option<u64> {
     match (old, out) {
-        (None, [Out::Spawn(new), Out::Commit(to, Doc { url: committed, .. })])
-            if new == to && committed == url.as_bytes() =>
-        {
-            Some(*new)
-        }
+        (
+            None,
+            [
+                Out::SpawnGpu(gpu),
+                Out::Spawn(new),
+                Out::Commit(to, Doc { url: committed, .. }),
+            ],
+        ) if gpu == new && new == to && committed == url.as_bytes() => Some(*new),
         (
             Some(old),
             [
                 Out::Kill(killed),
+                Out::SpawnGpu(gpu),
                 Out::Spawn(new),
                 Out::Commit(to, Doc { url: committed, .. }),
             ],
-        ) if *killed == old && new == to && committed == url.as_bytes() => Some(*new),
+        ) if *killed == old && gpu == new && new == to && committed == url.as_bytes() => Some(*new),
         _ => None,
     }
 }

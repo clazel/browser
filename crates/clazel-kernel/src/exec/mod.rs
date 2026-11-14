@@ -25,4 +25,6 @@ pub mod real_urls;
 pub mod records;
 pub mod step;
 pub mod storage;
+pub mod subfetch;
+pub mod surfaces;
 pub mod urls;

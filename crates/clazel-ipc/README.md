@@ -30,6 +30,25 @@ parsers of untrusted input carry machine-checked proofs.
   rendering; its links are the schema's one nested array. No message
   carries a claimed identity (origin, renderer id, tab id or sender URL),
   and renderer ids never reach a renderer.
+- **Item 5.18's messages** (Phase 5, beside `Display`, which stays until
+  5.26): `Title` (11, renderer to kernel), `FrameReady` (15), `GpuReady`
+  (18) and `GpuRefused` (19) from a GPU process, and `Viewport` (108) and
+  `Input` (109) to a renderer and `GpuViewport` (114) to a GPU process. No
+  tag is reused. The kernel decodes a GPU process's frames with
+  `decode_gpu_message`, which accepts only its three messages, so neither
+  kind of process can send the other's (`lemma_gpu_decode_direction`).
+  Decisions: `Input` has every field in every kind (zero where unused) and
+  its scroll delta is a sign and a magnitude, because the profile has no
+  negative integers; the schema does not narrow `kind`, `scale` or the key
+  code, which the receiver checks, as with `Commit`'s kind.
+- **Item 5.19's messages**: `FetchStyle` (14, renderer to kernel: a request
+  id the renderer chooses and the sheet's URL as the document wrote it), and
+  `StyleResponse` (110: the request id and the response's `Content-Type`),
+  `StyleBody` (111: the request id and at most `MAX_STYLE_CHUNK` octets),
+  `StyleEnd` (112) and `StyleFailed` (113) to a renderer. No tag collides
+  with 5.18's. Every `StyleBody` of at most `MAX_STYLE_CHUNK` octets fits one
+  frame (`lemma_style_body_fits_frame`). The request id is the renderer's
+  own and identifies nothing to the kernel.
 
 Out of scope: any CBOR outside the profile, and the transport itself
 (sockets, reading and writing); this crate only turns bytes into values and

@@ -65,6 +65,11 @@ pub proof fn lemma_navigate_tab_consistency(
             assert(s1b.conns == s1.conns && s2b.conns == s2.conns && s1b.next_conn == s1.next_conn && s2b.next_conn == s2.next_conn);
             crate::net_rel::lemma_tabs_update(s1.renderers, i1, r);
             crate::net_rel::lemma_rel_conn_tabs(s1, s2, s1b, s2b);
+            // Item 5.18: a replaced renderer's title is forgotten in both runs.
+            crate::surface_rel::lemma_titles_forget_same(rules, s1.titles, s2.titles, old.id, old.lock, d);
+            // Item 5.19: a kept renderer's sub-fetches end in both runs.
+            crate::subfetch_rel::lemma_end_domain(rules, s1.subfetches, s2.subfetches, old.id, old.lock, d);
+            crate::subfetch_rel::lemma_new_document_domain(rules, s1.subcounts, s2.subcounts, old.id, old.lock, d);
             assert forall|x: Renderer| s1b.renderers.contains(x) implies s2b.renderers.contains(x) by {
                 crate::unwind_base::lemma_update_contains(urls, s1.renderers, s1.next_id, i1, r, x);
                 crate::unwind_base::lemma_update_contains(urls, s2.renderers, s2.next_id, i2, r, x);
@@ -127,6 +132,14 @@ pub proof fn lemma_rel_after_update(
         s2b.conns == s2.conns,
         s1b.next_conn == s1.next_conn,
         s2b.next_conn == s2.next_conn,
+        s1b.viewports == s1.viewports,
+        s2b.viewports == s2.viewports,
+        s1b.titles == s1.titles,
+        s2b.titles == s2.titles,
+        s1b.subfetches == s1.subfetches,
+        s2b.subfetches == s2.subfetches,
+        s1b.subcounts == s1.subcounts,
+        s2b.subcounts == s2.subcounts,
         r.tab == s1.renderers[i1].tab,
         crate::invariant::kernel_wf(rules, urls, s1b),
         crate::invariant::kernel_wf(rules, urls, s2b),
@@ -207,6 +220,10 @@ pub proof fn lemma_rel_from_sets(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
         s1.now == s2.now,
         cookies_agree(rules, d, s1, s2),
         forall|o: clazel_origin::spec::Origin| o is Tuple && crate::domain::domain_of_lock(rules, o) == d ==> storage_of(s1, o) == storage_of(s2, o),
+        s1.viewports == s2.viewports,
+        crate::domain::titles_of_domain(rules, s1.titles, d) == crate::domain::titles_of_domain(rules, s2.titles, d),
+        crate::domain::subfetches_of_domain(rules, s1.subfetches, d) == crate::domain::subfetches_of_domain(rules, s2.subfetches, d),
+        crate::domain::subcounts_of_domain(rules, s1.subcounts, d) == crate::domain::subcounts_of_domain(rules, s2.subcounts, d),
     ensures
         crate::noninterference::rel(rules, urls, d, s1, s2),
 {
@@ -223,6 +240,7 @@ pub proof fn lemma_rel_from_sets(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
 /// `OpenTab` from related states: the same outputs, and related states.
 /// Without a script it is the new renderer, then a `NavigateTab` of its tab
 /// (item 4.12), whose consistency is `lemma_begin_consistency`.
+#[verifier::spinoff_prover]
 pub proof fn lemma_open_tab_consistency(
     rules: Seq<clazel_psl::spec::Rule>,
     urls: UrlFns,
@@ -265,16 +283,47 @@ pub proof fn lemma_open_tab_consistency(
         crate::net_rel::lemma_rel_conn_open_tab(rules, urls, s1, s2, s1b, s2b, rn);
         lemma_rel_from_sets(rules, urls, d, s1b, s2b);
         if script is None {
-            assert(find_by_tab(s1b.renderers, s1.next_id, 0) is Some) by {
-                crate::invariant::lemma_find_by_tab(s1b.renderers, s1.next_id, 0);
-                assert(s1b.renderers[s1.renderers.len() as int].tab == s1.next_id);
-            }
-            crate::net_rel::lemma_begin_consistency(rules, urls, fetch, d, s1b, s2b, s1.next_id, url);
-            let spawn = seq![Output::Spawn { id: s1.next_id, policy: Policy::Renderer }];
-            crate::net_rel::lemma_renderer_outs_concat(spawn, begin_navigation(rules, urls, fetch, s1b, s1.next_id, url).1);
-            crate::net_rel::lemma_renderer_outs_concat(spawn, begin_navigation(rules, urls, fetch, s2b, s1.next_id, url).1);
+            assert(s1b.renderers[s1.renderers.len() as int].tab == s1.next_id);
+            lemma_open_tab_fetch_consistency(rules, urls, fetch, d, s1b, s2b, s1.next_id, s1.renderers.len() as int, url);
         }
     }
+}
+
+/// The fetch an `OpenTab` without a script starts, from related states
+/// that hold its new tab (item 5.18 split this out of
+/// [`lemma_open_tab_consistency`] for the resource limit, when the spawn
+/// became a pair).
+#[verifier::spinoff_prover]
+pub proof fn lemma_open_tab_fetch_consistency(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns,
+    fetch: FetchFns,
+    d: crate::domain::Domain,
+    s1b: State,
+    s2b: State,
+    id: nat,
+    j: int,
+    url: Seq<u32>,
+)
+    requires
+        crate::noninterference::rel(rules, urls, d, s1b, s2b),
+        0 <= j < s1b.renderers.len(),
+        s1b.renderers[j].tab == id,
+    ensures
+        crate::noninterference::renderer_outs(
+            seq![Output::Spawn { id, policy: Policy::Gpu }, Output::Spawn { id, policy: Policy::Renderer }] + begin_navigation(rules, urls, fetch, s1b, id, url).1,
+        ) == crate::noninterference::renderer_outs(
+            seq![Output::Spawn { id, policy: Policy::Gpu }, Output::Spawn { id, policy: Policy::Renderer }] + begin_navigation(rules, urls, fetch, s2b, id, url).1,
+        ),
+        crate::noninterference::rel(rules, urls, d, begin_navigation(rules, urls, fetch, s1b, id, url).0, begin_navigation(rules, urls, fetch, s2b, id, url).0),
+{
+    assert(find_by_tab(s1b.renderers, id, 0) is Some) by {
+        crate::invariant::lemma_find_by_tab(s1b.renderers, id, 0);
+    }
+    crate::net_rel::lemma_begin_consistency(rules, urls, fetch, d, s1b, s2b, id, url);
+    let spawn = seq![Output::Spawn { id, policy: Policy::Gpu }, Output::Spawn { id, policy: Policy::Renderer }];
+    crate::net_rel::lemma_renderer_outs_concat(spawn, begin_navigation(rules, urls, fetch, s1b, id, url).1);
+    crate::net_rel::lemma_renderer_outs_concat(spawn, begin_navigation(rules, urls, fetch, s2b, id, url).1);
 }
 
 /// `RendererExited` from related states.
@@ -301,6 +350,7 @@ pub proof fn lemma_exited_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: 
         crate::net_rel::lemma_closes_not_renderer(s1.conns, x1.tab);
         crate::net_rel::lemma_closes_not_renderer(s2.conns, x1.tab);
         crate::net_rel::lemma_rel_conn_exit_both(rules, urls, s1, s2, i1, i2);
+        crate::surface_rel::lemma_titles_forget_same(rules, s1.titles, s2.titles, x1.id, x1.lock, d);
         assert(s1b.conns == without_tab(s1.conns, x1.tab) && s2b.conns == without_tab(s2.conns, x1.tab));
         assert forall|x: Renderer| s1b.renderers.contains(x) implies s2b.renderers.contains(x) by {
             crate::unwind_base::lemma_remove_contains(urls, s1.renderers, s1.next_id, i1, x);
@@ -311,6 +361,12 @@ pub proof fn lemma_exited_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: 
             crate::unwind_base::lemma_remove_contains(urls, s1.renderers, s1.next_id, i1, x);
             crate::unwind_base::lemma_remove_contains(urls, s2.renderers, s2.next_id, i2, x);
         }
+        crate::net_rel::lemma_rel_conn_ext(
+            State { conns: without_tab(s1.conns, s1.renderers[i1].tab), renderers: s1.renderers.remove(i1), ..s1 },
+            State { conns: without_tab(s2.conns, s2.renderers[i2].tab), renderers: s2.renderers.remove(i2), ..s2 },
+            s1b,
+            s2b,
+        );
         lemma_rel_from_sets(rules, urls, d, s1b, s2b);
     } else {
         assert(s1b == s1);
@@ -326,6 +382,12 @@ pub proof fn lemma_exited_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: 
                 }
             }
             crate::net_rel::lemma_rel_conn_exit_second(rules, urls, s1, s2, i2);
+            // Item 5.18: the exited renderer is not `d`'s (it is not in the
+            // first run), so its title is not either.
+            assert(crate::domain::domain_of_renderer(rules, x2) != d) by {
+                assert(s2.renderers.contains(x2));
+            }
+            crate::surface_rel::lemma_titles_forget_other(rules, s2.titles, x2.id, x2.lock, d);
             assert forall|x: Renderer| s1b.renderers.contains(x) implies s2b.renderers.contains(x) by {
                 crate::unwind_base::lemma_remove_contains(urls, s2.renderers, s2.next_id, i2, x);
                 let k = choose|k: int| 0 <= k < s1.renderers.len() && s1.renderers[k] == x;
@@ -338,6 +400,12 @@ pub proof fn lemma_exited_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: 
             assert forall|x: Renderer| s2b.renderers.contains(x) && crate::domain::domain_of_renderer(rules, x) == d implies s1b.renderers.contains(x) by {
                 crate::unwind_base::lemma_remove_contains(urls, s2.renderers, s2.next_id, i2, x);
             }
+            crate::net_rel::lemma_rel_conn_ext(
+                s1,
+                State { conns: without_tab(s2.conns, s2.renderers[i2].tab), renderers: s2.renderers.remove(i2), ..s2 },
+                s1b,
+                s2b,
+            );
             lemma_rel_from_sets(rules, urls, d, s1b, s2b);
         }
     }

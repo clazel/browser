@@ -95,6 +95,9 @@ proof fn lemma_handle_no_show(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, 
                 lemma_storage_call_no_show(s, r, m);
             }
         },
+        clazel_ipc::message::spec::Message::FetchStyle { request, url } => {
+            crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, request, url);
+        },
         _ => {},
     }
 }
@@ -117,6 +120,8 @@ proof fn lemma_storage_call_no_show(s: State, r: Renderer, m: clazel_ipc::messag
 }
 
 /// The outputs of every event but a renderer's frame show nothing.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(60)]
 proof fn lemma_other_events_no_show(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
     requires
         reachable(rules, urls, fetch, s),
@@ -158,6 +163,64 @@ proof fn lemma_other_events_no_show(rules: Seq<clazel_psl::spec::Rule>, urls: Ur
                 lemma_closes_no_show(s.conns, s.renderers[i].tab);
             }
         },
+        // Item 5.18.
+        Event::FromGpu { .. } | Event::Resize { .. } | Event::Input { .. } => {
+            lemma_surface_events_no_show(s, e);
+        },
+        // Item 5.19.
+        Event::Tick { .. } | Event::SubNet { .. } => {
+            lemma_subfetch_events_no_show(rules, urls, fetch, s, e);
+        },
+        _ => {},
+    }
+}
+
+/// Item 5.18's events show nothing: a GPU process's frame gives a `Paint` or
+/// kills its renderer; a resize and an input write to the tab's processes.
+proof fn lemma_surface_events_no_show(s: State, e: Event)
+    requires
+        e is FromGpu || e is Resize || e is Input,
+    ensures
+        no_show(match e {
+            Event::FromGpu { id, bytes } => from_gpu(s, id, bytes).1,
+            Event::Resize { tab, width, height, scale } => resize(s, tab, Viewport { width, height, scale }).1,
+            Event::Input { tab, input } => user_input(s, tab, input).1,
+            _ => Seq::<Output>::empty(),
+        }),
+{
+    match e {
+        Event::FromGpu { id, bytes } => {
+            crate::surface_rel::lemma_from_gpu_shape(s, id, bytes);
+            if let Some(i) = find_by_id(s.renderers, id, 0) {
+                if crate::surface_rel::gpu_kills(s.renderers[i], bytes) {
+                    lemma_closes_no_show(s.conns, s.renderers[i].tab);
+                    lemma_cons_no_show(Output::Kill { id }, closes_of_tab(s.conns, s.renderers[i].tab));
+                }
+            }
+        },
+        Event::Resize { tab, width, height, scale } => {
+            let out = resize(s, tab, Viewport { width, height, scale }).1;
+            assert forall|k: int| 0 <= k < out.len() implies !((#[trigger] out[k]) is Show) by {
+                if let Some(i) = find_by_tab(s.renderers, tab, 0) {
+                    assert(k == 0 || k == 1);
+                }
+            }
+        },
+        _ => {},
+    }
+}
+
+/// Item 5.19's events show nothing: a `Tick`'s sweep and a `SubNet` answer
+/// renderers and write to sub-fetch connections only.
+proof fn lemma_subfetch_events_no_show(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+    requires
+        e is Tick || e is SubNet,
+    ensures
+        no_show(step(rules, urls, fetch, s, e).1),
+{
+    match e {
+        Event::Tick { time } => crate::subfetch_rel::lemma_tick_all_shape(s, time),
+        Event::SubNet { renderer, serial, hop, input } => crate::subfetch_rel::lemma_sub_net_shape(rules, fetch, s, renderer, serial, hop, input),
         _ => {},
     }
 }
@@ -201,7 +264,10 @@ pub proof fn theorem_address_bar_integrity(rules: Seq<clazel_psl::spec::Rule>, u
         reachable(rules, urls, fetch, s),
     ensures
         crate::statements::address_bar_integrity_statement(rules, urls, fetch, s, id, bytes),
+        // Restated for item 5.18: the `Paint`s of a GPU process's frame too.
+        crate::statements::paint_address_bar_statement(rules, urls, fetch, s, id, bytes),
 {
+    crate::surface_theorems::lemma_paint_address_bar(rules, urls, fetch, s, id, bytes);
     crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
     crate::invariant::lemma_find_by_id(s.renderers, id, 0);
     let out = step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1;
@@ -417,11 +483,13 @@ pub proof fn lemma_commit_frames(url: Seq<u32>, doc: Document)
 }
 
 /// The octets of the `ToRenderer` outputs of a fetch's step: an `Error` with
-/// a code of a failed navigation, or the frames that commit a response the
-/// transducer finished with.
+/// a code of a failed navigation, the frames that commit a response the
+/// transducer finished with, or (item 5.18) the `Viewport` a renderer spawned
+/// by the commit is given.
 pub open spec fn net_frames_ok(bytes: Seq<u8>, actions: Seq<NetAction>) -> bool {
     ||| bytes == reply_frame(clazel_ipc::message::spec::Message::Error { code: error_bad_url() })
     ||| bytes == reply_frame(clazel_ipc::message::spec::Message::Error { code: error_fetch() })
+    ||| exists|v: Viewport| bytes == #[trigger] viewport_frame(v)
     ||| exists|a: int|
         0 <= a < actions.len() && (#[trigger] actions[a]) is Done && bytes == commit_frames(
             clazel_url::url::spec::url_serializer(actions[a]->Done_url, false),
@@ -552,7 +620,8 @@ proof fn lemma_frames_ok_shift(bytes: Seq<u8>, actions: Seq<NetAction>)
 }
 
 /// The `ToRenderer` outputs of [`commit_navigation`] are the commit of the
-/// document, or the `Error` of a URL the kernel refuses.
+/// document, the `Error` of a URL the kernel refuses, or (item 5.18) the
+/// tab's `Viewport` for a renderer it spawns.
 proof fn lemma_commit_navigation_frames(urls: UrlFns, s: State, tab: nat, href: Seq<u32>, doc: Document)
     ensures
         ({
@@ -560,6 +629,7 @@ proof fn lemma_commit_navigation_frames(urls: UrlFns, s: State, tab: nat, href: 
             forall|k: int|
                 0 <= k < out.len() && (#[trigger] out[k]) is ToRenderer ==> out[k]->ToRenderer_bytes == commit_frames(href, doc)
                     || out[k]->ToRenderer_bytes == reply_frame(clazel_ipc::message::spec::Message::Error { code: error_bad_url() })
+                    || exists|v: Viewport| out[k]->ToRenderer_bytes == #[trigger] viewport_frame(v)
         }),
 {
     let out = commit_navigation(urls, s, tab, href, doc).1;
@@ -573,11 +643,39 @@ proof fn lemma_commit_navigation_frames(urls: UrlFns, s: State, tab: nat, href: 
         };
         assert(out == closes + o2);
         assert forall|k: int| 0 <= k < out.len() && (#[trigger] out[k]) is ToRenderer implies out[k]->ToRenderer_bytes == commit_frames(href, doc)
-            || out[k]->ToRenderer_bytes == reply_frame(clazel_ipc::message::spec::Message::Error { code: error_bad_url() }) by {
+            || out[k]->ToRenderer_bytes == reply_frame(clazel_ipc::message::spec::Message::Error { code: error_bad_url() })
+            || exists|v: Viewport| out[k]->ToRenderer_bytes == #[trigger] viewport_frame(v) by {
             if k >= closes.len() {
                 assert(out[k] == o2[k - closes.len()]);
+                if let Some(v) = find_viewport(s1.viewports, tab, 0) {
+                    if out[k]->ToRenderer_bytes == viewport_frame(v) {
+                        assert(exists|v2: Viewport| out[k]->ToRenderer_bytes == #[trigger] viewport_frame(v2));
+                    }
+                }
             }
         }
+    }
+}
+
+/// The frame of a message that is not `Commit` is not read as a `Commit`:
+/// it is that message, or the `Error` that replaces it if it has no frame
+/// (item 5.18, for `Viewport`).
+pub proof fn lemma_reply_frame_not_commit(m: clazel_ipc::message::spec::Message)
+    requires
+        !(m is Commit),
+    ensures
+        crate::statements::decode_frames(reply_frame(m)) matches Some(ms) ==> ms.len() > 0 && !(ms[0] is Commit),
+{
+    lemma_fixed_frames();
+    assert(crate::statements::decode_frames(Seq::<u8>::empty()) == Some(Seq::<clazel_ipc::message::spec::Message>::empty()));
+    if frame_of(m) is Some {
+        lemma_decode_frames_cons(m, Seq::<u8>::empty());
+        assert(reply_frame(m) + Seq::<u8>::empty() =~= reply_frame(m));
+    } else {
+        let e = clazel_ipc::message::spec::Message::Error { code: error_encode() };
+        lemma_decode_frames_cons(e, Seq::<u8>::empty());
+        assert(reply_frame(e) + Seq::<u8>::empty() =~= reply_frame(e));
+        assert(reply_frame(m) == reply_frame(e));
     }
 }
 
@@ -642,6 +740,11 @@ pub proof fn theorem_body_is_the_response(rules: Seq<clazel_psl::spec::Rule>, ur
                 )
             } by {
             let b = out[k]->ToRenderer_bytes;
+            if exists|v: Viewport| b == #[trigger] viewport_frame(v) {
+                let v = choose|v: Viewport| b == #[trigger] viewport_frame(v);
+                lemma_reply_frame_not_commit(clazel_ipc::message::spec::Message::Viewport { width: v.width, height: v.height, scale: v.scale });
+                assert(false);
+            }
             let a = choose|a: int|
                 0 <= a < actions.len() && (#[trigger] actions[a]) is Done && b == commit_frames(
                     clazel_url::url::spec::url_serializer(actions[a]->Done_url, false),

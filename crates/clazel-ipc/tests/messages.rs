@@ -6,8 +6,8 @@
 use clazel_ipc::frame::codec::{decode_frame, encode_frame, payload_length};
 use clazel_ipc::frame::spec::MAX_FRAME;
 use clazel_ipc::message::codec::{
-    MAX_BODY_CHUNK, Msg, decode_framed, decode_message, decode_renderer_message, encode_framed,
-    encode_message,
+    MAX_BODY_CHUNK, Msg, decode_framed, decode_gpu_message, decode_message,
+    decode_renderer_message, encode_framed, encode_message,
 };
 
 fn all() -> Vec<Msg> {
@@ -62,7 +62,89 @@ fn all() -> Vec<Msg> {
         },
         Msg::StorageLengthValue { length: 3 },
         Msg::Error { code: 7 },
+        Msg::Title {
+            title: t("Hacker News \u{2014} Show HN"),
+        },
+        Msg::Title { title: Vec::new() },
+        Msg::FrameReady {
+            buffer: 2,
+            width: 1280,
+            height: 800,
+        },
+        Msg::FrameReady {
+            buffer: u64::MAX,
+            width: 0,
+            height: u64::MAX,
+        },
+        Msg::GpuReady { software: false },
+        Msg::GpuReady { software: true },
+        Msg::GpuRefused,
+        Msg::Viewport {
+            width: 1280,
+            height: 800,
+            scale: 2,
+        },
+        Msg::Input {
+            kind: 0,
+            x: 10,
+            y: 20,
+            negative: false,
+            delta: 0,
+            key: 0,
+        },
+        Msg::Input {
+            kind: 1,
+            x: 0,
+            y: 0,
+            negative: true,
+            delta: 120,
+            key: 0,
+        },
+        Msg::Input {
+            kind: 2,
+            x: 0,
+            y: 0,
+            negative: false,
+            delta: 0,
+            key: 0x41,
+        },
+        Msg::GpuViewport {
+            width: 1280,
+            height: 800,
+            scale: 1,
+        },
+        Msg::FetchStyle {
+            request: 7,
+            url: t("news.css?abc"),
+        },
+        Msg::StyleResponse {
+            request: u64::MAX,
+            content_type: t("text/css"),
+        },
+        Msg::StyleBody {
+            request: 7,
+            bytes: vec![0x00, 0xFF],
+        },
+        Msg::StyleEnd { request: 7 },
+        Msg::StyleFailed { request: 0 },
     ]
+}
+
+#[test]
+fn a_largest_style_body_fits_one_frame() {
+    use clazel_ipc::message::codec::MAX_STYLE_CHUNK;
+    let m = Msg::StyleBody {
+        request: u64::MAX,
+        bytes: vec![0x5A; MAX_STYLE_CHUNK],
+    };
+    let frame = encode_framed(&m).unwrap_or_default();
+    assert_eq!(frame.len(), MAX_FRAME + 4);
+    assert_eq!(decode_framed(&frame), Some(m_clone(&m)));
+    let over = Msg::StyleBody {
+        request: u64::MAX,
+        bytes: vec![0x5A; MAX_STYLE_CHUNK + 1],
+    };
+    assert!(encode_framed(&over).is_none());
 }
 
 #[test]
@@ -97,6 +179,8 @@ fn the_kernel_decoder_takes_only_renderer_messages() {
                 | Msg::StorageLength
                 | Msg::Navigate { .. }
                 | Msg::Display { .. }
+                | Msg::Title { .. }
+                | Msg::FetchStyle { .. }
         );
         assert_eq!(
             decode_renderer_message(&bytes).is_some(),
@@ -104,6 +188,63 @@ fn the_kernel_decoder_takes_only_renderer_messages() {
             "{m:?}"
         );
     }
+}
+
+#[test]
+fn the_gpu_decoder_takes_only_gpu_messages() {
+    for m in all() {
+        let bytes = encode_message(&m);
+        let from_gpu = matches!(
+            m,
+            Msg::FrameReady { .. } | Msg::GpuReady { .. } | Msg::GpuRefused
+        );
+        assert_eq!(decode_gpu_message(&bytes).is_some(), from_gpu, "{m:?}");
+        // No message is accepted from both kinds of process.
+        assert!(!(from_gpu && decode_renderer_message(&bytes).is_some()));
+    }
+}
+
+#[test]
+fn the_new_tags_are_on_the_wire() {
+    // phase-5.md 5.18's table: the tag is the array's second item.
+    let cases: [(Msg, &[u8]); 5] = [
+        (Msg::Title { title: Vec::new() }, &[0x82, 0x0B, 0x60]),
+        (
+            Msg::FrameReady {
+                buffer: 0,
+                width: 1,
+                height: 2,
+            },
+            &[0x84, 0x0F, 0x00, 0x01, 0x02],
+        ),
+        (Msg::GpuRefused, &[0x81, 0x13]),
+        (
+            Msg::Viewport {
+                width: 1,
+                height: 2,
+                scale: 1,
+            },
+            &[0x84, 0x18, 0x6C, 0x01, 0x02, 0x01],
+        ),
+        (
+            Msg::GpuViewport {
+                width: 1,
+                height: 2,
+                scale: 1,
+            },
+            &[0x84, 0x18, 0x72, 0x01, 0x02, 0x01],
+        ),
+    ];
+    for (m, b) in cases {
+        assert_eq!(encode_message(&m), b, "{m:?}");
+    }
+    // Display keeps tag 10, unchanged.
+    let d = Msg::Display {
+        title: Vec::new(),
+        text: Vec::new(),
+        links: Vec::new(),
+    };
+    assert_eq!(encode_message(&d), [0x84, 0x0A, 0x60, 0x60, 0x80]);
 }
 
 #[test]
@@ -148,7 +289,7 @@ fn random_bytes_decode_to_one_encoding() {
     let rounds = if cfg!(miri) { 200 } else { 50_000usize };
     for i in 0..rounds {
         let mut b = all_bytes
-            .get(usize::try_from(next() % 21).unwrap_or(0))
+            .get(usize::try_from(next() % (all_bytes.len() as u64)).unwrap_or(0))
             .cloned()
             .unwrap_or_default();
         for _ in 0..=(next() % 3) {

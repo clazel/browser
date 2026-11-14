@@ -36,8 +36,8 @@ pub proof fn lemma_local_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
     ensures
         forall|k: int|
             0 <= k < step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1.len() && crate::noninterference::renderer_bound(#[trigger] step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1[k])
-                ==> if step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1[k] is Show {
-                step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1[k]->Show_tab == s.renderers[find_by_id(s.renderers, id, 0)->Some_0].tab
+                ==> if step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1[k] is Show || step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1[k] is Paint {
+                crate::domain::output_id(step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1[k]) == s.renderers[find_by_id(s.renderers, id, 0)->Some_0].tab
             } else {
                 crate::domain::output_id(step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1[k]) == id
             },
@@ -55,6 +55,9 @@ pub proof fn lemma_local_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
                     assert(false);
                 }
             }
+        }
+        if let clazel_ipc::message::spec::Message::FetchStyle { request, url } = m {
+            crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, request, url);
         }
     } else {
         crate::net_theorems::lemma_closes_of_tab(s.conns, r.tab);
@@ -102,6 +105,26 @@ pub proof fn lemma_local_respect(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
     ensures
         crate::noninterference::local_respect_statement(rules, urls, fetch, d, s1, s2, e),
 {
+    if e is FromGpu {
+        crate::surface_rel::lemma_local_respect_gpu(rules, urls, fetch, d, s1, s2, e);
+    } else if e is SubNet {
+        crate::subfetch_rel::lemma_local_respect_subnet(rules, urls, fetch, d, s1, s2, e);
+    } else {
+        lemma_local_respect_renderer(rules, urls, fetch, d, s1, s2, e);
+    }
+}
+
+/// [`lemma_local_respect`] for a renderer's frame.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(60)]
+pub proof fn lemma_local_respect_renderer(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s1: State, s2: State, e: Event)
+    requires
+        crate::noninterference::rel(rules, urls, d, s1, s2),
+        crate::noninterference::other_domain_local(rules, urls, d, s1, e),
+        e is FromRenderer,
+    ensures
+        crate::noninterference::local_respect_statement(rules, urls, fetch, d, s1, s2, e),
+{
     let id = e->FromRenderer_id;
     let bytes = e->FromRenderer_bytes;
     assert(e == (Event::FromRenderer { id, bytes }));
@@ -121,8 +144,8 @@ pub proof fn lemma_local_respect(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
         if crate::noninterference::addressed_to(rules, d, s1, s1b, out1[k]) {
             assert(crate::noninterference::renderer_bound(out1[k]));
             let q = choose|q: Renderer|
-                (s1.renderers.contains(q) || s1b.renderers.contains(q)) && (if out1[k] is Show {
-                    q.tab == out1[k]->Show_tab
+                (s1.renderers.contains(q) || s1b.renderers.contains(q)) && (if out1[k] is Show || out1[k] is Paint {
+                    q.tab == crate::domain::output_id(out1[k])
                 } else {
                     q.id == crate::domain::output_id(out1[k])
                 }) && crate::domain::domain_of_renderer(rules, q) == d;
@@ -131,7 +154,7 @@ pub proof fn lemma_local_respect(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
             }
             assert(s1.renderers.contains(q));
             assert(s1.renderers.contains(r));
-            if out1[k] is Show {
+            if out1[k] is Show || out1[k] is Paint {
                 crate::unwind_base::lemma_same_tab_same_renderer(urls, s1.renderers, s1.next_id, q, r);
             } else {
                 crate::unwind_base::lemma_same_id_same_renderer(urls, s1.renderers, s1.next_id, q, r);
@@ -157,6 +180,8 @@ pub proof fn lemma_local_respect(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
             assert(accepted_message(r, bytes) is None);
         }
         crate::net_rel::lemma_rel_conn_exit_first(rules, urls, s1, s2, i1);
+        crate::surface_rel::lemma_titles_forget_other(rules, s1.titles, r.id, r.lock, d);
+        crate::net_rel::lemma_rel_conn_ext(State { conns: without_tab(s1.conns, s1.renderers[i1].tab), renderers: s1.renderers.remove(i1), ..s1 }, s2, s1b, s2);
         crate::unwinding::lemma_rel_from_sets(rules, urls, d, s1b, s2);
     } else {
         // The renderers are as before; only the jar or the storage may change.
@@ -201,6 +226,17 @@ pub proof fn lemma_local_respect(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
         }
         assert(s1b.conns == s1.conns) by {
             assert(s1b.renderers == s1.renderers);
+        }
+        // Item 5.18: a `Title` sets a title under the sender's lock, of
+        // another domain.
+        if let Some(clazel_ipc::message::spec::Message::Title { title }) = accepted_message(r, bytes) {
+            crate::surface_rel::lemma_titles_set_other(rules, s1.titles, r.id, r.lock, title, d);
+        }
+        // Item 5.19: a `FetchStyle` changes only its sender's sub-fetches and
+        // counts, of another domain.
+        if let Some(clazel_ipc::message::spec::Message::FetchStyle { request, url }) = accepted_message(r, bytes) {
+            crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s1, r, request, url);
+            crate::subfetch_rel::lemma_fetch_style_other(rules, urls, fetch, d, s1, r, request, url);
         }
         crate::unwinding_d::lemma_rel_same_table(rules, urls, d, s1, s2, s1b, s2);
     }

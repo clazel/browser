@@ -1,16 +1,21 @@
 //! macOS: the Seatbelt sandbox (`sandbox_init`), the two escape attempts
-//! the sandbox tests make (`fork`, `ptrace`), `getentropy`, and Metal drawing
-//! for the GPU process ([`metal`]).
+//! the sandbox tests make (`fork`, `ptrace`), `getentropy`, clearing a
+//! descriptor's close-on-exec flag (`fcntl`, item 5.23), Metal drawing
+//! for the GPU process ([`metal`]) and the host's window ([`window`]).
 //!
 //! `sandbox_init` is deprecated, but it is what Chromium and Firefox still
 //! use, and no replacement exists for a process that is not an App Sandbox
 //! application. `libc` does not declare it, so it is declared here.
 
 use std::ffi::{CString, c_char, c_int, c_void};
+use std::os::fd::{AsRawFd, BorrowedFd};
 
 /// Metal drawing for the GPU process (phase-5.md item 5.17b), on Apple silicon.
 #[cfg(target_arch = "aarch64")]
 pub mod metal;
+/// The host's window (phase-5.md item 5.21), on Apple silicon.
+#[cfg(target_arch = "aarch64")]
+pub mod window;
 use std::fmt;
 
 use crate::{Errno, RandomError};
@@ -22,7 +27,10 @@ use crate::{Errno, RandomError};
 // ptrace(int request, pid_t pid, caddr_t addr, int data)`; man 2 getentropy
 // and <sys/random.h>: `int getentropy(void *buf, size_t buflen)` (as in
 // `libc`'s apple declaration, `getentropy(*mut c_void, size_t) -> c_int`,
-// though `libc` is not a dependency on macOS). The declarations below match
+// though `libc` is not a dependency on macOS); man 2 fcntl and <fcntl.h>:
+// `int fcntl(int fildes, int cmd, ...)`, as `libc`'s apple declaration
+// `fcntl(fd: c_int, cmd: c_int, ...) -> c_int`, a C variadic function whose
+// third argument, for `F_SETFD`, is an `int`. The declarations below match
 // those prototypes (`c_char`, `c_int` and `u64` have the C sizes on every
 // macOS target, `pid_t` is `int`, `caddr_t` is `char *` and `size_t` is
 // `usize`), the
@@ -36,7 +44,12 @@ unsafe extern "C" {
     fn _exit(status: c_int) -> !;
     fn ptrace(request: c_int, pid: c_int, addr: *mut c_char, data: c_int) -> c_int;
     fn getentropy(buf: *mut c_void, buflen: usize) -> c_int;
+    fn fcntl(fd: c_int, cmd: c_int, ...) -> c_int;
 }
+
+/// `F_SETFD` of `<sys/fcntl.h>`: set the descriptor's flags, of which the only
+/// one is `FD_CLOEXEC`.
+const F_SETFD: c_int = 2;
 
 /// `PT_ATTACHEXC` of `<sys/ptrace.h>`: attach to a process and take its
 /// exceptions as Mach messages instead of signals (what debuggers use).
@@ -152,6 +165,27 @@ pub fn attempt_ptrace_attach(pid: i32) -> Result<(), Errno> {
     if rc == 0 { Ok(()) } else { Err(Errno::last()) }
 }
 
+/// `fcntl(fd, F_SETFD, 0)`: clear `FD_CLOEXEC` on `fd`, so that a program this
+/// process starts next inherits it under the same number (item 5.18's list
+/// socket and item 5.23's surface socket; `std` opens every descriptor with the
+/// flag set and has no stable way to clear it). Every program started while the
+/// flag is clear inherits the descriptor, so the caller clears it just before
+/// the one start it is for and closes its own copy straight after. The number is
+/// the caller's to pass to the child; this makes no other change.
+pub fn clear_close_on_exec(fd: BorrowedFd<'_>) -> Result<(), Errno> {
+    let raw: c_int = fd.as_raw_fd();
+    let flags: c_int = 0;
+    // SAFETY: man 2 fcntl: `fcntl(fildes, F_SETFD, arg)` sets the
+    // close-on-exec flag of `fildes` to `arg & FD_CLOEXEC` and returns a value
+    // other than -1, or -1 and sets errno (`EBADF` for a descriptor that is not
+    // open). The arguments have the types of the declaration above: `raw` is
+    // the number of a descriptor `fd` borrows, so it is open for this call, and
+    // the one variadic argument is a `c_int`, the type `F_SETFD` reads. No
+    // pointer is passed.
+    let rc = unsafe { fcntl(raw, F_SETFD, flags) };
+    if rc == -1 { Err(Errno::last()) } else { Ok(()) }
+}
+
 /// `getentropy(buf, len)` on chunks of at most [`RANDOM_MAX_PER_CALL`] bytes:
 /// [`crate::fill_random`] on macOS. Each call fills its whole chunk or fails;
 /// a call interrupted by a signal (`EINTR`) is repeated.
@@ -182,8 +216,24 @@ pub(crate) fn fill_random(buf: &mut [u8]) -> Result<(), RandomError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{SandboxError, attempt_ptrace_attach, sandbox_init_profile};
+    use super::{SandboxError, attempt_ptrace_attach, clear_close_on_exec, sandbox_init_profile};
     use crate::Errno;
+
+    // Miri cannot run foreign calls.
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn a_cleared_descriptor_stays_open_and_usable() {
+        use std::io::{Read, Write};
+        use std::os::fd::AsFd;
+        let pair = std::os::unix::net::UnixStream::pair();
+        assert!(pair.is_ok(), "{pair:?}");
+        let Ok((mut a, mut b)) = pair else { return };
+        assert_eq!(clear_close_on_exec(a.as_fd()), Ok(()));
+        assert!(a.write_all(b"x").is_ok());
+        let mut got = [0u8; 1];
+        assert!(b.read_exact(&mut got).is_ok());
+        assert_eq!(got, *b"x");
+    }
 
     #[test]
     fn a_profile_with_a_nul_never_reaches_the_os() {

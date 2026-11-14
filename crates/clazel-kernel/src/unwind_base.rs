@@ -252,8 +252,8 @@ pub proof fn lemma_addressed_same(
 {
     if crate::noninterference::addressed_to(rules, d, s1, s1b, o) {
         let r = choose|r: Renderer|
-            (s1.renderers.contains(r) || s1b.renderers.contains(r)) && (if o is Show {
-                r.tab == o->Show_tab
+            (s1.renderers.contains(r) || s1b.renderers.contains(r)) && (if o is Show || o is Paint {
+                r.tab == crate::domain::output_id(o)
             } else {
                 r.id == crate::domain::output_id(o)
             }) && crate::domain::domain_of_renderer(rules, r) == d;
@@ -267,8 +267,8 @@ pub proof fn lemma_addressed_same(
     }
     if crate::noninterference::addressed_to(rules, d, s2, s2b, o) {
         let r = choose|r: Renderer|
-            (s2.renderers.contains(r) || s2b.renderers.contains(r)) && (if o is Show {
-                r.tab == o->Show_tab
+            (s2.renderers.contains(r) || s2b.renderers.contains(r)) && (if o is Show || o is Paint {
+                r.tab == crate::domain::output_id(o)
             } else {
                 r.id == crate::domain::output_id(o)
             }) && crate::domain::domain_of_renderer(rules, r) == d;
@@ -654,6 +654,9 @@ pub proof fn lemma_jar_no_public_suffix_step(rules: Seq<clazel_psl::spec::Rule>,
         },
         Event::NavigateTab { tab, url } => {
             lemma_navigation_frame(rules, urls, fetch, s, tab, url, script_document(seq![]));
+        },
+        Event::SubNet { renderer, serial, hop, input } => {
+            crate::subfetch_rel::lemma_sub_net_wf(rules, urls, fetch, s, renderer, serial, hop, input);
         },
         Event::Net { conn, input } => {
             lemma_net_frame(rules, urls, fetch, s, conn, input);

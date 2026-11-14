@@ -1,0 +1,72 @@
+#case 0
+#data "<!DOCTYPE html><body><p><br></p>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 1
+#data "<!DOCTYPE html><body><p><br>text</p>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,18 63x48 #ff000000 face=0 size=1024 glyphs=4 first=512,3168
+
+#case 2
+#data "<!DOCTYPE html><body><p>before<br>after</p>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-1 84x48 #ff000000 face=0 size=1024 glyphs=6 first=512,1975
+text -8,18 71x48 #ff000000 face=0 size=1024 glyphs=5 first=512,3168
+
+#case 3
+#data "<!DOCTYPE html><body><p><br><br></p>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 4
+#data "<!DOCTYPE html><body><p>a<br>b<br>c</p>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-1 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1975
+text -8,18 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,3168
+text -8,36 41x48 #ff000000 face=0 size=1024 glyphs=1 first=512,4361
+
+#case 5
+#data "<!DOCTYPE html><body><h1><br></h1>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 6
+#data "<!DOCTYPE html><body><p><input></p>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 7
+#data "<!DOCTYPE html><body><p><img></p>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 8
+#data "<!DOCTYPE html><body><p><wbr></p>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 9
+#data "<!DOCTYPE html><body><p><embed></p>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 10
+#data "<!DOCTYPE html><body><h2><input></h2>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 11
+#data "<!DOCTYPE html><body><em><br></em>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 12
+#data "<!DOCTYPE html><body><strong><br>text</strong>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,10 63x48 #ff000000 face=0 size=1024 glyphs=4 first=512,2656
+

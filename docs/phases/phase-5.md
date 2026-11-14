@@ -366,11 +366,25 @@ on Linux.
   driver and X server support it; otherwise shared memory (MIT-SHM). Lavapipe uses
   the second, so CI never exercises the first.
 
-**Open, found while recording this:** (g) keeps `clazel-text` until 5.26, but
-5.18 retires `Display` and `Show`, which `clazel-text`'s path uses. 5.18 cannot
-land as written before 5.26 without breaking text-mode `browse` or proving the
-display theorems over both paths in the meantime. Decide which before 5.18
-starts.
+**Found while recording this, decided 2026-11-09 (by a Claude session on the
+maintainer's delegation, from the goals above):** (g) keeps `clazel-text` until
+5.26, but 5.18 as first written retires `Display` and `Show`, which
+`clazel-text`'s path uses. **Decision: both paths coexist from 5.18 until 5.26.**
+5.18 adds the new messages (`FrameReady`, `Viewport`, `Input`, …) and the output
+`Paint` beside `Display` (tag 10) and `Show`, which stay in the schema, unchanged,
+with their theorems as proven today; `theorem_address_bar_integrity` and the
+Phase 2 to 4 theorems are restated over the enlarged message and output sets
+(each case analysis gains the new arms, which they would gain anyway), and the
+new paint and input theorems are added. 5.26 then deletes `Display`, `Show`,
+`clazel-text` and the `Show` theorems in one pull request (G1), leaving tag 10
+unused. Why not the alternatives: retiring `Display` in 5.18 would leave the
+repository with no working browser and no end-to-end evidence (`browse`, the
+1,761-document `pages.rs` run, the hostile pages) until 5.26, against the
+workflow's rule that every change lands with its verification intact; proving
+the theorems over both paths is not the doubling (g) feared, because the `Show`
+theorems already exist and are proven, so what grows is the restated theorems'
+case analysis, which is bounded and then deleted. A renderer with a paired GPU
+process (`Spawn` says) sends lists; one without sends `Display`, as today.
 
 **(a) The CSS parser's tier.** VERIFICATION.md requires at least Tier 1 for
 "every other parser of untrusted bytes: CSS, image decoders, font tables";
@@ -1205,8 +1219,9 @@ falls to software; a process killed mid-frame through real processes.
 
 ### 5.18 The IPC schema and the kernel: surfaces, viewports and input (L)
 
-`clazel-ipc`: the schema changes. Tags are never reused; `Display` is retired
-and tag 10 stays unused.
+`clazel-ipc`: the schema changes. Tags are never reused. `Display` (tag 10) and
+`Show` stay, unchanged, until 5.26 deletes them with `clazel-text` (decided under
+5.0, 2026-11-09); tag 10 then stays unused.
 
 | Tag | Direction | Message | Fields |
 |-----|-----------|---------|--------|
@@ -1249,7 +1264,7 @@ a compromised GPU process could show a stale frame under a newer same-site URL,
 which gains nothing the site's own renderer could not draw (listed). The host
 changes the address bar and the surface together on `Paint`. A new host event
 `Input { tab, input }` becomes a `ToRenderer` for that tab's renderer only. `Show`
-retires with `Display`.
+retires with `Display` in 5.26, not here (see 5.0).
 
 Theorems, each with certified mutations: `theorem_paint_only_own_tab` (a GPU
 process's `FrameReady` gives at most one `Paint`, for its own tab, and no other
@@ -1646,7 +1661,7 @@ Phase 3: TLS in the kernel (3.5b, 3.5e to 3.5g, 3.7) ─> the https:// step of 5
 
 5.1, 5.2, 5.9, 5.12, 5.13 (against a hand-built computed-style table), 5.17 (with
 5.10's outline type), 5.17a, 5.17b, 5.17c, 5.21, 5.21a, 5.22, 5.22a and 5.24 start at once,
-and 5.18 once the question 5.0 leaves open is answered. 5.13 to
+and 5.18 now that 5.0's question about it is decided (2026-11-09). 5.13 to
 5.16 take computed style as a parameter (a table of the subset's computed
 values per node), so layout does not wait for the cascade's proofs, as
 Phase 4's tree builder took `TokFns`. The demo (5.26) needs the conformance

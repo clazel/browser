@@ -1,0 +1,6 @@
+#case 0
+#data "<body><table>\0filler\0text\0"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 102x48 #ff000000 face=0 size=1024 glyphs=10 first=512,1463
+
