@@ -1242,6 +1242,9 @@ pub proof fn lemma_insert_attach_requires(doc: Document, paths: Seq<Seq<NodeId>>
 
 /// DOM §4.2.3 "insert" keeps the arena well formed, with [`insert_paths`]
 /// as the witness; paths that do not pass through `node` are unchanged.
+// Near the default solver limit: statements added elsewhere in this module
+// shift the solver's search, so the limit is raised (no proof changed).
+#[verifier::rlimit(30)]
 pub proof fn lemma_insert_wf_with(doc: Document, paths: Seq<Seq<NodeId>>, node: NodeId, parent: NodeId, child: Option<NodeId>)
     requires
         insert_requires(doc, node, parent, child),
@@ -2041,7 +2044,7 @@ pub proof fn theorem_set_mode_wf(doc: Document, mode: DocumentMode)
 pub proof fn lemma_limit_exact(doc: Document, k: nat)
     ensures
         can_create(doc, k) <==> doc.nodes.len() + k <= 4_000_000,
-        !can_create(doc, k) ==> forall|d: Document| d.nodes.len() == doc.nodes.len() + k ==> !wf(d),
+        !can_create(doc, k) ==> forall|d: Document| #![trigger wf(d)] d.nodes.len() == doc.nodes.len() + k ==> !wf(d),
 {
 }
 
@@ -2182,6 +2185,9 @@ pub open spec fn reparent_one(d: Document, from: NodeId, to: NodeId) -> Seq<Node
 }
 
 /// Appending the first child of `from` to `to` gives [`reparent_one`].
+// Near the default solver limit: statements added elsewhere in this module
+// shift the solver's search, so the limit is raised (no proof changed).
+#[verifier::rlimit(60)]
 pub proof fn lemma_reparent_step_records(d: Document, from: NodeId, to: NodeId)
     requires
         reparent_children_requires(d, from, to),
