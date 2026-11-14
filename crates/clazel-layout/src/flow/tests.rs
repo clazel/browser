@@ -662,7 +662,8 @@ fn vertical_align() {
     // the baseline of the parent box. If the box does not have a baseline,
     // align the bottom margin edge with the parent's baseline": a 20px
     // image sits 20 above the baseline; the line is 20 + 2 high.
-    let l = std("<div id=d>x<img id=i style='vertical-align:baseline;width:1px;height:20px'></div>");
+    let l =
+        std("<div id=d>x<img id=i style='vertical-align:baseline;width:1px;height:20px'></div>");
     assert_eq!(baseline(&l), Some(px(20)), "{}", l.dump());
     assert_eq!((l.bb("d").height, l.bb("i").y), (px(22), 0));
     // A percentage: "Raise (positive value) or lower (negative value) the
@@ -805,7 +806,9 @@ fn text_indent_hanging() {
     // Line 1 "aaaa" (0 + 40 of 60; "bbbb" does not fit), lines 2 and 3 are
     // after soft wraps: indented by 20, so 40 fit: "bbbb" then "cccc".
     assert_eq!(run_xs(&l, "d"), [0, 20, 20], "{}", l.dump());
-    let l = std("<div id=d style='text-indent:20px each-line hanging;width:60px'>aaaa bbbb<br>cc</div>");
+    let l = std(
+        "<div id=d style='text-indent:20px each-line hanging;width:60px'>aaaa bbbb<br>cc</div>",
+    );
     // First line: not indented, so "aaaa bbbb" does not fit in 60 (90):
     // "aaaa" then, after a soft wrap, indented "bbbb"; after the forced
     // break, "cc" is not indented.
@@ -910,9 +913,13 @@ fn overflow_wrap_break_word() {
     // introduced by `anywhere` are considered when calculating min-content
     // intrinsic sizes"; those of `break-word` are not. An inline block in a
     // 30px container is min(max(min-content, 30), max-content 60).
-    let l = std("<div style='width:30px'><span id=s style='display:inline-block;overflow-wrap:anywhere'>abcdef</span></div>");
+    let l = std(
+        "<div style='width:30px'><span id=s style='display:inline-block;overflow-wrap:anywhere'>abcdef</span></div>",
+    );
     assert_eq!(l.bb("s").width, px(30), "{}", l.dump());
-    let l = std("<div style='width:30px'><span id=s style='display:inline-block;overflow-wrap:break-word'>abcdef</span></div>");
+    let l = std(
+        "<div style='width:30px'><span id=s style='display:inline-block;overflow-wrap:break-word'>abcdef</span></div>",
+    );
     assert_eq!(l.bb("s").width, px(60), "{}", l.dump());
 }
 
@@ -959,13 +966,20 @@ fn limited_quirks_mode() {
 /// below and 20px at the sides, and `padding: 5%` is 5px all round.
 #[test]
 fn percentage_margins_and_padding() {
-    let l = std("<div style='width:100px'><div id=c style='margin:10% 20%;padding:5%;height:1px'></div></div>");
+    let l = std(
+        "<div style='width:100px'><div id=c style='margin:10% 20%;padding:5%;height:1px'></div></div>",
+    );
     let f = l.frag("c");
     assert_eq!(f.margin.top, px(10), "{}", l.dump());
     assert_eq!(f.margin.bottom, px(10));
     assert_eq!((f.margin.left, f.margin.right), (px(20), px(20)));
     assert_eq!(
-        (f.padding.top, f.padding.right, f.padding.bottom, f.padding.left),
+        (
+            f.padding.top,
+            f.padding.right,
+            f.padding.bottom,
+            f.padding.left
+        ),
         (px(5), px(5), px(5), px(5))
     );
     // §10.3.3: width auto = 100 − 20 − 20 (margins) = 60 border box; the
@@ -1292,7 +1306,8 @@ fn extreme_lengths_saturate_and_never_panic() {
     let b = l.frag("b");
     assert!(b.margin.left < px(-10_000_000), "{dump}");
     assert_eq!(
-        b.margin.left
+        b.margin
+            .left
             .saturating_add(b.border_box.width)
             .saturating_add(b.margin.right),
         px(200),
@@ -1313,7 +1328,10 @@ fn extreme_lengths_saturate_and_never_panic() {
     // Boxes in flow with non-negative margins below one another do not
     // move up: a, c, d, e in order (§9.4.1).
     let ys: Vec<i32> = ["a", "c", "d", "e"].iter().map(|i| l.bb(i).y).collect();
-    assert!(ys.windows(2).all(|w| w.first() <= w.get(1)), "{ys:?} {dump}");
+    assert!(
+        ys.windows(2).all(|w| w.first() <= w.get(1)),
+        "{ys:?} {dump}"
+    );
     // A huge `font-size` gives lines as high as the (clamped) font: `d`'s
     // two lines are each as high as one, and its height is their sum.
     let d = l.lines("d");

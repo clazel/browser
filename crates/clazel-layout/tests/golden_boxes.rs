@@ -74,7 +74,10 @@ fn parse(html: &str) -> Arena {
 
 /// The fixture files in `dir` (`.txt`) that no document of this run
 /// produces: stale fixtures, left behind when a case or page went away.
-fn stale_fixtures(dir: &std::path::Path, produced: &std::collections::BTreeSet<String>) -> Vec<String> {
+fn stale_fixtures(
+    dir: &std::path::Path,
+    produced: &std::collections::BTreeSet<String>,
+) -> Vec<String> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return vec![format!("{}: cannot list the fixtures", dir.display())];
     };

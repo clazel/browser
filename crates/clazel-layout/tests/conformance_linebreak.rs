@@ -139,7 +139,11 @@ fn cases(lines: &[(String, &str)]) -> Result<Vec<Case>, String> {
         }
         let rules: Vec<String> = gap_rules.into_iter().skip(1).collect();
         if rules.len() != text.len() {
-            return Err(format!("{line}: {} rules for {} characters", rules.len(), text.len()));
+            return Err(format!(
+                "{line}: {} rules for {} characters",
+                rules.len(),
+                text.len()
+            ));
         }
         out.push(Case {
             line: line.clone(),
@@ -348,7 +352,10 @@ fn line_break_test() {
         bad.is_empty(),
         "break-all prohibits a break between two letters (CSS Text 3 §5.2): {bad:?}"
     );
-    assert!(checked > 0, "no letter-letter gap checked: the check is blind");
+    assert!(
+        checked > 0,
+        "no letter-letter gap checked: the check is blind"
+    );
     assert!(changed > 0, "break-all changed no line: the check is blind");
     if !cfg!(miri) {
         assert_eq!(

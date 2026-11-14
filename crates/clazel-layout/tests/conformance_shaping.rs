@@ -481,14 +481,22 @@ fn differing_clusters(text: &str, ours: &[UnitGlyph], theirs: &[Theirs]) -> Vec<
     let mut a: BTreeMap<usize, Vec<Cell>> = BTreeMap::new();
     let mut b: BTreeMap<usize, Vec<Cell>> = BTreeMap::new();
     for g in ours {
-        let (x, y) = if g.mark { (0, 0) } else { (g.x_offset, g.y_offset) };
+        let (x, y) = if g.mark {
+            (0, 0)
+        } else {
+            (g.x_offset, g.y_offset)
+        };
         a.entry(g.cluster)
             .or_default()
             .push((u32::from(g.glyph), g.x_advance, x, y));
     }
     for g in theirs {
         let c = usize::try_from(g.cluster).unwrap_or(usize::MAX);
-        let (x, y) = if mark_at(c) { (0, 0) } else { (g.x_offset, g.y_offset) };
+        let (x, y) = if mark_at(c) {
+            (0, 0)
+        } else {
+            (g.x_offset, g.y_offset)
+        };
         b.entry(c).or_default().push((g.glyph, g.x_advance, x, y));
     }
     let keys: std::collections::BTreeSet<usize> = a.keys().chain(b.keys()).copied().collect();
@@ -804,7 +812,14 @@ fn compare_file(
                 t.pass = t.pass.saturating_add(1);
                 continue;
             };
-            let message = format!("{} [differing char indices {:?}]", diff.message, diff.clusters.iter().map(|&c| char_index(text,c)).collect::<Vec<_>>());
+            let message = format!(
+                "{} [differing char indices {:?}]",
+                diff.message,
+                diff.clusters
+                    .iter()
+                    .map(|&c| char_index(text, c))
+                    .collect::<Vec<_>>()
+            );
             let message = message.as_str();
             let kinds = &diff.kinds;
             let has_mark = text.chars().any(is_combining_mark);
@@ -839,14 +854,11 @@ fn compare_file(
                 Vec::new()
             };
             let unm_w = unmapped_windows(text, &face);
-            let both_w: Vec<(usize, usize)> =
-                comp_w.iter().chain(&unm_w).copied().collect();
+            let both_w: Vec<(usize, usize)> = comp_w.iter().chain(&unm_w).copied().collect();
             let residue_ok = |w: &[(usize, usize)]| {
                 let r = outside(text, &diff.clusters, w);
                 r.is_empty()
-                    || residual_is_positioning(
-                        text, &ours, &theirs, &r, kern_table, face_traits,
-                    )
+                    || residual_is_positioning(text, &ours, &theirs, &r, kern_table, face_traits)
             };
             let glyph_reason: Option<&'static str> = if positioning_only {
                 None
@@ -967,7 +979,10 @@ fn vendored_fonts() {
         .saturating_add(t.fail);
     assert!(total > 0, "the vendored suite compared no cases");
     assert!(t.pass > 0, "the vendored suite had no agreeing case");
-    assert_eq!(t.faces, VENDORED_FACES, "faces shaped in the vendored suite");
+    assert_eq!(
+        t.faces, VENDORED_FACES,
+        "faces shaped in the vendored suite"
+    );
     if cfg!(miri) {
         // Only a stride of the cases ran: the per-case list is checked in
         // normal runs.
@@ -986,7 +1001,10 @@ fn vendored_fonts() {
     got.sort_unstable();
     let mut want: Vec<(&str, &str, &str)> = VENDORED_EXPECTED.to_vec();
     want.sort_unstable();
-    assert!(!got.is_empty(), "expected differences were pinned, none seen");
+    assert!(
+        !got.is_empty(),
+        "expected differences were pinned, none seen"
+    );
     assert_eq!(
         got, want,
         "the vendored suite's expected differences changed (new difference \
