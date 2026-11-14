@@ -105,7 +105,7 @@ fn around_bounds() -> Vec<u32> {
     for (first, last) in TABLE {
         for edge in [*first, *last] {
             for c in [edge.saturating_sub(1), edge, edge.saturating_add(1)] {
-                if c >= 0x80 && c <= MAX && !is_surrogate(c) {
+                if (0x80..=MAX).contains(&c) && !is_surrogate(c) {
                     points.push(c);
                 }
             }
