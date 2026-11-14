@@ -5,7 +5,8 @@
 //!
 //! The document ([`doc`]): 0 the document, 1 `html`, 2 `body`, 3 `div id=x class="ab c"`
 //! holding 4, a text node of two spaces, then 5 `p lang=EN`, 6 `a href=/`, 7 `p` and 8
-//! `span`, the children of `body` in that order.
+//! `span`, the children of `body` in that order. Node 7 also has an attribute `k` in the XLink
+//! namespace.
 
 #[allow(unused_imports)]
 use super::spec::*;
@@ -29,6 +30,11 @@ pub open spec fn element(name: Seq<u32>, attributes: Seq<Attr>) -> NodeKind {
 /// An attribute without a namespace.
 pub open spec fn attr(name: Seq<u32>, value: Seq<u32>) -> Attr {
     Attr { namespace: None, prefix: None, local_name: name, value }
+}
+
+/// An attribute in the XLink namespace.
+pub open spec fn xattr(name: Seq<u32>, value: Seq<u32>) -> Attr {
+    Attr { namespace: Some(Namespace::XLink), prefix: Some(seq![0x78u32, 0x6C, 0x69, 0x6E, 0x6B]), local_name: name, value }
 }
 
 /// A node.
@@ -57,7 +63,7 @@ pub open spec fn doc(mode: DocumentMode) -> Document {
             node(NodeKind::Text { data: seq![0x20u32, 0x20] }, Some(3usize), seq![]),
             node(element(seq![0x70u32], seq![attr(seq![0x6Cu32, 0x61, 0x6E, 0x67], seq![0x45u32, 0x4E])]), Some(2usize), seq![]),
             node(element(seq![0x61u32], seq![attr(seq![0x68u32, 0x72, 0x65, 0x66], seq![0x2Fu32])]), Some(2usize), seq![]),
-            node(element(seq![0x70u32], seq![]), Some(2usize), seq![]),
+            node(element(seq![0x70u32], seq![xattr(seq![0x6Bu32], seq![0x76u32])]), Some(2usize), seq![]),
             node(element(seq![0x73u32, 0x70, 0x61, 0x6E], seq![]), Some(2usize), seq![]),
         ],
     }
@@ -85,6 +91,31 @@ pub open spec fn specificity_of(source: Seq<u32>) -> Specificity {
             zero()
         },
         None => zero(),
+    }
+}
+
+/// The serialization of the selector `source` parses to (empty if it is invalid).
+pub open spec fn serialized(source: Seq<u32>) -> Seq<u32> {
+    match parse_a_selector(source) {
+        Some(list) => serialize_a_group_of_selectors(list),
+        None => Seq::empty(),
+    }
+}
+
+/// `a` and `b` are the same sequence, checked element by element (so that `compute_only` can
+/// decide it).
+pub open spec fn same_seq(a: Seq<u32>, b: Seq<u32>) -> bool {
+    a.len() == b.len() && same_from(a, b, 0)
+}
+
+/// `a` and `b` agree from index `i` on, which is within both.
+pub open spec fn same_from(a: Seq<u32>, b: Seq<u32>, i: int) -> bool
+    decreases a.len() - i,
+{
+    if i < 0 || i >= a.len() || i >= b.len() {
+        true
+    } else {
+        a[i] == b[i] && same_from(a, b, i + 1)
     }
 }
 
