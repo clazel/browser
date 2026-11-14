@@ -305,15 +305,28 @@ mod tests {
         assert!(dxbc_problem(&[]).is_some());
     }
 
+    /// The committed Direct3D shaders, embedded so that the test opens no file
+    /// (Miri's isolation refuses `open`); the names are checked against `D3D`.
+    const COMMITTED_D3D: &[(&str, &[u8])] = &[
+        (
+            "quad.hlsl.vs.dxbc",
+            include_bytes!("../../crates/clazel-gpu/shaders/quad.hlsl.vs.dxbc"),
+        ),
+        (
+            "quad.hlsl.ps.dxbc",
+            include_bytes!("../../crates/clazel-gpu/shaders/quad.hlsl.ps.dxbc"),
+        ),
+    ];
+
     /// The committed Direct3D shaders are containers, whatever compiled them.
     #[test]
-    fn the_committed_direct3d_shaders_are_containers() -> Result<(), String> {
-        for (name, _, _) in super::D3D {
-            let path = format!("../{}/{name}", super::DIR);
-            let bytes = std::fs::read(&path).map_err(|e| format!("{path}: {e}"))?;
-            assert_eq!(super::dxbc_problem(&bytes), None, "{path}");
+    fn the_committed_direct3d_shaders_are_containers() {
+        let listed: Vec<&str> = super::D3D.iter().map(|(name, _, _)| *name).collect();
+        let embedded: Vec<&str> = COMMITTED_D3D.iter().map(|(name, _)| *name).collect();
+        assert_eq!(listed, embedded);
+        for (name, bytes) in COMMITTED_D3D {
+            assert_eq!(super::dxbc_problem(bytes), None, "{}/{name}", super::DIR);
         }
-        Ok(())
     }
 
     #[test]
