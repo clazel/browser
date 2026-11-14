@@ -1,0 +1,179 @@
+#case 0
+#data "<menuitem>"
+root
+  block <html>
+    block <body>
+      inline <menuitem>
+
+#case 1
+#data "</menuitem>"
+root
+  block <html>
+    block <body>
+
+#case 2
+#data "<!DOCTYPE html><body><menuitem>A"
+root
+  block <html>
+    block <body>
+      inline <menuitem>
+        text "A"
+
+#case 3
+#data "<!DOCTYPE html><body><menuitem>A<menuitem>B"
+root
+  block <html>
+    block <body>
+      inline <menuitem>
+        text "A"
+        inline <menuitem>
+          text "B"
+
+#case 4
+#data "<!DOCTYPE html><body><menuitem>A<menu>B</menu>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <menuitem> first
+          text "A"
+      block <menu>
+        text "B"
+      block (anonymous)
+        inline <menuitem> last
+
+#case 5
+#data "<!DOCTYPE html><body><menuitem>A<hr>B"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <menuitem> first
+          text "A"
+      block <hr>
+      block (anonymous)
+        inline <menuitem> last
+          text "B"
+
+#case 6
+#data "<!DOCTYPE html><li><menuitem><li>"
+root
+  block <html>
+    block <body>
+      block <li>
+        marker <li> "• "
+        inline <menuitem>
+      block <li>
+        marker <li> "• "
+
+#case 7
+#data "<!DOCTYPE html><menuitem><p></menuitem>x"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <menuitem> first
+      block <p>
+        text "x"
+      block (anonymous)
+        inline <menuitem> last
+
+#case 8
+#data "<!DOCTYPE html><p><b></p><menuitem>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline <b>
+      block (anonymous)
+        inline <b>
+          inline <menuitem>
+
+#case 9
+#data "<!DOCTYPE html><menuitem><asdf></menuitem>x"
+root
+  block <html>
+    block <body>
+      inline <menuitem>
+        inline <asdf>
+      text "x"
+
+#case 10
+#data "<!DOCTYPE html></menuitem>"
+root
+  block <html>
+    block <body>
+
+#case 11
+#data "<!DOCTYPE html><html></menuitem>"
+root
+  block <html>
+    block <body>
+
+#case 12
+#data "<!DOCTYPE html><head></menuitem>"
+root
+  block <html>
+    block <body>
+
+#case 13
+#data "<!DOCTYPE html><select><menuitem></select>"
+root
+  block <html>
+    block <body>
+      inline <select>
+        inline <menuitem>
+
+#case 14
+#data "<!DOCTYPE html><option><menuitem>"
+root
+  block <html>
+    block <body>
+      inline <option>
+        inline <menuitem>
+
+#case 15
+#data "<!DOCTYPE html><menuitem><option>"
+root
+  block <html>
+    block <body>
+      inline <menuitem>
+        inline <option>
+
+#case 16
+#data "<!DOCTYPE html><menuitem></body>"
+root
+  block <html>
+    block <body>
+      inline <menuitem>
+
+#case 17
+#data "<!DOCTYPE html><menuitem></html>"
+root
+  block <html>
+    block <body>
+      inline <menuitem>
+
+#case 18
+#data "<!DOCTYPE html><menuitem><p>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <menuitem> first
+      block <p>
+      block (anonymous)
+        inline <menuitem> last
+
+#case 19
+#data "<!DOCTYPE html><menuitem><li>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <menuitem> first
+      block <li>
+        marker <li> "• "
+      block (anonymous)
+        inline <menuitem> last
+

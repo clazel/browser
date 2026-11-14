@@ -1,0 +1,123 @@
+#case 0
+#data "<!DOCTYPE html><body><p><br></p>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+
+#case 1
+#data "<!DOCTYPE html><body><p><br>text</p>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x69.28125
+    block <body> 8,16 784x37.28125 m=8,8,8,8
+      block <p> 8,16 784x37.28125 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+        line 8,34.640625 784x18.640625 base=49.5
+          text "text" x=8 base=49.5 w=31.359375
+
+#case 2
+#data "<!DOCTYPE html><body><p>before<br>after</p>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x69.28125
+    block <body> 8,16 784x37.28125 m=8,8,8,8
+      block <p> 8,16 784x37.28125 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "before" x=8 base=30.859375 w=52.390625
+        line 8,34.640625 784x18.640625 base=49.5
+          text "after" x=8 base=49.5 w=39.015625
+
+#case 3
+#data "<!DOCTYPE html><body><p><br><br></p>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x69.28125
+    block <body> 8,16 784x37.28125 m=8,8,8,8
+      block <p> 8,16 784x37.28125 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+        line 8,34.640625 784x18.640625 base=49.5
+
+#case 4
+#data "<!DOCTYPE html><body><p>a<br>b<br>c</p>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x87.921875
+    block <body> 8,16 784x55.921875 m=8,8,8,8
+      block <p> 8,16 784x55.921875 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "a" x=8 base=30.859375 w=9.546875
+        line 8,34.640625 784x18.640625 base=49.5
+          text "b" x=8 base=49.5 w=10.25
+        line 8,53.28125 784x18.640625 base=68.140625
+          text "c" x=8 base=68.140625 w=8.96875
+
+#case 5
+#data "<!DOCTYPE html><body><h1><br></h1>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x80.125
+    block <body> 8,21.4375 784x37.25 m=8,8,8,8
+      block <h1> 8,21.4375 784x37.25 m=21.4375,0,21.4375,0
+        line 8,21.4375 784x37.25 base=51.140625
+
+#case 6
+#data "<!DOCTYPE html><body><p><input></p>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x54.421875
+    block <body> 8,16 784x22.421875 m=8,8,8,8
+      block <p> 8,16 784x22.421875 m=16,0,16,0
+        line 8,16 784x22.421875 base=34.640625
+          atomic <input>
+        replaced <input> 8,16 227.796875x18.640625
+
+#case 7
+#data "<!DOCTYPE html><body><p><img></p>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          atomic <img>
+        replaced <img> 8,30.859375 0x0
+
+#case 8
+#data "<!DOCTYPE html><body><p><wbr></p>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+
+#case 9
+#data "<!DOCTYPE html><body><p><embed></p>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x16
+    block <body> 8,16 784x0 m=8,8,8,8
+      block <p> 8,16 784x0 m=16,0,16,0
+
+#case 10
+#data "<!DOCTYPE html><body><h2><input></h2>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x73.4375
+    block <body> 8,19.921875 784x33.59375 m=8,8,8,8
+      block <h2> 8,19.921875 784x33.59375 m=19.921875,0,19.921875,0
+        line 8,19.921875 784x33.59375 base=47.859375
+          atomic <input>
+        replaced <input> 8,19.921875 341.390625x27.9375
+
+#case 11
+#data "<!DOCTYPE html><body><em><br></em>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <em> 8,8 0x18.640625 start end
+
+#case 12
+#data "<!DOCTYPE html><body><strong><br>text</strong>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x53.28125
+    block <body> 8,8 784x37.28125 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <strong> 8,8 0x18.640625 start
+      line 8,26.640625 784x18.640625 base=41.5
+        inline <strong> 8,26.640625 31.359375x18.640625 end
+        text "text" x=8 base=41.5 w=31.359375
+

@@ -1,0 +1,43 @@
+#case 0
+#data "<!doctype html><p>foo<main>bar<p>baz"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "foo"
+      block <main>
+        block (anonymous)
+          text "bar"
+        block <p>
+          text "baz"
+
+#case 1
+#data "<!doctype html><main><p>foo</main>bar"
+root
+  block <html>
+    block <body>
+      block <main>
+        block <p>
+          text "foo"
+      block (anonymous)
+        text "bar"
+
+#case 2
+#data "<!DOCTYPE html>xxx<svg><x><g><a><main><b>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        text "xxx"
+        inline <svg> first
+          inline <x> first
+            inline <g> first
+              inline <a> first
+      block <main>
+      block (anonymous)
+        inline <svg> last
+          inline <x> last
+            inline <g> last
+              inline <a> last
+        inline <b>
+

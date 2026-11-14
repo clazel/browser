@@ -343,10 +343,12 @@ pub proof fn lemma_server_hello()
         parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 6, 0x12, 0x34, 0, 2, 0xAA, 0xBB]), 32) is Ok,
         parse_handshake_body(2, sh_body(hrr_random(), 0, seq![0u8, 6, 0x12, 0x34, 0, 2, 0xAA, 0xBB]), 32) is Ok,
         parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 7, 0, 0x2b, 0, 3, 3, 4, 5]), 32) == Res::<HsMsg>::Err(ErrKind::Decode),
-        // RFC 5246's legacy extension syntax permits a five-byte extension vector.
-        parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 5, 0x12, 0x34, 0, 1, 9]), 32) is Ok,
-        // An empty extension vector is syntactically allowed; negotiation reports protocol_version.
-        parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 0]), 32) is Ok,
+        // §4.1.3, B.3.1: `extensions<6..2^16-1>`. A five-octet or empty block
+        // is malformed for the TLS 1.3 parser; `hello::spec::validate`
+        // classifies such a ServerHello (no supported_versions) as legacy
+        // before it, so its alert there is still protocol_version.
+        parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 5, 0x12, 0x34, 0, 1, 9]), 32) == Res::<HsMsg>::Err(ErrKind::Decode),
+        parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 0]), 32) == Res::<HsMsg>::Err(ErrKind::Decode),
 {
     assert(parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 6] + sv_ext()), 32) == Res::<HsMsg>::Ok(
         HsMsg::ServerHello(
@@ -406,8 +408,9 @@ pub proof fn lemma_server_hello()
         by (compute_only);
     assert(parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 7, 0, 0x2b, 0, 3, 3, 4, 5]), 32) == Res::<HsMsg>::Err(ErrKind::Decode))
         by (compute_only);
-    assert(parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 5, 0x12, 0x34, 0, 1, 9]), 32) is Ok)
-        by (compute_only);    assert(parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 0]), 32) is Ok)
+    assert(parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 5, 0x12, 0x34, 0, 1, 9]), 32) == Res::<HsMsg>::Err(ErrKind::Decode))
+        by (compute_only);
+    assert(parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 0]), 32) == Res::<HsMsg>::Err(ErrKind::Decode))
         by (compute_only);
 }
 
@@ -548,7 +551,14 @@ pub proof fn lemma_server_messages()
         parse_handshake(seq![4u8, 0, 0, 22, 0, 0, 0, 5, 0, 0, 0, 6, 0, 0, 1, 9, 0, 8, 0, 0x2a, 0, 4, 0, 0, 16, 0], 32) is Ok,
         parse_handshake(seq![4u8, 0, 0, 20, 0, 0, 0, 5, 0, 0, 0, 6, 0, 0, 1, 9, 0, 6, 0, 0x2b, 0, 2, 3, 4], 32)
             == Res::<HsMsg>::Err(ErrKind::ExtensionNotAllowed),
+        // RFC 8446 section 4.6.1: ticket_lifetime "MUST NOT" exceed 604800.
+        parse_handshake(seq![4u8, 0, 0, 14, 0, 0x09, 0x3a, 0x80, 0, 0, 0, 6, 0, 0, 1, 9, 0, 0], 32) is Ok,
+        parse_handshake(seq![4u8, 0, 0, 14, 0, 0x09, 0x3a, 0x81, 0, 0, 0, 6, 0, 0, 1, 9, 0, 0], 32)
+            == Res::<HsMsg>::Err(ErrKind::TicketLifetimeTooLong),
 {
+    assert(parse_handshake(seq![4u8, 0, 0, 14, 0, 0x09, 0x3a, 0x80, 0, 0, 0, 6, 0, 0, 1, 9, 0, 0], 32) is Ok) by (compute_only);
+    assert(parse_handshake(seq![4u8, 0, 0, 14, 0, 0x09, 0x3a, 0x81, 0, 0, 0, 6, 0, 0, 1, 9, 0, 0], 32)
+        == Res::<HsMsg>::Err(ErrKind::TicketLifetimeTooLong)) by (compute_only);
     assert(parse_handshake(seq![8u8, 0, 0, 2, 0, 0], 32) == Res::<HsMsg>::Ok(HsMsg::EncryptedExtensions(Seq::<Ext>::empty()))) by (compute_only);
     assert(parse_handshake(seq![8u8, 0, 0, 6, 0, 4, 0, 0, 0, 0], 32)
         == Res::<HsMsg>::Ok(HsMsg::EncryptedExtensions(seq![Ext { etype: 0, data: Seq::<u8>::empty() }]))) by (compute_only);
@@ -604,6 +614,51 @@ pub proof fn lemma_server_messages()
         by (compute_only);
     assert(parse_handshake(seq![4u8, 0, 0, 20, 0, 0, 0, 5, 0, 0, 0, 6, 0, 0, 1, 9, 0, 6, 0, 0x2b, 0, 2, 3, 4], 32)
         == Res::<HsMsg>::Err(ErrKind::ExtensionNotAllowed)) by (compute_only);
+}
+
+/// The bodies of a CertificateRequest's requests: §4.4.2.1's empty
+/// status_request, RFC 6962's empty signed_certificate_timestamp request
+/// (docs/ERRATA.md), §4.2.4's CertificateAuthoritiesExtension and §4.2.5's
+/// OIDFilterExtension, whose OIDs must differ.
+pub proof fn lemma_request_bodies()
+    ensures
+        parse_handshake(seq![13u8, 0, 0, 7, 0, 0, 4, 0, 5, 0, 0], 32) is Ok,
+        parse_handshake(seq![13u8, 0, 0, 8, 0, 0, 5, 0, 5, 0, 1, 1], 32) == Res::<HsMsg>::Err(ErrKind::Decode),
+        parse_handshake(seq![13u8, 0, 0, 7, 0, 0, 4, 0, 0x12, 0, 0], 32) is Ok,
+        parse_handshake(seq![13u8, 0, 0, 8, 0, 0, 5, 0, 0x12, 0, 1, 1], 32) == Res::<HsMsg>::Err(ErrKind::Decode),
+        parse_handshake(seq![13u8, 0, 0, 12, 0, 0, 9, 0, 0x2f, 0, 5, 0, 3, 0, 1, 7], 32) is Ok,
+        parse_handshake(seq![13u8, 0, 0, 12, 0, 0, 9, 0, 0x2f, 0, 5, 0, 3, 0, 2, 7], 32) == Res::<HsMsg>::Err(ErrKind::Decode),
+        parse_handshake(seq![13u8, 0, 0, 17, 0, 0, 14, 0, 0x30, 0, 10, 0, 8, 1, 5, 0, 0, 1, 6, 0, 0], 32) is Ok,
+        parse_handshake(seq![13u8, 0, 0, 10, 0, 0, 7, 0, 0x30, 0, 3, 0, 1, 5], 32) == Res::<HsMsg>::Err(ErrKind::Decode),
+        oid_filters_distinct(seq![0u8, 8, 1, 5, 0, 0, 1, 6, 0, 0]),
+        !oid_filters_distinct(seq![0u8, 8, 1, 5, 0, 0, 1, 5, 0, 0]),
+{
+    assert(parse_handshake(seq![13u8, 0, 0, 7, 0, 0, 4, 0, 5, 0, 0], 32) is Ok) by (compute_only);
+    assert(parse_handshake(seq![13u8, 0, 0, 8, 0, 0, 5, 0, 5, 0, 1, 1], 32) == Res::<HsMsg>::Err(ErrKind::Decode)) by (compute_only);
+    assert(parse_handshake(seq![13u8, 0, 0, 7, 0, 0, 4, 0, 0x12, 0, 0], 32) is Ok) by (compute_only);
+    assert(parse_handshake(seq![13u8, 0, 0, 8, 0, 0, 5, 0, 0x12, 0, 1, 1], 32) == Res::<HsMsg>::Err(ErrKind::Decode)) by (compute_only);
+    assert(parse_handshake(seq![13u8, 0, 0, 12, 0, 0, 9, 0, 0x2f, 0, 5, 0, 3, 0, 1, 7], 32) is Ok) by (compute_only);
+    assert(parse_handshake(seq![13u8, 0, 0, 12, 0, 0, 9, 0, 0x2f, 0, 5, 0, 3, 0, 2, 7], 32)
+        == Res::<HsMsg>::Err(ErrKind::Decode)) by (compute_only);
+    assert(parse_handshake(seq![13u8, 0, 0, 17, 0, 0, 14, 0, 0x30, 0, 10, 0, 8, 1, 5, 0, 0, 1, 6, 0, 0], 32) is Ok) by (compute_only);
+    assert(parse_handshake(seq![13u8, 0, 0, 10, 0, 0, 7, 0, 0x30, 0, 3, 0, 1, 5], 32) == Res::<HsMsg>::Err(ErrKind::Decode)) by (compute_only);
+    assert(oid_filters_distinct(seq![0u8, 8, 1, 5, 0, 0, 1, 6, 0, 0])) by (compute_only);
+    assert(!oid_filters_distinct(seq![0u8, 8, 1, 5, 0, 0, 1, 5, 0, 0])) by (compute_only);
+}
+
+/// RFC 8446 §4.2.10: a NewSessionTicket's early_data extension is
+/// `struct { uint32 max_early_data_size; } EarlyDataIndication`. Four
+/// octets are accepted; two are `decode_error`.
+pub proof fn lemma_ticket_early_data()
+    ensures
+        parse_handshake(seq![4u8, 0, 0, 22, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 7, 0, 8, 0, 42, 0, 4, 0, 0, 0, 1], 32) is Ok,
+        parse_handshake(seq![4u8, 0, 0, 20, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 7, 0, 6, 0, 42, 0, 2, 0, 1], 32)
+            == Res::<HsMsg>::Err(ErrKind::Decode),
+{
+    assert(parse_handshake(seq![4u8, 0, 0, 22, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 7, 0, 8, 0, 42, 0, 4, 0, 0, 0, 1], 32) is Ok)
+        by (compute_only);
+    assert(parse_handshake(seq![4u8, 0, 0, 20, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 7, 0, 6, 0, 42, 0, 2, 0, 1], 32)
+        == Res::<HsMsg>::Err(ErrKind::Decode)) by (compute_only);
 }
 
 } // verus!

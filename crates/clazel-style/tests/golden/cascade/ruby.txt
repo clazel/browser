@@ -1,0 +1,192 @@
+#case 0
+#data "<html><ruby>a<rb>b<rb></ruby></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <ruby>
+      <rb>
+      <rb>
+
+#case 1
+#data "<html><ruby>a<rb>b<rt></ruby></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <ruby>
+      <rb>
+      <rt>
+
+#case 2
+#data "<html><ruby>a<rb>b<rtc></ruby></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <ruby>
+      <rb>
+      <rtc>
+
+#case 3
+#data "<html><ruby>a<rb>b<rp></ruby></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <ruby>
+      <rb>
+      <rp> display=None
+
+#case 4
+#data "<html><ruby>a<rb>b<span></ruby></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <ruby>
+      <rb>
+        <span>
+
+#case 5
+#data "<html><ruby>a<rt>b<rb></ruby></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <ruby>
+      <rt>
+      <rb>
+
+#case 6
+#data "<html><ruby>a<rt>b<rt></ruby></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <ruby>
+      <rt>
+      <rt>
+
+#case 7
+#data "<html><ruby>a<rt>b<rtc></ruby></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <ruby>
+      <rt>
+      <rtc>
+
+#case 8
+#data "<html><ruby>a<rt>b<rp></ruby></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <ruby>
+      <rt>
+      <rp> display=None
+
+#case 9
+#data "<html><ruby>a<rt>b<span></ruby></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <ruby>
+      <rt>
+        <span>
+
+#case 10
+#data "<html><ruby>a<rtc>b<rb></ruby></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <ruby>
+      <rtc>
+      <rb>
+
+#case 11
+#data "<html><ruby>a<rtc>b<rt>c<rt>d</ruby></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <ruby>
+      <rtc>
+        <rt>
+        <rt>
+
+#case 12
+#data "<html><ruby>a<rtc>b<rtc></ruby></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <ruby>
+      <rtc>
+      <rtc>
+
+#case 13
+#data "<html><ruby>a<rtc>b<rp></ruby></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <ruby>
+      <rtc>
+        <rp> display=None
+
+#case 14
+#data "<html><ruby>a<rtc>b<span></ruby></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <ruby>
+      <rtc>
+        <span>
+
+#case 15
+#data "<html><ruby>a<rp>b<rb></ruby></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <ruby>
+      <rp> display=None
+      <rb>
+
+#case 16
+#data "<html><ruby>a<rp>b<rt></ruby></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <ruby>
+      <rp> display=None
+      <rt>
+
+#case 17
+#data "<html><ruby>a<rp>b<rtc></ruby></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <ruby>
+      <rp> display=None
+      <rtc>
+
+#case 18
+#data "<html><ruby>a<rp>b<rp></ruby></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <ruby>
+      <rp> display=None
+      <rp> display=None
+
+#case 19
+#data "<html><ruby>a<rp>b<span></ruby></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <ruby>
+      <rp> display=None
+        <span>
+
+#case 20
+#data "<html><ruby><rtc><ruby>a<rb>b<rt></ruby></ruby></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <ruby>
+      <rtc>
+        <ruby>
+          <rb>
+          <rt>
+

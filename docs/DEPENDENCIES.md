@@ -61,6 +61,14 @@ Changing a row is a reviewable act. Adding one means saying why below.
 | infer | 0.19.0 | test | A file-type detector by magic numbers (bojand/infer), written without the WHATWG standard: the reference in `clazel-mime`'s sniffing differential test (`tests/conformance_sniffing.rs`). Used without default features, so it has no dependencies (`cfb` is optional). |
 | psl-types | 2.0.11 | test | Types of the `publicsuffix` crate's API (no dependencies). |
 | publicsuffix | 2.3.0 | test | An independent Public Suffix List implementation (rust-publicsuffix, used by `cookie_store`), written from the list's own format: the reference engine in `clazel-psl`'s differential test (`tests/conformance_differential.rs`). Used without default features, so it has no `idna` dependency and handles ASCII hosts only; its only dependency is `psl-types`. |
+| cssparser | 0.38.0 | test | Servo's CSS Syntax parser: the reference engine in `clazel-css`'s differential test (`tests/conformance_differential.rs`, phase-5.md item 5.4). It adds the seven packages in the rows below. |
+| cssparser-macros | 0.7.1 | test | Procedural macros of `cssparser` (`match_byte!`). |
+| dtoa | 1.0.11 | test | Float formatting, required by `dtoa-short`. No dependencies. |
+| dtoa-short | 0.3.5 | test | Short float formatting, required by `cssparser`. |
+| phf | 0.14.0 | test | Perfect-hash static maps, required by `cssparser`. A newer major version than the `phf` that `web_atoms` needs. |
+| phf_generator | 0.14.0 | test | The perfect-hash search used by `phf_macros`. |
+| phf_macros | 0.14.0 | test | The `phf_map!` macro, enabled by `cssparser`. |
+| phf_shared | 0.14.0 | test | The hashing shared by `phf` and its generator. |
 | cfg-if | 1.0.5 | shipped | `#[cfg]` helper macro, required by `encoding_rs`. Also reached from libcrux (`clazel-crypto`) through normal edges under `cfg(hax)` or `cfg(valgrind_ct_test)`, which our builds never set, so it is locked there but never compiled into the browser. |
 | percent-encoding | 2.3.2 | test | rust-url's percent-encoding (used by the `url` crate and Servo): a reference engine in `clazel-percent`'s differential test (`tests/conformance_percent.rs`). No dependencies. |
 | form_urlencoded | 1.2.2 | test | rust-url's `application/x-www-form-urlencoded` serializer: the reference for that percent-encode set in the same test. Its only dependency is `percent-encoding`. |
@@ -223,6 +231,38 @@ Changing a row is a reviewable act. Adding one means saying why below.
 | shlex | 1.3.0 | shipped | Locked but never compiled: reached from libcrux only under `cfg(hax)` (hax's F* extraction) or `cfg(valgrind_ct_test)` (libcrux-secrets's Valgrind constant-time test), which our builds never set. Required by ?. |
 | uuid | 1.29.0 | shipped | Locked but never compiled: reached from libcrux only under `cfg(hax)` (hax's F* extraction) or `cfg(valgrind_ct_test)` (libcrux-secrets's Valgrind constant-time test), which our builds never set. Required by ?. |
 | windows-link | 0.2.1 | shipped | Also required by `parking_lot_core` on Windows in the test-only html5ever chain. Locked but never compiled: reached from libcrux only under `cfg(hax)` (hax's F* extraction) or `cfg(valgrind_ct_test)` (libcrux-secrets's Valgrind constant-time test), which our builds never set. Required by ?. |
+| ttf-parser | 0.25.1 | test | RazrFalcon's OpenType parser (used by `rustybuzz`, `resvg` and `cosmic-text`): a reference engine in `clazel-font`'s differential test (`tests/conformance_fonts.rs`, phase-5.md item 5.9) for the table directory, metrics, `cmap`, outlines, `kern` and `GPOS` pair kerning. Used without default features, with `std` and `opentype-layout` only; it has no dependencies of its own. `rustybuzz` (item 5.11) also enables `apple-layout`, `variable-fonts`, `glyph-names` and `no-std-float`, which pulls in `core_maths`; features unify across the workspace's test builds. `#![forbid(unsafe_code)]`. Pinned to 0.25.1, its latest release. |
+| read-fonts | 0.44.0 | test | Google's OpenType parser from fontations (used by Chrome's Skia through `skrifa`): the second reference engine in the same test, written independently of `ttf-parser`. Pinned to 0.44.0, the newest release whose `yoke` dependency is optional (0.45.0 makes it required, which adds `yoke`, `yoke-derive`, `zerofrom`, `zerofrom-derive`, `stable_deref_trait`, `synstructure` and `smallvec`). `cargo tree` shows four new packages below it (`font-types`, `bytemuck`, `bytemuck_derive`, rows below) and `once_cell`, `syn` 3, `quote`, `proc-macro2` and `unicode-ident`, already listed. `#![forbid(unsafe_code)]`. |
+| font-types | 0.12.7 | test | fontations' scalar types (`Tag`, `GlyphId`, `F2Dot14`, …), required by `read-fonts`. Its only dependency, `bytemuck`, is enabled by `read-fonts`. |
+| bytemuck | 1.25.2 | test | Plain-old-data casts, required by `read-fonts` and `font-types` (it contains `unsafe`, behind its derive's checks). |
+| bytemuck_derive | 1.12.1 | test | The derive macros of `bytemuck` (proc-macro), enabled by `font-types`; it uses `syn` 3, `quote` and `proc-macro2`, already listed. |
+| rustybuzz | 0.20.1 | test | HarfBuzz's shaping algorithm ported to Rust (harfbuzz/rustybuzz): the reference shaper in `clazel-layout`'s shaping differential (`tests/conformance_shaping.rs`, phase-5.md item 5.11), run with the `kern` feature only, glyph ids and advances compared. Used with `std` only (no `wasm-shaper`, so no `wasmi`). It enables `ttf-parser`'s `apple-layout`, `variable-fonts`, `glyph-names` and `no-std-float` features, which unify with `clazel-font`'s test build; besides `ttf-parser` and `bytemuck` (listed) it adds the six packages in the rows below and uses `bitflags`, `log` and `smallvec`, already listed. Pinned to 0.20.1, its latest release, whose `ttf-parser` is the 0.25.1 already listed. |
+| core_maths | 0.1.1 | test | Float functions for `no_std` (`f32::sqrt` and so on through `libm`), required by `rustybuzz` and by `ttf-parser`'s `no-std-float` feature, which `rustybuzz` enables. |
+| libm | 0.2.16 | shipped | The Rust port of musl's maths library, required by `core_maths` (test) and by `naga` (tooling). Classed `shipped` only because `num-traits` now has an edge to it (a feature `naga`'s `half` enables), and `num-traits` is locked under libcrux's `cfg(hax)` and `cfg(valgrind_ct_test)`, which our builds never set, so it is never compiled into the browser. No dependencies. |
+| unicode-bidi-mirroring | 0.4.0 | test | The Unicode Bidi_Mirroring_Glyph property, required by `rustybuzz`. No dependencies. `#![forbid(unsafe_code)]`. |
+| unicode-ccc | 0.4.0 | test | The Unicode Canonical_Combining_Class property, required by `rustybuzz`. No dependencies. `#![forbid(unsafe_code)]`. |
+| unicode-properties | 0.1.5 | test | Unicode General_Category (the only feature `rustybuzz` enables), required by `rustybuzz`. No dependencies. |
+| unicode-script | 0.5.9 | test | The Unicode Script property, required by `rustybuzz`. No dependencies. |
+| ab_glyph_rasterizer | 0.1.10 | test | Alex Butler's coverage rasterizer (used by `ab_glyph`, `glyph_brush` and `wgpu_glyph`), a descendant of `font-rs`: the reference engine in `clazel-glyph-mask`'s differential test (`tests/conformance_masks.rs`, phase-5.md item 5.17), the same signed-area accumulation in `f32` written by another author. Used without default features but with `std`, which is its only default; `cargo tree` shows no dependencies (`libm` is optional and off). It has `unsafe` only to call its line function through a pointer chosen by CPU feature detection (all variants are the same scalar code). Pinned to 0.1.10, its latest release. |
+| naga | 30.0.1 | tooling | The wgpu project's shader translator: `xtask/src/shaders.rs` compiles `clazel-gpu`'s GLSL to the committed SPIR-V with it and `cargo xtask check` confirms the two agree (phase-5.md item 5.17b: "compiled from GLSL by tooling that never ships"). No SPIR-V compiler is installed on the development machine, and this keeps the check in Rust. Features `glsl-in`, `spv-out`, and `wgsl-in`, which is unused but without which 30.0.1 does not build. |
+| naga-types | 30.0.1 | tooling | Required by `naga` (GLSL to SPIR-V for `clazel-gpu`'s shaders, in `xtask` only). |
+| arrayvec | 0.7.8 | tooling | Required by `naga` (GLSL to SPIR-V for `clazel-gpu`'s shaders, in `xtask` only). |
+| bit-set | 0.10.0 | tooling | Required by `naga` (GLSL to SPIR-V for `clazel-gpu`'s shaders, in `xtask` only). |
+| bit-vec | 0.9.1 | tooling | Required by `naga` (GLSL to SPIR-V for `clazel-gpu`'s shaders, in `xtask` only). |
+| cfg_aliases | 0.2.2 | tooling | Build-script helper, required by `naga` (GLSL to SPIR-V for `clazel-gpu`'s shaders, in `xtask` only). |
+| codespan-reporting | 0.13.1 | tooling | Required by `naga` (GLSL to SPIR-V for `clazel-gpu`'s shaders, in `xtask` only). Formats its error messages. |
+| crunchy | 0.2.4 | tooling | Required by `half`, which `naga` requires (in `xtask` only). |
+| foldhash | 0.2.0 | proof | A fast hasher, required by `hashbrown` with the `default-hasher` feature, which `naga` (in `xtask` only, for `clazel-gpu`'s shaders) enables. Classed `proof` because that feature unifies onto the `hashbrown` that Verus's macros reach through `indexmap`; ghost code is erased from normal builds. No dependencies. |
+| half | 2.7.1 | tooling | Required by `naga` (GLSL to SPIR-V for `clazel-gpu`'s shaders, in `xtask` only). |
+| pp-rs | 0.2.1 | tooling | The GLSL preprocessor, required by `naga` (GLSL to SPIR-V for `clazel-gpu`'s shaders, in `xtask` only). |
+| rustc-hash | 1.1.0 | tooling | Required by `naga` (GLSL to SPIR-V for `clazel-gpu`'s shaders, in `xtask` only). |
+| spirv | 0.4.0+sdk-1.4.341.0 | tooling | SPIR-V's enumerations, required by `naga` (GLSL to SPIR-V for `clazel-gpu`'s shaders, in `xtask` only). |
+| thiserror | 2.0.21 | tooling | Required by `naga` (GLSL to SPIR-V for `clazel-gpu`'s shaders, in `xtask` only). |
+| thiserror-impl | 2.0.21 | tooling | The `thiserror` derive (proc-macro), required by `naga` (GLSL to SPIR-V for `clazel-gpu`'s shaders, in `xtask` only). |
+| unicode-width | 0.2.3 | tooling | Required by `codespan-reporting`, which `naga` requires (in `xtask` only). |
+| unicode-xid | 0.2.6 | tooling | Required by `naga` (GLSL to SPIR-V for `clazel-gpu`'s shaders, in `xtask` only). |
+| zerocopy | 0.8.63 | tooling | Required by `naga` (GLSL to SPIR-V for `clazel-gpu`'s shaders, in `xtask` only). |
+| zerocopy-derive | 0.8.63 | tooling | The `zerocopy` derives (proc-macro), required by `naga` (GLSL to SPIR-V for `clazel-gpu`'s shaders, in `xtask` only). |
 <!-- END ALLOWLIST -->
 
 The only `shipped` package is `libc`, and only `clazel-sys` depends on it

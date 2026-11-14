@@ -1,0 +1,110 @@
+#case 0
+#data "<!doctype html><p>foo<search>bar<p>baz"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "foo"
+      block <search>
+        block (anonymous)
+          text "bar"
+        block <p>
+          text "baz"
+
+#case 1
+#data "<!doctype html><search><p>foo</search>bar"
+root
+  block <html>
+    block <body>
+      block <search>
+        block <p>
+          text "foo"
+      block (anonymous)
+        text "bar"
+
+#case 2
+#data "<!DOCTYPE html>xxx<svg><x><g><a><search><b>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        text "xxx"
+        inline <svg> first
+          inline <x> first
+            inline <g> first
+              inline <a> first
+      block <search>
+      block (anonymous)
+        inline <svg> last
+          inline <x> last
+            inline <g> last
+              inline <a> last
+        inline <b>
+
+#case 3
+#data "<!doctype html><a><search>x</a>y"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <a>
+      block <search>
+        inline <a>
+          text "x"
+        text "y"
+
+#case 4
+#data "<!doctype html><a><search>x<p>y<a>z"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <a>
+      block <search>
+        block (anonymous)
+          inline <a>
+            text "x"
+        block <p>
+          inline <a>
+            text "y"
+          inline <a>
+            text "z"
+
+#case 5
+#data "<!doctype html><li>a<search><li>b"
+root
+  block <html>
+    block <body>
+      block <li>
+        marker <li> "• "
+        block (anonymous)
+          text "a"
+        block <search>
+          block <li>
+            marker <li> "• "
+            text "b"
+
+#case 6
+#data "<!doctype html><dd>a<search><dt>b"
+root
+  block <html>
+    block <body>
+      block <dd>
+        block (anonymous)
+          text "a"
+        block <search>
+          block <dt>
+            text "b"
+
+#case 7
+#data "<!doctype html><x><search></x>y"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <x> first
+      block <search>
+        text "y"
+      block (anonymous)
+        inline <x> last
+

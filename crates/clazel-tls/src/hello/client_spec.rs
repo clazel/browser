@@ -15,7 +15,8 @@
 //!   Chrome and Firefox do. The captured host is retained unchanged for the
 //!   certificate check.
 //! - Caller entropy/random and public input are exactly 32 bytes. Session ID
-//!   is at most 32 bytes; a nonempty ID requests middlebox compatibility.
+//!   is empty or 32 bytes (§4.1.2, [`config_ok`]); a nonempty ID requests
+//!   middlebox compatibility.
 //!   The record driver must implement Appendix D.4's dummy CCS rules later.
 //! - Signature schemes include TLS 1.3 schemes and RSA PKCS#1 for certificate
 //!   signatures only. The auth machine already excludes PKCS#1 in CV.
@@ -49,14 +50,20 @@ pub struct Config {
     /// X25519 public input, not a shared secret.
     pub public_key: Seq<u8>,
 }
-/// Local inputs representable by this client profile.
+/// Local inputs representable by this client profile. §4.1.2
+/// legacy_session_id: in compatibility mode "a client not offering a
+/// pre-TLS 1.3 session MUST generate a new 32-byte value", and "Otherwise,
+/// it MUST be set as a zero-length vector"; any other length is the
+/// caller's error (internal_error).
 pub open spec fn config_ok(c: Config) -> bool {
     crate::host::spec::host_ok(c.host) && c.random.len() == 32
-        && c.session_id.len() <= 32 && c.public_key.len() == 32
+        && (c.session_id.len() == 0 || c.session_id.len() == 32) && c.public_key.len() == 32
 }
 /// §4.2.3: schemes offered for CV and certificate signatures.
+/// ecdsa_secp384r1_sha384 (0x0503) is here because servers with a P-384 leaf
+/// key have no other scheme to sign with (§4.4.3); phase-3.md item 3.5g.
 pub open spec fn signatures() -> Seq<u16> {
-    seq![0x0403u16, 0x0804u16, 0x0805u16, 0x0806u16, 0x0807u16,
+    seq![0x0403u16, 0x0503u16, 0x0804u16, 0x0805u16, 0x0806u16, 0x0807u16,
         0x0401u16, 0x0501u16, 0x0601u16]
 }
 /// §4.2.2: an absent initial cookie or a structurally valid bounded retry cookie.

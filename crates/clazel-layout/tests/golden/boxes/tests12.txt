@@ -1,0 +1,73 @@
+#case 0
+#data "<!DOCTYPE html><body><p>foo<math><mtext><i>baz</i></mtext><annotation-xml><svg><desc><b>eggs</b></desc><g><foreignObject><P>spam<TABLE><tr><td><img></td></table></foreignObject></g><g>quux</g></svg></annotation-xml></math>bar"
+root
+  block <html>
+    block <body>
+      block <p>
+        block (anonymous)
+          text "foo"
+          inline <math> first
+            inline <mtext>
+              inline <i>
+                text "baz"
+            inline <annotation-xml> first
+              inline <svg> first
+                inline <desc>
+                  inline <b>
+                    text "eggs"
+                inline <g> first
+                  inline <foreignObject> first
+        block <p>
+          text "spam"
+        table-wrapper <table>
+          table <table>
+            table-row-group <tbody>
+              table-row <tr>
+                table-cell <td>
+                  replaced <img> inline Image
+        block (anonymous)
+          inline <math> last
+            inline <annotation-xml> last
+              inline <svg> last
+                inline <g> last
+                  inline <foreignObject> last
+                inline <g>
+                  text "quux"
+          text "bar"
+
+#case 1
+#data "<!DOCTYPE html><body>foo<math><mtext><i>baz</i></mtext><annotation-xml><svg><desc><b>eggs</b></desc><g><foreignObject><P>spam<TABLE><tr><td><img></td></table></foreignObject></g><g>quux</g></svg></annotation-xml></math>bar"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        text "foo"
+        inline <math> first
+          inline <mtext>
+            inline <i>
+              text "baz"
+          inline <annotation-xml> first
+            inline <svg> first
+              inline <desc>
+                inline <b>
+                  text "eggs"
+              inline <g> first
+                inline <foreignObject> first
+      block <p>
+        text "spam"
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                replaced <img> inline Image
+      block (anonymous)
+        inline <math> last
+          inline <annotation-xml> last
+            inline <svg> last
+              inline <g> last
+                inline <foreignObject> last
+              inline <g>
+                text "quux"
+        text "bar"
+

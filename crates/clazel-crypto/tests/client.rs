@@ -225,6 +225,34 @@ fn the_servers_close_notify_is_answered() -> TestResult {
     Ok(())
 }
 
+/// RFC 8446 §6.1: closing during the server's flight sends close_notify,
+/// sealed under the client handshake epoch. rustls decrypts it.
+#[test]
+fn closing_during_the_servers_flight_sends_close_notify() -> TestResult {
+    let mut server = server(LEAF_ECDSA, KEY_ECDSA)?;
+    let (mut client, hello) = connect(anchors());
+    feed(&mut server, &hello.send)?;
+    // The ServerHello alone: the client now holds the handshake keys.
+    let flight = take(&mut server)?;
+    let length = flight
+        .get(3..5)
+        .map(|n| n.iter().fold(0usize, |a, b| a * 256 + usize::from(*b)))
+        .ok_or("no record header")?;
+    let server_hello = flight.get(..length + 5).ok_or("no ServerHello record")?;
+    let out = client.receive(server_hello);
+    assert_eq!(out.state, State::Handshaking);
+    let out = client.close();
+    assert_eq!(out.state, State::Closed);
+    assert_eq!(out.send.first(), Some(&23), "not a protected record");
+    // rustls decrypts it and, mid-handshake, reports it as an error.
+    let read = feed(&mut server, &out.send);
+    assert!(
+        read.as_ref().is_err_and(|e| e.contains("CloseNotify")),
+        "{read:?}"
+    );
+    Ok(())
+}
+
 #[test]
 fn a_certificate_for_another_name_sends_bad_certificate() -> TestResult {
     let mut server = server(LEAF_OTHER, KEY_OTHER)?;
@@ -347,6 +375,30 @@ fn the_end_of_stream_without_close_notify_is_truncation() -> TestResult {
             origin: Origin::Truncated
         })
     );
+    // RFC 8446 §6.1: our close_notify goes out as the connection ends;
+    // rustls reads it as the end of the stream.
+    feed(&mut server, &out.send)?;
+    assert_eq!(read_plaintext(&mut server)?, b"");
+    Ok(())
+}
+
+#[test]
+fn the_end_of_stream_after_our_close_sends_nothing() -> TestResult {
+    let mut server = server(LEAF_ECDSA, KEY_ECDSA)?;
+    let (mut client, hello) = connect(anchors());
+    let (out, _) = handshake(&mut client, &mut server, hello.send)?;
+    assert_eq!(out.state, State::Open);
+    let out = client.close();
+    assert_eq!(out.state, State::Closing);
+    feed(&mut server, &out.send)?;
+    let out = client.receive_eof();
     assert!(out.send.is_empty());
+    assert_eq!(
+        out.state,
+        State::Failed(Failure {
+            alert: 80,
+            origin: Origin::Truncated
+        })
+    );
     Ok(())
 }

@@ -1,0 +1,310 @@
+#case 0
+#data "<!doctype html><body><title>X</title>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 1
+#data "<!doctype html><table><title>X</title></table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x16
+    block <body> 8,8 784x0 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+
+#case 2
+#data "<!doctype html><head></head><title>X</title>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 3
+#data "<!doctype html></head><title>X</title>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 4
+#data "<!doctype html></head><base>X"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "X" x=8 base=22.859375 w=11.390625
+
+#case 5
+#data "<!doctype html></head><basefont>X"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "X" x=8 base=22.859375 w=11.390625
+
+#case 6
+#data "<!doctype html></head><bgsound>X"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "X" x=8 base=22.859375 w=11.390625
+
+#case 7
+#data "<!doctype html><table><meta></table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x16
+    block <body> 8,8 784x0 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+
+#case 8
+#data "<!doctype html><table>X<tr><td><table> <meta></table></table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x36.640625
+    block <body> 8,8 784x20.640625 m=8,8,8,8
+      block (anonymous) 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          text "X" x=8 base=22.859375 w=11.390625
+      table-wrapper <table> 8,26.640625 2x2 m=0,782,0,0
+        table <table> 8,26.640625 2x2
+          row-group <tbody> 8,26.640625 2x2
+            row <tr> 8,26.640625 2x2
+              cell <td> 8,26.640625 2x2 p=1,1,1,1
+                table-wrapper <table> 9,27.640625 0x0
+                  table <table> 9,27.640625 0x0
+
+#case 9
+#data "<!doctype html><html> <head>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 10
+#data "<!doctype html> <head>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 11
+#data "<!doctype html><table><style> <tr>x </style> </table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x16
+    block <body> 8,8 784x0 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+
+#case 12
+#data "<!doctype html><table><TBODY><script> <tr>x </script> </table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x16
+    block <body> 8,8 784x0 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+          row-group <tbody> 8,8 0x0
+
+#case 13
+#data "<!doctype html><p><applet><p>X</p></applet>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        block (anonymous) 8,16 784x0
+        block <p> 8,16 784x18.640625 m=16,0,16,0
+          line 8,16 784x18.640625 base=30.859375
+            text "X" x=8 base=30.859375 w=11.390625
+        block (anonymous) 8,50.640625 784x0
+
+#case 14
+#data "<!doctype html><p><object type=\"application/x-non-existant-plugin\"><p>X</p></object>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        block (anonymous) 8,16 784x0
+        block <p> 8,16 784x18.640625 m=16,0,16,0
+          line 8,16 784x18.640625 base=30.859375
+            text "X" x=8 base=30.859375 w=11.390625
+        block (anonymous) 8,50.640625 784x0
+
+#case 15
+#data "<!doctype html><listing>\nX</listing>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <listing> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "X" x=8 base=30.859375 w=11.390625
+
+#case 16
+#data "<!doctype html><select><input>X"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x38.421875
+    block <body> 8,8 784x22.421875 m=8,8,8,8
+      line 8,8 784x22.421875 base=26.640625
+        atomic <input>
+        text "X" x=235.796875 base=26.640625 w=11.390625
+      replaced <input> 8,8 227.796875x18.640625
+
+#case 17
+#data "<!doctype html><select><select>X"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "X" x=8 base=22.859375 w=11.390625
+
+#case 18
+#data "<!doctype html><table><input type=hidDEN></table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x16
+    block <body> 8,8 784x0 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+
+#case 19
+#data "<!doctype html><table>X<input type=hidDEN></table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      block (anonymous) 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          text "X" x=8 base=22.859375 w=11.390625
+      table-wrapper <table> 8,26.640625 0x0 m=0,784,0,0
+        table <table> 8,26.640625 0x0
+
+#case 20
+#data "<!doctype html><table>  <input type=hidDEN></table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x16
+    block <body> 8,8 784x0 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+
+#case 21
+#data "<!doctype html><table>  <input type='hidDEN'></table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x16
+    block <body> 8,8 784x0 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+
+#case 22
+#data "<!doctype html><table><input type=\" hidden\"><input type=hidDEN></table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x38.421875
+    block <body> 8,8 784x22.421875 m=8,8,8,8
+      block (anonymous) 8,8 784x22.421875
+        line 8,8 784x22.421875 base=26.640625
+          atomic <input>
+        replaced <input> 8,8 227.796875x18.640625
+      table-wrapper <table> 8,30.421875 0x0 m=0,784,0,0
+        table <table> 8,30.421875 0x0
+
+#case 23
+#data "<!doctype html><table><select>X<tr>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      block (anonymous) 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          inline <select> 8,8 11.390625x18.640625 start end
+          text "X" x=8 base=22.859375 w=11.390625
+      table-wrapper <table> 8,26.640625 0x0 m=0,784,0,0
+        table <table> 8,26.640625 0x0
+          row-group <tbody> 8,26.640625 0x0
+            row <tr> 8,26.640625 0x0
+
+#case 24
+#data "<!doctype html><select>X</select>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <select> 8,8 11.390625x18.640625 start end
+        text "X" x=8 base=22.859375 w=11.390625
+
+#case 25
+#data "<!DOCTYPE hTmL><html></html>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 26
+#data "<!DOCTYPE HTML><html></html>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 28
+#data "<div><p>a</x> b"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x616
+    block <body> 8,16 784x584 m=8,8,8,8
+      block <div> 8,16 784x18.640625
+        block <p> 8,16 784x18.640625 m=16,0,16,0
+          line 8,16 784x18.640625 base=30.859375
+            text "a b" x=8 base=30.859375 w=24.875
+
+#case 29
+#data "<table><tr><td><code></code> </table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 2x2 m=0,782,0,0
+        table <table> 8,8 2x2
+          row-group <tbody> 8,8 2x2
+            row <tr> 8,8 2x2
+              cell <td> 8,8 2x2 p=1,1,1,1
+
+#case 30
+#data "<table><b><tr><td>aaa</td></tr>bbb</table>ccc"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block (anonymous) 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          inline <b> 8,8 30.734375x18.640625 start end
+          text "bbb" x=8 base=22.859375 w=30.734375
+      table-wrapper <table> 8,26.640625 30.625x20.640625 m=0,753.375,0,0
+        table <table> 8,26.640625 30.625x20.640625
+          row-group <tbody> 8,26.640625 30.625x20.640625
+            row <tr> 8,26.640625 30.625x20.640625
+              cell <td> 8,26.640625 30.625x20.640625 p=1,1,1,1
+                line 9,27.640625 28.625x18.640625 base=42.5
+                  text "aaa" x=9 base=42.5 w=28.625
+      block (anonymous) 8,47.28125 784x18.640625
+        line 8,47.28125 784x18.640625 base=62.140625
+          inline <b> 8,47.28125 26.890625x18.640625 start end
+          text "ccc" x=8 base=62.140625 w=26.890625
+
+#case 31
+#data "A<table><tr> B</tr> B</table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block (anonymous) 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          text "A B B" x=8 base=22.859375 w=45.25
+      table-wrapper <table> 8,26.640625 0x0 m=0,784,0,0
+        table <table> 8,26.640625 0x0
+          row-group <tbody> 8,26.640625 0x0
+            row <tr> 8,26.640625 0x0
+
+#case 32
+#data "A<table><tr> B</tr> </em>C</table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block (anonymous) 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          text "A BC" x=8 base=22.859375 w=40.9375
+      table-wrapper <table> 8,26.640625 0x0 m=0,784,0,0
+        table <table> 8,26.640625 0x0
+          row-group <tbody> 8,26.640625 0x0
+            row <tr> 8,26.640625 0x0
+
+#case 33
+#data "<select><keygen>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+

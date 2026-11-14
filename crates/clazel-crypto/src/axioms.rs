@@ -46,7 +46,8 @@ pub fn sha256(message: &[u8]) -> (out: Vec<u8>)
     libcrux_sha2::sha256(message).to_vec()
 }
 
-/// SHA-384 of `message`, for certificate links signed sha384WithRSAEncryption.
+/// SHA-384 of `message`, for certificate links signed sha384WithRSAEncryption
+/// or ecdsa-with-SHA384, and for ecdsa_secp384r1_sha384 in CertificateVerify.
 // AXIOM: libcrux-sha2 0.0.9 `sha384(&[u8]) -> [u8; 48]` returns SHA-384 of its input (HACL*
 // hash_st: Spec.Agile.Hash.hash SHA2_384); it panics above u32::MAX, so we abort above MAX_INPUT.
 #[verifier::external_body]

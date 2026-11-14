@@ -1,0 +1,641 @@
+#case 0
+#data "<!doctype html><p><button><button>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          atomic <button>
+          atomic <button>
+        inline-block <button> 8,30.859375 0x0
+        inline-block <button> 8,30.859375 0x0
+
+#case 1
+#data "<!doctype html><p><button><address>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          atomic <button>
+        inline-block <button> 8,30.859375 0x0
+          block <address> 8,30.859375 0x0
+
+#case 2
+#data "<!doctype html><p><button><article>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          atomic <button>
+        inline-block <button> 8,30.859375 0x0
+          block <article> 8,30.859375 0x0
+
+#case 3
+#data "<!doctype html><p><button><aside>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          atomic <button>
+        inline-block <button> 8,30.859375 0x0
+          block <aside> 8,30.859375 0x0
+
+#case 4
+#data "<!doctype html><p><button><blockquote>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x51.78125
+    block <body> 8,16 784x19.78125 m=8,8,8,8
+      block <p> 8,16 784x19.78125 m=16,0,16,0
+        line 8,16 784x19.78125 base=32
+          atomic <button>
+        inline-block <button> 8,16 80x16
+          block <blockquote> 48,32 0x0 m=16,40,16,40
+
+#case 5
+#data "<!doctype html><p><button><center>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          atomic <button>
+        inline-block <button> 8,30.859375 0x0
+          block <center> 8,30.859375 0x0
+
+#case 6
+#data "<!doctype html><p><button><details>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          atomic <button>
+        inline-block <button> 8,30.859375 0x0
+
+#case 7
+#data "<!doctype html><p><button><dialog>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          atomic <button>
+        inline-block <button> 8,30.859375 0x0
+
+#case 8
+#data "<!doctype html><p><button><dir>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x51.78125
+    block <body> 8,16 784x19.78125 m=8,8,8,8
+      block <p> 8,16 784x19.78125 m=16,0,16,0
+        line 8,16 784x19.78125 base=32
+          atomic <button>
+        inline-block <button> 8,16 40x16
+          block <dir> 8,32 40x0 m=16,0,16,0 p=0,0,0,40
+
+#case 9
+#data "<!doctype html><p><button><div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          atomic <button>
+        inline-block <button> 8,30.859375 0x0
+          block <div> 8,30.859375 0x0
+
+#case 10
+#data "<!doctype html><p><button><dl>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x51.78125
+    block <body> 8,16 784x19.78125 m=8,8,8,8
+      block <p> 8,16 784x19.78125 m=16,0,16,0
+        line 8,16 784x19.78125 base=32
+          atomic <button>
+        inline-block <button> 8,16 0x16
+          block <dl> 8,32 0x0 m=16,0,16,0
+
+#case 11
+#data "<!doctype html><p><button><fieldset>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          atomic <button>
+        inline-block <button> 8,30.859375 0x0
+
+#case 12
+#data "<!doctype html><p><button><figcaption>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          atomic <button>
+        inline-block <button> 8,30.859375 0x0
+          block <figcaption> 8,30.859375 0x0
+
+#case 13
+#data "<!doctype html><p><button><figure>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x51.78125
+    block <body> 8,16 784x19.78125 m=8,8,8,8
+      block <p> 8,16 784x19.78125 m=16,0,16,0
+        line 8,16 784x19.78125 base=32
+          atomic <button>
+        inline-block <button> 8,16 80x16
+          block <figure> 48,32 0x0 m=16,40,16,40
+
+#case 14
+#data "<!doctype html><p><button><footer>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          atomic <button>
+        inline-block <button> 8,30.859375 0x0
+          block <footer> 8,30.859375 0x0
+
+#case 15
+#data "<!doctype html><p><button><header>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          atomic <button>
+        inline-block <button> 8,30.859375 0x0
+          block <header> 8,30.859375 0x0
+
+#case 16
+#data "<!doctype html><p><button><hgroup>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          atomic <button>
+        inline-block <button> 8,30.859375 0x0
+          block <hgroup> 8,30.859375 0x0
+
+#case 17
+#data "<!doctype html><p><button><main>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          atomic <button>
+        inline-block <button> 8,30.859375 0x0
+          block <main> 8,30.859375 0x0
+
+#case 18
+#data "<!doctype html><p><button><menu>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x51.78125
+    block <body> 8,16 784x19.78125 m=8,8,8,8
+      block <p> 8,16 784x19.78125 m=16,0,16,0
+        line 8,16 784x19.78125 base=32
+          atomic <button>
+        inline-block <button> 8,16 40x16
+          block <menu> 8,32 40x0 m=16,0,16,0 p=0,0,0,40
+
+#case 19
+#data "<!doctype html><p><button><nav>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          atomic <button>
+        inline-block <button> 8,30.859375 0x0
+          block <nav> 8,30.859375 0x0
+
+#case 20
+#data "<!doctype html><p><button><ol>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x51.78125
+    block <body> 8,16 784x19.78125 m=8,8,8,8
+      block <p> 8,16 784x19.78125 m=16,0,16,0
+        line 8,16 784x19.78125 base=32
+          atomic <button>
+        inline-block <button> 8,16 40x16
+          block <ol> 8,32 40x0 m=16,0,16,0 p=0,0,0,40
+
+#case 21
+#data "<!doctype html><p><button><p>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x51.78125
+    block <body> 8,16 784x19.78125 m=8,8,8,8
+      block <p> 8,16 784x19.78125 m=16,0,16,0
+        line 8,16 784x19.78125 base=32
+          atomic <button>
+        inline-block <button> 8,16 0x16
+          block <p> 8,32 0x0 m=16,0,16,0
+
+#case 22
+#data "<!doctype html><p><button><search>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          atomic <button>
+        inline-block <button> 8,30.859375 0x0
+          block <search> 8,30.859375 0x0
+
+#case 23
+#data "<!doctype html><p><button><section>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          atomic <button>
+        inline-block <button> 8,30.859375 0x0
+          block <section> 8,30.859375 0x0
+
+#case 24
+#data "<!doctype html><p><button><summary>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          atomic <button>
+        inline-block <button> 8,30.859375 0x0
+
+#case 25
+#data "<!doctype html><p><button><ul>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x51.78125
+    block <body> 8,16 784x19.78125 m=8,8,8,8
+      block <p> 8,16 784x19.78125 m=16,0,16,0
+        line 8,16 784x19.78125 base=32
+          atomic <button>
+        inline-block <button> 8,16 40x16
+          block <ul> 8,32 40x0 m=16,0,16,0 p=0,0,0,40
+
+#case 26
+#data "<!doctype html><p><button><h1>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x57.21875
+    block <body> 8,16 784x25.21875 m=8,8,8,8
+      block <p> 8,16 784x25.21875 m=16,0,16,0
+        line 8,16 784x25.21875 base=37.4375
+          atomic <button>
+        inline-block <button> 8,16 0x21.4375
+          block <h1> 8,37.4375 0x0 m=21.4375,0,21.4375,0
+
+#case 27
+#data "<!doctype html><p><button><h6>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x60.75
+    block <body> 8,16 784x28.75 m=8,8,8,8
+      block <p> 8,16 784x28.75 m=16,0,16,0
+        line 8,16 784x28.75 base=40.96875
+          atomic <button>
+        inline-block <button> 8,16 0x24.96875
+          block <h6> 8,40.96875 0x0 m=24.96875,0,24.96875,0
+
+#case 28
+#data "<!doctype html><p><button><listing>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x51.78125
+    block <body> 8,16 784x19.78125 m=8,8,8,8
+      block <p> 8,16 784x19.78125 m=16,0,16,0
+        line 8,16 784x19.78125 base=32
+          atomic <button>
+        inline-block <button> 8,16 0x16
+          block <listing> 8,32 0x0 m=16,0,16,0
+
+#case 29
+#data "<!doctype html><p><button><pre>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x51.78125
+    block <body> 8,16 784x19.78125 m=8,8,8,8
+      block <p> 8,16 784x19.78125 m=16,0,16,0
+        line 8,16 784x19.78125 base=32
+          atomic <button>
+        inline-block <button> 8,16 0x16
+          block <pre> 8,32 0x0 m=16,0,16,0
+
+#case 30
+#data "<!doctype html><p><button><form>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          atomic <button>
+        inline-block <button> 8,30.859375 0x0
+          block <form> 8,30.859375 0x0
+
+#case 31
+#data "<!doctype html><p><button><li>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          atomic <button>
+        inline-block <button> 8,30.859375 0x0
+          block <li> 8,30.859375 0x0
+            marker <li> -6.53125,30.859375 14.53125x18.640625
+              line -6.53125,30.859375 14.53125x18.640625 base=45.71875
+                text "• " x=-6.53125 base=45.71875 w=14.53125
+
+#case 32
+#data "<!doctype html><p><button><dd>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          atomic <button>
+        inline-block <button> 8,30.859375 40x0
+          block <dd> 48,30.859375 0x0 m=0,0,0,40
+
+#case 33
+#data "<!doctype html><p><button><dt>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          atomic <button>
+        inline-block <button> 8,30.859375 0x0
+          block <dt> 8,30.859375 0x0
+
+#case 34
+#data "<!doctype html><p><button><plaintext>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x51.78125
+    block <body> 8,16 784x19.78125 m=8,8,8,8
+      block <p> 8,16 784x19.78125 m=16,0,16,0
+        line 8,16 784x19.78125 base=32
+          atomic <button>
+        inline-block <button> 8,16 0x16
+          block <plaintext> 8,32 0x0 m=16,0,16,0
+
+#case 35
+#data "<!doctype html><p><button><table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          atomic <button>
+        inline-block <button> 8,30.859375 0x0
+          table-wrapper <table> 8,30.859375 0x0
+            table <table> 8,30.859375 0x0
+
+#case 36
+#data "<!doctype html><p><button><hr>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x53.78125
+    block <body> 8,16 784x21.78125 m=8,8,8,8
+      block <p> 8,16 784x21.78125 m=16,0,16,0
+        line 8,16 784x21.78125 base=34
+          atomic <button>
+        inline-block <button> 8,16 2x18
+          block <hr> 8,24 2x2 m=8,0,8,0 b=1,1,1,1
+
+#case 37
+#data "<!doctype html><p><button><xmp>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x51.78125
+    block <body> 8,16 784x19.78125 m=8,8,8,8
+      block <p> 8,16 784x19.78125 m=16,0,16,0
+        line 8,16 784x19.78125 base=32
+          atomic <button>
+        inline-block <button> 8,16 0x16
+          block <xmp> 8,32 0x0 m=16,0,16,0
+
+#case 38
+#data "<!doctype html><p><button></p>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x51.78125
+    block <body> 8,16 784x19.78125 m=8,8,8,8
+      block <p> 8,16 784x19.78125 m=16,0,16,0
+        line 8,16 784x19.78125 base=32
+          atomic <button>
+        inline-block <button> 8,16 0x16
+          block <p> 8,32 0x0 m=16,0,16,0
+
+#case 39
+#data "<!doctype html><button><p></button>x"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x35.78125
+    block <body> 8,8 784x19.78125 m=8,8,8,8
+      line 8,8 784x19.78125 base=24
+        atomic <button>
+        text "x" x=8 base=24 w=9.03125
+      inline-block <button> 8,8 0x16
+        block <p> 8,24 0x0 m=16,0,16,0
+
+#case 40
+#data "<!doctype html><address><button></address>a"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x53.28125
+    block <body> 8,8 784x37.28125 m=8,8,8,8
+      block <address> 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          atomic <button>
+        inline-block <button> 8,22.859375 0x0
+      block (anonymous) 8,26.640625 784x18.640625
+        line 8,26.640625 784x18.640625 base=41.5
+          text "a" x=8 base=41.5 w=9.546875
+
+#case 41
+#data "<p><table></p>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x616
+    block <body> 8,16 784x584 m=8,8,8,8
+      block <p> 8,16 784x0 m=0,0,16,0
+        block <p> 8,16 784x0 m=16,0,16,0
+        table-wrapper <table> 8,16 0x0 m=0,784,0,0
+          table <table> 8,16 0x0
+
+#case 42
+#data "<!doctype html><svg>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 43
+#data "<!doctype html><p><figcaption>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x16
+    block <body> 8,16 784x0 m=8,8,8,8
+      block <p> 8,16 784x0 m=16,0,16,0
+      block <figcaption> 8,16 784x0
+
+#case 44
+#data "<!doctype html><p><summary>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x16
+    block <body> 8,16 784x0 m=8,8,8,8
+      block <p> 8,16 784x0 m=16,0,16,0
+      block (anonymous) 8,16 784x0
+
+#case 45
+#data "<!doctype html><form><table><form>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x16
+    block <body> 8,8 784x0 m=8,8,8,8
+      block <form> 8,8 784x0
+        table-wrapper <table> 8,8 0x0 m=0,784,0,0
+          table <table> 8,8 0x0
+
+#case 46
+#data "<!doctype html><table><form><form>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x16
+    block <body> 8,8 784x0 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+
+#case 47
+#data "<!doctype html><table><form></table><form>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x16
+    block <body> 8,8 784x0 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+
+#case 48
+#data "<!doctype html><svg><foreignObject><p>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x16
+    block <body> 8,16 784x0 m=8,8,8,8
+      block (anonymous) 8,16 784x0
+      block <p> 8,16 784x0 m=16,0,16,0
+      block (anonymous) 8,16 784x0
+
+#case 49
+#data "<!doctype html><svg><title>abc"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 50
+#data "<option><span><option>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 51
+#data "<option><option>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 52
+#data "<math><annotation-xml><div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block (anonymous) 8,8 784x0
+      block <div> 8,8 784x0
+
+#case 53
+#data "<math><annotation-xml encoding=\"application/svg+xml\"><div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block (anonymous) 8,8 784x0
+      block <div> 8,8 784x0
+
+#case 54
+#data "<math><annotation-xml encoding=\"application/xhtml+xml\"><div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block (anonymous) 8,8 784x0
+      block <div> 8,8 784x0
+      block (anonymous) 8,8 784x0
+
+#case 55
+#data "<math><annotation-xml encoding=\"aPPlication/xhtmL+xMl\"><div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block (anonymous) 8,8 784x0
+      block <div> 8,8 784x0
+      block (anonymous) 8,8 784x0
+
+#case 56
+#data "<math><annotation-xml encoding=\"text/html\"><div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block (anonymous) 8,8 784x0
+      block <div> 8,8 784x0
+      block (anonymous) 8,8 784x0
+
+#case 57
+#data "<math><annotation-xml encoding=\"Text/htmL\"><div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block (anonymous) 8,8 784x0
+      block <div> 8,8 784x0
+      block (anonymous) 8,8 784x0
+
+#case 58
+#data "<math><annotation-xml encoding=\" text/html \"><div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block (anonymous) 8,8 784x0
+      block <div> 8,8 784x0
+
+#case 59
+#data "<math><annotation-xml> </annotation-xml>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 60
+#data "<math><annotation-xml>c</annotation-xml>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <math> 8,8 8.96875x18.640625 start end
+        inline <annotation-xml> 8,8 8.96875x18.640625 start end
+        text "c" x=8 base=22.859375 w=8.96875
+
+#case 61
+#data "<math><annotation-xml><!--foo-->"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 62
+#data "<math><annotation-xml></svg>x"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <math> 8,8 9.03125x18.640625 start end
+        inline <annotation-xml> 8,8 9.03125x18.640625 start end
+        text "x" x=8 base=22.859375 w=9.03125
+
+#case 63
+#data "<math><annotation-xml><svg>x"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <math> 8,8 9.03125x18.640625 start end
+        inline <annotation-xml> 8,8 9.03125x18.640625 start end
+        inline <svg> 8,8 9.03125x18.640625 start end
+        text "x" x=8 base=22.859375 w=9.03125
+

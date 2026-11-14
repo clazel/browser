@@ -1,0 +1,56 @@
+#case 0
+#data "<!DOCTYPE html>&NotEqualTilde;"
+root
+  block <html>
+    block <body>
+      text "≂\u{338}"
+
+#case 1
+#data "<!DOCTYPE html>&NotEqualTilde;A"
+root
+  block <html>
+    block <body>
+      text "≂\u{338}A"
+
+#case 2
+#data "<!DOCTYPE html>&ThickSpace;"
+root
+  block <html>
+    block <body>
+      text "\u{205f}\u{200a}"
+
+#case 3
+#data "<!DOCTYPE html>&ThickSpace;A"
+root
+  block <html>
+    block <body>
+      text "\u{205f}\u{200a}A"
+
+#case 4
+#data "<!DOCTYPE html>&NotSubset;"
+root
+  block <html>
+    block <body>
+      text "⊂\u{20d2}"
+
+#case 5
+#data "<!DOCTYPE html>&NotSubset;A"
+root
+  block <html>
+    block <body>
+      text "⊂\u{20d2}A"
+
+#case 6
+#data "<!DOCTYPE html>&Gopf;"
+root
+  block <html>
+    block <body>
+      text "𝔾"
+
+#case 7
+#data "<!DOCTYPE html>&Gopf;A"
+root
+  block <html>
+    block <body>
+      text "𝔾A"
+

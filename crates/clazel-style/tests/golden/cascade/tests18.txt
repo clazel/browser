@@ -1,0 +1,297 @@
+#case 0
+#data "<plaintext></plaintext>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <plaintext> margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 1
+#data "<!doctype html><plaintext></plaintext>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <plaintext> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 2
+#data "<!doctype html><html><plaintext></plaintext>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <plaintext> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 3
+#data "<!doctype html><head><plaintext></plaintext>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <plaintext> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 4
+#data "<!doctype html><html><noscript><plaintext></plaintext>"
+<html> display=Block
+  <head> display=None
+    <noscript>
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <plaintext> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 5
+#data "<!doctype html></head><plaintext></plaintext>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <plaintext> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 6
+#data "<!doctype html><body><plaintext></plaintext>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <plaintext> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 7
+#data "<!doctype html><table><plaintext></plaintext>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <plaintext> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+    <table> display=Table border-spacing=2px 2px
+
+#case 8
+#data "<!doctype html><table><tbody><plaintext></plaintext>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <plaintext> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+
+#case 9
+#data "<!doctype html><table><tbody><tr><plaintext></plaintext>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <plaintext> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+
+#case 10
+#data "<!doctype html><table><td><plaintext></plaintext>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+            <plaintext> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 11
+#data "<!doctype html><table><caption><plaintext></plaintext>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <caption> display=TableCaption text-align=Center
+        <plaintext> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 12
+#data "<!doctype html><table><colgroup><plaintext></plaintext>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <plaintext> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+    <table> display=Table border-spacing=2px 2px
+      <colgroup> display=TableColumnGroup
+
+#case 13
+#data "<!doctype html><select><plaintext></plaintext>X"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <plaintext> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 14
+#data "<!doctype html><table><select><plaintext>a<caption>b"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <plaintext> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+    <table> display=Table border-spacing=2px 2px
+
+#case 15
+#data "<!doctype html><template><plaintext>a</template>b"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 16
+#data "<!doctype html><body></body><plaintext></plaintext>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <plaintext> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 17
+#data "<!doctype html><frameset><plaintext></plaintext>"
+<html> display=Block
+  <head> display=None
+  <frameset>
+
+#case 18
+#data "<!doctype html><frameset></frameset><plaintext></plaintext>"
+<html> display=Block
+  <head> display=None
+  <frameset>
+
+#case 19
+#data "<!doctype html><body></body></html><plaintext></plaintext>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <plaintext> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 20
+#data "<!doctype html><frameset></frameset></html><plaintext></plaintext>"
+<html> display=Block
+  <head> display=None
+  <frameset>
+
+#case 21
+#data "<!doctype html><svg><plaintext>a</plaintext>b"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+      <plaintext> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 22
+#data "<!doctype html><svg><title><plaintext>a</plaintext>b"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+      <title> display=None
+        <plaintext> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 23
+#data "<!doctype html><table><tr><style></script></style>abc"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <style> display=None
+
+#case 24
+#data "<!doctype html><table><tr><script></style></script>abc"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <script> display=None
+
+#case 25
+#data "<!doctype html><table><caption><style></script></style>abc"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <caption> display=TableCaption text-align=Center
+        <style> display=None
+
+#case 26
+#data "<!doctype html><table><td><style></script></style>abc"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+            <style> display=None
+
+#case 27
+#data "<!doctype html><select><script></style></script>abc"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <script> display=None
+
+#case 28
+#data "<!doctype html><table><select><script></style></script>abc"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <script> display=None
+    <table> display=Table border-spacing=2px 2px
+
+#case 29
+#data "<!doctype html><table><tr><select><script></style></script>abc"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <script> display=None
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+
+#case 30
+#data "<!doctype html><frameset></frameset><noframes>abc"
+<html> display=Block
+  <head> display=None
+  <frameset>
+  <noframes> display=None
+
+#case 31
+#data "<!doctype html><frameset></frameset><noframes>abc</noframes><!--abc-->"
+<html> display=Block
+  <head> display=None
+  <frameset>
+  <noframes> display=None
+
+#case 32
+#data "<!doctype html><frameset></frameset></html><noframes>abc"
+<html> display=Block
+  <head> display=None
+  <frameset>
+  <noframes> display=None
+
+#case 33
+#data "<!doctype html><frameset></frameset></html><noframes>abc</noframes><!--abc-->"
+<html> display=Block
+  <head> display=None
+  <frameset>
+  <noframes> display=None
+
+#case 34
+#data "<!doctype html><table><tr></tbody><tfoot>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+      <tfoot> display=TableFooterGroup vertical-align=Middle
+
+#case 35
+#data "<!doctype html><table><td><svg></svg>abc<td>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+            <svg>
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+
