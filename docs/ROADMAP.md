@@ -45,18 +45,15 @@ running the demo and the escape tests on Linux x86-64 and macOS arm64.
 ## Phase 3: Networking
 Verified HTTP/1.1 parser, DNS, and our own TLS 1.3 client with verified
 crypto from libcrux (decided in phase-3.md item 3.0; rustls was not taken).
-Certificate revocation through a set pushed to the browser (3.5h), and a
-generic proven store on the WHATWG Storage model that keeps it, the cookie
-jar, `localStorage` and the history across runs (3.10). Later phases add
-IndexedDB, the Cache API and an HTTP cache to the same store. Both items
-were added 2026-11-03.
+A generic proven store on the WHATWG Storage model that keeps the cookie jar,
+`localStorage` and the history across runs (3.10), added 2026-11-03. Later
+phases add IndexedDB, the Cache API and an HTTP cache to the same store.
 *Exit:* a verified `curl` clone.
 Detailed plan: [phases/phase-3.md](phases/phase-3.md).
 **Status: in progress (started 2026-10-23). The TLS decision (3.0) is
 taken: option B. HTTP, DNS, the fetch client with redirects and cookies, the
 kernel join, the TLS client and the `curl` clone over `http:` and `https:` are
-on `main` (CI's full verification green on bf6a9ea). Left: revocation (3.5h),
-persistent state (3.10), the TLS proofs and tier raises (3.5e to 3.5g), and
+on `main` (CI's full verification green on bf6a9ea). Left: persistent state (3.10), the TLS proofs and tier raises (3.5e to 3.5g), and
 the wrap-up (3.9).**
 
 ## Phase 4: HTML and DOM
@@ -96,7 +93,9 @@ in safe Rust. DOM bindings.
 
 ## Phase 8: Windows port, compatibility grind
 Windows proofs (the AppContainer backend, base CI job and Phase 5's window exist, see Platforms). WPT score tracking, CSS breadth,
-Web APIs, performance. Also the legacy multi-byte encodings (gb18030 and
+Web APIs, performance. Also certificate revocation through a pushed set
+([phases/phase-3.md](phases/phase-3.md), item 3.5h, moved here on 2026-11-05):
+until then a revoked certificate that has not expired is accepted. Also the legacy multi-byte encodings (gb18030 and
 GBK, Big5, ISO-2022-JP, Shift_JIS, EUC-JP, EUC-KR), slipped from Phase 4
 item 4.4 as its item 4.0 allows; until then a page in one of them is not
 rendered and says "encoding `<name>` is not supported"
