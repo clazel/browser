@@ -141,12 +141,12 @@
       }
     },
     {
-      "id": "version-0301-only-protected",
+      "id": "record-version-checked",
       "file": "src/spec.rs",
-      "find": "v == 0x0303 || (!protected && v == 0x0301)",
-      "replace": "v == 0x0303 || (protected && v == 0x0301)",
+      "find": "if !ok_type {",
+      "replace": "if !ok_type || be_value(b.subrange(1, 3)) != 0x0303 {",
       "expect": "killed",
-      "reason": "0x0301 is refused on an unprotected record: lemma_record_versions is false.",
+      "reason": "A legacy_record_version other than 0x0303 is refused, which §5.1 says to ignore: lemma_record_versions is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -155,17 +155,17 @@
       }
     },
     {
-      "id": "version-0303-changed",
+      "id": "protected-header-constant",
       "file": "src/spec.rs",
-      "find": "v == 0x0303 || (!protected && v == 0x0301)",
-      "replace": "v == 0x0304 || (!protected && v == 0x0301)",
+      "find": "Read::Done(Frame::Protected(b.take(5), body), rest)",
+      "replace": "Read::Done(Frame::Protected(additional_data(len), body), rest)",
       "expect": "killed",
-      "reason": "0x0303 is refused: lemma_record_versions is false.",
+      "reason": "A protected record's additional data is the constant 23, 3, 3, len instead of the header received (§5.2): lemma_record_versions is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
         "lemma": "super::examples::lemma_record_versions()",
-        "witness": "read_record(seq![22u8, 3, 3, 0, 1, 7], false) != Read::<Frame>::Done(Frame::Plain(Record { ctype: 22, fragment: seq![7u8] }), Seq::<u8>::empty())"
+        "witness": "read_record(seq![23u8, 3, 1, 0, 1, 7], true) != Read::<Frame>::Done(Frame::Protected(seq![23u8, 3, 1, 0, 1], seq![7u8]), Seq::<u8>::empty())"
       }
     },
     {
@@ -390,6 +390,20 @@
         "file": "src/certificates.rs",
         "lemma": "super::examples::lemma_feed_examples()",
         "witness": "feed_record(Reasm { buf: Seq::<u8>::empty() }, Record { ctype: 22, fragment: Seq::<u8>::empty() }) != Res::<(Event, Reasm)>::Err(ErrKind::ZeroLengthFragment)"
+      }
+    },
+    {
+      "id": "alert-handshake-too-large",
+      "file": "src/spec.rs",
+      "find": "ErrKind::HandshakeTooLarge => INTERNAL_ERROR,",
+      "replace": "ErrKind::HandshakeTooLarge => ILLEGAL_PARAMETER,",
+      "expect": "killed",
+      "reason": "The crate's handshake-size limit (its resource policy, not a rule the peer broke) maps to illegal_parameter instead of internal_error: lemma_alert_mapping is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_alert_mapping()",
+        "witness": "alert_of(ErrKind::HandshakeTooLarge) != 80"
       }
     },
     {
@@ -729,6 +743,118 @@
       }
     },
     {
+      "id": "ticket-lifetime-unchecked",
+      "file": "src/spec.rs",
+      "find": "n.ticket_lifetime > 604800",
+      "replace": "n.ticket_lifetime > 604801",
+      "expect": "killed",
+      "reason": "A ticket_lifetime of 604801 seconds is accepted (§4.6.1): lemma_server_messages is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_server_messages()",
+        "witness": "parse_handshake(seq![4u8, 0, 0, 14, 0, 0x09, 0x3a, 0x81, 0, 0, 0, 6, 0, 0, 1, 9, 0, 0], 32) != Res::<HsMsg>::Err(ErrKind::TicketLifetimeTooLong)"
+      }
+    },
+    {
+      "id": "ticket-early-data-unchecked",
+      "file": "src/spec.rs",
+      "find": "e.etype == EXT_EARLY_DATA && m is Nst {",
+      "replace": "e.etype == EXT_EARLY_DATA && m is Nst && false {",
+      "expect": "killed",
+      "reason": "A NewSessionTicket's early_data body that is not a uint32 is accepted (RFC 8446 §4.2.10): lemma_ticket_early_data is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_ticket_early_data()",
+        "witness": "parse_handshake(seq![4u8, 0, 0, 20, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 7, 0, 6, 0, 42, 0, 2, 0, 1], 32) != Res::<HsMsg>::Err(ErrKind::Decode)"
+      }
+    },
+    {
+      "id": "request-status-request-body-unchecked",
+      "file": "src/spec.rs",
+      "find": "e.etype == EXT_STATUS_REQUEST && m is Cr {",
+      "replace": "e.etype == EXT_STATUS_REQUEST && m is Cr && false {",
+      "expect": "killed",
+      "reason": "A CertificateRequest's non-empty status_request is accepted (RFC 8446 §4.4.2.1): lemma_request_bodies is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_request_bodies()",
+        "witness": "parse_handshake(seq![13u8, 0, 0, 8, 0, 0, 5, 0, 5, 0, 1, 1], 32) != Res::<HsMsg>::Err(ErrKind::Decode)"
+      }
+    },
+    {
+      "id": "request-sct-body-unchecked",
+      "file": "src/spec.rs",
+      "find": "e.etype == EXT_SCT && m is Cr {",
+      "replace": "e.etype == EXT_SCT && m is Cr && false {",
+      "expect": "killed",
+      "reason": "A CertificateRequest's non-empty signed_certificate_timestamp is accepted (RFC 6962 §3.3.1, docs/ERRATA.md): lemma_request_bodies is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_request_bodies()",
+        "witness": "parse_handshake(seq![13u8, 0, 0, 8, 0, 0, 5, 0, 0x12, 0, 1, 1], 32) != Res::<HsMsg>::Err(ErrKind::Decode)"
+      }
+    },
+    {
+      "id": "certificate-authorities-unchecked",
+      "file": "src/spec.rs",
+      "find": "read_certificate_authorities(e.data) is Some",
+      "replace": "true",
+      "expect": "killed",
+      "reason": "A malformed CertificateAuthoritiesExtension is accepted (RFC 8446 §4.2.4): lemma_request_bodies is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_request_bodies()",
+        "witness": "parse_handshake(seq![13u8, 0, 0, 12, 0, 0, 9, 0, 0x2f, 0, 5, 0, 3, 0, 2, 7], 32) != Res::<HsMsg>::Err(ErrKind::Decode)"
+      }
+    },
+    {
+      "id": "oid-filters-unchecked",
+      "file": "src/spec.rs",
+      "find": "read_oid_filters(e.data) is Some",
+      "replace": "true",
+      "expect": "killed",
+      "reason": "A malformed OIDFilterExtension is accepted (RFC 8446 §4.2.5): lemma_request_bodies is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_request_bodies()",
+        "witness": "parse_handshake(seq![13u8, 0, 0, 10, 0, 0, 7, 0, 0x30, 0, 3, 0, 1, 5], 32) != Res::<HsMsg>::Err(ErrKind::Decode)"
+      }
+    },
+    {
+      "id": "oid-repeat-allowed",
+      "file": "src/spec.rs",
+      "find": "oids.len() == 0 || (!oid_listed(oids.skip(1), oids[0]) && oids_distinct(oids.skip(1)))",
+      "replace": "oids.len() == 0 || oids_distinct(oids.skip(1))",
+      "expect": "killed",
+      "reason": "A repeated OID in oid_filters is accepted (RFC 8446 §4.2.5): lemma_request_bodies is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_request_bodies()",
+        "witness": "oid_filters_distinct(seq![0u8, 8, 1, 5, 0, 0, 1, 5, 0, 0])"
+      }
+    },
+    {
+      "id": "request-repeated-oid-ignored",
+      "file": "src/auth/spec.rs",
+      "find": "else if !filters_distinct { fail(s, crate::spec::ILLEGAL_PARAMETER) }",
+      "replace": "",
+      "expect": "killed",
+      "reason": "The CertificateRequest step ignores a repeated OID (RFC 8446 §4.2.5): lemma_repeated_oid is false.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_repeated_oid()",
+        "witness": "on_request(super::examples::crypto(), State { phase: Phase::CertificateOrRequest, ..super::examples::initial() }, seq![1u8], true, true, false).1 != Action::Fail(47u8)"
+      }
+    },
+    {
       "id": "allowed-only-first",
       "file": "src/spec.rs",
       "find": "es.len() == 0 || (extension_allowed(es[0].etype, m) && all_allowed(es.skip(1), m))",
@@ -768,6 +894,76 @@
         "file": "src/hello/mutation_certificates.rs",
         "lemma": "super::certificates::lemma_legacy_server_hello_extensions_without_supported_versions()",
         "witness": "super::spec::validate(Seq::empty(), false, super::certificates::legacy_server_hello_with_extensions(seq![0u8, 0, 0, 0])) != Err(crate::spec::PROTOCOL_VERSION)"
+      }
+    },
+    {
+      "id": "hello-retry-read-as-legacy",
+      "file": "src/hello/spec.rs",
+      "find": "\n        && server_random(body) != crate::spec::hrr_random() {",
+      "replace": " {",
+      "expect": "killed",
+      "reason": "A HelloRetryRequest without supported_versions is read as a legacy ServerHello (protocol_version), against §4.1.3's \"MUST first examine the Random value\": lemma_retry_without_versions is false.",
+      "module": "hello::examples",
+      "certificate": {
+        "file": "src/hello/certificates.rs",
+        "lemma": "super::examples::lemma_retry_without_versions()",
+        "witness": "super::spec::validate(seq![7u8], false, super::examples::retry_body(Seq::empty())) != Err::<super::spec::Selection, u8>(50u8)"
+      }
+    },
+    {
+      "id": "server-hello-extensions-floor-0",
+      "file": "src/spec.rs",
+      "find": "match read_exts(r5, 6, 65535) {",
+      "replace": "match read_exts(r5, 0, 65535) {",
+      "expect": "killed",
+      "reason": "A ServerHello's extension block may be shorter than §4.1.3/B.3.1's `extensions<6..2^16-1>`, so a HelloRetryRequest with an empty block is missing_extension instead of decode_error: lemma_retry_short_extensions is false.",
+      "module": "hello::examples",
+      "certificate": {
+        "file": "src/hello/certificates.rs",
+        "lemma": "super::examples::lemma_retry_short_extensions()",
+        "witness": "super::spec::validate(seq![7u8], false, super::examples::retry_body(seq![0u8, 0u8])) != Err::<super::spec::Selection, u8>(50u8)"
+      }
+    },
+    {
+      "id": "hello-retry-missing-versions-protocol-version",
+      "file": "src/hello/spec.rs",
+      "find": "None => if crate::spec::is_hello_retry_request(sh) { Some(crate::spec::MISSING_EXTENSION) }",
+      "replace": "None => if false { Some(crate::spec::MISSING_EXTENSION) }",
+      "expect": "killed",
+      "reason": "A HelloRetryRequest without supported_versions is protocol_version instead of missing_extension (§4.1.4, §6.2): lemma_retry_without_versions is false.",
+      "module": "hello::examples",
+      "certificate": {
+        "file": "src/hello/certificates.rs",
+        "lemma": "super::examples::lemma_retry_without_versions()",
+        "witness": "super::spec::validate(seq![7u8], false, super::examples::retry_body(seq![0u8, 7u8, 0u8, 44u8, 0u8, 3u8, 0u8, 1u8, 9u8])) != Err::<super::spec::Selection, u8>(109u8)"
+      }
+    },
+    {
+      "id": "legacy-version-0300-ignored",
+      "file": "src/hello/spec.rs",
+      "find": "if sh.legacy_version == 0x0300 { Err(crate::spec::PROTOCOL_VERSION) }",
+      "replace": "if false { Err(crate::spec::PROTOCOL_VERSION) }",
+      "expect": "killed",
+      "reason": "A ServerHello with legacy_version 0x0300 is accepted (Appendix D.5): lemma_legacy_version_checks is false.",
+      "module": "hello::examples",
+      "certificate": {
+        "file": "src/hello/certificates.rs",
+        "lemma": "super::examples::lemma_legacy_version_checks()",
+        "witness": "super::spec::parsed(crate::spec::ServerHello { legacy_version: 0x0300, ..super::examples::server() }, seq![7u8], false) != Err::<super::spec::Selection, u8>(70u8)"
+      }
+    },
+    {
+      "id": "retry-legacy-version-ignored",
+      "file": "src/hello/spec.rs",
+      "find": "else if crate::spec::is_hello_retry_request(sh) && sh.legacy_version != 0x0303 { Err(crate::spec::ILLEGAL_PARAMETER) }",
+      "replace": "else if false { Err(crate::spec::ILLEGAL_PARAMETER) }",
+      "expect": "killed",
+      "reason": "A HelloRetryRequest with legacy_version 0x0302 is accepted (§4.1.4): lemma_legacy_version_checks is false.",
+      "module": "hello::examples",
+      "certificate": {
+        "file": "src/hello/certificates.rs",
+        "lemma": "super::examples::lemma_legacy_version_checks()",
+        "witness": "super::spec::parsed(crate::spec::ServerHello { legacy_version: 0x0302, ..super::examples::request() }, seq![7u8], false) != Err::<super::spec::Selection, u8>(47u8)"
       }
     },
     {
@@ -1039,15 +1235,15 @@
     {
       "id": "server-hello-extensions-floor",
       "file": "src/spec.rs",
-      "find": "                                            match read_exts(r5, 0, 65535) {\n                                                None => None,\n                                                Some((exts, r6)) => {",
-      "replace": "                                            match read_exts(r5, 6, 65535) {\n                                                None => None,\n                                                Some((exts, r6)) => {",
+      "find": "                                            match read_exts(r5, 6, 65535) {\n                                                None => None,\n                                                Some((exts, r6)) => {",
+      "replace": "                                            match read_exts(r5, 5, 65535) {\n                                                None => None,\n                                                Some((exts, r6)) => {",
       "expect": "killed",
-      "reason": "Raising the floor to 6 makes an empty extension vector a decode error: lemma_server_hello (an empty extension vector parses) is false.",
+      "reason": "Lowering the floor to 5 lets a five-octet extension vector parse, against §4.1.3/B.3.1's `extensions<6..2^16-1>`: lemma_server_hello (a five-octet vector is a decode error) is false.",
       "module": "examples_hs",
       "certificate": {
         "file": "src/certificates.rs",
         "lemma": "super::examples_hs::lemma_server_hello()",
-        "witness": "!(parse_handshake_body(2, super::examples_hs::sh_body(super::examples_hs::z32(), 0, seq![0u8, 0]), 32) is Ok)"
+        "witness": "parse_handshake_body(2, super::examples_hs::sh_body(super::examples_hs::z32(), 0, seq![0u8, 5, 0x12, 0x34, 0, 1, 9]), 32) != Res::<HsMsg>::Err(ErrKind::Decode)"
       }
     },
     {
@@ -2031,6 +2227,20 @@
       }
     },
     {
+      "id": "client-session-id-any-length",
+      "file": "src/hello/client_spec.rs",
+      "find": "(c.session_id.len() == 0 || c.session_id.len() == 32)",
+      "replace": "c.session_id.len() <= 32",
+      "expect": "killed",
+      "reason": "A legacy_session_id of 1 to 31 bytes is accepted and sent, against §4.1.2 (a new 32-byte value in compatibility mode, otherwise a zero-length vector): lemma_session_id_lengths is false.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_session_id_lengths()",
+        "witness": "super::client_spec::start(super::client_spec::Config { session_id: seq![7u8], ..super::client_examples::config() }) != Err::<(super::client_spec::State, Seq<u8>), u8>(80u8)"
+      }
+    },
+    {
       "id": "client-cipher",
       "file": "src/hello/client_spec.rs",
       "find": "cipher_suites: seq![0x1303u16]",
@@ -2423,6 +2633,20 @@
       }
     },
     {
+      "id": "bootstrap-initial-record-version-0303",
+      "file": "src/hello/bootstrap_spec.rs",
+      "find": "crate::spec::write_plaintext(crate::spec::CT_HANDSHAKE, 0x0301, flight)",
+      "replace": "crate::spec::write_plaintext(crate::spec::CT_HANDSHAKE, 0x0303, flight)",
+      "expect": "killed",
+      "reason": "RFC 8446 §5.1: a record containing an initial ClientHello SHOULD have version 0x0301; the mutant writes 0x0303, so lemma_record_versions is false.",
+      "module": "hello::certificates",
+      "certificate": {
+        "file": "src/hello/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_record_versions()",
+        "witness": "super::bootstrap_spec::initial_record(seq![1u8]) != seq![22u8, 3u8, 1u8, 0u8, 1u8, 1u8]"
+      }
+    },
+    {
       "id": "bootstrap-ccs-dropped-mid-message",
       "file": "src/hello/bootstrap_spec.rs",
       "find": "PeerEvent::Ccs => if crate::spec::at_message_boundary(s.reassembly) {",
@@ -2434,6 +2658,34 @@
         "file": "src/hello/mutation_certificates.rs",
         "lemma": "super::certificates::lemma_ccs_fatal_mid_message()",
         "witness": "super::bootstrap_spec::receive(|m: Seq<u8>| super::certificates::empty_hash(m), super::certificates::awaiting_with_buffer(seq![1u8]), super::bootstrap_spec::PeerEvent::Ccs).1 == super::bootstrap_spec::Action::None"
+      }
+    },
+    {
+      "id": "bootstrap-retained-dropped",
+      "file": "src/hello/bootstrap_spec.rs",
+      "find": "            s.retained)",
+      "replace": "            seq![])",
+      "expect": "killed",
+      "reason": "RFC 8446 §5.1 lets handshake messages share a record, and a HelloRetryRequest precedes no key change, so the messages after it are the server's next ones: the mutant forgets them when ClientHello2 is acknowledged, so lemma_retained_processed_on_acknowledge is false.",
+      "module": "hello::certificates",
+      "certificate": {
+        "file": "src/hello/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_retained_processed_on_acknowledge()",
+        "witness": "super::bootstrap_spec::acknowledge(|m: Seq<u8>| super::certificates::empty_hash(m), super::certificates::retry_sent_with_retained(), seq![1u8]).1 == super::bootstrap_spec::Action::None"
+      }
+    },
+    {
+      "id": "bootstrap-following-bytes-refused-first",
+      "file": "src/hello/bootstrap_spec.rs",
+      "find": "if message.len() < crate::spec::HANDSHAKE_HEADER || message[0] != crate::spec::HS_SERVER_HELLO {",
+      "replace": "if message.len() < crate::spec::HANDSHAKE_HEADER || message[0] != crate::spec::HS_SERVER_HELLO || messages.len() != 1 || reassembly.buf.len() != 0 {",
+      "expect": "killed",
+      "reason": "RFC 8446 §5.1: the alignment check covers only messages before a key change, and the server's Hello is checked first; the mutant (the old behaviour) refuses any byte after the Hello with unexpected_message before looking at it, so lemma_first_message_first is false.",
+      "module": "hello::certificates",
+      "certificate": {
+        "file": "src/hello/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_first_message_first()",
+        "witness": "super::bootstrap_spec::receive_messages(|m: Seq<u8>| super::certificates::empty_hash(m), super::certificates::awaiting_with_buffer(seq![]), seq![seq![2u8, 0u8, 0u8, 0u8], seq![2u8, 0u8, 0u8, 0u8]]).1 == super::bootstrap_spec::Action::Fail(crate::spec::UNEXPECTED_MESSAGE)"
       }
     },
     {
@@ -2467,8 +2719,8 @@
     {
       "id": "hello-classify-absent-legacy-extension-field",
       "file": "src/hello/spec.rs",
-      "find": "else if crate::spec::legacy_server_hello_without_supported_versions(body) {",
-      "replace": "else if false {",
+      "find": "else if crate::spec::legacy_server_hello_without_supported_versions(body)\n",
+      "replace": "else if false\n",
       "expect": "killed",
       "reason": "RFC 5246 §7.4.1.3 allows the legacy ServerHello extension field to be absent; a complete pre-TLS-1.3 response maps to protocol_version, while the strict generic TLS 1.3 parser would report decode_error.",
       "module": "hello::certificates",
@@ -2481,8 +2733,8 @@
     {
       "id": "hello-legacy-server-hello-protocol-version",
       "file": "src/hello/spec.rs",
-      "find": "None => Some(below_tls13(sh.random)),",
-      "replace": "None => Some(crate::spec::MISSING_EXTENSION),",
+      "find": "            else { Some(below_tls13(sh.random)) },",
+      "replace": "            else { Some(crate::spec::MISSING_EXTENSION) },",
       "expect": "killed",
       "reason": "A legacy ServerHello without supported_versions selects an unsupported protocol for this TLS 1.3-only client and must fail with protocol_version (illegal_parameter only when its random carries a downgrade sentinel), not missing_extension.",
       "module": "hello::certificates",
@@ -2615,16 +2867,16 @@
       "certificate": {
         "file": "src/host/certificates.rs",
         "lemma": "super::examples::lemma_host_bounds()",
-        "witness": "host_ok(Host::Dns(super::examples::name_of(254)))"
+        "witness": "host_ok(Host::Dns(super::examples::labels_of(254)))"
       }
     },
     {
       "id": "host-trailing-dot",
       "file": "src/host/spec.rs",
-      "find": " && name.last() != 0x2eu8",
-      "replace": "",
+      "find": "1 <= run && !digits",
+      "replace": "true",
       "expect": "killed",
-      "reason": "A name ending in a dot is accepted (RFC 6066 §3: \"without a trailing dot\"): lemma_host_bounds is false.",
+      "reason": "A name ending in a dot (an empty last label) is accepted (RFC 6066 §3: \"without a trailing dot\"; RFC 2181 §11): lemma_host_bounds is false.",
       "module": "host::examples",
       "certificate": {
         "file": "src/host/certificates.rs",
@@ -2632,6 +2884,91 @@
         "witness": "host_ok(Host::Dns(seq![104u8, 0x2eu8]))"
       }
     },
+    {
+      "id": "host-ipv4-literal",
+      "file": "src/host/spec.rs",
+      "find": "1 <= run && !digits",
+      "replace": "1 <= run",
+      "expect": "killed",
+      "reason": "A name whose last label is all digits (an IPv4 literal, RFC 6066 §3) is accepted: lemma_dns_names is false.",
+      "module": "host::examples",
+      "certificate": {
+        "file": "src/host/certificates.rs",
+        "lemma": "super::examples::lemma_dns_names()",
+        "witness": "host_ok(Host::Dns(seq![0x31u8, 0x2eu8, 0x32u8]))"
+      }
+    },
+    {
+      "id": "host-label-64",
+      "file": "src/host/spec.rs",
+      "find": "run + 1 <= 63",
+      "replace": "run + 1 <= 64",
+      "expect": "killed",
+      "reason": "A 64-octet label is accepted (RFC 2181 §11: \"between 1 and 63 octets\"): lemma_dns_names is false.",
+      "module": "host::examples",
+      "certificate": {
+        "file": "src/host/certificates.rs",
+        "lemma": "super::examples::lemma_dns_names()",
+        "witness": "host_ok(Host::Dns(super::examples::name_of(64)))"
+      }
+    },
+    {
+      "id": "host-empty-label",
+      "file": "src/host/spec.rs",
+      "find": "1 <= run && dns_labels_ok(rest.subrange(1, rest.len() as int), 0, true)",
+      "replace": "dns_labels_ok(rest.subrange(1, rest.len() as int), 0, true)",
+      "expect": "killed",
+      "reason": "An empty label is accepted (RFC 2181 §11): lemma_dns_names is false.",
+      "module": "host::examples",
+      "certificate": {
+        "file": "src/host/certificates.rs",
+        "lemma": "super::examples::lemma_dns_names()",
+        "witness": "host_ok(Host::Dns(seq![104u8, 0x2eu8, 0x2eu8, 104u8]))"
+      }
+    },
+    {
+      "id": "host-digits-not-reset",
+      "file": "src/host/spec.rs",
+      "find": "dns_labels_ok(rest.subrange(1, rest.len() as int), 0, true)",
+      "replace": "dns_labels_ok(rest.subrange(1, rest.len() as int), 0, digits)",
+      "expect": "killed",
+      "reason": "A label after one with a letter is taken to have one too, so an all-digit last label is accepted: lemma_dns_names is false.",
+      "module": "host::examples",
+      "certificate": {
+        "file": "src/host/certificates.rs",
+        "lemma": "super::examples::lemma_dns_names()",
+        "witness": "host_ok(Host::Dns(seq![104u8, 0x2eu8, 0x32u8]))"
+      }
+    },
+    {
+      "id": "host-non-ascii",
+      "file": "src/host/spec.rs",
+      "find": "&&& rest[0] < 0x80u8",
+      "replace": "&&& rest[0] <= 0xffu8",
+      "expect": "killed",
+      "reason": "A non-ASCII octet is accepted (RFC 6066 §3: \"using ASCII encoding\"): lemma_dns_names is false.",
+      "module": "host::examples",
+      "certificate": {
+        "file": "src/host/certificates.rs",
+        "lemma": "super::examples::lemma_dns_names()",
+        "witness": "host_ok(Host::Dns(seq![0xe9u8]))"
+      }
+    },
+    {
+      "id": "host-colon",
+      "file": "src/host/spec.rs",
+      "find": "&&& rest[0] != 0x3au8",
+      "replace": "&&& rest[0] != 0x2eu8",
+      "expect": "killed",
+      "reason": "A name holding a colon (an IPv6 literal, RFC 6066 §3) is accepted: lemma_dns_names is false.",
+      "module": "host::examples",
+      "certificate": {
+        "file": "src/host/certificates.rs",
+        "lemma": "super::examples::lemma_dns_names()",
+        "witness": "host_ok(Host::Dns(seq![0x3au8, 0x3au8, 0x31u8]))"
+      }
+    },
+
     {
       "id": "host-no-ipv6",
       "file": "src/host/spec.rs",
@@ -2806,12 +3143,12 @@
       "find": "client_secret: next, ..s",
       "replace": "client_secret: s.client_secret, ..s",
       "expect": "killed",
-      "reason": "The client traffic secret does not move after the reply to an update_requested KeyUpdate (RFC 8446 4.6.3, 7.2): lemma_key_update_requested_is_answered is false.",
+      "reason": "The client traffic secret does not move after the owed answer to an update_requested KeyUpdate (RFC 8446 4.6.3, 7.2): lemma_key_update_requested_is_answered is false.",
       "module": "connection::post_handshake_examples",
       "certificate": {
         "file": "src/connection/post_handshake_certificates.rs",
         "lemma": "super::post_handshake_examples::lemma_key_update_requested_is_answered()",
-        "witness": "super::post_handshake_examples::msg(super::post_handshake_examples::ku(1), true).1.client_secret == super::post_handshake_examples::ready().client_secret"
+        "witness": "super::post_handshake_examples::answered().1.client_secret == super::post_handshake_examples::ready().client_secret"
       }
     },
     {
@@ -2820,26 +3157,26 @@
       "find": "Ok(s1) => if request == crate::spec::UPDATE_REQUESTED {",
       "replace": "Ok(s1) => if request == 7 {",
       "expect": "killed",
-      "reason": "An update_requested KeyUpdate gets no reply (RFC 8446 4.6.3): lemma_key_update_requested_is_answered is false.",
+      "reason": "An update_requested KeyUpdate owes no answer, so the next data goes out without one (RFC 8446 4.6.3): lemma_key_update_requested_is_answered is false.",
       "module": "connection::post_handshake_examples",
       "certificate": {
         "file": "src/connection/post_handshake_certificates.rs",
         "lemma": "super::post_handshake_examples::lemma_key_update_requested_is_answered()",
-        "witness": "super::post_handshake_examples::msg(super::post_handshake_examples::ku(1), true).0.wires.len() == 0"
+        "witness": "super::post_handshake_examples::answered().0.wires.len() == 1"
       }
     },
     {
       "id": "ph-key-update-reply-asks-again",
       "file": "src/connection/post_handshake_spec.rs",
-      "find": "send_key_update(c, f, s1, crate::spec::UPDATE_NOT_REQUESTED)",
-      "replace": "send_key_update(c, f, s1, crate::spec::UPDATE_REQUESTED)",
+      "find": "match send_key_update(c, f, State { key_update_owed: false, ..s }, crate::spec::UPDATE_NOT_REQUESTED) {",
+      "replace": "match send_key_update(c, f, State { key_update_owed: false, ..s }, if s.key_update_owed { crate::spec::UPDATE_REQUESTED } else { crate::spec::UPDATE_NOT_REQUESTED }) {",
       "expect": "killed",
-      "reason": "The reply asks the server to update again, so two peers would update forever (RFC 8446 4.6.3: the reply is update_not_requested): lemma_key_update_answer_does_not_ask_again is false.",
+      "reason": "The owed answer asks the server to update again, so two peers would update forever (RFC 8446 4.6.3: the answer is update_not_requested): lemma_key_update_answer_does_not_ask_again is false.",
       "module": "connection::post_handshake_examples",
       "certificate": {
         "file": "src/connection/post_handshake_certificates.rs",
         "lemma": "super::post_handshake_examples::lemma_key_update_answer_does_not_ask_again()",
-        "witness": "super::post_handshake_examples::msg(super::post_handshake_examples::ku(1), true).0.wires[0][9] == 1u8"
+        "witness": "super::post_handshake_examples::answered().0.wires[0][9] == 1u8"
       }
     },
     {
@@ -2868,6 +3205,62 @@
         "file": "src/connection/post_handshake_certificates.rs",
         "lemma": "super::post_handshake_examples::lemma_key_update_must_end_its_record()",
         "witness": "super::post_handshake_examples::ku_rx(0, false, super::post_handshake_examples::ready()).0.end == super::post_handshake_spec::End::Continue"
+      }
+    },
+    {
+      "id": "ph-key-update-answered-at-once",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "(quiet(), State { key_update_owed: true, ..s1 })",
+      "replace": "send_key_update(c, f, s1, crate::spec::UPDATE_NOT_REQUESTED)",
+      "expect": "killed",
+      "reason": "The answer to update_requested is sent in the step that receives it instead of being owed until the next Application Data record (RFC 8446 4.6.3), so several requests while silent draw several answers: lemma_key_update_requested_is_owed is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_key_update_requested_is_owed()",
+        "witness": "super::post_handshake_examples::msg(super::post_handshake_examples::ku(1), true).0.wires.len() == 1"
+      }
+    },
+    {
+      "id": "ph-owed-answer-forgotten",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "} else if s.key_update_owed || needs_rekey(s) {",
+      "replace": "} else if needs_rekey(s) {",
+      "expect": "killed",
+      "reason": "The owed KeyUpdate is never sent: the next Application Data record goes out without it (RFC 8446 4.6.3: MUST send ... prior to sending its next Application Data record): lemma_key_update_requested_is_answered is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_key_update_requested_is_answered()",
+        "witness": "super::post_handshake_examples::answered().0.wires.len() == 1"
+      }
+    },
+    {
+      "id": "ph-owed-answer-not-discharged",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "State { key_update_owed: false, ..s }",
+      "replace": "s",
+      "expect": "killed",
+      "reason": "Sending the owed KeyUpdate does not discharge it, so every later data record is preceded by another KeyUpdate (RFC 8446 4.6.3: a single update): lemma_key_update_requested_is_answered is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_key_update_requested_is_answered()",
+        "witness": "super::post_handshake_examples::answered().1.key_update_owed"
+      }
+    },
+    {
+      "id": "ph-owed-answer-per-request",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "key_update_owed: true, ..s1",
+      "replace": "key_update_owed: !s1.key_update_owed, ..s1",
+      "expect": "killed",
+      "reason": "A second update_requested while one answer is owed cancels it (the owed answer is counted per request, modulo two), so the server asked twice gets no answer (RFC 8446 4.6.3: multiple KeyUpdates while silent draw a single update): lemma_two_requests_one_answer is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_two_requests_one_answer()",
+        "witness": "!super::post_handshake_examples::twice().1.key_update_owed"
       }
     },
     {
@@ -2943,10 +3336,10 @@
     {
       "id": "ph-truncation-is-clean",
       "file": "src/connection/post_handshake_spec.rs",
-      "find": "consuming(die(crate::spec::INTERNAL_ERROR), 0)",
+      "find": "consuming(truncated(f, s), 0)",
       "replace": "(Out { wires: seq![], delivered: seq![], end: End::Close }, closed(), 0)",
       "expect": "killed",
-      "reason": "The transport closing before close_notify is an orderly close instead of a truncation (RFC 8446 6.1): lemma_transport_closing is false.",
+      "reason": "The end of the transport before close_notify is an orderly close (end-of-data) instead of a truncation (RFC 8446 6.1: MUST receive a close_notify before indicating end-of-data): lemma_transport_closing is false.",
       "module": "connection::post_handshake_examples",
       "certificate": {
         "file": "src/connection/post_handshake_certificates.rs",
@@ -2955,10 +3348,24 @@
       }
     },
     {
+      "id": "ph-eof-no-close-notify",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "(Out { wires: close_connection(f, s).0.wires, delivered: seq![], end: End::Fail(crate::spec::INTERNAL_ERROR) },",
+      "replace": "(Out { wires: seq![], delivered: seq![], end: End::Fail(crate::spec::INTERNAL_ERROR) },",
+      "expect": "killed",
+      "reason": "The end of the transport ends the connection without our close_notify while the write side is open (RFC 8446 6.1: MUST send a close_notify before closing the write side): lemma_transport_closing is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_transport_closing()",
+        "witness": "super::post_handshake_spec::step(super::post_handshake_examples::crypto(), super::post_handshake_examples::cipher(), super::post_handshake_examples::ready(), super::post_handshake_spec::Input::Closed).0.wires.len() == 0"
+      }
+    },
+    {
       "id": "ph-no-rekey-at-last-number",
       "file": "src/connection/post_handshake_spec.rs",
-      "find": "} else if needs_rekey(s) {",
-      "replace": "} else if false {",
+      "find": "} else if s.key_update_owed || needs_rekey(s) {",
+      "replace": "} else if s.key_update_owed {",
       "expect": "killed",
       "reason": "A data record goes out on the last sequence number with no KeyUpdate, so the counter would wrap on the next one (RFC 8446 5.3): lemma_last_sequence_number_rekeys_example is false.",
       "module": "connection::post_handshake_examples",
@@ -2971,8 +3378,8 @@
     {
       "id": "ph-rekey-asks-peer",
       "file": "src/connection/post_handshake_spec.rs",
-      "find": "match send_key_update(c, f, s, crate::spec::UPDATE_NOT_REQUESTED) {",
-      "replace": "match send_key_update(c, f, s, crate::spec::UPDATE_REQUESTED) {",
+      "find": "match send_key_update(c, f, State { key_update_owed: false, ..s }, crate::spec::UPDATE_NOT_REQUESTED) {",
+      "replace": "match send_key_update(c, f, State { key_update_owed: false, ..s }, if needs_rekey(s) { crate::spec::UPDATE_REQUESTED } else { crate::spec::UPDATE_NOT_REQUESTED }) {",
       "expect": "killed",
       "reason": "The KeyUpdate that precedes the last sequence number asks the peer to update too, which the rekey does not need (RFC 8446 4.6.3): lemma_last_sequence_number_rekeys_example is false.",
       "module": "connection::post_handshake_examples",
@@ -3161,7 +3568,49 @@
       "certificate": {
         "file": "src/connection/driver_certificates.rs",
         "lemma": "super::driver_examples::lemma_nothing_sent()",
-        "witness": "super::driver_spec::truncated(80).status == super::driver_spec::Status::Failed(80u8, super::driver_spec::Origin::NotSent)"
+        "witness": "super::driver_spec::truncated(seq![], 80).status == super::driver_spec::Status::Failed(80u8, super::driver_spec::Origin::NotSent)"
+      }
+    },
+    {
+      "id": "driver-eof-reports-closed",
+      "file": "src/connection/driver_spec.rs",
+      "find": "status: Status::Failed(description, Origin::Truncated) }",
+      "replace": "status: Status::Closed }",
+      "expect": "killed",
+      "reason": "The end of the transport before the server's close_notify is reported as Closed, end-of-data (RFC 8446 6.1: MUST receive a close_notify before indicating end-of-data): lemma_eof_truncates is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_eof_truncates()",
+        "witness": "super::driver_examples::eof_at(super::driver_spec::Stage::App(super::post_handshake_examples::ready()), super::driver_spec::Status::Open).status == super::driver_spec::Status::Closed"
+      }
+    },
+    {
+      "id": "driver-hello-eof-no-close-notify",
+      "file": "src/connection/driver_spec.rs",
+      "find": "truncated(plaintext_alert(crate::spec::LEVEL_WARNING, crate::spec::CLOSE_NOTIFY), alert),",
+      "replace": "truncated(seq![], alert),",
+      "expect": "killed",
+      "reason": "The end of the transport during the Hello exchange ends the connection without our plaintext close_notify while the write side is open (RFC 8446 6.1: MUST send a close_notify before closing the write side): lemma_eof_sends_close_notify is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_eof_sends_close_notify()",
+        "witness": "super::driver_examples::eof_at(super::driver_spec::Stage::Hello(super::driver_examples::hello_waiting(), seq![]), super::driver_spec::Status::Handshaking).send.len() == 0"
+      }
+    },
+    {
+      "id": "driver-eof-close-notify-after-close",
+      "file": "src/connection/driver_spec.rs",
+      "find": "Stage::Ended => Step { send: seq![], deliver: seq![], stage: Stage::Ended, status },",
+      "replace": "Stage::Ended => Step { send: plaintext_alert(crate::spec::LEVEL_WARNING, crate::spec::CLOSE_NOTIFY), deliver: seq![], stage: Stage::Ended, status },",
+      "expect": "killed",
+      "reason": "The end of the transport sends a close_notify after the connection has ended, our own close_notify sent (RFC 8446 6.1: the close_notify says the sender will not send any more messages): lemma_eof_after_close is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_eof_after_close()",
+        "witness": "super::driver_examples::eof_at(super::driver_spec::Stage::Ended, super::driver_spec::Status::Closed).send == seq![21u8, 3, 3, 0, 2, 1, 0]"
       }
     },
     {
@@ -3176,6 +3625,20 @@
         "file": "src/connection/dispatcher_certificates.rs",
         "lemma": "super::dispatcher_lemmas::lemma_flight_close_sends_close_notify()",
         "witness": "super::dispatcher_spec::closing(super::dispatcher_certificates::alert_ciphers(), super::dispatcher_certificates::sample_flight_state()).0 != super::dispatcher_spec::Action::Close(Some(seq![23u8, 3, 3, 0, 19, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 21]))"
+      }
+    },
+    {
+      "id": "dispatcher-eof-no-close-notify",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "(Action::Fail(crate::spec::INTERNAL_ERROR, close_wire(ciphers, s)), failed())",
+      "replace": "(Action::Fail(crate::spec::INTERNAL_ERROR, None), failed())",
+      "expect": "killed",
+      "reason": "The end of the transport during the server's flight ends the connection without our close_notify while the write side is open (RFC 8446 6.1: MUST send a close_notify before closing the write side): lemma_eof_sends_close_notify is false.",
+      "module": "connection::dispatcher_lemmas",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_lemmas::lemma_eof_sends_close_notify()",
+        "witness": "super::dispatcher_spec::eof(super::dispatcher_certificates::alert_ciphers(), super::dispatcher_certificates::sample_flight_state()).0 == super::dispatcher_spec::Action::Fail(80u8, None)"
       }
     },
     {

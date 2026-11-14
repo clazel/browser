@@ -91,6 +91,21 @@ pub proof fn lemma_start_refuses_bad_host()
     assert(start(Config { host: crate::host::spec::Host::Dns(seq![]), ..initial().config }, initial().transcript) is Err) by (compute_only);
 }
 
+/// Concrete authentication requirement: RFC 8446 §4.2.5, a CertificateRequest
+/// whose oid_filters repeats an OID is illegal_parameter.
+pub proof fn lemma_repeated_oid()
+    ensures
+        on_request(crypto(), State { phase: Phase::CertificateOrRequest, ..initial() }, seq![1u8], true, true, false).1
+            == Action::Fail(47u8),
+        !request_filters_distinct(seq![crate::spec::Ext { etype: 48, data: seq![0u8, 8, 1, 5, 0, 0, 1, 5, 0, 0] }]),
+        request_filters_distinct(seq![crate::spec::Ext { etype: 48, data: seq![0u8, 8, 1, 5, 0, 0, 1, 6, 0, 0] }]),
+{
+    assert(on_request(crypto(), State { phase: Phase::CertificateOrRequest, ..initial() }, seq![1u8], true, true, false).1
+        == Action::Fail(47u8)) by (compute_only);
+    assert(!request_filters_distinct(seq![crate::spec::Ext { etype: 48, data: seq![0u8, 8, 1, 5, 0, 0, 1, 5, 0, 0] }])) by (compute_only);
+    assert(request_filters_distinct(seq![crate::spec::Ext { etype: 48, data: seq![0u8, 8, 1, 5, 0, 0, 1, 6, 0, 0] }])) by (compute_only);
+}
+
 /// Concrete authentication requirement: early_data.
 pub proof fn lemma_early_data()
     ensures step(crypto(), verifier(), initial(), Input::Application(seq![1u8])).1 == Action::Fail(10u8),

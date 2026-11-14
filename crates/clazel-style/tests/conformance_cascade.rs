@@ -20,7 +20,7 @@ use clazel_style::cascade::computed::{
     ComputedStyle, Display, LineHeight, Lp, MaxSize, Overflow, Size, TextAlign, VerticalAlign,
     WhiteSpace,
 };
-use clazel_style::cascade::{ComputedTable, cascade, cascade_with, hints, ua};
+use clazel_style::cascade::{ComputedTable, cascade, cascade_unindexed, cascade_with, hints, ua};
 use clazel_style::sources::{Device, collect};
 use clazel_treebuilder::exec::driver::parse_real;
 use clazel_treebuilder::exec::types::EncFnsExec;
@@ -269,6 +269,10 @@ fn wpt_css_cascade() {
             assert!(
                 table == cascade_with(&small, &arena, &sources, device),
                 "{page}: the cut sheets give another table"
+            );
+            assert!(
+                table == cascade_unindexed(&arena, &sources, device),
+                "{page}: the rule index gives another table"
             );
             table
         };

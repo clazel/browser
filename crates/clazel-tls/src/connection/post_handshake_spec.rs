@@ -42,7 +42,9 @@
 //!    key, since protected records are all there is after the handshake. An
 //!    alert received from the peer is `Fail(description)` alone: §6.2 asks
 //!    for no reply. An error raised while sending (a record that is too long)
-//!    is `Fail` alone, because the sending epoch is what failed.
+//!    is `Fail` alone, because the sending epoch is what failed. The end of
+//!    the transport is not such an error: before its `Fail` the record sent,
+//!    if any, is our `close_notify` (item 14).
 //! 6. **Alerts.** Each direction closes on its own (§6.1, which drops the
 //!    earlier versions' immediate answer to a `close_notify`). The peer's
 //!    `close_notify` ends the read side: the output ends in `PeerClosed` and
@@ -55,9 +57,7 @@
 //!    caller can tell it from a failure of ours, and never answered. Data that arrives after the
 //!    read side ended is ignored (§6.1: "Any data received after a closure
 //!    alert has been received MUST be ignored"): it is consumed with no
-//!    action. `Closed` (the transport ended) while the read side is open is
-//!    a truncation, `Fail(internal_error)` with no alert, because nothing can
-//!    be sent.
+//!    action. The end of the transport (`Closed`) is item 14.
 //! 7. **NewSessionTicket (§4.6.1) is parsed, then ignored.** It is read with
 //!    the parser of `spec.rs` (so a malformed one is `decode_error` or
 //!    `illegal_parameter`, as the parser gives) and has no further effect.
@@ -77,13 +77,29 @@
 //!    messages MUST NOT span key changes. Implementations MUST verify that
 //!    all messages immediately preceding a key change align with a record
 //!    boundary; if not, then they MUST terminate the connection with an
-//!    "unexpected_message" alert". With `update_requested`, the client then
-//!    sends KeyUpdate(`update_not_requested`) under its current key and moves
-//!    its write secret, key, IV and sequence number on in the same way, unless
-//!    its write side has closed (§6.1: nothing is written after it). An
-//!    invalid `request_update` is `illegal_parameter` (the parser's
-//!    `InvalidEnum`). Several KeyUpdates in one connection are fine; each
-//!    needs its own record.
+//!    "unexpected_message" alert". An invalid `request_update` is
+//!    `illegal_parameter` (the parser's `InvalidEnum`). Several KeyUpdates in
+//!    one connection are fine; each needs its own record.
+//!    **The answer to `update_requested` is owed, not sent at once.** §4.6.3:
+//!    "If the request_update field is set to "update_requested", then the
+//!    receiver MUST send a KeyUpdate of its own with request_update set to
+//!    "update_not_requested" prior to sending its next Application Data
+//!    record. This mechanism allows either side to force an update to the
+//!    entire connection, but causes an implementation which receives multiple
+//!    KeyUpdates while it is silent to respond with a single update." The
+//!    step that receives the request sends nothing; it sets
+//!    [`State::key_update_owed`], a flag and not a count, so several requests
+//!    before the next application data draw one answer. [`send_application`]
+//!    sends the owed KeyUpdate(`update_not_requested`) under the current
+//!    write key, clears the flag, moves the write secret, key, IV and
+//!    sequence number on as for any KeyUpdate it sends, and then sends the
+//!    data under the new key. Nothing else sends or clears the owed answer: a
+//!    client-initiated KeyUpdate ([`update_keys`]), our `close_notify` and a
+//!    fatal alert go out under the current write key with the answer still
+//!    owed (the RFC asks for it only before Application Data, and after
+//!    `close_notify` there is none, §6.1). This is the mechanism the
+//!    clean-room transcription models (`transcription::connection`:
+//!    `key_update_owed`, `send_application_data`).
 //! 10. **Sequence numbers (§5.3) close or rekey; they never wrap.** The
 //!     receive epoch of `traffic::spec` becomes exhausted after using
 //!     sequence number 2^64 - 1, and its next record is `Fail(internal_error)`:
@@ -93,13 +109,17 @@
 //!     which uses that number and moves the write keys on, and the data goes
 //!     out under the new key at sequence number 0 ([`needs_rekey`]). So the
 //!     send epoch is never exhausted while the connection is open ([`wf`]).
+//!     When an answer is owed (item 9) as well, that one KeyUpdate is both
+//!     the answer and the rekey, as in the transcription's
+//!     `send_application_data` (its `must_rekey` is either condition).
 //! 11. **Local operations.** [`send_application`] sends one record of at most
 //!     2^14 bytes (a longer one is `Fail(record_overflow)`: the caller
 //!     fragments, as `traffic::exec` says); [`update_keys`] is the
 //!     client-initiated KeyUpdate, with or without `update_requested`;
 //!     [`close`] sends `close_notify` and ends the write side; the read side
 //!     goes on until the server's own `close_notify`, which avoids truncation
-//!     (§6.1). Each does nothing once the write side has ended.
+//!     (§6.1). Each does nothing once the write side has ended. An answer
+//!     owed under item 9 goes out only before application data.
 //! 12. **No padding, no early data, no client authentication.** Records are
 //!     sent with zero padding. 0-RTT, `EndOfEarlyData` and post-handshake
 //!     client authentication are out of scope (an `EndOfEarlyData` or
@@ -108,7 +128,27 @@
 //!     `traffic::spec::Cipher` with the key taken from the epoch in use. The
 //!     key schedule's `schedule::spec::Crypto` is a parameter too. Nothing
 //!     about either is assumed here.
-//! 14. RFC prose and equations have no numbered algorithm steps; the
+//! 14. **The end of the transport (`Input::Closed`).** It means only that the
+//!     peer's direction of the transport ended (no more bytes will arrive); it
+//!     is not the peer's `close_notify`. While the read side is open it is a
+//!     truncation ([`truncated`]): "If a transport-level close is received
+//!     prior to a "close_notify", the receiver cannot know that all the data
+//!     that was sent has been received" (§6.1). The output ends in
+//!     `Fail(internal_error)`, never in `PeerClosed` or `Close`: "the TLS
+//!     implementation MUST receive a "close_notify" alert before indicating
+//!     end-of-data to the application layer" (§6.1). The connection ends, its
+//!     write side included, so while the write side is open our `close_notify`
+//!     goes out first, exactly the record [`close`] would send at that point
+//!     (under the current client key and its next sequence number): "Each party
+//!     MUST send a "close_notify" alert before closing its write side of the
+//!     connection, unless it has already sent some error alert" (§6.1). It is
+//!     the one `Send` before a `Fail` that is not a fatal alert (item 5); the
+//!     `internal_error` is a local report and is never written. After our
+//!     `close_notify` (`WriteClosed`) nothing is sent, as the write side has
+//!     already closed with one; after an error alert the connection has ended.
+//!     Once the read side has ended (the server's `close_notify`, or the end of
+//!     the connection), `Closed` changes nothing.
+//! 15. RFC prose and equations have no numbered algorithm steps; the
 //!     comments cite the section instead.
 #[allow(unused_imports)]
 use vstd::prelude::*;
@@ -135,7 +175,8 @@ pub enum Phase {
 pub enum Input {
     /// Bytes of the server's stream, starting at a record boundary.
     Bytes(Seq<u8>),
-    /// The transport closed.
+    /// The peer's direction of the transport ended: no more bytes will
+    /// arrive. Not the peer's `close_notify` (item 14).
     Closed,
 }
 
@@ -214,6 +255,9 @@ pub struct State {
     pub server_secret: Seq<u8>,
     /// Bytes of one unfinished handshake message (§5.1).
     pub reassembly: crate::spec::Reasm,
+    /// §4.6.3: a KeyUpdate(`update_not_requested`) of ours is owed "prior to
+    /// sending its next Application Data record" (item 9).
+    pub key_update_owed: bool,
 }
 
 /// The state of a connection that has not ended.
@@ -229,7 +273,7 @@ pub open spec fn can_write(s: State) -> bool { s.phase == Phase::Open || s.phase
 /// failed; the send epoch has a next sequence number (item 10: it is never
 /// exhausted); both secrets are `Hash.length` bytes; the reassembly buffer is
 /// within its bound. A closed direction holds no epoch or secret, and the rest
-/// is as in `Open`. Ended: nothing is retained.
+/// is as in `Open`. Ended: nothing is retained, and no answer is owed.
 pub open spec fn wf(s: State) -> bool {
     match s.phase {
         Phase::Open => match (s.sender, s.receiver) {
@@ -255,7 +299,7 @@ pub open spec fn wf(s: State) -> bool {
         },
         Phase::Closed | Phase::Failed => s.sender is None && s.receiver is None
             && s.client_secret.len() == 0 && s.server_secret.len() == 0
-            && s.reassembly.buf.len() == 0,
+            && s.reassembly.buf.len() == 0 && !s.key_update_owed,
     }
 }
 
@@ -282,6 +326,7 @@ pub open spec fn failed() -> State {
         client_secret: seq![],
         server_secret: seq![],
         reassembly: crate::spec::reasm_new(),
+        key_update_owed: false,
     }
 }
 
@@ -383,6 +428,20 @@ pub open spec fn close_connection(f: crate::traffic::spec::Cipher, s: State) -> 
     }
 }
 
+/// §6.1: the end of the transport before the server's `close_notify`, a
+/// truncation (item 14). While the write side is open our `close_notify`
+/// goes out first, the record [`close`] sends at this point; then the
+/// connection fails with `internal_error`, which is not written, and every
+/// key is dropped. After our `close_notify` nothing is sent.
+pub open spec fn truncated(f: crate::traffic::spec::Cipher, s: State) -> (Out, State) {
+    if can_write(s) {
+        (Out { wires: close_connection(f, s).0.wires, delivered: seq![], end: End::Fail(crate::spec::INTERNAL_ERROR) },
+            failed())
+    } else {
+        die(crate::spec::INTERNAL_ERROR)
+    }
+}
+
 /// §7.2: the client write secret becomes the next generation, and §7.3 a
 /// fresh key and IV with sequence number 0 are derived from it.
 pub open spec fn rotated_sender(c: crate::schedule::spec::Crypto, s: State) -> Result<State, u8> {
@@ -450,15 +509,17 @@ pub open spec fn send_data_record(f: crate::traffic::spec::Cipher, s: State, dat
     }
 }
 
-/// §5, §5.3: send one application data record. On the last sequence number
-/// a KeyUpdate(`update_not_requested`) goes first (item 10).
+/// §5, §5.3, §4.6.3: send one application data record. A
+/// KeyUpdate(`update_not_requested`) goes first when one is owed (item 9) or
+/// on the last sequence number (item 10); it is one KeyUpdate if both, and
+/// nothing is owed after it.
 pub open spec fn send_application(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, s: State, data: Seq<u8>)
     -> (Out, State)
 {
     if !can_write(s) {
         (quiet(), s)
-    } else if needs_rekey(s) {
-        match send_key_update(c, f, s, crate::spec::UPDATE_NOT_REQUESTED) {
+    } else if s.key_update_owed || needs_rekey(s) {
+        match send_key_update(c, f, State { key_update_owed: false, ..s }, crate::spec::UPDATE_NOT_REQUESTED) {
             (o1, s1) => if can_write(s1) {
                 match send_data_record(f, s1, data) {
                     (o2, s2) => (then(o1, o2), s2),
@@ -473,7 +534,7 @@ pub open spec fn send_application(c: crate::schedule::spec::Crypto, f: crate::tr
 }
 
 /// §4.6.3: the client-initiated KeyUpdate, asking the server to update too
-/// when `request_peer` is set.
+/// when `request_peer` is set. An owed answer stays owed (item 9).
 pub open spec fn update_keys(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, s: State, request_peer: bool)
     -> (Out, State)
 {
@@ -487,8 +548,10 @@ pub open spec fn close(f: crate::traffic::spec::Cipher, s: State) -> (Out, State
 
 /// §4.6.3 on receipt of KeyUpdate(`request`), a valid value: the message must
 /// end its record and leave no unfinished message (§5.1). The read keys are
-/// updated; with `update_requested` the reply goes out under the old write
-/// keys and the write keys are updated after it.
+/// updated; with `update_requested` an answer is owed and nothing is sent:
+/// the receiver "MUST send a KeyUpdate of its own ... prior to sending its
+/// next Application Data record" (item 9). A request while one is owed
+/// leaves one owed.
 pub open spec fn key_update_received(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, s: State, request: u8,
     last: bool) -> (Out, State)
 {
@@ -498,7 +561,7 @@ pub open spec fn key_update_received(c: crate::schedule::spec::Crypto, f: crate:
         match rotated_receiver(c, s) {
             Err(a) => fatal(f, s, a),
             Ok(s1) => if request == crate::spec::UPDATE_REQUESTED {
-                send_key_update(c, f, s1, crate::spec::UPDATE_NOT_REQUESTED)
+                (quiet(), State { key_update_owed: true, ..s1 })
             } else {
                 (quiet(), s1)
             },
@@ -592,14 +655,16 @@ pub open spec fn receive(c: crate::schedule::spec::Crypto, f: crate::traffic::sp
 }
 
 /// The transducer: `step(state, input) -> (output, state, consumed)`.
-/// After the read side ended, bytes are consumed and ignored (§6.1).
+/// After the read side ended, bytes are consumed and ignored (§6.1), and the
+/// end of the transport changes nothing; before, it is [`truncated`]
+/// (item 14).
 pub open spec fn step(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, s: State, input: Input) -> (Out, State, nat) {
     match input {
         Input::Bytes(wire) => {
             if can_read(s) { receive(c, f, s, wire) } else { (quiet(), s, wire.len()) }
         },
         Input::Closed => {
-            if can_read(s) { consuming(die(crate::spec::INTERNAL_ERROR), 0) } else { (quiet(), s, 0) }
+            if can_read(s) { consuming(truncated(f, s), 0) } else { (quiet(), s, 0) }
         },
     }
 }
@@ -617,6 +682,7 @@ pub open spec fn start(c: crate::schedule::spec::Crypto, client_secret: Seq<u8>,
             client_secret,
             server_secret,
             reassembly: crate::spec::reasm_new(),
+            key_update_owed: false,
         }),
         (Err(a), _) => Err(a),
         (_, Err(a)) => Err(a),

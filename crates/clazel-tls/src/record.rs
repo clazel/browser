@@ -73,16 +73,12 @@ pub fn read_record<'a>(input: &'a [u8], protected: bool) -> (out: ReadOut<'a>)
         return ReadOut::NeedMore;
     }
     let t = byte_at(input, 0);
-    let v_hi = byte_at(input, 1);
-    let v_lo = byte_at(input, 2);
     let l_hi = byte_at(input, 3);
     let l_lo = byte_at(input, 4);
     proof {
-        super::lemmas_pl::lemma_be_value_2(input@.subrange(1, 3));
         super::lemmas_pl::lemma_be_value_2(input@.subrange(3, 5));
     }
-    // v_hi * 256 + v_lo and l_hi * 256 + l_lo are below 2^16: no saturation.
-    let v: u16 = (v_hi as u16).saturating_mul(256).saturating_add(v_lo as u16);
+    // l_hi * 256 + l_lo is below 2^16: no saturation.
     let len: usize = (l_hi as usize).saturating_mul(256).saturating_add(l_lo as usize);
     // 1.
     let ok_type = if protected {
@@ -93,10 +89,7 @@ pub fn read_record<'a>(input: &'a [u8], protected: bool) -> (out: ReadOut<'a>)
     if !ok_type {
         return ReadOut::Fail(ErrKind::UnexpectedContentType);
     }
-    // 2.
-    if !(v == 0x0303 || (!protected && v == 0x0301)) {
-        return ReadOut::Fail(ErrKind::BadLegacyRecordVersion);
-    }
+    // 2. legacy_record_version is ignored (§5.1).
     // 3.
     let limit = if protected && t == CT_APPLICATION_DATA {
         MAX_CIPHERTEXT

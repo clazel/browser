@@ -12,8 +12,9 @@
 //! - RFC 6066, January 2011, <https://www.rfc-editor.org/rfc/rfc6066>, the
 //!   plain-text form fetched on 8 November 2026, SHA-256
 //!   `6a33cceaa5e1b6518923d9d04ffaa738bad0417806b3c94a995484e140f5cbc0`.
-//! - RFC 5890 §2.3.1 (LDH label), RFC 1123 §2.1 (host names and numbers) and
-//!   RFC 1035 §2.3.4 (size limits), for what a "DNS hostname" is.
+//! - RFC 2181 §11 (labels; #139, replacing RFC 5890 §2.3.1's LDH label), RFC
+//!   1123 §2.1 (host names and numbers) and RFC 1035 §2.3.4 (size limits), for
+//!   what a "DNS hostname" is.
 //!
 //! Modelling choices:
 //! - **The host is the client's string, as bytes** ([`host_name_for`]): what the
@@ -30,18 +31,24 @@
 //!   supported are DNS hostnames"). A host that is not (an IP literal, a string
 //!   that breaks the hostname syntax) gets no extension, since no name of a
 //!   supported type exists for it.
-//! - **What a DNS hostname is.** RFC 6066 names no grammar. The one used is the
-//!   one its own reference, RFC 5890 §2.3.1, gives: labels of "ASCII letters,
-//!   digits, and the hyphen", with no hyphen "at the beginning or end", of at
-//!   most 63 octets; RFC 1123 §2.1's relaxation (a label may start with a
-//!   digit); and RFC 1035 §2.3.4's "names 255 octets or less", which, for the
-//!   wire form of a name of n text octets without a trailing dot (a length octet
-//!   per label and the root's zero octet), is n + 2 ≤ 255. Whether an "xn--"
-//!   label is valid Punycode (RFC 5890's "Fake A-labels") is not checked: that
-//!   needs IDNA, and RFC 6066 only asks for "A-labels" by reference.
+//! - **What a DNS hostname is.** RFC 6066 names no grammar. (Changed by #139,
+//!   a reading change: this model first used RFC 5890 §2.3.1's LDH labels,
+//!   which would leave out names such as `a_b.example` that browsers send.)
+//!   The DNS itself does not limit labels to letters, digits and hyphens:
+//!   RFC 2181 §11, "any binary string whatever can be used as the label of
+//!   any resource record", and "The length of any one label is limited to
+//!   between 1 and 63 octets." So a label here is 1 to 63 octets, each one
+//!   ASCII (RFC 6066 §3: "a byte string using ASCII encoding") and not `:`
+//!   (IP literals, below). With RFC 1035 §2.3.4's "names 255 octets or
+//!   less", which, for the wire form of a name of n text octets without a
+//!   trailing dot (a length octet per label and the root's zero octet), is
+//!   n + 2 ≤ 255. Whether an "xn--" label is valid Punycode (RFC 5890's
+//!   "Fake A-labels") is not checked: that needs IDNA, and RFC 6066 only
+//!   asks for "A-labels" by reference.
 //! - **IP literals.** "Literal IPv4 and IPv6 addresses are not permitted in
-//!   'HostName'." An IPv6 literal, bracketed or not, holds `:`, which no LDH
-//!   label does. An IPv4 literal is all digits and dots; RFC 1123 §2.1 says "a
+//!   'HostName'." An IPv6 literal, bracketed or not, holds `:` (RFC 4291
+//!   §2.2), so a name holding one is taken as a literal and is not a
+//!   hostname. An IPv4 literal is all digits and dots; RFC 1123 §2.1 says "a
 //!   valid host name can never have the dotted-decimal form #.#.#.#, since at
 //!   least the highest-level component label will be alphabetic". The rule
 //!   applied is the weaker "the last label is not all digits", which excludes
@@ -140,34 +147,12 @@ pub open spec fn read_server_name_list(data: Seq<u8>) -> Option<Seq<ServerName>>
 }
 
 // --------------------------------------------------------------------------
-// What a DNS hostname is (RFC 5890 §2.3.1, RFC 1123 §2.1, RFC 1035 §2.3.4).
+// What a DNS hostname is (RFC 2181 §11, RFC 1123 §2.1, RFC 1035 §2.3.4).
 // --------------------------------------------------------------------------
-
-/// RFC 1035 §2.3.1 `<letter>`: "any one of the 52 alphabetic characters A
-/// through Z in upper case and a through z in lower case".
-pub open spec fn is_letter(byte: u8) -> bool {
-    (0x41 <= byte && byte <= 0x5A) || (0x61 <= byte && byte <= 0x7A)
-}
 
 /// RFC 1035 §2.3.1 `<digit>`: "any one of the ten digits 0 through 9".
 pub open spec fn is_digit(byte: u8) -> bool {
     0x30 <= byte && byte <= 0x39
-}
-
-/// RFC 1035 §2.3.1 `<let-dig-hyp>`.
-pub open spec fn is_let_dig_hyp(byte: u8) -> bool {
-    is_letter(byte) || is_digit(byte) || byte == 0x2D
-}
-
-/// Whether every byte is a letter, digit or hyphen.
-pub open spec fn all_let_dig_hyp(label: Seq<u8>) -> bool
-    decreases label.len(),
-{
-    if label.len() == 0 {
-        true
-    } else {
-        is_let_dig_hyp(label[0]) && all_let_dig_hyp(label.subrange(1, label.len() as int))
-    }
 }
 
 /// Whether every byte is a digit.
@@ -181,15 +166,31 @@ pub open spec fn all_digits(label: Seq<u8>) -> bool
     }
 }
 
-/// RFC 5890 §2.3.1: an LDH label, "a string consisting of ASCII letters, digits,
-/// and the hyphen with the further restriction that the hyphen cannot appear at
-/// the beginning or end of the string. Like all DNS labels, its total length
-/// must not exceed 63 octets." (RFC 1123 §2.1 lets it start with a digit.)
-pub open spec fn is_ldh_label(label: Seq<u8>) -> bool {
+/// An octet of a HostName label: RFC 6066 §3, "a byte string using ASCII
+/// encoding", and not `:`, which marks an IPv6 literal ("Literal IPv4 and
+/// IPv6 addresses are not permitted"). RFC 2181 §11 allows any other octet:
+/// "any binary string whatever can be used as the label of any resource
+/// record". (#139: replaces RFC 5890 §2.3.1's LDH rule, a reading change.)
+pub open spec fn is_host_name_octet(byte: u8) -> bool {
+    byte < 0x80 && byte != 0x3A
+}
+
+/// Whether every octet is a HostName octet.
+pub open spec fn all_host_name_octets(label: Seq<u8>) -> bool
+    decreases label.len(),
+{
+    if label.len() == 0 {
+        true
+    } else {
+        is_host_name_octet(label[0]) && all_host_name_octets(label.subrange(1, label.len() as int))
+    }
+}
+
+/// A DNS label: RFC 2181 §11, "The length of any one label is limited to
+/// between 1 and 63 octets", of HostName octets.
+pub open spec fn is_dns_label(label: Seq<u8>) -> bool {
     &&& 1 <= label.len() && label.len() <= 63
-    &&& all_let_dig_hyp(label)
-    &&& label[0] != 0x2D
-    &&& label[label.len() - 1] != 0x2D
+    &&& all_host_name_octets(label)
 }
 
 /// The labels of a name: the strings between its dots (0x2E), in order. Two
@@ -206,14 +207,14 @@ pub open spec fn split_labels(name: Seq<u8>, current: Seq<u8>) -> Seq<Seq<u8>>
     }
 }
 
-/// Whether every label is an LDH label.
-pub open spec fn all_ldh_labels(labels: Seq<Seq<u8>>) -> bool
+/// Whether every label is a DNS label.
+pub open spec fn all_dns_labels(labels: Seq<Seq<u8>>) -> bool
     decreases labels.len(),
 {
     if labels.len() == 0 {
         true
     } else {
-        is_ldh_label(labels[0]) && all_ldh_labels(labels.subrange(1, labels.len() as int))
+        is_dns_label(labels[0]) && all_dns_labels(labels.subrange(1, labels.len() as int))
     }
 }
 
@@ -222,8 +223,8 @@ pub open spec fn is_dns_host_name(name: Seq<u8>) -> bool {
     let labels = split_labels(name, seq![]);
     // RFC 1035 §2.3.4: "names 255 octets or less", in the wire form.
     &&& name.len() + 2 <= 255
-    // RFC 5890 §2.3.1, RFC 1123 §2.1.
-    &&& all_ldh_labels(labels)
+    // RFC 2181 §11, RFC 6066 §3 (#139: was RFC 5890 §2.3.1's LDH labels).
+    &&& all_dns_labels(labels)
     // RFC 6066: "Literal IPv4 and IPv6 addresses are not permitted"; RFC 1123
     // §2.1: "at least the highest-level component label will be alphabetic".
     &&& !all_digits(labels.last())

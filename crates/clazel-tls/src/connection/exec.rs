@@ -458,19 +458,6 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
         out
     }
 
-    /// RFC 8446 §6.1: the transport ended before close_notify; nothing is
-    /// sent and every key is dropped.
-    fn die(&mut self, alert: u8) -> (out: Action)
-        ensures
-            final(self).crypto_functions() == old(self).crypto_functions(), final(self).cipher_functions() == old(self).cipher_functions(),
-            final(self).verifier_functions() == old(self).verifier_functions(),
-            final(self).wf(), final(self).resources_wf(),
-            (out@, final(self)@) == super::dispatcher_spec::die(alert),
-    {
-        self.terminal(Mode::Failed);
-        Action::Fail(alert, None)
-    }
-
     /// RFC 8446 §6, §6.2: the peer's fatal alert. It is not answered; every
     /// key is dropped.
     fn peer_alert(&mut self, alert: u8) -> (out: Action)
@@ -995,17 +982,35 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
             self.server_application_secret.as_slice())
     }
 
-    /// EOF before the handshake ends is truncation. RFC 8446 §6.1: the truncation sends no alert, since the peer has
-    /// closed the connection.
+    /// RFC 8446 §6.1: the server's direction of the transport ended. Before
+    /// its close_notify that is a truncation ([`super::dispatcher_spec::eof`]):
+    /// our close_notify goes out, sealed as [`Self::close_write`] would seal
+    /// it, and the connection fails with `internal_error`, which is not sent.
+    /// After an error alert or a close_notify it does nothing.
     pub fn eof(&mut self) -> (out: Action)
-        requires old(self).wf(),
+        requires old(self).wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(),
         ensures
             final(self).crypto_functions() == old(self).crypto_functions(), final(self).cipher_functions() == old(self).cipher_functions(),
             final(self).wf(),
-            super::dispatcher_contract::truncation_ensures(old(self)@, out@, final(self)@),
+            super::dispatcher_contract::truncation_ensures(super::dispatcher_spec::Ciphers {
+                seal: old(self).cipher_functions().seal, open: old(self).cipher_functions().open }, old(self)@, out@,
+                final(self)@),
     {
-        if matches!(self.mode, Mode::Failed | Mode::Closed) { Action::None }
-        else { self.die(crate::spec::INTERNAL_ERROR) }
+        if matches!(self.mode, Mode::Failed | Mode::Closed) {
+            Action::None
+        } else {
+            let closing = self.close();
+            let ghost closed_view = closing@;
+            let wire = match closing {
+                Action::Close(wire) => wire,
+                _ => None,
+            };
+            proof {
+                assert(closed_view == super::dispatcher_spec::Action::Close(wire_view(wire)));
+            }
+            self.terminal(Mode::Failed);
+            Action::Fail(crate::spec::INTERNAL_ERROR, wire)
+        }
     }
 }
 } // verus!

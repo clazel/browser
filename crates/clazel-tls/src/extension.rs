@@ -450,6 +450,203 @@ pub fn server_name_ee_ok(data: &[u8]) -> (b: bool)
     data.is_empty()
 }
 
+/// RFC 8446 §4.2.4: whether `data` is a CertificateAuthoritiesExtension
+/// ([`super::spec::read_certificate_authorities`]).
+pub fn certificate_authorities(data: &[u8]) -> (b: bool)
+    ensures
+        b == super::spec::read_certificate_authorities(data@) is Some,
+{
+    let mut sub = match vec_whole(data, 3, 65535) {
+        Some(s) => s,
+        None => return false,
+    };
+    let ghost content = sub@;
+    let ghost mut acc: Seq<Seq<u8>> = Seq::empty();
+    while !sub.is_empty()
+        invariant
+            whole_vec(data@, 3, 65535) == Some(content),
+            super::lemmas_pl::list_after(acc, sub@, |x: Seq<u8>| super::spec::read_distinguished_name(x))
+                == super::spec::read_list(content, |x: Seq<u8>| super::spec::read_distinguished_name(x)),
+        decreases sub@.len(),
+    {
+        let ghost before = sub@;
+        proof {
+            super::lemmas_pl::lemma_list_after_step(acc, before, |x: Seq<u8>| super::spec::read_distinguished_name(x));
+            super::lemmas_pl::lemma_read_vec_canonical(before, 1, 65535);
+        }
+        if sub.vec(1, 65535).is_none() {
+            return false;
+        }
+        proof {
+            acc = acc.push(super::spec::read_vec(before, 1, 65535)->Some_0.0);
+        }
+    }
+    proof {
+        super::lemmas_pl::lemma_list_after_empty(acc, |x: Seq<u8>| super::spec::read_distinguished_name(x));
+        assert(sub@ =~= Seq::<u8>::empty());
+    }
+    true
+}
+
+/// RFC 8446 §4.2.5: read one OIDFilter as its OID
+/// ([`super::spec::read_oid_filter`]).
+pub fn read_oid_filter<'a>(c: &mut Cur<'a>) -> (r: Option<&'a [u8]>)
+    ensures
+        match r {
+            Some(oid) => super::spec::read_oid_filter(old(c)@) == Some((oid@, final(c)@)),
+            None => super::spec::read_oid_filter(old(c)@) is None,
+        },
+{
+    let oid = c.vec(1, 255)?;
+    let _values = c.vec(0, 65535)?;
+    Some(oid.as_slice())
+}
+
+/// RFC 8446 §4.2.5: an OIDFilterExtension's OIDs
+/// ([`super::spec::read_oid_filters`]).
+pub fn oid_filters<'a>(data: &'a [u8]) -> (r: Option<Vec<&'a [u8]>>)
+    ensures
+        match r {
+            Some(v) => super::spec::read_oid_filters(data@) == Some(v@.map_values(|s: &[u8]| s@)),
+            None => super::spec::read_oid_filters(data@) is None,
+        },
+{
+    let mut sub = vec_whole(data, 0, 65535)?;
+    let ghost content = sub@;
+    let mut acc: Vec<&'a [u8]> = Vec::new();
+    proof {
+        assert(acc@.map_values(|s: &[u8]| s@) =~= Seq::<Seq<u8>>::empty());
+    }
+    while !sub.is_empty()
+        invariant
+            whole_vec(data@, 0, 65535) == Some(content),
+            super::lemmas_pl::list_after(acc@.map_values(|s: &[u8]| s@), sub@, |x: Seq<u8>| super::spec::read_oid_filter(x))
+                == super::spec::read_list(content, |x: Seq<u8>| super::spec::read_oid_filter(x)),
+        decreases sub@.len(),
+    {
+        let ghost before = sub@;
+        proof {
+            super::lemmas_pl::lemma_list_after_step(acc@.map_values(|s: &[u8]| s@), before, |x: Seq<u8>| super::spec::read_oid_filter(x));
+            super::lemmas_ext::lemma_read_oid_filter_shrinks(before);
+        }
+        let oid = read_oid_filter(&mut sub)?;
+        let ghost old_acc = acc@;
+        acc.push(oid);
+        proof {
+            assert(acc@.map_values(|s: &[u8]| s@) =~= old_acc.map_values(|s: &[u8]| s@).push(oid@));
+        }
+    }
+    proof {
+        super::lemmas_pl::lemma_list_after_empty(acc@.map_values(|s: &[u8]| s@), |x: Seq<u8>| super::spec::read_oid_filter(x));
+        assert(sub@ =~= Seq::<u8>::empty());
+    }
+    Some(acc)
+}
+
+/// RFC 8446 §4.2.5: no OID appears twice in an OIDFilterExtension
+/// ([`super::spec::oid_filters_distinct`]).
+pub fn oid_filters_distinct(data: &[u8]) -> (b: bool)
+    ensures
+        b == super::spec::oid_filters_distinct(data@),
+{
+    let oids = match oid_filters(data) {
+        Some(v) => v,
+        None => return true,
+    };
+    let ghost s = oids@.map_values(|x: &[u8]| x@);
+    proof {
+        assert(s =~= oids@.map_values(|s: &[u8]| s@));
+        assert(super::spec::read_oid_filters(data@) == Some(s));
+        super::lemmas_ext::lemma_oids_distinct(s);
+    }
+    let n = oids.len();
+    let mut i: usize = 0;
+    while i < n
+        invariant
+            n == oids@.len(),
+            s == oids@.map_values(|x: &[u8]| x@),
+            super::spec::read_oid_filters(data@) == Some(s),
+            super::spec::oids_distinct(s) == (forall|x: int, y: int| 0 <= x < y < s.len() ==> s[x] != s[y]),
+            i <= n,
+            forall|a: int, b: int| 0 <= a < b < n && a < i ==> s[a] != s[b],
+        decreases n - i,
+    {
+        let a: &[u8] = match oids.get(i) {
+            Some(x) => x,
+            None => return true,
+        };
+        // i < n, so this does not saturate.
+        let mut j: usize = i.saturating_add(1);
+        while j < n
+            invariant
+                n == oids@.len(),
+                s == oids@.map_values(|x: &[u8]| x@),
+                i < n,
+                i < j <= n,
+                a@ == s[i as int],
+                super::spec::read_oid_filters(data@) == Some(s),
+                super::spec::oids_distinct(s) == (forall|x: int, y: int| 0 <= x < y < s.len() ==> s[x] != s[y]),
+                forall|x: int, y: int| 0 <= x < y < n && x < i ==> s[x] != s[y],
+                forall|y: int| i < y < j ==> s[i as int] != s[y],
+            decreases n - j,
+        {
+            let b: &[u8] = match oids.get(j) {
+                Some(x) => x,
+                None => return true,
+            };
+            if super::handshake::bytes_eq(a, b) {
+                proof {
+                    assert(s[i as int] == s[j as int]);
+                    assert(!(forall|x: int, y: int| 0 <= x < y < s.len() ==> s[x] != s[y]));
+                    assert(super::spec::read_oid_filters(data@) == Some(s));
+                    assert(!super::spec::oid_filters_distinct(data@));
+                }
+                return false;
+            }
+            j = j.saturating_add(1);
+        }
+        i = i.saturating_add(1);
+    }
+    true
+}
+
+/// RFC 8446 §4.2.5 for every oid_filters extension of a block
+/// ([`crate::auth::spec::request_filters_distinct`]).
+pub fn request_filters_distinct(es: &[Extension<'_>]) -> (b: bool)
+    ensures
+        b == crate::auth::spec::request_filters_distinct(super::types::views(es@)),
+{
+    let n = es.len();
+    let mut i: usize = n;
+    let mut ok = true;
+    proof {
+        assert(super::types::views(es@).skip(n as int) =~= Seq::<super::spec::Ext>::empty());
+    }
+    while i > 0
+        invariant
+            n == es@.len(),
+            i <= n,
+            ok == crate::auth::spec::request_filters_distinct(super::types::views(es@).skip(i as int)),
+        decreases i,
+    {
+        i = i.saturating_sub(1);
+        let here = match es.get(i) {
+            Some(e) => e.etype != EXT_OID_FILTERS || oid_filters_distinct(e.data),
+            None => true,
+        };
+        proof {
+            let v = super::types::views(es@);
+            assert(v.skip(i as int).skip(1) =~= v.skip(i as int + 1));
+            assert(v.skip(i as int)[0] == es@[i as int]@);
+        }
+        ok = here && ok;
+    }
+    proof {
+        assert(super::types::views(es@).skip(0) =~= super::types::views(es@));
+    }
+    ok
+}
+
 /// Whether the `extension_data` of `e`, in a message of kind `m`, has the
 /// structure of the extensions this crate reads
 /// ([`super::spec::ext_body_ok`]).
@@ -483,6 +680,17 @@ pub fn ext_body_ok(e: &Extension<'_>, m: MsgKind) -> (b: bool)
         } else {
             server_name_ee_ok(e.data)
         }
+    } else if (e.etype == EXT_STATUS_REQUEST || e.etype == EXT_SCT) && matches!(m, MsgKind::Cr) {
+        // §4.4.2.1's empty status_request and RFC 6962 §3.3.1's empty
+        // signed_certificate_timestamp request.
+        e.data.is_empty()
+    } else if e.etype == EXT_CERTIFICATE_AUTHORITIES {
+        certificate_authorities(e.data)
+    } else if e.etype == EXT_OID_FILTERS {
+        oid_filters(e.data).is_some()
+    } else if e.etype == EXT_EARLY_DATA && matches!(m, MsgKind::Nst) {
+        // §4.2.10: `uint32 max_early_data_size`.
+        e.data.len() == 4
     } else {
         true
     }

@@ -58,6 +58,10 @@
 //!   That is still so of `connection`; the record is added here, around it.
 //! - After the handshake the wrapper adds nothing: application data, KeyUpdate
 //!   and closure are `connection`'s functions on [`ClientConnection::connection`].
+//! - After our close_notify (`connection::close_write_side`), `connection` writes no
+//!   handshake record, so [`before_second_flight`] adds no dummy record either: it
+//!   puts one only before a record the client writes. §6.1's close_notify says "the
+//!   sender will not send any more messages on this connection".
 
 #[allow(unused_imports)]
 use vstd::prelude::*;

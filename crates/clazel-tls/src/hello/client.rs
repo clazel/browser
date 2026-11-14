@@ -203,7 +203,8 @@ impl Hello {
         ensures super::client_contract::start_ensures(config@, start_view(out)),
     {
         if !config.host.is_ok() || config.random.len() != 32
-            || config.session_id.len() > 32 || config.public_key.len() != 32 { return Err(80); }
+            || (!config.session_id.is_empty() && config.session_id.len() != 32)
+            || config.public_key.len() != 32 { return Err(80); }
         let b = build(&config, &[]);
         let transcript = match Transcript::new(b.as_slice()) { Ok(t) => t, Err(_) => return Err(80) };
         let mut flight = Vec::new();

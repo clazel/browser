@@ -61,6 +61,7 @@
 pub mod compute;
 pub mod computed;
 pub mod hints;
+pub mod index;
 pub mod legacy;
 pub mod logical;
 pub mod rules;
@@ -316,8 +317,36 @@ pub fn cascade_with(
     sources: &Sources,
     device: Device,
 ) -> ComputedTable {
+    run(sheets, arena, sources, device, true)
+}
+
+/// [`cascade`] trying every rule against every element, without the rule index
+/// ([`index`]): the oracle the indexed cascade is tested against.
+pub fn cascade_unindexed(arena: &Arena, sources: &Sources, device: Device) -> ComputedTable {
+    run(ua::sheets(), arena, sources, device, false)
+}
+
+/// The cascade; `indexed` says whether rules are found through the rule index or all tried.
+fn run(
+    sheets: &ua::Sheets,
+    arena: &Arena,
+    sources: &Sources,
+    device: Device,
+    indexed: bool,
+) -> ComputedTable {
     let quirks = sources.quirks;
     let (mut rules, after_rules) = prepare(sheets, sources, device);
+    let rule_index = index::RuleIndex::new(rules.iter().enumerate().flat_map(|(i, r)| {
+        r.selectors
+            .index_keys()
+            .into_iter()
+            .map(move |(subject, ancestor)| (i, subject, ancestor))
+    }));
+    // The element ancestors of the element being styled: the elements on the path from
+    // the root, each with its keys, and their keys together. The walk is in preorder, so
+    // an element's parent is on the path; the elements after it are left first.
+    let mut path: Vec<(usize, Vec<index::Key>)> = Vec::new();
+    let mut ancestors: index::Ancestors<index::Key> = index::Ancestors::default();
     let attributes: HashMap<usize, Vec<Longhands>> = sources
         .attributes
         .iter()
@@ -346,16 +375,41 @@ pub fn cascade_with(
             .and_then(|p| table.get(p))
             .cloned()
             .unwrap_or_else(|| initial.clone());
+        let parent_node = arena.parent(x);
+        for _ in 0..path.len() {
+            match path.last() {
+                Some((top, _)) if Some(*top) != parent_node => {
+                    if let Some((_, keys)) = path.pop() {
+                        ancestors.pop(&keys);
+                    }
+                }
+                _ => break,
+            }
+        }
+        let keys = index::element_keys(arena.kind(x));
+        let candidates: Vec<usize> = if indexed {
+            rule_index.candidates(&keys, &ancestors)
+        } else {
+            (0..rules.len()).collect()
+        };
         let element_hints = hints::hints(arena, x, hint_cx);
         let prose = ua::prose(arena, x, parent.text_align, quirks);
         let mut entries: Vec<Entry<'_>> = Vec::new();
-        for r in &mut rules {
+        // Matching needs each rule's selectors mutably, the entries its declarations
+        // shared: match first, then read the declarations of the rules that matched.
+        let mut matched: Vec<(usize, Specificity)> = Vec::new();
+        for &i in &candidates {
+            let Some(r) = rules.get_mut(i) else { continue };
             let Some(spec) = r.selectors.match_element(arena, x) else {
                 continue;
             };
             if r.needs_border && !ua::border_not_zero(arena, x) {
                 continue;
             }
+            matched.push((i, spec));
+        }
+        for &(i, spec) in &matched {
+            let Some(r) = rules.get(i) else { continue };
             let (origin, base) = (r.origin, r.order);
             push_all(&mut entries, &r.declarations, |important, k| {
                 priority(origin, important, spec, base.saturating_add(k))
@@ -403,6 +457,8 @@ pub fn cascade_with(
         if let Some(slot) = table.styles.get_mut(x) {
             *slot = Some(style);
         }
+        ancestors.push(&keys);
+        path.push((x, keys));
     }
     table
 }

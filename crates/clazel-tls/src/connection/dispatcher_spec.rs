@@ -41,9 +41,22 @@
 //!   (`dispatcher_contract::handoff_ensures`), with both directions at sequence
 //!   number 0. So one machine runs after the handshake, and it is the one
 //!   the post-handshake theorems are about.
-//! - The transport ending before close_notify (§6.1, truncation) is
-//!   `Fail(internal_error, None)` ([`die`]): the peer has closed the
-//!   connection, so nothing is sent, as in `post_handshake_spec` (choice 6).
+//! - The end of the transport ([`eof`]) means only that the peer's direction
+//!   of the transport ended, not that the peer closed the connection. Before
+//!   the peer's close_notify it is a truncation (§6.1: "If a transport-level
+//!   close is received prior to a "close_notify", the receiver cannot know
+//!   that all the data that was sent has been received"), and never
+//!   end-of-data: "the TLS implementation MUST receive a "close_notify" alert
+//!   before indicating end-of-data to the application layer". The connection
+//!   fails with `internal_error`, a local report that is never written, and
+//!   every key is dropped ([`truncated`]). It closes our write side too, so
+//!   our close_notify goes out first, exactly the record a close at that point
+//!   would send ([`close_wire`]): "Each party MUST send a "close_notify" alert
+//!   before closing its write side of the connection, unless it has already
+//!   sent some error alert". The record rides in `Fail`'s second place, the
+//!   one `Fail` whose record is not a fatal alert. In `Failed` and `Closed`
+//!   (after an error alert, or a close_notify of either side) the end of the
+//!   transport does nothing. As in `post_handshake_spec` (item 14).
 //! - A fatal alert received from the peer (any alert but close_notify and
 //!   user_canceled) is `PeerAlert(description)` ([`receive_fatal_alert`]). It
 //!   is never answered (§6: "Upon receiving an error alert, the TLS
@@ -81,7 +94,8 @@ pub enum Mode {
     Ready,
     /// Fatal error; all key and partial-input state is dropped.
     Failed,
-    /// Transport closed; all key and partial-input state is dropped.
+    /// Closed with a close_notify, ours or the peer's (§6.1); all key and
+    /// partial-input state is dropped.
     Closed,
 }
 
@@ -100,7 +114,8 @@ pub enum Action {
     /// RFC 8446 §6.2: a fatal error detected locally, with its alert
     /// description and the protected fatal alert record to send
     /// ([`alert_wire`]), or `None` when no settled write epoch is held.
-    /// Every key is dropped.
+    /// Every key is dropped. At the end of the transport ([`truncated`]) the
+    /// record is our close_notify ([`close_wire`]) instead.
     Fail(u8, Option<Seq<u8>>),
     /// RFC 8446 §6: the peer's fatal alert. It is not answered, and every key
     /// is dropped.
@@ -321,10 +336,19 @@ pub open spec fn fatal(ciphers: Ciphers, s: State, description: u8) -> (Action, 
     (Action::Fail(description, alert_wire(ciphers, s, description)), failed())
 }
 
-/// §6.1: the transport ended before close_notify. The peer has closed the
-/// connection, so no alert is sent.
-pub open spec fn die(description: u8) -> (Action, State) {
-    (Action::Fail(description, None), failed())
+/// §6.1: the end of the transport before the peer's close_notify, a
+/// truncation. Our close_notify goes out, if it can, as a close at this point
+/// would send it ([`close_wire`]); the connection fails with
+/// `internal_error`, which is not written, and every key is dropped.
+pub open spec fn truncated(ciphers: Ciphers, s: State) -> (Action, State) {
+    (Action::Fail(crate::spec::INTERNAL_ERROR, close_wire(ciphers, s)), failed())
+}
+
+/// §6.1: the end of the transport. A truncation ([`truncated`]) while the
+/// connection is live; after an error alert or a close_notify (`Failed`,
+/// `Closed`) nothing happens.
+pub open spec fn eof(ciphers: Ciphers, s: State) -> (Action, State) {
+    if s.mode == Mode::Failed || s.mode == Mode::Closed { (Action::None, s) } else { truncated(ciphers, s) }
 }
 
 /// §6, §6.2: a fatal alert from the peer ends the connection and is not
@@ -351,7 +375,7 @@ pub open spec fn failed() -> State {
     }
 }
 
-/// Drop every secret and partial input after transport closure.
+/// Drop every secret and partial input after a close_notify (§6.1).
 pub open spec fn closed() -> State {
     State { mode: Mode::Closed, ..failed() }
 }

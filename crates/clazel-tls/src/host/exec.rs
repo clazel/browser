@@ -30,9 +30,53 @@ impl Host {
         ensures out == super::spec::host_ok(self@),
     {
         match self {
-            Host::Dns(name) => match name.last() {
-                Some(last) => name.len() <= 253 && *last != 0x2eu8,
-                None => false,
+            Host::Dns(name) => {
+                if name.is_empty() || name.len() > 253 {
+                    return false;
+                }
+                let mut run: usize = 0;
+                let mut digits = true;
+                let mut i: usize = 0;
+                proof {
+                    assert(name@.subrange(0, name@.len() as int) =~= name@);
+                }
+                while i < name.len()
+                    invariant
+                        i <= name@.len(),
+                        1 <= name@.len() <= 253,
+                        run <= 63,
+                        super::spec::host_ok(self@) == super::spec::dns_labels_ok(
+                            name@.subrange(i as int, name@.len() as int), run as nat, digits),
+                    decreases name@.len() - i,
+                {
+                    let ghost rest = name@.subrange(i as int, name@.len() as int);
+                    proof {
+                        assert(rest[0] == name@[i as int]);
+                        assert(rest.subrange(1, rest.len() as int) =~= name@.subrange(i + 1, name@.len() as int));
+                    }
+                    let b = match name.get(i) {
+                        Some(b) => *b,
+                        None => return false,
+                    };
+                    if b == 0x2eu8 {
+                        if run == 0 {
+                            return false;
+                        }
+                        run = 0;
+                        digits = true;
+                    } else {
+                        if b >= 0x80u8 || b == 0x3au8 || run >= 63 {
+                            return false;
+                        }
+                        run = run.saturating_add(1);
+                        digits = digits && (0x30u8..=0x39u8).contains(&b);
+                    }
+                    i = i.saturating_add(1);
+                }
+                proof {
+                    assert(name@.subrange(i as int, name@.len() as int) =~= Seq::<u8>::empty());
+                }
+                run >= 1 && !digits
             },
             Host::Ip(address) => address.len() == 4 || address.len() == 16,
         }
