@@ -20,9 +20,9 @@ text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,san
 <rect x="32" y="128" width="124" height="76" rx="6" fill="var(--t2s)" stroke="var(--t2)" stroke-opacity=".5"/>
 <text x="40" y="146" font-size="12" class="m b">kernel</text>
 <text x="40" y="175" font-size="10.5" class="b" style="fill:var(--t2)">Proven correct</text>
-<svg x="40" y="155" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="58.8" height="6" fill="var(--proof)"/><rect x="58.8" width="38.4" height="6" fill="var(--spec)"/><rect x="97.2" width="10.8" height="6" fill="var(--exec)"/></svg>
+<svg x="40" y="155" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="58.6" height="6" fill="var(--proof)"/><rect x="58.6" width="37.2" height="6" fill="var(--spec)"/><rect x="95.8" width="12.2" height="6" fill="var(--exec)"/></svg>
 <text x="40" y="188" font-size="10" class="mut">7.0k cases</text>
-<text x="40" y="199" font-size="10" class="mut">47/47 mut</text>
+<text x="40" y="199" font-size="10" class="mut">74/74 mut</text>
 <rect x="164" y="128" width="124" height="76" rx="6" fill="var(--t2s)" stroke="var(--t2)" stroke-opacity=".5"/>
 <text x="172" y="146" font-size="12" class="m b">fetch</text>
 <text x="172" y="175" font-size="10.5" class="b" style="fill:var(--t2)">Proven correct</text>
@@ -246,9 +246,9 @@ text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,san
 <rect x="296" y="1280" width="124" height="76" rx="6" fill="var(--t2s)" stroke="var(--t2)" stroke-opacity=".5"/>
 <text x="304" y="1298" font-size="12" class="m b">ipc</text>
 <text x="304" y="1327" font-size="10.5" class="b" style="fill:var(--t2)">Proven correct</text>
-<svg x="304" y="1307" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="42.4" height="6" fill="var(--proof)"/><rect x="42.4" width="44.6" height="6" fill="var(--spec)"/><rect x="87.1" width="20.9" height="6" fill="var(--exec)"/></svg>
+<svg x="304" y="1307" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="39.8" height="6" fill="var(--proof)"/><rect x="39.8" width="44.1" height="6" fill="var(--spec)"/><rect x="83.9" width="24.1" height="6" fill="var(--exec)"/></svg>
 <text x="304" y="1340" font-size="10" class="mut">80k cases</text>
-<text x="304" y="1351" font-size="10" class="mut">80/80 mut</text>
+<text x="304" y="1351" font-size="10" class="mut">98/98 mut</text>
 <rect x="736" y="1144" width="148" height="224" rx="10" fill="var(--panel)" stroke="var(--line)"/>
 <text x="748" y="1166" font-size="13" class="b">OS boundary</text>
 <text x="748" y="1182" font-size="11" class="mut">the only unsafe code</text>
@@ -263,7 +263,7 @@ text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,san
 <rect x="756" y="1307" width="108" height="6" rx="3" fill="none" stroke="var(--line)" stroke-dasharray="3 2"/>
 <text x="756" y="1340" font-size="10" class="mut">138 unsafe, audited</text>
 <rect x="20" y="1384" width="864" height="130" rx="10" fill="var(--panel)" stroke="var(--line)"/>
-<text x="32" y="1410" font-size="12" class="b">2270 of 2283 broken specs caught by a theorem</text>
+<text x="32" y="1410" font-size="12" class="b">2315 of 2328 broken specs caught by a theorem</text>
 <text x="32" y="1427" font-size="11" class="mut">13 more (crypto) broke only a proof script: no theorem became false, so they are not counted as coverage.</text>
 <text x="32" y="1453" font-size="12" class="b">21 axioms: proofs taken from other verified libraries</text>
 <text x="32" y="1470" font-size="11" class="mut">p384, 6: The trust boundary of the field: every call into fiat-crypto, each one axiom.</text>
