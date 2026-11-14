@@ -9,47 +9,6 @@ instead of trust.
 - **Honest about it:** each crate declares its verification tier, and the
   trusted computing base is listed in [docs/VERIFICATION.md](docs/VERIFICATION.md).
 
-Status: Phases 0 (foundations) and 1 (verified primitives) are complete:
-UTF-8 (`clazel-encoding`), percent-encoding (`clazel-percent`), forgiving
-base64 (`clazel-base64`), MIME types and sniffing (`clazel-mime`), IDNA
-(`clazel-idna`) and URLs (`clazel-url`) are at Tier 2, on macOS and on
-Linux CI. Phase 2 (kernel and IPC) is complete; see
-[docs/STATUS.md](docs/STATUS.md) and
-[docs/phases/phase-2.md](docs/phases/phase-2.md). Phase 3 (networking) is
-in progress. HTTP/1.1 field syntax, response framing and request
-serialization (`clazel-http`), DNS (`clazel-dns`), the fetch client with
-redirects and cookies (`clazel-fetch`), DER (`clazel-der`) and RSA PKCS#1
-v1.5 verification (`clazel-pkcs1`) are at Tier 2. The kernel
-(`clazel-kernel`, still Tier 2) runs the fetch client itself: connections are
-kernel state, every request, redirect and cookie is its decision, and its
-Phase 2 theorems still hold with network events. The network shell
-(`clazel-net`) only carries bytes. TLS is not done yet: X.509, the TLS 1.3
-handshake and the libcrux join are partly built at Tier 0; `clazel fetch`
-uses them for `https://`, but certificate chains with a P-384 issuer key
-are refused for now, so most sites fail, and they are not yet joined to the
-kernel, so `clazel browse` speaks only `http://`. What
-remains is listed in [docs/phases/phase-3.md](docs/phases/phase-3.md#status).
-
-Phase 4 (HTML and DOM) is built but not yet complete: every CI job but
-Miri passed at `e29265d`, and `clazel-dom` is not at Tier 2 yet. `cargo run -p clazel -- browse URL`
-is a text-mode browser in the style of Lynx: the kernel fetches the page,
-a sandboxed renderer parses it and prints the title, the text and numbered
-links, and typing a link's number navigates the tab through the kernel,
-under an address line that is always the kernel's committed URL. Every
-parser on the page's path is proven: the encoding sniffing algorithm
-(`clazel-html`) and the decoders (`clazel-encoding`), the tokenizer, proven
-total and panic-free, with its character references (`clazel-html`), and
-the tree builder (`clazel-treebuilder`), all at Tier 2. The DOM operations
-(`clazel-dom`) are proven too, but the crate stays at Tier 0 until it has a
-conformance test of its own. The kernel proves that what a renderer
-displays is shown for its own tab, labelled with the URL the kernel
-committed there (`theorem_show_only_own_tab`,
-`theorem_address_bar_integrity`), and that a renderer receives the fetched
-body whole (`theorem_body_is_the_response`). The text layout (`clazel-text`)
-and the renderer's glue are Tier 0. Pages in the seven legacy multi-byte
-encodings (Shift_JIS, GBK, Big5 and others) are not rendered yet: the page
-says "encoding `<name>` is not supported" (moved to Phase 8). See
-[docs/phases/phase-4.md](docs/phases/phase-4.md#status).
 
 Recheck every proof yourself, on Linux x86-64, with:
 
@@ -57,8 +16,6 @@ Recheck every proof yourself, on Linux x86-64, with:
 docker build --platform linux/amd64 -t clazel-verify .
 docker run --rm --platform linux/amd64 clazel-verify
 ```
-
-See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Verification status
 
@@ -68,31 +25,77 @@ Every crate, where it runs and the full table, with every conformance suite:
 [docs/STATUS.md](docs/STATUS.md). CI redraws both after every push to
 `main` whose full verification passes, so they can lag behind `main`.
 
+## What it does today
 
-**Phase 2 process tests: where they have run.** The demo (`cargo run -p clazel
--- demo`), the sandbox escape attempts, the hostile-renderer test and the WPT
-`cookies/` run through real processes (item 2.16) run in CI on Linux x86-64
-(`ubuntu-24.04`) and on macOS arm64. On Ubuntu the renderer needs an AppArmor
-profile that allows unprivileged user namespaces, or it fails closed; CI loads
-it, and so does the release tarball's `install.sh` (see item 2.16 in
-[docs/phases/phase-2.md](docs/phases/phase-2.md)). The escape attempts include
-`fork` and `ptrace` of a sibling. Where Yama restricts `ptrace` on Linux, the
-`ptrace` result shows less than it does on macOS.
+- **Fetches.** `clazel fetch URL` is a `curl` clone over `http:` and
+  `https:`, on our own DNS client, HTTP/1.1 parser and TLS 1.3 client, with
+  redirects and cookies.
+- **Browses, as text.** `clazel browse URL` shows a page in the style of
+  Lynx: the title, the text and numbered links. Pages in the seven legacy
+  multi-byte encodings (Shift_JIS, GBK, Big5 and others) are not rendered
+  yet: the page says "encoding `<name>` is not supported".
+- **Not yet:** pages drawn in a window, images, forms and JavaScript. The
+  crates for CSS, layout, fonts, GPU drawing and the window are on `main`,
+  but `browse` does not use them yet.
 
-**Phase 4 process tests: where they have run.** `crates/clazel/tests/pages.rs`
-(the 1,761 html5lib document cases and a page with links, visited through
-real renderers, and the WPT `cookies/` rows through the kernel's
-`Set-Cookie` path) and `crates/clazel/tests/hostile_pages.rs` (12 hostile
-pages, each through a real sandboxed renderer, checked for panics, the
-memory bound and the address line) run in CI's base jobs on Linux x86-64
-(`ubuntu-24.04`) and macOS arm64, as do the Phase 2 tests, and passed there
-at `e29265d`; they are Unix only, so not on Windows. Two hostile pages are ignored for time, not for
-failure: a million nested `<div>`s and 64 MiB of `&amp;` (see item 4.16 in
-[docs/phases/phase-4.md](docs/phases/phase-4.md)). The `browse` demo on
-real sites runs locally only, since CI has no Internet.
+What comes next, and in what order, is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
-Formalizing the standards has already found one spec bug: see
-[docs/ERRATA.md](docs/ERRATA.md).
+## How it is put together
+
+Clazel runs as several processes, and the one that makes the security
+decisions is the one that is proven.
+
+- **The kernel** (`clazel-kernel`) is a proven state machine. Tabs, origins,
+  connections, cookies and storage are its state, and every navigation,
+  request, redirect and cookie is its decision. Its theorems say, among other
+  things, that what a renderer displays is shown for its own tab, under the
+  URL the kernel committed there (`theorem_show_only_own_tab`,
+  `theorem_address_bar_integrity`), and that a renderer receives the fetched
+  body whole (`theorem_body_is_the_response`).
+- **Renderers** (`clazel-renderer`) parse and lay out pages, one process per
+  origin, inside the OS sandbox: namespaces, seccomp and Landlock on Linux,
+  Seatbelt on macOS, an AppContainer on Windows. A renderer talks only to the
+  kernel, over a proven message codec (`clazel-ipc`).
+- **Parsers of untrusted bytes are ours**, and each is proven against a
+  transcription of its standard: URLs, encodings, HTTP, DNS, cookies, HTML
+  tokenizing and tree building, certificates and more.
+- **Shells carry bytes.** The host (`clazel`), the network shell
+  (`clazel-net`) and the store's shell (`clazel-store-shell`) do the I/O and
+  make no protocol decisions: those belong to the proven crates they call.
+- **`clazel-sys`** holds every `unsafe` block: single calls into the OS,
+  with no policy of their own.
+
+## How it is verified
+
+Each crate declares a tier in its `Cargo.toml`, and
+`cargo xtask verify` rejects a claim that is not backed:
+
+| Tier | Guarantee | Checked by |
+|------|-----------|------------|
+| 0 | Memory safe | Safe Rust, Miri, deny-lints |
+| 1 | Never panics on any input | Kani harnesses |
+| 2 | Functionally correct against an executable spec | Verus proofs |
+
+A proof only shows that code matches its spec. That the spec matches the
+standard is shown by evidence that machines check too: official test suites
+(Web Platform Tests, html5lib-tests and others) run through the proven code,
+differential tests against independent engines, deliberately broken specs
+that a theorem must reject, and a second, independent transcription proven
+equivalent to the first. No step depends on a person approving something.
+The policy, the tools and the trusted computing base are in
+[docs/VERIFICATION.md](docs/VERIFICATION.md).
+
+Formalising the standards has found places where they are wrong as written:
+see [docs/ERRATA.md](docs/ERRATA.md).
+
+**Where it has run.** CI builds and tests on Linux x86-64 (`ubuntu-24.04`),
+macOS arm64 and Windows, and runs the proofs on Linux. The tests that start
+real sandboxed processes (the sandbox escape attempts, hostile renderers and
+hostile pages) run on Linux and macOS; they are Unix only. On Ubuntu the
+renderer needs an AppArmor profile that allows unprivileged user namespaces,
+or it fails closed (see [Building](#building)). Where Yama restricts `ptrace`
+on Linux, the `ptrace` escape attempt shows less than it does on macOS. The
+`browse` demo on real sites runs locally only, since CI has no Internet.
 
 ## Building
 
@@ -115,8 +118,7 @@ target/release/clazel fetch http://example.com/           # GET, redirects follo
 client: it builds each request, frames each response with the proven HTTP/1.1
 parser, follows redirects and keeps the cookies they set for the rest of the
 run. It needs the Internet. An `https://` URL goes over our TLS 1.3 client
-with Mozilla's roots as the trust store; until P-384 issuer keys are
-supported, a chain that has one (most sites today) fails with `unknown_ca`.
+with Mozilla's roots as the trust store.
 
 ```sh
 target/release/clazel browse http://info.cern.ch/         # text-mode browser: title, text, numbered links
@@ -126,7 +128,6 @@ target/release/clazel browse http://info.cern.ch/         # text-mode browser: t
 follow a link, `g URL` to go elsewhere, `b` to go back, `q` to quit. The
 kernel fetches every page and the page is parsed in a sandboxed renderer,
 one per origin; the address line is the kernel's, whatever the page says.
-It speaks only `http://` until TLS is joined to the kernel.
 
 Each GitHub release has a Linux x86-64 tarball with both binaries and an
 installer: unpack it and run `sudo ./install.sh` (or `PREFIX=... ./install.sh`).
@@ -155,8 +156,7 @@ and much of it is work only a person can do.
   people may record one, so a reviewed file means a person read it. See
   [docs/SPEC-REVIEWS.md](docs/SPEC-REVIEWS.md) for how. `contract.rs` files are
   the shortest route to what each crate actually promises.
-- **Take errata upstream.** Formalising the standards has found places where
-  they are wrong as written. Agents never file issues with standards bodies;
+- **Take errata upstream.** Agents never file issues with standards bodies;
   the entries marked "Reported upstream: not yet" in
   [docs/ERRATA.md](docs/ERRATA.md) are waiting for a person to check them and
   report them.
@@ -167,18 +167,16 @@ and much of it is work only a person can do.
 - **Add test suites.** Every Tier 2 crate is tested against official suites
   and independent engines (`tests/conformance*.rs`). Point us at suites we have
   not vendored, or at engines worth differential testing against.
-- **Run it where we have not.** The Phase 2 and 4 process tests (the sandbox,
-  the hostile renderer, the hostile pages) run in CI on `ubuntu-24.04` and
-  macOS arm64 only. Other Linux distributions and kernels are untested.
-- **Read `clazel-sys`.** It is the only crate with `unsafe`: 62 blocks that
-  enter the OS sandbox, read the OS random source, or list the DNS servers and
-  open the host's window (Windows). Every change is audited
-  by a second model ([docs/SYS-AUDITS.md](docs/SYS-AUDITS.md)); a person
-  reading it too is welcome.
-- **Build the next phases.** The plan is in [docs/ROADMAP.md](docs/ROADMAP.md)
-  and the detailed plans in [docs/phases/](docs/phases/). TLS is partly
-  built and not yet joined to the kernel. Contributions go through the same
-  machine checks as everything else, whoever (or whatever) wrote them: read
+- **Run it where we have not.** The tests that start real sandboxed
+  processes run in CI on `ubuntu-24.04` and macOS arm64 only. Other Linux
+  distributions and kernels are untested.
+- **Read `clazel-sys`.** It is the only crate with `unsafe`. Every change is
+  audited by a second model ([docs/SYS-AUDITS.md](docs/SYS-AUDITS.md)); a
+  person reading it too is welcome.
+- **Build what is missing.** The plan is in [docs/ROADMAP.md](docs/ROADMAP.md),
+  and crates below their target tier are listed in
+  [docs/STATUS.md](docs/STATUS.md). Contributions go through the same machine
+  checks as everything else, whoever (or whatever) wrote them: read
   [CLAUDE.md](CLAUDE.md) first, and expect `cargo xtask verify --changed` and
   CI's full verification to be the bar.
 
