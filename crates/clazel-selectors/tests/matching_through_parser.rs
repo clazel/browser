@@ -438,32 +438,67 @@ fn nested(open: &str, x: &str, n: usize) -> String {
     format!("{}{}{}", open.repeat(n), x, ")".repeat(n))
 }
 
+/// A small document, `html > body > ul`, and its elements by label. The cost of matching
+/// nested functions grows with the depth of the element (see
+/// `nested_functions_cost_too_much_on_a_deep_document`), so the nesting test uses this one.
+fn small_document() -> (Arena, Vec<(&'static str, usize)>) {
+    let mut a = Arena::new(Vec::new());
+    a.set_mode(DocumentMode::NoQuirks);
+    let h = html(&mut a, "html", &[]);
+    a.append(0, h);
+    let b = html(&mut a, "body", &[]);
+    a.append(h, b);
+    let u = html(&mut a, "ul", &[]);
+    a.append(b, u);
+    (a, vec![("html", h), ("body", b), ("ul", u)])
+}
+
+fn matched_small(selector: &str) -> Vec<&'static str> {
+    let (arena, names) = small_document();
+    let Some(s) = parse_selector(&cps(selector)) else {
+        return vec!["<invalid>"];
+    };
+    names
+        .iter()
+        .filter(|(_, id)| matches(&arena, &s, *id))
+        .map(|(n, _)| *n)
+        .collect()
+}
+
 #[test]
 fn nesting_is_accepted_at_max_nesting_and_refused_one_past() {
-    use Mode::NoQuirks;
     // contract.rs: MAX_NESTING = 32 levels of functions inside functions; the spec has no
     // limit, so 33 levels of an otherwise valid selector are the one place the parser may
     // answer "invalid" where the standard does not.
     assert_eq!(clazel_selectors::contract::MAX_NESTING, 32);
+    // Under Miri (docs/VERIFICATION.md: a suite must stay far below five minutes there) only
+    // `:is(` is matched, and the other functions and the mixed selectors are checked by
+    // parsing alone; all of it is matched in the normal run. The code path at 32 and 33 is
+    // the same.
+    let miri = cfg!(miri);
     for open in [":is(", ":where(", ":not("] {
         let ok = nested(open, "ul", 32);
         let over = nested(open, "ul", 33);
-        // 32 levels of :not() is an even number of negations: `ul` itself (§4.3).
-        assert_eq!(matched(NoQuirks, &ok), ["ul"], "{open} x32");
-        assert_eq!(matched(NoQuirks, &over), ["<invalid>"], "{open} x33");
-        // One fewer is accepted too.
-        // 31 levels of :not() is odd: every element but `ul`.
-        let every_element = document(NoQuirks).1.len();
-        let expected = if open == ":not(" {
-            every_element - 1
-        } else {
-            1
-        };
-        assert_eq!(
-            matched(NoQuirks, &nested(open, "ul", 31)).len(),
-            expected,
-            "{open} x31"
+        let few = nested(open, "ul", 31);
+        assert!(parse_selector(&cps(&ok)).is_some(), "{open} x32 parses");
+        assert!(
+            parse_selector(&cps(&over)).is_none(),
+            "{open} x33 is refused"
         );
+        assert!(parse_selector(&cps(&few)).is_some(), "{open} x31 parses");
+        if miri && open != ":is(" {
+            continue;
+        }
+        // 32 levels of :not() is an even number of negations: `ul` itself (§4.3).
+        assert_eq!(matched_small(&ok), ["ul"], "{open} x32");
+        assert_eq!(matched_small(&over), ["<invalid>"], "{open} x33");
+        // 31 levels of :not() is odd: every element but `ul`.
+        let want: &[&str] = if open == ":not(" {
+            &["html", "body"]
+        } else {
+            &["ul"]
+        };
+        assert_eq!(matched_small(&few), want, "{open} x31");
     }
     // Mixed functions count together.
     let mixed32 = format!(
@@ -474,7 +509,40 @@ fn nesting_is_accepted_at_max_nesting_and_refused_one_past() {
     let mixed33 = format!("{}ul{}", ":is(:not(:where(".repeat(11), ")".repeat(33));
     assert!(parse_selector(&cps(&mixed32)).is_some());
     assert!(parse_selector(&cps(&mixed33)).is_none());
-    // The limit is on nesting, not on length: 33 siblings at one level are fine.
+    // The limit is on nesting, not on length: many siblings at one level are fine.
     let wide = format!(":is({})", vec!["ul"; 200].join(","));
-    assert_eq!(matched(NoQuirks, &wide), ["ul"]);
+    assert_eq!(matched_small(&wide), ["ul"]);
+}
+
+#[test]
+#[ignore = "known: matching cost grows with the depth of the element to the power of the nesting of :is()/:not()/:where() (about 43 s for 6 levels on a 40-deep chain)"]
+fn nested_functions_cost_too_much_on_a_deep_document() {
+    // `exec_match` computes the rows of every ancestor of the element for each complex
+    // selector, and each row of a compound holding `:is(...)` runs the argument's selector
+    // against that ancestor the same way. The work bound of `theorem_match_total` counts
+    // none of it (README). Selectors this nested are valid (MAX_NESTING is 32), and a page
+    // chooses both the selector and the depth of its document, so this is a way to hang the
+    // renderer. Run with `--ignored`: it fails until matching is linear in the nesting.
+    let mut a = Arena::new(Vec::new());
+    let mut parent = 0usize;
+    let mut last = 0usize;
+    for _ in 0..40 {
+        let e = html(&mut a, "div", &[]);
+        a.append(parent, e);
+        parent = e;
+        last = e;
+    }
+    let s = parse_selector(&cps(&nested(":is(", "div", 4)));
+    assert!(s.is_some());
+    if let Some(s) = s {
+        let started = std::time::Instant::now();
+        assert!(matches(&a, &s, last));
+        // Measured: 0.8 s for 4 levels, 5.9 s for 5, 43 s for 6 (debug build). A linear
+        // matcher takes microseconds.
+        assert!(
+            started.elapsed() < std::time::Duration::from_millis(50),
+            "took {:?}",
+            started.elapsed()
+        );
+    }
 }

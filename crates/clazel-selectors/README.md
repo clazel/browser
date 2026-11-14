@@ -24,7 +24,12 @@ What is proven, and what is not:
   its work is dropped: `list_matches_exec` ignores it), the scans of an element's siblings
   for `:first-child`, `:nth-child()` and the other tree-structural pseudo-classes, nor the
   scans of its attributes and class words at each entry. Those costs are not bounded by
-  any theorem here.
+  any theorem here, and the first is not small: each row of a compound that holds
+  `:is(...)` runs the argument's selector over the ancestors of the element the same way,
+  so the work for an element at depth `d` with `k` levels of nesting is on the order of
+  C(d + k, k). Measured in a debug build, `:is(` nested 6 deep on an element 40 deep took
+  43 s. `MAX_NESTING` is 32. `tests/matching_through_parser.rs` has this as an ignored
+  test that fails (`nested_functions_cost_too_much_on_a_deep_document`).
 - **Specificity** (`src/exec_specificity.rs`) is proven equal to §17.
 - **Parsing** (`src/exec_parse.rs`) and **serialization** (`src/exec_serialize.rs`) are
   checked by Verus for panics, overflow and termination only. They are **not yet proven
@@ -57,7 +62,8 @@ Tests, which are the only evidence that the shipped parser builds the right sele
   grammar rejects.
 - `tests/matching_through_parser.rs` parses and matches on a document with SVG and
   no-namespace elements, `:nth-*` with negative and zero `A`, `:empty`, `:not()` with
-  complex arguments, and `MAX_NESTING` at 32 and 33.
+  complex arguments, and `MAX_NESTING` at 32 and 33; and it holds the ignored test of the
+  nested-function cost above.
 - `tests/serialize_escaping.rs` checks the serializer's escaping against CSSOM and its
   hand-copied range table of non-ASCII ident code points against CSS Syntax's list and
   `clazel-css`'s tokenizer.
