@@ -54,6 +54,37 @@ pub open spec fn first_rule_prelude(string: Seq<u32>) -> Seq<ComponentValue> {
     }
 }
 
+/// The prelude of the first child rule of the sheet's first rule.
+pub open spec fn first_child_prelude(string: Seq<u32>) -> Seq<ComponentValue> {
+    match rules(string)[0] {
+        Rule::QualifiedRule { child_rules, .. } => match child_rules[0] {
+            Rule::QualifiedRule { prelude, .. } => prelude,
+            _ => Seq::empty(),
+        },
+        _ => Seq::empty(),
+    }
+}
+
+/// How many items the sheet's first rule's block has, if it is an at-rule with a block;
+/// -1 if it is an at-rule without one, and -2 if it is not an at-rule.
+pub open spec fn first_at_rule_block_len(string: Seq<u32>) -> int {
+    match rules(string)[0] {
+        Rule::AtRule { child_rules, .. } => match child_rules {
+            Some(items) => items.len() as int,
+            None => -1,
+        },
+        _ => -2,
+    }
+}
+
+/// The prelude of the sheet's first rule, if it is an at-rule.
+pub open spec fn first_at_rule_prelude(string: Seq<u32>) -> Seq<ComponentValue> {
+    match rules(string)[0] {
+        Rule::AtRule { prelude, .. } => prelude,
+        _ => Seq::empty(),
+    }
+}
+
 /// `--x: /**/a b /**/ !important `.
 pub open spec fn custom_declaration() -> Seq<u32> {
     seq![
@@ -489,6 +520,9 @@ pub proof fn lemma_example_function()
             ComponentValue::Function { name: seq![0x66u32], value: seq![ident(0x61)] },
             ident(0x62),
         ],
+        parse_a_list_of_component_values(
+            Input::String { string: seq![0x66u32, 0x28, 0x61, 0x29, 0x62] },
+        )[0]->name.len() == 1,
 {
     assert(parse_a_list_of_component_values(
         Input::String { string: seq![0x66u32, 0x28, 0x61, 0x29, 0x62] },
@@ -496,6 +530,9 @@ pub proof fn lemma_example_function()
         ComponentValue::Function { name: seq![0x66u32], value: seq![ident(0x61)] },
         ident(0x62),
     ]) by (compute_only);
+    assert(parse_a_list_of_component_values(
+        Input::String { string: seq![0x66u32, 0x28, 0x61, 0x29, 0x62] },
+    )[0]->name.len() == 1) by (compute_only);
 }
 
 /// §5.5.3 "consume a qualified rule". In `a{b c;d{}}`, `b c` is read as a rule with `;` as
@@ -515,6 +552,9 @@ pub proof fn lemma_example_qualified_rule_stops()
             style_rule(0x61, Seq::empty(), Seq::empty()),
             style_rule(0x63, Seq::empty(), Seq::empty()),
         ],
+        first_child_prelude(
+            seq![0x61u32, 0x7B, 0x62, 0x20, 0x63, 0x3B, 0x64, 0x7B, 0x7D, 0x7D],
+        ).len() == 1,
 {
     assert(rules(seq![0x61u32, 0x7B, 0x62, 0x20, 0x63, 0x3B, 0x64, 0x7B, 0x7D, 0x7D]) == seq![
         style_rule(0x61, Seq::empty(), seq![style_rule(0x64, Seq::empty(), Seq::empty())]),
@@ -523,6 +563,9 @@ pub proof fn lemma_example_qualified_rule_stops()
         style_rule(0x61, Seq::empty(), Seq::empty()),
         style_rule(0x63, Seq::empty(), Seq::empty()),
     ]) by (compute_only);
+    assert(first_child_prelude(
+        seq![0x61u32, 0x7B, 0x62, 0x20, 0x63, 0x3B, 0x64, 0x7B, 0x7D, 0x7D],
+    ).len() == 1) by (compute_only);
 }
 
 /// §5.5.2 "consume an at-rule". `@a;b{}`: the `;` ends the at-rule, and `b{}` is a rule.
@@ -554,6 +597,8 @@ pub proof fn lemma_example_at_rules()
                 child_rules: None,
             },
         ],
+        first_at_rule_block_len(seq![0x40u32, 0x61, 0x7B, 0x62, 0x3A, 0x63, 0x7D]) == 1,
+        first_at_rule_prelude(seq![0x40u32, 0x61, 0x20, 0x62, 0x3B]).len() == 2,
 {
     assert(rules(seq![0x40u32, 0x61, 0x3B, 0x62, 0x7B, 0x7D]) == seq![
         Rule::AtRule { name: seq![0x61u32], prelude: Seq::empty(), child_rules: None },
@@ -579,6 +624,10 @@ pub proof fn lemma_example_at_rules()
             child_rules: None,
         },
     ]) by (compute_only);
+    assert(first_at_rule_block_len(seq![0x40u32, 0x61, 0x7B, 0x62, 0x3A, 0x63, 0x7D]) == 1)
+        by (compute_only);
+    assert(first_at_rule_prelude(seq![0x40u32, 0x61, 0x20, 0x62, 0x3B]).len() == 2)
+        by (compute_only);
 }
 
 /// §6.2 more of `<a-n-plus-b>`: `+n-1` is `<n-ident>` after a `+` with nothing between

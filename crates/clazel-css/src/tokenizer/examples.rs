@@ -407,6 +407,7 @@ pub proof fn lemma_example_ident_sequence()
         }),
         first(seq![0x61u32, 0x5C, 0x0A]) == (Token::Ident { value: seq![0x61u32] }),
         after(seq![0x61u32, 0x5C, 0x0A]) == 1,
+        after(seq![0x61u32, 0x5C, 0x67]) == 3,
 {
     assert(first(seq![0x61u32, 0x31]) == (Token::Ident { value: seq![0x61u32, 0x31] }))
         by (compute_only);
@@ -420,6 +421,7 @@ pub proof fn lemma_example_ident_sequence()
     assert(first(seq![0x61u32, 0x5C, 0x0A]) == (Token::Ident { value: seq![0x61u32] }))
         by (compute_only);
     assert(after(seq![0x61u32, 0x5C, 0x0A]) == 1) by (compute_only);
+    assert(after(seq![0x61u32, 0x5C, 0x67]) == 3) by (compute_only);
 }
 
 /// §4.2 "non-ASCII ident code point", on both sides of each of its 15 ranges: an ident
