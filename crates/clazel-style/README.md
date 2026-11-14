@@ -260,7 +260,12 @@ mappings.
 ## Verification
 
 Tier 0 now, target tier 1 (phase-5.md 5.0(a)): the tier is raised only after CI's full
-verification of the harnesses is green.
+verification of the harnesses is green. No harness reaches the entry points: `values::parse`
+and `parse_items`, `Values::from_rows`, the named-colour path of `parse_color`, the media
+query parser, or `cascade` (each is under "Not done" below). The harnesses cover the
+steps, value types and conversions these are built from. `xtask` requires only a non-zero
+harness count for tier 1 (`xtask/src/workspace.rs`), not that any particular entry point
+is covered; that is outside this crate.
 
 - **Kani harnesses** (`src/values/proofs.rs`): each runs one operation on every input
   within its bound, checking for panics, overflow, reads outside a slice and loops that
@@ -332,7 +337,8 @@ verification of the harnesses is green.
   condition evaluator on any list of four ops, even with features reduced to unknown
   names (over 8 GB in 69 s); a query of up to three ops (over 8 GB in 118 s); a list of up
   to three one-op queries (over 8 GB at 686 s); the parser on any four tokens (unfinished
-  after 12 minutes); the tokens adapter, which calls `clazel-css`'s tokenizer; the
+  after 12 minutes), and on any two tokens over three code points (tried again: 3 GB and
+  unfinished after 10 minutes, stopped, harness removed); the tokens adapter, which calls `clazel-css`'s tokenizer; the
   serializer; and the sheet walk and document collection. Each was stopped at the local
   8 GB cap and removed rather than sent to a 16 GB CI runner untested.
 - **Conformance** (`tests/conformance_mediaqueries.rs`), over WPT `css/mediaqueries/` at
