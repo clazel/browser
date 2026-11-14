@@ -570,6 +570,7 @@ dependencies = [
  "clazel-der",
  "clazel-psl",
  "vstd",
+ "webpki-root-certs",
 ]
 
 [[package]]
@@ -2302,6 +2303,15 @@ dependencies = [
  "phf_codegen",
  "string_cache",
  "string_cache_codegen",
+]
+
+[[package]]
+name = "webpki-root-certs"
+version = "1.0.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e49d0e65abc00c142e8f9428da991da9f1a250c39be97459901eb12b9b49f62a"
+dependencies = [
+ "rustls-pki-types",
 ]
 
 [[package]]

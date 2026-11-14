@@ -56,6 +56,10 @@ At that commit `certdata.txt` holds 169 certificates; the table has **118**.
 
 ### Evidence
 
+`tests/conformance_roots.rs`: the table equals `webpki-root-certs` 1.0.11, generated
+from the CCADB's Mozilla report, as whole DER encodings in both directions (118
+of 118). That is a second record of the list, read by code that is not ours.
+
 `tests/trust_store.rs`: every root decodes with this crate's own decoders
 (envelope, TBS, SubjectPublicKeyInfo, extensions, signature algorithms) and is
 self-issued; the count, well-known labels and exclusions; no duplicate label,
