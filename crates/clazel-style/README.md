@@ -333,13 +333,19 @@ verification of the harnesses is green.
   8 GB cap and removed rather than sent to a 16 GB CI runner untested.
 - **Conformance** (`tests/conformance_mediaqueries.rs`), over WPT `css/mediaqueries/` at
   commit `4ad507b2` (`tests/data/wpt-mediaqueries/SOURCE.md`):
-  - `test_media_queries.html`, read call by call: **159 pass, 55 expected failures**, none
-    fail, of 214 calls read; 159 calls are not run (in loops, conditions or functions, or
+  - `test_media_queries.html`, read call by call: **110 pass, 104 expected**, none
+    fail, of 214 calls read (55 of the expected ones fail, as pinned per case; 49 name a
+    media feature outside the subset and pass only because the unknown feature evaluates
+    false, so they are not counted as passes of the supported subset); 159 calls are not run (in loops, conditions or functions, or
     with computed strings) and are listed by line with the reason.
   - `match-media-parsing.html`: **21 pass**, none fail; the 13 calls inside
     `test_resolution_parsing()` are not run.
-  - 22 reftests, one unit per `@media` rule: **47 pass, 10 expected failures**, none fail.
-  - Every expected failure is a query on a media feature outside the subset (`color`,
+  - "`@media` block activation (green/red proxy)": nothing is rendered; the 22 reftest pages'
+    `@media` blocks are scanned for the words green and red, and `active_media` must agree.
+    One unit per rule: **39 pass, 18 expected** (10 fail as pinned, 8 pass only because an
+    unknown feature is false), none fail.
+  - Each expected failure is listed by `file:line` in the test (a listed case that passes,
+    or is not run, fails the test; the totals are asserted) and is a query on a media feature outside the subset (`color`,
     `monochrome`, `aspect-ratio`, `device-*`, `color-index`, `scan`, `grid`,
     `overflow-*`, `update`, `hover`, `pointer` and their `any-` forms) or the `ch` unit,
     each listed with its reason when the test runs.

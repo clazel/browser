@@ -17,13 +17,23 @@
 //! **`match-media-parsing.html`.** Each unit is one `test_parsing(query, expected)`: the list
 //! parsed and serialized must be `expected`.
 //!
-//! **Reftests.** Each unit is one `@media` rule of a page: the page's `style` elements are
-//! parsed as sheets, and each `@media` rule must be active in WPT's 800 by 600 viewport
-//! exactly when its block paints green (see the converter and `SOURCE.md`).
+//! **`@media` block activation (green/red proxy).** This suite renders nothing. Each unit is
+//! one `@media` rule of a reftest page: the converter scanned the block for the words
+//! `green` and `red` and took "green" to mean "the rule applies"; the page's `style` elements
+//! are parsed as sheets, and `StyleSheet::active_media` in WPT's 800 by 600 viewport must
+//! agree. It evidences the media query evaluator only, not painting (see the converter and
+//! `SOURCE.md`).
 //!
-//! A unit that fails is an expected failure only if its query names a media feature or a
-//! unit outside the subset (the table below gives the reason); any other failure fails the
-//! test. Calls the converter did not read are listed, not counted.
+//! **Expected failures are per case.** A case that names a media feature or a unit outside
+//! the subset is listed by `file:line` in [`EXPECTED_FAIL`] and must still fail: it fails the
+//! test if it passes (the list is stale) or if a listed case is not run. A case that is not
+//! listed must pass, whatever it names. A case that names an unsupported feature and
+//! evaluates (`should_apply`, `should_not_apply`, `expression_should_be_known`,
+//! `expression_should_be_unknown`, and the reftest blocks) but passes only because an unknown
+//! feature evaluates false is not a pass of the supported subset: it is tallied with the
+//! expected failures, as "passes only because unknown". Parsing helpers do not depend on the
+//! feature being known, so a pass there is a pass. The totals are asserted. Calls the
+//! converter did not read are listed, not counted.
 
 use clazel_style::sources::media::{Device, matches_environment, serialize};
 use clazel_style::sources::sheet::StyleSheet;
@@ -129,22 +139,139 @@ fn reason(query: &str) -> Option<String> {
     None
 }
 
+/// The cases that must fail, each by `file:line`: every one names a media feature or a
+/// unit outside the subset (phase-5.md item 5.8: `width`, `height`, their `min-` and `max-`
+/// forms, and `orientation`; units of `values/`'s subset), so this implementation reads the
+/// feature as unknown and the WPT expectation, which needs the feature's value, is not met.
+/// A case in this list that passes, or is not run, fails the test.
+const EXPECTED_FAIL: &[&str] = &[
+    "media-queries-003.xht:9",
+    "media-queries-003.xht:10",
+    "media-queries-003.xht:11",
+    "mq-negative-range-001.html:16",
+    "mq-negative-range-002.html:16",
+    "negation-001.html:18",
+    "negation-001.html:21",
+    "negation-001.html:24",
+    "negation-002.html:16",
+    "relative-units-004.html:29",
+    "test_media_queries.html:277",
+    "test_media_queries.html:278",
+    "test_media_queries.html:314",
+    "test_media_queries.html:319",
+    "test_media_queries.html:320",
+    "test_media_queries.html:321",
+    "test_media_queries.html:326",
+    "test_media_queries.html:328",
+    "test_media_queries.html:329",
+    "test_media_queries.html:330",
+    "test_media_queries.html:335",
+    "test_media_queries.html:338",
+    "test_media_queries.html:339",
+    "test_media_queries.html:352",
+    "test_media_queries.html:444",
+    "test_media_queries.html:446",
+    "test_media_queries.html:448",
+    "test_media_queries.html:449",
+    "test_media_queries.html:450",
+    "test_media_queries.html:519",
+    "test_media_queries.html:520",
+    "test_media_queries.html:521",
+    "test_media_queries.html:530",
+    "test_media_queries.html:531",
+    "test_media_queries.html:532",
+    "test_media_queries.html:534",
+    "test_media_queries.html:535",
+    "test_media_queries.html:536",
+    "test_media_queries.html:545",
+    "test_media_queries.html:559",
+    "test_media_queries.html:589",
+    "test_media_queries.html:590",
+    "test_media_queries.html:591",
+    "test_media_queries.html:592",
+    "test_media_queries.html:606",
+    "test_media_queries.html:607",
+    "test_media_queries.html:608",
+    "test_media_queries.html:619",
+    "test_media_queries.html:620",
+    "test_media_queries.html:621",
+    "test_media_queries.html:622",
+    "test_media_queries.html:633",
+    "test_media_queries.html:634",
+    "test_media_queries.html:635",
+    "test_media_queries.html:636",
+    "test_media_queries.html:637",
+    "test_media_queries.html:638",
+    "test_media_queries.html:656",
+    "test_media_queries.html:657",
+    "test_media_queries.html:658",
+    "test_media_queries.html:659",
+    "test_media_queries.html:660",
+    "test_media_queries.html:661",
+    "test_media_queries.html:662",
+    "test_media_queries.html:663",
+];
+
+/// Whether a helper evaluates a query (its result depends on a feature being known), as
+/// opposed to a parsing helper.
+fn evaluates(helper: &str) -> bool {
+    matches!(
+        helper,
+        "should_apply"
+            | "should_not_apply"
+            | "expression_should_be_known"
+            | "expression_should_be_unknown"
+    )
+}
+
 /// The tally of one suite.
 #[derive(Default)]
 struct Tally {
     pass: usize,
     xfail: Vec<String>,
     failures: Vec<String>,
+    seen: Vec<String>,
 }
 
 impl Tally {
-    fn record(&mut self, ok: bool, query: &str, what: String) {
-        if ok {
-            self.pass = self.pass.saturating_add(1);
-        } else if let Some(why) = reason(query) {
-            self.xfail.push(format!("{what}: {why}"));
-        } else {
-            self.failures.push(what);
+    /// One case: its key (`file:line`), whether it evaluates, whether it passed, the text
+    /// of its query for [`reason`], and its description.
+    fn record(&mut self, key: &str, evaluating: bool, ok: bool, query: &str, what: String) {
+        let listed = EXPECTED_FAIL.iter().find(|k| **k == key).copied();
+        if let Some(k) = listed {
+            self.seen.push((*k).to_owned());
+        }
+        match (listed.is_some(), ok) {
+            (true, true) => self.failures.push(format!(
+                "{what}: passes, but is listed in EXPECTED_FAIL (stale entry)"
+            )),
+            (true, false) => {
+                let why = reason(query).unwrap_or_else(|| {
+                    "listed, but names no feature outside the subset".to_owned()
+                });
+                self.xfail.push(format!("{what}: {why}"));
+            }
+            (false, false) => self.failures.push(what),
+            (false, true) => match reason(query).filter(|_| evaluating) {
+                Some(why) => self
+                    .xfail
+                    .push(format!("{what}: passes only because unknown; {why}")),
+                None => self.pass = self.pass.saturating_add(1),
+            },
+        }
+    }
+
+    /// Every listed key of `file` was run (unless a stride skipped some).
+    fn check_stale(&mut self, file: &str, complete: bool) {
+        if !complete {
+            return;
+        }
+        let prefix = format!("{file}:");
+        for k in EXPECTED_FAIL.iter().filter(|k| k.starts_with(&prefix)) {
+            if !self.seen.iter().any(|s| s == k) {
+                self.failures
+                    .push(format!("{k}: listed in EXPECTED_FAIL but not run"));
+            }
         }
     }
 
@@ -167,6 +294,11 @@ impl Tally {
             self.failures.len(),
             self.failures.join("\n")
         );
+    }
+
+    /// The suite's fixed totals, which a change of the data or the code must update.
+    fn assert_totals(&self, pass: usize, xfail: usize) {
+        assert_eq!((self.pass, self.xfail.len()), (pass, xfail), "pass, xfail");
     }
 }
 
@@ -218,13 +350,19 @@ fn wpt_test_media_queries() {
             "test_media_queries.html:{} {}({:?}) at {}x{}",
             c.line, c.helper, c.input, c.width, c.height
         );
-        t.record(ok, c.input, what);
+        let key = format!("test_media_queries.html:{}", c.line);
+        t.record(&key, evaluates(c.helper), ok, c.input, what);
     }
+    t.check_stale("test_media_queries.html", stride == 1);
     for (line, helper, why) in EVAL_NOT_RUN {
         println!("not run: test_media_queries.html:{line} {helper}: {why}");
     }
     t.report("WPT mediaqueries/ test_media_queries.html", ran);
     t.assert_clean();
+    if stride == 1 {
+        t.assert_totals(110, 104);
+        assert_eq!(ran, EVAL.len());
+    }
 }
 
 #[test]
@@ -236,17 +374,20 @@ fn wpt_match_media_parsing() {
             "match-media-parsing.html:{} {:?}: got {got:?}, want {:?}",
             c.line, c.query, c.expected
         );
-        t.record(got == c.expected, c.query, what);
+        // Parsing and serialization do not depend on a feature being known.
+        let key = format!("match-media-parsing.html:{}", c.line);
+        t.record(&key, false, got == c.expected, c.query, what);
     }
     for (line, helper, why) in PARSING_NOT_RUN {
         println!("not run: match-media-parsing.html:{line} {helper}: {why}");
     }
     t.report("WPT mediaqueries/ match-media-parsing.html", PARSING.len());
     t.assert_clean();
+    t.assert_totals(PARSING.len(), 0);
 }
 
 #[test]
-fn wpt_media_reftests() {
+fn wpt_media_block_activation() {
     let device = Device::screen(800, 600);
     let mut t = Tally::default();
     let mut total = 0usize;
@@ -274,13 +415,23 @@ fn wpt_media_reftests() {
                 "{}:{line} @media {prelude:?}: active {got:?}, want {want}",
                 page.file
             );
+            let key = format!("{}:{line}", page.file);
             t.record(
+                &key,
+                true,
                 got == Some(*want) && active.len() == page.media.len(),
                 &prelude,
                 what,
             );
         }
     }
-    t.report("WPT mediaqueries/ reftests", total);
+    for page in PAGES {
+        t.check_stale(page.file, true);
+    }
+    t.report(
+        "WPT mediaqueries/ @media block activation (green/red proxy)",
+        total,
+    );
     t.assert_clean();
+    t.assert_totals(39, 18);
 }
