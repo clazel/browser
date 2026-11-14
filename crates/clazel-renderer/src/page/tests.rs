@@ -18,7 +18,8 @@ const DEJAVU: &[u8] =
     include_bytes!("../../../clazel-font/tests/data/fonts-dejavu/DejaVuSerif.ttf");
 
 fn fonts() -> Fonts {
-    Fonts::from_bytes(vec![DEJAVU.to_vec()])
+    // The embedded bytes, not a leaked copy: Miri reports each leak.
+    Fonts::from_static(vec![DEJAVU])
 }
 
 fn frames(msgs: &[Msg]) -> Vec<u8> {
