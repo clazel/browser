@@ -54,7 +54,7 @@ numbers.
 | clazel-treebuilder | 2 (2) | 1703 verified, 0 errors | no harnesses | 0 | 0 (0) | 16900 / 20297 / 6692 | 48 / 0 / 0 of 48 | html5ever 0.39.0 differential, WPT tree-construction inputs: 3699 / 3898 (199 expected failures)<br>html5ever 0.39.0 differential, random tag soup: 9991 / 10000 (9 expected failures)<br>html5lib tree construction (WPT): 1963 / 1967 (4 expected failures) | 0 of 2 files current |
 | clazel-url | 2 (2) | 565 verified, 0 errors | no harnesses | 0 | 0 (0) | 5725 / 5260 / 2026 | 144 / 0 / 0 of 144 | WPT url/ setters_tests.json: 278 / 278<br>WPT url/ toascii.json: 87 / 87<br>WPT url/ urltestdata.json: 896 / 896<br>WPT url/ urltestdata.json hosts: 359 / 359 | 0 of 7 files current |
 | clazel-window | 0 (0) | not used | no harnesses | 0 | 0 (0) | — | — | none | no spec files |
-| clazel-x509 | 0 (2) | 974 verified, 0 errors | no harnesses | 0 | 0 (0) | 8816 / 7222 / 4131 | 273 / 0 / 0 of 273 | x509-limbo path validation (accept-all links): 9736 / 9802 (66 expected failures) | 0 of 33 files current |
+| clazel-x509 | 0 (2) | 974 verified, 0 errors | no harnesses | 0 | 0 (0) | 8816 / 7222 / 4131 | 273 / 0 / 0 of 273 | Mozilla roots against webpki-root-certs (CCADB), whole DER: 118 / 118<br>x509-limbo path validation (accept-all links): 9736 / 9802 (66 expected failures) | 0 of 33 files current |
 | xtask | 0 (0) | not used | no harnesses | 0 | 0 (0) | — | — | none | no spec files |
 
 ¹ From Verus's `line_count`; only code inside `verus!` is counted, and type definitions count as exec.

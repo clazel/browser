@@ -14,7 +14,8 @@
 //!
 //! Each document is cascaded with the user agent sheets cut to the rules that can match it
 //! (`clazel_style::cascade::ua::Sheets::for_document`), and, except under Miri, also with
-//! the whole sheets, and the two tables must be equal.
+//! the whole sheets and without the rule index (`cascade_unindexed`), and the tables must
+//! be equal.
 //!
 //! Not cascaded: the `#document-fragment` cases (the cascade takes a document) and the
 //! `scripted_*.dat` cases, which the generated table only counts.
@@ -31,7 +32,9 @@ use clazel_dom::exec::{Arena, ExecKind};
 use clazel_style::cascade::computed::{
     ComputedStyle, Family, LineHeight, ListStyleType, Lp, MaxSize, Size, VerticalAlign,
 };
-use clazel_style::cascade::{ComputedTable, cascade, cascade_with, tree_order, ua};
+use clazel_style::cascade::{
+    ComputedTable, cascade, cascade_unindexed, cascade_with, tree_order, ua,
+};
 use clazel_style::sources::{Device, collect};
 use clazel_treebuilder::exec::driver::parse_real;
 use clazel_treebuilder::exec::types::EncFnsExec;
@@ -242,6 +245,12 @@ fn print_document(out: &mut String, case: &Case) {
         assert!(
             table == cascade(&arena, &sources, device),
             "case {}: the cut sheets give another table",
+            case.index
+        );
+        // The rule index finds every rule that matches (`cascade::index`).
+        assert!(
+            table == cascade_unindexed(&arena, &sources, device),
+            "case {}: the rule index gives another table",
             case.index
         );
     }

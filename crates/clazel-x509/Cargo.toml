@@ -14,10 +14,12 @@ vstd = "=0.0.0-2026-10-04-0306"
 # Test only (docs/DEPENDENCIES.md: never shipped). `rustls-webpki` is the
 # independent engine of `tests/limbo/differential.rs`, built without a
 # cryptography provider: the test gives it a stand-in that accepts every
-# signature, as it gives our own path validation.
+# signature, as it gives our own path validation. `webpki-root-certs` is the
+# second record `tests/conformance_roots.rs` checks the root table against.
 [dev-dependencies]
 rustls-webpki = { version = "=0.103.16", default-features = false, features = ["alloc"] }
 rustls-pki-types = { version = "=1.15.1", default-features = false, features = ["alloc"] }
+webpki-root-certs = "=1.0.11"
 
 [package.metadata.clazel]
 tier = 0
