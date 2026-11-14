@@ -1,0 +1,162 @@
+#case 0
+#data "<!DOCTYPE html><body><foo>A"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 1
+#data "<!DOCTYPE html><body><area>A"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 2
+#data "<!DOCTYPE html><body><base>A"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 3
+#data "<!DOCTYPE html><body><basefont>A"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 4
+#data "<!DOCTYPE html><body><bgsound>A"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 5
+#data "<!DOCTYPE html><body><br>A"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,10 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,2656
+
+#case 6
+#data "<!DOCTYPE html><body><col>A"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 7
+#data "<!DOCTYPE html><body><command>A"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 8
+#data "<!DOCTYPE html><body><embed>A"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 9
+#data "<!DOCTYPE html><body><frame>A"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 10
+#data "<!DOCTYPE html><body><hr>A"
+scale 1
+fill 0,0 800x600 #ffffffff
+fill 8,8 784x1 #ff808080
+fill 8,9 784x1 #ff808080
+push-clip 9,9 782x0
+pop-clip
+push-clip 9,9 782x0
+pop-clip
+text -8,1 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,2103
+
+#case 11
+#data "<!DOCTYPE html><body><img>A"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 12
+#data "<!DOCTYPE html><body><input>A"
+scale 1
+fill 0,0 800x600 #ffffffff
+text 220,-5 43x48 #ff000000 face=0 size=1024 glyphs=1 first=15091,1705
+
+#case 13
+#data "<!DOCTYPE html><body><keygen>A"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 14
+#data "<!DOCTYPE html><keygen>A</keygen>B"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 55x48 #ff000000 face=0 size=1024 glyphs=2 first=512,1463
+
+#case 15
+#data "</keygen>A"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 16
+#data "<!DOCTYPE html></keygen>A"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 17
+#data "<!DOCTYPE html><head></keygen>A"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 18
+#data "<!DOCTYPE html><head></head></keygen>A"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 19
+#data "<!DOCTYPE html><body></keygen>A"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 20
+#data "<!DOCTYPE html><body><link>A"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 21
+#data "<!DOCTYPE html><body><meta>A"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 22
+#data "<!DOCTYPE html><body><param>A"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 23
+#data "<!DOCTYPE html><body><source>A"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 24
+#data "<!DOCTYPE html><body><track>A"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 25
+#data "<!DOCTYPE html><body><wbr>A"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+

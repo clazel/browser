@@ -1,0 +1,105 @@
+#case 0
+#data "<table><th>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 1
+#data "<table><td>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 2
+#data "<table><col foo='bar'>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 3
+#data "<table><colgroup></html>foo"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 57x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 4
+#data "<table></table><p>foo"
+scale 1
+fill 0,0 800x608 #ffffffff
+text -8,7 57x48 #ff000000 face=0 size=1024 glyphs=3 first=512,2487
+
+#case 5
+#data "<table></body></caption></col></colgroup></html></tbody></td></tfoot></th></thead></tr><td>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 6
+#data "<table><select><option>3</select></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 7
+#data "<table><select><table></table></select></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 8
+#data "<table><select></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 9
+#data "<table><select><option>A<tr><td>B</td></tr></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text -5,13 44x48 #ff000000 face=0 size=1024 glyphs=1 first=704,2848
+
+#case 10
+#data "<table><td></body></caption></col></colgroup></html>foo"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -5,-6 57x48 #ff000000 face=0 size=1024 glyphs=3 first=704,1655
+
+#case 11
+#data "<table><td>A</table>B"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -5,-6 44x48 #ff000000 face=0 size=1024 glyphs=1 first=704,1655
+text -8,16 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,3040
+
+#case 12
+#data "<table><tr><caption>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 13
+#data "<table><tr></body></caption></col></colgroup></html></td></th><td>foo"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -5,-6 57x48 #ff000000 face=0 size=1024 glyphs=3 first=704,1655
+
+#case 14
+#data "<table><td><tr>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 15
+#data "<table><td><button><td>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 16
+#data "<table><tr><td><svg><desc><td>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 17
+#data "<div><table><svg><foreignObject><select><table><s>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 18
+#data "<table>a<!doctype html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+

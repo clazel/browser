@@ -13,8 +13,9 @@
 //! into a fragment tree of positioned boxes and line boxes (CSS 2.1 §8.3.1,
 //! §9.4, §10, §16.1, §16.2, the Quirks Mode Standard's §3.3 to §3.7); and
 //! table layout (item 5.15, [`table`]): the grid, column widths, row
-//! heights and cell alignment of tables (CSS 2.1 §17, CSS Tables 3). The
-//! display list (item 5.16) is not started.
+//! heights and cell alignment of tables (CSS 2.1 §17, CSS Tables 3); and
+//! paint (item 5.16, [`paint`]): the fragment tree to a display list in
+//! CSS 2.1 Appendix E.2's order, with the hit regions of links.
 //!
 //! Tier: see `[package.metadata.clazel]` in `Cargo.toml` and
 //! `docs/VERIFICATION.md`.
@@ -22,6 +23,7 @@
 pub mod boxes;
 pub mod flow;
 pub mod fonts;
+pub mod paint;
 pub mod shape;
 pub mod table;
 pub mod text;

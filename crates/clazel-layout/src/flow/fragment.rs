@@ -34,6 +34,7 @@ use crate::boxes::BoxId;
 
 /// A rectangle in 1/64 px.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[cfg_attr(kani, derive(kani::Arbitrary))]
 pub struct Rect {
     /// Left edge.
     pub x: i32,
@@ -47,6 +48,7 @@ pub struct Rect {
 
 /// Four lengths, one per side, in 1/64 px.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[cfg_attr(kani, derive(kani::Arbitrary))]
 pub struct Sides {
     /// Top.
     pub top: i32,

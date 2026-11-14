@@ -14,6 +14,9 @@ clazel-font = { path = "../clazel-font" }
 # The computed `white-space`, `word-break` and `overflow-wrap` that white space
 # processing and line breaking read (Phase 5 items 5.7 and 5.12).
 clazel-style = { path = "../clazel-style" }
+# The basic URL parser and serializer that resolve a link's `href` for its
+# hit region (Phase 5 item 5.16).
+clazel-url = { path = "../clazel-url" }
 
 # The reference shaper of the shaping differential (tests/conformance_shaping.rs,
 # phase-5.md item 5.11), never compiled into the browser.
