@@ -621,13 +621,21 @@ fn create_random(p: &mut Pair, rng: &mut Rng, stats: &mut Stats) -> Result<usize
     stats.created = stats.created.saturating_add(1);
     let (kind, handle) = match rng.below(10) {
         0..=4 => {
-            let (ns, uri) = match rng.below(4) {
-                0 => (Namespace::Svg, SVG_NS),
-                1 => (Namespace::MathMl, MATHML_NS),
-                _ => (Namespace::Html, HTML_NS),
+            // DOM §4.9: an element's namespace is null or a namespace; `None`
+            // (the empty namespace URI in `RcDom`) is covered too.
+            let (ns, uri) = match rng.below(5) {
+                0 => (Some(Namespace::Svg), SVG_NS),
+                1 => (Some(Namespace::MathMl), MATHML_NS),
+                2 => (None, ""),
+                _ => (Some(Namespace::Html), HTML_NS),
             };
             let name = rng.pick(NAMES).copied().unwrap_or("div");
-            let is_template = matches!(ns, Namespace::Html) && name == "template";
+            let is_template = matches!(ns, Some(Namespace::Html)) && name == "template";
+            let prefix = match rng.below(4) {
+                0 => Some("p"),
+                1 => Some("q"),
+                _ => None,
+            };
             let mut ours = vec![ExecAttr {
                 namespace: None,
                 prefix: None,
@@ -646,14 +654,18 @@ fn create_random(p: &mut Pair, rng: &mut Rng, stats: &mut Stats) -> Result<usize
             let mut flags = ElementFlags::default();
             flags.template = is_template;
             let el = p.dom.create_element(
-                QualName::new(None, html5ever::Namespace::from(uri), LocalName::from(name)),
+                QualName::new(
+                    prefix.map(Prefix::from),
+                    html5ever::Namespace::from(uri),
+                    LocalName::from(name),
+                ),
                 theirs,
                 flags,
             );
             (
                 ExecKind::Element {
-                    namespace: Some(ns),
-                    prefix: None,
+                    namespace: ns,
+                    prefix: prefix.map(u32s),
                     local_name: u32s(name),
                     attributes: ours,
                     template_contents: None,
@@ -681,16 +693,17 @@ fn create_random(p: &mut Pair, rng: &mut Rng, stats: &mut Stats) -> Result<usize
         8 => {
             let name = format!("d{id}");
             let public_id = random_text(rng);
+            let system_id = random_text(rng);
             (
                 ExecKind::DocumentType {
                     name: u32s(&name),
                     public_id: u32s(&public_id),
-                    system_id: Vec::new(),
+                    system_id: u32s(&system_id),
                 },
                 Node::new(NodeData::Doctype {
                     name: rc_str(&name),
                     public_id: rc_str(&public_id),
-                    system_id: rc_str(""),
+                    system_id: rc_str(&system_id),
                 }),
             )
         }
@@ -748,16 +761,30 @@ fn host_including(a: &Arena, node: usize, x: usize) -> bool {
     true
 }
 
+/// The namespace as the printout shows it: nothing for HTML, `svg `,
+/// `math `, and `none ` for the null namespace (so a null-namespace
+/// element does not print like an HTML one).
 fn ns_prefix(uri: &str) -> &'static str {
     match uri {
         SVG_NS => "svg ",
         MATHML_NS => "math ",
+        "" => "none ",
         _ => "",
     }
 }
 
-fn fmt_attrs(mut attrs: Vec<(String, String)>) -> Vec<String> {
-    attrs.sort();
+/// The namespace prefix as the printout shows it (`{p}` after the name), so
+/// a dropped or swapped prefix is a difference.
+fn prefix_mark(prefix: Option<&str>) -> String {
+    prefix.map_or_else(String::new, |p| format!("{{{p}}}"))
+}
+
+/// Attribute lines in the attribute list's own order. (The html5lib
+/// expected-tree format sorts attributes, so suite 1's printer
+/// (`support/dump.rs`) does; this differential must not, or an order bug in
+/// "append an attribute" would be invisible. DOM §4.9: the attribute list is
+/// ordered.)
+fn fmt_attrs(attrs: Vec<(String, String)>) -> Vec<String> {
     attrs
         .into_iter()
         .map(|(k, v)| format!("{k}=\"{v}\""))
@@ -836,6 +863,7 @@ fn dump_arena(a: &Arena) -> String {
                     ),
                     ExecKind::Element {
                         namespace,
+                        prefix,
                         local_name,
                         attributes,
                         template_contents,
@@ -844,12 +872,19 @@ fn dump_arena(a: &Arena) -> String {
                         let uri = match namespace {
                             Some(Namespace::Svg) => SVG_NS,
                             Some(Namespace::MathMl) => MATHML_NS,
+                            None => "",
                             _ => HTML_NS,
                         };
+                        let prefix = prefix.as_ref().map(|v| lossy(v));
                         pad(
                             &mut out,
                             d,
-                            &format!("<{}{}>", ns_prefix(uri), lossy(local_name)),
+                            &format!(
+                                "<{}{}{}>",
+                                ns_prefix(uri),
+                                lossy(local_name),
+                                prefix_mark(prefix.as_deref())
+                            ),
                         );
                         let attrs = attributes
                             .iter()
@@ -861,7 +896,11 @@ fn dump_arena(a: &Arena) -> String {
                                     Some(Namespace::Xmlns) => format!("xmlns {l}"),
                                     _ => l,
                                 };
-                                (name, lossy(&at.value))
+                                let mark = at.prefix.as_ref().map(|v| lossy(v));
+                                (
+                                    format!("{name}{}", prefix_mark(mark.as_deref())),
+                                    lossy(&at.value),
+                                )
                             })
                             .collect();
                         for line in fmt_attrs(attrs) {
@@ -960,7 +999,12 @@ fn dump_rc(p: &Pair) -> String {
                         pad(
                             &mut out,
                             d,
-                            &format!("<{}{}>", ns_prefix(&name.ns), &*name.local),
+                            &format!(
+                                "<{}{}{}>",
+                                ns_prefix(&name.ns),
+                                &*name.local,
+                                prefix_mark(name.prefix.as_deref())
+                            ),
                         );
                         let list = attrs
                             .borrow()
@@ -973,7 +1017,10 @@ fn dump_rc(p: &Pair) -> String {
                                     XMLNS_NS => format!("xmlns {l}"),
                                     _ => l.to_owned(),
                                 };
-                                (printed, String::from(&*at.value))
+                                (
+                                    format!("{printed}{}", prefix_mark(at.name.prefix.as_deref())),
+                                    String::from(&*at.value),
+                                )
                             })
                             .collect();
                         for line in fmt_attrs(list) {
@@ -1021,14 +1068,15 @@ fn step(p: &mut Pair, rng: &mut Rng, stats: &mut Stats) -> Result<(), String> {
     let roll = rng.below(100);
     match roll {
         0..=17 => {
-            if n < 60 {
-                let id = create_random(p, rng, stats)?;
-                // Half the time, attach it right away.
-                if rng.below(2) == 0
-                    && let Some(&parent) = rng.pick(&containers)
-                {
-                    place(p, id, parent, None, stats)?;
-                }
+            // No cap on the arena's size: a sequence creates at most
+            // 6 + 2 * OPS nodes (a template adds its contents), so a cap
+            // such as the former `n < 60` could never bind.
+            let id = create_random(p, rng, stats)?;
+            // Half the time, attach it right away.
+            if rng.below(2) == 0
+                && let Some(&parent) = rng.pick(&containers)
+            {
+                place(p, id, parent, None, stats)?;
             }
         }
         18..=64 => {
