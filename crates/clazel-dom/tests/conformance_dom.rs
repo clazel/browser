@@ -2,13 +2,26 @@
 //! operations against official data and against an independent engine.
 //! Two suites, reported by one `clazel-conformance:` line each.
 //!
-//! # Suite 1: html5lib tree-construction trees (official data)
+//! # Suite 1: html5lib tree shapes (a representability test, not tree construction)
 //!
-//! The expected trees of the html5lib tree-construction tests vendored from
-//! WPT for `clazel-treebuilder`
-//! (`../clazel-treebuilder/tests/data/wpt-tree-construction/`, converted by
-//! `cargo xtask testdata` into `generated/wpt_tree_construction.rs`). The
-//! generated table is shared by `include!` with a relative path, never
+//! **What it shows, and what it does not.** The tree *shapes* and contents
+//! come from the html5lib tree-construction tests vendored from WPT for
+//! `clazel-treebuilder` (`../clazel-treebuilder/tests/data/wpt-tree-construction/`,
+//! converted by `cargo xtask testdata` into
+//! `generated/wpt_tree_construction.rs`). This suite does **not** test tree
+//! construction: no HTML is parsed, and nothing here says that an HTML parser
+//! builds these trees (`clazel-treebuilder`'s own suite does). Each expected
+//! tree is read by this test's own small reader of the suite's text format
+//! and printed back by the shared printer, so the first comparison alone is
+//! close to a round trip and can hardly fail. What the suite does check is
+//! that the arena's mutators build and rearrange every one of those 1,967
+//! realistic shapes (deep nesting, templates, foreign content, fragments,
+//! every kind of node) correctly, by the routes below, with the invariants
+//! (`check_wf`) holding. Attribute order is not seen by the printer (the
+//! html5lib format sorts attributes), so [`same_tree`] compares the
+//! attribute lists in list order between routes.
+//!
+//! The generated table is shared by `include!` with a relative path, never
 //! copied, and so is the suite-format printer (`support/dump.rs`).
 //! `clazel-treebuilder` is not a dev-dependency here: it depends on this
 //! crate, and a dev-dependency cycle would build the crate twice with
@@ -22,24 +35,33 @@
 //! `append`, `append_attribute`), then printed again by a walk over the
 //! arena's readers (`children`, `kind`; `support/dump.rs`) and compared byte
 //! for byte with the original text. A `#document-fragment` case builds under
-//! a parentless `DocumentFragment`, as the fragment algorithm's root. The
-//! well-formedness predicate `wf` of `src/spec.rs` is a ghost predicate and
-//! cannot be called; its executable statement is [`check_wf`] below, which
-//! re-checks, on every tree built, through the readers, each clause the
-//! proofs establish (parent/child agreement, no duplicate children, only
-//! documents, elements and fragments have children, node 0 the only document
-//! and parentless, template contents a parentless fragment hosted by its
-//! template, acyclicity, `previous_sibling`, `last_child`, `has_child` and
+//! a parentless `DocumentFragment`, as the fragment algorithm's root.
+//!
+//! The same tree is then built four more ways, and each must print the same
+//! text, pass [`check_wf`] and be [`same_tree`] as the original (the same
+//! node fields, attributes in the same order, the same template contents):
+//! (1) a copy built with `append` (the control for the copier); (2) a copy
+//! whose children are inserted last to first with `insert_before`; (3) a copy
+//! whose children are built under a scratch parent and moved with
+//! `reparent_children`; (4) a copy appended in order and then every child
+//! removed and inserted again at its place with `remove` and
+//! `insert_before`/`append`. The original arena is also put through the
+//! remove-and-reinsert of every node in place. The well-formedness predicate
+//! `wf` of `src/spec.rs` is a ghost predicate and cannot be called; its
+//! executable statement is [`check_wf`] below, which re-checks, on every tree
+//! built, through the readers, each clause the proofs establish
+//! (parent/child agreement, no duplicate children, only documents, elements
+//! and fragments have children, node 0 the only document and parentless,
+//! template contents a parentless fragment hosted by its template,
+//! acyclicity, `previous_sibling`, `last_child`, `has_child` and
 //! `is_inclusive_ancestor` agreeing with the children lists).
 //!
-//! A case passes if it builds, [`check_wf`] holds and the printout equals
-//! the expected text. Units: cases. `total` is the length of `CASES`
+//! A case passes if every route builds, [`check_wf`] holds and every printout
+//! equals the expected text. Units: cases. `total` is the length of `CASES`
 //! (every case of every non-scripted `.dat` file; the scripted ones are not
-//! trees to build and are counted on a separate line). The trees are the
-//! parser's outputs, so this suite shows that every tree shape the standard
-//! expects of an HTML parser is representable in, and read back from, the
-//! arena. [`KNOWN_MISMATCHES`] lists, by name with a cause, the cases that
-//! are expected not to round-trip (none today).
+//! trees to build and are counted on a separate line).
+//! [`KNOWN_MISMATCHES`] lists, by name with a cause, the cases that are
+//! expected not to round-trip (none today).
 //!
 //! # Suite 2: differential against `markup5ever_rcdom` 0.39.0
 //!
@@ -408,20 +430,349 @@ fn build(expected: &str, fragment: bool) -> Result<(Arena, usize), String> {
     Ok((a, root))
 }
 
-/// One case: build, check `wf`, print, compare.
+// ---------------------------------------------------------------------------
+// Suite 1, other routes: the same tree built with the mutators.
+
+/// A comparable text of one node's own fields (not its place), with the
+/// attribute list in list order (the suite's printer sorts attributes).
+fn key(k: &ExecKind) -> String {
+    fn ns(n: &Option<Namespace>) -> &'static str {
+        match n {
+            None => "none",
+            Some(Namespace::Html) => "html",
+            Some(Namespace::MathMl) => "mathml",
+            Some(Namespace::Svg) => "svg",
+            Some(Namespace::XLink) => "xlink",
+            Some(Namespace::Xml) => "xml",
+            Some(Namespace::Xmlns) => "xmlns",
+        }
+    }
+    fn opt(v: &Option<Vec<u32>>) -> String {
+        v.as_ref()
+            .map_or_else(|| "-".to_owned(), |v| format!("+{v:?}"))
+    }
+    match k {
+        ExecKind::Document { url, base_url, .. } => format!("document {url:?} {base_url:?}"),
+        ExecKind::DocumentType {
+            name,
+            public_id,
+            system_id,
+        } => format!("doctype {name:?} {public_id:?} {system_id:?}"),
+        ExecKind::Element {
+            namespace,
+            prefix,
+            local_name,
+            attributes,
+            template_contents,
+            form_owner,
+        } => {
+            let attrs: Vec<String> = attributes
+                .iter()
+                .map(|t| {
+                    format!(
+                        "{} {} {:?} {:?}",
+                        ns(&t.namespace),
+                        opt(&t.prefix),
+                        t.local_name,
+                        t.value
+                    )
+                })
+                .collect();
+            format!(
+                "element {} {} {local_name:?} [{}] tc={} fo={}",
+                ns(namespace),
+                opt(prefix),
+                attrs.join("; "),
+                template_contents.is_some(),
+                form_owner.is_some()
+            )
+        }
+        ExecKind::Text { data } => format!("text {data:?}"),
+        ExecKind::Comment { data } => format!("comment {data:?}"),
+        ExecKind::ProcessingInstruction { target, data } => format!("pi {target:?} {data:?}"),
+        ExecKind::DocumentFragment { host } => format!("fragment host={}", host.is_some()),
+    }
+}
+
+/// The two trees below `s` in `src` and `d` in `dst` have the same shape,
+/// the same fields at every node (attributes in the same order) and the
+/// same template contents.
+fn same_tree(src: &Arena, s: usize, dst: &Arena, d: usize) -> Result<(), String> {
+    let mut stack = vec![(s, d)];
+    while let Some((s, d)) = stack.pop() {
+        let (ks, kd) = (key(src.kind(s)), key(dst.kind(d)));
+        if ks != kd {
+            return Err(format!("node differs: {ks} / {kd}"));
+        }
+        let (cs, cd) = (src.children(s), dst.children(d));
+        if cs.len() != cd.len() {
+            return Err(format!("{ks}: {} children / {}", cs.len(), cd.len()));
+        }
+        stack.extend(cs.iter().copied().zip(cd.iter().copied()));
+        if let (
+            ExecKind::Element {
+                template_contents: Some(fs),
+                ..
+            },
+            ExecKind::Element {
+                template_contents: Some(fd),
+                ..
+            },
+        ) = (src.kind(s), dst.kind(d))
+        {
+            stack.push((*fs, *fd));
+        }
+    }
+    Ok(())
+}
+
+fn ns_copy(n: &Option<Namespace>) -> Option<Namespace> {
+    n.as_ref().map(|n| match n {
+        Namespace::Html => Namespace::Html,
+        Namespace::MathMl => Namespace::MathMl,
+        Namespace::Svg => Namespace::Svg,
+        Namespace::XLink => Namespace::XLink,
+        Namespace::Xml => Namespace::Xml,
+        Namespace::Xmlns => Namespace::Xmlns,
+    })
+}
+
+fn mode_copy(m: &DocumentMode) -> DocumentMode {
+    match m {
+        DocumentMode::NoQuirks => DocumentMode::NoQuirks,
+        DocumentMode::Quirks => DocumentMode::Quirks,
+        DocumentMode::LimitedQuirks => DocumentMode::LimitedQuirks,
+    }
+}
+
+/// A node of the same kind and fields as `kind`, but with no attributes, no
+/// template contents and no form owner (those are added by the operations
+/// under test).
+fn bare(kind: &ExecKind) -> ExecKind {
+    match kind {
+        ExecKind::Document { mode, url, base_url } => ExecKind::Document {
+            mode: mode_copy(mode),
+            url: url.clone(),
+            base_url: base_url.clone(),
+        },
+        ExecKind::DocumentType {
+            name,
+            public_id,
+            system_id,
+        } => ExecKind::DocumentType {
+            name: name.clone(),
+            public_id: public_id.clone(),
+            system_id: system_id.clone(),
+        },
+        ExecKind::Element {
+            namespace,
+            prefix,
+            local_name,
+            ..
+        } => ExecKind::Element {
+            namespace: ns_copy(namespace),
+            prefix: prefix.clone(),
+            local_name: local_name.clone(),
+            attributes: Vec::new(),
+            template_contents: None,
+            form_owner: None,
+        },
+        ExecKind::Text { data } => ExecKind::Text { data: data.clone() },
+        ExecKind::Comment { data } => ExecKind::Comment { data: data.clone() },
+        ExecKind::ProcessingInstruction { target, data } => ExecKind::ProcessingInstruction {
+            target: target.clone(),
+            data: data.clone(),
+        },
+        ExecKind::DocumentFragment { .. } => ExecKind::DocumentFragment { host: None },
+    }
+}
+
+/// How `copy_tree` attaches a node's new children to it.
+#[derive(Clone, Copy, Debug)]
+enum Route {
+    /// `append`, in order (the copier's own control: it must reproduce the
+    /// original).
+    Append,
+    /// DOM §4.2.3 "pre-insert": from the last child to the first, each
+    /// inserted before the one before it (`insert_before`, or `append` for
+    /// the first).
+    InsertBeforeReversed,
+    /// Under a scratch parent first (`append`), then "move all children"
+    /// (`reparent_children`) to the real parent.
+    ViaScratch,
+    /// `append` to the real parent, then each child removed and inserted
+    /// again at its place (`remove`, `insert_before` or `append`).
+    RemoveAndReinsert,
+}
+
+const ROUTES: [Route; 4] = [
+    Route::Append,
+    Route::InsertBeforeReversed,
+    Route::ViaScratch,
+    Route::RemoveAndReinsert,
+];
+
+/// Remove `child` from `parent` and put it back at its place.
+fn remove_and_reinsert(a: &mut Arena, parent: usize, child: usize) {
+    let next = a
+        .children(parent)
+        .iter()
+        .position(|&x| x == child)
+        .and_then(|i| a.children(parent).get(i.saturating_add(1)))
+        .copied();
+    a.remove(child);
+    match next {
+        Some(n) => a.insert_before(parent, child, n),
+        None => a.append(parent, child),
+    }
+}
+
+/// Attach `kids` (new, parentless) to `parent`, in this order, by `route`.
+fn attach(a: &mut Arena, parent: usize, kids: &[usize], route: Route) -> Result<(), String> {
+    match route {
+        Route::Append => {
+            for &k in kids {
+                a.append(parent, k);
+            }
+        }
+        Route::InsertBeforeReversed => {
+            for &k in kids.iter().rev() {
+                match a.children(parent).first().copied() {
+                    Some(first) => a.insert_before(parent, k, first),
+                    None => a.append(parent, k),
+                }
+            }
+        }
+        Route::ViaScratch => {
+            let scratch = create(
+                a,
+                ExecKind::Element {
+                    namespace: Some(Namespace::Html),
+                    prefix: None,
+                    local_name: u32s("scratch"),
+                    attributes: Vec::new(),
+                    template_contents: None,
+                    form_owner: None,
+                },
+            )?;
+            for &k in kids {
+                a.append(scratch, k);
+            }
+            a.reparent_children(scratch, parent);
+            if !a.children(scratch).is_empty() {
+                return Err("scratch parent still has children".to_owned());
+            }
+        }
+        Route::RemoveAndReinsert => {
+            for &k in kids {
+                a.append(parent, k);
+            }
+            for &k in kids {
+                remove_and_reinsert(a, parent, k);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// A copy of the tree below `src_root` (attributes in list order, template
+/// contents) in a new arena, built with `route`; returns it and the node
+/// that corresponds to `src_root`.
+fn copy_tree(src: &Arena, src_root: usize, route: Route) -> Result<(Arena, usize), String> {
+    let mut dst = Arena::new(u32s("about:blank"));
+    let dst_root = if src_root == 0 {
+        0
+    } else {
+        create(&mut dst, bare(src.kind(src_root)))?
+    };
+    let mut stack = vec![(src_root, dst_root)];
+    while let Some((s, d)) = stack.pop() {
+        if let ExecKind::Element {
+            template_contents: Some(f),
+            ..
+        } = src.kind(s)
+        {
+            let df = dst
+                .create_template_contents(d)
+                .ok_or("the node limit is far away")?;
+            stack.push((*f, df));
+        }
+        let mut made: Vec<usize> = Vec::new();
+        for &c in src.children(s) {
+            let dc = create(&mut dst, bare(src.kind(c)))?;
+            if let ExecKind::Element { attributes, .. } = src.kind(c) {
+                for t in attributes {
+                    dst.append_attribute(
+                        dc,
+                        ExecAttr {
+                            namespace: ns_copy(&t.namespace),
+                            prefix: t.prefix.clone(),
+                            local_name: t.local_name.clone(),
+                            value: t.value.clone(),
+                        },
+                    );
+                }
+            }
+            made.push(dc);
+            stack.push((c, dc));
+        }
+        attach(&mut dst, d, &made, route)?;
+    }
+    Ok((dst, dst_root))
+}
+
+/// The tree rebuilt by every route must equal the original (the same
+/// fields, attributes in the same order, the same places), be well formed,
+/// and print as the expected text.
+fn other_routes(a: &Arena, root: usize, expected: &str) -> Result<(), String> {
+    for route in ROUTES {
+        let (b, b_root) = copy_tree(a, root, route).map_err(|e| format!("{route:?}: {e}"))?;
+        check_wf(&b).map_err(|e| format!("{route:?}: wf: {e}"))?;
+        same_tree(a, root, &b, b_root).map_err(|e| format!("{route:?}: {e}"))?;
+        let printed = dump::dump_children(&b, b_root);
+        let printed = printed.strip_suffix('\n').unwrap_or(&printed);
+        if printed != expected {
+            return Err(format!(
+                "{route:?}: --- expected\n{expected}\n--- printed\n{printed}"
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Every node with a parent, in id order, removed and inserted again at its
+/// place, in the arena the case was built in.
+fn reinsert_in_place(a: &mut Arena) {
+    for id in 0..a.len() {
+        if let Some(p) = a.parent(id) {
+            remove_and_reinsert(a, p, id);
+        }
+    }
+}
+
+/// One case: build, check `wf`, print, compare; then build the same tree
+/// by the other routes and require the same.
 fn round_trip(case: &Case) -> Result<(), String> {
-    let (a, root) = build(case.document, case.fragment.is_some())?;
+    let (mut a, root) = build(case.document, case.fragment.is_some())?;
     check_wf(&a)?;
     let printed = dump::dump_children(&a, root);
     let printed = printed.strip_suffix('\n').unwrap_or(&printed);
-    if printed == case.document {
-        Ok(())
-    } else {
-        Err(format!(
+    if printed != case.document {
+        return Err(format!(
             "--- expected\n{}\n--- printed\n{printed}",
             case.document
-        ))
+        ));
     }
+    other_routes(&a, root, case.document)?;
+    let (before, before_root) = copy_tree(&a, root, Route::Append)?;
+    reinsert_in_place(&mut a);
+    check_wf(&a).map_err(|e| format!("reinsert in place: wf: {e}"))?;
+    same_tree(&before, before_root, &a, root).map_err(|e| format!("reinsert in place: {e}"))?;
+    let printed = dump::dump_children(&a, root);
+    if printed.strip_suffix('\n').unwrap_or(&printed) != case.document {
+        return Err(format!("reinsert in place: printed\n{printed}"));
+    }
+    Ok(())
 }
 
 #[test]
