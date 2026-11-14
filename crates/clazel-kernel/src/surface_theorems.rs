@@ -114,20 +114,34 @@ proof fn lemma_from_renderer_no_surface(rules: Seq<clazel_psl::spec::Rule>, urls
     }
 }
 
-/// Every event but a GPU process's frame paints nothing.
-proof fn lemma_no_paint_but_gpu(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+/// A renderer's frame paints nothing.
+proof fn lemma_no_paint_from_renderer(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
     requires
         reachable(rules, urls, fetch, s),
-        !(e is FromGpu),
+        e is FromRenderer,
+    ensures
+        forall|k: int| 0 <= k < step(rules, urls, fetch, s, e).1.len() ==> !((#[trigger] step(rules, urls, fetch, s, e).1[k]) is Paint),
+{
+    crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
+    match e {
+        Event::FromRenderer { id, bytes } => {
+            lemma_from_renderer_no_surface(rules, urls, fetch, s, id, bytes);
+        },
+        _ => {},
+    }
+}
+
+/// Opening a tab paints nothing.
+proof fn lemma_no_paint_open_tab(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+    requires
+        reachable(rules, urls, fetch, s),
+        e is OpenTab,
     ensures
         forall|k: int| 0 <= k < step(rules, urls, fetch, s, e).1.len() ==> !((#[trigger] step(rules, urls, fetch, s, e).1[k]) is Paint),
 {
     crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
     let out = step(rules, urls, fetch, s, e).1;
     match e {
-        Event::FromRenderer { id, bytes } => {
-            lemma_from_renderer_no_surface(rules, urls, fetch, s, id, bytes);
-        },
         Event::OpenTab { url, script } => {
             let id = s.next_id;
             if let Some(lock) = lock_of_url(urls, url, id) {
@@ -145,9 +159,38 @@ proof fn lemma_no_paint_but_gpu(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns
                 }
             }
         },
+        _ => {},
+    }
+}
+
+/// Navigating a tab paints nothing.
+proof fn lemma_no_paint_navigate(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+    requires
+        reachable(rules, urls, fetch, s),
+        e is NavigateTab,
+    ensures
+        forall|k: int| 0 <= k < step(rules, urls, fetch, s, e).1.len() ==> !((#[trigger] step(rules, urls, fetch, s, e).1[k]) is Paint),
+{
+    crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
+    match e {
         Event::NavigateTab { tab, url } => {
             lemma_begin_no_surface(rules, urls, fetch, s, tab, url);
         },
+        _ => {},
+    }
+}
+
+/// A network event paints nothing.
+proof fn lemma_no_paint_net(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+    requires
+        reachable(rules, urls, fetch, s),
+        e is Net,
+    ensures
+        forall|k: int| 0 <= k < step(rules, urls, fetch, s, e).1.len() ==> !((#[trigger] step(rules, urls, fetch, s, e).1[k]) is Paint),
+{
+    crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
+    let out = step(rules, urls, fetch, s, e).1;
+    match e {
         Event::Net { conn, input } => {
             crate::net_theorems::theorem_net_only_to_tab(rules, urls, fetch, s, conn, input);
             assert forall|k: int| 0 <= k < out.len() implies !((#[trigger] out[k]) is Paint) by {
@@ -157,11 +200,40 @@ proof fn lemma_no_paint_but_gpu(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns
                 }
             }
         },
+        _ => {},
+    }
+}
+
+/// A renderer's exit paints nothing.
+proof fn lemma_no_paint_exited(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+    requires
+        reachable(rules, urls, fetch, s),
+        e is RendererExited,
+    ensures
+        forall|k: int| 0 <= k < step(rules, urls, fetch, s, e).1.len() ==> !((#[trigger] step(rules, urls, fetch, s, e).1[k]) is Paint),
+{
+    crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
+    match e {
         Event::RendererExited { id } => {
             if let Some(i) = find_by_id(s.renderers, id, 0) {
                 lemma_closes_no_surface(s.conns, s.renderers[i].tab);
             }
         },
+        _ => {},
+    }
+}
+
+/// A resize paints nothing.
+proof fn lemma_no_paint_resize(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+    requires
+        reachable(rules, urls, fetch, s),
+        e is Resize,
+    ensures
+        forall|k: int| 0 <= k < step(rules, urls, fetch, s, e).1.len() ==> !((#[trigger] step(rules, urls, fetch, s, e).1[k]) is Paint),
+{
+    crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
+    let out = step(rules, urls, fetch, s, e).1;
+    match e {
         Event::Resize { tab, width, height, scale } => {
             assert forall|k: int| 0 <= k < out.len() implies !((#[trigger] out[k]) is Paint) by {
                 if find_by_tab(s.renderers, tab, 0) is Some {
@@ -170,6 +242,38 @@ proof fn lemma_no_paint_but_gpu(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns
             }
         },
         _ => {},
+    }
+}
+
+/// A tick or the user's input paints nothing.
+proof fn lemma_no_paint_rest(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+    requires
+        reachable(rules, urls, fetch, s),
+        e is Tick || e is Input,
+    ensures
+        forall|k: int| 0 <= k < step(rules, urls, fetch, s, e).1.len() ==> !((#[trigger] step(rules, urls, fetch, s, e).1[k]) is Paint),
+{
+    crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
+}
+
+/// Every event but a GPU process's frame paints nothing. One lemma per
+/// event, so that no single proof unfolds every arm of `step`.
+proof fn lemma_no_paint_but_gpu(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+    requires
+        reachable(rules, urls, fetch, s),
+        !(e is FromGpu),
+    ensures
+        forall|k: int| 0 <= k < step(rules, urls, fetch, s, e).1.len() ==> !((#[trigger] step(rules, urls, fetch, s, e).1[k]) is Paint),
+{
+    match e {
+        Event::FromRenderer { .. } => lemma_no_paint_from_renderer(rules, urls, fetch, s, e),
+        Event::OpenTab { .. } => lemma_no_paint_open_tab(rules, urls, fetch, s, e),
+        Event::NavigateTab { .. } => lemma_no_paint_navigate(rules, urls, fetch, s, e),
+        Event::Net { .. } => lemma_no_paint_net(rules, urls, fetch, s, e),
+        Event::RendererExited { .. } => lemma_no_paint_exited(rules, urls, fetch, s, e),
+        Event::Resize { .. } => lemma_no_paint_resize(rules, urls, fetch, s, e),
+        Event::FromGpu { .. } => {},
+        Event::Tick { .. } | Event::Input { .. } => lemma_no_paint_rest(rules, urls, fetch, s, e),
     }
 }
 
