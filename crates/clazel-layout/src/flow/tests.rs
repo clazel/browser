@@ -497,6 +497,37 @@ fn html_and_body_fill_the_viewport_in_quirks_mode() {
     assert_eq!(l.bb("b").height, px(10));
 }
 
+/// KNOWN BUG, pinned (suspected; see the README's "A consequence to check"
+/// and the report of the test-gap review). In quirks mode the `body` is
+/// stretched to fill the `html` element less its margins (Quirks Mode
+/// Standard §3.7), and the `html` element to fill the viewport (§3.6). When
+/// the `body`'s last child has a bottom margin larger than the `body`'s, the
+/// two collapse (CSS 2.1 §8.3.1: the `body`'s computed `height` is `auto`),
+/// so the `body`'s used bottom margin is the larger one. We subtract only
+/// the `body`'s own margin (8) when stretching it, so the `body` is 16px too
+/// tall and the `html` element ends 8px below the viewport (§10.6.7: its
+/// content ends at the bottom margin edge of its last child). Chrome, run on
+/// `<p>One<p>Two` in an 800 by 600 viewport in quirks mode, gives `html`
+/// 600 and `body` 576 high: it subtracts the collapsed margin (8 + 16), so
+/// the page exactly fits and does not scroll. Here the viewport is 100 high,
+/// the `body`'s margin 8 and its child's bottom margin 16: the browser-like
+/// result is `html` 100 and `body` 76; this test pins what we give (108 and
+/// 84) and fails when it is fixed, so that it is then replaced by the
+/// browser-like assertion.
+#[test]
+fn known_bug_quirks_body_fill_ignores_the_collapsed_bottom_margin() {
+    let l =
+        quirks("<body id=b style='margin:8px'><div style='height:10px;margin-bottom:16px'></div>");
+    let html = l.frags.fragment(1).map(|f| f.border_box.height);
+    // Not the browser-like (px(100), px(76)).
+    assert_eq!(
+        (html, l.bb("b").height),
+        (Some(px(108)), px(84)),
+        "{}",
+        l.dump()
+    );
+}
+
 // ---- CSS 2.1 §10.8, line heights ----
 
 /// §10.8.1's example: "The three rules in the example below have the same
