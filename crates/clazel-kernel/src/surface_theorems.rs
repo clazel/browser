@@ -131,22 +131,34 @@ proof fn lemma_subfetch_events_no_surface(rules: Seq<clazel_psl::spec::Rule>, ur
     }
 }
 
-/// Every event but a GPU process's frame paints nothing.
-#[verifier::spinoff_prover]
-#[verifier::rlimit(60)]
-proof fn lemma_no_paint_but_gpu(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+/// A renderer's frame paints nothing.
+proof fn lemma_no_paint_from_renderer(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
     requires
         reachable(rules, urls, fetch, s),
-        !(e is FromGpu),
+        e is FromRenderer,
+    ensures
+        forall|k: int| 0 <= k < step(rules, urls, fetch, s, e).1.len() ==> !((#[trigger] step(rules, urls, fetch, s, e).1[k]) is Paint),
+{
+    crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
+    match e {
+        Event::FromRenderer { id, bytes } => {
+            lemma_from_renderer_no_surface(rules, urls, fetch, s, id, bytes);
+        },
+        _ => {},
+    }
+}
+
+/// Opening a tab paints nothing.
+proof fn lemma_no_paint_open_tab(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+    requires
+        reachable(rules, urls, fetch, s),
+        e is OpenTab,
     ensures
         forall|k: int| 0 <= k < step(rules, urls, fetch, s, e).1.len() ==> !((#[trigger] step(rules, urls, fetch, s, e).1[k]) is Paint),
 {
     crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
     let out = step(rules, urls, fetch, s, e).1;
     match e {
-        Event::FromRenderer { id, bytes } => {
-            lemma_from_renderer_no_surface(rules, urls, fetch, s, id, bytes);
-        },
         Event::OpenTab { url, script } => {
             let id = s.next_id;
             if let Some(lock) = lock_of_url(urls, url, id) {
@@ -164,15 +176,38 @@ proof fn lemma_no_paint_but_gpu(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns
                 }
             }
         },
-        Event::GpuExited { id } => {
-            crate::gpu_theorems::theorem_gpu_exit_contained(rules, urls, fetch, s, id);
-        },
-        Event::GpuSoftware | Event::GpuSiteExit { .. } => {
-            crate::gpu_theorems::lemma_channel_gpu_events(rules, urls, fetch, s, e);
-        },
+        _ => {},
+    }
+}
+
+/// Navigating a tab paints nothing.
+proof fn lemma_no_paint_navigate(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+    requires
+        reachable(rules, urls, fetch, s),
+        e is NavigateTab,
+    ensures
+        forall|k: int| 0 <= k < step(rules, urls, fetch, s, e).1.len() ==> !((#[trigger] step(rules, urls, fetch, s, e).1[k]) is Paint),
+{
+    crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
+    match e {
         Event::NavigateTab { tab, url } => {
             lemma_begin_no_surface(rules, urls, fetch, s, tab, url);
         },
+        _ => {},
+    }
+}
+
+/// A network event paints nothing.
+proof fn lemma_no_paint_net(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+    requires
+        reachable(rules, urls, fetch, s),
+        e is Net,
+    ensures
+        forall|k: int| 0 <= k < step(rules, urls, fetch, s, e).1.len() ==> !((#[trigger] step(rules, urls, fetch, s, e).1[k]) is Paint),
+{
+    crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
+    let out = step(rules, urls, fetch, s, e).1;
+    match e {
         Event::Net { conn, input } => {
             crate::net_theorems::theorem_net_only_to_tab(rules, urls, fetch, s, conn, input);
             assert forall|k: int| 0 <= k < out.len() implies !((#[trigger] out[k]) is Paint) by {
@@ -182,11 +217,40 @@ proof fn lemma_no_paint_but_gpu(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns
                 }
             }
         },
+        _ => {},
+    }
+}
+
+/// A renderer's exit paints nothing.
+proof fn lemma_no_paint_exited(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+    requires
+        reachable(rules, urls, fetch, s),
+        e is RendererExited,
+    ensures
+        forall|k: int| 0 <= k < step(rules, urls, fetch, s, e).1.len() ==> !((#[trigger] step(rules, urls, fetch, s, e).1[k]) is Paint),
+{
+    crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
+    match e {
         Event::RendererExited { id } => {
             if let Some(i) = find_by_id(s.renderers, id, 0) {
                 lemma_closes_no_surface(s.conns, s.renderers[i].tab);
             }
         },
+        _ => {},
+    }
+}
+
+/// A resize paints nothing.
+proof fn lemma_no_paint_resize(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+    requires
+        reachable(rules, urls, fetch, s),
+        e is Resize,
+    ensures
+        forall|k: int| 0 <= k < step(rules, urls, fetch, s, e).1.len() ==> !((#[trigger] step(rules, urls, fetch, s, e).1[k]) is Paint),
+{
+    crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
+    let out = step(rules, urls, fetch, s, e).1;
+    match e {
         Event::Resize { tab, width, height, scale } => {
             assert forall|k: int| 0 <= k < out.len() implies !((#[trigger] out[k]) is Paint) by {
                 if find_by_tab(s.renderers, tab, 0) is Some {
@@ -194,10 +258,82 @@ proof fn lemma_no_paint_but_gpu(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns
                 }
             }
         },
-        Event::Tick { .. } | Event::SubNet { .. } => {
-            lemma_subfetch_events_no_surface(rules, urls, fetch, s, e);
+        _ => {},
+    }
+}
+
+/// A tick or a sub-fetch's network event paints nothing.
+proof fn lemma_no_paint_subfetch(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+    requires
+        e is Tick || e is SubNet,
+    ensures
+        forall|k: int| 0 <= k < step(rules, urls, fetch, s, e).1.len() ==> !((#[trigger] step(rules, urls, fetch, s, e).1[k]) is Paint),
+{
+    lemma_subfetch_events_no_surface(rules, urls, fetch, s, e);
+}
+
+/// The user's input paints nothing.
+proof fn lemma_no_paint_input(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+    requires
+        reachable(rules, urls, fetch, s),
+        e is Input,
+    ensures
+        forall|k: int| 0 <= k < step(rules, urls, fetch, s, e).1.len() ==> !((#[trigger] step(rules, urls, fetch, s, e).1[k]) is Paint),
+{
+    crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
+}
+
+/// A GPU process's exit paints nothing (item 5.17c).
+proof fn lemma_no_paint_gpu_exited(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+    requires
+        reachable(rules, urls, fetch, s),
+        e is GpuExited,
+    ensures
+        forall|k: int| 0 <= k < step(rules, urls, fetch, s, e).1.len() ==> !((#[trigger] step(rules, urls, fetch, s, e).1[k]) is Paint),
+{
+    crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
+    match e {
+        Event::GpuExited { id } => {
+            crate::gpu_theorems::theorem_gpu_exit_contained(rules, urls, fetch, s, id);
         },
         _ => {},
+    }
+}
+
+/// The switch to software drawing, and a site's GPU exits, paint nothing
+/// (item 5.17c).
+proof fn lemma_no_paint_gpu_policy(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+    requires
+        reachable(rules, urls, fetch, s),
+        e is GpuSoftware || e is GpuSiteExit,
+    ensures
+        forall|k: int| 0 <= k < step(rules, urls, fetch, s, e).1.len() ==> !((#[trigger] step(rules, urls, fetch, s, e).1[k]) is Paint),
+{
+    crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
+    crate::gpu_theorems::lemma_channel_gpu_events(rules, urls, fetch, s, e);
+}
+
+/// Every event but a GPU process's frame paints nothing. One lemma per
+/// event, so that no single proof unfolds every arm of `step`.
+proof fn lemma_no_paint_but_gpu(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+    requires
+        reachable(rules, urls, fetch, s),
+        !(e is FromGpu),
+    ensures
+        forall|k: int| 0 <= k < step(rules, urls, fetch, s, e).1.len() ==> !((#[trigger] step(rules, urls, fetch, s, e).1[k]) is Paint),
+{
+    match e {
+        Event::FromRenderer { .. } => lemma_no_paint_from_renderer(rules, urls, fetch, s, e),
+        Event::OpenTab { .. } => lemma_no_paint_open_tab(rules, urls, fetch, s, e),
+        Event::NavigateTab { .. } => lemma_no_paint_navigate(rules, urls, fetch, s, e),
+        Event::Net { .. } => lemma_no_paint_net(rules, urls, fetch, s, e),
+        Event::RendererExited { .. } => lemma_no_paint_exited(rules, urls, fetch, s, e),
+        Event::Resize { .. } => lemma_no_paint_resize(rules, urls, fetch, s, e),
+        Event::FromGpu { .. } => {},
+        Event::GpuExited { .. } => lemma_no_paint_gpu_exited(rules, urls, fetch, s, e),
+        Event::GpuSoftware | Event::GpuSiteExit { .. } => lemma_no_paint_gpu_policy(rules, urls, fetch, s, e),
+        Event::Tick { .. } | Event::SubNet { .. } => lemma_no_paint_subfetch(rules, urls, fetch, s, e),
+        Event::Input { .. } => lemma_no_paint_input(rules, urls, fetch, s, e),
     }
 }
 
