@@ -22,7 +22,10 @@ use super::dump::dump;
 use super::fragment::{BoxFragment, LineItem, Rect};
 use super::{BoxFont, FragmentTree, Viewport, layout};
 use crate::boxes::replaced::string;
-use crate::boxes::{BoxId, BoxKind, BoxTree, LayoutBox, StyleFns, build};
+use crate::boxes::{
+    BoxId, BoxKind, BoxTree, Fragment, LayoutBox, RowGroup, StyleFns, TextRun, build,
+};
+use crate::text::TextStyle;
 
 struct NoEncodings;
 
@@ -1100,4 +1103,228 @@ fn deep_trees_lay_out_without_recursion() {
         f.boxes.iter().filter(|b| b.is_some()).count(),
         depth.saturating_add(1)
     );
+}
+
+// ---- Depth: other shapes than plain blocks ----
+
+/// The text run of a document with the text "x" (units after Phase I), to
+/// put into hand-built box trees (the units are made by `boxes::build`).
+fn x_run() -> TextRun {
+    let l = std("<p>x</p>");
+    let found = l.tree.boxes.iter().find_map(|b| match &b.kind {
+        BoxKind::Text(run) => Some(run.clone()),
+        _ => None,
+    });
+    assert!(found.is_some(), "the document has a text run");
+    found.unwrap_or(TextRun {
+        text: "x".to_owned(),
+        style: TextStyle::INITIAL,
+        units: Vec::new(),
+    })
+}
+
+/// How deep: far past a recursive implementation's stack (100,000), less
+/// under Miri, where every box costs far more.
+fn deep(native: usize) -> usize {
+    if cfg!(miri) { 200 } else { native }
+}
+
+/// Lays out `tree` (every style initial: the boxes have no nodes) and
+/// returns what must not depend on how deeply the content is nested: the
+/// outermost block's border box, and the text runs (x, baseline), with the
+/// time layout took.
+fn laid_signature(tree: &BoxTree) -> (Option<Rect>, Vec<(i32, i32)>, std::time::Duration) {
+    struct NoStyle;
+    impl StyleFns for NoStyle {
+        fn style(&self, _node: usize) -> Option<&ComputedStyle> {
+            None
+        }
+    }
+    let arena = Arena::new(Vec::new());
+    let start = std::time::Instant::now();
+    let f = layout(tree, &arena, &NoStyle, &BoxFont, Viewport::px(800, 600));
+    let took = start.elapsed();
+    let runs = f
+        .lines
+        .iter()
+        .flat_map(|l| l.items.iter())
+        .filter_map(|i| match i {
+            LineItem::Text(r) => Some((r.x, r.baseline)),
+            _ => None,
+        })
+        .collect();
+    // Box 1 is the first child of the root in every tree below.
+    (f.fragment(1).map(|b| b.border_box), runs, took)
+}
+
+/// The depth-`n` tree of `shape` and its signature.
+fn signature_of(shape: &str, n: usize) -> (Option<Rect>, Vec<(i32, i32)>, std::time::Duration) {
+    let mut t = BoxTree::new();
+    let mut p = t.add_child(BoxTree::ROOT, BoxKind::Block, None);
+    match shape {
+        // `<span><span>…x…</span></span>`: one inline formatting context.
+        "inline" => {
+            for _ in 0..n {
+                p = t.add_child(p, BoxKind::Inline(Fragment::WHOLE), None);
+            }
+        }
+        // Each inline block holds the next in its own line.
+        "inline-block" => {
+            for _ in 0..n {
+                p = t.add_child(p, BoxKind::InlineBlock, None);
+            }
+        }
+        // `<span><div>…</div></span>` n times, as `boxes::build` splits it
+        // (CSS 2.1 §9.2.1.1): an anonymous block with the first fragment,
+        // the div, an anonymous block with the last.
+        "split" => {
+            for _ in 0..n {
+                let a = t.add_child(p, BoxKind::Block, None);
+                t.add_child(
+                    a,
+                    BoxKind::Inline(Fragment {
+                        first: true,
+                        last: false,
+                    }),
+                    None,
+                );
+                let d = t.add_child(p, BoxKind::Block, None);
+                let c = t.add_child(p, BoxKind::Block, None);
+                t.add_child(
+                    c,
+                    BoxKind::Inline(Fragment {
+                        first: false,
+                        last: true,
+                    }),
+                    None,
+                );
+                p = d;
+            }
+        }
+        // `<table><tr><td>` n times.
+        _ => {
+            for _ in 0..n {
+                let w = t.add_child(p, BoxKind::TableWrapper { inline: false }, None);
+                let table = t.add_child(w, BoxKind::Table { inline: false }, None);
+                let group = t.add_child(table, BoxKind::RowGroup(RowGroup::Body), None);
+                let row = t.add_child(group, BoxKind::Row, None);
+                p = t.add_child(row, BoxKind::Cell, None);
+            }
+        }
+    }
+    t.add_child(p, BoxKind::Text(x_run()), None);
+    laid_signature(&t)
+}
+
+/// No recursion in the inline formatting context, inline blocks, split
+/// inlines and the table placeholder: each shape nested far deeper than a
+/// recursive implementation's stack lays out, and (nothing in them has
+/// edges, margins or size) gives exactly what one level gives: the same
+/// outermost block, the same text run at the same place (CSS 2.1 §9.4.2:
+/// an inline box without edges does not move its content; §10.6.3 and
+/// §10.6.7: the heights are the content's). The time is printed, to see
+/// growth: each shape was measured at several depths while writing this
+/// (layout alone is linear in the number of boxes; parsing and the cascade
+/// of such documents are not, which is why the trees are built by hand:
+/// measured in a debug build from 500 to 4,000 nested levels, each doubling
+/// took layout 2x, but the parser about 4x for the inline shapes and the
+/// cascade about 4x for the block-in-inline and table shapes).
+#[test]
+fn deep_shapes_lay_out_without_recursion_and_unchanged() {
+    for (shape, native) in [
+        ("inline", 100_000),
+        ("inline-block", 100_000),
+        ("split", 50_000),
+        ("table", 40_000),
+    ] {
+        let n = deep(native);
+        let (outer, runs, took) = signature_of(shape, n);
+        let (outer1, runs1, _) = signature_of(shape, 1);
+        eprintln!("deep {shape} depth {n}: layout took {took:?}");
+        assert!(outer.is_some(), "{shape}: the outer block has a fragment");
+        assert_eq!(runs.len(), 1, "{shape}: one text run");
+        assert_eq!(runs, runs1, "{shape}: the text is where depth 1 puts it");
+        assert_eq!(outer, outer1, "{shape}: the outer block is as at depth 1");
+    }
+}
+
+// ---- Extremes ----
+
+/// Lengths far past any real page, and past `i32` in 1/64 px (a pixel is 64
+/// units, so `i32::MAX` is 33,554,431 px), go through the whole pipeline.
+#[test]
+fn extreme_lengths_saturate_and_never_panic() {
+    let l = lay(
+        &format!(
+            "{STD}<div id=a style='width:99999999px;height:99999999px'></div>\
+             <div id=b style='margin:-99999999px 0 0 -99999999px;height:10px'></div>\
+             <div id=c style='padding:99999999px;margin:99999999px;border:99999999px solid'>x</div>\
+             <div id=d style='font-size:99999999px'>x y</div>\
+             <div id=e style='width:2147483647px;margin-left:2147483647px;height:2147483647px'></div>\
+             <div id=f style='line-height:99999999px;text-indent:-99999999px'>x</div>\
+             <div id=g style='width:-5px;height:-5px;margin:-2147483648px'>x</div>\
+             <div><span id=h style='display:inline-block;width:99999999px'>y</span><img id=i style='width:99999999px;height:99999999px'></div>"
+        ),
+        200,
+        100,
+    );
+    let dump = l.dump();
+    // No fragment has a negative size or an edge that wrapped around.
+    for f in l.frags.boxes.iter().flatten() {
+        let r = f.border_box;
+        assert!(r.width >= 0 && r.height >= 0, "negative size: {dump}");
+        assert!(r.right() >= r.x && r.bottom() >= r.y, "wrapped: {dump}");
+    }
+    for line in &l.frags.lines {
+        assert!(line.rect.width >= 0 && line.rect.height >= 0, "{dump}");
+    }
+    // A length beyond what the style crate keeps is clamped to the same
+    // value however far beyond: 99,999,999px and 2,147,483,647px give the
+    // same used width and height.
+    let (a, e) = (l.frag("a"), l.frag("e"));
+    assert_eq!(a.border_box.width, e.border_box.width, "{dump}");
+    assert_eq!(a.border_box.height, e.border_box.height, "{dump}");
+    assert!(a.border_box.width > px(10_000_000), "{dump}");
+    // CSS 2.1 §10.3.3 for an `auto` width: the margins, borders, padding and
+    // width add up to the containing block's 200px, as long as nothing
+    // saturated: `b`'s margin-left is minus the clamp and its width 200px
+    // more.
+    let b = l.frag("b");
+    assert!(b.margin.left < px(-10_000_000), "{dump}");
+    assert_eq!(
+        b.margin.left
+            .saturating_add(b.border_box.width)
+            .saturating_add(b.margin.right),
+        px(200),
+        "{dump}"
+    );
+    // A margin of i32::MIN px is clamped like -99,999,999px, on every side.
+    let g = l.frag("g");
+    assert_eq!(
+        (g.margin.top, g.margin.right, g.margin.bottom, g.margin.left),
+        (b.margin.left, b.margin.left, b.margin.left, b.margin.left),
+        "{dump}"
+    );
+    // `c`'s border box, padding and borders, each at the clamp, sum past
+    // `i32::MAX` and stop there; its text is as far right.
+    let c = l.frag("c");
+    assert_eq!(c.border_box.width, i32::MAX, "{dump}");
+    assert_eq!(c.border_box.height, i32::MAX, "{dump}");
+    // Boxes in flow with non-negative margins below one another do not
+    // move up: a, c, d, e in order (§9.4.1).
+    let ys: Vec<i32> = ["a", "c", "d", "e"].iter().map(|i| l.bb(i).y).collect();
+    assert!(ys.windows(2).all(|w| w.first() <= w.get(1)), "{ys:?} {dump}");
+    // A huge `font-size` gives lines as high as the (clamped) font: `d`'s
+    // two lines are each as high as one, and its height is their sum.
+    let d = l.lines("d");
+    assert_eq!(d.len(), 2, "{dump}");
+    let line_height = d.first().map(|x| x.rect.height);
+    assert!(line_height > Some(px(10_000_000)), "{dump}");
+    assert_eq!(
+        Some(l.bb("d").height),
+        line_height.map(|h| h.saturating_mul(2)),
+        "{dump}"
+    );
+    // A negative `text-indent` moves the first line left of the box.
+    assert!(l.runs("f").first().is_some_and(|r| r.1 < 0), "{dump}");
 }
