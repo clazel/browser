@@ -7,8 +7,10 @@
 //!   points are outside the page layer. The strip is drawn by the host from the
 //!   kernel's URL, in its own layer above.
 //! - **An adversarial GPU process** (a Perl stand-in, [`FAKE_GPU`], paired with the
-//!   real renderer: it waits for the kernel's `GpuViewport` and the renderer's
-//!   first list, then misbehaves one way):
+//!   real renderer: it says `GpuReady { software: false }` as the real one does,
+//!   since the kernel paints only a started process's frames (item 5.17c), waits
+//!   for the kernel's `GpuViewport` and the renderer's first list, then misbehaves
+//!   one way):
 //!   - claiming a surface larger than the viewport: the kernel **drops** the
 //!     `FrameReady` (5.18's decision 3: dropped, not a kill), so there is no
 //!     `Paint`, and both processes keep running;
@@ -64,6 +66,7 @@ sub cbor { my $v = shift; return chr($v) if $v < 24; return "\x18" . chr($v) if 
 sub frame_ready { my ($s, $w, $h) = @_; my $m = "\x84" . cbor(15) . cbor($s) . cbor($w) . cbor($h);
   print STDOUT pack('N', length $m) . $m; }
 sub surface { my ($s, $w, $h, $bytes) = @_; print {$surf} pack('VVV', $s, $w, $h) . $bytes; }
+my $ready = "\x82\x12\xf4"; print STDOUT pack('N', length $ready) . $ready;
 my ($w, $h);
 while (!defined $w) {
   my $head = exactly(\*STDIN, 4) // exit 0; my $m = exactly(\*STDIN, unpack('N', $head)) // exit 0;
@@ -279,7 +282,7 @@ fn lying(mode: &str) -> Option<(u32, u32)> {
     // `browse --headless` shows nothing and ends with its error, not a signal.
     let out = f.dir.join("out.png");
     let ran = Command::new(f.renderer.with_file_name("clazel"))
-        .args(["browse", "--headless"])
+        .args(["--headless"])
         .arg(&out)
         .args([
             "--size",

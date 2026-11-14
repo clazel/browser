@@ -885,7 +885,7 @@ pub proof fn lemma_subnet_not_d(
     assert forall|k: int| 0 <= k < out1.len() implies !crate::noninterference::addressed_to(rules, d, s1, s1b, #[trigger] out1[k]) by {
         if crate::noninterference::addressed_to(rules, d, s1, s1b, out1[k]) {
             let q = choose|q: Renderer|
-                (s1.renderers.contains(q) || s1b.renderers.contains(q)) && (if out1[k] is Show || out1[k] is Paint {
+                (s1.renderers.contains(q) || s1b.renderers.contains(q)) && (if out1[k] is Show || out1[k] is Paint || out1[k] is GpuStopped {
                     q.tab == crate::domain::output_id(out1[k])
                 } else {
                     q.id == crate::domain::output_id(out1[k])

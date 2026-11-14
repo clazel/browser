@@ -43,7 +43,7 @@ here: Phase 5 decodes no image, and an `img` is a box of its attributes' size.
 
 ## `screenshot-macos-metal.png`
 
-The page as `clazel browse --headless OUT --size 800x600 URL` wrote it on
+The page as `clazel --headless OUT --size 800x600 URL` wrote it on
 2026-11-13, served with its sheet (`site.css?v=7`) from loopback: macOS 26.7.2
 on an Apple M1 Pro, Metal, at commit `9006b6e9` of `claude/sheets-wired`, with
 `browse`'s own fonts (`RENDERER_FONTS` in `cli/window.rs`: the system's Arial,

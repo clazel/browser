@@ -31,9 +31,19 @@ use clazel_glyph_mask::{Offset, Quarter, glyph_mask};
 use clazel_layout::shape::{Script, Shaper};
 
 /// The strip's height in points.
+#[cfg(any(
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 pub const STRIP_POINTS: f64 = 36.0;
 
 /// Where a TrueType face is looked for, in order.
+#[cfg(any(
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 pub const FONT_PATHS: &[&str] = &[
     "/System/Library/Fonts/Supplemental/Arial.ttf",
     "/System/Library/Fonts/Geneva.ttf",
@@ -44,6 +54,11 @@ pub const FONT_PATHS: &[&str] = &[
 ];
 
 /// The first face of [`FONT_PATHS`] that reads and parses.
+#[cfg(any(
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 pub fn system_font() -> Option<Vec<u8>> {
     FONT_PATHS.iter().find_map(|p| {
         let bytes = std::fs::read(p).ok()?;

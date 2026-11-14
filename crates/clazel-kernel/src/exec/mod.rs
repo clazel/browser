@@ -20,6 +20,7 @@ pub use crate::spec;
 
 pub mod fetch;
 pub mod frames;
+pub mod gpu;
 pub mod locks;
 pub mod real_urls;
 pub mod records;

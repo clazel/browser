@@ -908,6 +908,174 @@
         "lemma": "ml_sweep_timeout(ml_s_sub(Seq::<clazel_cookie::storage::spec::Cookie>::empty(), Seq::<SubFetch>::empty(), Seq::<SubCount>::empty(), 60), ml_subfetch(0, clazel_origin::spec::Origin::Opaque(0nat), false))",
         "witness": "subfetch_live(ml_s_sub(Seq::<clazel_cookie::storage::spec::Cookie>::empty(), Seq::<SubFetch>::empty(), Seq::<SubCount>::empty(), 60), ml_subfetch(0, clazel_origin::spec::Origin::Opaque(0nat), false)) && ml_s_sub(Seq::<clazel_cookie::storage::spec::Cookie>::empty(), Seq::<SubFetch>::empty(), Seq::<SubCount>::empty(), 60).now >= ml_subfetch(0, clazel_origin::spec::Origin::Opaque(0nat), false).started + subfetch_timeout() && sweep(ml_s_sub(Seq::<clazel_cookie::storage::spec::Cookie>::empty(), Seq::<SubFetch>::empty(), Seq::<SubCount>::empty(), 60), seq![ml_subfetch(0, clazel_origin::spec::Origin::Opaque(0nat), false)]).0.len() == 1"
       }
+    },
+    {
+      "id": "gpu-window-shorter",
+      "file": "src/spec.rs",
+      "find": "pub open spec fn gpu_window() -> int {\n    300",
+      "replace": "pub open spec fn gpu_window() -> int {\n    299",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "The window is 299 seconds: a third exit 299 seconds after the oldest no longer moves the tab to software. ml_gpu_rule2 (what theorem_gpu_restart_bounded states, with 300 written out) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_gpu_rule2(-1, -299, 0)",
+        "witness": "ml_exit(ml_gpu_exit_state(Some(ml_rec(false, true, seq![-1int, -299int])), false, Seq::<SiteExit>::empty(), 0))[0] == Output::Spawn { id: 1, policy: Policy::Gpu }"
+      }
+    },
+    {
+      "id": "gpu-window-longer",
+      "file": "src/spec.rs",
+      "find": "pub open spec fn gpu_window() -> int {\n    300",
+      "replace": "pub open spec fn gpu_window() -> int {\n    301",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "The window is 301 seconds: an exit 300 seconds after the oldest moves the tab to software. ml_gpu_rule2 is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_gpu_rule2(-1, -300, 0)",
+        "witness": "ml_exit(ml_gpu_exit_state(Some(ml_rec(false, true, seq![-1int, -300int])), false, Seq::<SiteExit>::empty(), 0))[0] == Output::Spawn { id: 1, policy: Policy::GpuSoftware }"
+      }
+    },
+    {
+      "id": "gpu-exits-four",
+      "file": "src/spec.rs",
+      "find": "pub open spec fn gpu_exits() -> nat {\n    3",
+      "replace": "pub open spec fn gpu_exits() -> nat {\n    4",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "Four exits move a tab on: the third within the window restarts in hardware again. ml_gpu_rule2 is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_gpu_rule2(-1, -2, 0)",
+        "witness": "ml_exit(ml_gpu_exit_state(Some(ml_rec(false, true, seq![-1int, -2int])), false, Seq::<SiteExit>::empty(), 0))[0] == Output::Spawn { id: 1, policy: Policy::Gpu }"
+      }
+    },
+    {
+      "id": "gpu-rule2-never",
+      "file": "src/spec.rs",
+      "find": "let (s2, out) = if third_exit(g, s.now) || s1.gpu.demoted {",
+      "replace": "let (s2, out) = if s1.gpu.demoted {",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "Rule 2 is gone: a hardware process restarts in hardware for ever. ml_gpu_rule2 is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_gpu_rule2(-1, -2, 0)",
+        "witness": "ml_exit(ml_gpu_exit_state(Some(ml_rec(false, true, seq![-1int, -2int])), false, Seq::<SiteExit>::empty(), 0))[0] == Output::Spawn { id: 1, policy: Policy::Gpu }"
+      }
+    },
+    {
+      "id": "gpu-rule4-never",
+      "file": "src/spec.rs",
+      "find": "    if third_exit(g, s.now) {\n            gpu_stop(s, r, g)",
+      "replace": "    if false {\n            gpu_stop(s, r, g)",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "Rule 4 is gone: a software process restarts for ever. ml_gpu_rule4 is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_gpu_rule4(-1, -2, 0)",
+        "witness": "ml_exit(ml_gpu_exit_state(Some(ml_rec(true, true, seq![-1int, -2int])), false, Seq::<SiteExit>::empty(), 0))[0] == Output::Spawn { id: 1, policy: Policy::GpuSoftware }"
+      }
+    },
+    {
+      "id": "gpu-sites-four",
+      "file": "src/spec.rs",
+      "find": "pub open spec fn gpu_sites() -> nat {\n    3",
+      "replace": "pub open spec fn gpu_sites() -> nat {\n    4",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "Four sites put every tab in software: hardware exits from three sites no longer do. ml_gpu_rule3 is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_gpu_rule3()",
+        "witness": "ml_exit(ml_gpu_exit_state(Some(ml_rec(false, true, Seq::empty())), false, ml_two_sites(), 0))[0] == Output::Spawn { id: 1, policy: Policy::Gpu }"
+      }
+    },
+    {
+      "id": "gpu-sites-two",
+      "file": "src/spec.rs",
+      "find": "pub open spec fn gpu_sites() -> nat {\n    3",
+      "replace": "pub open spec fn gpu_sites() -> nat {\n    2",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "Two sites put every tab in software. ml_gpu_rule3_own (what theorem_site_cannot_demote_others rests on) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_gpu_rule3_own()",
+        "witness": "ml_exit(ml_gpu_exit_state(Some(ml_rec(false, true, Seq::empty())), false, ml_own_and_one(), 0))[0] == Output::GpuAllSoftware"
+      }
+    },
+    {
+      "id": "gpu-site-counts-own",
+      "file": "src/spec.rs",
+      "find": "sites.filter(|x: SiteExit| x.site != site && within(x.time, now))",
+      "replace": "sites.filter(|x: SiteExit| within(x.time, now))",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "A site's own earlier exit counts as another site's, so one site and one other demote every tab. ml_gpu_rule3_own is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_gpu_rule3_own()",
+        "witness": "ml_exit(ml_gpu_exit_state(Some(ml_rec(false, true, Seq::empty())), false, ml_own_and_one(), 0))[0] == Output::GpuAllSoftware"
+      }
+    },
+    {
+      "id": "gpu-refusal-hardware",
+      "file": "src/spec.rs",
+      "find": "        let (s2, out) = gpu_restart(s1, r, g, true, seq![]);\n            (s2, all + out)",
+      "replace": "        let (s2, out) = gpu_restart(s1, r, g, false, seq![]);\n            (s2, all + out)",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "A refused device is started again in hardware. ml_gpu_refusal is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_gpu_refusal(0)",
+        "witness": "ml_exit(ml_gpu_exit_state(None, false, Seq::<SiteExit>::empty(), 0))[1] == Output::Spawn { id: 1, policy: Policy::Gpu }"
+      }
+    },
+    {
+      "id": "gpu-paint-before-ready",
+      "file": "src/spec.rs",
+      "find": "} else if !gpu_of(s, r).running {",
+      "replace": "} else if false {",
+      "expect": "killed",
+      "module": "surface_rel",
+      "reason": "A frame is painted before GpuReady, so a late frame of an exited process is shown. ml_gpu_no_paint_cold (what theorem_paint_after_restart states) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_gpu_no_paint_cold(ml_frame_ready(0))",
+        "witness": "from_gpu(ml_gpu_cold(), 1, ml_frame_ready(0)).1.len() == 1 && from_gpu(ml_gpu_cold(), 1, ml_frame_ready(0)).1[0] is Paint"
+      }
+    },
+    {
+      "id": "gpu-ready-not-running",
+      "file": "src/spec.rs",
+      "find": "with_gpu_rec(s, GpuRec { running: true, software: g.software || software, ..g })",
+      "replace": "with_gpu_rec(s, GpuRec { running: false, software: g.software || software, ..g })",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "GpuReady does not mark the process running, so it never paints. ml_gpu_ready_paints is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_gpu_ready_paints()",
+        "witness": "from_gpu(gpu_ready(ml_gpu_cold(), ml_gpu_renderer(true), false), 1, ml_frame_ready(0)).1.len() == 0"
+      }
+    },
+    {
+      "id": "gpu-restart-other-id",
+      "file": "src/spec.rs",
+      "find": "seq![Output::Spawn { id: r.id, policy: gpu_policy(software) }]",
+      "replace": "seq![Output::Spawn { id: r.tab, policy: gpu_policy(software) }]",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "A restart starts the GPU process of the tab's id, another renderer's. ml_gpu_rule2 (and theorem_gpu_exit_contained) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_gpu_rule2(-1, -2, 0)",
+        "witness": "ml_exit(ml_gpu_exit_state(Some(ml_rec(false, true, seq![-1int, -2int])), false, Seq::<SiteExit>::empty(), 0))[0] == Output::Spawn { id: 0, policy: Policy::GpuSoftware }"
+      }
     }
   ]
 }

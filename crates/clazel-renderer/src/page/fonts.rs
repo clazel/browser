@@ -39,9 +39,20 @@ impl Fonts {
     /// The first face of each file of `files` (bytes), skipping any that is
     /// not a face item 5.9 reads.
     pub fn from_bytes(files: Vec<Vec<u8>>) -> Fonts {
+        Fonts::from_static(
+            files
+                .into_iter()
+                .map(|bytes| -> &'static [u8] { Box::leak(bytes.into_boxed_slice()) })
+                .collect(),
+        )
+    }
+
+    /// As [`Fonts::from_bytes`], over bytes that already live for the whole
+    /// process (`include_bytes!`, or a file leaked once), so nothing is
+    /// copied or leaked here.
+    pub fn from_static(files: Vec<&'static [u8]>) -> Fonts {
         let mut f = Fonts::none();
-        for bytes in files {
-            let data: &'static [u8] = Box::leak(bytes.into_boxed_slice());
+        for data in files {
             let Ok(face) = Face::parse(data, 0) else {
                 continue;
             };

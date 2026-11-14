@@ -64,6 +64,7 @@ pub proof fn lemma_navigate_tab_outputs(urls: UrlFns, s: State, tab: nat, url: S
                     Output::Show { .. } => false,
                     Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
                     Output::Paint { .. } => false,
+                    Output::GpuStopped { .. } | Output::GpuAllSoftware => false,
                     Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
                     Output::Connect { .. } | Output::Send { .. } | Output::Close { .. } => false,
                 }
@@ -122,6 +123,7 @@ pub proof fn theorem_reply_only_to_sender(rules: Seq<clazel_psl::spec::Rule>, ur
                     Output::Show { .. } => false,
                     Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
                     Output::Paint { .. } => false,
+                    Output::GpuStopped { .. } | Output::GpuAllSoftware => false,
                     Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
                     Output::Close { conn: x } => exists|i2: int, j: int|
                         0 <= i2 < s.renderers.len() && 0 <= j < s.conns.len() && s.renderers[i2].id == id && s.conns[j].id == x && s.conns[j].tab == s.renderers[i2].tab,
@@ -158,6 +160,7 @@ pub proof fn theorem_reply_only_to_sender(rules: Seq<clazel_psl::spec::Rule>, ur
                                     Output::Show { .. } => false,
                                     Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
                                     Output::Paint { .. } => false,
+                                    Output::GpuStopped { .. } | Output::GpuAllSoftware => false,
                                     Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
                                     Output::Close { conn: x } => exists|i2: int, j: int|
                                         0 <= i2 < s.renderers.len() && 0 <= j < s.conns.len() && s.renderers[i2].id == id && s.conns[j].id == x && s.conns[j].tab == s.renderers[i2].tab,

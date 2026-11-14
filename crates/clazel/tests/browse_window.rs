@@ -127,7 +127,7 @@ mod mac {
         assert!(addr.is_some());
         let Some(addr) = addr else { return };
         let child = Command::new(&f.clazel)
-            .args(["browse", &format!("http://{addr}/")])
+            .arg(format!("http://{addr}/"))
             .env("CLAZEL_RENDERER", &f.renderer)
             .env("CLAZEL_GPU", &f.gpu)
             .stderr(Stdio::piped())

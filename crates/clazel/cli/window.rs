@@ -1,4 +1,4 @@
-//! `clazel browse` with a window, and `browse --headless OUT URL` (phase-5.md item
+//! `clazel [URL]` with a window, and `clazel --headless OUT URL` (phase-5.md item
 //! 5.23). Outside the line-counted shell in `src/`: it only calls `Host`'s public
 //! functions. The text-mode browser of item 4.15 is `browse.rs`.
 //!
@@ -34,6 +34,8 @@
 //! - **The address bar**: Command-L focuses it with its URL selected (typing
 //!   replaces it); typing edits it (Backspace deletes the last character);
 //!   Return navigates (`navigate_tab`) to what was typed, Escape cancels. A
+//!   window opened without a URL has no tab and no page: the address bar is
+//!   focused, and the first URL typed opens the tab. A
 //!   control character is never typed. Command-`[`, or a click on the strip's
 //!   back button, goes back along the URLs the
 //!   tab has committed (this loop's list, as in item 4.15), Command-R reloads.
@@ -48,6 +50,12 @@ use std::time::{Duration, Instant};
 use clazel::Host;
 use clazel_gpu::channel::SurfaceFrame;
 use clazel_kernel::exec::records::{EventRecord, OutputRecord};
+#[cfg(any(
+    test,
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 use clazel_window::keys::Named;
 
 use crate::picture;
@@ -149,6 +157,12 @@ pub fn pixels_for(host: &mut Host, tab: u64, paint: &Paint) -> Option<SurfaceFra
 }
 
 /// The title bar's text.
+#[cfg(any(
+    test,
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 pub fn title_bar(url: &str, title: &str) -> String {
     let title: String = title.chars().take(200).collect();
     if title.trim().is_empty() {
@@ -159,6 +173,12 @@ pub fn title_bar(url: &str, title: &str) -> String {
 }
 
 /// The text being typed in the address bar.
+#[cfg(any(
+    test,
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Edit {
     /// What is typed.
@@ -170,6 +190,12 @@ pub struct Edit {
 }
 
 /// What a key or a character asks of the loop.
+#[cfg(any(
+    test,
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
     /// Nothing.
@@ -187,6 +213,12 @@ pub enum Action {
 }
 
 /// The address bar: the URL shown and, while the user types, the edit.
+#[cfg(any(
+    test,
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Bar {
     /// The URL the bar shows (the latest `Paint`'s, or the one asked for).
@@ -197,6 +229,12 @@ pub struct Bar {
     pub edit: Option<Edit>,
 }
 
+#[cfg(any(
+    test,
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 impl Bar {
     /// Focus the bar, its URL selected.
     pub fn focus(&mut self) -> Action {
@@ -276,12 +314,24 @@ impl Bar {
 }
 
 /// The URLs a tab committed, the current one last, for going back.
+#[cfg(any(
+    test,
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct History {
     urls: Vec<String>,
     going_back: bool,
 }
 
+#[cfg(any(
+    test,
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 impl History {
     /// A `Paint` showed `url`.
     pub fn shown(&mut self, url: &str) {
@@ -309,6 +359,12 @@ impl History {
 
 /// The wheel's `delta` (120 a notch, positive away from the user) as device
 /// pixels to scroll, positive down.
+#[cfg(any(
+    test,
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 pub fn wheel_pixels(delta: i16, scale: u64) -> i64 {
     let scale = i64::try_from(scale).unwrap_or(1);
     i64::from(delta).saturating_mul(-48).saturating_mul(scale) / 120
@@ -316,6 +372,12 @@ pub fn wheel_pixels(delta: i16, scale: u64) -> i64 {
 
 /// The scroll, in device pixels (positive down), that a key with DOM `keyCode`
 /// `code` asks for in a content area `page` pixels tall at `scale`.
+#[cfg(any(
+    test,
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 pub fn key_scroll(code: u32, page: u32, scale: u64) -> Option<i64> {
     let page = (i64::from(page) / 8).saturating_mul(7);
     let line = 40i64.saturating_mul(i64::try_from(scale).unwrap_or(1));
@@ -329,6 +391,12 @@ pub fn key_scroll(code: u32, page: u32, scale: u64) -> Option<i64> {
 }
 
 /// RGBA8 premultiplied pixels as the window's `0x00RRGGBB`, over white.
+#[cfg(any(
+    test,
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 pub fn window_pixels(rgba: &[u8]) -> Vec<u32> {
     picture::rgb_over_white(rgba)
         .as_chunks::<3>()
@@ -396,6 +464,11 @@ pub fn headless(
 
 /// The user's input on `tab`'s content area (`EventRecord::Input`): `kind` 0 a
 /// click, 1 a scroll, 2 a key; the scroll delta signed.
+#[cfg(any(
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 pub fn input(host: &mut Host, tab: u64, kind: u64, (x, y): (u64, u64), delta: i64, key: u64) {
     host.event(EventRecord::Input {
         tab,
@@ -436,7 +509,8 @@ pub mod windowed {
 
     /// What the loop keeps between frames.
     struct Tab {
-        tab: u64,
+        /// The kernel's tab, once a URL has been asked for.
+        tab: Option<u64>,
         bar: Bar,
         history: History,
         pending: Option<super::Paint>,
@@ -455,19 +529,44 @@ pub mod windowed {
             self.scale = kernel_scale(window.dpi().unwrap_or(96));
             let backing = f64::from(window.dpi().unwrap_or(96)) / 96.0;
             self.strip_px = (STRIP_POINTS * backing).round() as u32;
+            self.send_size(host);
+        }
+
+        /// Tell the kernel the content area's size, if there is a tab.
+        fn send_size(&self, host: &mut Host) {
+            let Some(tab) = self.tab else { return };
             let (w, h) = self.content();
             host.event(EventRecord::Resize {
-                tab: self.tab,
+                tab,
                 width: w.into(),
                 height: h.into(),
                 scale: self.scale,
             });
         }
 
+        /// Go to `url`: in the tab, or in a new one if the window has none yet
+        /// (it was opened without a URL, or the URL could not be opened).
         fn navigate(&mut self, host: &mut Host, url: &str) {
             self.bar.url = url.to_owned();
             self.bar.committed = false;
-            host.navigate_tab(self.tab, url);
+            if let Some(tab) = self.tab {
+                host.navigate_tab(tab, url);
+                return;
+            }
+            let tab = host.open(url);
+            if renderer_of(host, tab).is_none() {
+                eprintln!("clazel: cannot open {url}");
+                return;
+            }
+            self.tab = Some(tab);
+            self.send_size(host);
+        }
+
+        /// `Input` for the tab, if there is one.
+        fn input(&self, host: &mut Host, kind: u64, at: (u64, u64), delta: i64) {
+            if let Some(tab) = self.tab {
+                input(host, tab, kind, at, delta, 0);
+            }
         }
 
         fn act(&mut self, host: &mut Host, action: Action) -> bool {
@@ -485,6 +584,7 @@ pub mod windowed {
                     }
                     None => false,
                 },
+                Action::Reload if self.bar.url.is_empty() => false,
                 Action::Reload => {
                     let url = self.bar.url.clone();
                     self.navigate(host, &url);
@@ -493,7 +593,7 @@ pub mod windowed {
                 Action::Key(code) => {
                     let page = self.content().1;
                     if let Some(d) = key_scroll(code, page, self.scale) {
-                        input(host, self.tab, 1, (0, 0), d, 0);
+                        self.input(host, 1, (0, 0), d);
                     }
                     false
                 }
@@ -523,7 +623,7 @@ pub mod windowed {
                         u64::try_from(x).unwrap_or(0),
                         u64::try_from(y.saturating_sub(strip)).unwrap_or(0),
                     );
-                    input(host, self.tab, 0, at, 0, 0);
+                    self.input(host, 0, at, 0);
                     false
                 }
                 Event::Wheel { delta, x, y } if y >= strip => {
@@ -531,7 +631,7 @@ pub mod windowed {
                         u64::try_from(x).unwrap_or(0),
                         u64::try_from(y.saturating_sub(strip)).unwrap_or(0),
                     );
-                    input(host, self.tab, 1, at, wheel_pixels(delta, self.scale), 0);
+                    self.input(host, 1, at, wheel_pixels(delta, self.scale));
                     false
                 }
                 Event::Wheel { .. } | Event::Closed => false,
@@ -547,8 +647,9 @@ pub mod windowed {
         }
     }
 
-    /// Open a window and browse `url` in it until the window closes.
-    pub fn run(host: &mut Host, url: &str) -> Result<(), String> {
+    /// Open a window and browse in it until the window closes: at `url`, or
+    /// with no page and the address bar focused.
+    pub fn run(host: &mut Host, url: Option<&str>) -> Result<(), String> {
         let mut window =
             Window::open("Clazel").map_err(|e| format!("cannot open a window: {e:?}"))?;
         window.activate();
@@ -558,17 +659,27 @@ pub mod windowed {
                 "clazel: no TrueType font found (strip.rs FONT_PATHS); the address bar has no text"
             );
         }
-        let tab = host.open(url);
-        if renderer_of(host, tab).is_none() {
-            return Err(format!("cannot open {url}"));
+        let tab = match url {
+            Some(url) => {
+                let tab = host.open(url);
+                if renderer_of(host, tab).is_none() {
+                    return Err(format!("cannot open {url}"));
+                }
+                Some(tab)
+            }
+            None => None,
+        };
+        let mut bar = Bar {
+            url: url.unwrap_or_default().to_owned(),
+            committed: false,
+            edit: None,
+        };
+        if url.is_none() {
+            bar.focus();
         }
         let mut t = Tab {
             tab,
-            bar: Bar {
-                url: url.to_owned(),
-                committed: false,
-                edit: None,
-            },
+            bar,
             history: History::default(),
             pending: None,
             strip_px: 0,
@@ -576,7 +687,7 @@ pub mod windowed {
             size: (0, 0),
         };
         t.resize(host, &window);
-        let _ = window.set_title(&title_bar(url, ""));
+        let _ = window.set_title(&url.map_or("Clazel".to_owned(), |u| title_bar(u, "")));
         let mut dirty = true;
         loop {
             // Every queued window event, then everything the host has, then one frame.
@@ -593,14 +704,16 @@ pub mod windowed {
                     break;
                 }
             }
-            if renderer_of(host, tab).is_none() {
-                return Err("the tab is gone".to_owned());
+            if let Some(tab) = t.tab {
+                if renderer_of(host, tab).is_none() {
+                    return Err("the tab is gone".to_owned());
+                }
+                t.pending = take_paint(host, tab).or(t.pending.take());
             }
-            t.pending = take_paint(host, tab).or(t.pending.take());
-            let ready = t
-                .pending
-                .clone()
-                .and_then(|p| Some((pixels_for(host, tab, &p)?, p)));
+            let ready = t.tab.and_then(|tab| {
+                let p = t.pending.clone()?;
+                Some((pixels_for(host, tab, &p)?, p))
+            });
             if let Some((frame, paint)) = ready {
                 t.pending = None;
                 t.history.shown(&paint.url);

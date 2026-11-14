@@ -140,6 +140,8 @@ pub proof fn lemma_rel_after_update(
         s2b.subfetches == s2.subfetches,
         s1b.subcounts == s1.subcounts,
         s2b.subcounts == s2.subcounts,
+        s1b.gpu == s1.gpu,
+        s2b.gpu == s2.gpu,
         r.tab == s1.renderers[i1].tab,
         crate::invariant::kernel_wf(rules, urls, s1b),
         crate::invariant::kernel_wf(rules, urls, s2b),
@@ -224,6 +226,9 @@ pub proof fn lemma_rel_from_sets(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
         crate::domain::titles_of_domain(rules, s1.titles, d) == crate::domain::titles_of_domain(rules, s2.titles, d),
         crate::domain::subfetches_of_domain(rules, s1.subfetches, d) == crate::domain::subfetches_of_domain(rules, s2.subfetches, d),
         crate::domain::subcounts_of_domain(rules, s1.subcounts, d) == crate::domain::subcounts_of_domain(rules, s2.subcounts, d),
+        s1.gpu.demoted == s2.gpu.demoted,
+        s1.gpu.sites == s2.gpu.sites,
+        crate::domain::gpu_recs_of_domain(rules, s1.gpu.recs, d) == crate::domain::gpu_recs_of_domain(rules, s2.gpu.recs, d),
     ensures
         crate::noninterference::rel(rules, urls, d, s1, s2),
 {

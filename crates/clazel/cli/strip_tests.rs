@@ -6,13 +6,13 @@ use crate::strip::{
     render,
 };
 
-/// DejaVu Serif, vendored for `clazel-font`'s tests.
-fn font() -> Option<Vec<u8>> {
-    let path = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../clazel-font/tests/data/fonts-dejavu/DejaVuSerif.ttf"
-    );
-    std::fs::read(path).ok()
+/// DejaVu Serif, vendored for `clazel-font`'s tests. Embedded rather than
+/// read at run time, so that the tests open no file (Miri's isolation
+/// refuses `open`).
+const DEJAVU: &[u8] = include_bytes!("../../clazel-font/tests/data/fonts-dejavu/DejaVuSerif.ttf");
+
+fn font() -> Option<&'static [u8]> {
+    Some(DEJAVU)
 }
 
 fn dark(pixels: &[u32]) -> usize {
@@ -37,7 +37,7 @@ fn a_url_draws_dark_pixels_only_inside_the_field() {
         committed: true,
         can_go_back: false,
     };
-    let px = render(font.as_deref(), 400, 36, 1.0, &what);
+    let px = render(font, 400, 36, 1.0, &what);
     assert_eq!(px.len(), 14_400);
     // The corners are the strip's background, the field is white where no
     // glyph is, and the text made dark pixels.
@@ -60,7 +60,7 @@ fn a_url_draws_dark_pixels_only_inside_the_field() {
         text: "http://example.com/a/longer/path",
         ..what.clone()
     };
-    assert!(dark(&render(font.as_deref(), 400, 36, 1.0, &longer)) > n);
+    assert!(dark(&render(font, 400, 36, 1.0, &longer)) > n);
     assert_eq!(dark(&render(None, 400, 36, 1.0, &what)), 0);
 }
 
@@ -74,8 +74,11 @@ fn editing_shows_a_caret_and_keeps_long_text_in_view() {
         can_go_back: false,
     };
     // An empty field while editing still has its caret.
-    assert!(dark(&render(font.as_deref(), 200, 36, 1.0, &editing)) > 0);
-    let long = "x".repeat(400);
+    assert!(dark(&render(font, 200, 36, 1.0, &editing)) > 0);
+    // Under Miri, 60 `x`s: still about three times the field's width, so the
+    // text still overflows, and the test stays well under Miri's 300 s
+    // (400 took 378 s there).
+    let long = "x".repeat(if cfg!(miri) { 60 } else { 400 });
     let shown = Contents {
         text: &long,
         editing: false,
@@ -90,7 +93,7 @@ fn editing_shows_a_caret_and_keeps_long_text_in_view() {
     };
     // Both fill the field with ink, and stay inside it.
     for what in [&shown, &typed] {
-        let px = render(font.as_deref(), 200, 36, 1.0, what);
+        let px = render(font, 200, 36, 1.0, what);
         assert!(dark(&px) > 100);
         assert!(
             px.iter()
@@ -109,8 +112,8 @@ fn a_retina_strip_is_twice_the_size() {
         committed: true,
         can_go_back: false,
     };
-    let one = dark(&render(font.as_deref(), 300, 36, 1.0, &what));
-    let two = dark(&render(font.as_deref(), 600, 72, 2.0, &what));
+    let one = dark(&render(font, 300, 36, 1.0, &what));
+    let two = dark(&render(font, 600, 72, 2.0, &what));
     assert!(two > one * 3, "{one} then {two}");
 }
 
