@@ -199,9 +199,11 @@ fn a_redirect_to_another_origin_replaces_the_renderer_with_the_final_url() {
         [
             Out::Close(1),
             Out::Kill(old),
+            Out::SpawnGpu(gpu),
             Out::Spawn(new),
             Out::Commit(to, support::Doc { url, body, kind: 0, .. }),
         ] if *old == id
+            && gpu == new
             && new == to
             && *new != id
             && url.as_slice() == b"http://other.test/landed"
@@ -334,7 +336,10 @@ fn open_fetching(k: &mut Kernel, url: &str) -> Vec<Out> {
 fn a_tab_opened_without_a_script_fetches_and_commits_the_document() {
     let mut k = Kernel::new();
     let out = open_fetching(&mut k, "http://example.test/page");
-    assert_eq!(out, vec![Out::Spawn(0), connect(0, "example.test")]);
+    assert_eq!(
+        out,
+        vec![Out::SpawnGpu(0), Out::Spawn(0), connect(0, "example.test")]
+    );
     k.net(0, InputBuf::Connected);
     let body = b"<!DOCTYPE html><title>T</title><p>Hi".to_vec();
     let out = k.net(
@@ -444,4 +449,247 @@ fn a_large_body_is_split_into_body_frames_and_read_back_whole() {
     }
     let doc = support::read_doc(msgs);
     assert_eq!(doc.map(|d| d.body), Some(body));
+}
+
+// ---------------------------------------------------------------------
+// Item 5.19: style sheet fetches.
+// ---------------------------------------------------------------------
+
+impl Kernel {
+    fn sub_net(&mut self, renderer: u64, serial: u64, hop: u64, input: InputBuf) -> Vec<Out> {
+        self.event(&EventRecord::SubNet {
+            renderer,
+            serial,
+            hop,
+            input,
+        })
+    }
+
+    fn fetch_style(&mut self, id: u64, request: u64, url: &str) -> Vec<Out> {
+        self.send(
+            id,
+            &Msg::FetchStyle {
+                request,
+                url: url.as_bytes().to_vec(),
+            },
+        )
+    }
+}
+
+fn sub_connect(id: u64, serial: u64, hop: u64, host: &str) -> Out {
+    Out::SubConnect(id, serial, hop, host.as_bytes().to_vec(), 80, false)
+}
+
+fn has(req: &[u8], what: &[u8]) -> bool {
+    req.windows(what.len()).any(|w| w == what)
+}
+
+/// A tab at `http://example.test/page` whose document has the cookie `a=b`.
+fn page_with_cookie(k: &mut Kernel) -> u64 {
+    k.event(&EventRecord::Tick {
+        time: 13_000_000_000,
+    });
+    let id = open(k, "http://example.test/page");
+    k.send(
+        id,
+        &Msg::CookieSet {
+            cookie_string: b"a=b".to_vec(),
+        },
+    );
+    id
+}
+
+#[test]
+fn a_same_origin_style_sheet_is_fetched_with_the_documents_cookies() {
+    let mut k = Kernel::new();
+    let id = page_with_cookie(&mut k);
+    let out = k.fetch_style(id, 7, "/s.css");
+    assert_eq!(out, vec![sub_connect(id, 0, 1, "example.test")]);
+    let out = k.sub_net(id, 0, 1, InputBuf::Connected);
+    let ok = matches!(
+        out.as_slice(),
+        [Out::SubSend(r, 0, 1, req)]
+            if *r == id && req.starts_with(b"GET /s.css HTTP/1.1\r\n") && has(req, b"Cookie: a=b")
+    );
+    assert!(ok, "{out:?}");
+    let out = k.sub_net(
+        id,
+        0,
+        1,
+        InputBuf::Bytes(response_with("Set-Cookie: c=d", b"p{}")),
+    );
+    assert_eq!(
+        out,
+        vec![
+            Out::SubClose(id, 0, 1),
+            Out::Frames(
+                id,
+                vec![
+                    Msg::StyleResponse {
+                        request: 7,
+                        content_type: Vec::new()
+                    },
+                    Msg::StyleBody {
+                        request: 7,
+                        bytes: b"p{}".to_vec()
+                    },
+                    Msg::StyleEnd { request: 7 },
+                ]
+            )
+        ]
+    );
+    // A credentialed response stores its cookies.
+    assert_eq!(
+        cookie_string(&k.send(id, &Msg::CookieGet), id),
+        Some(&b"a=b; c=d"[..])
+    );
+    // The fetch is over: a late event about it is ignored.
+    assert_eq!(k.sub_net(id, 0, 1, InputBuf::Closed), vec![]);
+}
+
+#[test]
+fn a_cross_origin_style_sheet_carries_no_cookies_and_stores_none() {
+    let mut k = Kernel::new();
+    let id = page_with_cookie(&mut k);
+    let out = k.fetch_style(id, 1, "http://other.test/s.css");
+    assert_eq!(out, vec![sub_connect(id, 0, 1, "other.test")]);
+    let out = k.sub_net(id, 0, 1, InputBuf::Connected);
+    let ok = matches!(
+        out.as_slice(),
+        [Out::SubSend(_, 0, 1, req)] if req.starts_with(b"GET /s.css") && !has(req, b"Cookie")
+    );
+    assert!(ok, "{out:?}");
+    k.sub_net(
+        id,
+        0,
+        1,
+        InputBuf::Bytes(response_with("Set-Cookie: x=y", b"")),
+    );
+    assert_eq!(k.jar_len(), 1);
+}
+
+#[test]
+fn each_redirect_hop_decides_credentials_and_gets_its_own_connection() {
+    let mut k = Kernel::new();
+    let id = page_with_cookie(&mut k);
+    k.fetch_style(id, 1, "/s.css");
+    k.sub_net(id, 0, 1, InputBuf::Connected);
+    let redirect = b"HTTP/1.1 302 Found\r\nLocation: http://other.test/t.css\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec();
+    let out = k.sub_net(id, 0, 1, InputBuf::Bytes(redirect));
+    assert_eq!(
+        out,
+        vec![Out::SubClose(id, 0, 1), sub_connect(id, 0, 2, "other.test")]
+    );
+    // The old hop is gone.
+    assert_eq!(k.sub_net(id, 0, 1, InputBuf::Connected), vec![]);
+    // The second hop is cross-origin: no cookies.
+    let out = k.sub_net(id, 0, 2, InputBuf::Connected);
+    let ok = matches!(
+        out.as_slice(),
+        [Out::SubSend(_, 0, 2, req)] if req.starts_with(b"GET /t.css") && !has(req, b"Cookie")
+    );
+    assert!(ok, "{out:?}");
+}
+
+#[test]
+fn a_renderer_has_at_most_eight_sub_fetches_at_once() {
+    let mut k = Kernel::new();
+    let id = open(&mut k, "http://example.test/");
+    for n in 0..8u64 {
+        assert_eq!(
+            k.fetch_style(id, n, "/s.css"),
+            vec![sub_connect(id, n, 1, "example.test")]
+        );
+    }
+    assert_eq!(
+        k.fetch_style(id, 8, "/s.css"),
+        vec![Out::To(id, Msg::StyleFailed { request: 8 })]
+    );
+    // Another renderer's limit is its own.
+    let other = open(&mut k, "http://other.test/");
+    assert_eq!(
+        k.fetch_style(other, 0, "/s.css"),
+        vec![sub_connect(other, 0, 1, "other.test")]
+    );
+}
+
+#[test]
+fn a_document_starts_at_most_sixty_four_sub_fetches_and_a_commit_starts_a_new_count() {
+    let mut k = Kernel::new();
+    let id = open(&mut k, "http://example.test/");
+    // A URL the transducer does not fetch fails at once, and counts.
+    for n in 0..64u64 {
+        assert_eq!(
+            k.fetch_style(id, n, "ftp://example.test/s.css"),
+            vec![Out::To(id, Msg::StyleFailed { request: n })]
+        );
+    }
+    assert_eq!(
+        k.fetch_style(id, 64, "/s.css"),
+        vec![Out::To(id, Msg::StyleFailed { request: 64 })]
+    );
+    // A same-origin navigation commits a new document.
+    k.navigate(id, "http://example.test/next");
+    k.net(0, InputBuf::Connected);
+    k.net(0, InputBuf::Bytes(response(b"next")));
+    assert_eq!(
+        k.fetch_style(id, 65, "/s.css"),
+        vec![sub_connect(id, 64, 1, "example.test")]
+    );
+}
+
+#[test]
+fn a_navigation_ends_the_old_documents_sub_fetches() {
+    let mut k = Kernel::new();
+    let id = open(&mut k, "http://example.test/");
+    k.fetch_style(id, 1, "/s.css");
+    k.navigate(id, "http://example.test/next");
+    k.net(0, InputBuf::Connected);
+    let out = k.net(0, InputBuf::Bytes(response(b"next")));
+    assert!(
+        matches!(out.last(), Some(Out::Commit(to, _)) if *to == id),
+        "{out:?}"
+    );
+    // The old document's sub-fetch is ignored, then closed by the next tick.
+    assert_eq!(k.sub_net(id, 0, 1, InputBuf::Connected), vec![]);
+    assert_eq!(
+        k.event(&EventRecord::Tick { time: 1 }),
+        vec![Out::SubClose(id, 0, 1)]
+    );
+    assert_eq!(k.event(&EventRecord::Tick { time: 2 }), vec![]);
+}
+
+#[test]
+fn a_sub_fetch_past_its_timeout_fails_on_a_tick() {
+    let mut k = Kernel::new();
+    k.event(&EventRecord::Tick { time: 1000 });
+    let id = open(&mut k, "http://example.test/");
+    k.fetch_style(id, 5, "/s.css");
+    assert_eq!(k.event(&EventRecord::Tick { time: 1059 }), vec![]);
+    assert_eq!(
+        k.event(&EventRecord::Tick { time: 1060 }),
+        vec![
+            Out::SubClose(id, 0, 1),
+            Out::To(id, Msg::StyleFailed { request: 5 })
+        ]
+    );
+    assert_eq!(k.sub_net(id, 0, 1, InputBuf::Connected), vec![]);
+}
+
+#[test]
+fn a_style_sheet_asked_for_before_the_first_commit_kills_the_renderer() {
+    let mut k = Kernel::new();
+    open_fetching(&mut k, "http://example.test/");
+    let out = k.fetch_style(0, 1, "/s.css");
+    assert_eq!(out, vec![Out::Kill(0), Out::Close(0)]);
+}
+
+#[test]
+fn a_sub_fetch_event_for_another_renderer_is_ignored() {
+    let mut k = Kernel::new();
+    let a = open(&mut k, "http://a.test/");
+    let b = open(&mut k, "http://b.test/");
+    k.fetch_style(a, 1, "/s.css");
+    // Serial 0 of `b` does not exist: `a`'s fetch is not reachable through `b`.
+    assert_eq!(k.sub_net(b, 0, 1, InputBuf::Connected), vec![]);
 }

@@ -32,4 +32,11 @@ pub open spec fn psl_rules() -> Seq<super::spec::Rule> {
     Seq::new(super::data::PSL_RULES_LEN as nat, |i: int| table_rule(i))
 }
 
+/// The list's ICANN section, its first rows: the rules without the private
+/// section's. A domain under a suffix only the private section lists has the
+/// public suffix these rules give, as if that entry were not there.
+pub open spec fn psl_icann_rules() -> Seq<super::spec::Rule> {
+    psl_rules().take(super::data::PSL_ICANN_RULES_LEN as int)
+}
+
 } // verus!

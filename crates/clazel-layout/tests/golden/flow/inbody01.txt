@@ -1,0 +1,48 @@
+#case 0
+#data "<button>1</foo>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        atomic <button>
+      inline-block <button> 8,8 10.1875x18.640625
+        line 8,8 10.1875x18.640625 base=22.859375
+          text "1" x=8 base=22.859375 w=10.1875
+
+#case 1
+#data "<foo>1<p>2</foo>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x608
+    block <body> 8,8 784x584 m=8,8,8,8
+      block (anonymous) 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          inline <foo> 8,8 10.1875x18.640625 start
+          text "1" x=8 base=22.859375 w=10.1875
+      block <p> 8,42.640625 784x18.640625 m=16,0,16,0
+        line 8,42.640625 784x18.640625 base=57.5
+          text "2" x=8 base=57.5 w=10.1875
+      block (anonymous) 8,77.28125 784x0
+
+#case 2
+#data "<dd>1</foo>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <dd> 48,8 744x18.640625 m=0,0,0,40
+        line 48,8 744x18.640625 base=22.859375
+          text "1" x=48 base=22.859375 w=10.1875
+
+#case 3
+#data "<foo>1<dd>2</foo>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block (anonymous) 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          inline <foo> 8,8 10.1875x18.640625 start
+          text "1" x=8 base=22.859375 w=10.1875
+      block <dd> 48,26.640625 744x18.640625 m=0,0,0,40
+        line 48,26.640625 744x18.640625 base=41.5
+          text "2" x=48 base=41.5 w=10.1875
+      block (anonymous) 8,45.28125 784x0
+

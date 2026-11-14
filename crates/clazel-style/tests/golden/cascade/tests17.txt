@@ -1,0 +1,114 @@
+#case 0
+#data "<!doctype html><table><tbody><select><tr>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+
+#case 1
+#data "<!doctype html><table><tr><select><td>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+
+#case 2
+#data "<!doctype html><table><tr><td><select><td>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+            <select>
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+
+#case 3
+#data "<!doctype html><table><tr><th><select><td>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <th> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell font-weight=700 vertical-align=Middle text-align=Center
+            <select> text-align=Start
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+
+#case 4
+#data "<!doctype html><table><caption><select><tr>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <caption> display=TableCaption text-align=Center
+        <select> text-align=Start
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+
+#case 5
+#data "<!doctype html><select><tr>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+
+#case 6
+#data "<!doctype html><select><td>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+
+#case 7
+#data "<!doctype html><select><th>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+
+#case 8
+#data "<!doctype html><select><tbody>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+
+#case 9
+#data "<!doctype html><select><thead>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+
+#case 10
+#data "<!doctype html><select><tfoot>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+
+#case 11
+#data "<!doctype html><select><caption>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+
+#case 12
+#data "<!doctype html><table><tr></table>a"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+

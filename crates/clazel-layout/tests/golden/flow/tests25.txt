@@ -1,0 +1,217 @@
+#case 0
+#data "<!DOCTYPE html><body><foo>A"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <foo> 8,8 11.5625x18.640625 start end
+        text "A" x=8 base=22.859375 w=11.5625
+
+#case 1
+#data "<!DOCTYPE html><body><area>A"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "A" x=8 base=22.859375 w=11.5625
+
+#case 2
+#data "<!DOCTYPE html><body><base>A"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "A" x=8 base=22.859375 w=11.5625
+
+#case 3
+#data "<!DOCTYPE html><body><basefont>A"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "A" x=8 base=22.859375 w=11.5625
+
+#case 4
+#data "<!DOCTYPE html><body><bgsound>A"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "A" x=8 base=22.859375 w=11.5625
+
+#case 5
+#data "<!DOCTYPE html><body><br>A"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x53.28125
+    block <body> 8,8 784x37.28125 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+      line 8,26.640625 784x18.640625 base=41.5
+        text "A" x=8 base=41.5 w=11.5625
+
+#case 6
+#data "<!DOCTYPE html><body><col>A"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "A" x=8 base=22.859375 w=11.5625
+
+#case 7
+#data "<!DOCTYPE html><body><command>A"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <command> 8,8 11.5625x18.640625 start end
+        text "A" x=8 base=22.859375 w=11.5625
+
+#case 8
+#data "<!DOCTYPE html><body><embed>A"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "A" x=8 base=22.859375 w=11.5625
+
+#case 9
+#data "<!DOCTYPE html><body><frame>A"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "A" x=8 base=22.859375 w=11.5625
+
+#case 10
+#data "<!DOCTYPE html><body><hr>A"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x44.640625
+    block <body> 8,8 784x28.640625 m=8,8,8,8
+      block <hr> 8,8 784x2 m=8,0,8,0 b=1,1,1,1
+      block (anonymous) 8,18 784x18.640625
+        line 8,18 784x18.640625 base=32.859375
+          text "A" x=8 base=32.859375 w=11.5625
+
+#case 11
+#data "<!DOCTYPE html><body><img>A"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        atomic <img>
+        text "A" x=8 base=22.859375 w=11.5625
+      replaced <img> 8,22.859375 0x0
+
+#case 12
+#data "<!DOCTYPE html><body><input>A"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x38.421875
+    block <body> 8,8 784x22.421875 m=8,8,8,8
+      line 8,8 784x22.421875 base=26.640625
+        atomic <input>
+        text "A" x=235.796875 base=26.640625 w=11.5625
+      replaced <input> 8,8 227.796875x18.640625
+
+#case 13
+#data "<!DOCTYPE html><body><keygen>A"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "A" x=8 base=22.859375 w=11.5625
+
+#case 14
+#data "<!DOCTYPE html><keygen>A</keygen>B"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "AB" x=8 base=22.859375 w=23.3125
+
+#case 15
+#data "</keygen>A"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "A" x=8 base=22.859375 w=11.5625
+
+#case 16
+#data "<!DOCTYPE html></keygen>A"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "A" x=8 base=22.859375 w=11.5625
+
+#case 17
+#data "<!DOCTYPE html><head></keygen>A"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "A" x=8 base=22.859375 w=11.5625
+
+#case 18
+#data "<!DOCTYPE html><head></head></keygen>A"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "A" x=8 base=22.859375 w=11.5625
+
+#case 19
+#data "<!DOCTYPE html><body></keygen>A"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "A" x=8 base=22.859375 w=11.5625
+
+#case 20
+#data "<!DOCTYPE html><body><link>A"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "A" x=8 base=22.859375 w=11.5625
+
+#case 21
+#data "<!DOCTYPE html><body><meta>A"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "A" x=8 base=22.859375 w=11.5625
+
+#case 22
+#data "<!DOCTYPE html><body><param>A"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "A" x=8 base=22.859375 w=11.5625
+
+#case 23
+#data "<!DOCTYPE html><body><source>A"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "A" x=8 base=22.859375 w=11.5625
+
+#case 24
+#data "<!DOCTYPE html><body><track>A"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "A" x=8 base=22.859375 w=11.5625
+
+#case 25
+#data "<!DOCTYPE html><body><wbr>A"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "A" x=8 base=22.859375 w=11.5625
+

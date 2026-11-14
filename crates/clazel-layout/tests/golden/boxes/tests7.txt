@@ -1,0 +1,299 @@
+#case 0
+#data "<!doctype html><body><title>X</title>"
+root
+  block <html>
+    block <body>
+
+#case 1
+#data "<!doctype html><table><title>X</title></table>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+
+#case 2
+#data "<!doctype html><head></head><title>X</title>"
+root
+  block <html>
+    block <body>
+
+#case 3
+#data "<!doctype html></head><title>X</title>"
+root
+  block <html>
+    block <body>
+
+#case 4
+#data "<!doctype html></head><base>X"
+root
+  block <html>
+    block <body>
+      text "X"
+
+#case 5
+#data "<!doctype html></head><basefont>X"
+root
+  block <html>
+    block <body>
+      text "X"
+
+#case 6
+#data "<!doctype html></head><bgsound>X"
+root
+  block <html>
+    block <body>
+      text "X"
+
+#case 7
+#data "<!doctype html><table><meta></table>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+
+#case 8
+#data "<!doctype html><table>X<tr><td><table> <meta></table></table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        text "X"
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                table-wrapper <table>
+                  table <table>
+
+#case 9
+#data "<!doctype html><html> <head>"
+root
+  block <html>
+    block <body>
+
+#case 10
+#data "<!doctype html> <head>"
+root
+  block <html>
+    block <body>
+
+#case 11
+#data "<!doctype html><table><style> <tr>x </style> </table>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+
+#case 12
+#data "<!doctype html><table><TBODY><script> <tr>x </script> </table>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+
+#case 13
+#data "<!doctype html><p><applet><p>X</p></applet>"
+root
+  block <html>
+    block <body>
+      block <p>
+        block (anonymous)
+          inline <applet> first
+        block <p>
+          text "X"
+        block (anonymous)
+          inline <applet> last
+
+#case 14
+#data "<!doctype html><p><object type=\"application/x-non-existant-plugin\"><p>X</p></object>"
+root
+  block <html>
+    block <body>
+      block <p>
+        block (anonymous)
+          inline <object> first
+        block <p>
+          text "X"
+        block (anonymous)
+          inline <object> last
+
+#case 15
+#data "<!doctype html><listing>\nX</listing>"
+root
+  block <html>
+    block <body>
+      block <listing>
+        text "X" white-space=Pre
+
+#case 16
+#data "<!doctype html><select><input>X"
+root
+  block <html>
+    block <body>
+      inline <select>
+      replaced <input> inline Input(Text { chars: 20 })
+      text "X"
+
+#case 17
+#data "<!doctype html><select><select>X"
+root
+  block <html>
+    block <body>
+      inline <select>
+      text "X"
+
+#case 18
+#data "<!doctype html><table><input type=hidDEN></table>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+
+#case 19
+#data "<!doctype html><table>X<input type=hidDEN></table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        text "X"
+      table-wrapper <table>
+        table <table>
+
+#case 20
+#data "<!doctype html><table>  <input type=hidDEN></table>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+
+#case 21
+#data "<!doctype html><table>  <input type='hidDEN'></table>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+
+#case 22
+#data "<!doctype html><table><input type=\" hidden\"><input type=hidDEN></table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        replaced <input> inline Input(Text { chars: 20 })
+      table-wrapper <table>
+        table <table>
+
+#case 23
+#data "<!doctype html><table><select>X<tr>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <select>
+          text "X"
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+
+#case 24
+#data "<!doctype html><select>X</select>"
+root
+  block <html>
+    block <body>
+      inline <select>
+        text "X"
+
+#case 25
+#data "<!DOCTYPE hTmL><html></html>"
+root
+  block <html>
+    block <body>
+
+#case 26
+#data "<!DOCTYPE HTML><html></html>"
+root
+  block <html>
+    block <body>
+
+#case 28
+#data "<div><p>a</x> b"
+root
+  block <html>
+    block <body>
+      block <div>
+        block <p>
+          text "a b"
+
+#case 29
+#data "<table><tr><td><code></code> </table>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                inline <code>
+
+#case 30
+#data "<table><b><tr><td>aaa</td></tr>bbb</table>ccc"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <b>
+        inline <b>
+          text "bbb"
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                text "aaa"
+      block (anonymous)
+        inline <b>
+          text "ccc"
+
+#case 31
+#data "A<table><tr> B</tr> B</table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        text "A B B"
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+
+#case 32
+#data "A<table><tr> B</tr> </em>C</table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        text "A BC"
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+
+#case 33
+#data "<select><keygen>"
+root
+  block <html>
+    block <body>
+      inline <select>
+        inline <keygen>
+

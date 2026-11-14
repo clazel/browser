@@ -1,0 +1,29 @@
+#case 0
+#data "<input type=\"hidden\"><frameset>"
+<html> display=Block
+  <head> display=None
+  <frameset>
+
+#case 1
+#data "<!DOCTYPE html><table><caption><svg>foo</table>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <caption> display=TableCaption text-align=Center
+        <svg>
+
+#case 2
+#data "<table><tr><td><svg><desc><td></desc><circle>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+            <svg>
+              <desc>
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+            <circle>
+

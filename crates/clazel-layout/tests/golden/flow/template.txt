@@ -1,0 +1,825 @@
+#case 0
+#data "<body><template>Hello</template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 1
+#data "<template>Hello</template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 2
+#data "<template></template><div></div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <div> 8,8 784x0
+
+#case 3
+#data "<html><template>Hello</template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 4
+#data "<head><template><div></div></template></head>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 5
+#data "<div><template><div><span></template><b>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <div> 8,8 784x0
+
+#case 6
+#data "<div><template></div>Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <div> 8,8 784x0
+
+#case 7
+#data "<div></template></div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <div> 8,8 784x0
+
+#case 8
+#data "<table><template></template></table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+
+#case 9
+#data "<table><template></template></div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+
+#case 10
+#data "<table><div><template></template></div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <div> 8,8 784x0
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+
+#case 11
+#data "<table><template></template><div></div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <div> 8,8 784x0
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+
+#case 12
+#data "<table>   <template></template></table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+
+#case 13
+#data "<table><tbody><template></template></tbody>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+          row-group <tbody> 8,8 0x0
+
+#case 14
+#data "<table><tbody><template></tbody></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+          row-group <tbody> 8,8 0x0
+
+#case 15
+#data "<table><tbody><template></template></tbody></table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+          row-group <tbody> 8,8 0x0
+
+#case 16
+#data "<table><thead><template></template></thead>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+          row-group <thead> 8,8 0x0
+
+#case 17
+#data "<table><tfoot><template></template></tfoot>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+          row-group <tfoot> 8,8 0x0
+
+#case 18
+#data "<select><template></template></select>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 19
+#data "<select><template><option></option></template></select>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 20
+#data "<template><option></option></select><option></option></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 21
+#data "<select><template></template><option></select>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 22
+#data "<select><option><template></template></select>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 23
+#data "<select><template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 24
+#data "<select><option></option><template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 25
+#data "<select><option></option><template><option>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 26
+#data "<table><thead><template><td></template></table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+          row-group <thead> 8,8 0x0
+
+#case 27
+#data "<table><template><thead></template></table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+
+#case 28
+#data "<body><table><template><td></tr><div></template></table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+
+#case 29
+#data "<table><template><thead></template></thead></table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+
+#case 30
+#data "<table><thead><template><tr></template></table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+          row-group <thead> 8,8 0x0
+
+#case 31
+#data "<table><template><tr></template></table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+
+#case 32
+#data "<table><tr><template><td>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+          row-group <tbody> 8,8 0x0
+            row <tr> 8,8 0x0
+
+#case 33
+#data "<table><template><tr><template><td></template></tr></template></table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+
+#case 34
+#data "<table><template><tr><template><td></td></template></tr></template></table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+
+#case 35
+#data "<table><template><td></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+
+#case 36
+#data "<body><template><td></td></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 37
+#data "<body><template><template><tr></tr></template><td></td></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 38
+#data "<table><colgroup><template><col>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+          column-group <colgroup> 8,8 0x0
+
+#case 39
+#data "<frameset><template><frame></frame></template></frameset>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+
+#case 40
+#data "<template><frame></frame></frameset><frame></frame></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 41
+#data "<template><div><frameset><span></span></div><span></span></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 42
+#data "<body><template><div><frameset><span></span></div><span></span></template></body>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 43
+#data "<head><template></template></head><p><frameset>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+
+#case 44
+#data "<template>x</template><p><frameset>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+
+#case 45
+#data "<head></head><template></template><p><frameset>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+
+#case 46
+#data "<p><template></template><frameset>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,16 784x584 m=8,8,8,8
+      block <p> 8,16 784x0 m=0,0,16,0
+
+#case 47
+#data "<p><template><frameset></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,16 784x584 m=8,8,8,8
+      block <p> 8,16 784x0 m=0,0,16,0
+
+#case 48
+#data "<template></template>x<frameset>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "x" x=8 base=22.859375 w=9.03125
+
+#case 49
+#data "<body><template><script>var i = 1;</script><td></td></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 50
+#data "<body><template><tr><div></div></tr></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 51
+#data "<table><template><tr><div></div></tr></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+
+#case 52
+#data "<body><template><tr></tr><td></td></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 53
+#data "<body><template><td></td></tr><td></td></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 54
+#data "<body><template><td></td><tbody><td></td></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 55
+#data "<body><template><td></td><caption></caption><td></td></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 56
+#data "<body><template><td></td><colgroup></caption><td></td></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 57
+#data "<body><template><td></td></table><td></td></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 58
+#data "<body><template><tr></tr><tbody><tr></tr></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 59
+#data "<body><template><tr></tr><caption><tr></tr></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 60
+#data "<body><template><tr></tr></table><tr></tr></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 61
+#data "<body><template><thead></thead><caption></caption><tbody></tbody></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 62
+#data "<body><template><thead></thead></table><tbody></tbody></template></body>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 63
+#data "<body><template><div><tr></tr></div></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 64
+#data "<body><template><em>Hello</em></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 65
+#data "<body><template><!--comment--></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 66
+#data "<body><template><style></style><td></td></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 67
+#data "<body><template><meta><td></td></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 68
+#data "<body><template><link><td></td></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 69
+#data "<body><table><colgroup><template><col></col></template></colgroup></table></body>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+          column-group <colgroup> 8,8 0x0
+
+#case 70
+#data "<body a=b><template><div></div><body c=d><div></div></body></template></body>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 71
+#data "<html a=b><template><div><html b=c><span></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 72
+#data "<html a=b><template><col></col><html b=c><col></col></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 73
+#data "<html a=b><template><frame></frame><html b=c><frame></frame></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 74
+#data "<body><template><tr></tr><template></template><td></td></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 75
+#data "<body><template><thead></thead><template><tr></tr></template><tr></tr><tfoot></tfoot></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 76
+#data "<body><template><template><b><template></template></template>text</template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 77
+#data "<body><template><col><colgroup>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 78
+#data "<body><template><col></colgroup>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 79
+#data "<body><template><col><colgroup></template></body>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 80
+#data "<body><template><col><div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 81
+#data "<body><template><col></div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 82
+#data "<body><template><col>Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 83
+#data "<body><template><i><menu>Foo</i>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 84
+#data "<body><template></div><div>Foo</div><template></template><tr></tr>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 85
+#data "<body><div><template></div><tr><td>Foo</td></tr></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <div> 8,8 784x0
+
+#case 86
+#data "<template></figcaption><sub><table></table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 87
+#data "<template><template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 88
+#data "<template><div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 89
+#data "<template><template><div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 90
+#data "<template><template><table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 91
+#data "<template><template><tbody>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 92
+#data "<template><template><tr>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 93
+#data "<template><template><td>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 94
+#data "<template><template><caption>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 95
+#data "<template><template><colgroup>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 96
+#data "<template><template><col>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 97
+#data "<template><template><tbody><select>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 98
+#data "<template><template><table>Foo"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 99
+#data "<template><template><frame>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 100
+#data "<template><template><script>var i"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 101
+#data "<template><template><style>var i"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 102
+#data "<template><table></template><body><span>Foo"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <span> 8,8 29.5x18.640625 start end
+        text "Foo" x=8 base=22.859375 w=29.5
+
+#case 103
+#data "<template><td></template><body><span>Foo"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <span> 8,8 29.5x18.640625 start end
+        text "Foo" x=8 base=22.859375 w=29.5
+
+#case 104
+#data "<template><object></template><body><span>Foo"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <span> 8,8 29.5x18.640625 start end
+        text "Foo" x=8 base=22.859375 w=29.5
+
+#case 105
+#data "<template><svg><template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 106
+#data "<template><svg><foo><template><foreignObject><div></template><div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <div> 8,8 784x0
+
+#case 107
+#data "<dummy><template><span></dummy>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 108
+#data "<body><table><tr><td><select><template>Foo</template><caption>A</table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 11.5625x20.640625 m=0,772.4375,0,0
+        caption <caption> 8,8 11.5625x18.640625
+          line 8,8 11.5625x18.640625 base=22.859375
+            text "A" x=8 base=22.859375 w=11.5625
+        table <table> 8,26.640625 11.5625x2
+          row-group <tbody> 8,26.640625 11.5625x2
+            row <tr> 8,26.640625 11.5625x2
+              cell <td> 8,26.640625 11.5625x2 p=1,1,1,1
+
+#case 109
+#data "<body></body><template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 110
+#data "<head></head><template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 111
+#data "<head></head><template>Foo</template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 112
+#data "<html><head></head><template></template><head>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 113
+#data "<!DOCTYPE HTML><dummy><table><template><table><template><table><script>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x16
+    block <body> 8,8 784x0 m=8,8,8,8
+      block (anonymous) 8,8 784x0
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+      block (anonymous) 8,8 784x0
+
+#case 114
+#data "<template><a><table><a>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 116
+#data "<template><table><form></table></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 118
+#data "<template><form><form><input></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 120
+#data "<template><form><template></template><form></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 121
+#data "<template><template><form></template><form></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 122
+#data "<form><template><form></template><form>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,16 784x584 m=8,8,8,8
+      block <form> 8,16 784x0 m=0,0,16,0
+
+#case 124
+#data "<!DOCTYPE HTML><template><tr><td>cell</td></tr></template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 125
+#data "<!DOCTYPE HTML><template> <tr> <td>cell</td> </tr> </template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 126
+#data "<!DOCTYPE HTML><template><tr><td>cell</td></tr>a</template>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+

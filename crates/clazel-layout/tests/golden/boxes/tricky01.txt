@@ -1,0 +1,195 @@
+#case 0
+#data "<b><p>Bold </b> Not bold</p>\nAlso not bold."
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <b>
+      block <p>
+        inline <b>
+          text "Bold "
+        text "Not bold"
+      block (anonymous)
+        text " Also not bold."
+
+#case 1
+#data "<html>\n<font color=red><i>Italic and Red<p>Italic and Red </font> Just italic.</p> Italic only.</i> Plain\n<p>I should not be red. <font color=red>Red. <i>Italic and red.</p>\n<p>Italic and red. </i> Red.</font> I should not be red.</p>\n<b>Bold <i>Bold and italic</b> Only Italic </i> Plain"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <font>
+          inline <i>
+            text "Italic and Red"
+        inline <i> first
+      block <p>
+        inline <font>
+          text "Italic and Red "
+        text "Just italic."
+      block (anonymous)
+        inline <i> last
+          text " Italic only."
+        text " Plain "
+      block <p>
+        text "I should not be red. "
+        inline <font>
+          text "Red. "
+          inline <i>
+            text "Italic and red."
+      block (anonymous)
+        inline <font>
+          inline <i>
+      block <p>
+        inline <font>
+          inline <i>
+            text "Italic and red. "
+          text "Red."
+        text " I should not be red."
+      block (anonymous)
+        text " "
+        inline <b>
+          text "Bold "
+          inline <i>
+            text "Bold and italic"
+        inline <i>
+          text " Only Italic "
+        text "Plain"
+
+#case 2
+#data "<html><body>\n<p><font size=\"7\">First paragraph.</p>\n<p>Second paragraph.</p></font>\n<b><p><i>Bold and Italic</b> Italic</p>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline <font>
+          text "First paragraph."
+      block (anonymous)
+        inline <font> first
+      block <p>
+        text "Second paragraph."
+      block (anonymous)
+        inline <font> last
+        inline <b>
+      block <p>
+        inline <b>
+          inline <i>
+            text "Bold and Italic"
+        inline <i>
+          text " Italic"
+
+#case 3
+#data "<html>\n<dl>\n<dt><b>Boo\n<dd>Goo?\n</dl>\n</html>"
+root
+  block <html>
+    block <body>
+      block <dl>
+        block <dt>
+          inline <b>
+            text "Boo "
+        block <dd>
+          inline <b>
+            text "Goo? "
+      block (anonymous)
+        inline <b>
+
+#case 4
+#data "<html><body>\n<label><a><div>Hello<div>World</div></a></label>  \n</body></html>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <label> first
+          inline <a>
+      block <div>
+        block (anonymous)
+          inline <a> first
+            text "Hello"
+        block <div>
+          text "World"
+        block (anonymous)
+          inline <a> last
+      block (anonymous)
+        inline <label> last
+
+#case 5
+#data "<table><center> <font>a</center> <img> <tr><td> </td> </tr> </table>"
+root
+  block <html>
+    block <body>
+      block <center>
+        text " "
+        inline <font>
+          text "a"
+      block (anonymous)
+        inline <font>
+          replaced <img> inline Image
+          text " "
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+
+#case 6
+#data "<table><tr><p><a><p>You should see this text."
+root
+  block <html>
+    block <body>
+      block <p>
+        inline <a>
+      block <p>
+        inline <a>
+          text "You should see this text."
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+
+#case 7
+#data "<TABLE>\n<TR>\n<CENTER><CENTER><TD></TD></TR><TR>\n<FONT>\n<TABLE><tr></tr></TABLE>\n</P>\n<a></font><font></a>\nThis page contains an insanely badly-nested tag sequence."
+root
+  block <html>
+    block <body>
+      block <center>
+        block <center>
+      block (anonymous)
+        inline <font>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+            table-row <tr>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+      block (anonymous)
+        inline <font> first
+      block <p>
+      block (anonymous)
+        inline <font> last
+          text " "
+          inline <a>
+        inline <a>
+          inline <font>
+        inline <font>
+          text "This page contains an insanely badly-nested tag sequence."
+
+#case 8
+#data "<html>\n<body>\n<b><nobr><div>This text is in a div inside a nobr</nobr>More text that should not be in the nobr, i.e., the\nnobr should have closed the div inside it implicitly. </b><pre>A pre tag outside everything else.</pre>\n</body>\n</html>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <b>
+          inline <nobr>
+      block <div>
+        block (anonymous)
+          inline <b>
+            inline <nobr>
+              text "This text is in a div inside a nobr" white-space=Nowrap
+            text "More text that should not be in the nobr, i.e., the nobr should have closed the div inside it implicitly. "
+        block <pre>
+          text "A pre tag outside everything else." white-space=Pre
+

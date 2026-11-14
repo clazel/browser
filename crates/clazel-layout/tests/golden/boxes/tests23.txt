@@ -1,0 +1,94 @@
+#case 0
+#data "<p><font size=4><font color=red><font size=4><font size=4><font size=4><font size=4><font size=4><font color=red><p>X"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline <font>
+          inline <font>
+            inline <font>
+              inline <font>
+                inline <font>
+                  inline <font>
+                    inline <font>
+                      inline <font>
+      block <p>
+        inline <font>
+          inline <font>
+            inline <font>
+              inline <font>
+                inline <font>
+                  text "X"
+
+#case 1
+#data "<p><font size=4><font size=4><font size=4><font size=4><p>X"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline <font>
+          inline <font>
+            inline <font>
+              inline <font>
+      block <p>
+        inline <font>
+          inline <font>
+            inline <font>
+              text "X"
+
+#case 2
+#data "<p><font size=4><font size=4><font size=4><font size=\"5\"><font size=4><p>X"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline <font>
+          inline <font>
+            inline <font>
+              inline <font>
+                inline <font>
+      block <p>
+        inline <font>
+          inline <font>
+            inline <font>
+              inline <font>
+                text "X"
+
+#case 3
+#data "<p><font size=4 id=a><font size=4 id=b><font size=4><font size=4><p>X"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline <font>
+          inline <font>
+            inline <font>
+              inline <font>
+      block <p>
+        inline <font>
+          inline <font>
+            inline <font>
+              inline <font>
+                text "X"
+
+#case 4
+#data "<p><b id=a><b id=a><b id=a><b><object><b id=a><b id=a>X</object><p>Y"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline <b>
+          inline <b>
+            inline <b>
+              inline <b>
+                inline <object>
+                  inline <b>
+                    inline <b>
+                      text "X"
+      block <p>
+        inline <b>
+          inline <b>
+            inline <b>
+              inline <b>
+                text "Y"
+

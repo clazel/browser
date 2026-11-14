@@ -1,0 +1,124 @@
+#case 0
+#data "<div>\n<div></div>\n</span>x"
+root
+  block <html>
+    block <body>
+      block <div>
+        block <div>
+        block (anonymous)
+          text " x"
+
+#case 1
+#data "<div>x<div></div>\n</span>x"
+root
+  block <html>
+    block <body>
+      block <div>
+        block (anonymous)
+          text "x"
+        block <div>
+        block (anonymous)
+          text " x"
+
+#case 2
+#data "<div>x<div></div>x</span>x"
+root
+  block <html>
+    block <body>
+      block <div>
+        block (anonymous)
+          text "x"
+        block <div>
+        block (anonymous)
+          text "xx"
+
+#case 3
+#data "<div>x<div></div>y</span>z"
+root
+  block <html>
+    block <body>
+      block <div>
+        block (anonymous)
+          text "x"
+        block <div>
+        block (anonymous)
+          text "yz"
+
+#case 4
+#data "<table><div>x<div></div>x</span>x"
+root
+  block <html>
+    block <body>
+      block <div>
+        block (anonymous)
+          text "x"
+        block <div>
+        block (anonymous)
+          text "xx"
+      table-wrapper <table>
+        table <table>
+
+#case 5
+#data "<table><li><li></table>"
+root
+  block <html>
+    block <body>
+      block <li>
+        marker <li> "• "
+      block <li>
+        marker <li> "• "
+      table-wrapper <table>
+        table <table>
+
+#case 6
+#data "x<table>x"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        text "xx"
+      table-wrapper <table>
+        table <table>
+
+#case 7
+#data "x<table><table>x"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        text "x"
+      table-wrapper <table>
+        table <table>
+      block (anonymous)
+        text "x"
+      table-wrapper <table>
+        table <table>
+
+#case 8
+#data "<b>a<div></div><div></b>y"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <b> first
+          text "a"
+      block <div>
+      block (anonymous)
+        inline <b> last
+      block <div>
+        inline <b>
+        text "y"
+
+#case 9
+#data "<a><div><p></a>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <a>
+      block <div>
+        block (anonymous)
+          inline <a>
+        block <p>
+          inline <a>
+

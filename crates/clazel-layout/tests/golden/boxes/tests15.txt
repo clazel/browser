@@ -1,0 +1,148 @@
+#case 0
+#data "<!DOCTYPE html><p><b><i><u></p> <p>X"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline <b>
+          inline <i>
+            inline <u>
+      block (anonymous)
+        inline <b> first
+          inline <i> first
+            inline <u> first
+      block <p>
+        text "X"
+      block (anonymous)
+        inline <b> last
+          inline <i> last
+            inline <u> last
+
+#case 1
+#data "<p><b><i><u></p>\n<p>X"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline <b>
+          inline <i>
+            inline <u>
+      block (anonymous)
+        inline <b> first
+          inline <i> first
+            inline <u> first
+      block <p>
+        text "X"
+      block (anonymous)
+        inline <b> last
+          inline <i> last
+            inline <u> last
+
+#case 2
+#data "<!doctype html></html> <head>"
+root
+  block <html>
+    block <body>
+
+#case 3
+#data "<!doctype html></body><meta>"
+root
+  block <html>
+    block <body>
+
+#case 4
+#data "<html></html><!-- foo -->"
+root
+  block <html>
+    block <body>
+
+#case 5
+#data "<!doctype html></body><title>X</title>"
+root
+  block <html>
+    block <body>
+
+#case 6
+#data "<!doctype html><table> X<meta></table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        text " X"
+      table-wrapper <table>
+        table <table>
+
+#case 7
+#data "<!doctype html><table> x</table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        text " x"
+      table-wrapper <table>
+        table <table>
+
+#case 8
+#data "<!doctype html><table> x </table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        text " x "
+      table-wrapper <table>
+        table <table>
+
+#case 9
+#data "<!doctype html><table><tr> x</table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        text " x"
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+
+#case 10
+#data "<!doctype html><table>X<style> <tr>x </style> </table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        text "X"
+      table-wrapper <table>
+        table <table>
+
+#case 11
+#data "<!doctype html><div><table><a>foo</a> <tr><td>bar</td> </tr></table></div>"
+root
+  block <html>
+    block <body>
+      block <div>
+        block (anonymous)
+          inline <a>
+            text "foo"
+        table-wrapper <table>
+          table <table>
+            table-row-group <tbody>
+              table-row <tr>
+                table-cell <td>
+                  text "bar"
+
+#case 12
+#data "<frame></frame></frame><frameset><frame><frameset><frame></frameset><noframes></frameset><noframes>"
+root
+  block <html>
+    inline <frameset>
+      inline <frame>
+      inline <frameset>
+        inline <frame>
+
+#case 13
+#data "<!DOCTYPE html><object></html>"
+root
+  block <html>
+    block <body>
+      inline <object>
+

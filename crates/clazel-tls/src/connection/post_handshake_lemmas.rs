@@ -6,11 +6,17 @@
 //!   whose inner type is `application_data` ([`lemma_delivered_is_application_data`]);
 //!   a record that failed to open, or was incomplete, delivers nothing
 //!   ([`lemma_failed_open_delivers_nothing`]).
-//! - **Ending.** A step that ends the connection leaves a connection that is
-//!   not open ([`lemma_step_end_ends_connection`]), and a connection that is
-//!   not open delivers and sends nothing for any later input
+//! - **The end of the transport** (item 14). While the read side is open
+//!   it is a truncation, never an orderly end, and it sends exactly what a
+//!   close would send, our close_notify, while the write side is open
+//!   ([`lemma_truncation`]).
+//! - **Ending.** A step that ends the read side leaves a connection that
+//!   cannot be read ([`lemma_step_end_ends_connection`]), and such a
+//!   connection delivers and sends nothing for any later input
 //!   ([`lemma_terminal_silent`]). One step at a time, that is "after
-//!   `close_notify` or `Fail` nothing more is delivered".
+//!   `close_notify` or `Fail` nothing more is delivered". The server's
+//!   `close_notify` leaves the write side as it was
+//!   ([`lemma_peer_close_keeps_the_write_side`]).
 //! - **Sends.** Every record the transducer sends is the encryption of a
 //!   message it chose, under the next sequence number of the send epoch:
 //!   [`lemma_key_update_wire`], [`lemma_application_wire`],
@@ -22,6 +28,11 @@
 //!   ([`lemma_application_data_leaves_send_keys`]); on the last sequence
 //!   number a data record is preceded by the KeyUpdate that uses it and the
 //!   data goes out at sequence number 0 ([`lemma_last_sequence_number_rekeys`]).
+//! - **The owed KeyUpdate (§4.6.3).** Receiving `update_requested` sends
+//!   nothing and owes one answer, however many requests came
+//!   ([`lemma_receive_key_update_resets`]); the next data record is preceded
+//!   by that answer under the old key, and nothing is owed after it
+//!   ([`lemma_owed_answer_precedes_data`]).
 //!
 //! The invariant [`super::post_handshake_spec::wf`] is preserved by the
 //! executable code (its contract says so); no lemma here restates that for the
@@ -38,12 +49,12 @@ pub proof fn lemma_failed_and_closed_wf()
 {}
 
 /// §6.1: "Any data received after a closure alert has been received MUST be
-/// ignored". Once the connection is not open, bytes are consumed and ignored
+/// ignored". Once the read side has ended, bytes are consumed and ignored
 /// and the transport closing changes nothing: no record sent, nothing
 /// delivered, no end, the same state.
 pub proof fn lemma_terminal_silent(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher,
     s: super::post_handshake_spec::State, wire: Seq<u8>)
-    requires s.phase != super::post_handshake_spec::Phase::Open,
+    requires !super::post_handshake_spec::can_read(s),
     ensures
         super::post_handshake_spec::step(c, f, s, super::post_handshake_spec::Input::Bytes(wire)).0
             == super::post_handshake_spec::quiet(),
@@ -58,6 +69,36 @@ pub proof fn lemma_terminal_silent(c: crate::schedule::spec::Crypto, f: crate::t
 {
     assert(super::post_handshake_spec::actions(super::post_handshake_spec::quiet())
         =~= Seq::<super::post_handshake_spec::Action>::empty());
+}
+
+/// §6.1 (item 14): the end of the transport while the read side is open is a
+/// truncation. It never ends in order (`PeerClosed` or `Close`: "MUST receive
+/// a "close_notify" alert before indicating end-of-data"), consumes and
+/// delivers nothing, and drops every key; it sends exactly the records a
+/// close would send while the write side is open ("Each party MUST send a
+/// "close_notify" alert before closing its write side"), and nothing after
+/// our close_notify.
+pub proof fn lemma_truncation(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher,
+    s: super::post_handshake_spec::State)
+    requires super::post_handshake_spec::can_read(s),
+    ensures
+        super::post_handshake_spec::step(c, f, s, super::post_handshake_spec::Input::Closed).0.end
+            == super::post_handshake_spec::End::Fail(crate::spec::INTERNAL_ERROR),
+        super::post_handshake_spec::step(c, f, s, super::post_handshake_spec::Input::Closed).0.delivered.len() == 0,
+        super::post_handshake_spec::step(c, f, s, super::post_handshake_spec::Input::Closed).1
+            == super::post_handshake_spec::failed(),
+        super::post_handshake_spec::step(c, f, s, super::post_handshake_spec::Input::Closed).2 == 0,
+        super::post_handshake_spec::step(c, f, s, super::post_handshake_spec::Input::Closed).0.wires
+            == if super::post_handshake_spec::can_write(s) {
+                super::post_handshake_spec::close(f, s).0.wires
+            } else {
+                Seq::<Seq<u8>>::empty()
+            },
+{
+    if !super::post_handshake_spec::can_write(s) {
+        assert(super::post_handshake_spec::step(c, f, s, super::post_handshake_spec::Input::Closed).0.wires
+            =~= Seq::<Seq<u8>>::empty());
+    }
 }
 
 /// No message of a record delivers plaintext.
@@ -75,7 +116,7 @@ pub proof fn lemma_messages_no_delivery(c: crate::schedule::spec::Crypto,
     if ms.len() > 0 {
         lemma_message_no_delivery(c, f, s, ms[0], ms.len() == 1);
         let r = super::post_handshake_spec::message(c, f, s, ms[0], ms.len() == 1);
-        if r.1.phase == super::post_handshake_spec::Phase::Open {
+        if super::post_handshake_spec::can_read(r.1) {
             lemma_messages_no_delivery(c, f, r.1, ms.skip(1));
         }
     }
@@ -150,24 +191,22 @@ pub proof fn lemma_fatal_ends(f: crate::traffic::spec::Cipher, s: super::post_ha
             == super::post_handshake_spec::End::Fail(alert),
 {}
 
-/// A key update that ends the connection leaves a connection that is not open.
+/// A key update that ends the connection leaves one that cannot be read.
 pub proof fn lemma_send_key_update_end(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher,
     s: super::post_handshake_spec::State, request: u8)
     ensures
         super::post_handshake_spec::send_key_update(c, f, s, request).0.end
             != super::post_handshake_spec::End::Continue
-            ==> super::post_handshake_spec::send_key_update(c, f, s, request).1.phase
-                != super::post_handshake_spec::Phase::Open,
+            ==> !super::post_handshake_spec::can_read(super::post_handshake_spec::send_key_update(c, f, s, request).1),
 {}
 
-/// A message that ends the connection leaves a connection that is not open.
+/// A message that ends the connection leaves one that cannot be read.
 pub proof fn lemma_message_end(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher,
     s: super::post_handshake_spec::State, m: Seq<u8>, last: bool)
     ensures
         super::post_handshake_spec::message(c, f, s, m, last).0.end
             != super::post_handshake_spec::End::Continue
-            ==> super::post_handshake_spec::message(c, f, s, m, last).1.phase
-                != super::post_handshake_spec::Phase::Open,
+            ==> !super::post_handshake_spec::can_read(super::post_handshake_spec::message(c, f, s, m, last).1),
 {
     if m.len() > 0 && (m[0] == crate::spec::HS_KEY_UPDATE) {
         let t = crate::spec::parse_handshake(m, crate::schedule::spec::HASH_LEN as nat);
@@ -183,34 +222,32 @@ pub proof fn lemma_message_end(c: crate::schedule::spec::Crypto, f: crate::traff
     }
 }
 
-/// A sequence of messages that ends the connection leaves a connection that
-/// is not open.
+/// A sequence of messages that ends the connection leaves one that cannot be
+/// read.
 pub proof fn lemma_messages_end(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher,
     s: super::post_handshake_spec::State, ms: Seq<Seq<u8>>)
     ensures
         super::post_handshake_spec::messages(c, f, s, ms).0.end
             != super::post_handshake_spec::End::Continue
-            ==> super::post_handshake_spec::messages(c, f, s, ms).1.phase
-                != super::post_handshake_spec::Phase::Open,
+            ==> !super::post_handshake_spec::can_read(super::post_handshake_spec::messages(c, f, s, ms).1),
     decreases ms.len(),
 {
     if ms.len() > 0 {
         lemma_message_end(c, f, s, ms[0], ms.len() == 1);
         let r = super::post_handshake_spec::message(c, f, s, ms[0], ms.len() == 1);
-        if r.1.phase == super::post_handshake_spec::Phase::Open {
+        if super::post_handshake_spec::can_read(r.1) {
             lemma_messages_end(c, f, r.1, ms.skip(1));
         }
     }
 }
 
-/// A record that ends the connection leaves a connection that is not open.
+/// A record that ends the read side leaves a connection that cannot be read.
 pub proof fn lemma_record_end(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher,
     s: super::post_handshake_spec::State, typ: u8, content: Seq<u8>)
     ensures
         super::post_handshake_spec::record(c, f, s, typ, content).0.end
             != super::post_handshake_spec::End::Continue
-            ==> super::post_handshake_spec::record(c, f, s, typ, content).1.phase
-                != super::post_handshake_spec::Phase::Open,
+            ==> !super::post_handshake_spec::can_read(super::post_handshake_spec::record(c, f, s, typ, content).1),
 {
     match crate::spec::feed_record(s.reassembly, crate::spec::Record { ctype: typ, fragment: content }) {
         crate::spec::Res::Ok((crate::spec::Event::Messages(ms), r)) => {
@@ -220,17 +257,17 @@ pub proof fn lemma_record_end(c: crate::schedule::spec::Crypto, f: crate::traffi
     }
 }
 
-/// A step that ends the connection (`Close` or `Fail`) leaves a connection
-/// that is not open, so by [`lemma_terminal_silent`] nothing more happens.
+/// A step that ends the read side (`PeerClosed`, `Close` or `Fail`) leaves a
+/// connection that cannot be read, so by [`lemma_terminal_silent`] nothing
+/// more happens.
 pub proof fn lemma_step_end_ends_connection(c: crate::schedule::spec::Crypto,
     f: crate::traffic::spec::Cipher, s: super::post_handshake_spec::State,
     input: super::post_handshake_spec::Input)
     ensures
         super::post_handshake_spec::step(c, f, s, input).0.end != super::post_handshake_spec::End::Continue
-            ==> super::post_handshake_spec::step(c, f, s, input).1.phase
-                != super::post_handshake_spec::Phase::Open,
+            ==> !super::post_handshake_spec::can_read(super::post_handshake_spec::step(c, f, s, input).1),
 {
-    if s.phase == super::post_handshake_spec::Phase::Open {
+    if super::post_handshake_spec::can_read(s) {
         match input {
             super::post_handshake_spec::Input::Bytes(wire) => {
                 match s.receiver {
@@ -293,7 +330,7 @@ pub proof fn lemma_key_update_wire(c: crate::schedule::spec::Crypto, f: crate::t
 }
 
 /// §5, §5.2, §5.3: in a connection that satisfies the invariant, away from
-/// the last sequence number, the one record `send_application` sends for at
+/// the last sequence number and owing no KeyUpdate, the one record `send_application` sends for at
 /// most 2^14 bytes of data is the encryption of that data as `application_data`,
 /// under the send epoch's next sequence number, and the epoch advances once.
 pub proof fn lemma_application_wire(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher,
@@ -304,6 +341,7 @@ pub proof fn lemma_application_wire(c: crate::schedule::spec::Crypto, f: crate::
         s.sender == Some(tx),
         tx.next == Some(n),
         n != u64::MAX,
+        !s.key_update_owed,
         data.len() <= crate::spec::MAX_PLAINTEXT,
     ensures
         super::post_handshake_spec::send_application(c, f, s, data).0.wires
@@ -331,6 +369,27 @@ pub proof fn lemma_close_notify_wire(f: crate::traffic::spec::Cipher, s: super::
                     level: crate::spec::LEVEL_WARNING,
                     description: crate::spec::CLOSE_NOTIFY,
                 }), 0)],
+        super::post_handshake_spec::close(f, s).0.end == super::post_handshake_spec::End::Continue,
+        super::post_handshake_spec::close(f, s).1 == super::post_handshake_spec::finish_write(s).1,
+        super::post_handshake_spec::can_read(super::post_handshake_spec::close(f, s).1),
+{}
+
+/// §6.1: the server's `close_notify` ends the read side only: the send epoch
+/// and the client secret stay, and the client can still write.
+pub proof fn lemma_peer_close_keeps_the_write_side(s: super::post_handshake_spec::State)
+    requires s.phase == super::post_handshake_spec::Phase::Open,
+    ensures
+        super::post_handshake_spec::can_write(super::post_handshake_spec::peer_closed(s).1),
+        !super::post_handshake_spec::can_read(super::post_handshake_spec::peer_closed(s).1),
+        super::post_handshake_spec::peer_closed(s).1.sender == s.sender,
+        super::post_handshake_spec::peer_closed(s).1.client_secret == s.client_secret,
+        super::post_handshake_spec::peer_closed(s).0.wires.len() == 0,
+{}
+
+/// §6.1: once both directions have sent `close_notify` nothing is held.
+pub proof fn lemma_both_closed(f: crate::traffic::spec::Cipher, s: super::post_handshake_spec::State)
+    requires s.phase == super::post_handshake_spec::Phase::ReadClosed,
+    ensures
         super::post_handshake_spec::close(f, s).0.end == super::post_handshake_spec::End::Close,
         super::post_handshake_spec::close(f, s).1 == super::post_handshake_spec::closed(),
 {}
@@ -358,8 +417,9 @@ pub proof fn lemma_send_key_update_resets(c: crate::schedule::spec::Crypto,
 
 /// §7.2, §7.3: receiving a valid KeyUpdate at the end of a record, at a
 /// message boundary, replaces the receive epoch by one derived from the
-/// next server traffic secret, at sequence number 0; without
-/// `update_requested` nothing else changes.
+/// next server traffic secret, at sequence number 0, and sends nothing;
+/// without `update_requested` nothing else changes, and with it one KeyUpdate
+/// is owed (§4.6.3), however many were owed before.
 pub proof fn lemma_receive_key_update_resets(c: crate::schedule::spec::Crypto,
     f: crate::traffic::spec::Cipher, s: super::post_handshake_spec::State, request: u8)
     requires
@@ -376,6 +436,10 @@ pub proof fn lemma_receive_key_update_resets(c: crate::schedule::spec::Crypto,
             && (request != crate::spec::UPDATE_REQUESTED
                 ==> super::post_handshake_spec::key_update_received(c, f, s, request, true)
                     == (super::post_handshake_spec::quiet(), s1))
+            && (request == crate::spec::UPDATE_REQUESTED
+                ==> super::post_handshake_spec::key_update_received(c, f, s, request, true)
+                    == (super::post_handshake_spec::quiet(),
+                        super::post_handshake_spec::State { key_update_owed: true, ..s1 }))
     }),
 {}
 
@@ -430,5 +494,50 @@ pub proof fn lemma_last_sequence_number_rekeys(c: crate::schedule::spec::Crypto,
     }),
 {
     crate::lemmas_pl::lemma_be_bytes_len(1, 3);
+    let s0 = super::post_handshake_spec::State { key_update_owed: false, ..s };
+    assert(super::post_handshake_spec::send_key_update(c, f, s0, crate::spec::UPDATE_NOT_REQUESTED).0
+        == super::post_handshake_spec::send_key_update(c, f, s, crate::spec::UPDATE_NOT_REQUESTED).0);
+}
+
+/// §4.6.3: "the receiver MUST send a KeyUpdate of its own with
+/// request_update set to "update_not_requested" prior to sending its next
+/// Application Data record". While an answer is owed, the next data record
+/// is preceded by KeyUpdate(`update_not_requested`) under the send epoch's
+/// next sequence number, the data goes out under the fresh epoch at
+/// sequence number 0, and nothing is owed afterwards.
+pub proof fn lemma_owed_answer_precedes_data(c: crate::schedule::spec::Crypto,
+    f: crate::traffic::spec::Cipher, s: super::post_handshake_spec::State, data: Seq<u8>,
+    tx: crate::traffic::spec::State, n: u64)
+    requires
+        super::post_handshake_spec::wf(s),
+        s.phase == super::post_handshake_spec::Phase::Open,
+        s.sender == Some(tx),
+        tx.next == Some(n),
+        s.key_update_owed,
+        data.len() <= crate::spec::MAX_PLAINTEXT,
+        super::post_handshake_spec::send_key_update(c, f, s, crate::spec::UPDATE_NOT_REQUESTED).0.end
+            == super::post_handshake_spec::End::Continue,
+        // As in `lemma_last_sequence_number_rekeys`.
+        match crate::traffic::spec::start(c, crate::schedule::spec::next_traffic_secret(c, s.client_secret)) {
+            Ok(ep) => crate::traffic::spec::wf(ep),
+            Err(_) => true,
+        },
+    ensures ({
+        let r = super::post_handshake_spec::send_application(c, f, s, data);
+        r.0.wires.len() == 2
+            && r.0.wires[0] == crate::spec::encrypt_record(super::post_handshake_spec::seal_of(f, tx), 16,
+                tx.iv, n, crate::spec::CT_HANDSHAKE,
+                crate::spec::write_handshake(crate::spec::HS_KEY_UPDATE,
+                    crate::spec::write_key_update(crate::spec::UPDATE_NOT_REQUESTED)), 0)
+            && r.1.client_secret == crate::schedule::spec::next_traffic_secret(c, s.client_secret)
+            && (match r.1.sender { Some(t2) => t2.next == Some(1u64), None => false })
+            && !r.1.key_update_owed
+            && super::post_handshake_spec::wf(r.1)
+    }),
+{
+    crate::lemmas_pl::lemma_be_bytes_len(1, 3);
+    let s0 = super::post_handshake_spec::State { key_update_owed: false, ..s };
+    assert(super::post_handshake_spec::send_key_update(c, f, s0, crate::spec::UPDATE_NOT_REQUESTED).0
+        == super::post_handshake_spec::send_key_update(c, f, s, crate::spec::UPDATE_NOT_REQUESTED).0);
 }
 } // verus!

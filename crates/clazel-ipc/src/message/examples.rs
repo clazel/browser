@@ -82,12 +82,93 @@ pub proof fn lemma_example_error()
     assert(encode_message(Message::Error { code: 5 }) == seq![0x82u8, 0x18, 0x69, 0x05]) by (compute_only);
 }
 
-/// An unknown tag is rejected.
+/// An unknown tag is rejected (12 is not a tag).
 pub proof fn lemma_reject_unknown_tag()
     ensures
+        decode_message(seq![0x81u8, 0x0C]) is None,
+{
+    assert(decode_message(seq![0x81u8, 0x0C]) is None) by (compute_only);
+}
+
+/// `Title("t")` is `[11, "t"]`, and a renderer may send it; `[11]`, without
+/// its title, is not a message.
+pub proof fn lemma_example_title()
+    ensures
+        decode_message(seq![0x82u8, 0x0B, 0x61, 0x74]) == Some(Message::Title { title: seq![0x74u8] }),
+        encode_message(Message::Title { title: seq![0x74u8] }) == seq![0x82u8, 0x0B, 0x61, 0x74],
+        decode_renderer_message(seq![0x82u8, 0x0B, 0x61, 0x74]) == Some(Message::Title { title: seq![0x74u8] }),
+        decode_gpu_message(seq![0x82u8, 0x0B, 0x61, 0x74]) is None,
         decode_message(seq![0x81u8, 0x0B]) is None,
 {
+    assert(decode_message(seq![0x82u8, 0x0B, 0x61, 0x74]) == Some(Message::Title { title: seq![0x74u8] })) by (compute_only);
+    assert(encode_message(Message::Title { title: seq![0x74u8] }) == seq![0x82u8, 0x0B, 0x61, 0x74]) by (compute_only);
+    assert(decode_renderer_message(seq![0x82u8, 0x0B, 0x61, 0x74]) == Some(Message::Title { title: seq![0x74u8] })) by (compute_only);
+    assert(decode_gpu_message(seq![0x82u8, 0x0B, 0x61, 0x74]) is None) by (compute_only);
     assert(decode_message(seq![0x81u8, 0x0B]) is None) by (compute_only);
+}
+
+/// `FrameReady(1, 640, 480)` is `[15, 1, 640, 480]`; a GPU process may send
+/// it, and a renderer may not.
+pub proof fn lemma_example_frame_ready()
+    ensures
+        decode_message(seq![0x84u8, 0x0F, 0x01, 0x19, 0x02, 0x80, 0x19, 0x01, 0xE0]) == Some(Message::FrameReady { buffer: 1, width: 640, height: 480 }),
+        encode_message(Message::FrameReady { buffer: 1, width: 640, height: 480 }) == seq![0x84u8, 0x0F, 0x01, 0x19, 0x02, 0x80, 0x19, 0x01, 0xE0],
+        decode_gpu_message(seq![0x84u8, 0x0F, 0x01, 0x19, 0x02, 0x80, 0x19, 0x01, 0xE0]) == Some(Message::FrameReady { buffer: 1, width: 640, height: 480 }),
+        decode_renderer_message(seq![0x84u8, 0x0F, 0x01, 0x19, 0x02, 0x80, 0x19, 0x01, 0xE0]) is None,
+{
+    assert(decode_message(seq![0x84u8, 0x0F, 0x01, 0x19, 0x02, 0x80, 0x19, 0x01, 0xE0]) == Some(Message::FrameReady { buffer: 1, width: 640, height: 480 })) by (compute_only);
+    assert(encode_message(Message::FrameReady { buffer: 1, width: 640, height: 480 }) == seq![0x84u8, 0x0F, 0x01, 0x19, 0x02, 0x80, 0x19, 0x01, 0xE0]) by (compute_only);
+    assert(decode_gpu_message(seq![0x84u8, 0x0F, 0x01, 0x19, 0x02, 0x80, 0x19, 0x01, 0xE0]) == Some(Message::FrameReady { buffer: 1, width: 640, height: 480 })) by (compute_only);
+    assert(decode_renderer_message(seq![0x84u8, 0x0F, 0x01, 0x19, 0x02, 0x80, 0x19, 0x01, 0xE0]) is None) by (compute_only);
+}
+
+/// `GpuReady(true)` is `[18, true]` and `GpuRefused` is `[19]`, both from a
+/// GPU process only.
+pub proof fn lemma_example_gpu_ready()
+    ensures
+        decode_gpu_message(seq![0x82u8, 0x12, 0xF5]) == Some(Message::GpuReady { software: true }),
+        encode_message(Message::GpuReady { software: true }) == seq![0x82u8, 0x12, 0xF5],
+        decode_gpu_message(seq![0x81u8, 0x13]) == Some(Message::GpuRefused),
+        encode_message(Message::GpuRefused) == seq![0x81u8, 0x13],
+        decode_renderer_message(seq![0x81u8, 0x13]) is None,
+{
+    assert(decode_gpu_message(seq![0x82u8, 0x12, 0xF5]) == Some(Message::GpuReady { software: true })) by (compute_only);
+    assert(encode_message(Message::GpuReady { software: true }) == seq![0x82u8, 0x12, 0xF5]) by (compute_only);
+    assert(decode_gpu_message(seq![0x81u8, 0x13]) == Some(Message::GpuRefused)) by (compute_only);
+    assert(encode_message(Message::GpuRefused) == seq![0x81u8, 0x13]) by (compute_only);
+    assert(decode_renderer_message(seq![0x81u8, 0x13]) is None) by (compute_only);
+}
+
+/// `Viewport(800, 600, 2)` is `[108, 800, 600, 2]` and `GpuViewport(800,
+/// 600, 2)` is `[114, 800, 600, 2]`; neither process may send either.
+pub proof fn lemma_example_viewports()
+    ensures
+        decode_message(seq![0x84u8, 0x18, 0x6C, 0x19, 0x03, 0x20, 0x19, 0x02, 0x58, 0x02]) == Some(Message::Viewport { width: 800, height: 600, scale: 2 }),
+        encode_message(Message::Viewport { width: 800, height: 600, scale: 2 }) == seq![0x84u8, 0x18, 0x6C, 0x19, 0x03, 0x20, 0x19, 0x02, 0x58, 0x02],
+        decode_message(seq![0x84u8, 0x18, 0x72, 0x19, 0x03, 0x20, 0x19, 0x02, 0x58, 0x02]) == Some(Message::GpuViewport { width: 800, height: 600, scale: 2 }),
+        encode_message(Message::GpuViewport { width: 800, height: 600, scale: 2 }) == seq![0x84u8, 0x18, 0x72, 0x19, 0x03, 0x20, 0x19, 0x02, 0x58, 0x02],
+        decode_renderer_message(seq![0x84u8, 0x18, 0x6C, 0x19, 0x03, 0x20, 0x19, 0x02, 0x58, 0x02]) is None,
+        decode_gpu_message(seq![0x84u8, 0x18, 0x72, 0x19, 0x03, 0x20, 0x19, 0x02, 0x58, 0x02]) is None,
+{
+    assert(decode_message(seq![0x84u8, 0x18, 0x6C, 0x19, 0x03, 0x20, 0x19, 0x02, 0x58, 0x02]) == Some(Message::Viewport { width: 800, height: 600, scale: 2 })) by (compute_only);
+    assert(encode_message(Message::Viewport { width: 800, height: 600, scale: 2 }) == seq![0x84u8, 0x18, 0x6C, 0x19, 0x03, 0x20, 0x19, 0x02, 0x58, 0x02]) by (compute_only);
+    assert(decode_message(seq![0x84u8, 0x18, 0x72, 0x19, 0x03, 0x20, 0x19, 0x02, 0x58, 0x02]) == Some(Message::GpuViewport { width: 800, height: 600, scale: 2 })) by (compute_only);
+    assert(encode_message(Message::GpuViewport { width: 800, height: 600, scale: 2 }) == seq![0x84u8, 0x18, 0x72, 0x19, 0x03, 0x20, 0x19, 0x02, 0x58, 0x02]) by (compute_only);
+    assert(decode_renderer_message(seq![0x84u8, 0x18, 0x6C, 0x19, 0x03, 0x20, 0x19, 0x02, 0x58, 0x02]) is None) by (compute_only);
+    assert(decode_gpu_message(seq![0x84u8, 0x18, 0x72, 0x19, 0x03, 0x20, 0x19, 0x02, 0x58, 0x02]) is None) by (compute_only);
+}
+
+/// `Input(scroll at (3, 4), up by 5)` is `[109, 1, 3, 4, true, 5, 0]`; the
+/// sign is a boolean, so the delta needs no negative integer.
+pub proof fn lemma_example_input()
+    ensures
+        decode_message(seq![0x87u8, 0x18, 0x6D, 0x01, 0x03, 0x04, 0xF5, 0x05, 0x00]) == Some(Message::Input { kind: 1, x: 3, y: 4, negative: true, delta: 5, key: 0 }),
+        encode_message(Message::Input { kind: 1, x: 3, y: 4, negative: true, delta: 5, key: 0 }) == seq![0x87u8, 0x18, 0x6D, 0x01, 0x03, 0x04, 0xF5, 0x05, 0x00],
+        decode_renderer_message(seq![0x87u8, 0x18, 0x6D, 0x01, 0x03, 0x04, 0xF5, 0x05, 0x00]) is None,
+{
+    assert(decode_message(seq![0x87u8, 0x18, 0x6D, 0x01, 0x03, 0x04, 0xF5, 0x05, 0x00]) == Some(Message::Input { kind: 1, x: 3, y: 4, negative: true, delta: 5, key: 0 })) by (compute_only);
+    assert(encode_message(Message::Input { kind: 1, x: 3, y: 4, negative: true, delta: 5, key: 0 }) == seq![0x87u8, 0x18, 0x6D, 0x01, 0x03, 0x04, 0xF5, 0x05, 0x00]) by (compute_only);
+    assert(decode_renderer_message(seq![0x87u8, 0x18, 0x6D, 0x01, 0x03, 0x04, 0xF5, 0x05, 0x00]) is None) by (compute_only);
 }
 
 /// `Commit("x", "t", 0)` is `[101, "x", h'74', 0]`.
@@ -252,6 +333,29 @@ pub proof fn lemma_reject_frames()
     assert(decode_framed(seq![0x00u8, 0x00, 0x00, 0x03, 0x81, 0x01]) is None) by (compute_only);
     assert(decode_framed(seq![0x00u8, 0x00, 0x00, 0x01, 0x81, 0x01]) is None) by (compute_only);
     assert(decode_framed(seq![0x00u8, 0x00, 0x00]) is None) by (compute_only);
+}
+
+/// `FetchStyle(1, "s.css")` is `[14, 1, "s.css"]`, from a renderer only;
+/// `StyleResponse(1, h'74')` is `[110, 1, h'74']`, `StyleBody(1, h'61')`
+/// `[111, 1, h'61']`, `StyleEnd(1)` `[112, 1]` and `StyleFailed(1)`
+/// `[113, 1]` (item 5.19).
+pub proof fn lemma_example_style()
+    ensures
+        decode_renderer_message(seq![0x83u8, 0x0E, 0x01, 0x65, 0x73, 0x2E, 0x63, 0x73, 0x73]) == Some(Message::FetchStyle { request: 1, url: seq![0x73u8, 0x2E, 0x63, 0x73, 0x73] }),
+        encode_message(Message::FetchStyle { request: 1, url: seq![0x73u8, 0x2E, 0x63, 0x73, 0x73] }) == seq![0x83u8, 0x0E, 0x01, 0x65, 0x73, 0x2E, 0x63, 0x73, 0x73],
+        decode_message(seq![0x83u8, 0x18, 0x6E, 0x01, 0x41, 0x74]) == Some(Message::StyleResponse { request: 1, content_type: seq![0x74u8] }),
+        decode_message(seq![0x83u8, 0x18, 0x6F, 0x01, 0x41, 0x61]) == Some(Message::StyleBody { request: 1, bytes: seq![0x61u8] }),
+        decode_message(seq![0x82u8, 0x18, 0x70, 0x01]) == Some(Message::StyleEnd { request: 1 }),
+        decode_message(seq![0x82u8, 0x18, 0x71, 0x01]) == Some(Message::StyleFailed { request: 1 }),
+        decode_renderer_message(seq![0x82u8, 0x18, 0x70, 0x01]) is None,
+{
+    assert(decode_renderer_message(seq![0x83u8, 0x0E, 0x01, 0x65, 0x73, 0x2E, 0x63, 0x73, 0x73]) == Some(Message::FetchStyle { request: 1, url: seq![0x73u8, 0x2E, 0x63, 0x73, 0x73] })) by (compute_only);
+    assert(encode_message(Message::FetchStyle { request: 1, url: seq![0x73u8, 0x2E, 0x63, 0x73, 0x73] }) == seq![0x83u8, 0x0E, 0x01, 0x65, 0x73, 0x2E, 0x63, 0x73, 0x73]) by (compute_only);
+    assert(decode_message(seq![0x83u8, 0x18, 0x6E, 0x01, 0x41, 0x74]) == Some(Message::StyleResponse { request: 1, content_type: seq![0x74u8] })) by (compute_only);
+    assert(decode_message(seq![0x83u8, 0x18, 0x6F, 0x01, 0x41, 0x61]) == Some(Message::StyleBody { request: 1, bytes: seq![0x61u8] })) by (compute_only);
+    assert(decode_message(seq![0x82u8, 0x18, 0x70, 0x01]) == Some(Message::StyleEnd { request: 1 })) by (compute_only);
+    assert(decode_message(seq![0x82u8, 0x18, 0x71, 0x01]) == Some(Message::StyleFailed { request: 1 })) by (compute_only);
+    assert(decode_renderer_message(seq![0x82u8, 0x18, 0x70, 0x01]) is None) by (compute_only);
 }
 
 } // verus!

@@ -1,0 +1,330 @@
+#case 0
+#data "<svg><![CDATA[foo\nbar]]>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "foo bar"
+
+#case 1
+#data "<svg><![CDATA[foo\rbar]]>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "foo bar"
+
+#case 2
+#data "<svg><![CDATA[foo\r\nbar]]>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "foo bar"
+
+#case 3
+#data "<script>a='\0'</script>"
+root
+  block <html>
+    block <body>
+
+#case 4
+#data "<script type=\"data\"><!--\0</script>"
+root
+  block <html>
+    block <body>
+
+#case 5
+#data "<script type=\"data\"><!--foo\0</script>"
+root
+  block <html>
+    block <body>
+
+#case 6
+#data "<script type=\"data\"><!-- foo-\0</script>"
+root
+  block <html>
+    block <body>
+
+#case 7
+#data "<script type=\"data\"><!-- foo--\0</script>"
+root
+  block <html>
+    block <body>
+
+#case 8
+#data "<script type=\"data\"><!-- foo-"
+root
+  block <html>
+    block <body>
+
+#case 9
+#data "<script type=\"data\"><!-- foo-<</script>"
+root
+  block <html>
+    block <body>
+
+#case 10
+#data "<script type=\"data\"><!-- foo-<S"
+root
+  block <html>
+    block <body>
+
+#case 11
+#data "<script type=\"data\"><!-- foo-</SCRIPT>"
+root
+  block <html>
+    block <body>
+
+#case 12
+#data "<script type=\"data\"><!--<p></script>"
+root
+  block <html>
+    block <body>
+
+#case 13
+#data "<script type=\"data\"><!--<script></script></script>"
+root
+  block <html>
+    block <body>
+
+#case 14
+#data "<script type=\"data\"><!--<script>\0</script></script>"
+root
+  block <html>
+    block <body>
+
+#case 15
+#data "<script type=\"data\"><!--<script>-\0</script></script>"
+root
+  block <html>
+    block <body>
+
+#case 16
+#data "<script type=\"data\"><!--<script>--\0</script></script>"
+root
+  block <html>
+    block <body>
+
+#case 17
+#data "<script type=\"data\"><!--<script>---</script></script>"
+root
+  block <html>
+    block <body>
+
+#case 18
+#data "<script type=\"data\"><!--<script></scrip></SCRIPT></script>"
+root
+  block <html>
+    block <body>
+
+#case 19
+#data "<script type=\"data\"><!--<script></scrip </SCRIPT></script>"
+root
+  block <html>
+    block <body>
+
+#case 20
+#data "<script type=\"data\"><!--<script></scrip/</SCRIPT></script>"
+root
+  block <html>
+    block <body>
+
+#case 21
+#data "<script type=\"data\"></scrip/></script>"
+root
+  block <html>
+    block <body>
+
+#case 22
+#data "<script type=\"data\"></scrip ></script>"
+root
+  block <html>
+    block <body>
+
+#case 23
+#data "<script type=\"data\"><!--</scrip></script>"
+root
+  block <html>
+    block <body>
+
+#case 24
+#data "<script type=\"data\"><!--</scrip </script>"
+root
+  block <html>
+    block <body>
+
+#case 25
+#data "<script type=\"data\"><!--</scrip/</script>"
+root
+  block <html>
+    block <body>
+
+#case 26
+#data "<!DOCTYPE html><!DOCTYPE html>"
+root
+  block <html>
+    block <body>
+
+#case 27
+#data "<html><!DOCTYPE html>"
+root
+  block <html>
+    block <body>
+
+#case 28
+#data "<html><head><!DOCTYPE html></head>"
+root
+  block <html>
+    block <body>
+
+#case 29
+#data "<html><head></head><!DOCTYPE html>"
+root
+  block <html>
+    block <body>
+
+#case 30
+#data "<body></body><!DOCTYPE html>"
+root
+  block <html>
+    block <body>
+
+#case 31
+#data "<table><!DOCTYPE html></table>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+
+#case 32
+#data "<select><!DOCTYPE html></select>"
+root
+  block <html>
+    block <body>
+      inline <select>
+
+#case 33
+#data "<table><colgroup><!DOCTYPE html></colgroup></table>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-column-group <colgroup>
+
+#case 34
+#data "<table><colgroup><!--test--></colgroup></table>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-column-group <colgroup>
+
+#case 35
+#data "<table><colgroup><html></colgroup></table>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-column-group <colgroup>
+
+#case 36
+#data "<table><colgroup> foo</colgroup></table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        text "foo"
+      table-wrapper <table>
+        table <table>
+          table-column-group <colgroup>
+
+#case 37
+#data "<select><!--test--></select>"
+root
+  block <html>
+    block <body>
+      inline <select>
+
+#case 38
+#data "<select><html></select>"
+root
+  block <html>
+    block <body>
+      inline <select>
+
+#case 39
+#data "<frameset><html></frameset>"
+root
+  block <html>
+    inline <frameset>
+
+#case 40
+#data "<frameset></frameset><html>"
+root
+  block <html>
+    inline <frameset>
+
+#case 41
+#data "<frameset></frameset><!DOCTYPE html>"
+root
+  block <html>
+    inline <frameset>
+
+#case 42
+#data "<html><body></body></html><!DOCTYPE html>"
+root
+  block <html>
+    block <body>
+
+#case 43
+#data "<svg><!DOCTYPE html></svg>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+
+#case 44
+#data "<svg><font></font></svg>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        inline <font>
+
+#case 45
+#data "<svg><font id=foo></font></svg>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        inline <font>
+
+#case 46
+#data "<svg><font size=4></font></svg>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+      inline <font>
+
+#case 47
+#data "<svg><font color=red></font></svg>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+      inline <font>
+
+#case 48
+#data "<svg><font font=sans></font></svg>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        inline <font>
+

@@ -1,0 +1,236 @@
+#case 0
+#data "<!DOCTYPE html><body><svg attributeName='' attributeType='' baseFrequency='' baseProfile='' calcMode='' clipPathUnits='' diffuseConstant='' edgeMode='' filterUnits='' glyphRef='' gradientTransform='' gradientUnits='' kernelMatrix='' kernelUnitLength='' keyPoints='' keySplines='' keyTimes='' lengthAdjust='' limitingConeAngle='' markerHeight='' markerUnits='' markerWidth='' maskContentUnits='' maskUnits='' numOctaves='' pathLength='' patternContentUnits='' patternTransform='' patternUnits='' pointsAtX='' pointsAtY='' pointsAtZ='' preserveAlpha='' preserveAspectRatio='' primitiveUnits='' refX='' refY='' repeatCount='' repeatDur='' requiredExtensions='' requiredFeatures='' specularConstant='' specularExponent='' spreadMethod='' startOffset='' stdDeviation='' stitchTiles='' surfaceScale='' systemLanguage='' tableValues='' targetX='' targetY='' textLength='' viewBox='' viewTarget='' xChannelSelector='' yChannelSelector='' zoomAndPan=''></svg>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+
+#case 1
+#data "<!DOCTYPE html><BODY><SVG ATTRIBUTENAME='' ATTRIBUTETYPE='' BASEFREQUENCY='' BASEPROFILE='' CALCMODE='' CLIPPATHUNITS='' DIFFUSECONSTANT='' EDGEMODE='' FILTERUNITS='' GLYPHREF='' GRADIENTTRANSFORM='' GRADIENTUNITS='' KERNELMATRIX='' KERNELUNITLENGTH='' KEYPOINTS='' KEYSPLINES='' KEYTIMES='' LENGTHADJUST='' LIMITINGCONEANGLE='' MARKERHEIGHT='' MARKERUNITS='' MARKERWIDTH='' MASKCONTENTUNITS='' MASKUNITS='' NUMOCTAVES='' PATHLENGTH='' PATTERNCONTENTUNITS='' PATTERNTRANSFORM='' PATTERNUNITS='' POINTSATX='' POINTSATY='' POINTSATZ='' PRESERVEALPHA='' PRESERVEASPECTRATIO='' PRIMITIVEUNITS='' REFX='' REFY='' REPEATCOUNT='' REPEATDUR='' REQUIREDEXTENSIONS='' REQUIREDFEATURES='' SPECULARCONSTANT='' SPECULAREXPONENT='' SPREADMETHOD='' STARTOFFSET='' STDDEVIATION='' STITCHTILES='' SURFACESCALE='' SYSTEMLANGUAGE='' TABLEVALUES='' TARGETX='' TARGETY='' TEXTLENGTH='' VIEWBOX='' VIEWTARGET='' XCHANNELSELECTOR='' YCHANNELSELECTOR='' ZOOMANDPAN=''></SVG>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+
+#case 2
+#data "<!DOCTYPE html><body><svg attributename='' attributetype='' basefrequency='' baseprofile='' calcmode='' clippathunits='' diffuseconstant='' edgemode='' filterunits='' filterres='' glyphref='' gradienttransform='' gradientunits='' kernelmatrix='' kernelunitlength='' keypoints='' keysplines='' keytimes='' lengthadjust='' limitingconeangle='' markerheight='' markerunits='' markerwidth='' maskcontentunits='' maskunits='' numoctaves='' pathlength='' patterncontentunits='' patterntransform='' patternunits='' pointsatx='' pointsaty='' pointsatz='' preservealpha='' preserveaspectratio='' primitiveunits='' refx='' refy='' repeatcount='' repeatdur='' requiredextensions='' requiredfeatures='' specularconstant='' specularexponent='' spreadmethod='' startoffset='' stddeviation='' stitchtiles='' surfacescale='' systemlanguage='' tablevalues='' targetx='' targety='' textlength='' viewbox='' viewtarget='' xchannelselector='' ychannelselector='' zoomandpan=''></svg>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+
+#case 3
+#data "<!DOCTYPE html><body><math attributeName='' attributeType='' baseFrequency='' baseProfile='' calcMode='' clipPathUnits='' diffuseConstant='' edgeMode='' filterUnits='' glyphRef='' gradientTransform='' gradientUnits='' kernelMatrix='' kernelUnitLength='' keyPoints='' keySplines='' keyTimes='' lengthAdjust='' limitingConeAngle='' markerHeight='' markerUnits='' markerWidth='' maskContentUnits='' maskUnits='' numOctaves='' pathLength='' patternContentUnits='' patternTransform='' patternUnits='' pointsAtX='' pointsAtY='' pointsAtZ='' preserveAlpha='' preserveAspectRatio='' primitiveUnits='' refX='' refY='' repeatCount='' repeatDur='' requiredExtensions='' requiredFeatures='' specularConstant='' specularExponent='' spreadMethod='' startOffset='' stdDeviation='' stitchTiles='' surfaceScale='' systemLanguage='' tableValues='' targetX='' targetY='' textLength='' viewBox='' viewTarget='' xChannelSelector='' yChannelSelector='' zoomAndPan=''></math>"
+root
+  block <html>
+    block <body>
+      inline <math>
+
+#case 4
+#data "<!DOCTYPE html><body><svg contentScriptType='' contentStyleType='' externalResourcesRequired='' filterRes=''></svg>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+
+#case 5
+#data "<!DOCTYPE html><body><svg CONTENTSCRIPTTYPE='' CONTENTSTYLETYPE='' EXTERNALRESOURCESREQUIRED='' FILTERRES=''></svg>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+
+#case 6
+#data "<!DOCTYPE html><body><svg contentscripttype='' contentstyletype='' externalresourcesrequired='' filterres=''></svg>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+
+#case 7
+#data "<!DOCTYPE html><body><math contentScriptType='' contentStyleType='' externalResourcesRequired='' filterRes=''></math>"
+root
+  block <html>
+    block <body>
+      inline <math>
+
+#case 8
+#data "<!DOCTYPE html><body><svg><altGlyph /><altGlyphDef /><altGlyphItem /><animateColor /><animateMotion /><animateTransform /><clipPath /><feBlend /><feColorMatrix /><feComponentTransfer /><feComposite /><feConvolveMatrix /><feDiffuseLighting /><feDisplacementMap /><feDistantLight /><feFlood /><feFuncA /><feFuncB /><feFuncG /><feFuncR /><feGaussianBlur /><feImage /><feMerge /><feMergeNode /><feMorphology /><feOffset /><fePointLight /><feSpecularLighting /><feSpotLight /><feTile /><feTurbulence /><foreignObject /><glyphRef /><linearGradient /><radialGradient /><textPath /></svg>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        inline <altGlyph>
+        inline <altGlyphDef>
+        inline <altGlyphItem>
+        inline <animateColor>
+        inline <animateMotion>
+        inline <animateTransform>
+        inline <clipPath>
+        inline <feBlend>
+        inline <feColorMatrix>
+        inline <feComponentTransfer>
+        inline <feComposite>
+        inline <feConvolveMatrix>
+        inline <feDiffuseLighting>
+        inline <feDisplacementMap>
+        inline <feDistantLight>
+        inline <feFlood>
+        inline <feFuncA>
+        inline <feFuncB>
+        inline <feFuncG>
+        inline <feFuncR>
+        inline <feGaussianBlur>
+        inline <feImage>
+        inline <feMerge>
+        inline <feMergeNode>
+        inline <feMorphology>
+        inline <feOffset>
+        inline <fePointLight>
+        inline <feSpecularLighting>
+        inline <feSpotLight>
+        inline <feTile>
+        inline <feTurbulence>
+        inline <foreignObject>
+        inline <glyphRef>
+        inline <linearGradient>
+        inline <radialGradient>
+        inline <textPath>
+
+#case 9
+#data "<!DOCTYPE html><body><svg><altglyph /><altglyphdef /><altglyphitem /><animatecolor /><animatemotion /><animatetransform /><clippath /><feblend /><fecolormatrix /><fecomponenttransfer /><fecomposite /><feconvolvematrix /><fediffuselighting /><fedisplacementmap /><fedistantlight /><feflood /><fefunca /><fefuncb /><fefuncg /><fefuncr /><fegaussianblur /><feimage /><femerge /><femergenode /><femorphology /><feoffset /><fepointlight /><fespecularlighting /><fespotlight /><fetile /><feturbulence /><foreignobject /><glyphref /><lineargradient /><radialgradient /><textpath /></svg>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        inline <altGlyph>
+        inline <altGlyphDef>
+        inline <altGlyphItem>
+        inline <animateColor>
+        inline <animateMotion>
+        inline <animateTransform>
+        inline <clipPath>
+        inline <feBlend>
+        inline <feColorMatrix>
+        inline <feComponentTransfer>
+        inline <feComposite>
+        inline <feConvolveMatrix>
+        inline <feDiffuseLighting>
+        inline <feDisplacementMap>
+        inline <feDistantLight>
+        inline <feFlood>
+        inline <feFuncA>
+        inline <feFuncB>
+        inline <feFuncG>
+        inline <feFuncR>
+        inline <feGaussianBlur>
+        inline <feImage>
+        inline <feMerge>
+        inline <feMergeNode>
+        inline <feMorphology>
+        inline <feOffset>
+        inline <fePointLight>
+        inline <feSpecularLighting>
+        inline <feSpotLight>
+        inline <feTile>
+        inline <feTurbulence>
+        inline <foreignObject>
+        inline <glyphRef>
+        inline <linearGradient>
+        inline <radialGradient>
+        inline <textPath>
+
+#case 10
+#data "<!DOCTYPE html><BODY><SVG><ALTGLYPH /><ALTGLYPHDEF /><ALTGLYPHITEM /><ANIMATECOLOR /><ANIMATEMOTION /><ANIMATETRANSFORM /><CLIPPATH /><FEBLEND /><FECOLORMATRIX /><FECOMPONENTTRANSFER /><FECOMPOSITE /><FECONVOLVEMATRIX /><FEDIFFUSELIGHTING /><FEDISPLACEMENTMAP /><FEDISTANTLIGHT /><FEFLOOD /><FEFUNCA /><FEFUNCB /><FEFUNCG /><FEFUNCR /><FEGAUSSIANBLUR /><FEIMAGE /><FEMERGE /><FEMERGENODE /><FEMORPHOLOGY /><FEOFFSET /><FEPOINTLIGHT /><FESPECULARLIGHTING /><FESPOTLIGHT /><FETILE /><FETURBULENCE /><FOREIGNOBJECT /><GLYPHREF /><LINEARGRADIENT /><RADIALGRADIENT /><TEXTPATH /></SVG>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        inline <altGlyph>
+        inline <altGlyphDef>
+        inline <altGlyphItem>
+        inline <animateColor>
+        inline <animateMotion>
+        inline <animateTransform>
+        inline <clipPath>
+        inline <feBlend>
+        inline <feColorMatrix>
+        inline <feComponentTransfer>
+        inline <feComposite>
+        inline <feConvolveMatrix>
+        inline <feDiffuseLighting>
+        inline <feDisplacementMap>
+        inline <feDistantLight>
+        inline <feFlood>
+        inline <feFuncA>
+        inline <feFuncB>
+        inline <feFuncG>
+        inline <feFuncR>
+        inline <feGaussianBlur>
+        inline <feImage>
+        inline <feMerge>
+        inline <feMergeNode>
+        inline <feMorphology>
+        inline <feOffset>
+        inline <fePointLight>
+        inline <feSpecularLighting>
+        inline <feSpotLight>
+        inline <feTile>
+        inline <feTurbulence>
+        inline <foreignObject>
+        inline <glyphRef>
+        inline <linearGradient>
+        inline <radialGradient>
+        inline <textPath>
+
+#case 11
+#data "<!DOCTYPE html><body><math><altGlyph /><altGlyphDef /><altGlyphItem /><animateColor /><animateMotion /><animateTransform /><clipPath /><feBlend /><feColorMatrix /><feComponentTransfer /><feComposite /><feConvolveMatrix /><feDiffuseLighting /><feDisplacementMap /><feDistantLight /><feFlood /><feFuncA /><feFuncB /><feFuncG /><feFuncR /><feGaussianBlur /><feImage /><feMerge /><feMergeNode /><feMorphology /><feOffset /><fePointLight /><feSpecularLighting /><feSpotLight /><feTile /><feTurbulence /><foreignObject /><glyphRef /><linearGradient /><radialGradient /><textPath /></math>"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <altglyph>
+        inline <altglyphdef>
+        inline <altglyphitem>
+        inline <animatecolor>
+        inline <animatemotion>
+        inline <animatetransform>
+        inline <clippath>
+        inline <feblend>
+        inline <fecolormatrix>
+        inline <fecomponenttransfer>
+        inline <fecomposite>
+        inline <feconvolvematrix>
+        inline <fediffuselighting>
+        inline <fedisplacementmap>
+        inline <fedistantlight>
+        inline <feflood>
+        inline <fefunca>
+        inline <fefuncb>
+        inline <fefuncg>
+        inline <fefuncr>
+        inline <fegaussianblur>
+        inline <feimage>
+        inline <femerge>
+        inline <femergenode>
+        inline <femorphology>
+        inline <feoffset>
+        inline <fepointlight>
+        inline <fespecularlighting>
+        inline <fespotlight>
+        inline <fetile>
+        inline <feturbulence>
+        inline <foreignobject>
+        inline <glyphref>
+        inline <lineargradient>
+        inline <radialgradient>
+        inline <textpath>
+
+#case 12
+#data "<!DOCTYPE html><body><svg><solidColor /></svg>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        inline <solidcolor>
+

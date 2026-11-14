@@ -169,7 +169,7 @@ pub fn profile_extensions(values: &[u16]) -> (out: bool)
 pub fn signature_scheme(scheme: u16) -> (out: bool)
     ensures out == super::spec::signature_scheme(scheme),
 {
-    scheme == 0x0403 || scheme == 0x0804 || scheme == 0x0805 || scheme == 0x0806
+    scheme == 0x0403 || scheme == 0x0503 || scheme == 0x0804 || scheme == 0x0805 || scheme == 0x0806
         || scheme == 0x0807
 }
 /// RFC 8446 §4.2: every parsed server response answers an actual offer.
@@ -279,13 +279,14 @@ impl Auth {
         if !extensions_offered(es, self.config.extensions.as_slice()) { return self.fail(crate::spec::UNSUPPORTED_EXTENSION); }
         self.record(crypto, Kind::EncryptedExtensions, body, Phase::CertificateOrRequest)
     }
-    fn on_request<C: Crypto>(&mut self, crypto: &C, body: &[u8], empty_context: bool, has_algorithms: bool) -> (out: Action)
+    fn on_request<C: Crypto>(&mut self, crypto: &C, body: &[u8], empty_context: bool, has_algorithms: bool, filters_distinct: bool) -> (out: Action)
         requires old(self).wf(),
-        ensures (final(self)@, out@) == super::spec::on_request(crypto.functions(), old(self)@, body@, empty_context, has_algorithms),
+        ensures (final(self)@, out@) == super::spec::on_request(crypto.functions(), old(self)@, body@, empty_context, has_algorithms, filters_distinct),
             final(self).wf(),
     {
         if !matches!(self.phase, Phase::CertificateOrRequest) { return self.fail(crate::spec::UNEXPECTED_MESSAGE); }
         if !empty_context { return self.fail(crate::spec::ILLEGAL_PARAMETER); }
+        if !filters_distinct { return self.fail(crate::spec::ILLEGAL_PARAMETER); }
         if !has_algorithms { return self.fail(crate::spec::MISSING_EXTENSION); }
         self.requested = true;
         self.record(crypto, Kind::CertificateRequest, body, Phase::Certificate)
@@ -355,7 +356,8 @@ impl Auth {
             HsMsg::EncryptedExtensions(es) => self.on_extensions(crypto, body, es.as_slice()),
             HsMsg::CertificateRequest(request) => {
                 let present = crate::extension::has_ext(request.extensions.as_slice(), 13);
-                self.on_request(crypto, body, initial_request_context_valid(request.context), present)
+                let distinct = crate::extension::request_filters_distinct(request.extensions.as_slice());
+                self.on_request(crypto, body, initial_request_context_valid(request.context), present, distinct)
             },
             HsMsg::Certificate(certificate) => {
                 let offered = certificate_extensions_offered(certificate.entries.as_slice(), self.config.extensions.as_slice());

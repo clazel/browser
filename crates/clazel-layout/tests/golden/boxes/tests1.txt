@@ -1,0 +1,1248 @@
+#case 0
+#data "Test"
+root
+  block <html>
+    block <body>
+      text "Test"
+
+#case 1
+#data "<p>One<p>Two"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "One"
+      block <p>
+        text "Two"
+
+#case 2
+#data "Line1<br>Line2<br>Line3<br>Line4"
+root
+  block <html>
+    block <body>
+      text "Line1"
+      text <br> "\n" white-space=Pre
+      text "Line2"
+      text <br> "\n" white-space=Pre
+      text "Line3"
+      text <br> "\n" white-space=Pre
+      text "Line4"
+
+#case 3
+#data "<html>"
+root
+  block <html>
+    block <body>
+
+#case 4
+#data "<head>"
+root
+  block <html>
+    block <body>
+
+#case 5
+#data "<body>"
+root
+  block <html>
+    block <body>
+
+#case 6
+#data "<html><head>"
+root
+  block <html>
+    block <body>
+
+#case 7
+#data "<html><head></head>"
+root
+  block <html>
+    block <body>
+
+#case 8
+#data "<html><head></head><body>"
+root
+  block <html>
+    block <body>
+
+#case 9
+#data "<html><head></head><body></body>"
+root
+  block <html>
+    block <body>
+
+#case 10
+#data "<html><head><body></body></html>"
+root
+  block <html>
+    block <body>
+
+#case 11
+#data "<html><head></body></html>"
+root
+  block <html>
+    block <body>
+
+#case 12
+#data "<html><head><body></html>"
+root
+  block <html>
+    block <body>
+
+#case 13
+#data "<html><body></html>"
+root
+  block <html>
+    block <body>
+
+#case 14
+#data "<body></html>"
+root
+  block <html>
+    block <body>
+
+#case 15
+#data "<head></html>"
+root
+  block <html>
+    block <body>
+
+#case 16
+#data "</head>"
+root
+  block <html>
+    block <body>
+
+#case 17
+#data "</body>"
+root
+  block <html>
+    block <body>
+
+#case 18
+#data "</html>"
+root
+  block <html>
+    block <body>
+
+#case 19
+#data "<b><table><td><i></table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <b> first
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                inline <i>
+      block (anonymous)
+        inline <b> last
+
+#case 20
+#data "<b><table><td></b><i></table>X"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <b> first
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                inline <i>
+      block (anonymous)
+        inline <b> last
+          text "X"
+
+#case 21
+#data "<h1>Hello<h2>World"
+root
+  block <html>
+    block <body>
+      block <h1>
+        text "Hello"
+      block <h2>
+        text "World"
+
+#case 22
+#data "<a><p>X<a>Y</a>Z</p></a>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <a>
+      block <p>
+        inline <a>
+          text "X"
+        inline <a>
+          text "Y"
+        text "Z"
+
+#case 23
+#data "<b><button>foo</b>bar"
+root
+  block <html>
+    block <body>
+      inline <b>
+      inline-block <button>
+        inline <b>
+          text "foo"
+        text "bar"
+
+#case 24
+#data "<!DOCTYPE html><span><button>foo</span>bar"
+root
+  block <html>
+    block <body>
+      inline <span>
+        inline-block <button>
+          text "foobar"
+
+#case 25
+#data "<p><b><div><marquee></p></b></div>X"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline <b>
+      block <div>
+        block (anonymous)
+          inline <b> first
+            inline <marquee> first
+        block <p>
+        block (anonymous)
+          inline <b> last
+            inline <marquee> last
+              text "X"
+
+#case 26
+#data "<script><div></script></div><title><p></title><p><p>"
+root
+  block <html>
+    block <body>
+      block <p>
+      block <p>
+
+#case 27
+#data "<!--><div>--<!-->"
+root
+  block <html>
+    block <body>
+      block <div>
+        text "--"
+
+#case 28
+#data "<p><hr></p>"
+root
+  block <html>
+    block <body>
+      block <p>
+      block <hr>
+      block <p>
+
+#case 29
+#data "<select><b><option><select><option></b></select>X"
+root
+  block <html>
+    block <body>
+      inline <select>
+        inline <b>
+          inline <option>
+      inline <b>
+        inline <option>
+      text "X"
+
+#case 30
+#data "<a><table><td><a><table></table><a></tr><a></table><b>X</b>C<a>Y"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <a> first
+          inline <a>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                block (anonymous)
+                  inline <a> first
+                table-wrapper <table>
+                  table <table>
+                block (anonymous)
+                  inline <a> last
+                  inline <a>
+      block (anonymous)
+        inline <a> last
+        inline <a>
+          inline <b>
+            text "X"
+          text "C"
+        inline <a>
+          text "Y"
+
+#case 31
+#data "<a X>0<b>1<a Y>2"
+root
+  block <html>
+    block <body>
+      inline <a>
+        text "0"
+        inline <b>
+          text "1"
+      inline <b>
+        inline <a>
+          text "2"
+
+#case 32
+#data "<!-----><font><div>hello<table>excite!<b>me!<th><i>please!</tr><!--X-->"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <font> first
+      block <div>
+        block (anonymous)
+          text "helloexcite!"
+          inline <b>
+            text "me!"
+        table-wrapper <table>
+          table <table>
+            table-row-group <tbody>
+              table-row <tr>
+                table-cell <th>
+                  inline <i>
+                    text "please!"
+      block (anonymous)
+        inline <font> last
+
+#case 33
+#data "<!DOCTYPE html><li>hello<li>world<ul>how<li>do</ul>you</body><!--do-->"
+root
+  block <html>
+    block <body>
+      block <li>
+        marker <li> "• "
+        text "hello"
+      block <li>
+        marker <li> "• "
+        block (anonymous)
+          text "world"
+        block <ul>
+          block (anonymous)
+            text "how"
+          block <li>
+            marker <li> "• "
+            text "do"
+        block (anonymous)
+          text "you"
+
+#case 34
+#data "<!DOCTYPE html>A<option>B<optgroup>C<select>D</option>E"
+root
+  block <html>
+    block <body>
+      text "A"
+      inline <option>
+        text "B"
+      inline <optgroup>
+        text "C"
+        inline <select>
+          text "DE"
+
+#case 35
+#data "<"
+root
+  block <html>
+    block <body>
+      text "<"
+
+#case 36
+#data "<#"
+root
+  block <html>
+    block <body>
+      text "<#"
+
+#case 37
+#data "</"
+root
+  block <html>
+    block <body>
+      text "</"
+
+#case 38
+#data "</#"
+root
+  block <html>
+    block <body>
+
+#case 39
+#data "<?"
+root
+  block <html>
+    block <body>
+
+#case 40
+#data "<?#"
+root
+  block <html>
+    block <body>
+
+#case 41
+#data "<!"
+root
+  block <html>
+    block <body>
+
+#case 42
+#data "<!#"
+root
+  block <html>
+    block <body>
+
+#case 43
+#data "<?COMMENT?>"
+root
+  block <html>
+    block <body>
+
+#case 44
+#data "<!COMMENT>"
+root
+  block <html>
+    block <body>
+
+#case 45
+#data "</ COMMENT >"
+root
+  block <html>
+    block <body>
+
+#case 46
+#data "<?COM--MENT?>"
+root
+  block <html>
+    block <body>
+
+#case 47
+#data "<!COM--MENT>"
+root
+  block <html>
+    block <body>
+
+#case 48
+#data "</ COM--MENT >"
+root
+  block <html>
+    block <body>
+
+#case 49
+#data "<!DOCTYPE html><style> EOF"
+root
+  block <html>
+    block <body>
+
+#case 50
+#data "<!DOCTYPE html><script> <!-- </script> --> </script> EOF"
+root
+  block <html>
+    block <body>
+      text "--> EOF"
+
+#case 51
+#data "<b><p></b>TEST"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <b>
+      block <p>
+        inline <b>
+        text "TEST"
+
+#case 52
+#data "<p id=a><b><p id=b></b>TEST"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline <b>
+      block <p>
+        text "TEST"
+
+#case 53
+#data "<b id=a><p><b id=b></p></b>TEST"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <b> first
+      block <p>
+        inline <b>
+      block (anonymous)
+        inline <b> last
+          text "TEST"
+
+#case 54
+#data "<!DOCTYPE html><title>U-test</title><body><div><p>Test<u></p></div></body>"
+root
+  block <html>
+    block <body>
+      block <div>
+        block <p>
+          text "Test"
+          inline <u>
+
+#case 55
+#data "<!DOCTYPE html><font><table></font></table></font>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <font> first
+      table-wrapper <table>
+        table <table>
+      block (anonymous)
+        inline <font> last
+
+#case 56
+#data "<font><p>hello<b>cruel</font>world"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <font>
+      block <p>
+        inline <font>
+          text "hello"
+          inline <b>
+            text "cruel"
+        inline <b>
+          text "world"
+
+#case 57
+#data "<b>Test</i>Test"
+root
+  block <html>
+    block <body>
+      inline <b>
+        text "TestTest"
+
+#case 58
+#data "<b>A<cite>B<div>C"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <b> first
+          text "A"
+          inline <cite> first
+            text "B"
+      block <div>
+        text "C"
+      block (anonymous)
+        inline <b> last
+          inline <cite> last
+
+#case 59
+#data "<b>A<cite>B<div>C</cite>D"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <b> first
+          text "A"
+          inline <cite> first
+            text "B"
+      block <div>
+        text "CD"
+      block (anonymous)
+        inline <b> last
+          inline <cite> last
+
+#case 60
+#data "<b>A<cite>B<div>C</b>D"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <b>
+          text "A"
+          inline <cite>
+            text "B"
+      block <div>
+        inline <b>
+          text "C"
+        text "D"
+
+#case 61
+#data ""
+root
+  block <html>
+    block <body>
+
+#case 62
+#data "<DIV>"
+root
+  block <html>
+    block <body>
+      block <div>
+
+#case 63
+#data "<DIV> abc"
+root
+  block <html>
+    block <body>
+      block <div>
+        text " abc"
+
+#case 64
+#data "<DIV> abc <B>"
+root
+  block <html>
+    block <body>
+      block <div>
+        text " abc "
+        inline <b>
+
+#case 65
+#data "<DIV> abc <B> def"
+root
+  block <html>
+    block <body>
+      block <div>
+        text " abc "
+        inline <b>
+          text "def"
+
+#case 66
+#data "<DIV> abc <B> def <I>"
+root
+  block <html>
+    block <body>
+      block <div>
+        text " abc "
+        inline <b>
+          text "def "
+          inline <i>
+
+#case 67
+#data "<DIV> abc <B> def <I> ghi"
+root
+  block <html>
+    block <body>
+      block <div>
+        text " abc "
+        inline <b>
+          text "def "
+          inline <i>
+            text "ghi"
+
+#case 68
+#data "<DIV> abc <B> def <I> ghi <P>"
+root
+  block <html>
+    block <body>
+      block <div>
+        block (anonymous)
+          text " abc "
+          inline <b> first
+            text "def "
+            inline <i> first
+              text "ghi "
+        block <p>
+        block (anonymous)
+          inline <b> last
+            inline <i> last
+
+#case 69
+#data "<DIV> abc <B> def <I> ghi <P> jkl"
+root
+  block <html>
+    block <body>
+      block <div>
+        block (anonymous)
+          text " abc "
+          inline <b> first
+            text "def "
+            inline <i> first
+              text "ghi "
+        block <p>
+          text " jkl"
+        block (anonymous)
+          inline <b> last
+            inline <i> last
+
+#case 70
+#data "<DIV> abc <B> def <I> ghi <P> jkl </B>"
+root
+  block <html>
+    block <body>
+      block <div>
+        block (anonymous)
+          text " abc "
+          inline <b>
+            text "def "
+            inline <i>
+              text "ghi "
+          inline <i> first
+        block <p>
+          inline <b>
+            text " jkl "
+        block (anonymous)
+          inline <i> last
+
+#case 71
+#data "<DIV> abc <B> def <I> ghi <P> jkl </B> mno"
+root
+  block <html>
+    block <body>
+      block <div>
+        block (anonymous)
+          text " abc "
+          inline <b>
+            text "def "
+            inline <i>
+              text "ghi "
+          inline <i> first
+        block <p>
+          inline <b>
+            text " jkl "
+          text "mno"
+        block (anonymous)
+          inline <i> last
+
+#case 72
+#data "<DIV> abc <B> def <I> ghi <P> jkl </B> mno </I>"
+root
+  block <html>
+    block <body>
+      block <div>
+        block (anonymous)
+          text " abc "
+          inline <b>
+            text "def "
+            inline <i>
+              text "ghi "
+          inline <i>
+        block <p>
+          inline <i>
+            inline <b>
+              text " jkl "
+            text "mno "
+
+#case 73
+#data "<DIV> abc <B> def <I> ghi <P> jkl </B> mno </I> pqr"
+root
+  block <html>
+    block <body>
+      block <div>
+        block (anonymous)
+          text " abc "
+          inline <b>
+            text "def "
+            inline <i>
+              text "ghi "
+          inline <i>
+        block <p>
+          inline <i>
+            inline <b>
+              text " jkl "
+            text "mno "
+          text "pqr"
+
+#case 74
+#data "<DIV> abc <B> def <I> ghi <P> jkl </B> mno </I> pqr </P>"
+root
+  block <html>
+    block <body>
+      block <div>
+        block (anonymous)
+          text " abc "
+          inline <b>
+            text "def "
+            inline <i>
+              text "ghi "
+          inline <i>
+        block <p>
+          inline <i>
+            inline <b>
+              text " jkl "
+            text "mno "
+          text "pqr "
+
+#case 75
+#data "<DIV> abc <B> def <I> ghi <P> jkl </B> mno </I> pqr </P> stu"
+root
+  block <html>
+    block <body>
+      block <div>
+        block (anonymous)
+          text " abc "
+          inline <b>
+            text "def "
+            inline <i>
+              text "ghi "
+          inline <i>
+        block <p>
+          inline <i>
+            inline <b>
+              text " jkl "
+            text "mno "
+          text "pqr "
+        block (anonymous)
+          text " stu"
+
+#case 76
+#data "<test attribute---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------->"
+root
+  block <html>
+    block <body>
+      inline <test>
+
+#case 77
+#data "<a href=\"blah\">aba<table><a href=\"foo\">br<tr><td></td></tr>x</table>aoe"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <a> first
+          text "aba"
+          inline <a>
+            text "br"
+          inline <a>
+            text "x"
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+      block (anonymous)
+        inline <a> last
+        inline <a>
+          text "aoe"
+
+#case 78
+#data "<a href=\"blah\">aba<table><tr><td><a href=\"foo\">br</td></tr>x</table>aoe"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <a> first
+          text "abax"
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                inline <a>
+                  text "br"
+      block (anonymous)
+        inline <a> last
+          text "aoe"
+
+#case 79
+#data "<table><a href=\"blah\">aba<tr><td><a href=\"foo\">br</td></tr>x</table>aoe"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <a>
+          text "aba"
+        inline <a>
+          text "x"
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                inline <a>
+                  text "br"
+      block (anonymous)
+        inline <a>
+          text "aoe"
+
+#case 80
+#data "<a href=a>aa<marquee>aa<a href=b>bb</marquee>aa"
+root
+  block <html>
+    block <body>
+      inline <a>
+        text "aa"
+        inline <marquee>
+          text "aa"
+          inline <a>
+            text "bb"
+        text "aa"
+
+#case 81
+#data "<wbr><strike><code></strike><code><strike></code>"
+root
+  block <html>
+    block <body>
+      text <wbr> "\u{200b}"
+      inline <strike>
+        inline <code>
+      inline <code>
+        inline <code>
+          inline <strike>
+
+#case 82
+#data "<!DOCTYPE html><spacer>foo"
+root
+  block <html>
+    block <body>
+      inline <spacer>
+        text "foo"
+
+#case 83
+#data "<title><meta></title><link><title><meta></title>"
+root
+  block <html>
+    block <body>
+
+#case 84
+#data "<style><!--</style><meta><script>--><link></script>"
+root
+  block <html>
+    block <body>
+
+#case 85
+#data "<head><meta></head><link>"
+root
+  block <html>
+    block <body>
+
+#case 86
+#data "<table><tr><tr><td><td><span><th><span>X</table>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+            table-row <tr>
+              table-cell <td>
+              table-cell <td>
+                inline <span>
+              table-cell <th>
+                inline <span>
+                  text "X"
+
+#case 87
+#data "<body><body><base><link><meta><title><p></title><body><p></body>"
+root
+  block <html>
+    block <body>
+      block <p>
+
+#case 88
+#data "<textarea><p></textarea>"
+root
+  block <html>
+    block <body>
+      replaced <textarea> inline TextArea { cols: 20, rows: 2 }
+
+#case 89
+#data "<p><image></p>"
+root
+  block <html>
+    block <body>
+      block <p>
+        replaced <img> inline Image
+
+#case 90
+#data "<a><table><a></table><p><a><div><a>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <a> first
+          inline <a>
+      table-wrapper <table>
+        table <table>
+      block (anonymous)
+        inline <a> last
+      block <p>
+        inline <a>
+      block <div>
+        inline <a>
+
+#case 91
+#data "<head></p><meta><p>"
+root
+  block <html>
+    block <body>
+      block <p>
+
+#case 92
+#data "<head></html><meta><p>"
+root
+  block <html>
+    block <body>
+      block <p>
+
+#case 93
+#data "<b><table><td></b><i></table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <b> first
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                inline <i>
+      block (anonymous)
+        inline <b> last
+
+#case 94
+#data "<h1><h2>"
+root
+  block <html>
+    block <body>
+      block <h1>
+      block <h2>
+
+#case 95
+#data "<a><p><a></a></p></a>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <a>
+      block <p>
+        inline <a>
+        inline <a>
+
+#case 96
+#data "<b><button></b></button></b>"
+root
+  block <html>
+    block <body>
+      inline <b>
+      inline-block <button>
+        inline <b>
+
+#case 97
+#data "<p><b><div><marquee></p></b></div>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline <b>
+      block <div>
+        block (anonymous)
+          inline <b> first
+            inline <marquee> first
+        block <p>
+        block (anonymous)
+          inline <b> last
+            inline <marquee> last
+
+#case 98
+#data "<script></script></div><title></title><p><p>"
+root
+  block <html>
+    block <body>
+      block <p>
+      block <p>
+
+#case 99
+#data "<select><b><option><select><option></b></select>"
+root
+  block <html>
+    block <body>
+      inline <select>
+        inline <b>
+          inline <option>
+      inline <b>
+        inline <option>
+
+#case 100
+#data "<html><head><title></title><body></body></html>"
+root
+  block <html>
+    block <body>
+
+#case 101
+#data "<a><table><td><a><table></table><a></tr><a></table><a>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <a> first
+          inline <a>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                block (anonymous)
+                  inline <a> first
+                table-wrapper <table>
+                  table <table>
+                block (anonymous)
+                  inline <a> last
+                  inline <a>
+      block (anonymous)
+        inline <a> last
+        inline <a>
+
+#case 102
+#data "<ul><li></li><div><li></div><li><li><div><li><address><li><b><em></b><li></ul>"
+root
+  block <html>
+    block <body>
+      block <ul>
+        block <li>
+          marker <li> "• "
+        block <div>
+          block <li>
+            marker <li> "• "
+        block <li>
+          marker <li> "• "
+        block <li>
+          marker <li> "• "
+          block <div>
+        block <li>
+          marker <li> "• "
+          block <address>
+        block <li>
+          marker <li> "• "
+          inline <b>
+            inline <em>
+        block <li>
+          marker <li> "• "
+
+#case 103
+#data "<ul><li><ul></li><li>a</li></ul></li></ul>"
+root
+  block <html>
+    block <body>
+      block <ul>
+        block <li>
+          marker <li> "• "
+          block <ul>
+            block <li>
+              marker <li> "◦ "
+              text "a"
+
+#case 104
+#data "<frameset><frame><frameset><frame></frameset><noframes></noframes></frameset>"
+root
+  block <html>
+    inline <frameset>
+      inline <frame>
+      inline <frameset>
+        inline <frame>
+
+#case 105
+#data "<h1><table><td><h3></table><h3></h1>"
+root
+  block <html>
+    block <body>
+      block <h1>
+        table-wrapper <table>
+          table <table>
+            table-row-group <tbody>
+              table-row <tr>
+                table-cell <td>
+                  block <h3>
+      block <h3>
+
+#case 106
+#data "<table><colgroup><col><colgroup><col><col><col><colgroup><col><col><thead><tr><td></table>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-column-group <colgroup>
+            table-column <col>
+          table-column-group <colgroup>
+            table-column <col>
+            table-column <col>
+            table-column <col>
+          table-column-group <colgroup>
+            table-column <col>
+            table-column <col>
+          table-header-group <thead>
+            table-row <tr>
+              table-cell <td>
+
+#case 107
+#data "<table><col><tbody><col><tr><col><td><col></table><col>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-column-group <colgroup>
+            table-column <col>
+          table-row-group <tbody>
+          table-column-group <colgroup>
+            table-column <col>
+          table-row-group <tbody>
+            table-row <tr>
+          table-column-group <colgroup>
+            table-column <col>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+          table-column-group <colgroup>
+            table-column <col>
+
+#case 108
+#data "<table><colgroup><tbody><colgroup><tr><colgroup><td><colgroup></table><colgroup>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-column-group <colgroup>
+          table-row-group <tbody>
+          table-column-group <colgroup>
+          table-row-group <tbody>
+            table-row <tr>
+          table-column-group <colgroup>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+          table-column-group <colgroup>
+
+#case 109
+#data "</strong></b></em></i></u></strike></s></blink></tt></pre></big></small></font></select></h1></h2></h3></h4></h5></h6></body></br></a></img></title></span></style></script></table></th></td></tr></frame></area></link></param></hr></input></col></base></meta></basefont></bgsound></embed></spacer></p></dd></dt></caption></colgroup></tbody></tfoot></thead></address></blockquote></center></dir></div></dl></fieldset></listing></menu></ol></ul></li></nobr></wbr></form></button></marquee></object></html></frameset></head></iframe></image></isindex></noembed></noframes></noscript></optgroup></option></plaintext></textarea>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        text <br> "\n" white-space=Pre
+      block <p>
+
+#case 110
+#data "<table><tr></strong></b></em></i></u></strike></s></blink></tt></pre></big></small></font></select></h1></h2></h3></h4></h5></h6></body></br></a></img></title></span></style></script></table></th></td></tr></frame></area></link></param></hr></input></col></base></meta></basefont></bgsound></embed></spacer></p></dd></dt></caption></colgroup></tbody></tfoot></thead></address></blockquote></center></dir></div></dl></fieldset></listing></menu></ol></ul></li></nobr></wbr></form></button></marquee></object></html></frameset></head></iframe></image></isindex></noembed></noframes></noscript></optgroup></option></plaintext></textarea>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        text <br> "\n" white-space=Pre
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+      block <p>
+
+#case 111
+#data "<frameset>"
+root
+  block <html>
+    inline <frameset>
+

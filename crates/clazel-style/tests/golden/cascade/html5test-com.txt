@@ -1,0 +1,219 @@
+#case 0
+#data "<div<div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div<div>
+
+#case 1
+#data "<div foo<bar=''>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 2
+#data "<div foo=`bar`>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 3
+#data "<div \\\"foo=''>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 4
+#data "<a href='\\nbar'></a>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <a> color=#0000eeff text-decoration-line=DecorationLines { underline: true, overline: false, line_through: false, blink: false }
+
+#case 5
+#data "<!DOCTYPE html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 6
+#data "&lang;&rang;"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 7
+#data "&apos;"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 8
+#data "&ImaginaryI;"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 9
+#data "&Kopf;"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 10
+#data "&notinva;"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 11
+#data "<?import namespace=\"foo\" implementation=\"#bar\">"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 12
+#data "<!--foo--bar-->"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 13
+#data "<svg><title><![CDATA[x]]>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+      <title> display=None
+
+#case 14
+#data "<svg><foreignobject><![CDATA[x]]>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+      <foreignObject>
+
+#case 15
+#data "<svg><foreignobject><p><![CDATA[x]]>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+      <foreignObject>
+        <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 16
+#data "<math><![CDATA[x]]>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+
+#case 17
+#data "<math><mtext><![CDATA[x]]>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <mtext>
+
+#case 18
+#data "<math><mtext><i><![CDATA[x]]>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <mtext>
+        <i> font-style=Italic
+
+#case 19
+#data "<![CDATA[x]]>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 20
+#data "<textarea><!--</textarea>--></textarea>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <textarea> white-space=PreWrap
+
+#case 21
+#data "<textarea><!--</textarea>-->"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <textarea> white-space=PreWrap
+
+#case 22
+#data "<style><!--</style>--></style>"
+<html> display=Block
+  <head> display=None
+    <style> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 23
+#data "<style><!--</style>-->"
+<html> display=Block
+  <head> display=None
+    <style> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 24
+#data "<ul><li>A </li> <li>B</li></ul>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <ul> margin-bottom=16px padding-left=40px display=Block
+      <li> display=ListItem text-align=Left
+      <li> display=ListItem text-align=Left
+
+#case 25
+#data "<table><form><input type=hidden><input></form><div></div></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <input> display=InlineBlock overflow-x=Clip overflow-y=Clip
+    <div> display=Block
+    <table> display=Table border-spacing=2px 2px
+      <form> margin-bottom=16px display=None
+      <input> display=None overflow-x=Clip overflow-y=Clip
+
+#case 26
+#data "<i>A<b>B<p></i>C</b>D"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <i> font-style=Italic
+      <b> font-weight=700
+    <b> font-weight=700
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <b> font-weight=700
+        <i> font-style=Italic
+
+#case 27
+#data "<div></div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 28
+#data "<svg></svg>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+
+#case 29
+#data "<math></math>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+

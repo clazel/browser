@@ -33,6 +33,9 @@ applies (which roots are kept, what is carried) are in
 3. Point `DATA_DIR` in `xtask/src/roots.rs` and the `include_str!` path in
    `crates/clazel-x509/tests/trust_store.rs` at the new directory, delete the
    old one, and update the pinned counts in the test.
-4. Run `cargo xtask tables`, then `cargo test -p clazel-x509`, and commit the
+4. Pin `webpki-root-certs` in `crates/clazel-x509/Cargo.toml`, and its row in
+   `docs/DEPENDENCIES.md`, to a release that follows the new commit, because
+   `tests/conformance_roots.rs` compares the two.
+5. Run `cargo xtask tables`, then `cargo test -p clazel-x509`, and commit the
    result. The generator stops on anything it does not understand (a new
    trust value, an unlinked object, a fingerprint that does not match).

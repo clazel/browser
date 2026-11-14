@@ -7,7 +7,26 @@ verus! {
 /// Canonical target, captured time and public share for the fixture scalar 5.
 pub open spec fn config() -> super::client_spec::Config {
     super::client_spec::Config { host: crate::host::spec::Host::Dns(seq![104u8]), now: 7, random: Seq::new(32, |i: int| 1u8),
-        session_id: seq![7u8], public_key: Seq::new(32, |i: int| 5u8) }
+        session_id: Seq::new(32, |i: int| 7u8), public_key: Seq::new(32, |i: int| 5u8) }
+}
+/// §4.1.2: a legacy_session_id of 1 to 31 bytes is neither compatibility
+/// mode's "32-byte value" nor "a zero-length vector", so the configuration
+/// is refused (internal_error); 0 and 32 bytes are accepted.
+pub proof fn lemma_session_id_lengths()
+    ensures
+        super::client_spec::start(super::client_spec::Config { session_id: seq![7u8], ..config() })
+            == Err::<(super::client_spec::State, Seq<u8>), u8>(80u8),
+        super::client_spec::start(super::client_spec::Config { session_id: Seq::new(31, |i: int| 7u8), ..config() })
+            == Err::<(super::client_spec::State, Seq<u8>), u8>(80u8),
+        super::client_spec::config_ok(super::client_spec::Config { session_id: Seq::empty(), ..config() }),
+        super::client_spec::config_ok(config()),
+{
+    assert(super::client_spec::start(super::client_spec::Config { session_id: seq![7u8], ..config() })
+        == Err::<(super::client_spec::State, Seq<u8>), u8>(80u8)) by (compute_only);
+    assert(super::client_spec::start(super::client_spec::Config { session_id: Seq::new(31, |i: int| 7u8), ..config() })
+        == Err::<(super::client_spec::State, Seq<u8>), u8>(80u8)) by (compute_only);
+    assert(super::client_spec::config_ok(super::client_spec::Config { session_id: Seq::empty(), ..config() })) by (compute_only);
+    assert(super::client_spec::config_ok(config())) by (compute_only);
 }
 /// config() with an IPv4 host.
 pub open spec fn ip_config() -> super::client_spec::Config {
@@ -73,6 +92,17 @@ pub proof fn lemma_client_cipher()
     ensures super::client_spec::client_hello(config(), seq![]).cipher_suites == seq![0x1303u16],
 {
     assert(super::client_spec::client_hello(config(), seq![]).cipher_suites == seq![0x1303u16]) by (compute_only);
+}
+/// Concrete RFC 8446 requirement: §4.2.3 ecdsa_secp384r1_sha384 is offered,
+/// once, after ecdsa_secp256r1_sha256.
+pub proof fn lemma_client_offers_p384()
+    ensures super::client_spec::signatures().len() == 9,
+        super::client_spec::signatures()[0] == 0x0403u16,
+        super::client_spec::signatures()[1] == 0x0503u16,
+{
+    assert(super::client_spec::signatures().len() == 9) by (compute_only);
+    assert(super::client_spec::signatures()[0] == 0x0403u16) by (compute_only);
+    assert(super::client_spec::signatures()[1] == 0x0503u16) by (compute_only);
 }
 /// Concrete RFC 8446 requirement: client public share.
 pub proof fn lemma_client_public_share()

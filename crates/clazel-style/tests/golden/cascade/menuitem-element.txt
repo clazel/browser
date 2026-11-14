@@ -1,0 +1,151 @@
+#case 0
+#data "<menuitem>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <menuitem>
+
+#case 1
+#data "</menuitem>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 2
+#data "<!DOCTYPE html><body><menuitem>A"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <menuitem>
+
+#case 3
+#data "<!DOCTYPE html><body><menuitem>A<menuitem>B"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <menuitem>
+      <menuitem>
+
+#case 4
+#data "<!DOCTYPE html><body><menuitem>A<menu>B</menu>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <menuitem>
+      <menu> margin-top=16px margin-bottom=16px padding-left=40px display=Block
+
+#case 5
+#data "<!DOCTYPE html><body><menuitem>A<hr>B"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <menuitem>
+      <hr> color=#808080ff margin-top=8px border-top-width=1px border-top-style=Inset margin-right=auto border-right-width=1px border-right-style=Inset margin-bottom=8px border-bottom-width=1px border-bottom-style=Inset margin-left=auto border-left-width=1px border-left-style=Inset display=Block overflow-x=Hidden overflow-y=Hidden
+
+#case 6
+#data "<!DOCTYPE html><li><menuitem><li>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <li> display=ListItem text-align=Left
+      <menuitem>
+    <li> display=ListItem text-align=Left
+
+#case 7
+#data "<!DOCTYPE html><menuitem><p></menuitem>x"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <menuitem>
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 8
+#data "<!DOCTYPE html><p><b></p><menuitem>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <b> font-weight=700
+    <b> font-weight=700
+      <menuitem>
+
+#case 9
+#data "<!DOCTYPE html><menuitem><asdf></menuitem>x"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <menuitem>
+      <asdf>
+
+#case 10
+#data "<!DOCTYPE html></menuitem>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 11
+#data "<!DOCTYPE html><html></menuitem>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 12
+#data "<!DOCTYPE html><head></menuitem>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 13
+#data "<!DOCTYPE html><select><menuitem></select>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <menuitem>
+
+#case 14
+#data "<!DOCTYPE html><option><menuitem>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <option>
+      <menuitem>
+
+#case 15
+#data "<!DOCTYPE html><menuitem><option>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <menuitem>
+      <option>
+
+#case 16
+#data "<!DOCTYPE html><menuitem></body>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <menuitem>
+
+#case 17
+#data "<!DOCTYPE html><menuitem></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <menuitem>
+
+#case 18
+#data "<!DOCTYPE html><menuitem><p>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <menuitem>
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 19
+#data "<!DOCTYPE html><menuitem><li>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <menuitem>
+      <li> display=ListItem text-align=Left
+

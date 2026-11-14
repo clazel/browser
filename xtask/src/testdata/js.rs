@@ -237,6 +237,16 @@ impl Parser {
                 self.bump();
                 Lit::Str(self.string_body(q)?)
             }
+            // A template with nothing substituted is a string.
+            Some('`') => {
+                self.bump();
+                let body = self.string_body('`')?;
+                let substitution: Vec<u16> = "${".encode_utf16().collect();
+                if body.windows(2).any(|w| w == substitution.as_slice()) {
+                    return self.err("a template that substitutes is not a literal");
+                }
+                Lit::Str(body)
+            }
             Some(c) if c.is_ascii_digit() => Lit::Num(self.number()?),
             Some('t') if self.rest_starts_with("true") => {
                 for _ in 0..4 {

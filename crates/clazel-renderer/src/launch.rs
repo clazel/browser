@@ -200,12 +200,17 @@ mod imp {
         // the binary is there (seen on the CI runner for about 6 in 100
         // starts of short-lived renderers, and never on a retry), apparently
         // while the system is still tidying a container whose last process just
-        // exited. Only that error, only while the file exists, is retried.
+        // exited. ERROR_GEN_FAILURE (31) has been seen once in the same place
+        // (CI run 42258642534, 1 start in 178; not reproduced in about 29,000
+        // local starts), so its cause is unknown and treating it the same way
+        // is a judgement. Only these errors, only while the file exists, are
+        // retried; each attempt builds the whole confinement again, and one
+        // that keeps failing still surfaces after the last retry.
         let mut retries = 0u32;
         let process = loop {
             match windows::spawn(&program, &line, &confinement, &env, &h_in, &h_out, &h_err) {
                 Ok(p) => break p,
-                Err(SpawnError::Call("CreateProcessW", Errno(2)))
+                Err(SpawnError::Call("CreateProcessW", Errno(2 | 31)))
                     if retries < 100 && program.exists() =>
                 {
                     retries = retries.saturating_add(1);

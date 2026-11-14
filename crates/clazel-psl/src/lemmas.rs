@@ -423,4 +423,16 @@ pub proof fn lemma_domain_match_same_cookie_root(rules: Seq<Rule>, h: Seq<u32>, 
     }
 }
 
+/// The ICANN section is a proper prefix of the list: it leaves the private
+/// section's rules out, and keeps the rest as they are.
+pub proof fn lemma_icann_rules_are_a_proper_prefix()
+    ensures
+        super::table::psl_icann_rules().len() < super::table::psl_rules().len(),
+        forall|i: int|
+            0 <= i < super::table::psl_icann_rules().len() ==> #[trigger] super::table::psl_icann_rules()[i]
+                == super::table::psl_rules()[i],
+{
+    assert(super::data::PSL_ICANN_RULES_LEN < super::data::PSL_RULES_LEN);
+}
+
 } // verus!

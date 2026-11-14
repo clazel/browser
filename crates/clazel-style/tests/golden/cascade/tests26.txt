@@ -1,0 +1,254 @@
+#case 0
+#data "<!DOCTYPE html><body><a href='#1'><nobr>1<nobr></a><br><a href='#2'><nobr>2<nobr></a><br><a href='#3'><nobr>3<nobr></a>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <a> color=#0000eeff text-decoration-line=DecorationLines { underline: true, overline: false, line_through: false, blink: false }
+      <nobr> white-space=Nowrap
+      <nobr> white-space=Nowrap
+    <nobr> white-space=Nowrap
+      <br>
+      <a> color=#0000eeff text-decoration-line=DecorationLines { underline: true, overline: false, line_through: false, blink: false }
+    <a> color=#0000eeff text-decoration-line=DecorationLines { underline: true, overline: false, line_through: false, blink: false }
+      <nobr> white-space=Nowrap
+      <nobr> white-space=Nowrap
+    <nobr> white-space=Nowrap
+      <br>
+      <a> color=#0000eeff text-decoration-line=DecorationLines { underline: true, overline: false, line_through: false, blink: false }
+    <a> color=#0000eeff text-decoration-line=DecorationLines { underline: true, overline: false, line_through: false, blink: false }
+      <nobr> white-space=Nowrap
+      <nobr> white-space=Nowrap
+
+#case 1
+#data "<!DOCTYPE html><body><b><nobr>1<nobr></b><i><nobr>2<nobr></i>3"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <b> font-weight=700
+      <nobr> white-space=Nowrap
+      <nobr> white-space=Nowrap
+    <nobr> white-space=Nowrap
+      <i> font-style=Italic
+    <i> font-style=Italic
+      <nobr> white-space=Nowrap
+      <nobr> white-space=Nowrap
+    <nobr> white-space=Nowrap
+
+#case 2
+#data "<!DOCTYPE html><body><b><nobr>1<table><nobr></b><i><nobr>2<nobr></i>3"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <b> font-weight=700
+      <nobr> white-space=Nowrap
+        <nobr>
+          <i> font-style=Italic
+        <i> font-style=Italic
+          <nobr>
+          <nobr>
+        <nobr>
+        <table> display=Table border-spacing=2px 2px
+
+#case 3
+#data "<!DOCTYPE html><body><b><nobr>1<table><tr><td><nobr></b><i><nobr>2<nobr></i>3"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <b> font-weight=700
+      <nobr> white-space=Nowrap
+        <table> display=Table border-spacing=2px 2px
+          <tbody> display=TableRowGroup vertical-align=Middle
+            <tr> display=TableRow vertical-align=Middle
+              <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+                <nobr>
+                  <i> font-style=Italic
+                <i> font-style=Italic
+                  <nobr>
+                  <nobr>
+                <nobr>
+
+#case 4
+#data "<!DOCTYPE html><body><b><nobr>1<div><nobr></b><i><nobr>2<nobr></i>3"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <b> font-weight=700
+      <nobr> white-space=Nowrap
+    <div> display=Block
+      <b> font-weight=700
+        <nobr> white-space=Nowrap
+        <nobr> white-space=Nowrap
+      <nobr> white-space=Nowrap
+        <i> font-style=Italic
+      <i> font-style=Italic
+        <nobr> white-space=Nowrap
+        <nobr> white-space=Nowrap
+      <nobr> white-space=Nowrap
+
+#case 5
+#data "<!DOCTYPE html><body><b><nobr>1<nobr></b><div><i><nobr>2<nobr></i>3"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <b> font-weight=700
+      <nobr> white-space=Nowrap
+      <nobr> white-space=Nowrap
+    <div> display=Block
+      <nobr> white-space=Nowrap
+        <i> font-style=Italic
+      <i> font-style=Italic
+        <nobr> white-space=Nowrap
+        <nobr> white-space=Nowrap
+      <nobr> white-space=Nowrap
+
+#case 6
+#data "<!DOCTYPE html><body><b><nobr>1<nobr><ins></b><i><nobr>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <b> font-weight=700
+      <nobr> white-space=Nowrap
+      <nobr> white-space=Nowrap
+        <ins> text-decoration-line=DecorationLines { underline: true, overline: false, line_through: false, blink: false }
+    <nobr> white-space=Nowrap
+      <i> font-style=Italic
+    <i> font-style=Italic
+      <nobr> white-space=Nowrap
+
+#case 7
+#data "<!DOCTYPE html><body><b><nobr>1<ins><nobr></b><i>2"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <b> font-weight=700
+      <nobr> white-space=Nowrap
+        <ins> text-decoration-line=DecorationLines { underline: true, overline: false, line_through: false, blink: false }
+      <nobr> white-space=Nowrap
+    <nobr> white-space=Nowrap
+      <i> font-style=Italic
+
+#case 8
+#data "<!DOCTYPE html><body><b>1<nobr></b><i><nobr>2</i>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <b> font-weight=700
+      <nobr> white-space=Nowrap
+    <nobr> white-space=Nowrap
+      <i> font-style=Italic
+    <i> font-style=Italic
+      <nobr> white-space=Nowrap
+
+#case 9
+#data "<p><code x</code></p>\n"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-bottom=16px display=Block
+      <code> font-family=monospace
+    <code> font-family=monospace
+
+#case 10
+#data "<!DOCTYPE html><svg><foreignObject><p><i></p>a"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+      <foreignObject>
+        <p> margin-top=16px margin-bottom=16px display=Block
+          <i> font-style=Italic
+        <i> font-style=Italic
+
+#case 11
+#data "<!DOCTYPE html><table><tr><td><svg><foreignObject><p><i></p>a"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+            <svg>
+              <foreignObject>
+                <p> margin-top=16px margin-bottom=16px display=Block
+                  <i> font-style=Italic
+                <i> font-style=Italic
+
+#case 12
+#data "<!DOCTYPE html><math><mtext><p><i></p>a"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <mtext>
+        <p> margin-top=16px margin-bottom=16px display=Block
+          <i> font-style=Italic
+        <i> font-style=Italic
+
+#case 13
+#data "<!DOCTYPE html><table><tr><td><math><mtext><p><i></p>a"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+            <math>
+              <mtext>
+                <p> margin-top=16px margin-bottom=16px display=Block
+                  <i> font-style=Italic
+                <i> font-style=Italic
+
+#case 14
+#data "<!DOCTYPE html><body><div><!/div>a"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 15
+#data "<button><p><button>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <button> display=InlineBlock text-align=Center
+      <p> margin-top=16px margin-bottom=16px display=Block
+    <button> display=InlineBlock text-align=Center
+
+#case 16
+#data "<svg></p><foo>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <foo>
+
+#case 17
+#data "<svg></br><foo>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+    <br>
+    <foo>
+
+#case 18
+#data "<math></p><foo>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <foo>
+
+#case 19
+#data "<math></br><foo>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+    <br>
+    <foo>
+

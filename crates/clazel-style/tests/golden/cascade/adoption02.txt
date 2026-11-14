@@ -1,0 +1,44 @@
+#case 0
+#data "<b>1<i>2<p>3</b>4"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <b> font-weight=700
+      <i> font-style=Italic
+    <i> font-style=Italic
+      <p> margin-top=16px margin-bottom=16px display=Block
+        <b> font-weight=700
+
+#case 1
+#data "<a><div><style></style><address><a>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <a>
+    <div> display=Block
+      <a>
+        <style> display=None
+      <address> display=Block font-style=Italic
+        <a>
+        <a>
+
+#case 2
+#data "<nobr><table><marquee></table><nobr>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <nobr> white-space=Nowrap
+      <marquee>
+      <table> display=Table white-space=Normal border-spacing=2px 2px
+    <nobr> white-space=Nowrap
+
+#case 3
+#data "<a><table><marquee></table><a>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <a>
+      <marquee>
+      <table> display=Table border-spacing=2px 2px
+      <a>
+

@@ -18,6 +18,12 @@ pub open spec fn decode_renderer_message_ensures(input: Seq<u8>, output: Option<
     output == decode_renderer_message(input)
 }
 
+/// Contract for `decode_gpu_message(&[u8]) -> Option<Message>`: what the
+/// kernel runs on the bytes of a frame from a GPU process (item 5.18).
+pub open spec fn decode_gpu_message_ensures(input: Seq<u8>, output: Option<Message>) -> bool {
+    output == decode_gpu_message(input)
+}
+
 /// Precondition of `encode_message(&Message) -> Vec<u8>`.
 pub open spec fn encode_message_requires(m: Message) -> bool {
     message_ok(m)

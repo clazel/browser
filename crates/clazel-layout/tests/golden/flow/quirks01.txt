@@ -1,0 +1,36 @@
+#case 0
+#data "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Frameset//EN\"\n\"http://www.w3.org/TR/xhtml1/DTD/xhtml1-frameset.dtd\"><p><table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x24
+    block <body> 8,16 784x0 m=8,8,8,8
+      block <p> 8,16 784x0 m=16,0,16,0
+      table-wrapper <table> 8,16 0x0 m=0,784,0,0
+        table <table> 8,16 0x0
+
+#case 1
+#data "<!DOCTYPE html SYSTEM \"http://www.ibm.com/data/dtd/v11/ibmxhtml1-transitional.dtd\"><p><table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x608
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <p> 8,8 784x0 m=0,0,16,0
+        table-wrapper <table> 8,8 0x0 m=0,784,0,0
+          table <table> 8,8 0x0
+
+#case 2
+#data "<!DOCTYPE html PUBLIC \"html\"><p><table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x608
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <p> 8,8 784x0 m=0,0,16,0
+        table-wrapper <table> 8,8 0x0 m=0,784,0,0
+          table <table> 8,8 0x0
+
+#case 3
+#data "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 3.2//EN\"\n   \"http://www.w3.org/TR/html4/strict.dtd\"><p><table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x608
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <p> 8,8 784x0 m=0,0,16,0
+        table-wrapper <table> 8,8 0x0 m=0,784,0,0
+          table <table> 8,8 0x0
+

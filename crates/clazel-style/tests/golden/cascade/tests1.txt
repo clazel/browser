@@ -1,0 +1,1027 @@
+#case 0
+#data "Test"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 1
+#data "<p>One<p>Two"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-bottom=16px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 2
+#data "Line1<br>Line2<br>Line3<br>Line4"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <br>
+    <br>
+    <br>
+
+#case 3
+#data "<html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 4
+#data "<head>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 5
+#data "<body>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 6
+#data "<html><head>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 7
+#data "<html><head></head>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 8
+#data "<html><head></head><body>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 9
+#data "<html><head></head><body></body>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 10
+#data "<html><head><body></body></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 11
+#data "<html><head></body></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 12
+#data "<html><head><body></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 13
+#data "<html><body></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 14
+#data "<body></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 15
+#data "<head></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 16
+#data "</head>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 17
+#data "</body>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 18
+#data "</html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 19
+#data "<b><table><td><i></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <b> font-weight=700
+      <table> display=Table font-weight=400 border-spacing=2px 2px
+        <tbody> display=TableRowGroup vertical-align=Middle
+          <tr> display=TableRow vertical-align=Middle
+            <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+              <i> font-style=Italic
+
+#case 20
+#data "<b><table><td></b><i></table>X"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <b> font-weight=700
+      <table> display=Table font-weight=400 border-spacing=2px 2px
+        <tbody> display=TableRowGroup vertical-align=Middle
+          <tr> display=TableRow vertical-align=Middle
+            <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+              <i> font-style=Italic
+
+#case 21
+#data "<h1>Hello<h2>World"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <h1> margin-bottom=21.4375px display=Block font-size=32px font-weight=700
+    <h2> margin-top=19.9219px margin-bottom=19.9219px display=Block font-size=24px font-weight=700
+
+#case 22
+#data "<a><p>X<a>Y</a>Z</p></a>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <a>
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <a>
+      <a>
+
+#case 23
+#data "<b><button>foo</b>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <b> font-weight=700
+    <button> display=InlineBlock text-align=Center
+      <b> font-weight=700
+
+#case 24
+#data "<!DOCTYPE html><span><button>foo</span>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <span>
+      <button> display=InlineBlock text-align=Center
+
+#case 25
+#data "<p><b><div><marquee></p></b></div>X"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-bottom=16px display=Block
+      <b> font-weight=700
+    <div> display=Block
+      <b> font-weight=700
+        <marquee>
+          <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 26
+#data "<script><div></script></div><title><p></title><p><p>"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+    <title> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 27
+#data "<!--><div>--<!-->"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 28
+#data "<p><hr></p>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> display=Block
+    <hr> color=#808080ff margin-top=8px border-top-width=1px border-top-style=Inset margin-right=auto border-right-width=1px border-right-style=Inset margin-bottom=8px border-bottom-width=1px border-bottom-style=Inset margin-left=auto border-left-width=1px border-left-style=Inset display=Block overflow-x=Hidden overflow-y=Hidden
+    <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 29
+#data "<select><b><option><select><option></b></select>X"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <b> font-weight=700
+        <option>
+    <b> font-weight=700
+      <option>
+
+#case 30
+#data "<a><table><td><a><table></table><a></tr><a></table><b>X</b>C<a>Y"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <a>
+      <a>
+      <table> display=Table border-spacing=2px 2px
+        <tbody> display=TableRowGroup vertical-align=Middle
+          <tr> display=TableRow vertical-align=Middle
+            <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+              <a>
+                <table> display=Table
+              <a>
+    <a>
+      <b> font-weight=700
+    <a>
+
+#case 31
+#data "<a X>0<b>1<a Y>2"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <a>
+      <b> font-weight=700
+    <b> font-weight=700
+      <a>
+
+#case 32
+#data "<!-----><font><div>hello<table>excite!<b>me!<th><i>please!</tr><!--X-->"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <font>
+      <div> display=Block
+        <b> font-weight=700
+        <table> display=Table border-spacing=2px 2px
+          <tbody> display=TableRowGroup vertical-align=Middle
+            <tr> display=TableRow vertical-align=Middle
+              <th> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell font-weight=700 vertical-align=Middle text-align=Center
+                <i> font-style=Italic
+
+#case 33
+#data "<!DOCTYPE html><li>hello<li>world<ul>how<li>do</ul>you</body><!--do-->"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <li> display=ListItem text-align=Left
+    <li> display=ListItem text-align=Left
+      <ul> margin-top=16px margin-bottom=16px padding-left=40px display=Block
+        <li> display=ListItem
+
+#case 34
+#data "<!DOCTYPE html>A<option>B<optgroup>C<select>D</option>E"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <option>
+    <optgroup>
+      <select>
+
+#case 35
+#data "<"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 36
+#data "<#"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 37
+#data "</"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 38
+#data "</#"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 39
+#data "<?"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 40
+#data "<?#"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 41
+#data "<!"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 42
+#data "<!#"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 43
+#data "<?COMMENT?>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 44
+#data "<!COMMENT>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 45
+#data "</ COMMENT >"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 46
+#data "<?COM--MENT?>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 47
+#data "<!COM--MENT>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 48
+#data "</ COM--MENT >"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 49
+#data "<!DOCTYPE html><style> EOF"
+<html> display=Block
+  <head> display=None
+    <style> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 50
+#data "<!DOCTYPE html><script> <!-- </script> --> </script> EOF"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 51
+#data "<b><p></b>TEST"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <b> font-weight=700
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <b> font-weight=700
+
+#case 52
+#data "<p id=a><b><p id=b></b>TEST"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-bottom=16px display=Block
+      <b> font-weight=700
+    <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 53
+#data "<b id=a><p><b id=b></p></b>TEST"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <b> font-weight=700
+      <p> margin-top=16px margin-bottom=16px display=Block
+        <b> font-weight=900
+
+#case 54
+#data "<!DOCTYPE html><title>U-test</title><body><div><p>Test<u></p></div></body>"
+<html> display=Block
+  <head> display=None
+    <title> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+        <u> text-decoration-line=DecorationLines { underline: true, overline: false, line_through: false, blink: false }
+
+#case 55
+#data "<!DOCTYPE html><font><table></font></table></font>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <font>
+      <table> display=Table border-spacing=2px 2px
+
+#case 56
+#data "<font><p>hello<b>cruel</font>world"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <font>
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <font>
+        <b> font-weight=700
+      <b> font-weight=700
+
+#case 57
+#data "<b>Test</i>Test"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <b> font-weight=700
+
+#case 58
+#data "<b>A<cite>B<div>C"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <b> font-weight=700
+      <cite> font-style=Italic
+        <div> display=Block
+
+#case 59
+#data "<b>A<cite>B<div>C</cite>D"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <b> font-weight=700
+      <cite> font-style=Italic
+        <div> display=Block
+
+#case 60
+#data "<b>A<cite>B<div>C</b>D"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <b> font-weight=700
+      <cite> font-style=Italic
+    <div> display=Block
+      <b> font-weight=700
+
+#case 61
+#data ""
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 62
+#data "<DIV>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 63
+#data "<DIV> abc"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 64
+#data "<DIV> abc <B>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+      <b> font-weight=700
+
+#case 65
+#data "<DIV> abc <B> def"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+      <b> font-weight=700
+
+#case 66
+#data "<DIV> abc <B> def <I>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+      <b> font-weight=700
+        <i> font-style=Italic
+
+#case 67
+#data "<DIV> abc <B> def <I> ghi"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+      <b> font-weight=700
+        <i> font-style=Italic
+
+#case 68
+#data "<DIV> abc <B> def <I> ghi <P>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+      <b> font-weight=700
+        <i> font-style=Italic
+          <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 69
+#data "<DIV> abc <B> def <I> ghi <P> jkl"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+      <b> font-weight=700
+        <i> font-style=Italic
+          <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 70
+#data "<DIV> abc <B> def <I> ghi <P> jkl </B>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+      <b> font-weight=700
+        <i> font-style=Italic
+      <i> font-style=Italic
+        <p> margin-top=16px margin-bottom=16px display=Block
+          <b> font-weight=700
+
+#case 71
+#data "<DIV> abc <B> def <I> ghi <P> jkl </B> mno"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+      <b> font-weight=700
+        <i> font-style=Italic
+      <i> font-style=Italic
+        <p> margin-top=16px margin-bottom=16px display=Block
+          <b> font-weight=700
+
+#case 72
+#data "<DIV> abc <B> def <I> ghi <P> jkl </B> mno </I>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+      <b> font-weight=700
+        <i> font-style=Italic
+      <i> font-style=Italic
+      <p> margin-top=16px margin-bottom=16px display=Block
+        <i> font-style=Italic
+          <b> font-weight=700
+
+#case 73
+#data "<DIV> abc <B> def <I> ghi <P> jkl </B> mno </I> pqr"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+      <b> font-weight=700
+        <i> font-style=Italic
+      <i> font-style=Italic
+      <p> margin-top=16px margin-bottom=16px display=Block
+        <i> font-style=Italic
+          <b> font-weight=700
+
+#case 74
+#data "<DIV> abc <B> def <I> ghi <P> jkl </B> mno </I> pqr </P>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+      <b> font-weight=700
+        <i> font-style=Italic
+      <i> font-style=Italic
+      <p> margin-top=16px margin-bottom=16px display=Block
+        <i> font-style=Italic
+          <b> font-weight=700
+
+#case 75
+#data "<DIV> abc <B> def <I> ghi <P> jkl </B> mno </I> pqr </P> stu"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+      <b> font-weight=700
+        <i> font-style=Italic
+      <i> font-style=Italic
+      <p> margin-top=16px margin-bottom=16px display=Block
+        <i> font-style=Italic
+          <b> font-weight=700
+
+#case 76
+#data "<test attribute---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------->"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <test>
+
+#case 77
+#data "<a href=\"blah\">aba<table><a href=\"foo\">br<tr><td></td></tr>x</table>aoe"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <a> color=#0000eeff text-decoration-line=DecorationLines { underline: true, overline: false, line_through: false, blink: false }
+      <a> text-decoration-line=DecorationLines { underline: true, overline: false, line_through: false, blink: false }
+      <a> text-decoration-line=DecorationLines { underline: true, overline: false, line_through: false, blink: false }
+      <table> display=Table border-spacing=2px 2px
+        <tbody> display=TableRowGroup vertical-align=Middle
+          <tr> display=TableRow vertical-align=Middle
+            <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+    <a> color=#0000eeff text-decoration-line=DecorationLines { underline: true, overline: false, line_through: false, blink: false }
+
+#case 78
+#data "<a href=\"blah\">aba<table><tr><td><a href=\"foo\">br</td></tr>x</table>aoe"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <a> color=#0000eeff text-decoration-line=DecorationLines { underline: true, overline: false, line_through: false, blink: false }
+      <table> display=Table border-spacing=2px 2px
+        <tbody> display=TableRowGroup vertical-align=Middle
+          <tr> display=TableRow vertical-align=Middle
+            <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+              <a> text-decoration-line=DecorationLines { underline: true, overline: false, line_through: false, blink: false }
+
+#case 79
+#data "<table><a href=\"blah\">aba<tr><td><a href=\"foo\">br</td></tr>x</table>aoe"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <a> color=#0000eeff text-decoration-line=DecorationLines { underline: true, overline: false, line_through: false, blink: false }
+    <a> color=#0000eeff text-decoration-line=DecorationLines { underline: true, overline: false, line_through: false, blink: false }
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+            <a> color=#0000eeff text-decoration-line=DecorationLines { underline: true, overline: false, line_through: false, blink: false }
+    <a> color=#0000eeff text-decoration-line=DecorationLines { underline: true, overline: false, line_through: false, blink: false }
+
+#case 80
+#data "<a href=a>aa<marquee>aa<a href=b>bb</marquee>aa"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <a> color=#0000eeff text-decoration-line=DecorationLines { underline: true, overline: false, line_through: false, blink: false }
+      <marquee>
+        <a> text-decoration-line=DecorationLines { underline: true, overline: false, line_through: false, blink: false }
+
+#case 81
+#data "<wbr><strike><code></strike><code><strike></code>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <wbr>
+    <strike> text-decoration-line=DecorationLines { underline: false, overline: false, line_through: true, blink: false }
+      <code> font-family=monospace
+    <code> font-family=monospace
+      <code>
+        <strike> text-decoration-line=DecorationLines { underline: false, overline: false, line_through: true, blink: false }
+
+#case 82
+#data "<!DOCTYPE html><spacer>foo"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <spacer>
+
+#case 83
+#data "<title><meta></title><link><title><meta></title>"
+<html> display=Block
+  <head> display=None
+    <title> display=None
+    <link> display=None
+    <title> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 84
+#data "<style><!--</style><meta><script>--><link></script>"
+<html> display=Block
+  <head> display=None
+    <style> display=None
+    <meta> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 85
+#data "<head><meta></head><link>"
+<html> display=Block
+  <head> display=None
+    <meta> display=None
+    <link> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 86
+#data "<table><tr><tr><td><td><span><th><span>X</table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+            <span>
+          <th> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell font-weight=700 vertical-align=Middle text-align=Center
+            <span>
+
+#case 87
+#data "<body><body><base><link><meta><title><p></title><body><p></body>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <base> display=None
+    <link> display=None
+    <meta> display=None
+    <title> display=None
+    <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 88
+#data "<textarea><p></textarea>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <textarea> white-space=PreWrap
+
+#case 89
+#data "<p><image></p>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-bottom=16px display=Block
+      <img>
+
+#case 90
+#data "<a><table><a></table><p><a><div><a>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <a>
+      <a>
+      <table> display=Table border-spacing=2px 2px
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <a>
+    <div> display=Block
+      <a>
+
+#case 91
+#data "<head></p><meta><p>"
+<html> display=Block
+  <head> display=None
+    <meta> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> display=Block
+
+#case 92
+#data "<head></html><meta><p>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <meta> display=None
+    <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 93
+#data "<b><table><td></b><i></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <b> font-weight=700
+      <table> display=Table font-weight=400 border-spacing=2px 2px
+        <tbody> display=TableRowGroup vertical-align=Middle
+          <tr> display=TableRow vertical-align=Middle
+            <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+              <i> font-style=Italic
+
+#case 94
+#data "<h1><h2>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <h1> display=Block font-size=32px font-weight=700
+    <h2> margin-top=19.9219px margin-bottom=19.9219px display=Block font-size=24px font-weight=700
+
+#case 95
+#data "<a><p><a></a></p></a>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <a>
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <a>
+      <a>
+
+#case 96
+#data "<b><button></b></button></b>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <b> font-weight=700
+    <button> display=InlineBlock text-align=Center
+      <b> font-weight=700
+
+#case 97
+#data "<p><b><div><marquee></p></b></div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-bottom=16px display=Block
+      <b> font-weight=700
+    <div> display=Block
+      <b> font-weight=700
+        <marquee>
+          <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 98
+#data "<script></script></div><title></title><p><p>"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+    <title> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 99
+#data "<select><b><option><select><option></b></select>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <b> font-weight=700
+        <option>
+    <b> font-weight=700
+      <option>
+
+#case 100
+#data "<html><head><title></title><body></body></html>"
+<html> display=Block
+  <head> display=None
+    <title> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 101
+#data "<a><table><td><a><table></table><a></tr><a></table><a>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <a>
+      <a>
+      <table> display=Table border-spacing=2px 2px
+        <tbody> display=TableRowGroup vertical-align=Middle
+          <tr> display=TableRow vertical-align=Middle
+            <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+              <a>
+                <table> display=Table
+              <a>
+    <a>
+
+#case 102
+#data "<ul><li></li><div><li></div><li><li><div><li><address><li><b><em></b><li></ul>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <ul> margin-bottom=16px padding-left=40px display=Block
+      <li> display=ListItem text-align=Left
+      <div> display=Block
+        <li> display=ListItem text-align=Left
+      <li> display=ListItem text-align=Left
+      <li> display=ListItem text-align=Left
+        <div> display=Block
+      <li> display=ListItem text-align=Left
+        <address> display=Block font-style=Italic
+      <li> display=ListItem text-align=Left
+        <b> font-weight=700
+          <em> font-style=Italic
+      <li> display=ListItem text-align=Left
+
+#case 103
+#data "<ul><li><ul></li><li>a</li></ul></li></ul>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <ul> margin-bottom=16px padding-left=40px display=Block
+      <li> display=ListItem text-align=Left
+        <ul> padding-left=40px display=Block list-style-type=circle
+          <li> display=ListItem
+
+#case 104
+#data "<frameset><frame><frameset><frame></frameset><noframes></noframes></frameset>"
+<html> display=Block
+  <head> display=None
+  <frameset>
+    <frame>
+    <frameset>
+      <frame>
+    <noframes> display=None
+
+#case 105
+#data "<h1><table><td><h3></table><h3></h1>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <h1> margin-bottom=21.4375px display=Block font-size=32px font-weight=700
+      <table> display=Table font-size=16px font-weight=400 border-spacing=2px 2px
+        <tbody> display=TableRowGroup vertical-align=Middle
+          <tr> display=TableRow vertical-align=Middle
+            <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+              <h3> display=Block font-size=18.7188px font-weight=700
+    <h3> margin-top=18.7188px margin-bottom=18.7188px display=Block font-size=18.7188px font-weight=700
+
+#case 106
+#data "<table><colgroup><col><colgroup><col><col><col><colgroup><col><col><thead><tr><td></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <colgroup> display=TableColumnGroup
+        <col> display=TableColumn
+      <colgroup> display=TableColumnGroup
+        <col> display=TableColumn
+        <col> display=TableColumn
+        <col> display=TableColumn
+      <colgroup> display=TableColumnGroup
+        <col> display=TableColumn
+        <col> display=TableColumn
+      <thead> display=TableHeaderGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+
+#case 107
+#data "<table><col><tbody><col><tr><col><td><col></table><col>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <colgroup> display=TableColumnGroup
+        <col> display=TableColumn
+      <tbody> display=TableRowGroup vertical-align=Middle
+      <colgroup> display=TableColumnGroup
+        <col> display=TableColumn
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+      <colgroup> display=TableColumnGroup
+        <col> display=TableColumn
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+      <colgroup> display=TableColumnGroup
+        <col> display=TableColumn
+
+#case 108
+#data "<table><colgroup><tbody><colgroup><tr><colgroup><td><colgroup></table><colgroup>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <colgroup> display=TableColumnGroup
+      <tbody> display=TableRowGroup vertical-align=Middle
+      <colgroup> display=TableColumnGroup
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+      <colgroup> display=TableColumnGroup
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+      <colgroup> display=TableColumnGroup
+
+#case 109
+#data "</strong></b></em></i></u></strike></s></blink></tt></pre></big></small></font></select></h1></h2></h3></h4></h5></h6></body></br></a></img></title></span></style></script></table></th></td></tr></frame></area></link></param></hr></input></col></base></meta></basefont></bgsound></embed></spacer></p></dd></dt></caption></colgroup></tbody></tfoot></thead></address></blockquote></center></dir></div></dl></fieldset></listing></menu></ol></ul></li></nobr></wbr></form></button></marquee></object></html></frameset></head></iframe></image></isindex></noembed></noframes></noscript></optgroup></option></plaintext></textarea>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <br>
+    <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 110
+#data "<table><tr></strong></b></em></i></u></strike></s></blink></tt></pre></big></small></font></select></h1></h2></h3></h4></h5></h6></body></br></a></img></title></span></style></script></table></th></td></tr></frame></area></link></param></hr></input></col></base></meta></basefont></bgsound></embed></spacer></p></dd></dt></caption></colgroup></tbody></tfoot></thead></address></blockquote></center></dir></div></dl></fieldset></listing></menu></ol></ul></li></nobr></wbr></form></button></marquee></object></html></frameset></head></iframe></image></isindex></noembed></noframes></noscript></optgroup></option></plaintext></textarea>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <br>
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+    <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 111
+#data "<frameset>"
+<html> display=Block
+  <head> display=None
+  <frameset>
+

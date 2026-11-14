@@ -1,0 +1,60 @@
+#case 0
+#data "<b>1<i>2<p>3</b>4"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <b>
+          text "1"
+          inline <i>
+            text "2"
+        inline <i> first
+      block <p>
+        inline <b>
+          text "3"
+        text "4"
+      block (anonymous)
+        inline <i> last
+
+#case 1
+#data "<a><div><style></style><address><a>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <a>
+      block <div>
+        block (anonymous)
+          inline <a>
+        block <address>
+          inline <a>
+          inline <a>
+
+#case 2
+#data "<nobr><table><marquee></table><nobr>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <nobr> first
+          inline <marquee>
+      table-wrapper <table>
+        table <table>
+      block (anonymous)
+        inline <nobr> last
+        inline <nobr>
+
+#case 3
+#data "<a><table><marquee></table><a>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <a> first
+          inline <marquee>
+      table-wrapper <table>
+        table <table>
+      block (anonymous)
+        inline <a> last
+          inline <a>
+

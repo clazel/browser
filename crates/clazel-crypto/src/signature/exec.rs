@@ -1,10 +1,12 @@
 //! The executable CertificateVerify signature check, proven equal to
 //! [`crate::signature::spec::verify`]. Parsing is ours (`clazel-x509`,
-//! `clazel-der`); the three verifications are the axioms of
-//! [`crate::axioms`].
+//! `clazel-der`); the P-256, RSA-PSS and Ed25519 verifications are the
+//! axioms of [`crate::axioms`], and P-384 is `clazel_p384`'s (through
+//! [`crate::chain::exec::ecdsa_p384_link`]).
 use crate::axioms;
 use crate::signature::spec::Hash;
 use clazel_der::decode as der;
+use clazel_x509::signature_algorithm::exec::EcdsaHash;
 use clazel_x509::spki::exec::{PublicKey, SubjectPublicKeyInfo};
 #[allow(unused_imports)]
 use vstd::prelude::*;
@@ -93,6 +95,29 @@ pub(crate) fn ecdsa_p256_sha256(spki: &SubjectPublicKeyInfo, input: &[u8], signa
     match (p256_point(spki), ecdsa_sig_value(signature)) {
         (Some(point), Some((r, s))) =>
             axioms::ecdsa_p256_sha256_verify(input, r.as_slice(), s.as_slice(), point),
+        _ => false,
+    }
+}
+
+/// RFC 8446 §4.2.3: the hash of the secp384r1 ECDSA scheme `scheme`.
+fn p384_hash(scheme: u16) -> (out: Option<EcdsaHash>)
+    ensures
+        match out {
+            Some(hash) => crate::signature::spec::p384_hash(scheme)
+                == Some(clazel_x509::signature_algorithm::exec::view_ecdsa_hash(hash)),
+            None => crate::signature::spec::p384_hash(scheme) is None,
+        },
+{
+    if scheme == 0x0503 { Some(EcdsaHash::Sha384) } else { None }
+}
+
+/// ECDSA over secp384r1 with `hash`: only a secp384r1 key verifies.
+fn ecdsa_p384(spki: &SubjectPublicKeyInfo, hash: EcdsaHash, input: &[u8], signature: &[u8]) -> (out: bool)
+    ensures out == crate::signature::spec::ecdsa_p384(spki@,
+        clazel_x509::signature_algorithm::exec::view_ecdsa_hash(hash), input@, signature@),
+{
+    match &spki.public_key {
+        PublicKey::EcP384(point) => crate::chain::exec::ecdsa_p384_link(point, hash, input, signature),
         _ => false,
     }
 }
@@ -261,7 +286,12 @@ pub fn verify(key: &[u8], scheme: u16, input: &[u8], signature: &[u8]) -> (out: 
             else if scheme == 0x0805 { rsa_pss_rsae(&spki, Hash::Sha384, input, signature) }
             else if scheme == 0x0806 { rsa_pss_rsae(&spki, Hash::Sha512, input, signature) }
             else if scheme == 0x0807 { ed25519(&spki, input, signature) }
-            else { false }
+            else {
+                match p384_hash(scheme) {
+                    Some(hash) => ecdsa_p384(&spki, hash, input, signature),
+                    None => false,
+                }
+            }
         },
     }
 }

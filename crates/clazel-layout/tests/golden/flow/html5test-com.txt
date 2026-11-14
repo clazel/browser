@@ -1,0 +1,251 @@
+#case 0
+#data "<div<div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 1
+#data "<div foo<bar=''>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <div> 8,8 784x0
+
+#case 2
+#data "<div foo=`bar`>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <div> 8,8 784x0
+
+#case 3
+#data "<div \\\"foo=''>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <div> 8,8 784x0
+
+#case 4
+#data "<a href='\\nbar'></a>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 5
+#data "<!DOCTYPE html>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 6
+#data "&lang;&rang;"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "⟨⟩" x=8 base=22.859375 w=12.484375
+
+#case 7
+#data "&apos;"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "'" x=8 base=22.859375 w=4.40625
+
+#case 8
+#data "&ImaginaryI;"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "ⅈ" x=8 base=22.859375 w=6.078125
+
+#case 9
+#data "&Kopf;"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "𝕂" x=8 base=22.859375 w=13.90625
+
+#case 10
+#data "&notinva;"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "∉" x=8 base=22.859375 w=11.84375
+
+#case 11
+#data "<?import namespace=\"foo\" implementation=\"#bar\">"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 12
+#data "<!--foo--bar-->"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 13
+#data "<svg><title><![CDATA[x]]>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 14
+#data "<svg><foreignobject><![CDATA[x]]>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <svg> 8,8 9.03125x18.640625 start end
+        inline <foreignObject> 8,8 9.03125x18.640625 start end
+        text "x" x=8 base=22.859375 w=9.03125
+
+#case 15
+#data "<svg><foreignobject><p><![CDATA[x]]>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,16 784x584 m=8,8,8,8
+      block (anonymous) 8,16 784x0
+      block <p> 8,16 784x0 m=16,0,16,0
+      block (anonymous) 8,16 784x0
+
+#case 16
+#data "<math><![CDATA[x]]>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <math> 8,8 9.03125x18.640625 start end
+        text "x" x=8 base=22.859375 w=9.03125
+
+#case 17
+#data "<math><mtext><![CDATA[x]]>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <math> 8,8 9.03125x18.640625 start end
+        inline <mtext> 8,8 9.03125x18.640625 start end
+        text "x" x=8 base=22.859375 w=9.03125
+
+#case 18
+#data "<math><mtext><i><![CDATA[x]]>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 19
+#data "<![CDATA[x]]>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 20
+#data "<textarea><!--</textarea>--></textarea>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x41.0625 base=45.28125
+        atomic <textarea>
+        text "-->" x=235.796875 base=45.28125 w=24.21875
+      replaced <textarea> 8,8 227.796875x37.28125
+
+#case 21
+#data "<textarea><!--</textarea>-->"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x41.0625 base=45.28125
+        atomic <textarea>
+        text "-->" x=235.796875 base=45.28125 w=24.21875
+      replaced <textarea> 8,8 227.796875x37.28125
+
+#case 22
+#data "<style><!--</style>--></style>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "-->" x=8 base=22.859375 w=24.21875
+
+#case 23
+#data "<style><!--</style>-->"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "-->" x=8 base=22.859375 w=24.21875
+
+#case 24
+#data "<ul><li>A </li> <li>B</li></ul>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x608
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <ul> 8,8 784x37.28125 m=0,0,16,0 p=0,0,0,40
+        block <li> 48,8 744x18.640625
+          line 48,8 744x18.640625 base=22.859375
+            text "A" x=48 base=22.859375 w=11.5625
+          marker <li> 33.46875,8 14.53125x18.640625
+            line 33.46875,8 14.53125x18.640625 base=22.859375
+              text "• " x=33.46875 base=22.859375 w=14.53125
+        block <li> 48,26.640625 744x18.640625
+          line 48,26.640625 744x18.640625 base=41.5
+            text "B" x=48 base=41.5 w=11.765625
+          marker <li> 33.46875,26.640625 14.53125x18.640625
+            line 33.46875,26.640625 14.53125x18.640625 base=41.5
+              text "• " x=33.46875 base=41.5 w=14.53125
+
+#case 25
+#data "<table><form><input type=hidden><input></form><div></div></table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block (anonymous) 8,8 784x18.640625
+        line 8,8 784x18.640625 base=26.640625
+          atomic <input>
+        replaced <input> 8,8 227.796875x18.640625
+      block <div> 8,26.640625 784x0
+      table-wrapper <table> 8,26.640625 0x0 m=0,784,0,0
+        table <table> 8,26.640625 0x0
+
+#case 26
+#data "<i>A<b>B<p></i>C</b>D"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x608
+    block <body> 8,8 784x584 m=8,8,8,8
+      block (anonymous) 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          inline <i> 8,8 23.328125x18.640625 start end
+          inline <b> 19.5625,8 11.765625x18.640625 start end
+          text "A" x=8 base=22.859375 w=11.5625
+          text "B" x=19.5625 base=22.859375 w=11.765625
+      block <p> 8,42.640625 784x18.640625 m=16,0,16,0
+        line 8,42.640625 784x18.640625 base=57.5
+          inline <b> 8,42.640625 12.25x18.640625 start end
+          text "C" x=8 base=57.5 w=12.25
+          text "D" x=20.25 base=57.5 w=12.828125
+
+#case 27
+#data "<div></div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <div> 8,8 784x0
+
+#case 28
+#data "<svg></svg>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 29
+#data "<math></math>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+

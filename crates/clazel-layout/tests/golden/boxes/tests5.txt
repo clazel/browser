@@ -1,0 +1,119 @@
+#case 0
+#data "<style> <!-- </style>x"
+root
+  block <html>
+    block <body>
+      text "x"
+
+#case 1
+#data "<style> <!-- </style> --> </style>x"
+root
+  block <html>
+    block <body>
+      text "--> x"
+
+#case 2
+#data "<style> <!--> </style>x"
+root
+  block <html>
+    block <body>
+      text "x"
+
+#case 3
+#data "<style> <!---> </style>x"
+root
+  block <html>
+    block <body>
+      text "x"
+
+#case 4
+#data "<iframe> <!---> </iframe>x"
+root
+  block <html>
+    block <body>
+      replaced <iframe> inline Iframe { src: None }
+      text "x"
+
+#case 5
+#data "<iframe> <!--- </iframe>->x</iframe> --> </iframe>x"
+root
+  block <html>
+    block <body>
+      replaced <iframe> inline Iframe { src: None }
+      text "->x --> x"
+
+#case 6
+#data "<script> <!-- </script> --> </script>x"
+root
+  block <html>
+    block <body>
+      text "--> x"
+
+#case 7
+#data "<title> <!-- </title> --> </title>x"
+root
+  block <html>
+    block <body>
+      text "--> x"
+
+#case 8
+#data "<textarea> <!--- </textarea>->x</textarea> --> </textarea>x"
+root
+  block <html>
+    block <body>
+      replaced <textarea> inline TextArea { cols: 20, rows: 2 }
+      text "->x --> x"
+
+#case 9
+#data "<style> <!</-- </style>x"
+root
+  block <html>
+    block <body>
+      text "x"
+
+#case 10
+#data "<p><xmp></xmp>"
+root
+  block <html>
+    block <body>
+      block <p>
+      block <xmp>
+
+#case 11
+#data "<xmp> <!-- > --> </xmp>"
+root
+  block <html>
+    block <body>
+      block <xmp>
+        text " <!-- > --> " white-space=Pre
+
+#case 12
+#data "<title>&amp;</title>"
+root
+  block <html>
+    block <body>
+
+#case 13
+#data "<title><!--&amp;--></title>"
+root
+  block <html>
+    block <body>
+
+#case 14
+#data "<title><!--</title>"
+root
+  block <html>
+    block <body>
+
+#case 15
+#data "<noscript><!--</noscript>--></noscript>"
+root
+  block <html>
+    block <body>
+
+#case 16
+#data "<noscript><!--</noscript>--></noscript>"
+root
+  block <html>
+    block <body>
+

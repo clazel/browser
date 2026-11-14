@@ -1,0 +1,30 @@
+#case 0
+#data "<button>1</foo>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <button> display=InlineBlock text-align=Center
+
+#case 1
+#data "<foo>1<p>2</foo>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <foo>
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 2
+#data "<dd>1</foo>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <dd> margin-left=40px display=Block
+
+#case 3
+#data "<foo>1<dd>2</foo>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <foo>
+      <dd> margin-left=40px display=Block
+

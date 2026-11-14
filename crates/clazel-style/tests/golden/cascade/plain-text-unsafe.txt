@@ -1,0 +1,299 @@
+#case 0
+#data "FOO&#x000D;ZOO"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 1
+#data "<html>\0<frameset></frameset>"
+<html> display=Block
+  <head> display=None
+  <frameset>
+
+#case 2
+#data "<html> \0 <frameset></frameset>"
+<html> display=Block
+  <head> display=None
+  <frameset>
+
+#case 3
+#data "<html>a\0a<frameset></frameset>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 4
+#data "<html>\0\0<frameset></frameset>"
+<html> display=Block
+  <head> display=None
+  <frameset>
+
+#case 5
+#data "<html>\0\n<frameset></frameset>"
+<html> display=Block
+  <head> display=None
+  <frameset>
+
+#case 6
+#data "<html><select>\0"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+
+#case 7
+#data "\0"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 8
+#data "<body>\0"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 9
+#data "<plaintext>\0filler\0text\0"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <plaintext> margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 10
+#data "<svg><![CDATA[\0filler\0text\0]]>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+
+#case 11
+#data "<body><!\0>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 12
+#data "<body><!\0filler\0text>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 13
+#data "<body><svg><foreignObject>\0filler\0text"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+      <foreignObject>
+
+#case 14
+#data "<svg>\0filler\0text"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+
+#case 15
+#data "<svg>\0<frameset>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+      <frameset>
+
+#case 16
+#data "<svg>\0 <frameset>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+      <frameset>
+
+#case 17
+#data "<svg>\0a<frameset>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+      <frameset>
+
+#case 18
+#data "<svg>\0</svg><frameset>"
+<html> display=Block
+  <head> display=None
+  <frameset>
+
+#case 19
+#data "<svg>\0 </svg><frameset>"
+<html> display=Block
+  <head> display=None
+  <frameset>
+
+#case 20
+#data "<svg>\0a</svg><frameset>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+
+#case 21
+#data "<svg><![CDATA[\0]]></svg><frameset>"
+<html> display=Block
+  <head> display=None
+  <frameset>
+
+#case 22
+#data "<svg><foreignObject><![CDATA[\0]]></foreignObject></svg><frameset>"
+<html> display=Block
+  <head> display=None
+  <frameset>
+
+#case 23
+#data "<svg>\0&#xFFFD;</svg><frameset>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+
+#case 24
+#data "<!DOCTYPE html><body>a<\0b"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 25
+#data "<svg><foreignObject><![CDATA[a\0b]]>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+      <foreignObject>
+
+#case 26
+#data "<svg><path></path></svg><frameset>"
+<html> display=Block
+  <head> display=None
+  <frameset>
+
+#case 27
+#data "<svg><p><frameset>"
+<html> display=Block
+  <head> display=None
+  <frameset>
+
+#case 28
+#data "<!DOCTYPE html><pre>\r\n\r\nA</pre>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <pre> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 29
+#data "<!DOCTYPE html><pre>\r\rA</pre>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <pre> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 30
+#data "<!DOCTYPE html><pre>\rA</pre>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <pre> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 31
+#data "<!DOCTYPE html><table><tr><td><math><mtext>\0a"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+            <math>
+              <mtext>
+
+#case 32
+#data "<!DOCTYPE html><table><tr><td><svg><foreignObject>\0a"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+            <svg>
+              <foreignObject>
+
+#case 33
+#data "<!DOCTYPE html><math><mi>a\0b"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <mi>
+
+#case 34
+#data "<!DOCTYPE html><math><mo>a\0b"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <mo>
+
+#case 35
+#data "<!DOCTYPE html><math><mn>a\0b"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <mn>
+
+#case 36
+#data "<!DOCTYPE html><math><ms>a\0b"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <ms>
+
+#case 37
+#data "<!DOCTYPE html><math><mtext>a\0b"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <mtext>
+
+#case 38
+#data "<math>\0filler\0text"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+
+#case 39
+#data "<math><![CDATA[\0filler\0text\0]]>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+
+#case 40
+#data "<math><annotation-xml>\0x"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <annotation-xml>
+
+#case 41
+#data "<math><annotation-xml encoding=\"text/html\">\0x"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <annotation-xml>
+

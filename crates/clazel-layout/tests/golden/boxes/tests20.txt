@@ -1,0 +1,593 @@
+#case 0
+#data "<!doctype html><p><button><button>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+        inline-block <button>
+
+#case 1
+#data "<!doctype html><p><button><address>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <address>
+
+#case 2
+#data "<!doctype html><p><button><article>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <article>
+
+#case 3
+#data "<!doctype html><p><button><aside>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <aside>
+
+#case 4
+#data "<!doctype html><p><button><blockquote>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <blockquote>
+
+#case 5
+#data "<!doctype html><p><button><center>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <center>
+
+#case 6
+#data "<!doctype html><p><button><details>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          inline <details>
+
+#case 7
+#data "<!doctype html><p><button><dialog>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+
+#case 8
+#data "<!doctype html><p><button><dir>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <dir>
+
+#case 9
+#data "<!doctype html><p><button><div>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <div>
+
+#case 10
+#data "<!doctype html><p><button><dl>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <dl>
+
+#case 11
+#data "<!doctype html><p><button><fieldset>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          inline <fieldset>
+
+#case 12
+#data "<!doctype html><p><button><figcaption>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <figcaption>
+
+#case 13
+#data "<!doctype html><p><button><figure>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <figure>
+
+#case 14
+#data "<!doctype html><p><button><footer>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <footer>
+
+#case 15
+#data "<!doctype html><p><button><header>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <header>
+
+#case 16
+#data "<!doctype html><p><button><hgroup>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <hgroup>
+
+#case 17
+#data "<!doctype html><p><button><main>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <main>
+
+#case 18
+#data "<!doctype html><p><button><menu>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <menu>
+
+#case 19
+#data "<!doctype html><p><button><nav>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <nav>
+
+#case 20
+#data "<!doctype html><p><button><ol>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <ol>
+
+#case 21
+#data "<!doctype html><p><button><p>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <p>
+
+#case 22
+#data "<!doctype html><p><button><search>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <search>
+
+#case 23
+#data "<!doctype html><p><button><section>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <section>
+
+#case 24
+#data "<!doctype html><p><button><summary>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          inline <summary>
+
+#case 25
+#data "<!doctype html><p><button><ul>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <ul>
+
+#case 26
+#data "<!doctype html><p><button><h1>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <h1>
+
+#case 27
+#data "<!doctype html><p><button><h6>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <h6>
+
+#case 28
+#data "<!doctype html><p><button><listing>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <listing>
+
+#case 29
+#data "<!doctype html><p><button><pre>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <pre>
+
+#case 30
+#data "<!doctype html><p><button><form>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <form>
+
+#case 31
+#data "<!doctype html><p><button><li>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <li>
+            marker <li> "• "
+
+#case 32
+#data "<!doctype html><p><button><dd>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <dd>
+
+#case 33
+#data "<!doctype html><p><button><dt>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <dt>
+
+#case 34
+#data "<!doctype html><p><button><plaintext>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <plaintext>
+
+#case 35
+#data "<!doctype html><p><button><table>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          table-wrapper <table>
+            table <table>
+
+#case 36
+#data "<!doctype html><p><button><hr>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <hr>
+
+#case 37
+#data "<!doctype html><p><button><xmp>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <xmp>
+
+#case 38
+#data "<!doctype html><p><button></p>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline-block <button>
+          block <p>
+
+#case 39
+#data "<!doctype html><button><p></button>x"
+root
+  block <html>
+    block <body>
+      inline-block <button>
+        block <p>
+      text "x"
+
+#case 40
+#data "<!doctype html><address><button></address>a"
+root
+  block <html>
+    block <body>
+      block <address>
+        inline-block <button>
+      block (anonymous)
+        text "a"
+
+#case 41
+#data "<p><table></p>"
+root
+  block <html>
+    block <body>
+      block <p>
+        block <p>
+        table-wrapper <table>
+          table <table>
+
+#case 42
+#data "<!doctype html><svg>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+
+#case 43
+#data "<!doctype html><p><figcaption>"
+root
+  block <html>
+    block <body>
+      block <p>
+      block <figcaption>
+
+#case 44
+#data "<!doctype html><p><summary>"
+root
+  block <html>
+    block <body>
+      block <p>
+      block (anonymous)
+        inline <summary>
+
+#case 45
+#data "<!doctype html><form><table><form>"
+root
+  block <html>
+    block <body>
+      block <form>
+        table-wrapper <table>
+          table <table>
+
+#case 46
+#data "<!doctype html><table><form><form>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+
+#case 47
+#data "<!doctype html><table><form></table><form>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+
+#case 48
+#data "<!doctype html><svg><foreignObject><p>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <svg> first
+          inline <foreignObject> first
+      block <p>
+      block (anonymous)
+        inline <svg> last
+          inline <foreignObject> last
+
+#case 49
+#data "<!doctype html><svg><title>abc"
+root
+  block <html>
+    block <body>
+      inline <svg>
+
+#case 50
+#data "<option><span><option>"
+root
+  block <html>
+    block <body>
+      inline <option>
+        inline <span>
+          inline <option>
+
+#case 51
+#data "<option><option>"
+root
+  block <html>
+    block <body>
+      inline <option>
+      inline <option>
+
+#case 52
+#data "<math><annotation-xml><div>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <math>
+          inline <annotation-xml>
+      block <div>
+
+#case 53
+#data "<math><annotation-xml encoding=\"application/svg+xml\"><div>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <math>
+          inline <annotation-xml>
+      block <div>
+
+#case 54
+#data "<math><annotation-xml encoding=\"application/xhtml+xml\"><div>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <math> first
+          inline <annotation-xml> first
+      block <div>
+      block (anonymous)
+        inline <math> last
+          inline <annotation-xml> last
+
+#case 55
+#data "<math><annotation-xml encoding=\"aPPlication/xhtmL+xMl\"><div>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <math> first
+          inline <annotation-xml> first
+      block <div>
+      block (anonymous)
+        inline <math> last
+          inline <annotation-xml> last
+
+#case 56
+#data "<math><annotation-xml encoding=\"text/html\"><div>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <math> first
+          inline <annotation-xml> first
+      block <div>
+      block (anonymous)
+        inline <math> last
+          inline <annotation-xml> last
+
+#case 57
+#data "<math><annotation-xml encoding=\"Text/htmL\"><div>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <math> first
+          inline <annotation-xml> first
+      block <div>
+      block (anonymous)
+        inline <math> last
+          inline <annotation-xml> last
+
+#case 58
+#data "<math><annotation-xml encoding=\" text/html \"><div>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <math>
+          inline <annotation-xml>
+      block <div>
+
+#case 59
+#data "<math><annotation-xml> </annotation-xml>"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <annotation-xml>
+
+#case 60
+#data "<math><annotation-xml>c</annotation-xml>"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <annotation-xml>
+          text "c"
+
+#case 61
+#data "<math><annotation-xml><!--foo-->"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <annotation-xml>
+
+#case 62
+#data "<math><annotation-xml></svg>x"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <annotation-xml>
+          text "x"
+
+#case 63
+#data "<math><annotation-xml><svg>x"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <annotation-xml>
+          inline <svg>
+            text "x"
+

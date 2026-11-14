@@ -1,0 +1,75 @@
+#case 0
+#data "<!DOCTYPE html><body><p>foo<math><mtext><i>baz</i></mtext><annotation-xml><svg><desc><b>eggs</b></desc><g><foreignObject><P>spam<TABLE><tr><td><img></td></table></foreignObject></g><g>quux</g></svg></annotation-xml></math>bar"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x140.5625
+    block <body> 8,16 784x108.5625 m=8,8,8,8
+      block <p> 8,16 784x108.5625 m=16,0,16,0
+        block (anonymous) 8,16 784x18.640625
+          line 8,16 784x18.640625 base=30.859375
+            inline <math> 33.1875,16 66.390625x18.640625 start
+            inline <mtext> 33.1875,16 28.21875x18.640625 start end
+            inline <i> 33.1875,16 28.21875x18.640625 start end
+            inline <annotation-xml> 61.40625,16 38.171875x18.640625 start
+            inline <svg> 61.40625,16 38.171875x18.640625 start
+            inline <desc> 61.40625,16 38.171875x18.640625 start end
+            inline <b> 61.40625,16 38.171875x18.640625 start end
+            text "foo" x=8 base=30.859375 w=25.1875
+            text "baz" x=33.1875 base=30.859375 w=28.21875
+            text "eggs" x=61.40625 base=30.859375 w=38.171875
+        block <p> 8,50.640625 784x18.640625 m=16,0,16,0
+          line 8,50.640625 784x18.640625 base=65.5
+            text "spam" x=8 base=65.5 w=43.171875
+        table-wrapper <table> 8,85.28125 2x20.640625 m=0,782,0,0
+          table <table> 8,85.28125 2x20.640625
+            row-group <tbody> 8,85.28125 2x20.640625
+              row <tr> 8,85.28125 2x20.640625
+                cell <td> 8,85.28125 2x20.640625 p=1,1,1,1
+                  line 9,86.28125 0x18.640625 base=101.140625
+                    atomic <img>
+                  replaced <img> 9,101.140625 0x0
+        block (anonymous) 8,105.921875 784x18.640625
+          line 8,105.921875 784x18.640625 base=120.78125
+            inline <math> 8,105.921875 39.875x18.640625 end
+            inline <annotation-xml> 8,105.921875 39.875x18.640625 end
+            inline <svg> 8,105.921875 39.875x18.640625 end
+            inline <g> 8,105.921875 39.875x18.640625 start end
+            text "quux" x=8 base=120.78125 w=39.875
+            text "bar" x=47.875 base=120.78125 w=27.4375
+
+#case 1
+#data "<!DOCTYPE html><body>foo<math><mtext><i>baz</i></mtext><annotation-xml><svg><desc><b>eggs</b></desc><g><foreignObject><P>spam<TABLE><tr><td><img></td></table></foreignObject></g><g>quux</g></svg></annotation-xml></math>bar"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x124.5625
+    block <body> 8,8 784x108.5625 m=8,8,8,8
+      block (anonymous) 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          inline <math> 33.1875,8 66.390625x18.640625 start
+          inline <mtext> 33.1875,8 28.21875x18.640625 start end
+          inline <i> 33.1875,8 28.21875x18.640625 start end
+          inline <annotation-xml> 61.40625,8 38.171875x18.640625 start
+          inline <svg> 61.40625,8 38.171875x18.640625 start
+          inline <desc> 61.40625,8 38.171875x18.640625 start end
+          inline <b> 61.40625,8 38.171875x18.640625 start end
+          text "foo" x=8 base=22.859375 w=25.1875
+          text "baz" x=33.1875 base=22.859375 w=28.21875
+          text "eggs" x=61.40625 base=22.859375 w=38.171875
+      block <p> 8,42.640625 784x18.640625 m=16,0,16,0
+        line 8,42.640625 784x18.640625 base=57.5
+          text "spam" x=8 base=57.5 w=43.171875
+      table-wrapper <table> 8,77.28125 2x20.640625 m=0,782,0,0
+        table <table> 8,77.28125 2x20.640625
+          row-group <tbody> 8,77.28125 2x20.640625
+            row <tr> 8,77.28125 2x20.640625
+              cell <td> 8,77.28125 2x20.640625 p=1,1,1,1
+                line 9,78.28125 0x18.640625 base=93.140625
+                  atomic <img>
+                replaced <img> 9,93.140625 0x0
+      block (anonymous) 8,97.921875 784x18.640625
+        line 8,97.921875 784x18.640625 base=112.78125
+          inline <math> 8,97.921875 39.875x18.640625 end
+          inline <annotation-xml> 8,97.921875 39.875x18.640625 end
+          inline <svg> 8,97.921875 39.875x18.640625 end
+          inline <g> 8,97.921875 39.875x18.640625 start end
+          text "quux" x=8 base=112.78125 w=39.875
+          text "bar" x=47.875 base=112.78125 w=27.4375
+

@@ -157,6 +157,8 @@ pub struct CrateScan {
     /// `unsafe` blocks and the lines they cover (xtask/src/sys.rs).
     pub unsafe_blocks: usize,
     pub unsafe_lines: usize,
+    /// Of those blocks, the dispatcher casts (xtask/src/sys.rs, rule 7).
+    pub dispatcher_casts: usize,
 }
 
 impl Crate {
@@ -196,6 +198,9 @@ pub fn scan_crate(c: &Crate) -> Result<CrateScan, String> {
         if sys_crate {
             let checked = sys::check_source(&relative(&file), &source)
                 .map_err(|e| format!("{}: {e}", file.display()))?;
+            result.dispatcher_casts = result
+                .dispatcher_casts
+                .saturating_add(checked.dispatcher_casts);
             for (line, what) in checked.violations {
                 result.violations.push(format!(
                     "{}:{line}: unsafe policy (CLAUDE.md rule 1): {what}",

@@ -1,0 +1,1394 @@
+#case 0
+#data "<!doctype html><script>"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 1
+#data "<!doctype html><script>a"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 2
+#data "<!doctype html><script><"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 3
+#data "<!doctype html><script></"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 4
+#data "<!doctype html><script></S"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 5
+#data "<!doctype html><script></SC"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 6
+#data "<!doctype html><script></SCR"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 7
+#data "<!doctype html><script></SCRI"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 8
+#data "<!doctype html><script></SCRIP"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 9
+#data "<!doctype html><script></SCRIPT"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 10
+#data "<!doctype html><script></SCRIPT "
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 11
+#data "<!doctype html><script></s"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 12
+#data "<!doctype html><script></sc"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 13
+#data "<!doctype html><script></scr"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 14
+#data "<!doctype html><script></scri"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 15
+#data "<!doctype html><script></scrip"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 16
+#data "<!doctype html><script></script"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 17
+#data "<!doctype html><script></script "
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 18
+#data "<!doctype html><script><!"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 19
+#data "<!doctype html><script><!a"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 20
+#data "<!doctype html><script><!-"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 21
+#data "<!doctype html><script><!-a"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 22
+#data "<!doctype html><script><!--"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 23
+#data "<!doctype html><script><!--a"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 24
+#data "<!doctype html><script><!--<"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 25
+#data "<!doctype html><script><!--<a"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 26
+#data "<!doctype html><script><!--</"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 27
+#data "<!doctype html><script><!--</script"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 28
+#data "<!doctype html><script><!--</script "
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 29
+#data "<!doctype html><script><!--<s"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 30
+#data "<!doctype html><script><!--<script"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 31
+#data "<!doctype html><script><!--<script "
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 32
+#data "<!doctype html><script><!--<script <"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 33
+#data "<!doctype html><script><!--<script <a"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 34
+#data "<!doctype html><script><!--<script </"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 35
+#data "<!doctype html><script><!--<script </s"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 36
+#data "<!doctype html><script><!--<script </script"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 37
+#data "<!doctype html><script><!--<script </scripta"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 38
+#data "<!doctype html><script><!--<script </script "
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 39
+#data "<!doctype html><script><!--<script </script>"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 40
+#data "<!doctype html><script><!--<script </script/"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 41
+#data "<!doctype html><script><!--<script </script <"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 42
+#data "<!doctype html><script><!--<script </script <a"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 43
+#data "<!doctype html><script><!--<script </script </"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 44
+#data "<!doctype html><script><!--<script </script </script"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 45
+#data "<!doctype html><script><!--<script </script </script "
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 46
+#data "<!doctype html><script><!--<script </script </script/"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 47
+#data "<!doctype html><script><!--<script </script </script>"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 48
+#data "<!doctype html><script><!--<script -"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 49
+#data "<!doctype html><script><!--<script -a"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 50
+#data "<!doctype html><script><!--<script -<"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 51
+#data "<!doctype html><script><!--<script --"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 52
+#data "<!doctype html><script><!--<script --a"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 53
+#data "<!doctype html><script><!--<script --<"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 54
+#data "<!doctype html><script><!--<script -->"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 55
+#data "<!doctype html><script><!--<script --><"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 56
+#data "<!doctype html><script><!--<script --></"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 57
+#data "<!doctype html><script><!--<script --></script"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 58
+#data "<!doctype html><script><!--<script --></script "
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 59
+#data "<!doctype html><script><!--<script --></script/"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 60
+#data "<!doctype html><script><!--<script --></script>"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 61
+#data "<!doctype html><script><!--<script><\\/script>--></script>"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 62
+#data "<!doctype html><script><!--<script></scr'+'ipt>--></script>"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 63
+#data "<!doctype html><script><!--<script></script><script></script></script>"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 64
+#data "<!doctype html><script><!--<script></script><script></script>--><!--</script>"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 65
+#data "<!doctype html><script><!--<script></script><script></script>-- ></script>"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 66
+#data "<!doctype html><script><!--<script></script><script></script>- -></script>"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 67
+#data "<!doctype html><script><!--<script></script><script></script>- - ></script>"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 68
+#data "<!doctype html><script><!--<script></script><script></script>-></script>"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 69
+#data "<!doctype html><script><!--<script>--!></script>X"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 70
+#data "<!doctype html><script><!--<scr'+'ipt></script>--></script>"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 71
+#data "<!doctype html><script><!--<script></scr'+'ipt></script>X"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 72
+#data "<!doctype html><style><!--<style></style>--></style>"
+<html> display=Block
+  <head> display=None
+    <style> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 73
+#data "<!doctype html><style><!--</style>X"
+<html> display=Block
+  <head> display=None
+    <style> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 74
+#data "<!doctype html><style><!--...</style>...--></style>"
+<html> display=Block
+  <head> display=None
+    <style> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 75
+#data "<!doctype html><style><!--<br><html xmlns:v=\"urn:schemas-microsoft-com:vml\"><!--[if !mso]><style></style>X"
+<html> display=Block
+  <head> display=None
+    <style> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 76
+#data "<!doctype html><style><!--...<style><!--...--!></style>--></style>"
+<html> display=Block
+  <head> display=None
+    <style> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 77
+#data "<!doctype html><style><!--...</style><!-- --><style>@import ...</style>"
+<html> display=Block
+  <head> display=None
+    <style> display=None
+    <style> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 78
+#data "<!doctype html><style>...<style><!--...</style><!-- --></style>"
+<html> display=Block
+  <head> display=None
+    <style> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 79
+#data "<!doctype html><style>...<!--[if IE]><style>...</style>X"
+<html> display=Block
+  <head> display=None
+    <style> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 80
+#data "<!doctype html><title><!--<title></title>--></title>"
+<html> display=Block
+  <head> display=None
+    <title> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 81
+#data "<!doctype html><title>&lt;/title></title>"
+<html> display=Block
+  <head> display=None
+    <title> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 82
+#data "<!doctype html><title>foo/title><link></head><body>X"
+<html> display=Block
+  <head> display=None
+    <title> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 83
+#data "<!doctype html><noscript><!--<noscript></noscript>--></noscript>"
+<html> display=Block
+  <head> display=None
+    <noscript>
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 84
+#data "<!doctype html><noscript><!--<noscript></noscript>--></noscript>"
+<html> display=Block
+  <head> display=None
+    <noscript>
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 85
+#data "<!doctype html><noscript><!--</noscript>X<noscript>--></noscript>"
+<html> display=Block
+  <head> display=None
+    <noscript>
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 86
+#data "<!doctype html><noscript><!--</noscript>X<noscript>--></noscript>"
+<html> display=Block
+  <head> display=None
+    <noscript>
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 87
+#data "<!doctype html><noscript><iframe></noscript>X"
+<html> display=Block
+  <head> display=None
+    <noscript>
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <iframe> border-top-width=2px border-top-style=Inset border-right-width=2px border-right-style=Inset border-bottom-width=2px border-bottom-style=Inset border-left-width=2px border-left-style=Inset
+
+#case 88
+#data "<!doctype html><noscript><iframe></noscript>X"
+<html> display=Block
+  <head> display=None
+    <noscript>
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <iframe> border-top-width=2px border-top-style=Inset border-right-width=2px border-right-style=Inset border-bottom-width=2px border-bottom-style=Inset border-left-width=2px border-left-style=Inset
+
+#case 89
+#data "<!doctype html><noframes><!--<noframes></noframes>--></noframes>"
+<html> display=Block
+  <head> display=None
+    <noframes> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 90
+#data "<!doctype html><noframes><body><script><!--...</script></body></noframes></html>"
+<html> display=Block
+  <head> display=None
+    <noframes> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 91
+#data "<!doctype html><textarea><!--<textarea></textarea>--></textarea>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <textarea> white-space=PreWrap
+
+#case 92
+#data "<!doctype html><textarea>&lt;/textarea></textarea>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <textarea> white-space=PreWrap
+
+#case 93
+#data "<!doctype html><textarea>&lt;</textarea>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <textarea> white-space=PreWrap
+
+#case 94
+#data "<!doctype html><textarea>a&lt;b</textarea>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <textarea> white-space=PreWrap
+
+#case 95
+#data "<!doctype html><iframe><!--<iframe></iframe>--></iframe>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <iframe> border-top-width=2px border-top-style=Inset border-right-width=2px border-right-style=Inset border-bottom-width=2px border-bottom-style=Inset border-left-width=2px border-left-style=Inset
+
+#case 96
+#data "<!doctype html><iframe>...<!--X->...<!--/X->...</iframe>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <iframe> border-top-width=2px border-top-style=Inset border-right-width=2px border-right-style=Inset border-bottom-width=2px border-bottom-style=Inset border-left-width=2px border-left-style=Inset
+
+#case 97
+#data "<!doctype html><xmp><!--<xmp></xmp>--></xmp>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <xmp> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 98
+#data "<!doctype html><noembed><!--<noembed></noembed>--></noembed>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <noembed> display=None
+
+#case 99
+#data "<script>"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 100
+#data "<script>a"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 101
+#data "<script><"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 102
+#data "<script></"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 103
+#data "<script></S"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 104
+#data "<script></SC"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 105
+#data "<script></SCR"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 106
+#data "<script></SCRI"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 107
+#data "<script></SCRIP"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 108
+#data "<script></SCRIPT"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 109
+#data "<script></SCRIPT "
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 110
+#data "<script></s"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 111
+#data "<script></sc"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 112
+#data "<script></scr"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 113
+#data "<script></scri"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 114
+#data "<script></scrip"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 115
+#data "<script></script"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 116
+#data "<script></script "
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 117
+#data "<script><!"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 118
+#data "<script><!a"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 119
+#data "<script><!-"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 120
+#data "<script><!-a"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 121
+#data "<script><!--"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 122
+#data "<script><!--a"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 123
+#data "<script><!--<"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 124
+#data "<script><!--<a"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 125
+#data "<script><!--</"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 126
+#data "<script><!--</script"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 127
+#data "<script><!--</script "
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 128
+#data "<script><!--<s"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 129
+#data "<script><!--<script"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 130
+#data "<script><!--<script "
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 131
+#data "<script><!--<script <"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 132
+#data "<script><!--<script <a"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 133
+#data "<script><!--<script </"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 134
+#data "<script><!--<script </s"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 135
+#data "<script><!--<script </script"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 136
+#data "<script><!--<script </scripta"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 137
+#data "<script><!--<script </script "
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 138
+#data "<script><!--<script </script>"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 139
+#data "<script><!--<script </script/"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 140
+#data "<script><!--<script </script <"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 141
+#data "<script><!--<script </script <a"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 142
+#data "<script><!--<script </script </"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 143
+#data "<script><!--<script </script </script"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 144
+#data "<script><!--<script </script </script "
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 145
+#data "<script><!--<script </script </script/"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 146
+#data "<script><!--<script </script </script>"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 147
+#data "<script><!--<script -"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 148
+#data "<script><!--<script -a"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 149
+#data "<script><!--<script --"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 150
+#data "<script><!--<script --a"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 151
+#data "<script><!--<script -->"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 152
+#data "<script><!--<script --><"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 153
+#data "<script><!--<script --></"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 154
+#data "<script><!--<script --></script"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 155
+#data "<script><!--<script --></script "
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 156
+#data "<script><!--<script --></script/"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 157
+#data "<script><!--<script --></script>"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 158
+#data "<script><!--<script><\\/script>--></script>"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 159
+#data "<script><!--<script></scr'+'ipt>--></script>"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 160
+#data "<script><!--<script></script><script></script></script>"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 161
+#data "<script><!--<script></script><script></script>--><!--</script>"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 162
+#data "<script><!--<script></script><script></script>-- ></script>"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 163
+#data "<script><!--<script></script><script></script>- -></script>"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 164
+#data "<script><!--<script></script><script></script>- - ></script>"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 165
+#data "<script><!--<script></script><script></script>-></script>"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 166
+#data "<script><!--<script>--!></script>X"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 167
+#data "<script><!--<scr'+'ipt></script>--></script>"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 168
+#data "<script><!--<script></scr'+'ipt></script>X"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 169
+#data "<style><!--<style></style>--></style>"
+<html> display=Block
+  <head> display=None
+    <style> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 170
+#data "<style><!--</style>X"
+<html> display=Block
+  <head> display=None
+    <style> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 171
+#data "<style><!--...</style>...--></style>"
+<html> display=Block
+  <head> display=None
+    <style> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 172
+#data "<style><!--<br><html xmlns:v=\"urn:schemas-microsoft-com:vml\"><!--[if !mso]><style></style>X"
+<html> display=Block
+  <head> display=None
+    <style> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 173
+#data "<style><!--...<style><!--...--!></style>--></style>"
+<html> display=Block
+  <head> display=None
+    <style> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 174
+#data "<style><!--...</style><!-- --><style>@import ...</style>"
+<html> display=Block
+  <head> display=None
+    <style> display=None
+    <style> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 175
+#data "<style>...<style><!--...</style><!-- --></style>"
+<html> display=Block
+  <head> display=None
+    <style> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 176
+#data "<style>...<!--[if IE]><style>...</style>X"
+<html> display=Block
+  <head> display=None
+    <style> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 177
+#data "<title><!--<title></title>--></title>"
+<html> display=Block
+  <head> display=None
+    <title> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 178
+#data "<title>&lt;/title></title>"
+<html> display=Block
+  <head> display=None
+    <title> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 179
+#data "<title>foo/title><link></head><body>X"
+<html> display=Block
+  <head> display=None
+    <title> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 180
+#data "<noscript><!--<noscript></noscript>--></noscript>"
+<html> display=Block
+  <head> display=None
+    <noscript>
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 181
+#data "<noscript><!--<noscript></noscript>--></noscript>"
+<html> display=Block
+  <head> display=None
+    <noscript>
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 182
+#data "<noscript><!--</noscript>X<noscript>--></noscript>"
+<html> display=Block
+  <head> display=None
+    <noscript>
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 183
+#data "<noscript><!--</noscript>X<noscript>--></noscript>"
+<html> display=Block
+  <head> display=None
+    <noscript>
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 184
+#data "<noscript><iframe></noscript>X"
+<html> display=Block
+  <head> display=None
+    <noscript>
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <iframe> border-top-width=2px border-top-style=Inset border-right-width=2px border-right-style=Inset border-bottom-width=2px border-bottom-style=Inset border-left-width=2px border-left-style=Inset
+
+#case 185
+#data "<noscript><iframe></noscript>X"
+<html> display=Block
+  <head> display=None
+    <noscript>
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <iframe> border-top-width=2px border-top-style=Inset border-right-width=2px border-right-style=Inset border-bottom-width=2px border-bottom-style=Inset border-left-width=2px border-left-style=Inset
+
+#case 186
+#data "<noframes><!--<noframes></noframes>--></noframes>"
+<html> display=Block
+  <head> display=None
+    <noframes> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 187
+#data "<noframes><body><script><!--...</script></body></noframes></html>"
+<html> display=Block
+  <head> display=None
+    <noframes> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 188
+#data "<textarea><!--<textarea></textarea>--></textarea>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <textarea> white-space=PreWrap
+
+#case 189
+#data "<textarea>&lt;/textarea></textarea>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <textarea> white-space=PreWrap
+
+#case 190
+#data "<iframe><!--<iframe></iframe>--></iframe>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <iframe> border-top-width=2px border-top-style=Inset border-right-width=2px border-right-style=Inset border-bottom-width=2px border-bottom-style=Inset border-left-width=2px border-left-style=Inset
+
+#case 191
+#data "<iframe>...<!--X->...<!--/X->...</iframe>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <iframe> border-top-width=2px border-top-style=Inset border-right-width=2px border-right-style=Inset border-bottom-width=2px border-bottom-style=Inset border-left-width=2px border-left-style=Inset
+
+#case 192
+#data "<xmp><!--<xmp></xmp>--></xmp>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <xmp> margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 193
+#data "<noembed><!--<noembed></noembed>--></noembed>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <noembed> display=None
+
+#case 194
+#data "<!doctype html><table>\n"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+
+#case 195
+#data "<!doctype html><table><td><span><font></span><span>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+            <span>
+              <font>
+            <font>
+              <span>
+
+#case 196
+#data "<!doctype html><form><table></form><form></table></form>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <form> display=Block
+      <table> display=Table border-spacing=2px 2px
+        <form> display=None
+

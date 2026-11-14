@@ -1,0 +1,340 @@
+#case 0
+#data "<!DOCTYPE html><math></math>"
+root
+  block <html>
+    block <body>
+      inline <math>
+
+#case 1
+#data "<!DOCTYPE html><body><math></math>"
+root
+  block <html>
+    block <body>
+      inline <math>
+
+#case 2
+#data "<!DOCTYPE html><math><mi>"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <mi>
+
+#case 3
+#data "<!DOCTYPE html><math><annotation-xml><svg><u>"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <annotation-xml>
+          inline <svg>
+      inline <u>
+
+#case 4
+#data "<!DOCTYPE html><body><select><math></math></select>"
+root
+  block <html>
+    block <body>
+      inline <select>
+        inline <math>
+
+#case 5
+#data "<!DOCTYPE html><body><select><option><math></math></option></select>"
+root
+  block <html>
+    block <body>
+      inline <select>
+        inline <option>
+          inline <math>
+
+#case 6
+#data "<!DOCTYPE html><body><table><math></math></table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <math>
+      table-wrapper <table>
+        table <table>
+
+#case 7
+#data "<!DOCTYPE html><body><table><math><mi>foo</mi></math></table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <math>
+          inline <mi>
+            text "foo"
+      table-wrapper <table>
+        table <table>
+
+#case 8
+#data "<!DOCTYPE html><body><table><math><mi>foo</mi><mi>bar</mi></math></table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <math>
+          inline <mi>
+            text "foo"
+          inline <mi>
+            text "bar"
+      table-wrapper <table>
+        table <table>
+
+#case 9
+#data "<!DOCTYPE html><body><table><tbody><math><mi>foo</mi><mi>bar</mi></math></tbody></table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <math>
+          inline <mi>
+            text "foo"
+          inline <mi>
+            text "bar"
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+
+#case 10
+#data "<!DOCTYPE html><body><table><tbody><tr><math><mi>foo</mi><mi>bar</mi></math></tr></tbody></table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <math>
+          inline <mi>
+            text "foo"
+          inline <mi>
+            text "bar"
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+
+#case 11
+#data "<!DOCTYPE html><body><table><tbody><tr><td><math><mi>foo</mi><mi>bar</mi></math></td></tr></tbody></table>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                inline <math>
+                  inline <mi>
+                    text "foo"
+                  inline <mi>
+                    text "bar"
+
+#case 12
+#data "<!DOCTYPE html><body><table><tbody><tr><td><math><mi>foo</mi><mi>bar</mi></math><p>baz</td></tr></tbody></table>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                block (anonymous)
+                  inline <math>
+                    inline <mi>
+                      text "foo"
+                    inline <mi>
+                      text "bar"
+                block <p>
+                  text "baz"
+
+#case 13
+#data "<!DOCTYPE html><body><table><caption><math><mi>foo</mi><mi>bar</mi></math><p>baz</caption></table>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table-caption <caption>
+          block (anonymous)
+            inline <math>
+              inline <mi>
+                text "foo"
+              inline <mi>
+                text "bar"
+          block <p>
+            text "baz"
+        table <table>
+
+#case 14
+#data "<!DOCTYPE html><body><table><caption><math><mi>foo</mi><mi>bar</mi><p>baz</table><p>quux"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table-caption <caption>
+          block (anonymous)
+            inline <math>
+              inline <mi>
+                text "foo"
+              inline <mi>
+                text "bar"
+          block <p>
+            text "baz"
+        table <table>
+      block <p>
+        text "quux"
+
+#case 15
+#data "<!DOCTYPE html><body><table><caption><math><mi>foo</mi><mi>bar</mi>baz</table><p>quux"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table-caption <caption>
+          inline <math>
+            inline <mi>
+              text "foo"
+            inline <mi>
+              text "bar"
+            text "baz"
+        table <table>
+      block <p>
+        text "quux"
+
+#case 16
+#data "<!DOCTYPE html><body><table><colgroup><math><mi>foo</mi><mi>bar</mi><p>baz</table><p>quux"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <math>
+          inline <mi>
+            text "foo"
+          inline <mi>
+            text "bar"
+      block <p>
+        text "baz"
+      table-wrapper <table>
+        table <table>
+          table-column-group <colgroup>
+      block <p>
+        text "quux"
+
+#case 17
+#data "<!DOCTYPE html><body><table><tr><td><select><math><mi>foo</mi><mi>bar</mi><p>baz</table><p>quux"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                block (anonymous)
+                  inline <select> first
+                    inline <math>
+                      inline <mi>
+                        text "foo"
+                      inline <mi>
+                        text "bar"
+                block <p>
+                  text "baz"
+                block (anonymous)
+                  inline <select> last
+      block <p>
+        text "quux"
+
+#case 18
+#data "<!DOCTYPE html><body><table><select><math><mi>foo</mi><mi>bar</mi><p>baz</table><p>quux"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <select> first
+          inline <math>
+            inline <mi>
+              text "foo"
+            inline <mi>
+              text "bar"
+      block <p>
+        text "baz"
+      block (anonymous)
+        inline <select> last
+      table-wrapper <table>
+        table <table>
+      block <p>
+        text "quux"
+
+#case 19
+#data "<!DOCTYPE html><body></body></html><math><mi>foo</mi><mi>bar</mi><p>baz"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <math>
+          inline <mi>
+            text "foo"
+          inline <mi>
+            text "bar"
+      block <p>
+        text "baz"
+
+#case 20
+#data "<!DOCTYPE html><body></body><math><mi>foo</mi><mi>bar</mi><p>baz"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <math>
+          inline <mi>
+            text "foo"
+          inline <mi>
+            text "bar"
+      block <p>
+        text "baz"
+
+#case 21
+#data "<!DOCTYPE html><frameset><math><mi></mi><mi></mi><p><span>"
+root
+  block <html>
+    inline <frameset>
+
+#case 22
+#data "<!DOCTYPE html><frameset></frameset><math><mi></mi><mi></mi><p><span>"
+root
+  block <html>
+    inline <frameset>
+
+#case 23
+#data "<!DOCTYPE html><body xlink:href=foo><math xlink:href=foo></math>"
+root
+  block <html>
+    block <body>
+      inline <math>
+
+#case 24
+#data "<!DOCTYPE html><body xlink:href=foo xml:lang=en><math><mi xml:lang=en xlink:href=foo></mi></math>"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <mi>
+
+#case 25
+#data "<!DOCTYPE html><body xlink:href=foo xml:lang=en><math><mi xml:lang=en xlink:href=foo /></math>"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <mi>
+
+#case 26
+#data "<!DOCTYPE html><body xlink:href=foo xml:lang=en><math><mi xml:lang=en xlink:href=foo />bar</math>"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <mi>
+        text "bar"
+

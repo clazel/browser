@@ -1,0 +1,11 @@
+#case 0
+#data "<body><table>\0filler\0text\0"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block (anonymous) 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          text "fillertext" x=8 base=22.859375 w=69.75
+      table-wrapper <table> 8,26.640625 0x0 m=0,784,0,0
+        table <table> 8,26.640625 0x0
+

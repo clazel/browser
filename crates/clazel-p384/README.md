@@ -6,9 +6,9 @@ untrusted input carry machine-checked proofs.
 
 ## Status: specification, field, point arithmetic and `verify`
 
-**Tier 0, target tier 2.** The specification, the field arithmetic, the
-point arithmetic and `verify` are written, and `verify` is proven against
-the contract below the six axioms. The tier 1 and tier 2 evidence is not
+**Tier 2** (raised on CI's full verification of its pull request). The
+specification, the field arithmetic, the point arithmetic and `verify` are
+written, and `verify` is proven against the contract below the six axioms
 (see Verification). What exists:
 
 - `src/spec.rs`: what "a valid ECDSA P-384 signature" means, transcribed
@@ -261,10 +261,8 @@ mutant of it is caught by that proof, which `mutations.json` cannot certify.
 Tier 2 does not require Kani harnesses (Verus proves panic-freedom). The
 independent transcription from SEC 1 (`independent.rs`) is proven to accept
 exactly what `spec.rs` accepts (`equivalence.rs`). With the conformance
-suites and the differential, that is every piece of evidence tier 2 lists,
-but the crate stays at tier 0 until CI's full verification is green on a run
-with all of it and the tier is raised in its own change; see
-[docs/VERIFICATION.md](../../docs/VERIFICATION.md) for what each tier
+suites and the differential, that is every piece of evidence tier 2 lists;
+see [docs/VERIFICATION.md](../../docs/VERIFICATION.md) for what each tier
 requires. The proofs cover memory and arithmetic safety of the Verus-checked
 code, but the claim is only as good as `spec.rs` (read against the standards
 by a person) and the six axioms (fiat-crypto's printed postconditions).

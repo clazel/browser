@@ -1,0 +1,189 @@
+#case 0
+#data "<div bar=\"ZZ&gt;YY\"></div>"
+root
+  block <html>
+    block <body>
+      block <div>
+
+#case 1
+#data "<div bar=\"ZZ&\"></div>"
+root
+  block <html>
+    block <body>
+      block <div>
+
+#case 2
+#data "<div bar='ZZ&'></div>"
+root
+  block <html>
+    block <body>
+      block <div>
+
+#case 3
+#data "<div bar=ZZ&></div>"
+root
+  block <html>
+    block <body>
+      block <div>
+
+#case 4
+#data "<div bar=\"ZZ&gt=YY\"></div>"
+root
+  block <html>
+    block <body>
+      block <div>
+
+#case 5
+#data "<div bar=\"ZZ&gt0YY\"></div>"
+root
+  block <html>
+    block <body>
+      block <div>
+
+#case 6
+#data "<div bar=\"ZZ&gt9YY\"></div>"
+root
+  block <html>
+    block <body>
+      block <div>
+
+#case 7
+#data "<div bar=\"ZZ&gtaYY\"></div>"
+root
+  block <html>
+    block <body>
+      block <div>
+
+#case 8
+#data "<div bar=\"ZZ&gtZYY\"></div>"
+root
+  block <html>
+    block <body>
+      block <div>
+
+#case 9
+#data "<div bar=\"ZZ&gt YY\"></div>"
+root
+  block <html>
+    block <body>
+      block <div>
+
+#case 10
+#data "<div bar=\"ZZ&gt\"></div>"
+root
+  block <html>
+    block <body>
+      block <div>
+
+#case 11
+#data "<div bar='ZZ&gt'></div>"
+root
+  block <html>
+    block <body>
+      block <div>
+
+#case 12
+#data "<div bar=ZZ&gt></div>"
+root
+  block <html>
+    block <body>
+      block <div>
+
+#case 13
+#data "<div bar=\"ZZ&pound_id=23\"></div>"
+root
+  block <html>
+    block <body>
+      block <div>
+
+#case 14
+#data "<div bar=\"ZZ&prod_id=23\"></div>"
+root
+  block <html>
+    block <body>
+      block <div>
+
+#case 15
+#data "<div bar=\"ZZ&pound;_id=23\"></div>"
+root
+  block <html>
+    block <body>
+      block <div>
+
+#case 16
+#data "<div bar=\"ZZ&prod;_id=23\"></div>"
+root
+  block <html>
+    block <body>
+      block <div>
+
+#case 17
+#data "<div bar=\"ZZ&pound=23\"></div>"
+root
+  block <html>
+    block <body>
+      block <div>
+
+#case 18
+#data "<div bar=\"ZZ&prod=23\"></div>"
+root
+  block <html>
+    block <body>
+      block <div>
+
+#case 19
+#data "<div>ZZ&pound_id=23</div>"
+root
+  block <html>
+    block <body>
+      block <div>
+        text "ZZ£_id=23"
+
+#case 20
+#data "<div>ZZ&prod_id=23</div>"
+root
+  block <html>
+    block <body>
+      block <div>
+        text "ZZ&prod_id=23"
+
+#case 21
+#data "<div>ZZ&pound;_id=23</div>"
+root
+  block <html>
+    block <body>
+      block <div>
+        text "ZZ£_id=23"
+
+#case 22
+#data "<div>ZZ&prod;_id=23</div>"
+root
+  block <html>
+    block <body>
+      block <div>
+        text "ZZ∏_id=23"
+
+#case 23
+#data "<div>ZZ&pound=23</div>"
+root
+  block <html>
+    block <body>
+      block <div>
+        text "ZZ£=23"
+
+#case 24
+#data "<div>ZZ&prod=23</div>"
+root
+  block <html>
+    block <body>
+      block <div>
+        text "ZZ&prod=23"
+
+#case 25
+#data "<div>ZZ&AElig=</div>"
+root
+  block <html>
+    block <body>
+      block <div>
+        text "ZZÆ="
+

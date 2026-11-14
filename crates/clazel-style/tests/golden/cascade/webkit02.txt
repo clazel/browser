@@ -1,0 +1,448 @@
+#case 0
+#data "<foo bar=qux/>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <foo>
+
+#case 1
+#data "<p id=\"status\"><noscript><strong>A</strong></noscript><span>B</span></p>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-bottom=16px display=Block
+      <noscript>
+        <strong> font-weight=700
+      <span>
+
+#case 2
+#data "<p id=\"status\"><noscript><strong>A</strong></noscript><span>B</span></p>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-bottom=16px display=Block
+      <noscript>
+        <strong> font-weight=700
+      <span>
+
+#case 3
+#data "<div><sarcasm><div></div></sarcasm></div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+      <sarcasm>
+        <div> display=Block
+
+#case 4
+#data "<html><body><img src=\"\" border=\"0\" alt=\"><div>A</div></body></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 5
+#data "<table><td></tbody>A"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+
+#case 6
+#data "<table><td></thead>A"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+
+#case 7
+#data "<table><td></tfoot>A"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+
+#case 8
+#data "<table><thead><td></tbody>A"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <thead> display=TableHeaderGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+
+#case 9
+#data "<legend>test</legend>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <legend> display=Block
+
+#case 10
+#data "<table><input>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <input> display=InlineBlock overflow-x=Clip overflow-y=Clip
+    <table> display=Table border-spacing=2px 2px
+
+#case 12
+#data "<b><em><foo><foo><aside></b>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <b> font-weight=700
+      <em> font-style=Italic
+        <foo>
+          <foo>
+    <em> font-style=Italic
+      <aside> display=Block
+        <b> font-weight=700
+
+#case 13
+#data "<b><em><foo><foo><aside></b></em>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <b> font-weight=700
+      <em> font-style=Italic
+        <foo>
+          <foo>
+    <em> font-style=Italic
+    <aside> display=Block
+      <em> font-style=Italic
+        <b> font-weight=700
+
+#case 14
+#data "<b><em><foo><foo><foo><aside></b>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <b> font-weight=700
+      <em> font-style=Italic
+        <foo>
+          <foo>
+            <foo>
+    <aside> display=Block
+      <b> font-weight=700
+
+#case 15
+#data "<b><em><foo><foo><foo><aside></b></em>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <b> font-weight=700
+      <em> font-style=Italic
+        <foo>
+          <foo>
+            <foo>
+    <aside> display=Block
+      <b> font-weight=700
+
+#case 19
+#data "<svg><foreignObject><div>foo</div><plaintext></foreignObject></svg><div>bar</div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+      <foreignObject>
+        <div> display=Block
+        <plaintext> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 20
+#data "<svg><foreignObject></foreignObject><title></svg>foo"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+      <foreignObject>
+      <title> display=None
+
+#case 21
+#data "</foreignObject><plaintext><div>foo</div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <plaintext> margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 22
+#data "<svg xml:base xml:lang xml:space xml:baaah definitionurl>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+
+#case 23
+#data "<math definitionurl xlink:title xlink:show>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+
+#case 24
+#data "<math DEFINITIONURL>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+
+#case 25
+#data "<select><hr>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <hr> color=#808080ff margin-top=8px border-top-width=1px border-top-style=Inset margin-right=auto border-right-width=1px border-right-style=Inset margin-bottom=8px border-bottom-width=1px border-bottom-style=Inset margin-left=auto border-left-width=1px border-left-style=Inset display=Block overflow-x=Hidden overflow-y=Hidden
+
+#case 26
+#data "<select><option><hr>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <option>
+      <hr> color=#808080ff margin-top=8px border-top-width=1px border-top-style=Inset margin-right=auto border-right-width=1px border-right-style=Inset margin-bottom=8px border-bottom-width=1px border-bottom-style=Inset margin-left=auto border-left-width=1px border-left-style=Inset display=Block overflow-x=Hidden overflow-y=Hidden
+
+#case 27
+#data "<select><optgroup><option><hr>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <optgroup>
+        <option>
+      <hr> color=#808080ff margin-top=8px border-top-width=1px border-top-style=Inset margin-right=auto border-right-width=1px border-right-style=Inset margin-bottom=8px border-bottom-width=1px border-bottom-style=Inset margin-left=auto border-left-width=1px border-left-style=Inset display=Block overflow-x=Hidden overflow-y=Hidden
+
+#case 28
+#data "<select><optgroup><hr>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <optgroup>
+      <hr> color=#808080ff margin-top=8px border-top-width=1px border-top-style=Inset margin-right=auto border-right-width=1px border-right-style=Inset margin-bottom=8px border-bottom-width=1px border-bottom-style=Inset margin-left=auto border-left-width=1px border-left-style=Inset display=Block overflow-x=Hidden overflow-y=Hidden
+
+#case 29
+#data "<select><option><optgroup><hr>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <option>
+      <optgroup>
+      <hr> color=#808080ff margin-top=8px border-top-width=1px border-top-style=Inset margin-right=auto border-right-width=1px border-right-style=Inset margin-bottom=8px border-bottom-width=1px border-bottom-style=Inset margin-left=auto border-left-width=1px border-left-style=Inset display=Block overflow-x=Hidden overflow-y=Hidden
+
+#case 30
+#data "<table><tr><td><select><hr>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+            <select>
+              <hr> color=#808080ff margin-top=8px border-top-width=1px border-top-style=Inset margin-right=auto border-right-width=1px border-right-style=Inset margin-bottom=8px border-bottom-width=1px border-bottom-style=Inset margin-left=auto border-left-width=1px border-left-style=Inset display=Block overflow-x=Hidden overflow-y=Hidden
+
+#case 31
+#data "<table><tr><td><select><option><hr>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+            <select>
+              <option>
+              <hr> color=#808080ff margin-top=8px border-top-width=1px border-top-style=Inset margin-right=auto border-right-width=1px border-right-style=Inset margin-bottom=8px border-bottom-width=1px border-bottom-style=Inset margin-left=auto border-left-width=1px border-left-style=Inset display=Block overflow-x=Hidden overflow-y=Hidden
+
+#case 32
+#data "<table><tr><td><select><optgroup><option><hr>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+            <select>
+              <optgroup>
+                <option>
+              <hr> color=#808080ff margin-top=8px border-top-width=1px border-top-style=Inset margin-right=auto border-right-width=1px border-right-style=Inset margin-bottom=8px border-bottom-width=1px border-bottom-style=Inset margin-left=auto border-left-width=1px border-left-style=Inset display=Block overflow-x=Hidden overflow-y=Hidden
+
+#case 33
+#data "<table><tr><td><select><optgroup><hr>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+            <select>
+              <optgroup>
+              <hr> color=#808080ff margin-top=8px border-top-width=1px border-top-style=Inset margin-right=auto border-right-width=1px border-right-style=Inset margin-bottom=8px border-bottom-width=1px border-bottom-style=Inset margin-left=auto border-left-width=1px border-left-style=Inset display=Block overflow-x=Hidden overflow-y=Hidden
+
+#case 34
+#data "<table><tr><td><select><option><optgroup><hr>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+            <select>
+              <option>
+              <optgroup>
+              <hr> color=#808080ff margin-top=8px border-top-width=1px border-top-style=Inset margin-right=auto border-right-width=1px border-right-style=Inset margin-bottom=8px border-bottom-width=1px border-bottom-style=Inset margin-left=auto border-left-width=1px border-left-style=Inset display=Block overflow-x=Hidden overflow-y=Hidden
+
+#case 35
+#data "<select><div><i></div><option>option"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <div> display=Block
+        <i> font-style=Italic
+      <i> font-style=Italic
+        <option>
+
+#case 36
+#data "<div><i></div><option>option"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+      <i> font-style=Italic
+    <i> font-style=Italic
+      <option>
+
+#case 37
+#data "<select><div>div 1</div><button>button</button><div>div 2</div><datalist><option>option</option></datalist><div>div 3</div></select>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <div> display=Block
+      <button> display=InlineBlock text-align=Center
+      <div> display=Block
+      <datalist> display=None
+        <option>
+      <div> display=Block
+
+#case 38
+#data "<select><button>button</select>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <button> display=InlineBlock text-align=Center
+
+#case 39
+#data "<select><datalist>datalist</select>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <datalist> display=None
+
+#case 40
+#data "<select><button><select></select></button></select>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <button> display=InlineBlock text-align=Center
+
+#case 41
+#data "<select><button><div><select></select>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <button> display=InlineBlock text-align=Center
+        <div> display=Block
+
+#case 42
+#data "<select><div><option><img>option</option></div></select>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <div> display=Block
+        <option>
+          <img>
+
+#case 43
+#data "<select><input>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+    <input> display=InlineBlock overflow-x=Clip overflow-y=Clip
+
+#case 44
+#data "<select><button><selectedcontent></button><option>X"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <button> display=InlineBlock text-align=Center
+        <selectedcontent>
+      <option>
+
+#case 45
+#data "<select><button><selectedcontent></button><option>x<i>i<b>ib</i>b"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <button> display=InlineBlock text-align=Center
+        <selectedcontent>
+      <option>
+        <i> font-style=Italic
+          <b> font-weight=700
+        <b> font-weight=700
+
+#case 46
+#data "<select><button><selectedcontent></button><option>X<option>Y"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <button> display=InlineBlock text-align=Center
+        <selectedcontent>
+      <option>
+      <option>
+
+#case 47
+#data "<select><button><selectedcontent></button><option>X<option selected>Y"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <button> display=InlineBlock text-align=Center
+        <selectedcontent>
+      <option>
+      <option>
+
+#case 48
+#data "<font><select><option>a</option></font></select>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <font>
+      <select>
+        <option>
+

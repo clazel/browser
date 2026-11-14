@@ -1,0 +1,484 @@
+#case 0
+#data "<!DOCTYPE html>Test"
+root
+  block <html>
+    block <body>
+      text "Test"
+
+#case 1
+#data "<textarea>test</div>test"
+root
+  block <html>
+    block <body>
+      replaced <textarea> inline TextArea { cols: 20, rows: 2 }
+
+#case 2
+#data "<table><td>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+
+#case 3
+#data "<table><td>test</tbody></table>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                text "test"
+
+#case 4
+#data "<frame>test"
+root
+  block <html>
+    block <body>
+      text "test"
+
+#case 5
+#data "<!DOCTYPE html><frameset>test"
+root
+  block <html>
+    inline <frameset>
+
+#case 6
+#data "<!DOCTYPE html><frameset> te st"
+root
+  block <html>
+    inline <frameset>
+
+#case 7
+#data "<!DOCTYPE html><frameset></frameset> te st"
+root
+  block <html>
+    inline <frameset>
+
+#case 8
+#data "<!DOCTYPE html><frameset><!DOCTYPE html>"
+root
+  block <html>
+    inline <frameset>
+
+#case 9
+#data "<!DOCTYPE html><font><p><b>test</font>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <font>
+      block <p>
+        inline <font>
+          inline <b>
+            text "test"
+
+#case 10
+#data "<!DOCTYPE html><dt><div><dd>"
+root
+  block <html>
+    block <body>
+      block <dt>
+        block <div>
+      block <dd>
+
+#case 11
+#data "<script></x"
+root
+  block <html>
+    block <body>
+
+#case 12
+#data "<table><plaintext><td>"
+root
+  block <html>
+    block <body>
+      block <plaintext>
+        text "<td>" white-space=Pre
+      table-wrapper <table>
+        table <table>
+
+#case 13
+#data "<plaintext></plaintext>"
+root
+  block <html>
+    block <body>
+      block <plaintext>
+        text "</plaintext>" white-space=Pre
+
+#case 14
+#data "<!DOCTYPE html><table><tr>TEST"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        text "TEST"
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+
+#case 15
+#data "<!DOCTYPE html><body t1=1><body t2=2><body t3=3 t4=4>"
+root
+  block <html>
+    block <body>
+
+#case 16
+#data "</b test"
+root
+  block <html>
+    block <body>
+
+#case 17
+#data "<!DOCTYPE html></b test<b &=&amp>X"
+root
+  block <html>
+    block <body>
+      text "X"
+
+#case 18
+#data "<!doctypehtml><scrIPt type=text/x-foobar;baz>X</SCRipt"
+root
+  block <html>
+    block <body>
+
+#case 19
+#data "&"
+root
+  block <html>
+    block <body>
+      text "&"
+
+#case 20
+#data "&#"
+root
+  block <html>
+    block <body>
+      text "&#"
+
+#case 21
+#data "&#X"
+root
+  block <html>
+    block <body>
+      text "&#X"
+
+#case 22
+#data "&#x"
+root
+  block <html>
+    block <body>
+      text "&#x"
+
+#case 23
+#data "&#45"
+root
+  block <html>
+    block <body>
+      text "-"
+
+#case 24
+#data "&x-test"
+root
+  block <html>
+    block <body>
+      text "&x-test"
+
+#case 25
+#data "<!doctypehtml><p><li>"
+root
+  block <html>
+    block <body>
+      block <p>
+      block <li>
+        marker <li> "• "
+
+#case 26
+#data "<!doctypehtml><p><dt>"
+root
+  block <html>
+    block <body>
+      block <p>
+      block <dt>
+
+#case 27
+#data "<!doctypehtml><p><dd>"
+root
+  block <html>
+    block <body>
+      block <p>
+      block <dd>
+
+#case 28
+#data "<!doctypehtml><p><form>"
+root
+  block <html>
+    block <body>
+      block <p>
+      block <form>
+
+#case 29
+#data "<!DOCTYPE html><p></P>X"
+root
+  block <html>
+    block <body>
+      block <p>
+      block (anonymous)
+        text "X"
+
+#case 30
+#data "&AMP"
+root
+  block <html>
+    block <body>
+      text "&"
+
+#case 31
+#data "&AMp;"
+root
+  block <html>
+    block <body>
+      text "&AMp;"
+
+#case 32
+#data "<!DOCTYPE html><html><head></head><body><thisISasillyTESTelementNameToMakeSureCrazyTagNamesArePARSEDcorrectLY>"
+root
+  block <html>
+    block <body>
+      inline <thisisasillytestelementnametomakesurecrazytagnamesareparsedcorrectly>
+
+#case 33
+#data "<!DOCTYPE html>X</body>X"
+root
+  block <html>
+    block <body>
+      text "XX"
+
+#case 34
+#data "<!DOCTYPE html><!-- X"
+root
+  block <html>
+    block <body>
+
+#case 35
+#data "<!DOCTYPE html><table><caption>test TEST</caption><td>test"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table-caption <caption>
+          text "test TEST"
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                text "test"
+
+#case 36
+#data "<!DOCTYPE html><select><option><optgroup>"
+root
+  block <html>
+    block <body>
+      inline <select>
+        inline <option>
+        inline <optgroup>
+
+#case 37
+#data "<!DOCTYPE html><select><optgroup><option></optgroup><option><select><option>"
+root
+  block <html>
+    block <body>
+      inline <select>
+        inline <optgroup>
+          inline <option>
+        inline <option>
+      inline <option>
+
+#case 38
+#data "<!DOCTYPE html><select><optgroup><option><optgroup>"
+root
+  block <html>
+    block <body>
+      inline <select>
+        inline <optgroup>
+          inline <option>
+        inline <optgroup>
+
+#case 39
+#data "<!DOCTYPE html><datalist><option>foo</datalist>bar"
+root
+  block <html>
+    block <body>
+      text "bar"
+
+#case 40
+#data "<!DOCTYPE html><font><input><input></font>"
+root
+  block <html>
+    block <body>
+      inline <font>
+        replaced <input> inline Input(Text { chars: 20 })
+        replaced <input> inline Input(Text { chars: 20 })
+
+#case 41
+#data "<!DOCTYPE html><!-- XXX - XXX -->"
+root
+  block <html>
+    block <body>
+
+#case 42
+#data "<!DOCTYPE html><!-- XXX - XXX"
+root
+  block <html>
+    block <body>
+
+#case 43
+#data "<!DOCTYPE html><!-- XXX - XXX - XXX -->"
+root
+  block <html>
+    block <body>
+
+#case 44
+#data "<!DOCTYPE html> <!DOCTYPE html>"
+root
+  block <html>
+    block <body>
+
+#case 45
+#data "test\ntest"
+root
+  block <html>
+    block <body>
+      text "test test"
+
+#case 46
+#data "<!DOCTYPE html><body><title>test</body></title>"
+root
+  block <html>
+    block <body>
+
+#case 47
+#data "<!DOCTYPE html><body><title>X</title><meta name=z><link rel=foo><style>\nx { content:\"</style\" } </style>"
+root
+  block <html>
+    block <body>
+
+#case 48
+#data "<!DOCTYPE html><select><optgroup></optgroup></select>"
+root
+  block <html>
+    block <body>
+      inline <select>
+        inline <optgroup>
+
+#case 49
+#data " \n "
+root
+  block <html>
+    block <body>
+
+#case 50
+#data "<!DOCTYPE html>  <html>"
+root
+  block <html>
+    block <body>
+
+#case 51
+#data "<!DOCTYPE html><script>\n</script>  <title>x</title>  </head>"
+root
+  block <html>
+    block <body>
+
+#case 52
+#data "<!DOCTYPE html><html><body><html id=x>"
+root
+  block <html>
+    block <body>
+
+#case 53
+#data "<!DOCTYPE html>X</body><html id=\"x\">"
+root
+  block <html>
+    block <body>
+      text "X"
+
+#case 54
+#data "<!DOCTYPE html><head><html id=x>"
+root
+  block <html>
+    block <body>
+
+#case 55
+#data "<!DOCTYPE html>X</html>X"
+root
+  block <html>
+    block <body>
+      text "XX"
+
+#case 56
+#data "<!DOCTYPE html>X</html> "
+root
+  block <html>
+    block <body>
+      text "X "
+
+#case 57
+#data "<!DOCTYPE html>X</html><p>X"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        text "X"
+      block <p>
+        text "X"
+
+#case 58
+#data "<!DOCTYPE html>X<p/x/y/z>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        text "X"
+      block <p>
+
+#case 59
+#data "<!DOCTYPE html><!--x--"
+root
+  block <html>
+    block <body>
+
+#case 60
+#data "<!DOCTYPE html><table><tr><td></p></table>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                block <p>
+
+#case 61
+#data "<!DOCTYPE <!DOCTYPE HTML>><!--<!--x-->-->"
+root
+  block <html>
+    block <body>
+      text ">"
+      text "-->"
+
+#case 62
+#data "<!doctype html><div><form></form><div></div></div>"
+root
+  block <html>
+    block <body>
+      block <div>
+        block <form>
+        block <div>
+

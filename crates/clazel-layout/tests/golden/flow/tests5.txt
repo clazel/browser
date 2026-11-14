@@ -1,0 +1,133 @@
+#case 0
+#data "<style> <!-- </style>x"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "x" x=8 base=22.859375 w=9.03125
+
+#case 1
+#data "<style> <!-- </style> --> </style>x"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "--> x" x=8 base=22.859375 w=38.328125
+
+#case 2
+#data "<style> <!--> </style>x"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "x" x=8 base=22.859375 w=9.03125
+
+#case 3
+#data "<style> <!---> </style>x"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "x" x=8 base=22.859375 w=9.03125
+
+#case 4
+#data "<iframe> <!---> </iframe>x"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x157.78125 base=162
+        atomic <iframe>
+        text "x" x=312 base=162 w=9.03125
+      replaced <iframe> 8,8 304x154 b=2,2,2,2
+
+#case 5
+#data "<iframe> <!--- </iframe>->x</iframe> --> </iframe>x"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x157.78125 base=162
+        atomic <iframe>
+        text "->x --> x" x=312 base=162 w=71.25
+      replaced <iframe> 8,8 304x154 b=2,2,2,2
+
+#case 6
+#data "<script> <!-- </script> --> </script>x"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "--> x" x=8 base=22.859375 w=38.328125
+
+#case 7
+#data "<title> <!-- </title> --> </title>x"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "--> x" x=8 base=22.859375 w=38.328125
+
+#case 8
+#data "<textarea> <!--- </textarea>->x</textarea> --> </textarea>x"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x41.0625 base=45.28125
+        atomic <textarea>
+        text "->x --> x" x=235.796875 base=45.28125 w=71.25
+      replaced <textarea> 8,8 227.796875x37.28125
+
+#case 9
+#data "<style> <!</-- </style>x"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "x" x=8 base=22.859375 w=9.03125
+
+#case 10
+#data "<p><xmp></xmp>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,16 784x584 m=8,8,8,8
+      block <p> 8,16 784x0
+      block <xmp> 8,16 784x0 m=16,0,16,0
+
+#case 11
+#data "<xmp> <!-- > --> </xmp>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x608
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <xmp> 8,8 784x18.640625 m=0,0,16,0
+        line 8,8 784x18.640625 base=22.859375
+          text " <!-- > --> " x=8 base=22.859375 w=88.625
+
+#case 12
+#data "<title>&amp;</title>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 13
+#data "<title><!--&amp;--></title>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 14
+#data "<title><!--</title>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 15
+#data "<noscript><!--</noscript>--></noscript>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 16
+#data "<noscript><!--</noscript>--></noscript>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+

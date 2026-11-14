@@ -1,0 +1,106 @@
+#case 0
+#data "<!DOCTYPE html><body><p><br></p>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <br>
+
+#case 1
+#data "<!DOCTYPE html><body><p><br>text</p>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <br>
+
+#case 2
+#data "<!DOCTYPE html><body><p>before<br>after</p>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <br>
+
+#case 3
+#data "<!DOCTYPE html><body><p><br><br></p>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <br>
+      <br>
+
+#case 4
+#data "<!DOCTYPE html><body><p>a<br>b<br>c</p>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <br>
+      <br>
+
+#case 5
+#data "<!DOCTYPE html><body><h1><br></h1>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <h1> margin-top=21.4375px margin-bottom=21.4375px display=Block font-size=32px font-weight=700
+      <br>
+
+#case 6
+#data "<!DOCTYPE html><body><p><input></p>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <input> display=InlineBlock overflow-x=Clip overflow-y=Clip
+
+#case 7
+#data "<!DOCTYPE html><body><p><img></p>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <img>
+
+#case 8
+#data "<!DOCTYPE html><body><p><wbr></p>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <wbr>
+
+#case 9
+#data "<!DOCTYPE html><body><p><embed></p>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <embed>
+
+#case 10
+#data "<!DOCTYPE html><body><h2><input></h2>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <h2> margin-top=19.9219px margin-bottom=19.9219px display=Block font-size=24px font-weight=700
+      <input> display=InlineBlock overflow-x=Clip overflow-y=Clip
+
+#case 11
+#data "<!DOCTYPE html><body><em><br></em>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <em> font-style=Italic
+      <br>
+
+#case 12
+#data "<!DOCTYPE html><body><strong><br>text</strong>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <strong> font-weight=700
+      <br>
+

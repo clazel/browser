@@ -1,0 +1,113 @@
+#case 0
+#data "<!DOCTYPE html><body><p><br></p>"
+root
+  block <html>
+    block <body>
+      block <p>
+        text <br> "\n" white-space=Pre
+
+#case 1
+#data "<!DOCTYPE html><body><p><br>text</p>"
+root
+  block <html>
+    block <body>
+      block <p>
+        text <br> "\n" white-space=Pre
+        text "text"
+
+#case 2
+#data "<!DOCTYPE html><body><p>before<br>after</p>"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "before"
+        text <br> "\n" white-space=Pre
+        text "after"
+
+#case 3
+#data "<!DOCTYPE html><body><p><br><br></p>"
+root
+  block <html>
+    block <body>
+      block <p>
+        text <br> "\n" white-space=Pre
+        text <br> "\n" white-space=Pre
+
+#case 4
+#data "<!DOCTYPE html><body><p>a<br>b<br>c</p>"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "a"
+        text <br> "\n" white-space=Pre
+        text "b"
+        text <br> "\n" white-space=Pre
+        text "c"
+
+#case 5
+#data "<!DOCTYPE html><body><h1><br></h1>"
+root
+  block <html>
+    block <body>
+      block <h1>
+        text <br> "\n" white-space=Pre
+
+#case 6
+#data "<!DOCTYPE html><body><p><input></p>"
+root
+  block <html>
+    block <body>
+      block <p>
+        replaced <input> inline Input(Text { chars: 20 })
+
+#case 7
+#data "<!DOCTYPE html><body><p><img></p>"
+root
+  block <html>
+    block <body>
+      block <p>
+        replaced <img> inline Image
+
+#case 8
+#data "<!DOCTYPE html><body><p><wbr></p>"
+root
+  block <html>
+    block <body>
+      block <p>
+        text <wbr> "\u{200b}"
+
+#case 9
+#data "<!DOCTYPE html><body><p><embed></p>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline <embed>
+
+#case 10
+#data "<!DOCTYPE html><body><h2><input></h2>"
+root
+  block <html>
+    block <body>
+      block <h2>
+        replaced <input> inline Input(Text { chars: 20 })
+
+#case 11
+#data "<!DOCTYPE html><body><em><br></em>"
+root
+  block <html>
+    block <body>
+      inline <em>
+        text <br> "\n" white-space=Pre
+
+#case 12
+#data "<!DOCTYPE html><body><strong><br>text</strong>"
+root
+  block <html>
+    block <body>
+      inline <strong>
+        text <br> "\n" white-space=Pre
+        text "text"
+

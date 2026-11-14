@@ -1,0 +1,40 @@
+#case 0
+#data "<!doctype html><p>foo<main>bar<p>baz"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x119.921875
+    block <body> 8,16 784x87.921875 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "foo" x=8 base=30.859375 w=25.1875
+      block <main> 8,50.640625 784x53.28125
+        block (anonymous) 8,50.640625 784x18.640625
+          line 8,50.640625 784x18.640625 base=65.5
+            text "bar" x=8 base=65.5 w=27.4375
+        block <p> 8,85.28125 784x18.640625 m=16,0,16,0
+          line 8,85.28125 784x18.640625 base=100.140625
+            text "baz" x=8 base=100.140625 w=28.21875
+
+#case 1
+#data "<!doctype html><main><p>foo</main>bar"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x77.28125
+    block <body> 8,16 784x53.28125 m=8,8,8,8
+      block <main> 8,16 784x18.640625
+        block <p> 8,16 784x18.640625 m=16,0,16,0
+          line 8,16 784x18.640625 base=30.859375
+            text "foo" x=8 base=30.859375 w=25.1875
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          text "bar" x=8 base=65.5 w=27.4375
+
+#case 2
+#data "<!DOCTYPE html>xxx<svg><x><g><a><main><b>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      block (anonymous) 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          text "xxx" x=8 base=22.859375 w=27.078125
+      block <main> 8,26.640625 784x0
+      block (anonymous) 8,26.640625 784x0
+

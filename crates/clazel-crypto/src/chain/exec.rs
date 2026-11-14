@@ -206,7 +206,7 @@ fn ecdsa_digest(hash: EcdsaHash, message: &[u8]) -> (out: Vec<u8>)
 
 /// ecdsa-with-SHA256 or ecdsa-with-SHA384 under a secp384r1 key whose
 /// ECPoint is `point` (design P17): FIPS 186-5 §6.4.2 by `clazel_p384`.
-fn ecdsa_p384_link(point: &[u8], hash: EcdsaHash, message: &[u8], signature: &[u8]) -> (out: bool)
+pub(crate) fn ecdsa_p384_link(point: &[u8], hash: EcdsaHash, message: &[u8], signature: &[u8]) -> (out: bool)
     ensures out == crate::chain::spec::ecdsa_p384_link(point@,
         clazel_x509::signature_algorithm::exec::view_ecdsa_hash(hash), message@, signature@),
 {

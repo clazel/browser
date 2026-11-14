@@ -1,0 +1,282 @@
+#case 0
+#data "<a><p></a></p>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <a>
+      block <p>
+        inline <a>
+
+#case 1
+#data "<a>1<p>2</a>3</p>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <a>
+          text "1"
+      block <p>
+        inline <a>
+          text "2"
+        text "3"
+
+#case 2
+#data "<a>1<button>2</a>3</button>"
+root
+  block <html>
+    block <body>
+      inline <a>
+        text "1"
+      inline-block <button>
+        inline <a>
+          text "2"
+        text "3"
+
+#case 3
+#data "<a>1<b>2</a>3</b>"
+root
+  block <html>
+    block <body>
+      inline <a>
+        text "1"
+        inline <b>
+          text "2"
+      inline <b>
+        text "3"
+
+#case 4
+#data "<a>1<div>2<div>3</a>4</div>5</div>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <a>
+          text "1"
+      block <div>
+        block (anonymous)
+          inline <a>
+            text "2"
+        block <div>
+          inline <a>
+            text "3"
+          text "4"
+        block (anonymous)
+          text "5"
+
+#case 5
+#data "<table><a>1<p>2</a>3</p>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <a>
+          text "1"
+      block <p>
+        inline <a>
+          text "2"
+        text "3"
+      table-wrapper <table>
+        table <table>
+
+#case 6
+#data "<b><b><a><p></a>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <b> first
+          inline <b> first
+            inline <a>
+      block <p>
+        inline <a>
+      block (anonymous)
+        inline <b> last
+          inline <b> last
+
+#case 7
+#data "<b><a><b><p></a>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <b> first
+          inline <a>
+            inline <b>
+          inline <b> first
+      block <p>
+        inline <a>
+      block (anonymous)
+        inline <b> last
+          inline <b> last
+
+#case 8
+#data "<a><b><b><p></a>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <a>
+          inline <b>
+            inline <b>
+        inline <b> first
+          inline <b> first
+      block <p>
+        inline <a>
+      block (anonymous)
+        inline <b> last
+          inline <b> last
+
+#case 9
+#data "<p>1<s id=\"A\">2<b id=\"B\">3</p>4</s>5</b>"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "1"
+        inline <s>
+          text "2"
+          inline <b>
+            text "3"
+      block (anonymous)
+        inline <s>
+          inline <b>
+            text "4"
+        inline <b>
+          text "5"
+
+#case 10
+#data "<table><a>1<td>2</td>3</table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <a>
+          text "1"
+        inline <a>
+          text "3"
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                text "2"
+
+#case 11
+#data "<table>A<td>B</td>C</table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        text "AC"
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                text "B"
+
+#case 12
+#data "<a><svg><tr><input></a>"
+root
+  block <html>
+    block <body>
+      inline <a>
+        inline <svg>
+          inline-table-wrapper (anonymous)
+            inline-table (anonymous)
+              table-row <tr>
+                table-cell (anonymous)
+                  inline-block <input>
+
+#case 13
+#data "<div><a><b><div><div><div><div><div><div><div><div><div><div></a>"
+root
+  block <html>
+    block <body>
+      block <div>
+        block (anonymous)
+          inline <a>
+            inline <b>
+          inline <b> first
+        block <div>
+          block (anonymous)
+            inline <a>
+          block <div>
+            block (anonymous)
+              inline <a>
+            block <div>
+              block (anonymous)
+                inline <a>
+              block <div>
+                block (anonymous)
+                  inline <a>
+                block <div>
+                  block (anonymous)
+                    inline <a>
+                  block <div>
+                    block (anonymous)
+                      inline <a>
+                    block <div>
+                      block (anonymous)
+                        inline <a>
+                      block <div>
+                        block (anonymous)
+                          inline <a> first
+                        block <div>
+                          block <div>
+                        block (anonymous)
+                          inline <a> last
+        block (anonymous)
+          inline <b> last
+
+#case 14
+#data "<div><a><b><u><i><code><div></a>"
+root
+  block <html>
+    block <body>
+      block <div>
+        block (anonymous)
+          inline <a>
+            inline <b>
+              inline <u>
+                inline <i>
+                  inline <code>
+          inline <u> first
+            inline <i> first
+              inline <code> first
+        block <div>
+          inline <a>
+        block (anonymous)
+          inline <u> last
+            inline <i> last
+              inline <code> last
+
+#case 15
+#data "<b><b><b><b>x</b></b></b></b>y"
+root
+  block <html>
+    block <body>
+      inline <b>
+        inline <b>
+          inline <b>
+            inline <b>
+              text "x"
+      text "y"
+
+#case 16
+#data "<p><b><b><b><b><p>x"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline <b>
+          inline <b>
+            inline <b>
+              inline <b>
+      block <p>
+        inline <b>
+          inline <b>
+            inline <b>
+              text "x"
+

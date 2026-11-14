@@ -59,6 +59,58 @@ pub enum Msg {
         /// The absolute URLs of its links, in order.
         links: Vec<Vec<u8>>,
     },
+    /// Renderer to kernel: the committed document's title.
+    Title {
+        /// The title.
+        title: Vec<u8>,
+    },
+    /// GPU process to kernel: a frame is drawn into a buffer of the ring.
+    FrameReady {
+        /// The buffer's id in the ring the host allocated.
+        buffer: u64,
+        /// The frame's width, in device pixels.
+        width: u64,
+        /// The frame's height, in device pixels.
+        height: u64,
+    },
+    /// GPU process to kernel: the driver is accepted (item 5.17c).
+    GpuReady {
+        /// Whether it is the software driver.
+        software: bool,
+    },
+    /// GPU process to kernel: the driver is refused (item 5.17c).
+    GpuRefused,
+    /// Renderer to kernel: fetch a style sheet (item 5.19).
+    FetchStyle {
+        /// The renderer's id for this fetch.
+        request: u64,
+        /// The sheet's URL, as the document wrote it.
+        url: Vec<u8>,
+    },
+    /// Kernel to renderer: the sheet's response arrived.
+    StyleResponse {
+        /// The renderer's id for the fetch.
+        request: u64,
+        /// The response's combined `Content-Type` field value, or empty.
+        content_type: Vec<u8>,
+    },
+    /// Kernel to renderer: the next part of the sheet's body.
+    StyleBody {
+        /// The renderer's id for the fetch.
+        request: u64,
+        /// The octets.
+        bytes: Vec<u8>,
+    },
+    /// Kernel to renderer: the sheet's body is complete.
+    StyleEnd {
+        /// The renderer's id for the fetch.
+        request: u64,
+    },
+    /// Kernel to renderer: the fetch failed (or was refused).
+    StyleFailed {
+        /// The renderer's id for the fetch.
+        request: u64,
+    },
     /// Kernel to renderer: a document is committed; its body follows in
     /// `Body` frames, then `BodyEnd`.
     Commit {
@@ -96,6 +148,39 @@ pub enum Msg {
     },
     /// Kernel to renderer: the committed document's body is complete.
     BodyEnd,
+    /// Kernel to renderer: the tab's content area.
+    Viewport {
+        /// Its width, in device pixels.
+        width: u64,
+        /// Its height, in device pixels.
+        height: u64,
+        /// Device pixels per CSS pixel (1 or 2).
+        scale: u64,
+    },
+    /// Kernel to renderer: one event of the user's on the content area.
+    Input {
+        /// 0 a click, 1 a scroll, 2 a key.
+        kind: u64,
+        /// The position's x, in device pixels.
+        x: u64,
+        /// The position's y, in device pixels.
+        y: u64,
+        /// Whether the scroll delta is negative.
+        negative: bool,
+        /// The scroll delta's magnitude, in device pixels.
+        delta: u64,
+        /// The key's code.
+        key: u64,
+    },
+    /// Kernel to GPU process: the tab's content area.
+    GpuViewport {
+        /// Its width, in device pixels.
+        width: u64,
+        /// Its height, in device pixels.
+        height: u64,
+        /// Device pixels per CSS pixel (1 or 2).
+        scale: u64,
+    },
 }
 
 /// [`max_body_chunk`]: the most octets one `Body` carries, `MAX_FRAME` minus
@@ -106,6 +191,17 @@ pub const MAX_BODY_CHUNK: usize = 1_048_568;
 pub proof fn lemma_max_body_chunk()
     ensures
         MAX_BODY_CHUNK as nat == max_body_chunk(),
+{
+}
+
+/// [`max_style_chunk`]: the most octets one `StyleBody` carries,
+/// `MAX_FRAME` minus 17 (item 5.19).
+pub const MAX_STYLE_CHUNK: usize = 1_048_559;
+
+/// [`MAX_STYLE_CHUNK`] is the spec's [`max_style_chunk`].
+pub proof fn lemma_max_style_chunk()
+    ensures
+        MAX_STYLE_CHUNK as nat == max_style_chunk(),
 {
 }
 
@@ -144,6 +240,25 @@ impl View for Msg {
             Msg::Error { code } => Message::Error { code: *code },
             Msg::Body { bytes } => Message::Body { bytes: bytes@ },
             Msg::BodyEnd => Message::BodyEnd,
+            Msg::Title { title } => Message::Title { title: title@ },
+            Msg::FrameReady { buffer, width, height } => Message::FrameReady { buffer: *buffer, width: *width, height: *height },
+            Msg::GpuReady { software } => Message::GpuReady { software: *software },
+            Msg::GpuRefused => Message::GpuRefused,
+            Msg::Viewport { width, height, scale } => Message::Viewport { width: *width, height: *height, scale: *scale },
+            Msg::Input { kind, x, y, negative, delta, key } => Message::Input {
+                kind: *kind,
+                x: *x,
+                y: *y,
+                negative: *negative,
+                delta: *delta,
+                key: *key,
+            },
+            Msg::GpuViewport { width, height, scale } => Message::GpuViewport { width: *width, height: *height, scale: *scale },
+            Msg::FetchStyle { request, url } => Message::FetchStyle { request: *request, url: url@ },
+            Msg::StyleResponse { request, content_type } => Message::StyleResponse { request: *request, content_type: content_type@ },
+            Msg::StyleBody { request, bytes } => Message::StyleBody { request: *request, bytes: bytes@ },
+            Msg::StyleEnd { request } => Message::StyleEnd { request: *request },
+            Msg::StyleFailed { request } => Message::StyleFailed { request: *request },
         }
     }
 }
@@ -278,6 +393,32 @@ fn parse_fields(tag: u64, toks: &[Tok]) -> (r: Option<Msg>)
             let s = text_at(toks, 2)?;
             Some(Msg::Navigate { url: s })
         } else { None }
+    } else if tag == 11 {
+        if k == 1 {
+            let s = text_at(toks, 2)?;
+            Some(Msg::Title { title: s })
+        } else { None }
+    } else if tag == 14 {
+        if k == 2 {
+            match (uint_at(toks, 2), text_at(toks, 3)) {
+                (Some(a), Some(b)) => Some(Msg::FetchStyle { request: a, url: b }),
+                _ => None,
+            }
+        } else { None }
+    } else if tag == 15 {
+        if k == 3 {
+            match (uint_at(toks, 2), uint_at(toks, 3), uint_at(toks, 4)) {
+                (Some(a), Some(b), Some(c)) => Some(Msg::FrameReady { buffer: a, width: b, height: c }),
+                _ => None,
+            }
+        } else { None }
+    } else if tag == 18 {
+        if k == 1 {
+            let b = bool_at(toks, 2)?;
+            Some(Msg::GpuReady { software: b })
+        } else { None }
+    } else if tag == 19 {
+        if k == 0 { Some(Msg::GpuRefused) } else { None }
     } else if tag == 101 {
         if k == 3 {
             match (text_at(toks, 2), bytes_at(toks, 3), uint_at(toks, 4)) {
@@ -319,6 +460,51 @@ fn parse_fields(tag: u64, toks: &[Tok]) -> (r: Option<Msg>)
         } else { None }
     } else if tag == 107 {
         if k == 0 { Some(Msg::BodyEnd) } else { None }
+    } else if tag == 108 {
+        if k == 3 {
+            match (uint_at(toks, 2), uint_at(toks, 3), uint_at(toks, 4)) {
+                (Some(a), Some(b), Some(c)) => Some(Msg::Viewport { width: a, height: b, scale: c }),
+                _ => None,
+            }
+        } else { None }
+    } else if tag == 109 {
+        if k == 6 {
+            match (uint_at(toks, 2), uint_at(toks, 3), uint_at(toks, 4), bool_at(toks, 5), uint_at(toks, 6), uint_at(toks, 7)) {
+                (Some(a), Some(b), Some(c), Some(n), Some(d), Some(e)) => Some(Msg::Input { kind: a, x: b, y: c, negative: n, delta: d, key: e }),
+                _ => None,
+            }
+        } else { None }
+    } else if tag == 110 {
+        if k == 2 {
+            match (uint_at(toks, 2), bytes_at(toks, 3)) {
+                (Some(a), Some(b)) => Some(Msg::StyleResponse { request: a, content_type: b }),
+                _ => None,
+            }
+        } else { None }
+    } else if tag == 111 {
+        if k == 2 {
+            match (uint_at(toks, 2), bytes_at(toks, 3)) {
+                (Some(a), Some(b)) => Some(Msg::StyleBody { request: a, bytes: b }),
+                _ => None,
+            }
+        } else { None }
+    } else if tag == 112 {
+        if k == 1 {
+            let a = uint_at(toks, 2)?;
+            Some(Msg::StyleEnd { request: a })
+        } else { None }
+    } else if tag == 113 {
+        if k == 1 {
+            let a = uint_at(toks, 2)?;
+            Some(Msg::StyleFailed { request: a })
+        } else { None }
+    } else if tag == 114 {
+        if k == 3 {
+            match (uint_at(toks, 2), uint_at(toks, 3), uint_at(toks, 4)) {
+                (Some(a), Some(b), Some(c)) => Some(Msg::GpuViewport { width: a, height: b, scale: c }),
+                _ => None,
+            }
+        } else { None }
     } else {
         None
     }
@@ -464,7 +650,27 @@ pub fn is_from_renderer(m: &Msg) -> (r: bool)
             | Msg::StorageLength
             | Msg::Navigate { .. }
             | Msg::Display { .. }
+            | Msg::Title { .. }
+            | Msg::FetchStyle { .. }
     )
+}
+
+/// Whether `m` is sent by a GPU process to the kernel (item 5.18).
+pub fn is_from_gpu(m: &Msg) -> (r: bool)
+    ensures
+        r == super::spec::is_from_gpu(m@),
+{
+    matches!(m, Msg::FrameReady { .. } | Msg::GpuReady { .. } | Msg::GpuRefused)
+}
+
+/// Decode a message the kernel receives from a GPU process: only
+/// GPU-process-to-kernel messages (item 5.18).
+pub fn decode_gpu_message(input: &[u8]) -> (output: Option<Msg>)
+    ensures
+        super::contract::decode_gpu_message_ensures(input@, option_msg(output)),
+{
+    let m = decode_message(input)?;
+    if is_from_gpu(&m) { Some(m) } else { None }
 }
 
 /// Decode a message the kernel receives from a renderer: only
@@ -519,6 +725,43 @@ fn toks5(a: Tok, b: Tok, c: Tok, d: Tok, e: Tok) -> (t: Vec<Tok>)
 {
     let t = vec![a, b, c, d, e];
     assert(views(t@) =~= seq![a@, b@, c@, d@, e@]);
+    t
+}
+
+/// The tokens of `Input`: the array, the tag 109 and the six fields.
+fn input_tokens(kind: u64, x: u64, y: u64, negative: bool, delta: u64, key: u64) -> (t: Vec<Tok>)
+    ensures
+        views(t@) =~= seq![
+            crate::cbor::spec::Token::Array(7),
+            crate::cbor::spec::Token::Uint(109),
+            crate::cbor::spec::Token::Uint(kind),
+            crate::cbor::spec::Token::Uint(x),
+            crate::cbor::spec::Token::Uint(y),
+            crate::cbor::spec::Token::Bool(negative),
+            crate::cbor::spec::Token::Uint(delta),
+            crate::cbor::spec::Token::Uint(key),
+        ],
+{
+    let t = vec![
+        Tok::Array(7),
+        Tok::Uint(109),
+        Tok::Uint(kind),
+        Tok::Uint(x),
+        Tok::Uint(y),
+        Tok::Bool(negative),
+        Tok::Uint(delta),
+        Tok::Uint(key),
+    ];
+    assert(views(t@) =~= seq![
+        crate::cbor::spec::Token::Array(7),
+        crate::cbor::spec::Token::Uint(109),
+        crate::cbor::spec::Token::Uint(kind),
+        crate::cbor::spec::Token::Uint(x),
+        crate::cbor::spec::Token::Uint(y),
+        crate::cbor::spec::Token::Bool(negative),
+        crate::cbor::spec::Token::Uint(delta),
+        crate::cbor::spec::Token::Uint(key),
+    ]);
     t
 }
 
@@ -592,6 +835,18 @@ fn message_tokens(m: &Msg) -> (t: Vec<Tok>)
         Msg::Error { code } => toks3(Tok::Array(2), Tok::Uint(105), Tok::Uint(*code)),
         Msg::Body { bytes } => toks3(Tok::Array(2), Tok::Uint(106), Tok::Bytes(copy(bytes.as_slice()))),
         Msg::BodyEnd => toks2(Tok::Array(1), Tok::Uint(107)),
+        Msg::Title { title } => toks3(Tok::Array(2), Tok::Uint(11), Tok::Text(copy(title.as_slice()))),
+        Msg::FrameReady { buffer, width, height } => toks5(Tok::Array(4), Tok::Uint(15), Tok::Uint(*buffer), Tok::Uint(*width), Tok::Uint(*height)),
+        Msg::GpuReady { software } => toks3(Tok::Array(2), Tok::Uint(18), Tok::Bool(*software)),
+        Msg::GpuRefused => toks2(Tok::Array(1), Tok::Uint(19)),
+        Msg::Viewport { width, height, scale } => toks5(Tok::Array(4), Tok::Uint(108), Tok::Uint(*width), Tok::Uint(*height), Tok::Uint(*scale)),
+        Msg::Input { kind, x, y, negative, delta, key } => input_tokens(*kind, *x, *y, *negative, *delta, *key),
+        Msg::GpuViewport { width, height, scale } => toks5(Tok::Array(4), Tok::Uint(114), Tok::Uint(*width), Tok::Uint(*height), Tok::Uint(*scale)),
+        Msg::FetchStyle { request, url } => toks4(Tok::Array(3), Tok::Uint(14), Tok::Uint(*request), Tok::Text(copy(url.as_slice()))),
+        Msg::StyleResponse { request, content_type } => toks4(Tok::Array(3), Tok::Uint(110), Tok::Uint(*request), Tok::Bytes(copy(content_type.as_slice()))),
+        Msg::StyleBody { request, bytes } => toks4(Tok::Array(3), Tok::Uint(111), Tok::Uint(*request), Tok::Bytes(copy(bytes.as_slice()))),
+        Msg::StyleEnd { request } => toks3(Tok::Array(2), Tok::Uint(112), Tok::Uint(*request)),
+        Msg::StyleFailed { request } => toks3(Tok::Array(2), Tok::Uint(113), Tok::Uint(*request)),
     }
 }
 

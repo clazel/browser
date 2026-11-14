@@ -1,0 +1,196 @@
+#case 0
+#data "<!DOCTYPE html><body><foo>A"
+root
+  block <html>
+    block <body>
+      inline <foo>
+        text "A"
+
+#case 1
+#data "<!DOCTYPE html><body><area>A"
+root
+  block <html>
+    block <body>
+      text "A"
+
+#case 2
+#data "<!DOCTYPE html><body><base>A"
+root
+  block <html>
+    block <body>
+      text "A"
+
+#case 3
+#data "<!DOCTYPE html><body><basefont>A"
+root
+  block <html>
+    block <body>
+      text "A"
+
+#case 4
+#data "<!DOCTYPE html><body><bgsound>A"
+root
+  block <html>
+    block <body>
+      inline <bgsound>
+      text "A"
+
+#case 5
+#data "<!DOCTYPE html><body><br>A"
+root
+  block <html>
+    block <body>
+      text <br> "\n" white-space=Pre
+      text "A"
+
+#case 6
+#data "<!DOCTYPE html><body><col>A"
+root
+  block <html>
+    block <body>
+      text "A"
+
+#case 7
+#data "<!DOCTYPE html><body><command>A"
+root
+  block <html>
+    block <body>
+      inline <command>
+        text "A"
+
+#case 8
+#data "<!DOCTYPE html><body><embed>A"
+root
+  block <html>
+    block <body>
+      inline <embed>
+      text "A"
+
+#case 9
+#data "<!DOCTYPE html><body><frame>A"
+root
+  block <html>
+    block <body>
+      text "A"
+
+#case 10
+#data "<!DOCTYPE html><body><hr>A"
+root
+  block <html>
+    block <body>
+      block <hr>
+      block (anonymous)
+        text "A"
+
+#case 11
+#data "<!DOCTYPE html><body><img>A"
+root
+  block <html>
+    block <body>
+      replaced <img> inline Image
+      text "A"
+
+#case 12
+#data "<!DOCTYPE html><body><input>A"
+root
+  block <html>
+    block <body>
+      replaced <input> inline Input(Text { chars: 20 })
+      text "A"
+
+#case 13
+#data "<!DOCTYPE html><body><keygen>A"
+root
+  block <html>
+    block <body>
+      inline <keygen>
+      text "A"
+
+#case 14
+#data "<!DOCTYPE html><keygen>A</keygen>B"
+root
+  block <html>
+    block <body>
+      inline <keygen>
+      text "AB"
+
+#case 15
+#data "</keygen>A"
+root
+  block <html>
+    block <body>
+      text "A"
+
+#case 16
+#data "<!DOCTYPE html></keygen>A"
+root
+  block <html>
+    block <body>
+      text "A"
+
+#case 17
+#data "<!DOCTYPE html><head></keygen>A"
+root
+  block <html>
+    block <body>
+      text "A"
+
+#case 18
+#data "<!DOCTYPE html><head></head></keygen>A"
+root
+  block <html>
+    block <body>
+      text "A"
+
+#case 19
+#data "<!DOCTYPE html><body></keygen>A"
+root
+  block <html>
+    block <body>
+      text "A"
+
+#case 20
+#data "<!DOCTYPE html><body><link>A"
+root
+  block <html>
+    block <body>
+      text "A"
+
+#case 21
+#data "<!DOCTYPE html><body><meta>A"
+root
+  block <html>
+    block <body>
+      text "A"
+
+#case 22
+#data "<!DOCTYPE html><body><param>A"
+root
+  block <html>
+    block <body>
+      text "A"
+
+#case 23
+#data "<!DOCTYPE html><body><source>A"
+root
+  block <html>
+    block <body>
+      inline <source>
+      text "A"
+
+#case 24
+#data "<!DOCTYPE html><body><track>A"
+root
+  block <html>
+    block <body>
+      inline <track>
+      text "A"
+
+#case 25
+#data "<!DOCTYPE html><body><wbr>A"
+root
+  block <html>
+    block <body>
+      text <wbr> "\u{200b}"
+      text "A"
+

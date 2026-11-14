@@ -1,0 +1,187 @@
+#case 0
+#data "<svg><![CDATA[foo]]>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "foo"
+
+#case 1
+#data "<math><![CDATA[foo]]>"
+root
+  block <html>
+    block <body>
+      inline <math>
+        text "foo"
+
+#case 2
+#data "<div><![CDATA[foo]]>"
+root
+  block <html>
+    block <body>
+      block <div>
+
+#case 3
+#data "<svg><![CDATA[foo"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "foo"
+
+#case 4
+#data "<svg><![CDATA["
+root
+  block <html>
+    block <body>
+      inline <svg>
+
+#case 5
+#data "<svg><![CDATA[]]>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+
+#case 6
+#data "<svg><![CDATA[]] >]]>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "]] >"
+
+#case 7
+#data "<svg><![CDATA[]]"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "]]"
+
+#case 8
+#data "<svg><![CDATA[]"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "]"
+
+#case 9
+#data "<svg><![CDATA[]>a"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "]>a"
+
+#case 10
+#data "<!DOCTYPE html><svg><![CDATA[foo]]]>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "foo]"
+
+#case 11
+#data "<!DOCTYPE html><svg><![CDATA[foo]]]]>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "foo]]"
+
+#case 12
+#data "<!DOCTYPE html><svg><![CDATA[foo]]]]]>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "foo]]]"
+
+#case 13
+#data "<svg><foreignObject><div><![CDATA[foo]]>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <svg> first
+          inline <foreignObject> first
+      block <div>
+      block (anonymous)
+        inline <svg> last
+          inline <foreignObject> last
+
+#case 14
+#data "<svg><![CDATA[<svg>]]>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "<svg>"
+
+#case 15
+#data "<svg><![CDATA[</svg>a]]>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "</svg>a"
+
+#case 16
+#data "<svg><![CDATA[<svg>a"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "<svg>a"
+
+#case 17
+#data "<svg><![CDATA[</svg>a"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "</svg>a"
+
+#case 18
+#data "<svg><![CDATA[<svg>]]><path>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "<svg>"
+        inline <path>
+
+#case 19
+#data "<svg><![CDATA[<svg>]]></path>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "<svg>"
+
+#case 20
+#data "<svg><![CDATA[<svg>]]><!--path-->"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "<svg>"
+
+#case 21
+#data "<svg><![CDATA[<svg>]]>path"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "<svg>path"
+
+#case 22
+#data "<svg><![CDATA[<!--svg-->]]>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "<!--svg-->"
+

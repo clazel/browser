@@ -167,22 +167,38 @@ fn suffix_label_count_exec(d: &[Vec<u32>]) -> (k: usize)
     ensures
         k as nat == suffix_label_count(super::table::psl_rules(), clazel_url::host::record::parts_view(d@)),
 {
-    let ghost rules = super::table::psl_rules();
+    proof {
+        assert(super::table::psl_rules().take(PSL_RULES_LEN as int) =~= super::table::psl_rules());
+    }
+    suffix_label_count_upto(d, PSL_RULES_LEN)
+}
+
+/// [`suffix_label_count_exec`] over the list's first `limit` rules.
+fn suffix_label_count_upto(d: &[Vec<u32>], limit: usize) -> (k: usize)
+    requires
+        limit <= PSL_RULES_LEN,
+    ensures
+        k as nat == suffix_label_count(super::table::psl_rules().take(limit as int), clazel_url::host::record::parts_view(d@)),
+{
+    let ghost rules = super::table::psl_rules().take(limit as int);
     let ghost dv = clazel_url::host::record::parts_view(d@);
     let mut best: Option<RuleRow> = None;
     let mut i: usize = 0;
-    while i < PSL_RULES_LEN
+    while i < limit
         invariant
-            i <= PSL_RULES_LEN,
-            rules == super::table::psl_rules(),
+            i <= limit,
+            limit <= PSL_RULES_LEN,
+            rules == super::table::psl_rules().take(limit as int),
+            rules.len() == limit,
             dv == clazel_url::host::record::parts_view(d@),
             (prevailing_from(rules, dv, i as nat) is None) == (best is None),
             best matches Some(b) ==> prevailing_from(rules, dv, i as nat) is Some && super::table::rule_of_row(b)
                 == rules[prevailing_from(rules, dv, i as nat)->Some_0 as int],
-        decreases PSL_RULES_LEN - i,
+        decreases limit - i,
     {
         let row = psl_rules_at_exec(i);
         proof {
+            assert(rules[i as int] == super::table::psl_rules()[i as int]);
             assert(rules[i as int] == super::table::rule_of_row(row));
             assert(prevailing_from(rules, dv, (i + 1) as nat) == if rule_matches(rules[i as int], dv) && (
             prevailing_from(rules, dv, i as nat) is None || beats(
@@ -426,6 +442,28 @@ pub fn is_public_suffix_exec(domain: &[u32]) -> (output: bool)
         None => false,
         Some(ps) => equal_exec(ps.as_slice(), domain),
     }
+}
+
+/// Whether `domain` is a public suffix under the list's ICANN section alone.
+pub fn is_icann_public_suffix_exec(domain: &[u32]) -> (output: bool)
+    ensures
+        super::contract::is_icann_public_suffix_ensures(domain@, output),
+{
+    let (labels, td) = split_domain(domain);
+    proof {
+        super::lemmas::lemma_domain_labels_join(domain@);
+    }
+    if has_empty_label_exec(labels.as_slice()) {
+        return false;
+    }
+    let k = suffix_label_count_upto(labels.as_slice(), PSL_ICANN_RULES_LEN);
+    proof {
+        super::lemmas::lemma_suffix_label_count_bounds(super::table::psl_icann_rules(), clazel_url::host::record::parts_view(labels@));
+    }
+    // Never saturates: k <= labels.len().
+    let from = labels.len().saturating_sub(k);
+    let suffix = join_exec(labels.as_slice(), from, td);
+    equal_exec(suffix.as_slice(), domain)
 }
 
 /// The cookie root of a domain: the shortest suffix, in labels, that is

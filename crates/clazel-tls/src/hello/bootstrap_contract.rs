@@ -16,11 +16,13 @@ pub open spec fn start_ensures(config: super::client_spec::Config,
         }
 }
 
-/// Only the exact pending flight opens the peer-input gate.
-pub open spec fn acknowledge_ensures(before: super::bootstrap_spec::State,
+/// Only the exact pending flight opens the peer-input gate. After
+/// ClientHello2 the messages retained from the HelloRetryRequest's record
+/// are processed then, so any Hello outcome may follow it.
+pub open spec fn acknowledge_ensures(hash: spec_fn(Seq<u8>) -> Seq<u8>, before: super::bootstrap_spec::State,
     sent: Seq<u8>, out: (super::bootstrap_spec::State, super::bootstrap_spec::Action)) -> bool {
     super::bootstrap_spec::wf(before)
-        && out == super::bootstrap_spec::acknowledge(before, sent)
+        && out == super::bootstrap_spec::acknowledge(hash, before, sent)
         && super::bootstrap_spec::wf(out.0)
         && match out.1 {
             super::bootstrap_spec::Action::None =>
@@ -29,6 +31,13 @@ pub open spec fn acknowledge_ensures(before: super::bootstrap_spec::State,
             super::bootstrap_spec::Action::Fail(_) =>
                 out.0.mode == super::bootstrap_spec::Mode::Failed
                     && out.0.pending_flight.len() == 0,
+            super::bootstrap_spec::Action::Established(_, _, _) =>
+                out.0.mode == super::bootstrap_spec::Mode::Established
+                    && before.mode == super::bootstrap_spec::Mode::AwaitClientHello2Send,
+            super::bootstrap_spec::Action::Send(wire) =>
+                out.0.mode == super::bootstrap_spec::Mode::AwaitClientHello2Send
+                    && out.0.pending_flight == wire
+                    && before.mode == super::bootstrap_spec::Mode::AwaitClientHello2Send,
             _ => false,
         }
 }

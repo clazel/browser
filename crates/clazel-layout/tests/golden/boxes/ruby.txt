@@ -1,0 +1,221 @@
+#case 0
+#data "<html><ruby>a<rb>b<rb></ruby></html>"
+root
+  block <html>
+    block <body>
+      inline <ruby>
+        text "a"
+        inline <rb>
+          text "b"
+        inline <rb>
+
+#case 1
+#data "<html><ruby>a<rb>b<rt></ruby></html>"
+root
+  block <html>
+    block <body>
+      inline <ruby>
+        text "a"
+        inline <rb>
+          text "b"
+        inline <rt>
+
+#case 2
+#data "<html><ruby>a<rb>b<rtc></ruby></html>"
+root
+  block <html>
+    block <body>
+      inline <ruby>
+        text "a"
+        inline <rb>
+          text "b"
+        inline <rtc>
+
+#case 3
+#data "<html><ruby>a<rb>b<rp></ruby></html>"
+root
+  block <html>
+    block <body>
+      inline <ruby>
+        text "a"
+        inline <rb>
+          text "b"
+
+#case 4
+#data "<html><ruby>a<rb>b<span></ruby></html>"
+root
+  block <html>
+    block <body>
+      inline <ruby>
+        text "a"
+        inline <rb>
+          text "b"
+          inline <span>
+
+#case 5
+#data "<html><ruby>a<rt>b<rb></ruby></html>"
+root
+  block <html>
+    block <body>
+      inline <ruby>
+        text "a"
+        inline <rt>
+          text "b"
+        inline <rb>
+
+#case 6
+#data "<html><ruby>a<rt>b<rt></ruby></html>"
+root
+  block <html>
+    block <body>
+      inline <ruby>
+        text "a"
+        inline <rt>
+          text "b"
+        inline <rt>
+
+#case 7
+#data "<html><ruby>a<rt>b<rtc></ruby></html>"
+root
+  block <html>
+    block <body>
+      inline <ruby>
+        text "a"
+        inline <rt>
+          text "b"
+        inline <rtc>
+
+#case 8
+#data "<html><ruby>a<rt>b<rp></ruby></html>"
+root
+  block <html>
+    block <body>
+      inline <ruby>
+        text "a"
+        inline <rt>
+          text "b"
+
+#case 9
+#data "<html><ruby>a<rt>b<span></ruby></html>"
+root
+  block <html>
+    block <body>
+      inline <ruby>
+        text "a"
+        inline <rt>
+          text "b"
+          inline <span>
+
+#case 10
+#data "<html><ruby>a<rtc>b<rb></ruby></html>"
+root
+  block <html>
+    block <body>
+      inline <ruby>
+        text "a"
+        inline <rtc>
+          text "b"
+        inline <rb>
+
+#case 11
+#data "<html><ruby>a<rtc>b<rt>c<rt>d</ruby></html>"
+root
+  block <html>
+    block <body>
+      inline <ruby>
+        text "a"
+        inline <rtc>
+          text "b"
+          inline <rt>
+            text "c"
+          inline <rt>
+            text "d"
+
+#case 12
+#data "<html><ruby>a<rtc>b<rtc></ruby></html>"
+root
+  block <html>
+    block <body>
+      inline <ruby>
+        text "a"
+        inline <rtc>
+          text "b"
+        inline <rtc>
+
+#case 13
+#data "<html><ruby>a<rtc>b<rp></ruby></html>"
+root
+  block <html>
+    block <body>
+      inline <ruby>
+        text "a"
+        inline <rtc>
+          text "b"
+
+#case 14
+#data "<html><ruby>a<rtc>b<span></ruby></html>"
+root
+  block <html>
+    block <body>
+      inline <ruby>
+        text "a"
+        inline <rtc>
+          text "b"
+          inline <span>
+
+#case 15
+#data "<html><ruby>a<rp>b<rb></ruby></html>"
+root
+  block <html>
+    block <body>
+      inline <ruby>
+        text "a"
+        inline <rb>
+
+#case 16
+#data "<html><ruby>a<rp>b<rt></ruby></html>"
+root
+  block <html>
+    block <body>
+      inline <ruby>
+        text "a"
+        inline <rt>
+
+#case 17
+#data "<html><ruby>a<rp>b<rtc></ruby></html>"
+root
+  block <html>
+    block <body>
+      inline <ruby>
+        text "a"
+        inline <rtc>
+
+#case 18
+#data "<html><ruby>a<rp>b<rp></ruby></html>"
+root
+  block <html>
+    block <body>
+      inline <ruby>
+        text "a"
+
+#case 19
+#data "<html><ruby>a<rp>b<span></ruby></html>"
+root
+  block <html>
+    block <body>
+      inline <ruby>
+        text "a"
+
+#case 20
+#data "<html><ruby><rtc><ruby>a<rb>b<rt></ruby></ruby></html>"
+root
+  block <html>
+    block <body>
+      inline <ruby>
+        inline <rtc>
+          inline <ruby>
+            text "a"
+            inline <rb>
+              text "b"
+            inline <rt>
+

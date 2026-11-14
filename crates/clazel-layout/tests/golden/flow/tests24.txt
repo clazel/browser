@@ -1,0 +1,64 @@
+#case 0
+#data "<!DOCTYPE html>&NotEqualTilde;"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "≂\u{338}" x=8 base=22.859375 w=13.40625
+
+#case 1
+#data "<!DOCTYPE html>&NotEqualTilde;A"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "≂\u{338}A" x=8 base=22.859375 w=24.96875
+
+#case 2
+#data "<!DOCTYPE html>&ThickSpace;"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "\u{205f}\u{200a}" x=8 base=22.859375 w=5.15625
+
+#case 3
+#data "<!DOCTYPE html>&ThickSpace;A"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "\u{205f}\u{200a}A" x=8 base=22.859375 w=16.703125
+
+#case 4
+#data "<!DOCTYPE html>&NotSubset;"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "⊂\u{20d2}" x=8 base=22.859375 w=13.40625
+
+#case 5
+#data "<!DOCTYPE html>&NotSubset;A"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "⊂\u{20d2}A" x=8 base=22.859375 w=24.96875
+
+#case 6
+#data "<!DOCTYPE html>&Gopf;"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "𝔾" x=8 base=22.859375 w=13.671875
+
+#case 7
+#data "<!DOCTYPE html>&Gopf;A"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "𝔾A" x=8 base=22.859375 w=25.21875
+

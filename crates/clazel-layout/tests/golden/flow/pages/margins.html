@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html><head><style>
+body { margin: 8px; font-family: serif; font-size: 16px }
+.box { border: 1px solid; padding: 4px }
+</style></head><body>
+<h1>Heading</h1>
+<p>A paragraph whose top margin collapses with the heading's bottom margin, and which wraps over several lines in a narrow viewport.</p>
+<div style="margin: 20px 0"><div style="margin: 30px 0"></div></div>
+<div class="box" style="width: 50%; margin: 0 auto">Centred, half the width, with <span style="padding: 0 4px; border: 1px solid">an inline box</span>.</div>
+<div style="overflow: hidden; margin-top: 10px"><p style="margin: 15px 0">Inside a block formatting context.</p></div>
+<ul><li>One</li><li>Two <span style="display: inline-block; width: 40px; height: 30px; vertical-align: middle"></span></li></ul>
+<p style="text-align: center; text-indent: 2em; line-height: 1.5">Centred text with an indent<br>and a forced break.</p>
+<pre>  preformatted	text
+with a tab</pre>
+</body></html>

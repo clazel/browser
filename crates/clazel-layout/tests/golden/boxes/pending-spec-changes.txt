@@ -1,0 +1,34 @@
+#case 0
+#data "<input type=\"hidden\"><frameset>"
+root
+  block <html>
+    inline <frameset>
+
+#case 1
+#data "<!DOCTYPE html><table><caption><svg>foo</table>bar"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table-caption <caption>
+          inline <svg>
+            text "foo"
+        table <table>
+      block (anonymous)
+        text "bar"
+
+#case 2
+#data "<table><tr><td><svg><desc><td></desc><circle>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                inline <svg>
+                  inline <desc>
+              table-cell <td>
+                inline <circle>
+

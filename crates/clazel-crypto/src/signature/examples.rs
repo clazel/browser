@@ -37,11 +37,47 @@ pub open spec fn ex_point() -> Seq<u8> {
     Seq::new(64, |i: int| (i + 1) as u8)
 }
 
+/// A secp384r1 key in uncompressed form, 0x04 || X || Y (RFC 5480 §2.2):
+/// 96 octets of 1, 2, ..., 96 (not a point on the curve; the classification
+/// does not check that).
+pub open spec fn ex_p384_spki() -> clazel_x509::spki::spec::SubjectPublicKeyInfo {
+    ex_spki(seq![1nat, 2nat, 840nat, 10045nat, 2nat, 1nat],
+        Some(seq![0x06u8, 0x05u8, 0x2bu8, 0x81u8, 0x04u8, 0x00u8, 0x22u8]),
+        0, seq![0x04u8] + Seq::new(96, |i: int| (i + 1) as u8))
+}
+
 /// A secp256r1 key in uncompressed form, 0x04 || X || Y (RFC 5480 §2.2).
 pub open spec fn ex_p256_spki(first: u8, point: Seq<u8>) -> clazel_x509::spki::spec::SubjectPublicKeyInfo {
     ex_spki(seq![1nat, 2nat, 840nat, 10045nat, 2nat, 1nat],
         Some(seq![0x06u8, 0x08u8, 0x2au8, 0x86u8, 0x48u8, 0xceu8, 0x3du8, 0x03u8, 0x01u8, 0x07u8]),
         0, seq![first] + point)
+}
+
+/// RFC 8446 §4.2.3: ecdsa_secp384r1_sha384 is 0x0503 and hashes with
+/// SHA-384. 0x0603 is ecdsa_secp521r1_sha512 and 0x0403 is on another curve.
+pub proof fn lemma_p384_hash_examples()
+    ensures
+        p384_hash(0x0503u16) == Some(clazel_x509::signature_algorithm::spec::EcdsaHash::Sha384),
+        p384_hash(0x0603u16) is None,
+        p384_hash(0x0403u16) is None,
+{
+    assert(p384_hash(0x0503u16) == Some(clazel_x509::signature_algorithm::spec::EcdsaHash::Sha384)) by (compute_only);
+    assert(p384_hash(0x0603u16) is None) by (compute_only);
+    assert(p384_hash(0x0403u16) is None) by (compute_only);
+}
+
+/// RFC 8446 §4.2.3: the scheme names the curve, so a secp256r1 key never
+/// verifies an ecdsa_secp384r1_sha384 signature, nor a secp384r1 key an
+/// ecdsa_secp256r1_sha256 one.
+pub proof fn lemma_curve_binding_examples()
+    ensures
+        !ecdsa_p384(ex_p256_spki(0x04u8, ex_point()),
+            clazel_x509::signature_algorithm::spec::EcdsaHash::Sha384, seq![], seq![]),
+        p256_point(ex_p384_spki()) is None,
+{
+    assert(!ecdsa_p384(ex_p256_spki(0x04u8, ex_point()),
+        clazel_x509::signature_algorithm::spec::EcdsaHash::Sha384, seq![], seq![])) by (compute_only);
+    assert(p256_point(ex_p384_spki()) is None) by (compute_only);
 }
 
 /// RFC 5480 §2.1.1 and RFC 8410 §3: the key algorithm identifiers.

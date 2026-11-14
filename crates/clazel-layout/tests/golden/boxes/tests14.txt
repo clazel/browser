@@ -1,0 +1,46 @@
+#case 0
+#data "<!DOCTYPE html><html><body><xyz:abc></xyz:abc>"
+root
+  block <html>
+    block <body>
+      inline <xyz:abc>
+
+#case 1
+#data "<!DOCTYPE html><html><body><xyz:abc></xyz:abc><span></span>"
+root
+  block <html>
+    block <body>
+      inline <xyz:abc>
+      inline <span>
+
+#case 2
+#data "<!DOCTYPE html><html><html abc:def=gh><xyz:abc></xyz:abc>"
+root
+  block <html>
+    block <body>
+      inline <xyz:abc>
+
+#case 3
+#data "<!DOCTYPE html><html xml:lang=bar><html xml:lang=foo>"
+root
+  block <html>
+    block <body>
+
+#case 4
+#data "<!DOCTYPE html><html 123=456>"
+root
+  block <html>
+    block <body>
+
+#case 5
+#data "<!DOCTYPE html><html 123=456><html 789=012>"
+root
+  block <html>
+    block <body>
+
+#case 6
+#data "<!DOCTYPE html><html><body 789=012>"
+root
+  block <html>
+    block <body>
+

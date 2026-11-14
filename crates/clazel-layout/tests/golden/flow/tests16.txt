@@ -1,0 +1,1290 @@
+#case 0
+#data "<!doctype html><script>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 1
+#data "<!doctype html><script>a"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 2
+#data "<!doctype html><script><"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 3
+#data "<!doctype html><script></"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 4
+#data "<!doctype html><script></S"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 5
+#data "<!doctype html><script></SC"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 6
+#data "<!doctype html><script></SCR"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 7
+#data "<!doctype html><script></SCRI"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 8
+#data "<!doctype html><script></SCRIP"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 9
+#data "<!doctype html><script></SCRIPT"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 10
+#data "<!doctype html><script></SCRIPT "
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 11
+#data "<!doctype html><script></s"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 12
+#data "<!doctype html><script></sc"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 13
+#data "<!doctype html><script></scr"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 14
+#data "<!doctype html><script></scri"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 15
+#data "<!doctype html><script></scrip"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 16
+#data "<!doctype html><script></script"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 17
+#data "<!doctype html><script></script "
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 18
+#data "<!doctype html><script><!"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 19
+#data "<!doctype html><script><!a"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 20
+#data "<!doctype html><script><!-"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 21
+#data "<!doctype html><script><!-a"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 22
+#data "<!doctype html><script><!--"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 23
+#data "<!doctype html><script><!--a"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 24
+#data "<!doctype html><script><!--<"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 25
+#data "<!doctype html><script><!--<a"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 26
+#data "<!doctype html><script><!--</"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 27
+#data "<!doctype html><script><!--</script"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 28
+#data "<!doctype html><script><!--</script "
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 29
+#data "<!doctype html><script><!--<s"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 30
+#data "<!doctype html><script><!--<script"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 31
+#data "<!doctype html><script><!--<script "
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 32
+#data "<!doctype html><script><!--<script <"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 33
+#data "<!doctype html><script><!--<script <a"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 34
+#data "<!doctype html><script><!--<script </"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 35
+#data "<!doctype html><script><!--<script </s"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 36
+#data "<!doctype html><script><!--<script </script"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 37
+#data "<!doctype html><script><!--<script </scripta"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 38
+#data "<!doctype html><script><!--<script </script "
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 39
+#data "<!doctype html><script><!--<script </script>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 40
+#data "<!doctype html><script><!--<script </script/"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 41
+#data "<!doctype html><script><!--<script </script <"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 42
+#data "<!doctype html><script><!--<script </script <a"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 43
+#data "<!doctype html><script><!--<script </script </"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 44
+#data "<!doctype html><script><!--<script </script </script"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 45
+#data "<!doctype html><script><!--<script </script </script "
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 46
+#data "<!doctype html><script><!--<script </script </script/"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 47
+#data "<!doctype html><script><!--<script </script </script>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 48
+#data "<!doctype html><script><!--<script -"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 49
+#data "<!doctype html><script><!--<script -a"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 50
+#data "<!doctype html><script><!--<script -<"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 51
+#data "<!doctype html><script><!--<script --"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 52
+#data "<!doctype html><script><!--<script --a"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 53
+#data "<!doctype html><script><!--<script --<"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 54
+#data "<!doctype html><script><!--<script -->"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 55
+#data "<!doctype html><script><!--<script --><"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 56
+#data "<!doctype html><script><!--<script --></"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 57
+#data "<!doctype html><script><!--<script --></script"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 58
+#data "<!doctype html><script><!--<script --></script "
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 59
+#data "<!doctype html><script><!--<script --></script/"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 60
+#data "<!doctype html><script><!--<script --></script>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 61
+#data "<!doctype html><script><!--<script><\\/script>--></script>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 62
+#data "<!doctype html><script><!--<script></scr'+'ipt>--></script>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 63
+#data "<!doctype html><script><!--<script></script><script></script></script>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 64
+#data "<!doctype html><script><!--<script></script><script></script>--><!--</script>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 65
+#data "<!doctype html><script><!--<script></script><script></script>-- ></script>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 66
+#data "<!doctype html><script><!--<script></script><script></script>- -></script>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 67
+#data "<!doctype html><script><!--<script></script><script></script>- - ></script>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 68
+#data "<!doctype html><script><!--<script></script><script></script>-></script>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 69
+#data "<!doctype html><script><!--<script>--!></script>X"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 70
+#data "<!doctype html><script><!--<scr'+'ipt></script>--></script>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "-->" x=8 base=22.859375 w=24.21875
+
+#case 71
+#data "<!doctype html><script><!--<script></scr'+'ipt></script>X"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 72
+#data "<!doctype html><style><!--<style></style>--></style>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "-->" x=8 base=22.859375 w=24.21875
+
+#case 73
+#data "<!doctype html><style><!--</style>X"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "X" x=8 base=22.859375 w=11.390625
+
+#case 74
+#data "<!doctype html><style><!--...</style>...--></style>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "...-->" x=8 base=22.859375 w=39.484375
+
+#case 75
+#data "<!doctype html><style><!--<br><html xmlns:v=\"urn:schemas-microsoft-com:vml\"><!--[if !mso]><style></style>X"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "X" x=8 base=22.859375 w=11.390625
+
+#case 76
+#data "<!doctype html><style><!--...<style><!--...--!></style>--></style>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "-->" x=8 base=22.859375 w=24.21875
+
+#case 77
+#data "<!doctype html><style><!--...</style><!-- --><style>@import ...</style>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 78
+#data "<!doctype html><style>...<style><!--...</style><!-- --></style>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 79
+#data "<!doctype html><style>...<!--[if IE]><style>...</style>X"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "X" x=8 base=22.859375 w=11.390625
+
+#case 80
+#data "<!doctype html><title><!--<title></title>--></title>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "-->" x=8 base=22.859375 w=24.21875
+
+#case 81
+#data "<!doctype html><title>&lt;/title></title>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 82
+#data "<!doctype html><title>foo/title><link></head><body>X"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 83
+#data "<!doctype html><noscript><!--<noscript></noscript>--></noscript>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 84
+#data "<!doctype html><noscript><!--<noscript></noscript>--></noscript>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 85
+#data "<!doctype html><noscript><!--</noscript>X<noscript>--></noscript>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 86
+#data "<!doctype html><noscript><!--</noscript>X<noscript>--></noscript>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 87
+#data "<!doctype html><noscript><iframe></noscript>X"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x173.78125
+    block <body> 8,8 784x157.78125 m=8,8,8,8
+      line 8,8 784x157.78125 base=162
+        atomic <iframe>
+      replaced <iframe> 8,8 304x154 b=2,2,2,2
+
+#case 88
+#data "<!doctype html><noscript><iframe></noscript>X"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x173.78125
+    block <body> 8,8 784x157.78125 m=8,8,8,8
+      line 8,8 784x157.78125 base=162
+        atomic <iframe>
+      replaced <iframe> 8,8 304x154 b=2,2,2,2
+
+#case 89
+#data "<!doctype html><noframes><!--<noframes></noframes>--></noframes>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "-->" x=8 base=22.859375 w=24.21875
+
+#case 90
+#data "<!doctype html><noframes><body><script><!--...</script></body></noframes></html>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 91
+#data "<!doctype html><textarea><!--<textarea></textarea>--></textarea>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x57.0625
+    block <body> 8,8 784x41.0625 m=8,8,8,8
+      line 8,8 784x41.0625 base=45.28125
+        atomic <textarea>
+        text "-->" x=235.796875 base=45.28125 w=24.21875
+      replaced <textarea> 8,8 227.796875x37.28125
+
+#case 92
+#data "<!doctype html><textarea>&lt;/textarea></textarea>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x57.0625
+    block <body> 8,8 784x41.0625 m=8,8,8,8
+      line 8,8 784x41.0625 base=45.28125
+        atomic <textarea>
+      replaced <textarea> 8,8 227.796875x37.28125
+
+#case 93
+#data "<!doctype html><textarea>&lt;</textarea>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x57.0625
+    block <body> 8,8 784x41.0625 m=8,8,8,8
+      line 8,8 784x41.0625 base=45.28125
+        atomic <textarea>
+      replaced <textarea> 8,8 227.796875x37.28125
+
+#case 94
+#data "<!doctype html><textarea>a&lt;b</textarea>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x57.0625
+    block <body> 8,8 784x41.0625 m=8,8,8,8
+      line 8,8 784x41.0625 base=45.28125
+        atomic <textarea>
+      replaced <textarea> 8,8 227.796875x37.28125
+
+#case 95
+#data "<!doctype html><iframe><!--<iframe></iframe>--></iframe>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x173.78125
+    block <body> 8,8 784x157.78125 m=8,8,8,8
+      line 8,8 784x157.78125 base=162
+        atomic <iframe>
+        text "-->" x=312 base=162 w=24.21875
+      replaced <iframe> 8,8 304x154 b=2,2,2,2
+
+#case 96
+#data "<!doctype html><iframe>...<!--X->...<!--/X->...</iframe>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x173.78125
+    block <body> 8,8 784x157.78125 m=8,8,8,8
+      line 8,8 784x157.78125 base=162
+        atomic <iframe>
+      replaced <iframe> 8,8 304x154 b=2,2,2,2
+
+#case 97
+#data "<!doctype html><xmp><!--<xmp></xmp>--></xmp>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x77.28125
+    block <body> 8,16 784x53.28125 m=8,8,8,8
+      block <xmp> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "<!--<xmp>" x=8 base=30.859375 w=91.90625
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          text "-->" x=8 base=65.5 w=24.21875
+
+#case 98
+#data "<!doctype html><noembed><!--<noembed></noembed>--></noembed>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "-->" x=8 base=22.859375 w=24.21875
+
+#case 99
+#data "<script>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 100
+#data "<script>a"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 101
+#data "<script><"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 102
+#data "<script></"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 103
+#data "<script></S"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 104
+#data "<script></SC"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 105
+#data "<script></SCR"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 106
+#data "<script></SCRI"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 107
+#data "<script></SCRIP"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 108
+#data "<script></SCRIPT"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 109
+#data "<script></SCRIPT "
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 110
+#data "<script></s"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 111
+#data "<script></sc"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 112
+#data "<script></scr"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 113
+#data "<script></scri"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 114
+#data "<script></scrip"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 115
+#data "<script></script"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 116
+#data "<script></script "
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 117
+#data "<script><!"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 118
+#data "<script><!a"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 119
+#data "<script><!-"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 120
+#data "<script><!-a"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 121
+#data "<script><!--"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 122
+#data "<script><!--a"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 123
+#data "<script><!--<"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 124
+#data "<script><!--<a"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 125
+#data "<script><!--</"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 126
+#data "<script><!--</script"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 127
+#data "<script><!--</script "
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 128
+#data "<script><!--<s"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 129
+#data "<script><!--<script"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 130
+#data "<script><!--<script "
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 131
+#data "<script><!--<script <"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 132
+#data "<script><!--<script <a"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 133
+#data "<script><!--<script </"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 134
+#data "<script><!--<script </s"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 135
+#data "<script><!--<script </script"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 136
+#data "<script><!--<script </scripta"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 137
+#data "<script><!--<script </script "
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 138
+#data "<script><!--<script </script>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 139
+#data "<script><!--<script </script/"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 140
+#data "<script><!--<script </script <"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 141
+#data "<script><!--<script </script <a"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 142
+#data "<script><!--<script </script </"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 143
+#data "<script><!--<script </script </script"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 144
+#data "<script><!--<script </script </script "
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 145
+#data "<script><!--<script </script </script/"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 146
+#data "<script><!--<script </script </script>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 147
+#data "<script><!--<script -"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 148
+#data "<script><!--<script -a"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 149
+#data "<script><!--<script --"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 150
+#data "<script><!--<script --a"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 151
+#data "<script><!--<script -->"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 152
+#data "<script><!--<script --><"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 153
+#data "<script><!--<script --></"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 154
+#data "<script><!--<script --></script"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 155
+#data "<script><!--<script --></script "
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 156
+#data "<script><!--<script --></script/"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 157
+#data "<script><!--<script --></script>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 158
+#data "<script><!--<script><\\/script>--></script>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 159
+#data "<script><!--<script></scr'+'ipt>--></script>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 160
+#data "<script><!--<script></script><script></script></script>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 161
+#data "<script><!--<script></script><script></script>--><!--</script>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 162
+#data "<script><!--<script></script><script></script>-- ></script>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 163
+#data "<script><!--<script></script><script></script>- -></script>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 164
+#data "<script><!--<script></script><script></script>- - ></script>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 165
+#data "<script><!--<script></script><script></script>-></script>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 166
+#data "<script><!--<script>--!></script>X"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 167
+#data "<script><!--<scr'+'ipt></script>--></script>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "-->" x=8 base=22.859375 w=24.21875
+
+#case 168
+#data "<script><!--<script></scr'+'ipt></script>X"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 169
+#data "<style><!--<style></style>--></style>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "-->" x=8 base=22.859375 w=24.21875
+
+#case 170
+#data "<style><!--</style>X"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "X" x=8 base=22.859375 w=11.390625
+
+#case 171
+#data "<style><!--...</style>...--></style>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "...-->" x=8 base=22.859375 w=39.484375
+
+#case 172
+#data "<style><!--<br><html xmlns:v=\"urn:schemas-microsoft-com:vml\"><!--[if !mso]><style></style>X"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "X" x=8 base=22.859375 w=11.390625
+
+#case 173
+#data "<style><!--...<style><!--...--!></style>--></style>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "-->" x=8 base=22.859375 w=24.21875
+
+#case 174
+#data "<style><!--...</style><!-- --><style>@import ...</style>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 175
+#data "<style>...<style><!--...</style><!-- --></style>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 176
+#data "<style>...<!--[if IE]><style>...</style>X"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "X" x=8 base=22.859375 w=11.390625
+
+#case 177
+#data "<title><!--<title></title>--></title>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "-->" x=8 base=22.859375 w=24.21875
+
+#case 178
+#data "<title>&lt;/title></title>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 179
+#data "<title>foo/title><link></head><body>X"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 180
+#data "<noscript><!--<noscript></noscript>--></noscript>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 181
+#data "<noscript><!--<noscript></noscript>--></noscript>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 182
+#data "<noscript><!--</noscript>X<noscript>--></noscript>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 183
+#data "<noscript><!--</noscript>X<noscript>--></noscript>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 184
+#data "<noscript><iframe></noscript>X"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x154 base=162
+        atomic <iframe>
+      replaced <iframe> 8,8 304x154 b=2,2,2,2
+
+#case 185
+#data "<noscript><iframe></noscript>X"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x154 base=162
+        atomic <iframe>
+      replaced <iframe> 8,8 304x154 b=2,2,2,2
+
+#case 186
+#data "<noframes><!--<noframes></noframes>--></noframes>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "-->" x=8 base=22.859375 w=24.21875
+
+#case 187
+#data "<noframes><body><script><!--...</script></body></noframes></html>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 188
+#data "<textarea><!--<textarea></textarea>--></textarea>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x41.0625 base=45.28125
+        atomic <textarea>
+        text "-->" x=235.796875 base=45.28125 w=24.21875
+      replaced <textarea> 8,8 227.796875x37.28125
+
+#case 189
+#data "<textarea>&lt;/textarea></textarea>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x37.28125 base=45.28125
+        atomic <textarea>
+      replaced <textarea> 8,8 227.796875x37.28125
+
+#case 190
+#data "<iframe><!--<iframe></iframe>--></iframe>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x157.78125 base=162
+        atomic <iframe>
+        text "-->" x=312 base=162 w=24.21875
+      replaced <iframe> 8,8 304x154 b=2,2,2,2
+
+#case 191
+#data "<iframe>...<!--X->...<!--/X->...</iframe>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x154 base=162
+        atomic <iframe>
+      replaced <iframe> 8,8 304x154 b=2,2,2,2
+
+#case 192
+#data "<xmp><!--<xmp></xmp>--></xmp>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <xmp> 8,8 784x18.640625 m=0,0,16,0
+        line 8,8 784x18.640625 base=22.859375
+          text "<!--<xmp>" x=8 base=22.859375 w=91.90625
+      block (anonymous) 8,42.640625 784x18.640625
+        line 8,42.640625 784x18.640625 base=57.5
+          text "-->" x=8 base=57.5 w=24.21875
+
+#case 193
+#data "<noembed><!--<noembed></noembed>--></noembed>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "-->" x=8 base=22.859375 w=24.21875
+
+#case 194
+#data "<!doctype html><table>\n"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x16
+    block <body> 8,8 784x0 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+
+#case 195
+#data "<!doctype html><table><td><span><font></span><span>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x18
+    block <body> 8,8 784x2 m=8,8,8,8
+      table-wrapper <table> 8,8 2x2 m=0,782,0,0
+        table <table> 8,8 2x2
+          row-group <tbody> 8,8 2x2
+            row <tr> 8,8 2x2
+              cell <td> 8,8 2x2 p=1,1,1,1
+
+#case 196
+#data "<!doctype html><form><table></form><form></table></form>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x16
+    block <body> 8,8 784x0 m=8,8,8,8
+      block <form> 8,8 784x0
+        table-wrapper <table> 8,8 0x0 m=0,784,0,0
+          table <table> 8,8 0x0
+

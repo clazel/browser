@@ -1,0 +1,181 @@
+#case 0
+#data "<head></head><style></style>"
+<html> display=Block
+  <head> display=None
+    <style> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 1
+#data "<head></head><script></script>"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 2
+#data "<head></head><!-- --><style></style><!-- --><script></script>"
+<html> display=Block
+  <head> display=None
+    <style> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 3
+#data "<head></head><!-- -->x<style></style><!-- --><script></script>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <style> display=None
+    <script> display=None
+
+#case 4
+#data "<!DOCTYPE html><html><head></head><body><pre>\n</pre></body></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <pre> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 5
+#data "<!DOCTYPE html><html><head></head><body><pre>\nfoo</pre></body></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <pre> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 6
+#data "<!DOCTYPE html><html><head></head><body><pre>\n\nfoo</pre></body></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <pre> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 7
+#data "<!DOCTYPE html><html><head></head><body><pre>\nfoo\n</pre></body></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <pre> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 8
+#data "<!DOCTYPE html><html><head></head><body><pre>x</pre><span>\n</span></body></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <pre> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+    <span>
+
+#case 9
+#data "<!DOCTYPE html><html><head></head><body><pre>x\ny</pre></body></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <pre> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 10
+#data "<!DOCTYPE html><html><head></head><body><pre>x<div>\ny</pre></body></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <pre> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+      <div> display=Block
+
+#case 11
+#data "<!DOCTYPE html><pre>&#x0a;&#x0a;A</pre>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <pre> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 12
+#data "<!DOCTYPE html><HTML><META><HEAD></HEAD></HTML>"
+<html> display=Block
+  <head> display=None
+    <meta> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 13
+#data "<!DOCTYPE html><HTML><HEAD><head></HEAD></HTML>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 14
+#data "<textarea>foo<span>bar</span><i>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <textarea> white-space=PreWrap
+
+#case 15
+#data "<title>foo<span>bar</em><i>baz"
+<html> display=Block
+  <head> display=None
+    <title> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 16
+#data "<!DOCTYPE html><textarea>\n</textarea>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <textarea> white-space=PreWrap
+
+#case 17
+#data "<!DOCTYPE html><textarea>\nfoo</textarea>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <textarea> white-space=PreWrap
+
+#case 18
+#data "<!DOCTYPE html><textarea>\n\nfoo</textarea>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <textarea> white-space=PreWrap
+
+#case 19
+#data "<!DOCTYPE html><html><head></head><body><ul><li><div><p><li></ul></body></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <ul> margin-top=16px margin-bottom=16px padding-left=40px display=Block
+      <li> display=ListItem text-align=Left
+        <div> display=Block
+          <p> margin-top=16px margin-bottom=16px display=Block
+      <li> display=ListItem text-align=Left
+
+#case 20
+#data "<!doctype html><nobr><nobr><nobr>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <nobr> white-space=Nowrap
+    <nobr> white-space=Nowrap
+    <nobr> white-space=Nowrap
+
+#case 21
+#data "<!doctype html><nobr><nobr></nobr><nobr>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <nobr> white-space=Nowrap
+    <nobr> white-space=Nowrap
+    <nobr> white-space=Nowrap
+
+#case 22
+#data "<!doctype html><html><body><p><table></table></body></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <table> display=Table border-spacing=2px 2px
+
+#case 23
+#data "<p><table></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-bottom=16px display=Block
+      <table> display=Table border-spacing=2px 2px
+

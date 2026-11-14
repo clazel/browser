@@ -1,0 +1,544 @@
+#case 0
+#data "<!DOCTYPE html><svg></svg>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+
+#case 1
+#data "<!DOCTYPE html><svg></svg><![CDATA[a]]>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+
+#case 2
+#data "<!DOCTYPE html><body><svg></svg>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+
+#case 3
+#data "<!DOCTYPE html><body><select><svg></svg></select>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <svg>
+
+#case 4
+#data "<!DOCTYPE html><body><select><option><svg></svg></option></select>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <option>
+        <svg>
+
+#case 5
+#data "<!DOCTYPE html><body><table><svg></svg></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+    <table> display=Table border-spacing=2px 2px
+
+#case 6
+#data "<!DOCTYPE html><body><table><svg><g>foo</g></svg></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+      <g>
+    <table> display=Table border-spacing=2px 2px
+
+#case 7
+#data "<!DOCTYPE html><body><table><svg><g>foo</g><g>bar</g></svg></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+      <g>
+      <g>
+    <table> display=Table border-spacing=2px 2px
+
+#case 8
+#data "<!DOCTYPE html><body><table><tbody><svg><g>foo</g><g>bar</g></svg></tbody></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+      <g>
+      <g>
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+
+#case 9
+#data "<!DOCTYPE html><body><table><tbody><tr><svg><g>foo</g><g>bar</g></svg></tr></tbody></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+      <g>
+      <g>
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+
+#case 10
+#data "<!DOCTYPE html><body><table><tbody><tr><td><svg><g>foo</g><g>bar</g></svg></td></tr></tbody></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+            <svg>
+              <g>
+              <g>
+
+#case 11
+#data "<!DOCTYPE html><body><table><tbody><tr><td><svg><g>foo</g><g>bar</g></svg><p>baz</td></tr></tbody></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+            <svg>
+              <g>
+              <g>
+            <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 12
+#data "<!DOCTYPE html><body><table><caption><svg><g>foo</g><g>bar</g></svg><p>baz</caption></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <caption> display=TableCaption text-align=Center
+        <svg>
+          <g>
+          <g>
+        <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 13
+#data "<!DOCTYPE html><body><table><caption><svg><g>foo</g><g>bar</g><p>baz</table><p>quux"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <caption> display=TableCaption text-align=Center
+        <svg>
+          <g>
+          <g>
+        <p> margin-top=16px margin-bottom=16px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 14
+#data "<!DOCTYPE html><body><table><caption><svg><g>foo</g><g>bar</g>baz</table><p>quux"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <caption> display=TableCaption text-align=Center
+        <svg>
+          <g>
+          <g>
+    <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 15
+#data "<!DOCTYPE html><body><table><colgroup><svg><g>foo</g><g>bar</g><p>baz</table><p>quux"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+      <g>
+      <g>
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <colgroup> display=TableColumnGroup
+    <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 16
+#data "<!DOCTYPE html><body><table><tr><td><select><svg><g>foo</g><g>bar</g><p>baz</table><p>quux"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+            <select>
+              <svg>
+                <g>
+                <g>
+              <p> margin-top=16px margin-bottom=16px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 17
+#data "<!DOCTYPE html><body><table><select><svg><g>foo</g><g>bar</g><p>baz</table><p>quux"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <svg>
+        <g>
+        <g>
+      <p> margin-top=16px margin-bottom=16px display=Block
+    <table> display=Table border-spacing=2px 2px
+    <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 18
+#data "<!DOCTYPE html><body></body></html><svg><g>foo</g><g>bar</g><p>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+      <g>
+      <g>
+    <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 19
+#data "<!DOCTYPE html><body></body><svg><g>foo</g><g>bar</g><p>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+      <g>
+      <g>
+    <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 20
+#data "<!DOCTYPE html><frameset><svg><g></g><g></g><p><span>"
+<html> display=Block
+  <head> display=None
+  <frameset>
+
+#case 21
+#data "<!DOCTYPE html><frameset></frameset><svg><g></g><g></g><p><span>"
+<html> display=Block
+  <head> display=None
+  <frameset>
+
+#case 22
+#data "<!DOCTYPE html><body xlink:href=foo><svg xlink:href=foo></svg>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+
+#case 23
+#data "<!DOCTYPE html><body xlink:href=foo xml:lang=en><svg><g xml:lang=en xlink:href=foo></g></svg>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+      <g>
+
+#case 24
+#data "<!DOCTYPE html><body xlink:href=foo xml:lang=en><svg><g xml:lang=en xlink:href=foo /></svg>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+      <g>
+
+#case 25
+#data "<!DOCTYPE html><body xlink:href=foo xml:lang=en><svg><g xml:lang=en xlink:href=foo />bar</svg>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+      <g>
+
+#case 26
+#data "<svg></path>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+
+#case 27
+#data "<div><svg></div>a"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+      <svg>
+
+#case 28
+#data "<div><svg><path></div>a"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+      <svg>
+        <path>
+
+#case 29
+#data "<div><svg><path></svg><path>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+      <svg>
+        <path>
+      <path>
+
+#case 30
+#data "<div><svg><path><foreignObject><math></div>a"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+      <svg>
+        <path>
+          <foreignObject>
+            <math>
+
+#case 31
+#data "<div><svg><path><foreignObject><p></div>a"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+      <svg>
+        <path>
+          <foreignObject>
+            <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 32
+#data "<!DOCTYPE html><svg><desc><div><svg><ul>a"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+      <desc>
+        <div> display=Block
+          <svg>
+          <ul> margin-top=16px margin-bottom=16px padding-left=40px display=Block
+
+#case 33
+#data "<!DOCTYPE html><svg><desc><svg><ul>a"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+      <desc>
+        <svg>
+        <ul> margin-top=16px margin-bottom=16px padding-left=40px display=Block
+
+#case 34
+#data "<!DOCTYPE html><p><svg><desc><p>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <svg>
+        <desc>
+          <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 35
+#data "<!DOCTYPE html><p><svg><title><p>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <svg>
+        <title> display=None
+          <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 36
+#data "<div><svg><path><foreignObject><p></foreignObject><p>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+      <svg>
+        <path>
+          <foreignObject>
+            <p> margin-top=16px margin-bottom=16px display=Block
+            <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 37
+#data "<math><mi><div><object><div><span></span></div></object></div></mi><mi>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <mi>
+        <div> display=Block
+          <object>
+            <div> display=Block
+              <span>
+      <mi>
+
+#case 38
+#data "<math><mi><svg><foreignObject><div><div></div></div></foreignObject></svg></mi><mi>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <mi>
+        <svg>
+          <foreignObject>
+            <div> display=Block
+              <div> display=Block
+      <mi>
+
+#case 39
+#data "<svg><script></script><path>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+      <script> display=None
+      <path>
+
+#case 40
+#data "<table><svg></svg><tr>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+
+#case 41
+#data "<math><mi><mglyph>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <mi>
+        <mglyph>
+
+#case 42
+#data "<math><mi><malignmark>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <mi>
+        <malignmark>
+
+#case 43
+#data "<math><mo><mglyph>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <mo>
+        <mglyph>
+
+#case 44
+#data "<math><mo><malignmark>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <mo>
+        <malignmark>
+
+#case 45
+#data "<math><mn><mglyph>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <mn>
+        <mglyph>
+
+#case 46
+#data "<math><mn><malignmark>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <mn>
+        <malignmark>
+
+#case 47
+#data "<math><ms><mglyph>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <ms>
+        <mglyph>
+
+#case 48
+#data "<math><ms><malignmark>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <ms>
+        <malignmark>
+
+#case 49
+#data "<math><mtext><mglyph>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <mtext>
+        <mglyph>
+
+#case 50
+#data "<math><mtext><malignmark>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <mtext>
+        <malignmark>
+
+#case 51
+#data "<math><annotation-xml><svg></svg></annotation-xml><mi>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <annotation-xml>
+        <svg>
+      <mi>
+
+#case 52
+#data "<math><annotation-xml><svg><foreignObject><div><math><mi></mi></math><span></span></div></foreignObject><path></path></svg></annotation-xml><mi>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <annotation-xml>
+        <svg>
+          <foreignObject>
+            <div> display=Block
+              <math>
+                <mi>
+              <span>
+          <path>
+      <mi>
+
+#case 53
+#data "<math><annotation-xml><svg><foreignObject><math><mi><svg></svg></mi><mo></mo></math><span></span></foreignObject><path></path></svg></annotation-xml><mi>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <annotation-xml>
+        <svg>
+          <foreignObject>
+            <math>
+              <mi>
+                <svg>
+              <mo>
+            <span>
+          <path>
+      <mi>
+

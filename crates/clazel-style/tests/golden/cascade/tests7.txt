@@ -1,0 +1,267 @@
+#case 0
+#data "<!doctype html><body><title>X</title>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <title> display=None
+
+#case 1
+#data "<!doctype html><table><title>X</title></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <title> display=None
+    <table> display=Table border-spacing=2px 2px
+
+#case 2
+#data "<!doctype html><head></head><title>X</title>"
+<html> display=Block
+  <head> display=None
+    <title> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 3
+#data "<!doctype html></head><title>X</title>"
+<html> display=Block
+  <head> display=None
+    <title> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 4
+#data "<!doctype html></head><base>X"
+<html> display=Block
+  <head> display=None
+    <base> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 5
+#data "<!doctype html></head><basefont>X"
+<html> display=Block
+  <head> display=None
+    <basefont> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 6
+#data "<!doctype html></head><bgsound>X"
+<html> display=Block
+  <head> display=None
+    <bgsound>
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 7
+#data "<!doctype html><table><meta></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <meta> display=None
+    <table> display=Table border-spacing=2px 2px
+
+#case 8
+#data "<!doctype html><table>X<tr><td><table> <meta></table></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+            <meta> display=None
+            <table> display=Table
+
+#case 9
+#data "<!doctype html><html> <head>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 10
+#data "<!doctype html> <head>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 11
+#data "<!doctype html><table><style> <tr>x </style> </table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <style> display=None
+
+#case 12
+#data "<!doctype html><table><TBODY><script> <tr>x </script> </table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <script> display=None
+
+#case 13
+#data "<!doctype html><p><applet><p>X</p></applet>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <applet>
+        <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 14
+#data "<!doctype html><p><object type=\"application/x-non-existant-plugin\"><p>X</p></object>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <object>
+        <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 15
+#data "<!doctype html><listing>\nX</listing>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <listing> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 16
+#data "<!doctype html><select><input>X"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+    <input> display=InlineBlock overflow-x=Clip overflow-y=Clip
+
+#case 17
+#data "<!doctype html><select><select>X"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+
+#case 18
+#data "<!doctype html><table><input type=hidDEN></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <input> display=None overflow-x=Clip overflow-y=Clip
+
+#case 19
+#data "<!doctype html><table>X<input type=hidDEN></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <input> display=None overflow-x=Clip overflow-y=Clip
+
+#case 20
+#data "<!doctype html><table>  <input type=hidDEN></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <input> display=None overflow-x=Clip overflow-y=Clip
+
+#case 21
+#data "<!doctype html><table>  <input type='hidDEN'></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <input> display=None overflow-x=Clip overflow-y=Clip
+
+#case 22
+#data "<!doctype html><table><input type=\" hidden\"><input type=hidDEN></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <input> display=InlineBlock overflow-x=Clip overflow-y=Clip
+    <table> display=Table border-spacing=2px 2px
+      <input> display=None overflow-x=Clip overflow-y=Clip
+
+#case 23
+#data "<!doctype html><table><select>X<tr>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+
+#case 24
+#data "<!doctype html><select>X</select>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+
+#case 25
+#data "<!DOCTYPE hTmL><html></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 26
+#data "<!DOCTYPE HTML><html></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 28
+#data "<div><p>a</x> b"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 29
+#data "<table><tr><td><code></code> </table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+            <code> font-family=monospace
+
+#case 30
+#data "<table><b><tr><td>aaa</td></tr>bbb</table>ccc"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <b> font-weight=700
+    <b> font-weight=700
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+    <b> font-weight=700
+
+#case 31
+#data "A<table><tr> B</tr> B</table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+
+#case 32
+#data "A<table><tr> B</tr> </em>C</table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+
+#case 33
+#data "<select><keygen>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <keygen>
+

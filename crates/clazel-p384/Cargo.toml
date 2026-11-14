@@ -24,13 +24,12 @@ sha2 = { version = "=0.10.9", default-features = false }
 ring = { version = "=0.17.14", default-features = false, features = ["alloc"] }
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
-# the shipped code today; `target-tier` is what the policy requires. The spec,
-# the field, the group law and `verify` exist and are proven, and the
-# mutations, conformance suites, independent transcription and its
-# equivalence proof are in place; tier 0 until CI's full verification is
-# green on a run with all of them.
+# the shipped code today; `target-tier` is what the policy requires. Tier 2:
+# `verify` is proven equal to the spec over the six fiat-crypto axioms, and
+# the mutations, conformance suites, differential, independent transcription
+# and its equivalence proof are all in place.
 [package.metadata.clazel]
-tier = 0
+tier = 2
 target-tier = 2
 
 [package.metadata.verus]

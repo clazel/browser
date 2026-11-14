@@ -43,6 +43,19 @@ pub proof fn lemma_legacy()
 {
     assert(parameters(crate::spec::ServerHello { legacy_version: 0x0304, ..server() }, seq![7u8]) is None) by (compute_only);
 }
+/// Appendix D.5: a legacy_version of 0x0300 aborts with protocol_version;
+/// §4.1.4: a HelloRetryRequest's must be 0x0303 (illegal_parameter), while a
+/// ServerHello's other values are ignored (§4.2.1).
+pub proof fn lemma_legacy_version_checks()
+    ensures
+        parsed(crate::spec::ServerHello { legacy_version: 0x0300, ..server() }, seq![7u8], false) == Err::<Selection, u8>(70u8),
+        parsed(crate::spec::ServerHello { legacy_version: 0x0302, ..request() }, seq![7u8], false) == Err::<Selection, u8>(47u8),
+        parsed(crate::spec::ServerHello { legacy_version: 0x0302, ..server() }, seq![7u8], false) is Ok,
+{
+    assert(parsed(crate::spec::ServerHello { legacy_version: 0x0300, ..server() }, seq![7u8], false) == Err::<Selection, u8>(70u8)) by (compute_only);
+    assert(parsed(crate::spec::ServerHello { legacy_version: 0x0302, ..request() }, seq![7u8], false) == Err::<Selection, u8>(47u8)) by (compute_only);
+    assert(parsed(crate::spec::ServerHello { legacy_version: 0x0302, ..server() }, seq![7u8], false) is Ok) by (compute_only);
+}
 /// §4.1.3: a server Random ending in the TLS 1.2 downgrade sentinel.
 pub open spec fn sentinel_random() -> Seq<u8> {
     Seq::new(24, |i: int| 0u8) + downgrade_tls12()
@@ -102,4 +115,32 @@ pub proof fn lemma_key_length()
 {
     assert(share(crate::spec::ServerHello { extensions: seq![crate::spec::Ext { etype: 51, data: seq![0u8, 29u8, 0u8, 1u8, 8u8] }], ..server() }) == Err(47u8)) by (compute_only);
 }
-} // verus!
+/// A HelloRetryRequest body echoing session ID 7, with `exts` after the
+/// compression method (nothing, or an encoded extension block).
+pub open spec fn retry_body(exts: Seq<u8>) -> Seq<u8> {
+    seq![3u8, 3u8] + crate::spec::hrr_random() + seq![1u8, 7u8, 0x13u8, 3u8, 0u8] + exts
+}
+/// §4.1.3: the Random is examined first, so a HelloRetryRequest without
+/// supported_versions is not a legacy ServerHello (protocol_version): with
+/// no extension field it is malformed, and with only a cookie its missing
+/// supported_versions is missing_extension (§4.1.4, §6.2).
+pub proof fn lemma_retry_without_versions()
+    ensures
+        validate(seq![7u8], false, retry_body(Seq::empty())) == Err::<Selection, u8>(50u8),
+        validate(seq![7u8], false, retry_body(seq![0u8, 7u8, 0u8, 44u8, 0u8, 3u8, 0u8, 1u8, 9u8])) == Err::<Selection, u8>(109u8),
+{
+    assert(validate(seq![7u8], false, retry_body(Seq::empty())) == Err::<Selection, u8>(50u8)) by (compute_only);
+    assert(validate(seq![7u8], false, retry_body(seq![0u8, 7u8, 0u8, 44u8, 0u8, 3u8, 0u8, 1u8, 9u8])) == Err::<Selection, u8>(109u8)) by (compute_only);
+}
+/// §4.1.3 and Appendix B.3.1: `Extension extensions<6..2^16-1>`, so a
+/// HelloRetryRequest whose extension block is empty, or holds one empty
+/// extension (4 octets), is malformed (decode_error), not a message whose
+/// supported_versions is missing.
+pub proof fn lemma_retry_short_extensions()
+    ensures
+        validate(seq![7u8], false, retry_body(seq![0u8, 0u8])) == Err::<Selection, u8>(50u8),
+        validate(seq![7u8], false, retry_body(seq![0u8, 4u8, 0x12u8, 0x34u8, 0u8, 0u8])) == Err::<Selection, u8>(50u8),
+{
+    assert(validate(seq![7u8], false, retry_body(seq![0u8, 0u8])) == Err::<Selection, u8>(50u8)) by (compute_only);
+    assert(validate(seq![7u8], false, retry_body(seq![0u8, 4u8, 0x12u8, 0x34u8, 0u8, 0u8])) == Err::<Selection, u8>(50u8)) by (compute_only);
+}} // verus!

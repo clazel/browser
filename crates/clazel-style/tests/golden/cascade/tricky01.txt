@@ -1,0 +1,131 @@
+#case 0
+#data "<b><p>Bold </b> Not bold</p>\nAlso not bold."
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <b> font-weight=700
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <b> font-weight=700
+
+#case 1
+#data "<html>\n<font color=red><i>Italic and Red<p>Italic and Red </font> Just italic.</p> Italic only.</i> Plain\n<p>I should not be red. <font color=red>Red. <i>Italic and red.</p>\n<p>Italic and red. </i> Red.</font> I should not be red.</p>\n<b>Bold <i>Bold and italic</b> Only Italic </i> Plain"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <font> color=#ff0000ff
+      <i> font-style=Italic
+    <i> font-style=Italic
+      <p> margin-top=16px margin-bottom=16px display=Block
+        <font> color=#ff0000ff
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <font> color=#ff0000ff
+        <i> font-style=Italic
+    <font> color=#ff0000ff
+      <i> font-style=Italic
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <font> color=#ff0000ff
+        <i> font-style=Italic
+    <b> font-weight=700
+      <i> font-style=Italic
+    <i> font-style=Italic
+
+#case 2
+#data "<html><body>\n<p><font size=\"7\">First paragraph.</p>\n<p>Second paragraph.</p></font>\n<b><p><i>Bold and Italic</b> Italic</p>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-bottom=16px display=Block
+      <font> font-size=48px
+    <font> font-size=48px
+      <p> margin-top=48px margin-bottom=48px display=Block
+    <b> font-weight=700
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <b> font-weight=700
+        <i> font-style=Italic
+      <i> font-style=Italic
+
+#case 3
+#data "<html>\n<dl>\n<dt><b>Boo\n<dd>Goo?\n</dl>\n</html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <dl> margin-bottom=16px display=Block
+      <dt> display=Block
+        <b> font-weight=700
+      <dd> margin-left=40px display=Block
+        <b> font-weight=700
+    <b> font-weight=700
+
+#case 4
+#data "<html><body>\n<label><a><div>Hello<div>World</div></a></label>  \n</body></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <label>
+      <a>
+      <div> display=Block
+        <a>
+          <div> display=Block
+
+#case 5
+#data "<table><center> <font>a</center> <img> <tr><td> </td> </tr> </table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <center> display=Block text-align=Center align-descendants=Some(Center)
+      <font>
+    <font>
+      <img>
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+
+#case 6
+#data "<table><tr><p><a><p>You should see this text."
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-bottom=16px display=Block
+      <a>
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <a>
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+
+#case 7
+#data "<TABLE>\n<TR>\n<CENTER><CENTER><TD></TD></TR><TR>\n<FONT>\n<TABLE><tr></tr></TABLE>\n</P>\n<a></font><font></a>\nThis page contains an insanely badly-nested tag sequence."
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <center> display=Block text-align=Center align-descendants=Some(Center)
+      <center> display=Block align-descendants=Some(Center)
+    <font>
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+    <font>
+      <p> margin-top=16px margin-bottom=16px display=Block
+      <a>
+    <a>
+      <font>
+    <font>
+
+#case 8
+#data "<html>\n<body>\n<b><nobr><div>This text is in a div inside a nobr</nobr>More text that should not be in the nobr, i.e., the\nnobr should have closed the div inside it implicitly. </b><pre>A pre tag outside everything else.</pre>\n</body>\n</html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <b> font-weight=700
+      <nobr> white-space=Nowrap
+    <div> display=Block
+      <b> font-weight=700
+        <nobr> white-space=Nowrap
+      <pre> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+

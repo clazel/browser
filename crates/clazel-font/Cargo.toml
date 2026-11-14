@@ -1,0 +1,25 @@
+[package]
+name = "clazel-font"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "OpenType font files and tables (Phase 5 item 5.9): the table directory and collections, the TrueType tables a face needs, glyph outlines as quadratic contours, cmap lookup and pair kerning."
+
+# No dependencies: every byte of a font is parsed by our own code (CLAUDE.md
+# rule 8). The dev-dependencies are the reference engines of the differential
+# test (tests/conformance_fonts.rs), never compiled into the browser.
+[dev-dependencies]
+ttf-parser = { version = "=0.25.1", default-features = false, features = ["std", "opentype-layout"] }
+read-fonts = "=0.44.0"
+
+# Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
+# shipped code today; `target-tier` is what the policy requires: a parser of
+# untrusted bytes, so Tier 1 (Kani harnesses in src/proofs.rs). The tier stays
+# 0 until CI's full verification has run those harnesses green.
+[package.metadata.clazel]
+tier = 0
+target-tier = 1
+
+[lints]
+workspace = true

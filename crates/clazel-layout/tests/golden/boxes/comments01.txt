@@ -1,0 +1,117 @@
+#case 0
+#data "FOO<!-- BAR -->BAZ"
+root
+  block <html>
+    block <body>
+      text "FOO"
+      text "BAZ"
+
+#case 1
+#data "FOO<!-- BAR --!>BAZ"
+root
+  block <html>
+    block <body>
+      text "FOO"
+      text "BAZ"
+
+#case 2
+#data "FOO<!-- BAR --! >BAZ"
+root
+  block <html>
+    block <body>
+      text "FOO"
+
+#case 3
+#data "FOO<!-- BAR --!\n>BAZ"
+root
+  block <html>
+    block <body>
+      text "FOO"
+
+#case 4
+#data "FOO<!-- BAR --   >BAZ"
+root
+  block <html>
+    block <body>
+      text "FOO"
+
+#case 5
+#data "FOO<!-- BAR -- <QUX> -- MUX -->BAZ"
+root
+  block <html>
+    block <body>
+      text "FOO"
+      text "BAZ"
+
+#case 6
+#data "FOO<!-- BAR -- <QUX> -- MUX --!>BAZ"
+root
+  block <html>
+    block <body>
+      text "FOO"
+      text "BAZ"
+
+#case 7
+#data "FOO<!-- BAR -- <QUX> -- MUX -- >BAZ"
+root
+  block <html>
+    block <body>
+      text "FOO"
+
+#case 8
+#data "FOO<!---->BAZ"
+root
+  block <html>
+    block <body>
+      text "FOO"
+      text "BAZ"
+
+#case 9
+#data "FOO<!--->BAZ"
+root
+  block <html>
+    block <body>
+      text "FOO"
+      text "BAZ"
+
+#case 10
+#data "FOO<!-->BAZ"
+root
+  block <html>
+    block <body>
+      text "FOO"
+      text "BAZ"
+
+#case 11
+#data "<?xml version=\"1.0\">Hi"
+root
+  block <html>
+    block <body>
+      text "Hi"
+
+#case 12
+#data "<?xml version=\"1.0\">"
+root
+  block <html>
+    block <body>
+
+#case 13
+#data "<?xml version"
+root
+  block <html>
+    block <body>
+
+#case 14
+#data "FOO<!----->BAZ"
+root
+  block <html>
+    block <body>
+      text "FOO"
+      text "BAZ"
+
+#case 15
+#data "<html><!-- comment --><title>Comment before head</title>"
+root
+  block <html>
+    block <body>
+

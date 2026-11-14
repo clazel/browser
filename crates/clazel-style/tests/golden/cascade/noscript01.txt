@@ -1,0 +1,134 @@
+#case 0
+#data "<head><noscript><!doctype html><!--foo--></noscript>"
+<html> display=Block
+  <head> display=None
+    <noscript>
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 1
+#data "<head><noscript><html class=\"foo\"><!--foo--></noscript>"
+<html> display=Block
+  <head> display=None
+    <noscript>
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 2
+#data "<head><noscript></noscript>"
+<html> display=Block
+  <head> display=None
+    <noscript>
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 3
+#data "<head><noscript>   </noscript>"
+<html> display=Block
+  <head> display=None
+    <noscript>
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 4
+#data "<head><noscript><!--foo--></noscript>"
+<html> display=Block
+  <head> display=None
+    <noscript>
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 5
+#data "<head><noscript><basefont><!--foo--></noscript>"
+<html> display=Block
+  <head> display=None
+    <noscript>
+      <basefont> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 6
+#data "<head><noscript><bgsound><!--foo--></noscript>"
+<html> display=Block
+  <head> display=None
+    <noscript>
+      <bgsound>
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 7
+#data "<head><noscript><link><!--foo--></noscript>"
+<html> display=Block
+  <head> display=None
+    <noscript>
+      <link> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 8
+#data "<head><noscript><meta><!--foo--></noscript>"
+<html> display=Block
+  <head> display=None
+    <noscript>
+      <meta> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 9
+#data "<head><noscript><noframes>XXX</noscript></noframes></noscript>"
+<html> display=Block
+  <head> display=None
+    <noscript>
+      <noframes> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 10
+#data "<head><noscript><style>XXX</style></noscript>"
+<html> display=Block
+  <head> display=None
+    <noscript>
+      <style> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 11
+#data "<head><noscript></br><!--foo--></noscript>"
+<html> display=Block
+  <head> display=None
+    <noscript>
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <br>
+
+#case 12
+#data "<head><noscript><head class=\"foo\"><!--foo--></noscript>"
+<html> display=Block
+  <head> display=None
+    <noscript>
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 13
+#data "<head><noscript><noscript class=\"foo\"><!--foo--></noscript>"
+<html> display=Block
+  <head> display=None
+    <noscript>
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 14
+#data "<head><noscript></p><!--foo--></noscript>"
+<html> display=Block
+  <head> display=None
+    <noscript>
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 15
+#data "<head><noscript><p><!--foo--></noscript>"
+<html> display=Block
+  <head> display=None
+    <noscript>
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> display=Block
+
+#case 16
+#data "<head><noscript>XXX<!--foo--></noscript></head>"
+<html> display=Block
+  <head> display=None
+    <noscript>
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 17
+#data "<head><noscript>"
+<html> display=Block
+  <head> display=None
+    <noscript>
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+

@@ -142,38 +142,125 @@ pub proof fn lemma_key_update_rotates_read_keys()
     assert(msg(ku(0), true).0 == super::post_handshake_spec::quiet()) by (compute_only);
 }
 
-/// §4.6.3: on KeyUpdate(`update_requested`) the client sends one record and
-/// then updates its own write keys: the client secret is the next
-/// generation and the new send epoch is at sequence number 0. The read keys
-/// are updated as well.
+/// The ready connection after KeyUpdate(`update_requested`).
+pub open spec fn owing() -> super::post_handshake_spec::State { msg(ku(1), true).1 }
+
+/// One octet of application data sent from [`owing`].
+pub open spec fn answered() -> (super::post_handshake_spec::Out, super::post_handshake_spec::State) {
+    super::post_handshake_spec::send_application(crypto(), cipher(), owing(), seq![5u8])
+}
+
+/// A second KeyUpdate(`update_requested`), in its own record, while the
+/// answer to the first is owed.
+pub open spec fn twice() -> (super::post_handshake_spec::Out, super::post_handshake_spec::State) {
+    super::post_handshake_spec::message(crypto(), cipher(), owing(), ku(1), true)
+}
+
+/// §4.6.3: on KeyUpdate(`update_requested`) the client sends nothing in that
+/// step: its answer is owed "prior to sending its next Application Data
+/// record". The read keys are updated; the write keys are not, yet.
+pub proof fn lemma_key_update_requested_is_owed()
+    ensures
+        msg(ku(1), true).0 == super::post_handshake_spec::quiet(),
+        msg(ku(1), true).0.wires.len() == 0,
+        owing().key_update_owed,
+        owing().client_secret == ready().client_secret,
+        owing().sender == ready().sender,
+        owing().server_secret == crate::schedule::spec::next_traffic_secret(crypto(), ready().server_secret),
+        !ready().key_update_owed,
+{
+    assert(msg(ku(1), true).0 == super::post_handshake_spec::quiet()) by (compute_only);
+    assert(msg(ku(1), true).0.wires.len() == 0) by (compute_only);
+    assert(owing().key_update_owed) by (compute_only);
+    assert(owing().client_secret == ready().client_secret) by (compute_only);
+    assert(owing().sender == ready().sender) by (compute_only);
+    assert(owing().server_secret == crate::schedule::spec::next_traffic_secret(crypto(), ready().server_secret))
+        by (compute_only);
+    assert(!ready().key_update_owed) by (compute_only);
+}
+
+/// §4.6.3: the owed answer goes out before the next application data: two
+/// records, the KeyUpdate first (its record's sixth octet is the handshake
+/// type 24) and then the data (its sixth octet is the 5 sent). The client
+/// write keys then move on: the client secret is the next generation and
+/// the data went out under the new epoch at sequence number 0, so it is at
+/// 1. Nothing is owed after it, and the next data goes out alone.
 pub proof fn lemma_key_update_requested_is_answered()
     ensures
-        msg(ku(1), true).0.wires.len() == 1,
-        msg(ku(1), true).0.end == super::post_handshake_spec::End::Continue,
-        msg(ku(1), true).1.client_secret
-            == crate::schedule::spec::next_traffic_secret(crypto(), ready().client_secret),
-        msg(ku(1), true).1.client_secret != ready().client_secret,
-        msg(ku(1), true).1.sender.unwrap().next == Some(0u64),
-        msg(ku(1), true).1.server_secret
-            == crate::schedule::spec::next_traffic_secret(crypto(), ready().server_secret),
+        answered().0.wires.len() == 2,
+        answered().0.wires[0][5] == 24u8,
+        answered().0.wires[1][5] == 5u8,
+        answered().0.end == super::post_handshake_spec::End::Continue,
+        answered().1.client_secret == crate::schedule::spec::next_traffic_secret(crypto(), ready().client_secret),
+        answered().1.client_secret != ready().client_secret,
+        answered().1.sender.unwrap().next == Some(1u64),
+        !answered().1.key_update_owed,
+        super::post_handshake_spec::send_application(crypto(), cipher(), answered().1, seq![5u8]).0.wires.len() == 1,
 {
-    assert(msg(ku(1), true).0.wires.len() == 1) by (compute_only);
-    assert(msg(ku(1), true).0.end == super::post_handshake_spec::End::Continue) by (compute_only);
-    assert(msg(ku(1), true).1.client_secret
-        == crate::schedule::spec::next_traffic_secret(crypto(), ready().client_secret)) by (compute_only);
-    assert(msg(ku(1), true).1.client_secret != ready().client_secret) by (compute_only);
-    assert(msg(ku(1), true).1.sender.unwrap().next == Some(0u64)) by (compute_only);
-    assert(msg(ku(1), true).1.server_secret
-        == crate::schedule::spec::next_traffic_secret(crypto(), ready().server_secret)) by (compute_only);
+    assert(answered().0.wires.len() == 2) by (compute_only);
+    assert(answered().0.wires[0][5] == 24u8) by (compute_only);
+    assert(answered().0.wires[1][5] == 5u8) by (compute_only);
+    assert(answered().0.end == super::post_handshake_spec::End::Continue) by (compute_only);
+    assert(answered().1.client_secret == crate::schedule::spec::next_traffic_secret(crypto(), ready().client_secret))
+        by (compute_only);
+    assert(answered().1.client_secret != ready().client_secret) by (compute_only);
+    assert(answered().1.sender.unwrap().next == Some(1u64)) by (compute_only);
+    assert(!answered().1.key_update_owed) by (compute_only);
+    assert(super::post_handshake_spec::send_application(crypto(), cipher(), answered().1, seq![5u8]).0.wires.len() == 1)
+        by (compute_only);
 }
 
 /// §4.6.3: the answer is KeyUpdate(`update_not_requested`): "the
-/// request_update field" of the reply, the ninth octet of the sent record
-/// (five header octets, then the 24, the length, the value), is 0.
+/// request_update field" of the first record sent, its ninth octet (five
+/// header octets, then the 24, the length, the value), is 0.
 pub proof fn lemma_key_update_answer_does_not_ask_again()
-    ensures msg(ku(1), true).0.wires[0][9] == 0u8,
+    ensures answered().0.wires[0][9] == 0u8,
 {
-    assert(msg(ku(1), true).0.wires[0][9] == 0u8) by (compute_only);
+    assert(answered().0.wires[0][9] == 0u8) by (compute_only);
+}
+
+/// §4.6.3: "causes an implementation which receives multiple KeyUpdates
+/// while it is silent to respond with a single update". A second
+/// `update_requested` while the first is owed sends nothing and leaves one
+/// answer owed: the next data is preceded by one KeyUpdate, and the data
+/// after it by none.
+pub proof fn lemma_two_requests_one_answer()
+    ensures
+        twice().0 == super::post_handshake_spec::quiet(),
+        twice().1.key_update_owed,
+        super::post_handshake_spec::send_application(crypto(), cipher(), twice().1, seq![5u8]).0.wires.len() == 2,
+        super::post_handshake_spec::send_application(crypto(), cipher(),
+            super::post_handshake_spec::send_application(crypto(), cipher(), twice().1, seq![5u8]).1,
+            seq![5u8]).0.wires.len() == 1,
+{
+    assert(twice().0 == super::post_handshake_spec::quiet()) by (compute_only);
+    assert(twice().1.key_update_owed) by (compute_only);
+    assert(super::post_handshake_spec::send_application(crypto(), cipher(), twice().1, seq![5u8]).0.wires.len() == 2)
+        by (compute_only);
+    assert(super::post_handshake_spec::send_application(crypto(), cipher(),
+        super::post_handshake_spec::send_application(crypto(), cipher(), twice().1, seq![5u8]).1,
+        seq![5u8]).0.wires.len() == 1) by (compute_only);
+}
+
+/// §4.6.3 asks for the answer only before Application Data: while it is owed,
+/// our `close_notify` goes out alone (one record, an alert: its sixth and
+/// seventh octets are the warning level 1 and `close_notify` 0), and a
+/// client-initiated KeyUpdate leaves the answer owed.
+pub proof fn lemma_owed_answer_only_before_data()
+    ensures
+        super::post_handshake_spec::close(cipher(), owing()).0.wires.len() == 1,
+        super::post_handshake_spec::close(cipher(), owing()).0.wires[0][5] == 1u8,
+        super::post_handshake_spec::close(cipher(), owing()).0.wires[0][6] == 0u8,
+        super::post_handshake_spec::update_keys(crypto(), cipher(), owing(), false).0.wires.len() == 1,
+        super::post_handshake_spec::update_keys(crypto(), cipher(), owing(), false).1.key_update_owed,
+{
+    assert(super::post_handshake_spec::close(cipher(), owing()).0.wires.len() == 1) by (compute_only);
+    assert(super::post_handshake_spec::close(cipher(), owing()).0.wires[0][5] == 1u8) by (compute_only);
+    assert(super::post_handshake_spec::close(cipher(), owing()).0.wires[0][6] == 0u8) by (compute_only);
+    assert(super::post_handshake_spec::update_keys(crypto(), cipher(), owing(), false).0.wires.len() == 1)
+        by (compute_only);
+    assert(super::post_handshake_spec::update_keys(crypto(), cipher(), owing(), false).1.key_update_owed)
+        by (compute_only);
 }
 
 /// §4.6.3 and the client-initiated update: asking the peer to update sends
@@ -219,36 +306,52 @@ pub proof fn lemma_key_update_must_end_its_record()
     assert(ku_rx(0, true, ready()).0.end == super::post_handshake_spec::End::Continue) by (compute_only);
 }
 
-/// §6.1: `close_notify` ends the connection: the client answers with its own
-/// `close_notify` and the output ends in `Close`; the state keeps no key.
+/// §6.1: the server's `close_notify` ends the read side: nothing is sent, the
+/// output ends in `PeerClosed` and the client can still write. Our own
+/// `close_notify` then ends the connection.
 pub proof fn lemma_close_notify_closes()
     ensures
-        rec(21, seq![1u8, 0]).0.end == super::post_handshake_spec::End::Close,
-        rec(21, seq![1u8, 0]).0.wires.len() == 1,
-        rec(21, seq![1u8, 0]).1 == super::post_handshake_spec::closed(),
+        rec(21, seq![1u8, 0]).0.end == super::post_handshake_spec::End::PeerClosed,
+        rec(21, seq![1u8, 0]).0.wires.len() == 0,
+        rec(21, seq![1u8, 0]).1.phase == super::post_handshake_spec::Phase::ReadClosed,
+        super::post_handshake_spec::close(cipher(), rec(21, seq![1u8, 0]).1).0.wires.len() == 1,
+        super::post_handshake_spec::close(cipher(), rec(21, seq![1u8, 0]).1).0.end == super::post_handshake_spec::End::Close,
+        super::post_handshake_spec::close(cipher(), rec(21, seq![1u8, 0]).1).1 == super::post_handshake_spec::closed(),
 {
-    assert(rec(21, seq![1u8, 0]).0.end == super::post_handshake_spec::End::Close) by (compute_only);
-    assert(rec(21, seq![1u8, 0]).0.wires.len() == 1) by (compute_only);
-    assert(rec(21, seq![1u8, 0]).1 == super::post_handshake_spec::closed()) by (compute_only);
+    assert(rec(21, seq![1u8, 0]).0.end == super::post_handshake_spec::End::PeerClosed) by (compute_only);
+    assert(rec(21, seq![1u8, 0]).0.wires.len() == 0) by (compute_only);
+    assert(rec(21, seq![1u8, 0]).1.phase == super::post_handshake_spec::Phase::ReadClosed) by (compute_only);
+    assert(super::post_handshake_spec::close(cipher(), rec(21, seq![1u8, 0]).1).0.wires.len() == 1) by (compute_only);
+    assert(super::post_handshake_spec::close(cipher(), rec(21, seq![1u8, 0]).1).0.end == super::post_handshake_spec::End::Close) by (compute_only);
+    assert(super::post_handshake_spec::close(cipher(), rec(21, seq![1u8, 0]).1).1 == super::post_handshake_spec::closed()) by (compute_only);
 }
 
-/// §6: every alert but `close_notify` is fatal and, being the peer's, is not
-/// answered: `Fail` with its description, nothing sent, the connection
-/// failed. That includes `user_canceled` (90), whatever the level.
+/// §6.1: `user_canceled` is not an error alert: nothing is sent or delivered
+/// and the connection stays open.
+pub proof fn lemma_user_canceled_changes_nothing()
+    ensures
+        rec(21, seq![1u8, 90]).0 == super::post_handshake_spec::quiet(),
+        rec(21, seq![1u8, 90]).1.phase == super::post_handshake_spec::Phase::Open,
+{
+    assert(rec(21, seq![1u8, 90]).0 == super::post_handshake_spec::quiet()) by (compute_only);
+    assert(rec(21, seq![1u8, 90]).1.phase == super::post_handshake_spec::Phase::Open) by (compute_only);
+}
+
+/// §6: every alert but the closure alerts is fatal and, being the peer's, is
+/// not answered: `Fail` with its description, nothing sent, the connection
+/// failed, whatever the level.
 pub proof fn lemma_other_alerts_are_fatal()
     ensures
         rec(21, seq![2u8, 40]).0
             == (super::post_handshake_spec::Out { wires: seq![], delivered: seq![],
-                end: super::post_handshake_spec::End::Fail(40u8) }),
-        rec(21, seq![1u8, 90]).0.end == super::post_handshake_spec::End::Fail(90u8),
-        rec(21, seq![1u8, 40]).0.end == super::post_handshake_spec::End::Fail(40u8),
+                end: super::post_handshake_spec::End::PeerAlert(40u8) }),
+        rec(21, seq![1u8, 40]).0.end == super::post_handshake_spec::End::PeerAlert(40u8),
         rec(21, seq![2u8, 40]).1 == super::post_handshake_spec::failed(),
 {
     assert(rec(21, seq![2u8, 40]).0
         == (super::post_handshake_spec::Out { wires: seq![], delivered: seq![],
-            end: super::post_handshake_spec::End::Fail(40u8) })) by (compute_only);
-    assert(rec(21, seq![1u8, 90]).0.end == super::post_handshake_spec::End::Fail(90u8)) by (compute_only);
-    assert(rec(21, seq![1u8, 40]).0.end == super::post_handshake_spec::End::Fail(40u8)) by (compute_only);
+            end: super::post_handshake_spec::End::PeerAlert(40u8) })) by (compute_only);
+    assert(rec(21, seq![1u8, 40]).0.end == super::post_handshake_spec::End::PeerAlert(40u8)) by (compute_only);
     assert(rec(21, seq![2u8, 40]).1 == super::post_handshake_spec::failed()) by (compute_only);
 }
 
@@ -281,14 +384,24 @@ pub proof fn lemma_unexpected_records()
         == super::post_handshake_spec::End::Fail(10u8)) by (compute_only);
 }
 
-/// §6.1: the transport closing before `close_notify` is a truncation:
-/// `Fail(internal_error)` (80), nothing sent, no input consumed; once the
-/// connection ended, the transport closing is not an error.
+/// §6.1 (item 14): the end of the transport before `close_notify` is a
+/// truncation: `Fail(internal_error)` (80), no input consumed, and while the
+/// write side is open our close_notify goes out first, the one record a
+/// close sends; after our close_notify nothing is sent; once the connection
+/// ended, the end of the transport is not an error.
 pub proof fn lemma_transport_closing()
     ensures
         super::post_handshake_spec::step(crypto(), cipher(), ready(), super::post_handshake_spec::Input::Closed).0.end
             == super::post_handshake_spec::End::Fail(80u8),
         super::post_handshake_spec::step(crypto(), cipher(), ready(), super::post_handshake_spec::Input::Closed).2 == 0,
+        super::post_handshake_spec::step(crypto(), cipher(), ready(), super::post_handshake_spec::Input::Closed).0.wires
+            == super::post_handshake_spec::close(cipher(), ready()).0.wires,
+        super::post_handshake_spec::step(crypto(), cipher(), ready(), super::post_handshake_spec::Input::Closed).0.wires.len()
+            == 1,
+        super::post_handshake_spec::step(crypto(), cipher(), super::post_handshake_spec::close(cipher(), ready()).1,
+            super::post_handshake_spec::Input::Closed).0.wires.len() == 0,
+        super::post_handshake_spec::step(crypto(), cipher(), super::post_handshake_spec::close(cipher(), ready()).1,
+            super::post_handshake_spec::Input::Closed).0.end == super::post_handshake_spec::End::Fail(80u8),
         super::post_handshake_spec::step(crypto(), cipher(), super::post_handshake_spec::closed(),
             super::post_handshake_spec::Input::Closed).0 == super::post_handshake_spec::quiet(),
 {
@@ -297,6 +410,14 @@ pub proof fn lemma_transport_closing()
         by (compute_only);
     assert(super::post_handshake_spec::step(crypto(), cipher(), ready(),
         super::post_handshake_spec::Input::Closed).2 == 0) by (compute_only);
+    assert(super::post_handshake_spec::step(crypto(), cipher(), ready(), super::post_handshake_spec::Input::Closed).0.wires
+        == super::post_handshake_spec::close(cipher(), ready()).0.wires) by (compute_only);
+    assert(super::post_handshake_spec::step(crypto(), cipher(), ready(),
+        super::post_handshake_spec::Input::Closed).0.wires.len() == 1) by (compute_only);
+    assert(super::post_handshake_spec::step(crypto(), cipher(), super::post_handshake_spec::close(cipher(), ready()).1,
+        super::post_handshake_spec::Input::Closed).0.wires.len() == 0) by (compute_only);
+    assert(super::post_handshake_spec::step(crypto(), cipher(), super::post_handshake_spec::close(cipher(), ready()).1,
+        super::post_handshake_spec::Input::Closed).0.end == super::post_handshake_spec::End::Fail(80u8)) by (compute_only);
     assert(super::post_handshake_spec::step(crypto(), cipher(), super::post_handshake_spec::closed(),
         super::post_handshake_spec::Input::Closed).0 == super::post_handshake_spec::quiet()) by (compute_only);
 }
@@ -358,20 +479,29 @@ pub proof fn lemma_last_sequence_number_rekeys_example()
         by (compute_only);
 }
 
-/// §6.1: closing sends `close_notify` and ends the connection; once ended,
-/// closing does nothing.
+/// §6.1: closing sends `close_notify` and ends the write side; the read side
+/// goes on, and closing again does nothing.
 pub proof fn lemma_local_close()
     ensures
         super::post_handshake_spec::close(cipher(), ready()).0.wires.len() == 1,
-        super::post_handshake_spec::close(cipher(), ready()).0.end == super::post_handshake_spec::End::Close,
-        super::post_handshake_spec::close(cipher(), ready()).1 == super::post_handshake_spec::closed(),
+        super::post_handshake_spec::close(cipher(), ready()).0.end == super::post_handshake_spec::End::Continue,
+        super::post_handshake_spec::close(cipher(), ready()).1.phase == super::post_handshake_spec::Phase::WriteClosed,
+        super::post_handshake_spec::peer_closed(super::post_handshake_spec::close(cipher(), ready()).1).0.end == super::post_handshake_spec::End::Close,
+        super::post_handshake_spec::peer_closed(super::post_handshake_spec::close(cipher(), ready()).1).1 == super::post_handshake_spec::closed(),
+        super::post_handshake_spec::close(cipher(), super::post_handshake_spec::close(cipher(), ready()).1).0 == super::post_handshake_spec::quiet(),
         super::post_handshake_spec::close(cipher(), super::post_handshake_spec::closed()).0
             == super::post_handshake_spec::quiet(),
 {
     assert(super::post_handshake_spec::close(cipher(), ready()).0.wires.len() == 1) by (compute_only);
-    assert(super::post_handshake_spec::close(cipher(), ready()).0.end == super::post_handshake_spec::End::Close)
+    assert(super::post_handshake_spec::close(cipher(), ready()).0.end == super::post_handshake_spec::End::Continue)
         by (compute_only);
-    assert(super::post_handshake_spec::close(cipher(), ready()).1 == super::post_handshake_spec::closed())
+    assert(super::post_handshake_spec::close(cipher(), ready()).1.phase == super::post_handshake_spec::Phase::WriteClosed)
+        by (compute_only);
+    assert(super::post_handshake_spec::peer_closed(super::post_handshake_spec::close(cipher(), ready()).1).0.end == super::post_handshake_spec::End::Close)
+        by (compute_only);
+    assert(super::post_handshake_spec::peer_closed(super::post_handshake_spec::close(cipher(), ready()).1).1 == super::post_handshake_spec::closed())
+        by (compute_only);
+    assert(super::post_handshake_spec::close(cipher(), super::post_handshake_spec::close(cipher(), ready()).1).0 == super::post_handshake_spec::quiet())
         by (compute_only);
     assert(super::post_handshake_spec::close(cipher(), super::post_handshake_spec::closed()).0
         == super::post_handshake_spec::quiet()) by (compute_only);

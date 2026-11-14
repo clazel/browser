@@ -68,7 +68,7 @@ pub proof fn lemma_dns_match_wildcard_matches_one_label_only()
         seq![b'*', b'.', b'e', b'x', b'a', b'm', b'p', b'l', b'e', b'.', b't', b'e', b's', b't'],
     )
 {
-    hide(wildcard_suffix_is_public_suffix);
+    hide(wildcard_suffix_is_icann_suffix);
     lemma_dns_wildcard_matches_one_label_only();
     reveal(dns_match);
     assert(seq![b'*', b'.', b'e', b'x', b'a', b'm', b'p', b'l', b'e', b'.', b't', b'e', b's', b't']

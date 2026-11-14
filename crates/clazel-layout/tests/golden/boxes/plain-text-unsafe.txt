@@ -1,0 +1,328 @@
+#case 0
+#data "FOO&#x000D;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO ZOO"
+
+#case 1
+#data "<html>\0<frameset></frameset>"
+root
+  block <html>
+    inline <frameset>
+
+#case 2
+#data "<html> \0 <frameset></frameset>"
+root
+  block <html>
+    inline <frameset>
+
+#case 3
+#data "<html>a\0a<frameset></frameset>"
+root
+  block <html>
+    block <body>
+      text "aa"
+
+#case 4
+#data "<html>\0\0<frameset></frameset>"
+root
+  block <html>
+    inline <frameset>
+
+#case 5
+#data "<html>\0\n<frameset></frameset>"
+root
+  block <html>
+    inline <frameset>
+
+#case 6
+#data "<html><select>\0"
+root
+  block <html>
+    block <body>
+      inline <select>
+
+#case 7
+#data "\0"
+root
+  block <html>
+    block <body>
+
+#case 8
+#data "<body>\0"
+root
+  block <html>
+    block <body>
+
+#case 9
+#data "<plaintext>\0filler\0text\0"
+root
+  block <html>
+    block <body>
+      block <plaintext>
+        text "�filler�text�" white-space=Pre
+
+#case 10
+#data "<svg><![CDATA[\0filler\0text\0]]>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "�filler�text�"
+
+#case 11
+#data "<body><!\0>"
+root
+  block <html>
+    block <body>
+
+#case 12
+#data "<body><!\0filler\0text>"
+root
+  block <html>
+    block <body>
+
+#case 13
+#data "<body><svg><foreignObject>\0filler\0text"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        inline <foreignObject>
+          text "fillertext"
+
+#case 14
+#data "<svg>\0filler\0text"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "�filler�text"
+
+#case 15
+#data "<svg>\0<frameset>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "�"
+        inline <frameset>
+
+#case 16
+#data "<svg>\0 <frameset>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "� "
+        inline <frameset>
+
+#case 17
+#data "<svg>\0a<frameset>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "�a"
+        inline <frameset>
+
+#case 18
+#data "<svg>\0</svg><frameset>"
+root
+  block <html>
+    inline <frameset>
+
+#case 19
+#data "<svg>\0 </svg><frameset>"
+root
+  block <html>
+    inline <frameset>
+
+#case 20
+#data "<svg>\0a</svg><frameset>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "�a"
+
+#case 21
+#data "<svg><![CDATA[\0]]></svg><frameset>"
+root
+  block <html>
+    inline <frameset>
+
+#case 22
+#data "<svg><foreignObject><![CDATA[\0]]></foreignObject></svg><frameset>"
+root
+  block <html>
+    inline <frameset>
+
+#case 23
+#data "<svg>\0&#xFFFD;</svg><frameset>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "��"
+
+#case 24
+#data "<!DOCTYPE html><body>a<\0b"
+root
+  block <html>
+    block <body>
+      text "a<b"
+
+#case 25
+#data "<svg><foreignObject><![CDATA[a\0b]]>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        inline <foreignObject>
+          text "ab"
+
+#case 26
+#data "<svg><path></path></svg><frameset>"
+root
+  block <html>
+    inline <frameset>
+
+#case 27
+#data "<svg><p><frameset>"
+root
+  block <html>
+    inline <frameset>
+
+#case 28
+#data "<!DOCTYPE html><pre>\r\n\r\nA</pre>"
+root
+  block <html>
+    block <body>
+      block <pre>
+        text "\nA" white-space=Pre
+
+#case 29
+#data "<!DOCTYPE html><pre>\r\rA</pre>"
+root
+  block <html>
+    block <body>
+      block <pre>
+        text "\nA" white-space=Pre
+
+#case 30
+#data "<!DOCTYPE html><pre>\rA</pre>"
+root
+  block <html>
+    block <body>
+      block <pre>
+        text "A" white-space=Pre
+
+#case 31
+#data "<!DOCTYPE html><table><tr><td><math><mtext>\0a"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                inline <math>
+                  inline <mtext>
+                    text "a"
+
+#case 32
+#data "<!DOCTYPE html><table><tr><td><svg><foreignObject>\0a"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                inline <svg>
+                  inline <foreignObject>
+                    text "a"
+
+#case 33
+#data "<!DOCTYPE html><math><mi>a\0b"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <mi>
+          text "ab"
+
+#case 34
+#data "<!DOCTYPE html><math><mo>a\0b"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <mo>
+          text "ab"
+
+#case 35
+#data "<!DOCTYPE html><math><mn>a\0b"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <mn>
+          text "ab"
+
+#case 36
+#data "<!DOCTYPE html><math><ms>a\0b"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <ms>
+          text "ab"
+
+#case 37
+#data "<!DOCTYPE html><math><mtext>a\0b"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <mtext>
+          text "ab"
+
+#case 38
+#data "<math>\0filler\0text"
+root
+  block <html>
+    block <body>
+      inline <math>
+        text "�filler�text"
+
+#case 39
+#data "<math><![CDATA[\0filler\0text\0]]>"
+root
+  block <html>
+    block <body>
+      inline <math>
+        text "�filler�text�"
+
+#case 40
+#data "<math><annotation-xml>\0x"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <annotation-xml>
+          text "�x"
+
+#case 41
+#data "<math><annotation-xml encoding=\"text/html\">\0x"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <annotation-xml>
+          text "x"
+

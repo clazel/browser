@@ -374,6 +374,53 @@
       "reason": "Routes ed448 (0x0808) to Ed25519 and refuses ed25519. The exec dispatcher's proof breaks; tests/signature.rs verifies RFC 8032 under 0x0807."
     },
     {
+      "id": "p384-scheme-code",
+      "file": "src/signature/spec.rs",
+      "find": "if scheme == 0x0503 { Some(",
+      "replace": "if scheme == 0x0603 { Some(",
+      "expect": "killed",
+      "reason": "0x0603 is ecdsa_secp521r1_sha512 (RFC 8446 §4.2.3): P-521 signatures would go to the P-384 check and ecdsa_secp384r1_sha384 be refused.",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_p384_hash_examples()",
+        "witness": "p384_hash(0x0503u16) is None"
+      }
+    },
+    {
+      "id": "p384-scheme-hash",
+      "file": "src/signature/spec.rs",
+      "find": "if scheme == 0x0503 { Some(clazel_x509::signature_algorithm::spec::EcdsaHash::Sha384) }",
+      "replace": "if scheme == 0x0503 { Some(clazel_x509::signature_algorithm::spec::EcdsaHash::Sha256) }",
+      "expect": "killed",
+      "reason": "RFC 8446 §4.2.3 binds 0x0503 to SHA-384. The link check accepts SHA-256 under a P-384 key (RFC 5758 §3.2), CertificateVerify does not.",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_p384_hash_examples()",
+        "witness": "p384_hash(0x0503u16) == Some(clazel_x509::signature_algorithm::spec::EcdsaHash::Sha256)"
+      }
+    },
+    {
+      "id": "p384-other-key-class",
+      "file": "src/signature/spec.rs",
+      "find": "crate::chain::spec::ecdsa_p384_link(point, hash, input, signature),\n        _ => false,",
+      "replace": "crate::chain::spec::ecdsa_p384_link(point, hash, input, signature),\n        _ => true,",
+      "expect": "killed",
+      "reason": "Any key that is not secp384r1 would verify every ecdsa_secp384r1_sha384 signature: CertificateVerify would prove nothing for it.",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_curve_binding_examples()",
+        "witness": "ecdsa_p384(crate::signature::examples::ex_p256_spki(0x04u8, crate::signature::examples::ex_point()), clazel_x509::signature_algorithm::spec::EcdsaHash::Sha384, seq![], seq![])"
+      }
+    },
+    {
+      "id": "p384-dispatch-dropped",
+      "file": "src/signature/spec.rs",
+      "find": "Some(hash) => ecdsa_p384(spki, hash, input, signature),",
+      "replace": "Some(hash) => false,",
+      "expect": "killed-incidentally",
+      "reason": "Refuses every ecdsa_secp384r1_sha384 signature. The exec dispatcher's proof breaks; tests/signature.rs and tests/conformance_tls.rs verify real signatures under 0x0503."
+    },
+    {
       "id": "p256-point-class",
       "file": "src/signature/spec.rs",
       "find": "clazel_x509::spki::spec::PublicKey::EcP256(point) => Some(point),",

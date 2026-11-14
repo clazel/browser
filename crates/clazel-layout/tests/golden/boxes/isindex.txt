@@ -1,0 +1,31 @@
+#case 0
+#data "<isindex>"
+root
+  block <html>
+    block <body>
+      inline <isindex>
+
+#case 1
+#data "<isindex name=\"A\" action=\"B\" prompt=\"C\" foo=\"D\">"
+root
+  block <html>
+    block <body>
+      inline <isindex>
+
+#case 2
+#data "<form><isindex>"
+root
+  block <html>
+    block <body>
+      block <form>
+        inline <isindex>
+
+#case 3
+#data "<!doctype html><isindex>x</isindex>x"
+root
+  block <html>
+    block <body>
+      inline <isindex>
+        text "x"
+      text "x"
+

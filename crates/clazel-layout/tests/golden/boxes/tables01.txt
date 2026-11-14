@@ -1,0 +1,229 @@
+#case 0
+#data "<table><th>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <th>
+
+#case 1
+#data "<table><td>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+
+#case 2
+#data "<table><col foo='bar'>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-column-group <colgroup>
+            table-column <col>
+
+#case 3
+#data "<table><colgroup></html>foo"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        text "foo"
+      table-wrapper <table>
+        table <table>
+          table-column-group <colgroup>
+
+#case 4
+#data "<table></table><p>foo"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+      block <p>
+        text "foo"
+
+#case 5
+#data "<table></body></caption></col></colgroup></html></tbody></td></tfoot></th></thead></tr><td>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+
+#case 6
+#data "<table><select><option>3</select></table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <select>
+          inline <option>
+            text "3"
+      table-wrapper <table>
+        table <table>
+
+#case 7
+#data "<table><select><table></table></select></table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <select>
+      table-wrapper <table>
+        table <table>
+      table-wrapper <table>
+        table <table>
+
+#case 8
+#data "<table><select></table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <select>
+      table-wrapper <table>
+        table <table>
+
+#case 9
+#data "<table><select><option>A<tr><td>B</td></tr></table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <select>
+          inline <option>
+            text "A"
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                text "B"
+
+#case 10
+#data "<table><td></body></caption></col></colgroup></html>foo"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                text "foo"
+
+#case 11
+#data "<table><td>A</table>B"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                text "A"
+      block (anonymous)
+        text "B"
+
+#case 12
+#data "<table><tr><caption>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table-caption <caption>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+
+#case 13
+#data "<table><tr></body></caption></col></colgroup></html></td></th><td>foo"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                text "foo"
+
+#case 14
+#data "<table><td><tr>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+            table-row <tr>
+
+#case 15
+#data "<table><td><button><td>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                inline-block <button>
+              table-cell <td>
+
+#case 16
+#data "<table><tr><td><svg><desc><td>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                inline <svg>
+                  inline <desc>
+              table-cell <td>
+
+#case 17
+#data "<div><table><svg><foreignObject><select><table><s>"
+root
+  block <html>
+    block <body>
+      block <div>
+        block (anonymous)
+          inline <svg>
+            inline <foreignObject>
+              inline <select>
+        table-wrapper <table>
+          table <table>
+        block (anonymous)
+          inline <s>
+        table-wrapper <table>
+          table <table>
+
+#case 18
+#data "<table>a<!doctype html>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        text "a"
+      table-wrapper <table>
+        table <table>
+

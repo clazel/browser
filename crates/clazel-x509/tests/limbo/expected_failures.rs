@@ -22,6 +22,7 @@ const CABF_CN: &str = "a CA/Browser Forum rule on the subject commonName (BR 7.1
 const CABF_AIA: &str = "a CA/Browser Forum rule on the content of authorityInfoAccess (a non-critical extension the decoders keep opaque; RFC 5280 6.1 does not read it)";
 const LEAF_KEY_RULE: &str = "the profile has no rule on the target's key type or size (BR 6.1.5, limbo: pedantic-webpki-subscriber-key); the path verdict returns the key and a key the TLS stack cannot verify with fails at CertificateVerify; whether Chrome and Firefox refuse such a key is unconfirmed (accept only where both accept)";
 const ROOT_RSA_BITS: &str = "BR 6.1.5 asks for an RSA modulus of a multiple of 8 bits and the real links accept this 2052-bit root (clazel-crypto/tests/chain_limbo.rs records that Chrome, Firefox and webpki accept it): a listed divergence, not a signature failure";
+const PRIVATE_SUFFIX_WILDCARD: &str = "limbo refuses a wildcard over a suffix in the PSL's private section, citing the CA/Browser Forum; BR 3.2.2.6 says to consult the ICANN section only, as dns_match and Chromium do (spec.rs)";
 
 const EXPECTED_FAILURES: &[(&str, &str)] = &[
     ("crl::structure::crl-invalid-signature", NEEDS_CRL),
@@ -89,4 +90,5 @@ const EXPECTED_FAILURES: &[(&str, &str)] = &[
     ("webpki::forbidden-weak-rsa-in-leaf", LEAF_KEY_RULE),
     ("webpki::forbidden-rsa-not-divisible-by-8-in-root", ROOT_RSA_BITS),
     ("webpki::forbidden-rsa-key-not-divisible-by-8-in-leaf", LEAF_KEY_RULE),
+    ("webpki::san::public-suffix-private-namespace-wildcard-san", PRIVATE_SUFFIX_WILDCARD),
 ];

@@ -1,0 +1,124 @@
+#case 0
+#data "<!doctype html><table><tbody><select><tr>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <select>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+
+#case 1
+#data "<!doctype html><table><tr><select><td>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <select>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+
+#case 2
+#data "<!doctype html><table><tr><td><select><td>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                inline <select>
+              table-cell <td>
+
+#case 3
+#data "<!doctype html><table><tr><th><select><td>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <th>
+                inline <select>
+              table-cell <td>
+
+#case 4
+#data "<!doctype html><table><caption><select><tr>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table-caption <caption>
+          inline <select>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+
+#case 5
+#data "<!doctype html><select><tr>"
+root
+  block <html>
+    block <body>
+      inline <select>
+
+#case 6
+#data "<!doctype html><select><td>"
+root
+  block <html>
+    block <body>
+      inline <select>
+
+#case 7
+#data "<!doctype html><select><th>"
+root
+  block <html>
+    block <body>
+      inline <select>
+
+#case 8
+#data "<!doctype html><select><tbody>"
+root
+  block <html>
+    block <body>
+      inline <select>
+
+#case 9
+#data "<!doctype html><select><thead>"
+root
+  block <html>
+    block <body>
+      inline <select>
+
+#case 10
+#data "<!doctype html><select><tfoot>"
+root
+  block <html>
+    block <body>
+      inline <select>
+
+#case 11
+#data "<!doctype html><select><caption>"
+root
+  block <html>
+    block <body>
+      inline <select>
+
+#case 12
+#data "<!doctype html><table><tr></table>a"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+      block (anonymous)
+        text "a"
+

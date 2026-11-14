@@ -1,0 +1,241 @@
+#case 0
+#data "<div<div>"
+root
+  block <html>
+    block <body>
+      inline <div<div>
+
+#case 1
+#data "<div foo<bar=''>"
+root
+  block <html>
+    block <body>
+      block <div>
+
+#case 2
+#data "<div foo=`bar`>"
+root
+  block <html>
+    block <body>
+      block <div>
+
+#case 3
+#data "<div \\\"foo=''>"
+root
+  block <html>
+    block <body>
+      block <div>
+
+#case 4
+#data "<a href='\\nbar'></a>"
+root
+  block <html>
+    block <body>
+      inline <a>
+
+#case 5
+#data "<!DOCTYPE html>"
+root
+  block <html>
+    block <body>
+
+#case 6
+#data "&lang;&rang;"
+root
+  block <html>
+    block <body>
+      text "⟨⟩"
+
+#case 7
+#data "&apos;"
+root
+  block <html>
+    block <body>
+      text "'"
+
+#case 8
+#data "&ImaginaryI;"
+root
+  block <html>
+    block <body>
+      text "ⅈ"
+
+#case 9
+#data "&Kopf;"
+root
+  block <html>
+    block <body>
+      text "𝕂"
+
+#case 10
+#data "&notinva;"
+root
+  block <html>
+    block <body>
+      text "∉"
+
+#case 11
+#data "<?import namespace=\"foo\" implementation=\"#bar\">"
+root
+  block <html>
+    block <body>
+
+#case 12
+#data "<!--foo--bar-->"
+root
+  block <html>
+    block <body>
+
+#case 13
+#data "<svg><title><![CDATA[x]]>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+
+#case 14
+#data "<svg><foreignobject><![CDATA[x]]>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        inline <foreignObject>
+          text "x"
+
+#case 15
+#data "<svg><foreignobject><p><![CDATA[x]]>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <svg> first
+          inline <foreignObject> first
+      block <p>
+      block (anonymous)
+        inline <svg> last
+          inline <foreignObject> last
+
+#case 16
+#data "<math><![CDATA[x]]>"
+root
+  block <html>
+    block <body>
+      inline <math>
+        text "x"
+
+#case 17
+#data "<math><mtext><![CDATA[x]]>"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <mtext>
+          text "x"
+
+#case 18
+#data "<math><mtext><i><![CDATA[x]]>"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <mtext>
+          inline <i>
+
+#case 19
+#data "<![CDATA[x]]>"
+root
+  block <html>
+    block <body>
+
+#case 20
+#data "<textarea><!--</textarea>--></textarea>"
+root
+  block <html>
+    block <body>
+      replaced <textarea> inline TextArea { cols: 20, rows: 2 }
+      text "-->"
+
+#case 21
+#data "<textarea><!--</textarea>-->"
+root
+  block <html>
+    block <body>
+      replaced <textarea> inline TextArea { cols: 20, rows: 2 }
+      text "-->"
+
+#case 22
+#data "<style><!--</style>--></style>"
+root
+  block <html>
+    block <body>
+      text "-->"
+
+#case 23
+#data "<style><!--</style>-->"
+root
+  block <html>
+    block <body>
+      text "-->"
+
+#case 24
+#data "<ul><li>A </li> <li>B</li></ul>"
+root
+  block <html>
+    block <body>
+      block <ul>
+        block <li>
+          marker <li> "• "
+          text "A "
+        block <li>
+          marker <li> "• "
+          text "B"
+
+#case 25
+#data "<table><form><input type=hidden><input></form><div></div></table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        replaced <input> inline Input(Text { chars: 20 })
+      block <div>
+      table-wrapper <table>
+        table <table>
+
+#case 26
+#data "<i>A<b>B<p></i>C</b>D"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <i>
+          text "A"
+          inline <b>
+            text "B"
+        inline <b>
+      block <p>
+        inline <b>
+          inline <i>
+          text "C"
+        text "D"
+
+#case 27
+#data "<div></div>"
+root
+  block <html>
+    block <body>
+      block <div>
+
+#case 28
+#data "<svg></svg>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+
+#case 29
+#data "<math></math>"
+root
+  block <html>
+    block <body>
+      inline <math>
+

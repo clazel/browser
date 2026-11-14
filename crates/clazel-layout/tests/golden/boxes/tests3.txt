@@ -1,0 +1,188 @@
+#case 0
+#data "<head></head><style></style>"
+root
+  block <html>
+    block <body>
+
+#case 1
+#data "<head></head><script></script>"
+root
+  block <html>
+    block <body>
+
+#case 2
+#data "<head></head><!-- --><style></style><!-- --><script></script>"
+root
+  block <html>
+    block <body>
+
+#case 3
+#data "<head></head><!-- -->x<style></style><!-- --><script></script>"
+root
+  block <html>
+    block <body>
+      text "x"
+
+#case 4
+#data "<!DOCTYPE html><html><head></head><body><pre>\n</pre></body></html>"
+root
+  block <html>
+    block <body>
+      block <pre>
+
+#case 5
+#data "<!DOCTYPE html><html><head></head><body><pre>\nfoo</pre></body></html>"
+root
+  block <html>
+    block <body>
+      block <pre>
+        text "foo" white-space=Pre
+
+#case 6
+#data "<!DOCTYPE html><html><head></head><body><pre>\n\nfoo</pre></body></html>"
+root
+  block <html>
+    block <body>
+      block <pre>
+        text "\nfoo" white-space=Pre
+
+#case 7
+#data "<!DOCTYPE html><html><head></head><body><pre>\nfoo\n</pre></body></html>"
+root
+  block <html>
+    block <body>
+      block <pre>
+        text "foo\n" white-space=Pre
+
+#case 8
+#data "<!DOCTYPE html><html><head></head><body><pre>x</pre><span>\n</span></body></html>"
+root
+  block <html>
+    block <body>
+      block <pre>
+        text "x" white-space=Pre
+      block (anonymous)
+        inline <span>
+
+#case 9
+#data "<!DOCTYPE html><html><head></head><body><pre>x\ny</pre></body></html>"
+root
+  block <html>
+    block <body>
+      block <pre>
+        text "x\ny" white-space=Pre
+
+#case 10
+#data "<!DOCTYPE html><html><head></head><body><pre>x<div>\ny</pre></body></html>"
+root
+  block <html>
+    block <body>
+      block <pre>
+        block (anonymous)
+          text "x" white-space=Pre
+        block <div>
+          text "\ny" white-space=Pre
+
+#case 11
+#data "<!DOCTYPE html><pre>&#x0a;&#x0a;A</pre>"
+root
+  block <html>
+    block <body>
+      block <pre>
+        text "\nA" white-space=Pre
+
+#case 12
+#data "<!DOCTYPE html><HTML><META><HEAD></HEAD></HTML>"
+root
+  block <html>
+    block <body>
+
+#case 13
+#data "<!DOCTYPE html><HTML><HEAD><head></HEAD></HTML>"
+root
+  block <html>
+    block <body>
+
+#case 14
+#data "<textarea>foo<span>bar</span><i>baz"
+root
+  block <html>
+    block <body>
+      replaced <textarea> inline TextArea { cols: 20, rows: 2 }
+
+#case 15
+#data "<title>foo<span>bar</em><i>baz"
+root
+  block <html>
+    block <body>
+
+#case 16
+#data "<!DOCTYPE html><textarea>\n</textarea>"
+root
+  block <html>
+    block <body>
+      replaced <textarea> inline TextArea { cols: 20, rows: 2 }
+
+#case 17
+#data "<!DOCTYPE html><textarea>\nfoo</textarea>"
+root
+  block <html>
+    block <body>
+      replaced <textarea> inline TextArea { cols: 20, rows: 2 }
+
+#case 18
+#data "<!DOCTYPE html><textarea>\n\nfoo</textarea>"
+root
+  block <html>
+    block <body>
+      replaced <textarea> inline TextArea { cols: 20, rows: 2 }
+
+#case 19
+#data "<!DOCTYPE html><html><head></head><body><ul><li><div><p><li></ul></body></html>"
+root
+  block <html>
+    block <body>
+      block <ul>
+        block <li>
+          marker <li> "• "
+          block <div>
+            block <p>
+        block <li>
+          marker <li> "• "
+
+#case 20
+#data "<!doctype html><nobr><nobr><nobr>"
+root
+  block <html>
+    block <body>
+      inline <nobr>
+      inline <nobr>
+      inline <nobr>
+
+#case 21
+#data "<!doctype html><nobr><nobr></nobr><nobr>"
+root
+  block <html>
+    block <body>
+      inline <nobr>
+      inline <nobr>
+      inline <nobr>
+
+#case 22
+#data "<!doctype html><html><body><p><table></table></body></html>"
+root
+  block <html>
+    block <body>
+      block <p>
+      table-wrapper <table>
+        table <table>
+
+#case 23
+#data "<p><table></table>"
+root
+  block <html>
+    block <body>
+      block <p>
+        table-wrapper <table>
+          table <table>
+

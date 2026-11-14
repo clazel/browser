@@ -1,0 +1,130 @@
+#case 0
+#data "FOO<!-- BAR -->BAZ"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO" x=8 base=22.859375 w=37.34375
+        text "BAZ" x=45.34375 base=22.859375 w=34.4375
+
+#case 1
+#data "FOO<!-- BAR --!>BAZ"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO" x=8 base=22.859375 w=37.34375
+        text "BAZ" x=45.34375 base=22.859375 w=34.4375
+
+#case 2
+#data "FOO<!-- BAR --! >BAZ"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO" x=8 base=22.859375 w=37.34375
+
+#case 3
+#data "FOO<!-- BAR --!\n>BAZ"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO" x=8 base=22.859375 w=37.34375
+
+#case 4
+#data "FOO<!-- BAR --   >BAZ"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO" x=8 base=22.859375 w=37.34375
+
+#case 5
+#data "FOO<!-- BAR -- <QUX> -- MUX -->BAZ"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO" x=8 base=22.859375 w=37.34375
+        text "BAZ" x=45.34375 base=22.859375 w=34.4375
+
+#case 6
+#data "FOO<!-- BAR -- <QUX> -- MUX --!>BAZ"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO" x=8 base=22.859375 w=37.34375
+        text "BAZ" x=45.34375 base=22.859375 w=34.4375
+
+#case 7
+#data "FOO<!-- BAR -- <QUX> -- MUX -- >BAZ"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO" x=8 base=22.859375 w=37.34375
+
+#case 8
+#data "FOO<!---->BAZ"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO" x=8 base=22.859375 w=37.34375
+        text "BAZ" x=45.34375 base=22.859375 w=34.4375
+
+#case 9
+#data "FOO<!--->BAZ"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO" x=8 base=22.859375 w=37.34375
+        text "BAZ" x=45.34375 base=22.859375 w=34.4375
+
+#case 10
+#data "FOO<!-->BAZ"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO" x=8 base=22.859375 w=37.34375
+        text "BAZ" x=45.34375 base=22.859375 w=34.4375
+
+#case 11
+#data "<?xml version=\"1.0\">Hi"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "Hi" x=8 base=22.859375 w=19.078125
+
+#case 12
+#data "<?xml version=\"1.0\">"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 13
+#data "<?xml version"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 14
+#data "FOO<!----->BAZ"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO" x=8 base=22.859375 w=37.34375
+        text "BAZ" x=45.34375 base=22.859375 w=34.4375
+
+#case 15
+#data "<html><!-- comment --><title>Comment before head</title>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+

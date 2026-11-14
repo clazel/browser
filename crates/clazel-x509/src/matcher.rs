@@ -54,7 +54,17 @@ mod tests {
     fn public_suffix_wildcards_are_blocked_with_psl_exceptions_applied() {
         assert!(!dns_id_matches(b"evil.co.uk", b"*.co.uk"));
         assert!(!dns_id_matches(b"evil.com", b"*.com"));
-        assert!(!dns_id_matches(b"evil.github.io", b"*.github.io"));
+        // Only the ICANN section counts (spec.rs): one operator holds these.
+        assert!(dns_id_matches(b"pages.github.io", b"*.github.io"));
+        assert!(dns_id_matches(
+            b"raw.githubusercontent.com",
+            b"*.githubusercontent.com"
+        ));
+        assert!(dns_id_matches(b"a.s3.amazonaws.com", b"*.s3.amazonaws.com"));
+        // A private entry takes nothing away: its parent stays refused.
+        assert!(!dns_id_matches(b"github.io", b"*.io"));
+        // No rule for the top-level label: the default `*` rule refuses it.
+        assert!(!dns_id_matches(b"a.intranet", b"*.intranet"));
         assert!(dns_id_matches(b"shop.example.co.uk", b"*.example.co.uk"));
         // PSL exception rules lower the public suffix to ck and kawasaki.jp.
         assert!(dns_id_matches(b"shop.www.ck", b"*.www.ck"));

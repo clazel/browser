@@ -70,6 +70,11 @@ impl View for Action {
     }
 }
 
+/// §7.1: an `Established` is one the key agreement may start from.
+pub open spec fn established_ok(a: &Action) -> bool {
+    match a { Action::Established(e) => e.wf(), _ => true }
+}
+
 /// Convert a constructor result to its abstract result.
 pub open spec fn start_view<C: Crypto>(out: Result<(Bootstrap<C>, Action), u8>)
     -> Result<(super::bootstrap_spec::State, super::bootstrap_spec::Action), u8> {
@@ -117,6 +122,7 @@ pub struct Bootstrap<C: Crypto> {
     compatibility: bool,
     reassembler: Reassembler,
     framer: Buffer,
+    retained: Vec<Vec<u8>>,
 }
 impl<C: Crypto> Bootstrap<C> {
     pub closed spec fn state(&self) -> super::bootstrap_spec::State {
@@ -126,6 +132,7 @@ impl<C: Crypto> Bootstrap<C> {
             pending_flight: self.pending_flight@,
             compatibility: self.compatibility,
             reassembly: self.reassembler@,
+            retained: crate::reassemble::views_bytes(self.retained@),
         }
     }
 }
@@ -148,7 +155,9 @@ impl<C: Crypto> Bootstrap<C> {
 
     fn fail(&mut self, alert: u8) -> (out: Action)
         requires old(self).wf(),
-        ensures final(self).wf(), final(self).state().mode == super::bootstrap_spec::Mode::Failed,
+        ensures
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).wf(), final(self).state().mode == super::bootstrap_spec::Mode::Failed,
             final(self).state().hello is None, final(self).state().pending_flight.len() == 0,
             final(self).state().compatibility == old(self).state().compatibility,
             final(self).state().reassembly == old(self).state().reassembly,
@@ -160,16 +169,20 @@ impl<C: Crypto> Bootstrap<C> {
         self.mode = Mode::Failed;
         self.hello = None;
         self.pending_flight.clear();
+        self.retained = Vec::new();
         proof {
             reveal(Bootstrap::state);
             assert(self.pending_flight@ =~= Seq::<u8>::empty());
+            assert(crate::reassemble::views_bytes(self.retained@) =~= Seq::<Seq<u8>>::empty());
         }
         Action::Fail(alert)
     }
 
     fn close(&mut self) -> (out: Action)
         requires old(self).wf(),
-        ensures final(self).wf(), final(self).state().mode == super::bootstrap_spec::Mode::Closed,
+        ensures
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).wf(), final(self).state().mode == super::bootstrap_spec::Mode::Closed,
             final(self).state().hello is None, final(self).state().pending_flight.len() == 0,
             final(self).state() == super::bootstrap_lemmas::terminal(old(self).state(),
                 super::bootstrap_spec::Mode::Closed, old(self).state().reassembly),
@@ -179,16 +192,20 @@ impl<C: Crypto> Bootstrap<C> {
         self.mode = Mode::Closed;
         self.hello = None;
         self.pending_flight.clear();
+        self.retained = Vec::new();
         proof {
             reveal(Bootstrap::state);
             assert(self.pending_flight@ =~= Seq::<u8>::empty());
+            assert(crate::reassemble::views_bytes(self.retained@) =~= Seq::<Seq<u8>>::empty());
         }
         Action::Close
     }
 
     fn peer_alert(&mut self, description: u8) -> (out: Action)
         requires old(self).wf(),
-        ensures final(self).wf(), final(self).state().mode == super::bootstrap_spec::Mode::Failed,
+        ensures
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).wf(), final(self).state().mode == super::bootstrap_spec::Mode::Failed,
             final(self).state().hello is None, final(self).state().pending_flight.len() == 0,
             final(self).state() == super::bootstrap_lemmas::terminal(old(self).state(),
                 super::bootstrap_spec::Mode::Failed, old(self).state().reassembly),
@@ -198,31 +215,38 @@ impl<C: Crypto> Bootstrap<C> {
         self.mode = Mode::Failed;
         self.hello = None;
         self.pending_flight.clear();
+        self.retained = Vec::new();
         proof {
             reveal(Bootstrap::state);
             assert(self.pending_flight@ =~= Seq::<u8>::empty());
+            assert(crate::reassemble::views_bytes(self.retained@) =~= Seq::<Seq<u8>>::empty());
         }
         Action::Alert(description)
     }
 
     fn handle_messages(&mut self, messages: Vec<Vec<u8>>) -> (out: Action)
         requires old(self).wf(), old(self).mode == Mode::AwaitServerHello,
-        ensures final(self).wf(), final(self).framer@ == old(self).framer@,
-            (final(self).state(), out@) == super::bootstrap_lemmas::after_messages(
+        ensures
+            established_ok(&out),
+
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).wf(), final(self).framer@ == old(self).framer@,
+            (final(self).state(), out@) == super::bootstrap_spec::receive_messages(
                 old(self).crypto_functions().hash, old(self).state(),
                 crate::reassemble::views_bytes(messages@)),
     {
         let ghost before = self.state();
+        let ghost all = crate::reassemble::views_bytes(messages@);
+        let mut messages = messages;
         if messages.is_empty() {
+            proof { assert(all.len() == 0); }
             return Action::None;
         }
-        if messages.len() != 1 || !self.reassembler.at_message_boundary() {
-            return self.fail(crate::spec::UNEXPECTED_MESSAGE);
+        let message = messages.remove(0);
+        proof {
+            assert(message@ == all[0]);
+            assert(crate::reassemble::views_bytes(messages@) =~= all.skip(1));
         }
-        let message = match messages.first() {
-            Some(message) => message,
-            None => return self.fail(crate::spec::INTERNAL_ERROR),
-        };
         let first = match message.first() {
             Some(first) => *first,
             None => return self.fail(crate::spec::UNEXPECTED_MESSAGE),
@@ -231,17 +255,30 @@ impl<C: Crypto> Bootstrap<C> {
             return self.fail(crate::spec::UNEXPECTED_MESSAGE);
         }
         let body = vstd::slice::slice_subrange(message.as_slice(), crate::spec::HANDSHAKE_HEADER, message.len());
-        proof { assert(body@ =~= message@.skip(crate::spec::HANDSHAKE_HEADER as int)); }
-        self.handle_hello_message(body)
+        proof {
+            assert(body@ =~= message@.skip(crate::spec::HANDSHAKE_HEADER as int));
+            super::bootstrap_lemmas::lemma_receive_messages(self.crypto_functions().hash, before, all);
+        }
+        self.handle_hello_message(body, messages)
     }
 
-    fn handle_hello_message(&mut self, body: &[u8]) -> (out: Action)
+    fn handle_hello_message(&mut self, body: &[u8], rest: Vec<Vec<u8>>) -> (out: Action)
         requires old(self).wf(), old(self).mode == Mode::AwaitServerHello,
-        ensures final(self).wf(), final(self).framer@ == old(self).framer@,
+        ensures
+            established_ok(&out),
+
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).wf(), final(self).framer@ == old(self).framer@,
             (final(self).state(), out@) == super::bootstrap_lemmas::hello_step(
-                old(self).crypto_functions().hash, old(self).state(), body@),
+                old(self).crypto_functions().hash, old(self).state(), body@,
+                crate::reassemble::views_bytes(rest@)),
     {
         let ghost before = self.state();
+        let aligned = rest.is_empty() && self.reassembler.at_message_boundary();
+        proof {
+            reveal(Bootstrap::state);
+            assert(aligned == (crate::reassemble::views_bytes(rest@).len() == 0 && before.reassembly.buf.len() == 0));
+        }
         let hello = match self.hello.take() {
             Some(hello) => hello,
             None => return self.fail(crate::spec::INTERNAL_ERROR),
@@ -266,7 +303,9 @@ impl<C: Crypto> Bootstrap<C> {
             Err(alert) => {
                 self.mode = Mode::Failed;
                 self.pending_flight.clear();
+                self.retained = Vec::new();
                 proof {
+                    assert(crate::reassemble::views_bytes(self.retained@) =~= Seq::<Seq<u8>>::empty());
                     reveal(Bootstrap::wf);
                     reveal(Bootstrap::state);
                     reveal(super::bootstrap_spec::wf);
@@ -278,8 +317,26 @@ impl<C: Crypto> Bootstrap<C> {
                 Action::Fail(alert)
             },
             Ok(Outcome::Established(established)) => {
+                if !aligned {
+                    self.mode = Mode::Failed;
+                    self.pending_flight.clear();
+                    self.retained = Vec::new();
+                    proof {
+                        reveal(Bootstrap::wf);
+                        reveal(Bootstrap::state);
+                        reveal(super::bootstrap_spec::wf);
+                        assert(self.pending_flight@ =~= Seq::<u8>::empty());
+                        assert(crate::reassemble::views_bytes(self.retained@) =~= Seq::<Seq<u8>>::empty());
+                        let ghost after = self.state();
+                        assert(after == super::bootstrap_lemmas::terminal(before,
+                            super::bootstrap_spec::Mode::Failed, before.reassembly));
+                    }
+                    return Action::Fail(crate::spec::UNEXPECTED_MESSAGE);
+                }
                 self.mode = Mode::Established;
+                self.retained = Vec::new();
                 proof {
+                    assert(crate::reassemble::views_bytes(self.retained@) =~= Seq::<Seq<u8>>::empty());
                     reveal(Bootstrap::wf);
                     reveal(Bootstrap::state);
                     reveal(super::bootstrap_spec::wf);
@@ -301,6 +358,7 @@ impl<C: Crypto> Bootstrap<C> {
                 self.pending_flight = vstd::slice::slice_to_vec(wire.as_slice());
                 self.hello = Some(next);
                 self.mode = Mode::AwaitClientHello2Send;
+                self.retained = rest;
                 proof {
                     reveal(Bootstrap::wf);
                     reveal(Bootstrap::state);
@@ -315,11 +373,15 @@ impl<C: Crypto> Bootstrap<C> {
 
     fn handle_alert(&mut self, alert: Alert) -> (out: Action)
         requires old(self).wf(), old(self).mode == Mode::AwaitServerHello,
-        ensures final(self).wf(), final(self).framer@ == old(self).framer@,
+        ensures
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).wf(), final(self).framer@ == old(self).framer@,
             (final(self).state(), out@) == if alert.description == crate::spec::CLOSE_NOTIFY {
                 (super::bootstrap_lemmas::terminal(old(self).state(),
                     super::bootstrap_spec::Mode::Closed, old(self).state().reassembly),
                     super::bootstrap_spec::Action::Close)
+            } else if alert.description == crate::spec::USER_CANCELED {
+                (old(self).state(), super::bootstrap_spec::Action::None)
             } else {
                 (super::bootstrap_lemmas::terminal(old(self).state(),
                     super::bootstrap_spec::Mode::Failed, old(self).state().reassembly),
@@ -328,6 +390,8 @@ impl<C: Crypto> Bootstrap<C> {
     {
         if alert.description == crate::spec::CLOSE_NOTIFY {
             self.close()
+        } else if alert.description == crate::spec::USER_CANCELED {
+            Action::None
         } else {
             self.peer_alert(alert.description)
         }
@@ -336,7 +400,11 @@ impl<C: Crypto> Bootstrap<C> {
     fn handle_handshake(&mut self, bytes: &[u8]) -> (out: Action)
         requires old(self).wf(), old(self).mode == Mode::AwaitServerHello,
             bytes.len() <= crate::spec::MAX_PLAINTEXT,
-        ensures final(self).wf(), final(self).framer@ == old(self).framer@,
+        ensures
+            established_ok(&out),
+
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).wf(), final(self).framer@ == old(self).framer@,
             (final(self).state(), out@) == super::bootstrap_lemmas::fragment_step(
                 old(self).crypto_functions().hash, old(self).state(), bytes@),
     {
@@ -382,7 +450,9 @@ impl<C: Crypto> Bootstrap<C> {
     fn handle_alert_record(&mut self, bytes: &[u8]) -> (out: Action)
         requires old(self).wf(), old(self).mode == Mode::AwaitServerHello,
             bytes.len() <= crate::spec::MAX_PLAINTEXT, bytes.len() != 0,
-        ensures final(self).wf(), final(self).framer@ == old(self).framer@,
+        ensures
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).wf(), final(self).framer@ == old(self).framer@,
             (final(self).state(), out@) == match crate::spec::read_alert(bytes@) {
                 Some(alert) => super::bootstrap_lemmas::alert_step(old(self).state(),
                     alert.level, alert.description),
@@ -436,7 +506,11 @@ impl<C: Crypto> Bootstrap<C> {
 
     fn handle_record(&mut self, wire: &[u8]) -> (out: Action)
         requires old(self).wf(), old(self).mode == Mode::AwaitServerHello,
-        ensures final(self).wf(), final(self).framer@ == old(self).framer@,
+        ensures
+            established_ok(&out),
+
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).wf(), final(self).framer@ == old(self).framer@,
             (final(self).state(), out@) == super::bootstrap_lemmas::record_step(
                 old(self).crypto_functions().hash, old(self).state(), wire@),
     {
@@ -473,6 +547,11 @@ impl<C: Crypto> Bootstrap<C> {
     /// Start with a fresh ClientHello and return the exact plaintext record to send.
     pub fn start(config: Config, crypto: C) -> (out: Result<(Self, Action), u8>)
         ensures super::bootstrap_contract::start_ensures(config@, start_view(out)),
+            match out {
+                Ok((b, _)) => b.wf() && b.crypto_functions() == crypto.functions()
+                    && b@.1 == crate::connection::framing_spec::new(),
+                Err(_) => true,
+            },
     {
         let ghost config_view = config@;
         let compatibility = !config.session_id.is_empty();
@@ -491,7 +570,9 @@ impl<C: Crypto> Bootstrap<C> {
             assert(flight.len() < 65536);
         }
         let mut wire = Vec::new();
-        crate::record::write_plaintext(&mut wire, crate::spec::CT_HANDSHAKE, 0x0303, flight.as_slice());
+        // RFC 8446 §5.1: "a record containing an initial ClientHello SHOULD
+        // have version 0x0301".
+        crate::record::write_plaintext(&mut wire, crate::spec::CT_HANDSHAKE, 0x0301, flight.as_slice());
         let pending = vstd::slice::slice_to_vec(wire.as_slice());
         let driver = Bootstrap {
             crypto,
@@ -501,8 +582,10 @@ impl<C: Crypto> Bootstrap<C> {
             compatibility,
             reassembler: Reassembler::new(),
             framer: Buffer::new_plaintext(),
+            retained: Vec::new(),
         };
         proof {
+            assert(crate::reassemble::views_bytes(driver.retained@) =~= Seq::<Seq<u8>>::empty());
             assert(super::bootstrap_contract::start_ensures(config_view,
                 Ok((driver@.0, super::bootstrap_spec::Action::Send(wire@)))));
         }
@@ -510,21 +593,27 @@ impl<C: Crypto> Bootstrap<C> {
     }
 
     /// Accept only the exact send completion associated with the current flight.
+    /// After ClientHello2, the messages retained from the HelloRetryRequest's
+    /// record are processed (RFC 8446 §5.1).
     pub fn acknowledge_send(&mut self, sent: &[u8]) -> (out: Action)
         requires old(self).wf(),
-        ensures final(self).wf(),
-            super::bootstrap_contract::acknowledge_ensures(old(self).state(), sent@,
-                (final(self).state(), out@)),
+        ensures
+            established_ok(&out),
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).wf(), final(self)@.1 == old(self)@.1,
+            super::bootstrap_contract::acknowledge_ensures(old(self).crypto_functions().hash, old(self)@.0,
+                sent@, (final(self)@.0, out@)),
     {
         let ghost before = self.state();
+        let ghost hash = self.crypto_functions().hash;
         let ghost mode0 = self.mode;
         let ghost pending0 = self.pending_flight@;
         proof {
             reveal(Bootstrap::state);
-            assert(before.mode == self.mode@);
+            reveal(Bootstrap::wf);
             assert(before.mode == mode0@);
-            assert(before.pending_flight == self.pending_flight@);
             assert(before.pending_flight == pending0);
+            assert(super::bootstrap_spec::wf(before));
         }
         let mode_ok = matches!(self.mode, Mode::AwaitClientHelloSend | Mode::AwaitClientHello2Send);
         let same = crate::handshake::bytes_eq(sent, self.pending_flight.as_slice());
@@ -536,58 +625,61 @@ impl<C: Crypto> Bootstrap<C> {
             let action = self.fail(crate::spec::INTERNAL_ERROR);
             proof {
                 reveal(Bootstrap::state);
-                reveal(super::bootstrap_spec::acknowledge);
-                assert(super::bootstrap_spec::wf(before));
-                assert(action@ == super::bootstrap_spec::Action::Fail(crate::spec::INTERNAL_ERROR));
-                let ghost expected = super::bootstrap_spec::acknowledge(before, sent@);
-                let ghost after = self.state();
                 if !mode_ok {
                     assert(before.mode != super::bootstrap_spec::Mode::AwaitClientHelloSend
                         && before.mode != super::bootstrap_spec::Mode::AwaitClientHello2Send);
                 } else {
-                    assert(sent@ != pending0);
                     assert(sent@ != before.pending_flight);
                 }
-                assert(after.mode == expected.0.mode);
-                assert(after.hello == expected.0.hello);
-                assert(after.pending_flight == expected.0.pending_flight);
-                assert(after.compatibility == expected.0.compatibility);
-                assert(after.reassembly == expected.0.reassembly);
-                assert(after == expected.0);
-                assert(action@ == super::bootstrap_spec::acknowledge(before, sent@).1);
+                let ghost expected = super::bootstrap_spec::acknowledge(hash, before, sent@);
+                assert(self.state() == expected.0);
+                assert(action@ == expected.1);
+                reveal(super::bootstrap_contract::acknowledge_ensures);
             }
             return action;
         }
-        proof {
-            assert(sent@ == before.pending_flight);
-        }
         self.pending_flight.clear();
         self.mode = Mode::AwaitServerHello;
+        let mut retained: Vec<Vec<u8>> = Vec::new();
+        std::mem::swap(&mut retained, &mut self.retained);
         proof {
             reveal(Bootstrap::state);
-            reveal(super::bootstrap_spec::acknowledge);
-            assert(super::bootstrap_spec::wf(before));
-            assert(mode_ok && same);
-            assert(mode0 == Mode::AwaitClientHelloSend || mode0 == Mode::AwaitClientHello2Send);
-            assert(before.mode == super::bootstrap_spec::Mode::AwaitClientHelloSend
-                || before.mode == super::bootstrap_spec::Mode::AwaitClientHello2Send);
-            let ghost expected = super::bootstrap_spec::acknowledge(before, sent@);
-            let ghost after = self.state();
-            assert(after.mode == expected.0.mode);
-            assert(after.hello == expected.0.hello);
-            assert(after.pending_flight == expected.0.pending_flight);
-            assert(after.compatibility == expected.0.compatibility);
-            assert(after.reassembly == expected.0.reassembly);
-            assert(after == expected.0);
-            assert(super::bootstrap_spec::Action::None == super::bootstrap_spec::acknowledge(before, sent@).1);
+            reveal(Bootstrap::wf);
+            reveal(super::bootstrap_spec::wf);
+            assert(self.pending_flight@ =~= Seq::<u8>::empty());
+            assert(crate::reassemble::views_bytes(self.retained@) =~= Seq::<Seq<u8>>::empty());
+            let ghost s1 = super::bootstrap_spec::State { mode: super::bootstrap_spec::Mode::AwaitServerHello,
+                hello: before.hello, pending_flight: seq![], retained: seq![],
+                compatibility: before.compatibility, reassembly: before.reassembly };
+            assert(self.state() == s1);
+            assert(crate::reassemble::views_bytes(retained@) == before.retained);
+            if mode0 == Mode::AwaitClientHelloSend {
+                assert(before.retained.len() == 0);
+                assert(crate::reassemble::views_bytes(retained@) =~= Seq::<Seq<u8>>::empty());
+                assert(super::bootstrap_spec::acknowledge(hash, before, sent@)
+                    == super::bootstrap_spec::receive_messages(hash, s1, crate::reassemble::views_bytes(retained@)));
+            } else {
+                assert(super::bootstrap_spec::acknowledge(hash, before, sent@)
+                    == super::bootstrap_spec::receive_messages(hash, s1, crate::reassemble::views_bytes(retained@)));
+            }
+            assert(self.wf());
         }
-        Action::None
+        let action = self.handle_messages(retained);
+        proof {
+            reveal(super::bootstrap_contract::acknowledge_ensures);
+            super::bootstrap_lemmas::lemma_acknowledge_outcome(hash, before, sent@);
+        }
+        action
     }
 
     /// Consume no more than one plaintext record prefix; the caller resubmits the suffix.
     pub fn feed(&mut self, input: &[u8]) -> (out: (usize, Action))
         requires old(self).wf(),
-        ensures final(self).wf(), out.0 <= input.len(),
+        ensures
+            established_ok(&out.1),
+
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).wf(), out.0 <= input.len(),
             super::bootstrap_contract::feed_exec_ensures(old(self).crypto_functions().hash, old(self)@.0,
                 old(self)@.1, input@, out.0 as nat, out.1@, final(self)@.0, final(self)@.1),
     {
@@ -626,11 +718,16 @@ impl<C: Crypto> Bootstrap<C> {
         (consumed, action)
     }
 
-    /// EOF before final ServerHello is a truncation failure.
+    /// RFC 8446 §6.1: the end of the transport before the final ServerHello
+    /// (and before the server's close_notify) is a truncation failure; its
+    /// caller answers it with our close_notify (`bootstrap_spec`).
     pub fn eof(&mut self) -> (out: Action)
         requires old(self).wf(),
-        ensures final(self).wf(),
+        ensures
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).wf(),
             super::bootstrap_contract::eof_ensures(old(self).state(), final(self).state(), out@),
+            super::bootstrap_contract::eof_ensures(old(self)@.0, final(self)@.0, out@),
     {
         let ghost before = self.state();
         match self.mode {

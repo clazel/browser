@@ -42,12 +42,10 @@ proof fn lemma_header_shape(t: u8, v: u16, len: nat)
 
 /// A record we write is read back as the record, whatever follows it, as
 /// long as it is one the standard allows: an `alert` or `handshake`
-/// fragment of 1 to 2^14 bytes, with a version [`legacy_record_version_ok`]
-/// accepts.
+/// fragment of 1 to 2^14 bytes, with any version (§5.1: it is ignored).
 pub proof fn lemma_read_record_write_plaintext(t: u8, v: u16, fragment: Seq<u8>, rest: Seq<u8>)
     requires
         t == CT_ALERT || t == CT_HANDSHAKE,
-        legacy_record_version_ok(v, false),
         1 <= fragment.len() <= MAX_PLAINTEXT,
     ensures
         read_record(write_plaintext(t, v, fragment) + rest, false) == Read::Done(
@@ -73,7 +71,6 @@ pub proof fn lemma_read_record_write_plaintext(t: u8, v: u16, fragment: Seq<u8>,
 /// server sends it, is read as [`Frame::Ccs`].
 pub proof fn lemma_read_record_ccs(v: u16, rest: Seq<u8>)
     requires
-        legacy_record_version_ok(v, false),
     ensures
         read_record(write_plaintext(CT_CHANGE_CIPHER_SPEC, v, seq![1u8]) + rest, false) == Read::Done(Frame::Ccs, rest),
 {
@@ -95,7 +92,7 @@ pub proof fn lemma_read_record_ccs(v: u16, rest: Seq<u8>)
 /// What [`read_record`] accepts is what the writers write: an unprotected
 /// `alert` or `handshake` record is [`write_plaintext`] of its fragment, a
 /// change_cipher_spec is that of `[1]`, and a protected record's header
-/// is exactly the additional data of §5.2 for its length. In every case
+/// is the header as received (its version is not checked, §5.1), which is §5.2's additional data. In every case
 /// the input is the record's bytes and the rest.
 pub proof fn lemma_read_record_canonical(b: Seq<u8>, protected: bool)
     ensures
@@ -105,14 +102,14 @@ pub proof fn lemma_read_record_canonical(b: Seq<u8>, protected: bool)
                     &&& !protected
                     &&& (rec.ctype == CT_ALERT || rec.ctype == CT_HANDSHAKE)
                     &&& 1 <= rec.fragment.len() <= MAX_PLAINTEXT
-                    &&& exists|v: u16| legacy_record_version_ok(v, protected) && b =~= write_plaintext(
+                    &&& exists|v: u16| b =~= write_plaintext(
                         rec.ctype,
                         v,
                         rec.fragment,
                     ) + rest
                 },
                 Frame::Ccs => {
-                    exists|v: u16| legacy_record_version_ok(v, protected) && b =~= write_plaintext(
+                    exists|v: u16| b =~= write_plaintext(
                         CT_CHANGE_CIPHER_SPEC,
                         v,
                         seq![1u8],
@@ -121,7 +118,7 @@ pub proof fn lemma_read_record_canonical(b: Seq<u8>, protected: bool)
                 Frame::Protected(h, body) => {
                     &&& protected
                     &&& body.len() <= MAX_CIPHERTEXT
-                    &&& h =~= additional_data(body.len())
+                    &&& h =~= write_record_header(CT_APPLICATION_DATA, be_value(b.subrange(1, 3)) as u16, body.len())
                     &&& b =~= h + body + rest
                 },
             },
@@ -166,7 +163,7 @@ pub proof fn lemma_read_record_canonical(b: Seq<u8>, protected: bool)
                 assert(b =~= write_plaintext(CT_CHANGE_CIPHER_SPEC, v, seq![1u8]) + rest);
             },
             Frame::Protected(h, bd) => {
-                assert(h =~= additional_data(bd.len()));
+assert(h =~= write_record_header(CT_APPLICATION_DATA, v, bd.len()));
             },
         }
     }
