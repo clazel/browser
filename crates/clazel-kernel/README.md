@@ -170,6 +170,137 @@ the new event, outputs and message. The ownership and limits proofs rest on
 an invariant of reachable states (`subfetch_tables_wf`: each key once, each
 serial below its renderer's counter).
 
+## The GPU crash policy (phase-5.md item 5.17c)
+
+What `GpuReady { software }`, `GpuRefused` and a GPU process's exit mean, as
+the item's four rules over the host's new event `GpuExited`, with the numbers
+stated once in `src/spec.rs`: `gpu_window` (300 seconds), `gpu_exits` and
+`gpu_sites` (three).
+
+- **Events**:
+  - `GpuExited { id }`, the host's: the GPU process of renderer `id` exited.
+  - `GpuSoftware`, the host's `--gpu=software`: every tab in software.
+  - `GpuSiteExit { lock }`, which the host never sends. It is the
+    declassified part of another domain's exit.
+- **Outputs**:
+  - `GpuStopped { tab, url }`: rule 4's notice.
+  - `GpuAllSoftware`: to the host, once.
+- **Policy**: `Policy::GpuSoftware`.
+- **State**: `GpuState`, with a record per renderer, the every-tab bit, and
+  the two most recent sites.
+- **No message is added.**
+
+### Decisions (taken here, from the plan's goals; each is also in `src/spec.rs`)
+
+1. **`GpuExited { id }`, not the item's `{ tab }`.** By id, an exit of a
+   replaced process (a cross-origin navigation) names no live renderer and
+   is ignored.
+2. **One record per renderer**, tagged with its id and lock, as 5.18's
+   titles are. A renderer with none has a process just started.
+   - Records are not removed when their renderer goes: ids are never reused,
+     so a stale one is never read. The table grows by one small record per
+     renderer that ever had a GPU message or exit (listed below).
+3. **Per origin, not per site.** Rule 2 holds "until it navigates to another
+   site". Here it holds until the tab's renderer is replaced, which a
+   navigation to another origin of the same site also does.
+4. **Time is the kernel's `now`**, in seconds from the host's `Tick`.
+5. **The mode.**
+   - A new tab's or new renderer's GPU process is `Spawn { id, Gpu }`, as in
+     5.18. It runs in the run's mode: hardware until the kernel says
+     `GpuAllSoftware`, after which the host starts every `Policy::Gpu` in
+     software.
+   - A restart names its mode: `GpuSoftware`, or `Gpu` only while not every
+     tab is in software.
+   - So 5.18's spawn outputs are unchanged.
+6. **Rule 1, the restart**: a new GPU process for the renderer, and the tab's
+   viewport again, which makes the renderer send its whole list again. The
+   renderer cannot receive a new descriptor, so the host keeps the GPU
+   process's end of the list channel and hands it to the new process.
+7. **Rules 2 and 4 count a record's last two exits in its mode**: the third
+   within 300 seconds moves hardware to software, or stops software. A change
+   of mode clears them.
+8. **Rule 3 counts hardware exits while drawing, by site** (the renderer's
+   domain), keeping the two most recent distinct sites.
+9. **A refusal is the machine's.**
+   - An exit before `GpuReady` in hardware puts every tab in software and is
+     not counted by site.
+   - `GpuRefused` itself changes nothing: the refused process exits next,
+     and that exit is the refusal.
+   - An exit before `GpuReady` in software is rule 4.
+10. **No fallback (macOS) is the host's.** A host with no software driver
+    starts nothing for `GpuSoftware` and draws the notice itself.
+11. **`GpuReady { software: true }` from a hardware start** marks the record
+    software.
+12. **A frame paints only from a running record**, that is, after the
+    current process's `GpuReady`. So a late frame of an exited process is
+    never shown.
+13. **A reload does not try again** (rule 4's last sentence is **not
+    built**). A stopped tab starts again when its renderer is replaced or the
+    tab is reopened. A restart on a same-origin commit would add outputs to
+    the commit path that every navigation theorem covers.
+14. **Noninterference.**
+    - A `GpuExited` belongs to its renderer's domain.
+    - Its declassified part is exactly what it does to the state every tab
+      shares: `GpuSoftware` for a refusal, `GpuSiteExit { lock }` for a
+      hardware exit while drawing (the site is counted, and every tab goes to
+      software if that makes three).
+    - Nothing else of another domain's exit reaches an observer
+      (`lemma_gpu_declassify`).
+    - The relation between the runs gains the shared bit and sites, and the
+      observer's records.
+    - That shared count is the one channel between sites, and the item
+      specifies it. It is stated as the declassified part, not hidden.
+
+### Theorems
+
+All are proven, and `Cargo.toml` lists them.
+
+- **`theorem_gpu_exit_contained`**: a GPU exit changes only the crash
+  policy's state, and no record but its renderer's. Every output is for that
+  renderer or its tab, or is the host's `GpuAllSoftware`.
+- **`theorem_gpu_restart_bounded`** (300 and two exits written out): a
+  restart in the same mode happens only if the record does not hold two
+  exits, the older within 300 seconds, and the record then holds this exit
+  and the newer one. A mode change records none.
+- **`theorem_site_cannot_demote_others`**, with `theorem_gpu_sites_wf_kept`:
+  every tab goes to software only through one of these:
+  - `GpuSoftware`;
+  - a refusal before `GpuReady`;
+  - a hardware exit while two other, distinct sites have exits within 300
+    seconds.
+- **`theorem_paint_after_restart`**: after `GpuExited` the record is not
+  running, and a non-running record's frames never paint.
+- **`theorem_channel_only_own_tab`**, restated with the restart.
+- Every earlier theorem is re-proven over the new events and outputs,
+  noninterference included.
+
+### Which copy of the policy is the specification
+
+**This one, `src/spec.rs`.** `clazel-gpu`'s `src/policy.rs` (item 5.17c, on
+branch `claude/gpu-fallback-cfed1c`, which this branch does not contain) was
+built first, for the kernel to take over. The two differ:
+- per tab there, per renderer here;
+- milliseconds there, the kernel's seconds here;
+- a `Config` with `fallback` there; here the host has no fallback;
+- a reload event there; none here.
+
+So they cannot be shown to agree as they are. **Recommended: remove
+`policy.rs` and its Kani harnesses from `clazel-gpu` on the branch that joins
+the two**, leaving `clazel-gpu` the start answer (`GpuReady`/`GpuRefused`)
+and the blocklist. The kernel must not depend on `clazel-gpu`, and does not.
+
+### Not done or not verified
+
+- **The host does not act on any of it yet.** It runs in text mode and
+  starts no GPU process (5.18's decision 2), so `GpuExited`,
+  `Policy::GpuSoftware`, `GpuAllSoftware` and `GpuStopped` are unused until
+  the window (5.20 to 5.23). Keeping the list channel's GPU end for restarts
+  is the host's, and is not built.
+- **Rule 4's "reloading tries once more"** is not built (decision 13).
+- **Records are not removed** when their renderer goes (decision 2).
+- **The real-process test** (a GPU process killed mid-frame) waits for the
+  GPU process binary and the host.
+
 ## Licence
 
 MIT, as in the repository's [LICENSE](../../LICENSE).

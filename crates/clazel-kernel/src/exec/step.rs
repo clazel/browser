@@ -1340,6 +1340,7 @@ pub fn net_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRec
                     let titles = s.titles;
                     let subfetches = s.subfetches;
                     let subcounts = s.subcounts;
+                    let gpu = s.gpu;
                     let mut renderers = renderers;
                     let ghost old_renderers = renderers@;
                     let rec = renderers.remove(i);
@@ -1354,7 +1355,7 @@ pub fn net_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRec
                             proof {
                                 assert(false);
                             }
-                            (StateRecord { renderers, jar, storage, next_id, conns, next_conn, now, viewports, titles, subfetches, subcounts }, no_outputs())
+                            (StateRecord { renderers, jar, storage, next_id, conns, next_conn, now, viewports, titles, subfetches, subcounts, gpu }, no_outputs())
                         },
                         Some(nav) => {
                             let nurl = nav.url;
@@ -1399,7 +1400,7 @@ pub fn net_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRec
                                 lemma_ok_remove::<F>(old_renderers, i as int);
                                 lemma_ok_insert::<F>(old_renderers.remove(i as int), i as int, rec2);
                             }
-                            let s1 = StateRecord { renderers, jar: jar1, storage, next_id, conns: conns1, next_conn, now, viewports, titles, subfetches, subcounts };
+                            let s1 = StateRecord { renderers, jar: jar1, storage, next_id, conns: conns1, next_conn, now, viewports, titles, subfetches, subcounts, gpu };
                             carry_out_exec::<U, F>(urls, s1, ctab, &partition, Some(conn), actions)
                         },
                     }
@@ -1705,6 +1706,9 @@ pub fn step_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRe
         EventRecord::Input { tab, kind, x, y, negative, delta, key } => {
             super::surfaces::user_input_exec(s, *tab, (*kind, *x, *y, *negative, *delta, *key))
         },
+        EventRecord::GpuExited { id } => super::gpu::gpu_exited_exec(s, *id),
+        EventRecord::GpuSoftware => super::gpu::gpu_software_exec(s),
+        EventRecord::GpuSiteExit { lock } => super::gpu::gpu_site_exit_lock_exec(s, lock),
     };
     proof {
         clazel_cookie::storage::exec::lemma_jar_view_in_range(out.0.jar@);

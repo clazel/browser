@@ -156,7 +156,13 @@ impl Host {
                 // Item 5.18: this host runs in text mode and starts no GPU
                 // process (the window is items 5.20 to 5.23), so there is
                 // none to start or write to, and no frame arrives to paint.
-                OutputRecord::SpawnGpu { .. } | OutputRecord::ToGpu { .. } => {}
+                // Item 5.17c: likewise no GPU process to restart, and no
+                // window to draw the notice in.
+                OutputRecord::SpawnGpu { .. }
+                | OutputRecord::SpawnGpuSoftware { .. }
+                | OutputRecord::ToGpu { .. }
+                | OutputRecord::GpuStopped { .. }
+                | OutputRecord::GpuAllSoftware => {}
                 // Item 5.19: no renderer sends `FetchStyle` before item 5.20,
                 // so no sub-fetch connection is asked for yet.
                 OutputRecord::SubConnect { .. }

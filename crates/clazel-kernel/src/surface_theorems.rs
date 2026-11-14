@@ -132,6 +132,8 @@ proof fn lemma_subfetch_events_no_surface(rules: Seq<clazel_psl::spec::Rule>, ur
 }
 
 /// Every event but a GPU process's frame paints nothing.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(60)]
 proof fn lemma_no_paint_but_gpu(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
     requires
         reachable(rules, urls, fetch, s),
@@ -161,6 +163,12 @@ proof fn lemma_no_paint_but_gpu(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns
                     }
                 }
             }
+        },
+        Event::GpuExited { id } => {
+            crate::gpu_theorems::theorem_gpu_exit_contained(rules, urls, fetch, s, id);
+        },
+        Event::GpuSoftware | Event::GpuSiteExit { .. } => {
+            crate::gpu_theorems::lemma_channel_gpu_events(rules, urls, fetch, s, e);
         },
         Event::NavigateTab { tab, url } => {
             lemma_begin_no_surface(rules, urls, fetch, s, tab, url);
@@ -556,6 +564,10 @@ pub proof fn theorem_channel_only_own_tab(rules: Seq<clazel_psl::spec::Rule>, ur
         },
         Event::Tick { .. } | Event::SubNet { .. } => {
             lemma_subfetch_events_no_surface(rules, urls, fetch, s, e);
+        },
+        // Item 5.17c.
+        Event::GpuExited { .. } | Event::GpuSoftware | Event::GpuSiteExit { .. } => {
+            crate::gpu_theorems::lemma_channel_gpu_events(rules, urls, fetch, s, e);
         },
         _ => {
             lemma_channel_surface(rules, urls, fetch, s, e);
