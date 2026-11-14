@@ -85,23 +85,23 @@ root (anonymous) 0,0 800x600
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      table-wrapper <table> 8,8 2x2 m=0,782,0,0
-        table <table> 8,8 2x2
-          row-group <tbody> 8,8 2x2
-            row <tr> 8,8 2x2
-              cell <td> 8,8 2x2 p=1,1,1,1
+      table-wrapper <table> 8,8 6x6 m=0,778,0,0
+        table <table> 8,8 6x6
+          row-group <tbody> 10,10 2x2
+            row <tr> 10,10 2x2
+              cell <td> 10,10 2x2 p=1,1,1,1
 
 #case 15
 #data "<table><caption><td>"
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      table-wrapper <table> 8,8 2x2 m=0,782,0,0
-        caption <caption> 8,8 2x0
-        table <table> 8,8 2x2
-          row-group <tbody> 8,8 2x2
-            row <tr> 8,8 2x2
-              cell <td> 8,8 2x2 p=1,1,1,1
+      table-wrapper <table> 8,8 6x6 m=0,778,0,0
+        caption <caption> 8,8 6x0
+        table <table> 8,8 6x6
+          row-group <tbody> 10,10 2x2
+            row <tr> 10,10 2x2
+              cell <td> 10,10 2x2 p=1,1,1,1
 
 #case 16
 #data "<table><caption><div>"
@@ -156,11 +156,11 @@ root (anonymous) 0,0 800x600
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      table-wrapper <table> 8,8 2x2 m=0,782,0,0
-        table <table> 8,8 2x2
-          row-group <tbody> 8,8 2x2
-            row <tr> 8,8 2x2
-              cell <td> 8,8 2x2 p=1,1,1,1
+      table-wrapper <table> 8,8 6x6 m=0,778,0,0
+        table <table> 8,8 6x6
+          row-group <tbody> 10,10 2x2
+            row <tr> 10,10 2x2
+              cell <td> 10,10 2x2 p=1,1,1,1
 
 #case 25
 #data "<table><colgroup>foo"
@@ -210,11 +210,11 @@ root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
       block <div> 8,8 784x0
-      table-wrapper <table> 8,8 2x2 m=0,782,0,0
-        table <table> 8,8 2x2
-          row-group <tbody> 8,8 2x2
-            row <tr> 8,8 2x2
-              cell <td> 8,8 2x2 p=1,1,1,1
+      table-wrapper <table> 8,8 6x6 m=0,778,0,0
+        table <table> 8,8 6x6
+          row-group <tbody> 10,10 2x2
+            row <tr> 10,10 2x2
+              cell <td> 10,10 2x2 p=1,1,1,1
 
 #case 37
 #data "<table><tbody></thead>"

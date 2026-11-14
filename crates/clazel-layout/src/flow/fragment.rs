@@ -14,8 +14,8 @@
 //!   Scrolling is the renderer's (item 5.20) and does not change them.
 //! - **One [`BoxFragment`] per box that is laid out as a box**: the root
 //!   (the initial containing block), block-level boxes, atomic inlines
-//!   (inline blocks, replaced elements, inline table wrappers), markers, the
-//!   table placeholder's boxes (`flow/mod.rs`), and inline boxes, whose
+//!   (inline blocks, replaced elements, inline table wrappers), markers,
+//!   every box of a table (item 5.15), and inline boxes, whose
 //!   fragment is the bounding rectangle of their pieces with their used
 //!   margins, borders and padding. Text runs have none: their glyphs are in
 //!   the line boxes. A box that is not laid out has `None`.

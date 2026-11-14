@@ -4,9 +4,9 @@ Layout for [Clazel](../../README.md), a web browser whose parsers of untrusted
 input carry machine-checked proofs (Phase 5, `docs/phases/phase-5.md`). So far:
 font matching (item 5.10, `src/fonts/`), shaping (item 5.11, `src/shape/`),
 white space and line breaking (item 5.12, `src/text/`), the box tree (item
-5.13, `src/boxes/`), and block and inline formatting (item 5.14,
-`src/flow/`). Table formatting and the display list (items 5.15 and 5.16)
-are not started.
+5.13, `src/boxes/`), block and inline formatting (item 5.14, `src/flow/`),
+and table layout (item 5.15, `src/table/`). The display list (item 5.16) is
+not started.
 
 Its dependencies are `clazel-font`, which reads every byte of a font,
 `clazel-style`, whose computed values the line breaker and the box tree read,
@@ -316,14 +316,8 @@ source.
   half an em. `sub` lowers by a fifth of the parent's font size and `super`
   raises by a third (CSS 2.1 leaves both to the user agent). The leading's
   odd 1/64 px goes below.
-- **Tables are item 5.15's; until then a placeholder**: the table wrapper is
-  a block box with the table's margins and `width` (shrink-to-fit when
-  `auto`), the table box a block filling it with the table's borders and
-  padding, row groups, rows, cells and captions blocks in their parent's
-  flow one below the other (cells and captions as block formatting context
-  roots), and columns empty boxes. `border-spacing`, column widths, cell
-  `vertical-align` and `colspan` have no effect yet. Every box in a table is
-  laid out and its text readable.
+- **Tables are item 5.15's** (below). Until it, a placeholder laid their
+  boxes out as blocks one below the other.
 - **Markers** (item 5.13: always `outside`) are a line of their own text in
   the list item's font, ending at its content edge, on its first baseline
   (or at its content top without one).
@@ -368,7 +362,7 @@ source.
   and radio buttons 13px square. Their baseline is the bottom margin edge
   (CSS 2.1's rule); engines align a text control's text instead (listed).
 - **Block formatting context roots**: the root element, inline blocks,
-  table cells, captions, the placeholder's table boxes, and blocks whose
+  table cells, captions, table wrapper and table boxes, and blocks whose
   `overflow` is not `visible` unless propagated to the viewport (the root
   element's always is; the `body`'s when the root's is `visible`).
 - **CSS 2.1 §8.3.1's definition and bullets disagree**; the bullets are
@@ -391,10 +385,152 @@ source.
 ### Not covered by 5.14
 
 Floats, positioning and clearance (not in the subset); table layout (item
-5.15; the placeholder above); `overflow` clipping and painting (item 5.16);
+5.15, below); `overflow` clipping and painting (item 5.16);
 bidirectional reordering (Phase 8); `letter-spacing`, `word-spacing`,
 justification, hyphenation; vertical writing modes; `box-sizing` (not in the
 subset).
+
+## Table layout (item 5.15)
+
+`src/table/`, against CSS 2.1 (the Recommendation of 7 June 2011) §17.2 to
+§17.5.4 and §17.6.1; CSS Tables 3, the Editor's Draft source at
+w3c/csswg-drafts commit `e13fe879` (8 October 2026), for the automatic
+layout ("computing column measures", "distributing width to columns"), the
+grid's track merging and the row heights; HTML at commit `4c54fae1`
+§4.9.12.1 "Forming a table"; and the Quirks Mode Standard at commit
+`5a06deb5` §3.8 to §3.10 and §3.13. Tables are laid out by 5.14's walk,
+which calls this module's functions:
+
+1. `grid.rs`, once per table box: HTML's "forming a table" over the box
+   tree (CSS Tables 3 §3.3.1 has boxes act as their HTML equivalents), with
+   `colspan` clamped to 1000 and `rowspan` to 65534, `rowspan=0` growing to
+   the end of its group, and the header and footer groups moved; then
+   §3.3.2's track merging.
+2. `measure.rs`: each cell's outer min-content and max-content widths and
+   percentage contribution from its content's (5.14's `intrinsic.rs`), each
+   column's measures with spanning cells by increasing span, GRIDMIN and
+   GRIDMAX, which `intrinsic.rs` uses as the table box's own sizes, and
+   §3.9.1's used width, which the walk gives the wrapper box.
+3. `distribute.rs`, when the walk enters the table box: §3.9.3's four sizing
+   guesses and the excess rules, or CSS 2.1 §17.5.2.1's fixed layout; every
+   proportional share is exact (`Share`: the pieces add up to the total).
+   Each cell is then laid out by 5.14's block container code, as a block
+   formatting context root, at the width of the columns it spans.
+4. `rows.rs`, when the walk leaves it: each row's height and baseline
+   (§17.5.3), the rows of spanning cells, the table's `height`, and each
+   cell's extra top and bottom padding for its `vertical-align`; the walk
+   then places every cell, row, row group, column and column group (§3.11).
+
+`state.rs` states each state (HTML's forming variables, the share, a
+column's measures, the width input, a row's extent), its invariant and each
+step's contract; it was committed before the implementation. Nothing
+recurses: tables nested 100,000 deep lay out in 1.5 s (debug build). Each
+file lists its modelling choices at its top; `src/table/mod.rs` lists those
+that cross files.
+
+### Decisions taken for 5.15
+
+Taken from the plan while the maintainer was away; each is also in the
+source.
+
+- **The walk lays tables out; `table/` is functions over plain data.** A
+  table box's frame is its cells' parent frame; cells are new `Role::Cell`
+  boxes laid out at a given width, rows and row groups `Role::Track`, both
+  placed by their table. 5.14's flow code is not forked.
+- **The grid is HTML's**, with attributes only from an HTML element of the
+  same type (`colspan`, `rowspan` on `td`/`th`, `span` on
+  `col`/`colgroup`). The **row group order** is CSS 2.1 §17.2's (the first
+  header group first, the first footer group last), since boxes have
+  display types. Column groups after the first row are skipped, as HTML's
+  algorithm does; a `table-column` directly in a table is a group of its
+  own.
+- **Hostile input: at most 65,536 columns.** HTML has no bound, and `<col
+  span=1000>` is a thousand columns in fifteen bytes. A cell past the bound
+  goes in the last column (overlapping, which HTML's model and CSS 2.1
+  §17.5 allow), so every cell is laid out. Rows are `u64` and implied rows
+  are never visited one by one. Per-column arrays live only while one
+  table's widths are computed.
+- **Track merging** (§3.3.2) merges a track into the previous one when no
+  cell starts or ends between them and no box defines it (a column box; a
+  column group with no columns defines its `span`'s columns); columns only
+  in auto layout.
+- **Missing cells get no box** (an anonymous cell would change nothing laid
+  out).
+- **A table's `width`, `min-width` and `height` are its border box's**
+  (HTML's `table { box-sizing: border-box }`; CSS 2.1 §17.6.1). `max-width`
+  on a table is not applied (§3.9.1 does not read it).
+- **ERRATA:** GRIDMIN, GRIDMAX and the assignable width include the table's
+  borders and padding (§3.8.2's "table intrinsic offsets"), which §3.9.1,
+  read literally, leaves out; and a spanning cell over columns with no
+  max-content width so far shares its width equally, where §3.8.3's ratio is
+  undefined. Both "Reported upstream: not yet".
+- **An auto-width table's available width** is its containing block's less
+  its margins that are not `auto` (shrink-to-fit's); §3.9.1 says the
+  containing block width.
+- **Formula readings**: `min('max-width', 'width')` with `width: auto`
+  drops the term; a spanning cell uses the "constrained column" formula when
+  its own `width` is a length; a column's max-content width is kept at least
+  its min-content width after each span.
+- **Fixed layout** only when `table-layout: fixed` and `width` is not
+  `auto`; first-row cells' widths are outer widths; percentages are of the
+  assignable width; every column not sized by a column box or a first-row
+  cell is a "remaining" one; excess per §3.9.3.2's fixed-mode rules.
+- **Percentage columns do not widen an auto-width table** past GRIDMAX
+  (§3.9.1 does not count them; engines do). To check against item 5.25.
+- **Row heights**: a row's `height`, its single-row cells' `height` (content
+  box plus edges; border box in quirks mode, §3.13), and its cells' needs;
+  row groups' `height` ignored; spanning cells' lacking height shared in
+  proportion to their rows' heights, by increasing span. The table's
+  `height` goes to auto-height rows equally, else to all (§3.10.5 with no
+  second pass).
+- **Shares are exact 64-bit arithmetic** (no `i128`): weights summing past
+  2^31 (over 33 million px, or 21 columns of 100%) are shifted down until
+  they fit, so the shares follow the shifted weights; they still add up to
+  the total.
+- **No second pass** of cell content (§3.10.6): percentage heights inside
+  cells are `auto`.
+- **`vertical-align`**: `baseline`, `top`, `middle`, `bottom`; the rest are
+  `baseline`. The space a cell does not fill is its extra padding, kept in
+  the fragment's padding (CSS 2.1 §17.5.3's wording), so a cell's content
+  box is where its content is.
+- **Baselines**: a cell's is its first line's (through nested blocks and
+  tables, as 5.14 finds it) or its content bottom; a table's is its first
+  row's; an inline table's is its table box's.
+- **Separated borders only.** Decision 5.0(b) takes collapsing borders "if
+  time allows"; not done. `border-collapse: collapse` is laid out separated
+  with no spacing.
+- **Captions** are above (`caption-side` is not in the subset) and as wide as
+  the table; CAPMIN widens it. **`visibility: collapse`** has no effect.
+- **A cell's percentage padding** is of its table's content width.
+- **The quirks**, quirks mode only: §3.8 (no soft wrap around an `img` in
+  an auto-width cell's own min-content), §3.9 (`nowrap` cell's `width` as its
+  minimum), §3.10 (an empty table: height 0, no border), §3.13 (a cell's
+  `height` is its border box's).
+- **An inline table's wrapper** holds no inline content (its table box is
+  inline-level); 5.14 took it for an inline formatting context, which the
+  placeholder hid. Fixed here.
+- **A consequence to check against item 5.25's reference engine**: 5.14
+  carries HTML's "align descendants" from `center` through tables, as HTML
+  §15.2 reads it, so on the HN-shaped page the comment table is centred in
+  its cell. Engines implement `center` as an inherited `text-align` that the
+  quirks-mode sheet resets on `table`, which would leave it at the left.
+- **The plan's section numbers**: CSS 2.1's (†) were checked against the
+  Recommendation, the Quirks Mode Standard's against the pinned text, HTML's
+  "forming a table" is §4.9.12.1 at the pinned commit, and CSS Tables 3's
+  numbers were counted from the pinned source's headings (each citation gives
+  the anchor too).
+- **Target tier stays 0**; the Kani harnesses below were added as the brief
+  asked.
+- **WPT reftests wait for item 5.25**: `css/CSS2/tables` and `css-tables`
+  are reftests (most of `css-tables` needs JavaScript); not vendored or run
+  here.
+
+### Not covered by 5.15
+
+The collapsing border model (§17.6.2); `caption-side: bottom`;
+`visibility: collapse`; `empty-cells`; the second layout pass of cell
+content (percentage heights in cells); row and column backgrounds and
+painting (item 5.16).
 
 ## Verification
 
@@ -666,7 +802,7 @@ Miri: every test this item adds, one test per process with `cargo
 
 ### Block and inline formatting (item 5.14)
 
-Unit tests (`src/flow/tests.rs`, 36): documents parsed by the tree builder,
+Unit tests (`src/flow/tests.rs`, 35): documents parsed by the tree builder,
 cascaded by item 5.7 with a user agent sheet of `display` values only, laid
 out with `flow::BoxFont` (every glyph an em square, Ahem's metrics), each
 expected position worked out by hand in a comment: each of §8.3.1's
@@ -683,8 +819,9 @@ half-leading, the strut with §3.4, §3.3 (a line holding a 1px image is 1px
 high in quirks mode, 10px in no-quirks mode), each `vertical-align` value;
 empty line boxes; wrapping and `br`; `text-align` (with `justify` and an
 overflowing line) and `text-indent` (with §16.1's anonymous block rule);
-inline boxes' edges; markers; the table placeholder; and a tree 100,000
-blocks deep (300 under Miri).
+inline boxes' edges; markers; and a tree 100,000 blocks deep (300 under
+Miri). (A 36th, for 5.14's table placeholder, was removed with it in item
+5.15.)
 
 Golden test (`tests/golden_flow.rs`): the 1,761 html5lib document cases
 item 5.13's golden test builds, and two pages of our own
@@ -770,3 +907,97 @@ costs about *n* × *L*; item 5.26's hostile pages will measure it.
 **WPT**: the `css/CSS2/` reftests the item names (`normal-flow`,
 `margin-padding-clear`, `box-display`, `linebox`, `visudet`, `visuren`) wait
 for the rendering harness of item 5.25.
+
+### Table layout (item 5.15)
+
+Unit tests (`src/table/tests.rs`, 30), as for 5.14: the real cascade with a
+`display`-only user agent sheet and `BoxFont`, each expected position worked
+out by hand in a comment. The grid: border spacing, `colspan`, track
+merging, a spanning cell over empty columns (the ERRATA entry), `rowspan`
+sharing its height, `rowspan=0`, header and footer groups, 70 cells of
+`colspan=1000` against the column bound. Column widths: excess by
+max-content with exact 1/64 px rounding, percent columns, pixel columns
+before auto ones, interpolation between two guesses, the border-box
+`width`, `min-width`, CAPMIN, auto margins, fixed layout and its excess.
+Heights: every `vertical-align`, baselines across font sizes, a row's and a
+cell's `height` in both modes, a table's `height` to its auto rows, an
+inline table's baseline. HTML's `<tr align=center>`; the quirks §3.8, §3.9,
+§3.10 and §3.13; tables nested 100,000 deep (50 under Miri); the clamps, the
+exact share, and the 64-bit floors against 128-bit arithmetic (200,000
+pseudo-random cases, 200 under Miri).
+
+Golden test (5.14's `tests/golden_flow.rs`): the 23 fixtures whose
+documents hold tables changed, and no other; 1,763 documents, 8,121
+fragments, 1,086 line boxes and 1,175 glyph runs. The HN-shaped page was
+checked by hand against the rules.
+
+Kani harnesses (`src/table/proofs.rs`), measured as for 5.14 (one at a
+time, own process group, 20 minutes and 8 GB caps, the shared lock; memory
+is the larger of the 5 s samples and `time -l`'s peak):
+
+| Harness | Kind | What it checks | Time | Peak memory |
+|---------|------|----------------|------|-------------|
+| `spans_any` | any input | HTML's `colspan` (1 to 1000) and `rowspan` (1 to 65534) clamps; downward growth exactly for 0 | 3 s | 0.28 GB |
+| `start_row_any` | step, every size | the row exists, `xcurrent` is 0, the invariant kept | 3 s | 0.28 GB |
+| `place_any` | step, every size | the cell lies inside the grid at the free column (the last one at the bound), cut only at the bound; `xcurrent` at its right | 3 s | 0.29 GB |
+| `end_row_any` | step, every size | `ycurrent` moves down one within `yheight` | 3 s | 0.28 GB |
+| `end_group_any` | step, every size | `ycurrent` reaches `yheight` | 3 s | 0.28 GB |
+| `widen_any` | step, every size | a column's measures: invariant kept, monotone, at least each contribution | 4 s | 0.40 GB |
+| `cell_outer_any` | any input | a cell's outer measures: invariant, min-content covers the offsets and the content | 4 s | 0.40 GB |
+| `used_width_any` | any input | §3.9.1's two cases, at least the used min-width | 3 s | 0.28 GB |
+| `table_intrinsic_any` | any input | a table's min-content width at most its max-content width | 3 s | 0.28 GB |
+| `row_extent_any` | step, every size | a row's extent: invariant kept, covers each cell and its `height` | 3 s | 0.28 GB |
+| `cell_offsets_any` | any input (sum within 2^22 px) | the extra padding is never negative and fills the rows exactly | 4 s | 0.40 GB |
+| `percent_of_small` | up to 100% of up to 2^14 px | a percentage of a length is within the length | 106 s | 0.29 GB |
+
+5.14's `flow::proofs::role_any` was run again for the new roles (3 s,
+0.28 GB).
+
+**Proved for every size**: forming a table's steps (`grid::start_row`,
+`place`, `end_row`, `end_group`), `measure::widen` and the row extent's
+steps (`rows::add_baseline`, `add_other`, `row_height`). **For every
+input**: `grid::spans`, `measure::cell_outer`, `used_width`,
+`table_intrinsic`, `rows::cell_offsets`. **Only bounded**:
+`distribute::percent_of`.
+
+**Removed at the cap** (20 minutes, CBMC's 64-bit division):
+`percent_of_any` (unbounded inputs; replaced by `percent_of_small`), and
+`share_step_any` (any total, weights up to 2^31) with its shrunk
+`share_step_small` (weights up to 2^12, totals up to 2^20). **The running
+share (`distribute::share_step`, `state::floor_share`) is not proved by
+Kani**: its division is by a symbolic divisor. Before the caps it used
+128-bit arithmetic; it is now exact 64-bit arithmetic by quotient and
+remainder, checked natively against 128-bit arithmetic.
+
+**Not covered by Kani**: the drivers (`grid::form`, `measure::columns`
+and `span_contribution`, `distribute::auto_widths`, `excess_shares`,
+`fixed_widths`, `rows::rows`, `fill`, `tops`, and the walk's
+`enter_table`, `enter_cell`, `exit_table`), whose state is the box tree, the
+grid and vectors of columns and rows; the unit and golden tests run them.
+CI has not run these harnesses yet.
+
+Miri: every test this item adds and the golden test, one test per process
+with `cargo +nightly-2026-08-21 miri test -p clazel-layout … --exact -Z
+unstable-options --report-time`, each capped at 10 minutes and run alone
+under the shared lock, never beside Kani. Times are on Miri's clock; all 31
+passed.
+
+| Test | Miri time |
+|------|-----------|
+| `golden_flow::golden_fragment_trees` (case 0 only, no page) | 109.4 s |
+| `table::tests::the_column_bound_keeps_every_cell` (70 cells, 65,536 columns) | 98.2 s |
+| `table::tests::fixed_layout` (three documents) | 31.8 s |
+| `table::tests::row_and_cell_heights` (three documents) | 26.5 s |
+| `table::tests::nowrap_cell_width_quirk` | 22.0 s |
+| `table::tests::images_do_not_wrap_in_quirks_cells` | 20.6 s |
+| `table::tests::nested_tables_lay_out_without_recursion` (50 levels under Miri) | 15.0 s |
+| the other 24 tests in `table::tests` | under 15 s each |
+
+**Performance**: layout is linear in nested tables (2,000 deep: 4 ms in a
+release build), but `clazel-style`'s cascade of such a document is
+quadratic (2,000 deep: 3.7 s; 4,000: 14.8 s), outside this item; for item
+5.26's hostile pages. Grid formation skips covered slots a cell at a time,
+so a row costs at most the row-spanning cells to its left.
+
+**WPT**: `css/CSS2/tables` and the `css-tables` reftests wait for item
+5.25's rendering harness.

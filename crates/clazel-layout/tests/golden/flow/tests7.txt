@@ -59,18 +59,18 @@ root (anonymous) 0,0 800x600
 #case 8
 #data "<!doctype html><table>X<tr><td><table> <meta></table></table>"
 root (anonymous) 0,0 800x600
-  block <html> 0,0 800x36.640625
-    block <body> 8,8 784x20.640625 m=8,8,8,8
+  block <html> 0,0 800x40.640625
+    block <body> 8,8 784x24.640625 m=8,8,8,8
       block (anonymous) 8,8 784x18.640625
         line 8,8 784x18.640625 base=22.859375
           text "X" x=8 base=22.859375 w=11.390625
-      table-wrapper <table> 8,26.640625 2x2 m=0,782,0,0
-        table <table> 8,26.640625 2x2
-          row-group <tbody> 8,26.640625 2x2
-            row <tr> 8,26.640625 2x2
-              cell <td> 8,26.640625 2x2 p=1,1,1,1
-                table-wrapper <table> 9,27.640625 0x0
-                  table <table> 9,27.640625 0x0
+      table-wrapper <table> 8,26.640625 6x6 m=0,778,0,0
+        table <table> 8,26.640625 6x6
+          row-group <tbody> 10,28.640625 2x2
+            row <tr> 10,28.640625 2x2
+              cell <td> 10,28.640625 2x2 p=1,1,1,1
+                table-wrapper <table> 11,29.640625 0x0
+                  table <table> 11,29.640625 0x0
 
 #case 9
 #data "<!doctype html><html> <head>"
@@ -249,11 +249,11 @@ root (anonymous) 0,0 800x600
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      table-wrapper <table> 8,8 2x2 m=0,782,0,0
-        table <table> 8,8 2x2
-          row-group <tbody> 8,8 2x2
-            row <tr> 8,8 2x2
-              cell <td> 8,8 2x2 p=1,1,1,1
+      table-wrapper <table> 8,8 6x6 m=0,778,0,0
+        table <table> 8,8 6x6
+          row-group <tbody> 10,10 2x2
+            row <tr> 10,10 2x2
+              cell <td> 10,10 2x2 p=1,1,1,1
 
 #case 30
 #data "<table><b><tr><td>aaa</td></tr>bbb</table>ccc"
@@ -264,17 +264,17 @@ root (anonymous) 0,0 800x600
         line 8,8 784x18.640625 base=22.859375
           inline <b> 8,8 30.734375x18.640625 start end
           text "bbb" x=8 base=22.859375 w=30.734375
-      table-wrapper <table> 8,26.640625 30.625x20.640625 m=0,753.375,0,0
-        table <table> 8,26.640625 30.625x20.640625
-          row-group <tbody> 8,26.640625 30.625x20.640625
-            row <tr> 8,26.640625 30.625x20.640625
-              cell <td> 8,26.640625 30.625x20.640625 p=1,1,1,1
-                line 9,27.640625 28.625x18.640625 base=42.5
-                  text "aaa" x=9 base=42.5 w=28.625
-      block (anonymous) 8,47.28125 784x18.640625
-        line 8,47.28125 784x18.640625 base=62.140625
-          inline <b> 8,47.28125 26.890625x18.640625 start end
-          text "ccc" x=8 base=62.140625 w=26.890625
+      table-wrapper <table> 8,26.640625 34.625x24.640625 m=0,749.375,0,0
+        table <table> 8,26.640625 34.625x24.640625
+          row-group <tbody> 10,28.640625 30.625x20.640625
+            row <tr> 10,28.640625 30.625x20.640625
+              cell <td> 10,28.640625 30.625x20.640625 p=1,1,1,1
+                line 11,29.640625 28.625x18.640625 base=44.5
+                  text "aaa" x=11 base=44.5 w=28.625
+      block (anonymous) 8,51.28125 784x18.640625
+        line 8,51.28125 784x18.640625 base=66.140625
+          inline <b> 8,51.28125 26.890625x18.640625 start end
+          text "ccc" x=8 base=66.140625 w=26.890625
 
 #case 31
 #data "A<table><tr> B</tr> B</table>"

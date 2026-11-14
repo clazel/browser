@@ -11,8 +11,10 @@
 //! table and anonymous boxes and text runs (CSS 2.1 §9.2, §17.2.1); and
 //! block and inline formatting (item 5.14, [`flow`]): the box tree laid out
 //! into a fragment tree of positioned boxes and line boxes (CSS 2.1 §8.3.1,
-//! §9.4, §10, §16.1, §16.2, the Quirks Mode Standard's §3.3 to §3.7). Table
-//! formatting and the display list (items 5.15 and 5.16) are not started.
+//! §9.4, §10, §16.1, §16.2, the Quirks Mode Standard's §3.3 to §3.7); and
+//! table layout (item 5.15, [`table`]): the grid, column widths, row
+//! heights and cell alignment of tables (CSS 2.1 §17, CSS Tables 3). The
+//! display list (item 5.16) is not started.
 //!
 //! Tier: see `[package.metadata.clazel]` in `Cargo.toml` and
 //! `docs/VERIFICATION.md`.
@@ -21,4 +23,5 @@ pub mod boxes;
 pub mod flow;
 pub mod fonts;
 pub mod shape;
+pub mod table;
 pub mod text;

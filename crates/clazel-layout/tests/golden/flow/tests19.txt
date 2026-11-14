@@ -826,27 +826,27 @@ root (anonymous) 0,0 800x600
 #case 98
 #data "<!doctype html><table><td><table><i>a<div>b<b>c</i>d"
 root (anonymous) 0,0 800x600
-  block <html> 0,0 800x55.28125
-    block <body> 8,8 784x39.28125 m=8,8,8,8
-      table-wrapper <table> 8,8 31.46875x39.28125 m=0,752.53125,0,0
-        table <table> 8,8 31.46875x39.28125
-          row-group <tbody> 8,8 31.46875x39.28125
-            row <tr> 8,8 31.46875x39.28125
-              cell <td> 8,8 31.46875x39.28125 p=1,1,1,1
-                block (anonymous) 9,9 29.46875x18.640625
-                  line 9,9 29.46875x18.640625 base=23.859375
-                    inline <i> 9,9 9.546875x18.640625 start end
-                    text "a" x=9 base=23.859375 w=9.546875
-                block <div> 9,27.640625 29.46875x18.640625
-                  line 9,27.640625 29.46875x18.640625 base=42.5
-                    inline <i> 9,27.640625 19.21875x18.640625 start end
-                    inline <b> 19.25,27.640625 8.96875x18.640625 start end
-                    inline <b> 28.21875,27.640625 10.25x18.640625 start end
-                    text "b" x=9 base=42.5 w=10.25
-                    text "c" x=19.25 base=42.5 w=8.96875
-                    text "d" x=28.21875 base=42.5 w=10.25
-                table-wrapper <table> 9,46.28125 0x0 m=0,29.46875,0,0
-                  table <table> 9,46.28125 0x0
+  block <html> 0,0 800x59.28125
+    block <body> 8,8 784x43.28125 m=8,8,8,8
+      table-wrapper <table> 8,8 35.46875x43.28125 m=0,748.53125,0,0
+        table <table> 8,8 35.46875x43.28125
+          row-group <tbody> 10,10 31.46875x39.28125
+            row <tr> 10,10 31.46875x39.28125
+              cell <td> 10,10 31.46875x39.28125 p=1,1,1,1
+                block (anonymous) 11,11 29.46875x18.640625
+                  line 11,11 29.46875x18.640625 base=25.859375
+                    inline <i> 11,11 9.546875x18.640625 start end
+                    text "a" x=11 base=25.859375 w=9.546875
+                block <div> 11,29.640625 29.46875x18.640625
+                  line 11,29.640625 29.46875x18.640625 base=44.5
+                    inline <i> 11,29.640625 19.21875x18.640625 start end
+                    inline <b> 21.25,29.640625 8.96875x18.640625 start end
+                    inline <b> 30.21875,29.640625 10.25x18.640625 start end
+                    text "b" x=11 base=44.5 w=10.25
+                    text "c" x=21.25 base=44.5 w=8.96875
+                    text "d" x=30.21875 base=44.5 w=10.25
+                table-wrapper <table> 11,48.28125 0x0 m=0,29.46875,0,0
+                  table <table> 11,48.28125 0x0
 
 #case 99
 #data "<!doctype html><body><bgsound>"
