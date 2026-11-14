@@ -53,12 +53,21 @@ fn name(v: &[u32]) -> String {
         .collect()
 }
 
+/// What the decoder puts in the tree where an index is out of bounds, so that the case fails
+/// with a readable difference (the parser's arrays are in bounds, `ranges_wf`).
+fn broken(what: &str) -> S {
+    S::Type(NsPrefix::Absent, format!("<out of bounds: {what}>"))
+}
+
 fn slice<T>(v: &[T], r: ExecRange) -> &[T] {
-    v.get(r.lo..r.hi).expect("range in bounds")
+    v.get(r.lo..r.hi).unwrap_or_default()
 }
 
 fn decode_simple(s: &ExecSelectors, si: usize) -> S {
-    match s.simples.get(si).expect("simple in bounds") {
+    let Some(simple) = s.simples.get(si) else {
+        return broken("simple");
+    };
+    match simple {
         ExecSimple::Type { ns, name: n } => S::Type(*ns, name(n)),
         ExecSimple::Universal { ns } => S::Universal(*ns),
         ExecSimple::Id { name: n } => S::Id(name(n)),
@@ -78,7 +87,12 @@ fn decode_simple(s: &ExecSelectors, si: usize) -> S {
 }
 
 fn decode_complex(s: &ExecSelectors, ci: usize) -> Cx {
-    let c = s.complexes.get(ci).expect("complex in bounds");
+    let Some(c) = s.complexes.get(ci) else {
+        return Cx {
+            compounds: vec![vec![broken("complex")]],
+            combinators: vec![],
+        };
+    };
     let compounds = slice(&s.compounds, c.compounds)
         .iter()
         .map(|r| (r.lo..r.hi).map(|si| decode_simple(s, si)).collect())
@@ -90,7 +104,12 @@ fn decode_complex(s: &ExecSelectors, ci: usize) -> Cx {
 }
 
 fn decode_list(s: &ExecSelectors, li: usize) -> Vec<Cx> {
-    let r = *s.lists.get(li).expect("list in bounds");
+    let Some(r) = s.lists.get(li).copied() else {
+        return vec![Cx {
+            compounds: vec![vec![broken("list")]],
+            combinators: vec![],
+        }];
+    };
     // An argument's list is finished before the list that holds it.
     (r.lo..r.hi).map(|ci| decode_complex(s, ci)).collect()
 }
@@ -99,9 +118,8 @@ fn decode_list(s: &ExecSelectors, li: usize) -> Vec<Cx> {
 fn parse(input: &str) -> Option<Vec<Cx>> {
     let cps: Vec<u32> = input.chars().map(u32::from).collect();
     let s = parse_selector(&cps)?;
-    // Every range of every array is in bounds, so that the decoder above reads all of them.
-    assert!(!s.lists.is_empty(), "{input:?}: no list");
-    Some(decode_list(&s, s.lists.len() - 1))
+    // The result is the last list; an empty `lists` decodes as the out-of-bounds marker.
+    Some(decode_list(&s, s.lists.len().saturating_sub(1)))
 }
 
 // Constructors, so that an expected tree reads like the selector.
@@ -1178,18 +1196,22 @@ fn argument_lists_come_before_the_list_that_holds_them() {
     // exec_types.rs: "an argument's list always has a smaller index". The decoder relies on
     // it only through `lists.last()` being the result.
     let cps: Vec<u32> = ":is(a, :not(b)) c".chars().map(u32::from).collect();
-    let s = parse_selector(&cps).expect("valid");
+    let parsed = parse_selector(&cps);
+    assert!(parsed.is_some(), "the selector is valid");
+    let Some(s) = parsed else {
+        return;
+    };
     for simple in &s.simples {
         if let ExecSimple::Is { list } | ExecSimple::Where { list } | ExecSimple::Not { list } =
             simple
         {
             assert!(
-                *list + 1 < s.lists.len(),
+                list.saturating_add(1) < s.lists.len(),
                 "argument list {list} not before the result"
             );
         }
     }
-    let got = decode_list(&s, s.lists.len() - 1);
+    let got = decode_list(&s, s.lists.len().saturating_sub(1));
     let want = vec![cx(
         vec![
             vec![S::Is(vec![

@@ -109,7 +109,7 @@ enum Failure {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Class {
     /// `.foo-*`, a tentative proposal in no standard pinned here.
-    ClassPrefix,
+    PrefixedClassName,
     /// `:host`, `:host()`.
     ShadowHost,
     /// `:has()`.
@@ -128,7 +128,7 @@ impl Class {
     /// The number of cases of this class in the WPT table (when all of it is run).
     fn count(self) -> usize {
         match self {
-            Class::ClassPrefix => 11,
+            Class::PrefixedClassName => 11,
             Class::ShadowHost => 15,
             Class::Has => 43,
             Class::ShadowPart => 34,
@@ -140,7 +140,7 @@ impl Class {
 
     fn reason(self) -> &'static str {
         match self {
-            Class::ClassPrefix => {
+            Class::PrefixedClassName => {
                 "class-prefix selectors (.foo-*) are a tentative proposal, in no standard pinned here"
             }
             Class::ShadowHost => ":host() (shadow DOM) is not in the subset",
@@ -212,7 +212,7 @@ fn expected_failure(case: &Case) -> Option<Expected> {
         return None;
     }
     let class = if case.file == "parse-class-prefix.tentative.html" && selector.contains("-*") {
-        Class::ClassPrefix
+        Class::PrefixedClassName
     } else if selector.contains(":host") {
         Class::ShadowHost
     } else if selector.contains(":has(") {
@@ -334,7 +334,7 @@ fn wpt_css_selectors_parsing() {
     if stride == 1 {
         // The table is fixed, so each class holds exactly its cases.
         for class in [
-            Class::ClassPrefix,
+            Class::PrefixedClassName,
             Class::ShadowHost,
             Class::Has,
             Class::ShadowPart,
@@ -356,7 +356,7 @@ fn wpt_css_selectors_parsing() {
             xfail,
             wrong_reason
                 + [
-                    Class::ClassPrefix,
+                    Class::PrefixedClassName,
                     Class::ShadowHost,
                     Class::Has,
                     Class::ShadowPart,

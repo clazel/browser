@@ -27,6 +27,12 @@ fn cps(s: &str) -> Vec<u32> {
     s.chars().map(u32::from).collect()
 }
 
+/// (A, B, C).
+type Triple = (u32, u32, u32);
+
+/// A selector list, the specificity of each of its selectors, and the most specific.
+type ListCase<'a> = (&'a str, &'a [Triple], Triple);
+
 fn abc(a: u32, b: u32, c: u32) -> ExecSpecificity {
     ExecSpecificity { a, b, c }
 }
@@ -35,8 +41,8 @@ fn abc(a: u32, b: u32, c: u32) -> ExecSpecificity {
 /// most specific of them.
 fn specificities(selector: &str) -> Option<(Vec<ExecSpecificity>, ExecSpecificity)> {
     let s = parse_selector(&cps(selector))?;
-    let last = s.lists.len() - 1;
-    let r = s.lists[last];
+    let last = s.lists.len().saturating_sub(1);
+    let r = s.lists.get(last).copied()?;
     let each = (r.lo..r.hi)
         .map(|ci| complex_specificity_of(&s, last, ci))
         .collect();
@@ -138,7 +144,7 @@ fn check(cases: &[(&str, (u32, u32, u32))]) {
 fn each_selector_of_a_list_has_its_own_specificity() {
     // §17: "If the selector is a selector list, this number is calculated for each selector in
     // the list." The list's maximum (what :is() would take) is one of them.
-    let cases: &[(&str, &[(u32, u32, u32)], (u32, u32, u32))] = &[
+    let cases: &[ListCase] = &[
         ("a, #b, .c.d", &[(0, 0, 1), (1, 0, 0), (0, 2, 0)], (1, 0, 0)),
         (
             "a, #b, .c.d, :is(#x, .y) z, ::before",
@@ -210,25 +216,26 @@ fn doubling(levels: usize, join: Join) -> ExecSelectors {
         }],
         lists: vec![ExecRange { lo: 0, hi: 1 }],
     };
-    for k in 1..=levels {
+    for below in 0..levels {
         let first = s.simples.len();
-        s.simples.push(ExecSimple::Is { list: k - 1 });
-        s.simples.push(ExecSimple::Is { list: k - 1 });
+        s.simples.push(ExecSimple::Is { list: below });
+        s.simples.push(ExecSimple::Is { list: below });
         let c_lo = s.compounds.len();
         let k_lo = s.combinators.len();
+        let second = first.saturating_add(1);
         match join {
             Join::InOneCompound => s.compounds.push(ExecRange {
                 lo: first,
-                hi: first + 2,
+                hi: first.saturating_add(2),
             }),
             Join::InTwoCompounds => {
                 s.compounds.push(ExecRange {
                     lo: first,
-                    hi: first + 1,
+                    hi: second,
                 });
                 s.compounds.push(ExecRange {
-                    lo: first + 1,
-                    hi: first + 2,
+                    lo: second,
+                    hi: second.saturating_add(1),
                 });
                 s.combinators.push(Combinator::Descendant);
             }
@@ -246,7 +253,7 @@ fn doubling(levels: usize, join: Join) -> ExecSelectors {
         });
         s.lists.push(ExecRange {
             lo: x_lo,
-            hi: x_lo + 1,
+            hi: x_lo.saturating_add(1),
         });
     }
     s
@@ -262,14 +269,16 @@ fn deeply_nested_sums_are_exact_below_the_limit() {
     // next component). `saturating` in exec_specificity.rs is proven equal to the spec's
     // `saturate`, and the spec's is pinned by the mutation `saturate-limit`.
     for join in [Join::InOneCompound, Join::InTwoCompounds] {
-        for k in 0..=18usize {
-            let s = doubling(k, join);
-            let got = list_specificity_of(&s, s.lists.len() - 1);
-            let n = u32::try_from(1u64 << k).expect("below the limit");
+        for k in 0..=18u32 {
+            let s = doubling(k as usize, join);
+            let last = s.lists.len().saturating_sub(1);
+            let got = list_specificity_of(&s, last);
+            // 2^k, below the limit for these k.
+            let n = 2u32.saturating_pow(k);
             assert_eq!(got, abc(n, n, n), "level {k}");
             // The complex selector's own sum is the list's maximum, as it is the only one.
-            let last = s.lists.len() - 1;
-            assert_eq!(complex_specificity_of(&s, last, s.lists[last].lo), got);
+            let only = s.lists.get(last).map_or(0, |r| r.lo);
+            assert_eq!(complex_specificity_of(&s, last, only), got);
         }
     }
 }

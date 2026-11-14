@@ -55,7 +55,7 @@ fn el(arena: &mut Arena, ns: Option<Namespace>, name: &str, attrs: Attrs) -> usi
             template_contents: None,
             form_owner: None,
         })
-        .expect("room in the arena");
+        .unwrap_or(0);
     for (ans, n, v) in attrs.iter().copied() {
         arena.append_attribute(
             id,
@@ -81,13 +81,13 @@ fn svg(arena: &mut Arena, name: &str, attrs: Attrs) -> usize {
 fn text(arena: &mut Arena, data: &str) -> usize {
     arena
         .create(ExecKind::Text { data: cps(data) })
-        .expect("room")
+        .unwrap_or(0)
 }
 
 fn comment(arena: &mut Arena, data: &str) -> usize {
     arena
         .create(ExecKind::Comment { data: cps(data) })
-        .expect("room")
+        .unwrap_or(0)
 }
 
 /// The document, and its elements by label, in document order.

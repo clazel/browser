@@ -51,7 +51,7 @@ fn ident(name: &[u32]) -> Vec<u32> {
         Some(&0x2E),
         "the class selector starts with a dot"
     );
-    out.get(1..).expect("a dot").to_vec()
+    out.get(1..).unwrap_or_default().to_vec()
 }
 
 /// `[a=value]` serialized, between `[a=` and `]`.
@@ -68,7 +68,9 @@ fn string(value: &[u32]) -> Vec<u32> {
     let want_head = cps("[a=");
     assert_eq!(out.get(..3), Some(want_head.as_slice()));
     assert_eq!(out.last(), Some(&0x5D));
-    out.get(3..out.len() - 1).expect("brackets").to_vec()
+    out.get(3..out.len().saturating_sub(1))
+        .unwrap_or_default()
+        .to_vec()
 }
 
 fn text(v: &[u32]) -> String {
@@ -314,10 +316,15 @@ fn the_range_table_agrees_with_the_standard_and_the_tokenizer_at_every_boundary(
     let mut points: Vec<u32> = Vec::new();
     for &(lo, hi) in NON_ASCII_IDENT {
         for edge in [lo, hi] {
-            for d in [-2i64, -1, 0, 1, 2] {
-                let c = i64::from(edge) + d;
+            for c in [
+                edge.saturating_sub(2),
+                edge.saturating_sub(1),
+                edge,
+                edge.saturating_add(1),
+                edge.saturating_add(2),
+            ] {
                 if (0x80..=0x10_FFFF).contains(&c) {
-                    points.push(u32::try_from(c).expect("in range"));
+                    points.push(c);
                 }
             }
         }
