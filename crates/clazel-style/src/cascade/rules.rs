@@ -39,7 +39,9 @@ use clazel_selectors::exec_match::matches;
 use clazel_selectors::exec_parse::parse_selector;
 use clazel_selectors::exec_specificity::{ExecSpecificity, complex_specificity_of};
 use clazel_selectors::exec_types::{ExecRange, ExecSelectors, ExecSimple};
+use clazel_selectors::spec::Combinator;
 
+use super::index::{Key, lower};
 use super::logical;
 use super::sort::Specificity;
 use crate::sources::Declaration;
@@ -131,6 +133,68 @@ fn subject_names(parsed: &ExecSelectors, ci: usize, depth: u32) -> Option<Vec<Ve
     })
 }
 
+/// The key of the simple selectors directly in compound selector `compound` of `parsed`
+/// (an index into `compounds`): the first ID selector's name, else the first class
+/// selector's, else the first type selector's, ASCII-lowercased (see `index.rs`).
+fn compound_key(parsed: &ExecSelectors, compound: usize) -> Option<Key> {
+    let range = parsed.compounds.get(compound)?;
+    let simples = parsed.simples.get(range.lo..range.hi)?;
+    let id = simples.iter().find_map(|s| match s {
+        ExecSimple::Id { name } => Some(Key::Id(lower(name))),
+        _ => None,
+    });
+    let class = || {
+        simples.iter().find_map(|s| match s {
+            ExecSimple::Class { name } => Some(Key::Class(lower(name))),
+            _ => None,
+        })
+    };
+    let ty = || {
+        simples.iter().find_map(|s| match s {
+            ExecSimple::Type { name, .. } => Some(Key::Type(lower(name))),
+            _ => None,
+        })
+    };
+    id.or_else(class).or_else(ty)
+}
+
+/// Complex selector `ci`'s subject key and ancestor key (see `index.rs`).
+fn complex_keys(parsed: &ExecSelectors, ci: usize) -> (Option<Key>, Option<Key>) {
+    let Some(complex) = parsed.complexes.get(ci) else {
+        return (None, None);
+    };
+    let (lo, hi) = (complex.compounds.lo, complex.compounds.hi);
+    let Some(last) = hi.checked_sub(1).filter(|&l| l >= lo) else {
+        return (None, None);
+    };
+    let subject = compound_key(parsed, last);
+    // Combinator `j` of the complex is between its compounds `j` and `j + 1`
+    // (`clazel_selectors::spec::match_complex`).
+    let mut ancestor: Option<Key> = None;
+    for (j, compound) in (lo..last).enumerate() {
+        let combinator = parsed
+            .combinators
+            .get(complex.combinators.lo.saturating_add(j))
+            .filter(|_| complex.combinators.lo.saturating_add(j) < complex.combinators.hi);
+        if !matches!(combinator, Some(Combinator::Descendant | Combinator::Child)) {
+            continue;
+        }
+        let Some(k) = compound_key(parsed, compound) else {
+            continue;
+        };
+        // An ID before a class before a type, as in a compound.
+        let rank = |k: &Key| match k {
+            Key::Id(_) => 0,
+            Key::Class(_) => 1,
+            Key::Type(_) => 2,
+        };
+        if ancestor.as_ref().is_none_or(|a| rank(&k) < rank(a)) {
+            ancestor = Some(k);
+        }
+    }
+    (subject, ancestor)
+}
+
 /// Whether type selector `name` may match an element whose local name is `local`: §5.1†
 /// compares the name ASCII-lowercased for an HTML element, as written otherwise; either
 /// equality is necessary for a match.
@@ -191,6 +255,14 @@ impl Selectors {
             one_by_one,
             subjects,
         })
+    }
+
+    /// The rule index's keys of each complex selector of the list: subject key, ancestor
+    /// key (see `index.rs`).
+    pub fn index_keys(&self) -> Vec<(Option<Key>, Option<Key>)> {
+        (self.list.lo..self.list.hi)
+            .map(|ci| complex_keys(&self.parsed, ci))
+            .collect()
     }
 
     /// False only if no complex selector of the list can match element `x`, by its

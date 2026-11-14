@@ -18,7 +18,13 @@
 //! - **The legacy microsyntaxes** ([`integer_any_6`], [`dimension_any_6`],
 //!   [`legacy_font_size_any_6`]) on any string up to six code points.
 //!
-//! Not done (see the README): the walk, [`super::preorder`]: every harness of it exceeded
+//! Not done (see the README): the rule index (`index.rs`). Every harness of its lookup
+//! stopped at a local cap and was removed: three sorted entries over three keys with two
+//! element and two ancestor keys (20 minutes; 5.5 GB with the entries in a `BTreeMap`,
+//! 2.9 GB in a sorted vector), and two entries over two keys with one of each (over 8 GB in
+//! 1,091 s). Its ancestor multiset (a `BTreeMap` of counts) likewise: pushing and popping
+//! one key from a one-key state exceeded 8 GB in 158 s, two keys from two the 20-minute
+//! cap. The index is tested against the unindexed cascade instead. The walk, [`super::preorder`]: every harness of it exceeded
 //! the local 8 GB cap, down to three nodes of at most one child each (11 GB in 31 s), its
 //! allocations being sized by a symbolic node count; its order and termination on real
 //! trees are checked by the unit test and the golden test (1,761 documents), and its loop
