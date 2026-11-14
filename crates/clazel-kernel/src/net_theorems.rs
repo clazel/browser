@@ -314,6 +314,8 @@ pub proof fn lemma_carry_out_renderer_outputs(urls: UrlFns, s: State, tab: nat, 
                     Output::Show { .. } => false,
                     Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
                     Output::Paint { .. } => false,
+                    Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
+                    Output::GpuStopped { .. } | Output::GpuAllSoftware => false,
                     _ => true,
                 }
         }),
@@ -440,6 +442,8 @@ pub proof fn lemma_commit_renderer_outputs(urls: UrlFns, s: State, tab: nat, hre
                     Output::Show { .. } => false,
                     Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
                     Output::Paint { .. } => false,
+                    Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
+                    Output::GpuStopped { .. } | Output::GpuAllSoftware => false,
                     _ => true,
                 }
         }),
@@ -512,6 +516,8 @@ pub proof fn lemma_abort_renderer_outputs(urls: UrlFns, s: State, tab: nat, code
                     Output::Show { .. } => false,
                     Output::ToGpu { .. } => false,
                     Output::Paint { .. } => false,
+                    Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
+                    Output::GpuStopped { .. } | Output::GpuAllSoftware => false,
                     _ => true,
                 }
         }),
@@ -721,6 +727,8 @@ pub proof fn lemma_begin_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
                     Output::Show { .. } => false,
                     Output::ToGpu { .. } => false,
                     Output::Paint { .. } => false,
+                    Output::GpuStopped { .. } | Output::GpuAllSoftware => false,
+                    Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
                     Output::Close { conn: x } => owned_in(s.conns, tab, x),
                 }
             &&& s1.next_id == s.next_id
@@ -756,6 +764,8 @@ pub proof fn lemma_begin_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
                         Output::Show { .. } => false,
                         Output::ToGpu { .. } => false,
                         Output::Paint { .. } => false,
+                        Output::GpuStopped { .. } | Output::GpuAllSoftware => false,
+                        Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
                         Output::Close { conn: x } => owned_in(s.conns, tab, x),
                     } by {
                         if k >= closes.len() {
@@ -789,6 +799,8 @@ pub proof fn lemma_begin_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
                             Output::Show { .. } => false,
                             Output::ToGpu { .. } => false,
                             Output::Paint { .. } => false,
+                            Output::GpuStopped { .. } | Output::GpuAllSoftware => false,
+                            Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
                             Output::Close { conn: x } => owned_in(s.conns, tab, x),
                         } by {
                             if k >= closes.len() {
@@ -827,6 +839,8 @@ pub proof fn lemma_begin_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
                             Output::Show { .. } => false,
                             Output::ToGpu { .. } => false,
                             Output::Paint { .. } => false,
+                            Output::GpuStopped { .. } | Output::GpuAllSoftware => false,
+                            Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
                             Output::Close { conn: x } => owned_in(s.conns, tab, x),
                         } by {
                             if k >= closes.len() {
@@ -1000,6 +1014,7 @@ pub proof fn lemma_net_mid(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fet
 }
 
 /// **`theorem_net_only_to_tab`.**
+#[verifier::rlimit(60)]
 pub proof fn theorem_net_only_to_tab(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, conn: nat, input: NetInput)
     requires
         reachable(rules, urls, fetch, s),
@@ -1026,6 +1041,8 @@ pub proof fn theorem_net_only_to_tab(rules: Seq<clazel_psl::spec::Rule>, urls: U
             Output::Show { .. } => false,
             Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
             Output::Paint { .. } => false,
+            Output::GpuStopped { .. } | Output::GpuAllSoftware => false,
+            Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
             Output::Close { .. } => true,
         } by {
             match out[k] {
@@ -1267,6 +1284,9 @@ pub proof fn lemma_handle_message_conns(rules: Seq<clazel_psl::spec::Rule>, urls
         },
         clazel_ipc::message::spec::Message::CookieGet => {},
         clazel_ipc::message::spec::Message::CookieSet { cookie_string } => {},
+        clazel_ipc::message::spec::Message::FetchStyle { request, url } => {
+            crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, request, url);
+        },
         _ => {
             crate::lock::lemma_storage_call_frame(s, r, m);
         },
@@ -1799,12 +1819,15 @@ pub proof fn theorem_connection_ownership(rules: Seq<clazel_psl::spec::Rule>, ur
         reachable(rules, urls, fetch, s),
     ensures
         crate::statements::connection_ownership_statement(rules, urls, fetch, s, e),
+        crate::statements::subfetch_ownership_statement(rules, urls, fetch, s, e),
 {
+    crate::subfetch_theorems::theorem_subfetch_ownership(rules, urls, fetch, s, e);
     crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
     assert(kernel_wf_conns(s));
     match e {
         Event::Tick { time } => {
             let (s1, out) = step(rules, urls, fetch, s, e);
+            crate::subfetch_rel::lemma_subfetch_events_own_none(rules, urls, fetch, s, e);
             lemma_own_all_unchanged(s, s1, out, crate::statements::event_tab(s, e));
         },
         Event::OpenTab { url, script } => {
@@ -1825,8 +1848,10 @@ pub proof fn theorem_connection_ownership(rules: Seq<clazel_psl::spec::Rule>, ur
         Event::FromGpu { id, bytes } => {
             lemma_own_all_from_gpu(rules, urls, fetch, s, id, bytes);
         },
-        Event::Resize { .. } | Event::Input { .. } => {
+        Event::GpuExited { .. } | Event::GpuSoftware | Event::GpuSiteExit { .. } => {},
+        Event::Resize { .. } | Event::Input { .. } | Event::SubNet { .. } => {
             let (s1, out) = step(rules, urls, fetch, s, e);
+            crate::subfetch_rel::lemma_subfetch_events_own_none(rules, urls, fetch, s, e);
             lemma_own_all_unchanged(s, s1, out, crate::statements::event_tab(s, e));
         },
     }

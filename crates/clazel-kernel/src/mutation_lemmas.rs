@@ -41,6 +41,9 @@ pub open spec fn ml_state_one() -> State {
         now: 0,
         viewports: Seq::empty(),
         titles: Seq::empty(),
+        subfetches: Seq::empty(),
+        subcounts: Seq::empty(),
+        gpu: init_gpu(),
     }
 }
 
@@ -531,6 +534,14 @@ pub open spec fn ml_gpu_state(committed: bool, sized: bool) -> State {
             Seq::empty()
         },
         titles: Seq::empty(),
+        subfetches: Seq::empty(),
+        subcounts: Seq::empty(),
+        // Item 5.17c: its GPU process said `GpuReady`, so its frames paint.
+        gpu: GpuState {
+            recs: seq![GpuRec { id: 1, lock: clazel_origin::spec::Origin::Opaque(1nat), software: false, running: true, stopped: false, exits: seq![] }],
+            demoted: false,
+            sites: seq![],
+        },
     }
 }
 
@@ -582,6 +593,296 @@ pub proof fn ml_resize(s: State, tab: nat, v: Viewport)
             Output::ToGpu { id: s.renderers[i].id, bytes: gpu_viewport_frame(v) },
         ],
 {
+}
+
+// ---------------------------------------------------------------------
+// Style sheet fetches (item 5.19).
+// ---------------------------------------------------------------------
+
+/// A sub-fetch of renderer `renderer` locked to `lock`, serial 0, started
+/// at time 0 and not yet connected.
+pub open spec fn ml_subfetch(renderer: nat, lock: clazel_origin::spec::Origin, ended: bool) -> SubFetch {
+    SubFetch {
+        renderer,
+        lock,
+        serial: 0,
+        request: 0,
+        tab: renderer,
+        fetch: ml_nav(0x61).fetch,
+        hop: 0,
+        started: 0,
+        partition: crate::domain::Domain::Opaque(0),
+        ended,
+    }
+}
+
+/// Transducer functions under which every URL has the opaque origin 9.
+pub open spec fn ml_fetch_cross() -> FetchFns {
+    FetchFns {
+        urls: clazel_fetch::transducer::spec::UrlFns {
+            origin: |u: clazel_url::url::spec::Url| clazel_origin::spec::Origin::Opaque(9nat),
+            ..crate::counterexamples::ce_fetch().urls
+        },
+        ..crate::counterexamples::ce_fetch()
+    }
+}
+
+/// [`ml_urls_a`], resolving every reference to itself.
+pub open spec fn ml_urls_resolving() -> UrlFns {
+    UrlFns { resolve: |b: Seq<u32>, i: Seq<u32>| Some(i), ..ml_urls_a() }
+}
+
+/// The state of [`ml_state_one`] with the given jar, sub-fetch tables and
+/// time (renderer 0, opaque lock 0).
+pub open spec fn ml_s_sub(jar: Seq<clazel_cookie::storage::spec::Cookie>, fs: Seq<SubFetch>, cs: Seq<SubCount>, now: int) -> State {
+    State { jar, subfetches: fs, subcounts: cs, now, ..ml_state_one() }
+}
+
+/// Eight live sub-fetches of renderer 0.
+pub open spec fn ml_eight() -> Seq<SubFetch> {
+    let f = ml_subfetch(0, clazel_origin::spec::Origin::Opaque(0nat), false);
+    seq![f, f, f, f, f, f, f, f]
+}
+
+/// 5.0(h): a sub-fetch whose request carries no credentials is given no
+/// jar.
+pub proof fn ml_uncredentialed_no_jar(fetch: FetchFns, s: State, f: SubFetch)
+    requires
+        !credentialed(fetch, f.lock, f.fetch.url),
+    ensures
+        subfetch_jar(fetch, s, f) == Seq::<clazel_cookie::storage::spec::Cookie>::empty(),
+{
+}
+
+/// A sub-fetch's frames go to its own renderer, after its outputs.
+pub proof fn ml_sub_finish_to_owner(fs: Seq<SubFetch>, f: SubFetch, out: Seq<Output>, frames: Seq<u8>)
+    ensures
+        sub_finish(fs, f, out, Some(frames)).1 == out + seq![Output::ToRenderer { id: f.renderer, bytes: frames }],
+{
+}
+
+/// A commit ends every sub-fetch of the renderer's document.
+pub proof fn ml_end_subfetches_ends(fs: Seq<SubFetch>, id: nat, lock: clazel_origin::spec::Origin, j: int)
+    requires
+        0 <= j < fs.len(),
+        fs[j].renderer == id,
+        fs[j].lock == lock,
+    ensures
+        end_subfetches(fs, id, lock)[j].ended,
+{
+}
+
+/// A `FetchStyle` past a limit is refused: nothing changes, and the
+/// renderer is told `StyleFailed`.
+pub proof fn ml_fetch_style_refused(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, r: Renderer, request: u64, url: Seq<u8>)
+    requires
+        live_subfetches(s.subfetches, r.id, r.lock) >= max_subfetches_at_once() || subcount_of(s.subcounts, r.id, r.lock).1 >= max_subfetches_per_document()
+            || subcount_of(s.subcounts, r.id, r.lock).0 >= max_subfetch_serial(),
+    ensures
+        fetch_style(rules, urls, fetch, s, r, request, url) == (s, reply(r, clazel_ipc::message::spec::Message::StyleFailed { request })),
+{
+}
+
+/// A live sub-fetch past its timeout is dropped from the table by a `Tick`.
+pub proof fn ml_sweep_timeout(s: State, f: SubFetch)
+    requires
+        subfetch_live(s, f),
+        s.now >= f.started + subfetch_timeout(),
+    ensures
+        sweep(s, seq![f]).0.len() == 0,
+{
+    reveal_with_fuel(sweep, 2);
+    assert(seq![f].drop_first() =~= Seq::<SubFetch>::empty());
+}
+
+/// A cookie `a=` for host `a`.
+pub open spec fn ml_cookie() -> clazel_cookie::storage::spec::Cookie {
+    clazel_cookie::storage::spec::Cookie {
+        name: seq![0x61u8],
+        value: Seq::<u8>::empty(),
+        expiry_time: 0,
+        domain: clazel_cookie::matching::spec::CanonicalHost { name: seq![0x61u8], is_ip_address: false },
+        path: Seq::<u8>::empty(),
+        creation_time: 0,
+        last_access_time: 0,
+        persistent_flag: false,
+        host_only_flag: true,
+        secure_only_flag: false,
+        http_only_flag: false,
+        same_site_flag: clazel_cookie::set_cookie::spec::SameSite::None,
+    }
+}
+
+// ---------------------------------------------------------------------
+// The GPU crash policy (item 5.17c).
+// ---------------------------------------------------------------------
+
+/// [`ml_gpu_renderer`]'s record.
+pub open spec fn ml_rec(software: bool, running: bool, exits: Seq<int>) -> GpuRec {
+    GpuRec { id: 1, lock: clazel_origin::spec::Origin::Opaque(1nat), software, running, stopped: false, exits }
+}
+
+/// [`ml_gpu_renderer`] alone, committed, its tab not sized, with this GPU
+/// record (or none), every-tab bit, sites and time.
+pub open spec fn ml_gpu_exit_state(rec: Option<GpuRec>, demoted: bool, sites: Seq<SiteExit>, now: int) -> State {
+    State {
+        now,
+        gpu: GpuState {
+            recs: match rec {
+                Some(g) => seq![g],
+                None => Seq::empty(),
+            },
+            demoted,
+            sites,
+        },
+        ..ml_gpu_state(true, false)
+    }
+}
+
+/// The restart in software, or in hardware, of [`ml_gpu_renderer`]'s GPU
+/// process, its tab not sized.
+pub open spec fn ml_spawn(software: bool) -> Seq<Output> {
+    seq![Output::Spawn { id: 1, policy: if software { Policy::GpuSoftware } else { Policy::Gpu } }]
+}
+
+/// The `GpuExited` of [`ml_gpu_renderer`]'s GPU process in `s`.
+pub open spec fn ml_exit(s: State) -> Seq<Output> {
+    gpu_exited(Seq::<clazel_psl::spec::Rule>::empty(), s, 1).1
+}
+
+/// Rules 1 and 2, with the numbers written out: a hardware process drawing
+/// with two exits recorded is restarted in software if the older is within
+/// 300 seconds, in hardware otherwise (what `theorem_gpu_restart_bounded`
+/// states).
+pub proof fn ml_gpu_rule2(t1: int, t2: int, now: int)
+    ensures
+        ml_exit(ml_gpu_exit_state(Some(ml_rec(false, true, seq![t1, t2])), false, Seq::empty(), now)) == ml_spawn(now - t2 < 300),
+{
+    let s = ml_gpu_exit_state(Some(ml_rec(false, true, seq![t1, t2])), false, Seq::empty(), now);
+    reveal(Seq::filter);
+    assert(other_sites(Seq::<SiteExit>::empty(), crate::domain::Domain::Opaque(1), now) =~= Seq::<SiteExit>::empty());
+    assert(gpu_of(s, ml_gpu_renderer(true)) == ml_rec(false, true, seq![t1, t2]));
+}
+
+/// Rule 4, with the numbers written out: a software process drawing with
+/// two exits recorded stops its tab if the older is within 300 seconds.
+pub proof fn ml_gpu_rule4(t1: int, t2: int, now: int)
+    ensures
+        ml_exit(ml_gpu_exit_state(Some(ml_rec(true, true, seq![t1, t2])), false, Seq::empty(), now)) == (if now - t2 < 300 {
+            seq![Output::GpuStopped { tab: 0, url: seq![0x61u32] }]
+        } else {
+            ml_spawn(true)
+        }),
+{
+    let s = ml_gpu_exit_state(Some(ml_rec(true, true, seq![t1, t2])), false, Seq::empty(), now);
+    assert(gpu_of(s, ml_gpu_renderer(true)) == ml_rec(true, true, seq![t1, t2]));
+}
+
+/// The refusal: a hardware process (no record) exiting before `GpuReady`
+/// puts every tab in software, tells the host, and restarts in software.
+pub proof fn ml_gpu_refusal(now: int)
+    ensures
+        ml_exit(ml_gpu_exit_state(None, false, Seq::empty(), now)) == seq![Output::GpuAllSoftware] + ml_spawn(true),
+{
+}
+
+/// Two sites other than [`ml_gpu_renderer`]'s, with exits at time 0.
+pub open spec fn ml_two_sites() -> Seq<SiteExit> {
+    seq![SiteExit { site: crate::domain::Domain::Opaque(7), time: 0 }, SiteExit { site: crate::domain::Domain::Opaque(8), time: 0 }]
+}
+
+/// [`ml_gpu_renderer`]'s own site and one other, with exits at time 0.
+pub open spec fn ml_own_and_one() -> Seq<SiteExit> {
+    seq![SiteExit { site: crate::domain::Domain::Opaque(1), time: 0 }, SiteExit { site: crate::domain::Domain::Opaque(8), time: 0 }]
+}
+
+/// A filter of two elements.
+pub proof fn ml_filter_two(x: SiteExit, y: SiteExit, p: spec_fn(SiteExit) -> bool)
+    ensures
+        seq![x, y].filter(p) == (if p(x) { seq![x] } else { Seq::<SiteExit>::empty() }) + (if p(y) { seq![y] } else { Seq::<SiteExit>::empty() }),
+{
+    reveal(Seq::filter);
+    let s = seq![x, y];
+    assert(s.drop_last() =~= seq![x]);
+    assert(seq![x].drop_last() =~= Seq::<SiteExit>::empty());
+    assert(s.last() == y);
+    assert(seq![x].last() == x);
+    assert(Seq::<SiteExit>::empty().filter(p) =~= Seq::<SiteExit>::empty());
+    assert(seq![x].filter(p) =~= (if p(x) { seq![x] } else { Seq::<SiteExit>::empty() }));
+    assert(s.filter(p) =~= (if p(x) { seq![x] } else { Seq::<SiteExit>::empty() }) + (if p(y) { seq![y] } else { Seq::<SiteExit>::empty() }));
+}
+
+/// The other sites of two sites at time 0, seen at time 0 from site
+/// `Opaque(1)`.
+pub proof fn ml_other_sites_two(x: SiteExit, y: SiteExit)
+    requires
+        x.time == 0 && y.time == 0,
+    ensures
+        other_sites(seq![x, y], crate::domain::Domain::Opaque(1), 0).len() == (if x.site != crate::domain::Domain::Opaque(1) { 1int } else { 0int }) + (if y.site
+            != crate::domain::Domain::Opaque(1) {
+            1int
+        } else {
+            0int
+        }),
+{
+    ml_filter_two(x, y, |e: SiteExit| e.site != crate::domain::Domain::Opaque(1) && within(e.time, 0));
+}
+
+/// Rule 3, with the number written out: a hardware exit while two other
+/// sites have exits now puts every tab in software.
+pub proof fn ml_gpu_rule3()
+    ensures
+        ml_exit(ml_gpu_exit_state(Some(ml_rec(false, true, Seq::empty())), false, ml_two_sites(), 0)) == seq![Output::GpuAllSoftware] + ml_spawn(true),
+{
+    let s = ml_gpu_exit_state(Some(ml_rec(false, true, Seq::empty())), false, ml_two_sites(), 0);
+    ml_other_sites_two(ml_two_sites()[0], ml_two_sites()[1]);
+    assert(ml_two_sites() =~= seq![ml_two_sites()[0], ml_two_sites()[1]]);
+    assert(gpu_of(s, ml_gpu_renderer(true)) == ml_rec(false, true, Seq::empty()));
+    assert(site_demotes(ml_two_sites(), crate::domain::Domain::Opaque(1), 0));
+    assert(ml_exit(s) =~= seq![Output::GpuAllSoftware] + ml_spawn(true));
+}
+
+/// Rule 3 counts other sites only: an exit while only the site itself and
+/// one other have exits restarts in hardware.
+pub proof fn ml_gpu_rule3_own()
+    ensures
+        ml_exit(ml_gpu_exit_state(Some(ml_rec(false, true, Seq::empty())), false, ml_own_and_one(), 0)) == ml_spawn(false),
+{
+    let s = ml_gpu_exit_state(Some(ml_rec(false, true, Seq::empty())), false, ml_own_and_one(), 0);
+    ml_other_sites_two(ml_own_and_one()[0], ml_own_and_one()[1]);
+    assert(ml_own_and_one() =~= seq![ml_own_and_one()[0], ml_own_and_one()[1]]);
+    assert(gpu_of(s, ml_gpu_renderer(true)) == ml_rec(false, true, Seq::empty()));
+    assert(!site_demotes(ml_own_and_one(), crate::domain::Domain::Opaque(1), 0));
+    assert(ml_exit(s) =~= ml_spawn(false));
+}
+
+/// [`ml_gpu_state`] sized, committed, with no GPU record: its process has
+/// not said `GpuReady`.
+pub open spec fn ml_gpu_cold() -> State {
+    State { gpu: init_gpu(), ..ml_gpu_state(true, true) }
+}
+
+/// Before `GpuReady`, no frame is painted (what
+/// `theorem_paint_after_restart` states).
+pub proof fn ml_gpu_no_paint_cold(bytes: Seq<u8>)
+    ensures
+        from_gpu(ml_gpu_cold(), 1, bytes).1.len() == 0 || !(from_gpu(ml_gpu_cold(), 1, bytes).1[0] is Paint),
+{
+    let s = ml_gpu_cold();
+    crate::surface_rel::lemma_from_gpu_shape(s, 1, bytes);
+    assert(!gpu_of(s, ml_gpu_renderer(true)).running);
+    crate::net_theorems::lemma_closes_of_tab(s.conns, 0);
+}
+
+/// After `GpuReady`, a frame that fits is painted.
+pub proof fn ml_gpu_ready_paints()
+    ensures
+        from_gpu(gpu_ready(ml_gpu_cold(), ml_gpu_renderer(true), false), 1, ml_frame_ready(0)).1.len() == 1,
+{
+    let s = gpu_ready(ml_gpu_cold(), ml_gpu_renderer(true), false);
+    crate::gpu_theorems::lemma_gpu_of_with(ml_gpu_cold(), GpuRec { running: true, ..gpu_of(ml_gpu_cold(), ml_gpu_renderer(true)) }, ml_gpu_renderer(true));
+    assert(gpu_of(s, ml_gpu_renderer(true)).running);
+    assert(decode_gpu_frame(ml_frame_ready(0)) == Some(clazel_ipc::message::spec::Message::FrameReady { buffer: 0, width: 1, height: 1 })) by (compute_only);
 }
 
 } // verus!

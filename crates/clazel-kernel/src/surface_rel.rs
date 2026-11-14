@@ -264,7 +264,7 @@ pub proof fn lemma_user_outputs(
             assert forall|k: int| 0 <= k < o2.len() implies !crate::noninterference::addressed_to(rules, d, s2, s2b, #[trigger] o2[k]) by {
                 if crate::noninterference::addressed_to(rules, d, s2, s2b, o2[k]) {
                     let q = choose|q: Renderer|
-                        (s2.renderers.contains(q) || s2b.renderers.contains(q)) && (if o2[k] is Show || o2[k] is Paint {
+                        (s2.renderers.contains(q) || s2b.renderers.contains(q)) && (if o2[k] is Show || o2[k] is Paint || o2[k] is GpuStopped {
                             q.tab == crate::domain::output_id(o2[k])
                         } else {
                             q.id == crate::domain::output_id(o2[k])
@@ -384,7 +384,7 @@ pub open spec fn gpu_kills(r: Renderer, bytes: Seq<u8>) -> bool {
 }
 
 /// What a GPU process's frame does to the state: it kills its renderer, or
-/// changes nothing.
+/// changes nothing but (a `GpuReady`, item 5.17c) its renderer's GPU record.
 pub proof fn lemma_from_gpu_shape(s: State, id: nat, bytes: Seq<u8>)
     ensures
         match find_by_id(s.renderers, id, 0) {
@@ -392,7 +392,12 @@ pub proof fn lemma_from_gpu_shape(s: State, id: nat, bytes: Seq<u8>)
             Some(i) => if gpu_kills(s.renderers[i], bytes) {
                 from_gpu(s, id, bytes) == kill_renderer(s, i, id)
             } else {
-                from_gpu(s, id, bytes).0 == s && from_gpu(s, id, bytes).1.len() <= 1 && (from_gpu(s, id, bytes).1.len() == 1 ==> from_gpu(s, id, bytes).1[0]
+                from_gpu(s, id, bytes).0 == (if decode_gpu_frame(bytes) matches Some(clazel_ipc::message::spec::Message::GpuReady { .. }) {
+                    gpu_ready(s, s.renderers[i], decode_gpu_frame(bytes)->Some_0->GpuReady_software)
+                } else {
+                    s
+                }) && (decode_gpu_frame(bytes) matches Some(clazel_ipc::message::spec::Message::GpuReady { .. }) ==> from_gpu(s, id, bytes).1.len() == 0)
+                && from_gpu(s, id, bytes).1.len() <= 1 && (from_gpu(s, id, bytes).1.len() == 1 ==> gpu_of(s, s.renderers[i]).running && from_gpu(s, id, bytes).1[0]
                     == Output::Paint {
                     tab: s.renderers[i].tab,
                     url: s.renderers[i].url,
@@ -480,7 +485,18 @@ pub proof fn lemma_d_gpu_event(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns,
         lemma_kill_both(rules, urls, d, s1, s2, i1, i2, id);
     } else {
         lemma_title_of_rel(rules, urls, d, s1, s2, r);
+        crate::gpu_rel::lemma_gpu_of_rel(rules, urls, d, s1, s2, r);
+        assert(s2.renderers[i2] == r);
         assert(step(rules, urls, fetch, s1, e).1 == step(rules, urls, fetch, s2, e).1);
+        if decode_gpu_frame(bytes) matches Some(clazel_ipc::message::spec::Message::GpuReady { .. }) {
+            // Item 5.17c: the same record set in both runs.
+            let software = decode_gpu_frame(bytes)->Some_0->GpuReady_software;
+            crate::gpu_theorems::lemma_gpu_of_key(s1, r);
+            let g = gpu_of(s1, r);
+            crate::gpu_rel::lemma_gpu_recs_set_same(rules, s1.gpu.recs, s2.gpu.recs, GpuRec { running: true, software: g.software || software, ..g }, d);
+            crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s1, e);
+            crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s2, e);
+        }
     }
 }
 
@@ -507,7 +523,7 @@ pub proof fn lemma_gpu_outputs_not_d(rules: Seq<clazel_psl::spec::Rule>, urls: U
     assert forall|k: int| 0 <= k < out1.len() implies !crate::noninterference::addressed_to(rules, d, s1, s1b, #[trigger] out1[k]) by {
         if crate::noninterference::addressed_to(rules, d, s1, s1b, out1[k]) {
             let q = choose|q: Renderer|
-                (s1.renderers.contains(q) || s1b.renderers.contains(q)) && (if out1[k] is Show || out1[k] is Paint {
+                (s1.renderers.contains(q) || s1b.renderers.contains(q)) && (if out1[k] is Show || out1[k] is Paint || out1[k] is GpuStopped {
                     q.tab == crate::domain::output_id(out1[k])
                 } else {
                     q.id == crate::domain::output_id(out1[k])
@@ -589,6 +605,13 @@ pub proof fn lemma_local_respect_gpu(rules: Seq<clazel_psl::spec::Rule>, urls: U
         crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s1, e);
         assert(from_gpu(s1, id, bytes) == kill_renderer(s1, i1, id));
         lemma_kill_first(rules, urls, d, s1, s2, i1, id);
+    } else if decode_gpu_frame(bytes) matches Some(clazel_ipc::message::spec::Message::GpuReady { .. }) {
+        // Item 5.17c: its renderer's record only, under a lock of `d2`.
+        let software = decode_gpu_frame(bytes)->Some_0->GpuReady_software;
+        crate::gpu_theorems::lemma_gpu_of_key(s1, r);
+        let g = gpu_of(s1, r);
+        crate::gpu_rel::lemma_gpu_recs_set_other(rules, s1.gpu.recs, GpuRec { running: true, software: g.software || software, ..g }, d);
+        crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s1, e);
     }
 }
 

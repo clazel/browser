@@ -76,6 +76,10 @@ pub open spec fn message_texts_ok(m: clazel_ipc::message::spec::Message) -> bool
         clazel_ipc::message::spec::Message::Title { title } => text_ok(title),
         clazel_ipc::message::spec::Message::FrameReady { .. } | clazel_ipc::message::spec::Message::GpuReady { .. } | clazel_ipc::message::spec::Message::GpuRefused => true,
         clazel_ipc::message::spec::Message::Viewport { .. } | clazel_ipc::message::spec::Message::Input { .. } | clazel_ipc::message::spec::Message::GpuViewport { .. } => true,
+        clazel_ipc::message::spec::Message::FetchStyle { url, .. } => text_ok(url),
+        clazel_ipc::message::spec::Message::StyleResponse { content_type, .. } => bytes_ok(content_type),
+        clazel_ipc::message::spec::Message::StyleBody { bytes, .. } => bytes_ok(bytes),
+        clazel_ipc::message::spec::Message::StyleEnd { .. } | clazel_ipc::message::spec::Message::StyleFailed { .. } => true,
     }
 }
 
@@ -207,6 +211,26 @@ pub proof fn lemma_message_ok(m: clazel_ipc::message::spec::Message)
                 seq![clazel_ipc::cbor::spec::Token::Uint(kind), clazel_ipc::cbor::spec::Token::Uint(x), clazel_ipc::cbor::spec::Token::Uint(y), clazel_ipc::cbor::spec::Token::Bool(negative), clazel_ipc::cbor::spec::Token::Uint(delta), clazel_ipc::cbor::spec::Token::Uint(key)],
             );
             lemma_six(clazel_ipc::cbor::spec::Token::Uint(kind), clazel_ipc::cbor::spec::Token::Uint(x), clazel_ipc::cbor::spec::Token::Uint(y), clazel_ipc::cbor::spec::Token::Bool(negative), clazel_ipc::cbor::spec::Token::Uint(delta), clazel_ipc::cbor::spec::Token::Uint(key));
+        },
+        clazel_ipc::message::spec::Message::FetchStyle { request, url } => {
+            lemma_msg(m, 3, 14, seq![clazel_ipc::cbor::spec::Token::Uint(request), clazel_ipc::cbor::spec::Token::Text(url)]);
+            lemma_two(clazel_ipc::cbor::spec::Token::Uint(request), clazel_ipc::cbor::spec::Token::Text(url));
+        },
+        clazel_ipc::message::spec::Message::StyleResponse { request, content_type } => {
+            lemma_msg(m, 3, 110, seq![clazel_ipc::cbor::spec::Token::Uint(request), clazel_ipc::cbor::spec::Token::Bytes(content_type)]);
+            lemma_two(clazel_ipc::cbor::spec::Token::Uint(request), clazel_ipc::cbor::spec::Token::Bytes(content_type));
+        },
+        clazel_ipc::message::spec::Message::StyleBody { request, bytes } => {
+            lemma_msg(m, 3, 111, seq![clazel_ipc::cbor::spec::Token::Uint(request), clazel_ipc::cbor::spec::Token::Bytes(bytes)]);
+            lemma_two(clazel_ipc::cbor::spec::Token::Uint(request), clazel_ipc::cbor::spec::Token::Bytes(bytes));
+        },
+        clazel_ipc::message::spec::Message::StyleEnd { request } => {
+            lemma_msg(m, 2, 112, seq![clazel_ipc::cbor::spec::Token::Uint(request)]);
+            lemma_one(clazel_ipc::cbor::spec::Token::Uint(request));
+        },
+        clazel_ipc::message::spec::Message::StyleFailed { request } => {
+            lemma_msg(m, 2, 113, seq![clazel_ipc::cbor::spec::Token::Uint(request)]);
+            lemma_one(clazel_ipc::cbor::spec::Token::Uint(request));
         },
     }
 }
@@ -363,6 +387,10 @@ pub fn message_ok_exec(m: &Msg) -> (r: bool)
         Msg::Title { title } => text_ok_exec(title.as_slice()),
         Msg::FrameReady { .. } | Msg::GpuReady { .. } | Msg::GpuRefused => true,
         Msg::Viewport { .. } | Msg::Input { .. } | Msg::GpuViewport { .. } => true,
+        Msg::FetchStyle { url, .. } => text_ok_exec(url.as_slice()),
+        Msg::StyleResponse { content_type, .. } => bytes_ok_exec(content_type.as_slice()),
+        Msg::StyleBody { bytes, .. } => bytes_ok_exec(bytes.as_slice()),
+        Msg::StyleEnd { .. } | Msg::StyleFailed { .. } => true,
     }
 }
 

@@ -80,6 +80,37 @@ pub enum Msg {
     },
     /// GPU process to kernel: the driver is refused (item 5.17c).
     GpuRefused,
+    /// Renderer to kernel: fetch a style sheet (item 5.19).
+    FetchStyle {
+        /// The renderer's id for this fetch.
+        request: u64,
+        /// The sheet's URL, as the document wrote it.
+        url: Vec<u8>,
+    },
+    /// Kernel to renderer: the sheet's response arrived.
+    StyleResponse {
+        /// The renderer's id for the fetch.
+        request: u64,
+        /// The response's combined `Content-Type` field value, or empty.
+        content_type: Vec<u8>,
+    },
+    /// Kernel to renderer: the next part of the sheet's body.
+    StyleBody {
+        /// The renderer's id for the fetch.
+        request: u64,
+        /// The octets.
+        bytes: Vec<u8>,
+    },
+    /// Kernel to renderer: the sheet's body is complete.
+    StyleEnd {
+        /// The renderer's id for the fetch.
+        request: u64,
+    },
+    /// Kernel to renderer: the fetch failed (or was refused).
+    StyleFailed {
+        /// The renderer's id for the fetch.
+        request: u64,
+    },
     /// Kernel to renderer: a document is committed; its body follows in
     /// `Body` frames, then `BodyEnd`.
     Commit {
@@ -163,6 +194,17 @@ pub proof fn lemma_max_body_chunk()
 {
 }
 
+/// [`max_style_chunk`]: the most octets one `StyleBody` carries,
+/// `MAX_FRAME` minus 17 (item 5.19).
+pub const MAX_STYLE_CHUNK: usize = 1_048_559;
+
+/// [`MAX_STYLE_CHUNK`] is the spec's [`max_style_chunk`].
+pub proof fn lemma_max_style_chunk()
+    ensures
+        MAX_STYLE_CHUNK as nat == max_style_chunk(),
+{
+}
+
 /// The view of a list of strings.
 pub open spec fn strings_view(v: Seq<Vec<u8>>) -> Seq<Seq<u8>> {
     v.map_values(|s: Vec<u8>| s@)
@@ -212,6 +254,11 @@ impl View for Msg {
                 key: *key,
             },
             Msg::GpuViewport { width, height, scale } => Message::GpuViewport { width: *width, height: *height, scale: *scale },
+            Msg::FetchStyle { request, url } => Message::FetchStyle { request: *request, url: url@ },
+            Msg::StyleResponse { request, content_type } => Message::StyleResponse { request: *request, content_type: content_type@ },
+            Msg::StyleBody { request, bytes } => Message::StyleBody { request: *request, bytes: bytes@ },
+            Msg::StyleEnd { request } => Message::StyleEnd { request: *request },
+            Msg::StyleFailed { request } => Message::StyleFailed { request: *request },
         }
     }
 }
@@ -351,6 +398,13 @@ fn parse_fields(tag: u64, toks: &[Tok]) -> (r: Option<Msg>)
             let s = text_at(toks, 2)?;
             Some(Msg::Title { title: s })
         } else { None }
+    } else if tag == 14 {
+        if k == 2 {
+            match (uint_at(toks, 2), text_at(toks, 3)) {
+                (Some(a), Some(b)) => Some(Msg::FetchStyle { request: a, url: b }),
+                _ => None,
+            }
+        } else { None }
     } else if tag == 15 {
         if k == 3 {
             match (uint_at(toks, 2), uint_at(toks, 3), uint_at(toks, 4)) {
@@ -419,6 +473,30 @@ fn parse_fields(tag: u64, toks: &[Tok]) -> (r: Option<Msg>)
                 (Some(a), Some(b), Some(c), Some(n), Some(d), Some(e)) => Some(Msg::Input { kind: a, x: b, y: c, negative: n, delta: d, key: e }),
                 _ => None,
             }
+        } else { None }
+    } else if tag == 110 {
+        if k == 2 {
+            match (uint_at(toks, 2), bytes_at(toks, 3)) {
+                (Some(a), Some(b)) => Some(Msg::StyleResponse { request: a, content_type: b }),
+                _ => None,
+            }
+        } else { None }
+    } else if tag == 111 {
+        if k == 2 {
+            match (uint_at(toks, 2), bytes_at(toks, 3)) {
+                (Some(a), Some(b)) => Some(Msg::StyleBody { request: a, bytes: b }),
+                _ => None,
+            }
+        } else { None }
+    } else if tag == 112 {
+        if k == 1 {
+            let a = uint_at(toks, 2)?;
+            Some(Msg::StyleEnd { request: a })
+        } else { None }
+    } else if tag == 113 {
+        if k == 1 {
+            let a = uint_at(toks, 2)?;
+            Some(Msg::StyleFailed { request: a })
         } else { None }
     } else if tag == 114 {
         if k == 3 {
@@ -573,6 +651,7 @@ pub fn is_from_renderer(m: &Msg) -> (r: bool)
             | Msg::Navigate { .. }
             | Msg::Display { .. }
             | Msg::Title { .. }
+            | Msg::FetchStyle { .. }
     )
 }
 
@@ -763,6 +842,11 @@ fn message_tokens(m: &Msg) -> (t: Vec<Tok>)
         Msg::Viewport { width, height, scale } => toks5(Tok::Array(4), Tok::Uint(108), Tok::Uint(*width), Tok::Uint(*height), Tok::Uint(*scale)),
         Msg::Input { kind, x, y, negative, delta, key } => input_tokens(*kind, *x, *y, *negative, *delta, *key),
         Msg::GpuViewport { width, height, scale } => toks5(Tok::Array(4), Tok::Uint(114), Tok::Uint(*width), Tok::Uint(*height), Tok::Uint(*scale)),
+        Msg::FetchStyle { request, url } => toks4(Tok::Array(3), Tok::Uint(14), Tok::Uint(*request), Tok::Text(copy(url.as_slice()))),
+        Msg::StyleResponse { request, content_type } => toks4(Tok::Array(3), Tok::Uint(110), Tok::Uint(*request), Tok::Bytes(copy(content_type.as_slice()))),
+        Msg::StyleBody { request, bytes } => toks4(Tok::Array(3), Tok::Uint(111), Tok::Uint(*request), Tok::Bytes(copy(bytes.as_slice()))),
+        Msg::StyleEnd { request } => toks3(Tok::Array(2), Tok::Uint(112), Tok::Uint(*request)),
+        Msg::StyleFailed { request } => toks3(Tok::Array(2), Tok::Uint(113), Tok::Uint(*request)),
     }
 }
 

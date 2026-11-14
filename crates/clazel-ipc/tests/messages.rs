@@ -113,7 +113,38 @@ fn all() -> Vec<Msg> {
             height: 800,
             scale: 1,
         },
+        Msg::FetchStyle {
+            request: 7,
+            url: t("news.css?abc"),
+        },
+        Msg::StyleResponse {
+            request: u64::MAX,
+            content_type: t("text/css"),
+        },
+        Msg::StyleBody {
+            request: 7,
+            bytes: vec![0x00, 0xFF],
+        },
+        Msg::StyleEnd { request: 7 },
+        Msg::StyleFailed { request: 0 },
     ]
+}
+
+#[test]
+fn a_largest_style_body_fits_one_frame() {
+    use clazel_ipc::message::codec::MAX_STYLE_CHUNK;
+    let m = Msg::StyleBody {
+        request: u64::MAX,
+        bytes: vec![0x5A; MAX_STYLE_CHUNK],
+    };
+    let frame = encode_framed(&m).unwrap_or_default();
+    assert_eq!(frame.len(), MAX_FRAME + 4);
+    assert_eq!(decode_framed(&frame), Some(m_clone(&m)));
+    let over = Msg::StyleBody {
+        request: u64::MAX,
+        bytes: vec![0x5A; MAX_STYLE_CHUNK + 1],
+    };
+    assert!(encode_framed(&over).is_none());
 }
 
 #[test]
@@ -149,6 +180,7 @@ fn the_kernel_decoder_takes_only_renderer_messages() {
                 | Msg::Navigate { .. }
                 | Msg::Display { .. }
                 | Msg::Title { .. }
+                | Msg::FetchStyle { .. }
         );
         assert_eq!(
             decode_renderer_message(&bytes).is_some(),

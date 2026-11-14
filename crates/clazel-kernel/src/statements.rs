@@ -52,6 +52,11 @@ pub open spec fn reply_only_to_sender_statement(rules: Seq<clazel_psl::spec::Rul
             Output::Show { tab: x, .. } => exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].id == id && s.renderers[i].tab == x,
             Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
             Output::Paint { .. } => false,
+            Output::GpuStopped { .. } | Output::GpuAllSoftware => false,
+            // Item 5.19: a `FetchStyle`'s sub-fetch is the sender's.
+            Output::SubConnect { renderer: x, .. } => x == id,
+            Output::SubSend { renderer: x, .. } => x == id,
+            Output::SubClose { renderer: x, .. } => x == id,
         }
 }
 
@@ -236,6 +241,8 @@ pub open spec fn net_only_to_tab_statement(rules: Seq<clazel_psl::spec::Rule>, u
                 Output::Show { .. } => false,
                 Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
                 Output::Paint { .. } => false,
+                Output::GpuStopped { .. } | Output::GpuAllSoftware => false,
+                Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
             },
     }
 }
@@ -524,7 +531,10 @@ pub open spec fn cookie_confidentiality_statement(rules: Seq<clazel_psl::spec::R
 /// open connection ([`net_target`]), the jar after the jar operations of the
 /// transducer's step ([`apply_net_ops`]: §5.8.3 retrieval for the request it
 /// builds and §5.7 storage of the final response's `Set-Cookie` lines, each
-/// with the request it answers, never for a public suffix); for anything else,
+/// with the request it answers, never for a public suffix); item 5.19: for a
+/// `SubNet` about the current connection of a live sub-fetch whose request
+/// carries credentials, the jar after the jar operations of that sub-fetch's
+/// transducer step (on a cross-origin request, unchanged); for anything else,
 /// unchanged.
 pub open spec fn cookie_integrity_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> bool {
     let s1 = step(rules, urls, fetch, s, e).0;
@@ -558,6 +568,20 @@ pub open spec fn cookie_integrity_statement(rules: Seq<clazel_psl::spec::Rule>, 
         Event::Tick { time } => s1.jar == clazel_cookie::storage::spec::evict_expired(s.jar, if time > s.now { time } else { s.now }),
         Event::Net { conn, input } => match net_target(s, conn) {
             Some((_, _, nav)) => s1.jar == apply_net_ops(rules, s.jar, net_transducer_step(fetch, s, nav, input).2),
+            None => s1.jar == s.jar,
+        },
+        Event::SubNet { renderer, serial, hop, input } => match subnet_target(s, renderer, serial) {
+            Some(f) => {
+                if subfetch_live(s, f) && hop != 0 && f.hop == hop && credentialed(fetch, f.lock, f.fetch.url) {
+                    s1.jar == apply_net_ops(
+                        rules,
+                        s.jar,
+                        clazel_fetch::transducer::spec::step(fetch.http, fetch.urls, f.fetch, input, s.jar, s.now).2,
+                    )
+                } else {
+                    s1.jar == s.jar
+                }
+            },
             None => s1.jar == s.jar,
         },
         _ => s1.jar == s.jar,
@@ -668,19 +692,29 @@ pub open spec fn paint_fits_viewport_statement(rules: Seq<clazel_psl::spec::Rule
 /// current renderer. That half follows from the fresh id and `renderers_wf`
 /// but needs a frame lemma through every navigation path, and is not part of
 /// what this theorem states now; see the crate README.)
+///
+/// Item 5.17c adds the restart: on the host's `GpuExited` of renderer `x`'s
+/// GPU process, a new GPU process for `x` alone (no renderer is started, and
+/// `x` names a live renderer), and its `GpuViewport`.
 pub open spec fn channel_only_own_tab_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> bool {
     let out = step(rules, urls, fetch, s, e).1;
     forall|k: int|
         0 <= k < out.len() ==> match #[trigger] out[k] {
-            Output::Spawn { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }) && out.contains(
+            Output::Spawn { id: x, policy: p } => (x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }) && out.contains(
                 Output::Spawn { id: x, policy: Policy::Renderer },
-            ),
+            )) || (gpu_restarted(s, e, x) && p != Policy::Renderer),
             Output::ToGpu { id: x, .. } => (x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu })) || (e matches Event::Resize {
                 tab,
                 ..
-            } && find_by_tab(s.renderers, tab, 0) matches Some(i) && s.renderers[i].id == x),
+            } && find_by_tab(s.renderers, tab, 0) matches Some(i) && s.renderers[i].id == x) || gpu_restarted(s, e, x),
             _ => true,
         }
+}
+
+/// The event is the host's `GpuExited` of the GPU process of live renderer
+/// `x` (item 5.17c).
+pub open spec fn gpu_restarted(s: State, e: Event, x: nat) -> bool {
+    e == Event::GpuExited { id: x } && find_by_id(s.renderers, x, 0) is Some
 }
 
 /// `theorem_input_only_to_own_tab`: the user's input on `tab` changes no
@@ -721,6 +755,254 @@ pub open spec fn viewport_only_to_own_tab_statement(
             Output::ToRenderer { id: s.renderers[i].id, bytes: viewport_frame(v) },
             Output::ToGpu { id: s.renderers[i].id, bytes: gpu_viewport_frame(v) },
         ],
+    }
+}
+
+// ---------------------------------------------------------------------
+// Style sheet fetches (phase-5.md item 5.19).
+// ---------------------------------------------------------------------
+
+/// `theorem_subfetch_only_to_requester`: every frame of a sub-fetch's answer
+/// goes to the renderer that asked, under its own request id, and only while
+/// the sub-fetch belongs to that renderer's current document (it is live:
+/// the renderer is live, committed and has the lock it asked with, and no
+/// commit has replaced the document since). A `SubNet` event sends frames
+/// only to its sub-fetch's renderer: the sheet (`StyleResponse`, the body,
+/// `StyleEnd`) or `StyleFailed`, each under the sub-fetch's request id. A
+/// `Tick` sends only `StyleFailed`, each to the renderer of a sub-fetch that
+/// is live at the tick. (A `FetchStyle`'s refusal goes to its sender:
+/// `theorem_reply_only_to_sender`.)
+pub open spec fn subfetch_only_to_requester_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> bool {
+    let out = step(rules, urls, fetch, s, e).1;
+    forall|k: int|
+        0 <= k < out.len() && (#[trigger] out[k]) is ToRenderer ==> match e {
+            Event::SubNet { renderer, serial, .. } => match subnet_target(s, renderer, serial) {
+                Some(f) => {
+                    &&& out[k]->ToRenderer_id == renderer
+                    &&& subfetch_live(s, f)
+                    &&& (out[k]->ToRenderer_bytes == style_failed_frame(f.request) || exists|doc: Document|
+                        out[k]->ToRenderer_bytes == #[trigger] style_frames(f.request, doc))
+                },
+                None => false,
+            },
+            Event::Tick { time } => exists|j: int|
+                0 <= j < s.subfetches.len() && s.subfetches[j].renderer == out[k]->ToRenderer_id && subfetch_live(tick(s, time).0, s.subfetches[j])
+                    && out[k]->ToRenderer_bytes == style_failed_frame(s.subfetches[j].request),
+            _ => true,
+        }
+}
+
+/// `theorem_subfetch_credentials` (5.0(h)): only a `SubNet` event writes to a
+/// sub-fetch connection, only to the connection it reports on, and every
+/// octet it writes is a valid request for the sub-fetch's current URL whose
+/// only part derived from a jar is its `Cookie` field: item 3.6's
+/// `theorem_wire_cookies`, with the jar the step was given, which is the
+/// kernel's jar when the URL is same-origin with the renderer's lock
+/// ([`credentialed`]) and an empty jar when it is not. So a cross-origin
+/// request carries nothing derived from the kernel's jar.
+pub open spec fn subfetch_credentials_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> bool {
+    let out = step(rules, urls, fetch, s, e).1;
+    fetch.urls.rules == rules ==> forall|k: int|
+        0 <= k < out.len() && (#[trigger] out[k]) is SubSend ==> match e {
+            Event::SubNet { renderer, serial, hop, input } => match subnet_target(s, renderer, serial) {
+                Some(f) => {
+                    let jar = if credentialed(fetch, f.lock, f.fetch.url) { s.jar } else { Seq::<clazel_cookie::storage::spec::Cookie>::empty() };
+                    &&& out[k]->SubSend_renderer == renderer && out[k]->SubSend_serial == serial && out[k]->SubSend_hop == hop
+                    &&& clazel_fetch::transducer::contract::is_wire_request(
+                        f.fetch.url,
+                        clazel_fetch::transducer::contract::carried(
+                            f.fetch.url,
+                            clazel_cookie::storage::spec::retrieve_cookie_string(
+                                rules,
+                                jar,
+                                (fetch.urls.request_url)(f.fetch.url),
+                                clazel_fetch::transducer::spec::request_context(fetch.urls, f.fetch),
+                                s.now,
+                            ),
+                        ),
+                        out[k]->SubSend_bytes,
+                    )
+                },
+                None => false,
+            },
+            _ => false,
+        }
+}
+
+/// `theorem_connection_ownership`, restated for item 5.19 (the second half;
+/// the first is [`connection_ownership_statement`], for navigations): a
+/// sub-fetch's connections are its renderer's tab's. Every sub-fetch
+/// connection output names a sub-fetch of the event's own renderer (the
+/// sender of a `FetchStyle`, or the sub-fetch a `SubNet` reports on) or, on a
+/// `Tick`, a sub-fetch of the old table; no other event names one. A
+/// sub-fetch the step creates is the sender's, on the sender's tab, with the
+/// sender's domain as its partition key; and a sub-fetch that stays keeps its
+/// renderer, lock, tab and partition key.
+pub open spec fn subfetch_ownership_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> bool {
+    let (s1, out) = step(rules, urls, fetch, s, e);
+    &&& forall|k: int|
+        0 <= k < out.len() && ((#[trigger] out[k]) is SubConnect || out[k] is SubSend || out[k] is SubClose) ==> match e {
+            Event::FromRenderer { id, .. } => crate::domain::output_id(out[k]) == id,
+            Event::SubNet { renderer, .. } => crate::domain::output_id(out[k]) == renderer,
+            Event::Tick { .. } => exists|j: int| 0 <= j < s.subfetches.len() && s.subfetches[j].renderer == crate::domain::output_id(out[k]),
+            _ => false,
+        }
+    &&& forall|j: int|
+        0 <= j < s1.subfetches.len() ==> match subfetch_of(
+            s.subfetches,
+            (#[trigger] s1.subfetches[j]).renderer,
+            s1.subfetches[j].lock,
+            s1.subfetches[j].serial,
+        ) {
+            Some(f) => s1.subfetches[j].tab == f.tab && s1.subfetches[j].partition == f.partition,
+            None => e matches Event::FromRenderer { id, .. } && s1.subfetches[j].renderer == id && exists|i: int|
+                0 <= i < s.renderers.len() && s.renderers[i].id == id && s1.subfetches[j].lock == s.renderers[i].lock && s1.subfetches[j].tab
+                    == s.renderers[i].tab && s1.subfetches[j].partition == crate::domain::domain_of_renderer(rules, s.renderers[i]),
+        }
+}
+
+/// The limits of item 5.19, as a theorem (`theorem_subfetch_limits`): a step
+/// never takes a renderer's sub-fetches in flight past
+/// [`max_subfetches_at_once`] or its document's count past
+/// [`max_subfetches_per_document`], when they were within them before.
+pub open spec fn subfetch_limits_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event, id: nat, lock: clazel_origin::spec::Origin) -> bool {
+    let s1 = step(rules, urls, fetch, s, e).0;
+    &&& (live_subfetches(s.subfetches, id, lock) <= max_subfetches_at_once() ==> live_subfetches(s1.subfetches, id, lock) <= max_subfetches_at_once())
+    &&& (subcount_of(s.subcounts, id, lock).1 <= max_subfetches_per_document() ==> subcount_of(s1.subcounts, id, lock).1 <= max_subfetches_per_document())
+}
+
+/// `theorem_commit_ends_subfetches` (item 5.19, "a navigation ends the old
+/// document's sub-fetches"): a commit that keeps the tab's renderer (a
+/// same-origin navigation) leaves none of its sub-fetches live, and a commit
+/// that replaces it leaves the old renderer not live, so none of its
+/// sub-fetches is either.
+pub open spec fn commit_ends_subfetches_statement(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, doc: Document) -> bool {
+    let s1 = navigate_tab(urls, s, tab, url, doc).0;
+    match find_by_tab(s.renderers, tab, 0) {
+        Some(i) => forall|j: int|
+            0 <= j < s1.subfetches.len() && (#[trigger] s1.subfetches[j]).renderer == s.renderers[i].id && s1.subfetches[j].lock == s.renderers[i].lock
+                && s1 != s ==> !subfetch_live(s1, s1.subfetches[j]),
+        None => true,
+    }
+}
+
+// ---------------------------------------------------------------------
+// The GPU crash policy (phase-5.md item 5.17c).
+// ---------------------------------------------------------------------
+
+/// `theorem_gpu_exit_contained`: a GPU process's exit changes no other tab's
+/// state or output. The step changes nothing but the crash policy's state;
+/// every record but that of the exiting process's renderer is unchanged; and
+/// every output is for that renderer (its new GPU process, its viewport) or
+/// its tab (the notice), or is the host's [`Output::GpuAllSoftware`]. Another
+/// tab's next start can change only through `s.gpu.demoted`, which
+/// [`site_cannot_demote_others_statement`] bounds.
+pub open spec fn gpu_exit_contained_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat) -> bool {
+    let (s1, out) = step(rules, urls, fetch, s, Event::GpuExited { id });
+    &&& s1 == State { gpu: s1.gpu, ..s }
+    &&& forall|x: nat, lock: clazel_origin::spec::Origin| x != id ==> gpu_rec_of(s1.gpu.recs, x, lock) == gpu_rec_of(s.gpu.recs, x, lock)
+    &&& forall|k: int|
+        0 <= k < out.len() ==> match #[trigger] out[k] {
+            Output::Spawn { id: x, policy: p } => x == id && p != Policy::Renderer,
+            Output::ToRenderer { id: x, .. } => x == id,
+            Output::ToGpu { id: x, .. } => x == id,
+            Output::GpuStopped { tab, url } => exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].id == id && s.renderers[i].tab == tab && s.renderers[i].url == url,
+            Output::GpuAllSoftware => true,
+            _ => false,
+        }
+}
+
+/// `theorem_gpu_restart_bounded`: a GPU process that exits while drawing is
+/// started again in the same mode only if its record does not already hold
+/// two exits of that mode, the older within five minutes (300 seconds), and
+/// then the record holds this exit and the newer of the two. So within any
+/// five minutes a tab's GPU process is restarted in one mode at most twice
+/// after exits in that mode; the third such exit moves it to software (rule
+/// 2) or stops it (rule 4). A restart in another mode records no exit.
+///
+/// The numbers are written out here (`300`, two exits), not read from
+/// `gpu_window` and `gpu_exits`, so that a change to those is a change to
+/// what is proven.
+pub open spec fn gpu_restart_bounded_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat) -> bool {
+    let (s1, out) = step(rules, urls, fetch, s, Event::GpuExited { id });
+    match find_by_id(s.renderers, id, 0) {
+        None => out.len() == 0 && s1 == s,
+        Some(i) => {
+            let r = s.renderers[i];
+            let g = gpu_of(s, r);
+            &&& (g.running && out.contains(Output::Spawn { id, policy: gpu_policy(g.software) })) ==> {
+                &&& !(g.exits.len() >= 2 && s.now - g.exits[1] < 300)
+                &&& gpu_of(s1, r).exits == seq![s.now] + g.exits.take(if g.exits.len() >= 1 { 1int } else { 0int })
+                &&& gpu_of(s1, r).software == g.software
+            }
+            &&& (out.contains(Output::Spawn { id, policy: gpu_policy(!g.software) }) ==> gpu_of(s1, r).exits.len() == 0)
+            &&& (g.running && g.exits.len() >= 2 && s.now - g.exits[1] < 300 ==> !out.contains(Output::Spawn { id, policy: gpu_policy(g.software) }))
+        },
+    }
+}
+
+/// `theorem_site_cannot_demote_others`: every tab goes to software
+/// (`gpu.demoted` set) only through one of: the host's `GpuSoftware`; a GPU
+/// process exiting before `GpuReady` in hardware (the machine's GPU refused,
+/// before any page reached the process); or a hardware exit while drawing of
+/// a site, or the declassified count of one (`GpuSiteExit`), when at least
+/// two **other** sites have hardware exits recorded within five minutes (300
+/// seconds). With [`gpu_sites_wf`] those two are different sites, so exits
+/// from fewer than three sites never change another site's mode.
+pub open spec fn site_cannot_demote_others_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> bool {
+    let s1 = step(rules, urls, fetch, s, e).0;
+    (!s.gpu.demoted && s1.gpu.demoted) ==> match e {
+        Event::GpuSoftware => true,
+        Event::GpuSiteExit { lock } => two_other_sites(s.gpu.sites, crate::domain::domain_of_lock(rules, lock), s.now),
+        Event::GpuExited { id } => match find_by_id(s.renderers, id, 0) {
+            Some(i) => {
+                let g = gpu_of(s, s.renderers[i]);
+                (!g.running && !g.software && !g.stopped) || (g.running && !g.software && two_other_sites(
+                    s.gpu.sites,
+                    crate::domain::domain_of_renderer(rules, s.renderers[i]),
+                    s.now,
+                ))
+            },
+            None => false,
+        },
+        _ => false,
+    }
+}
+
+/// Two entries of `sites` from sites other than `site`, within 300 seconds of
+/// `now`.
+pub open spec fn two_other_sites(sites: Seq<SiteExit>, site: crate::domain::Domain, now: int) -> bool {
+    exists|a: int, b: int|
+        0 <= a < b < sites.len() && sites[a].site != site && sites[b].site != site && now - sites[a].time < 300 && now - sites[b].time < 300
+}
+
+/// The sites the crash policy keeps are distinct, and at most two.
+pub open spec fn gpu_sites_wf(sites: Seq<SiteExit>) -> bool {
+    &&& sites.len() <= 2
+    &&& forall|a: int, b: int| 0 <= a < b < sites.len() ==> sites[a].site != sites[b].site
+}
+
+/// Every step keeps [`gpu_sites_wf`] (with `theorem_site_cannot_demote_others`:
+/// the two other sites are different sites).
+pub open spec fn gpu_sites_wf_kept_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> bool {
+    gpu_sites_wf(s.gpu.sites) ==> gpu_sites_wf(step(rules, urls, fetch, s, e).0.gpu.sites)
+}
+
+/// `theorem_paint_after_restart` (5.18's paint theorems restated over
+/// restarts): after the host's `GpuExited` of renderer `id`'s GPU process,
+/// its record is not running; and a frame from the GPU process of a renderer
+/// whose record is not running is never a `Paint`. So a message on `id`'s
+/// socket from an exited process (or from its successor before `GpuReady`)
+/// is never painted.
+pub open spec fn paint_after_restart_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat, bytes: Seq<u8>) -> bool {
+    &&& match find_by_id(s.renderers, id, 0) {
+        Some(i) => !gpu_of(step(rules, urls, fetch, s, Event::GpuExited { id }).0, s.renderers[i]).running,
+        None => true,
+    }
+    &&& match find_by_id(s.renderers, id, 0) {
+        Some(i) => !gpu_of(s, s.renderers[i]).running ==> forall|k: int|
+            0 <= k < step(rules, urls, fetch, s, Event::FromGpu { id, bytes }).1.len() ==> !(#[trigger] step(rules, urls, fetch, s, Event::FromGpu { id, bytes }).1[k] is Paint),
+        None => true,
     }
 }
 

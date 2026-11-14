@@ -108,9 +108,26 @@ proof fn lemma_from_renderer_no_surface(rules: Seq<clazel_psl::spec::Rule>, urls
                         lemma_storage_call_no_surface(s, r, m);
                     }
                 },
+                clazel_ipc::message::spec::Message::FetchStyle { request, url } => {
+                    crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, request, url);
+                },
                 _ => {},
             },
         }
+    }
+}
+
+/// Item 5.19's events (a `Tick`'s sweep, a `SubNet`) have none.
+proof fn lemma_subfetch_events_no_surface(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+    requires
+        e is Tick || e is SubNet,
+    ensures
+        no_surface(step(rules, urls, fetch, s, e).1),
+{
+    match e {
+        Event::Tick { time } => crate::subfetch_rel::lemma_tick_all_shape(s, time),
+        Event::SubNet { renderer, serial, hop, input } => crate::subfetch_rel::lemma_sub_net_shape(rules, fetch, s, renderer, serial, hop, input),
+        _ => {},
     }
 }
 
@@ -245,15 +262,55 @@ proof fn lemma_no_paint_resize(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns,
     }
 }
 
-/// A tick or the user's input paints nothing.
-proof fn lemma_no_paint_rest(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+/// A tick or a sub-fetch's network event paints nothing.
+proof fn lemma_no_paint_subfetch(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+    requires
+        e is Tick || e is SubNet,
+    ensures
+        forall|k: int| 0 <= k < step(rules, urls, fetch, s, e).1.len() ==> !((#[trigger] step(rules, urls, fetch, s, e).1[k]) is Paint),
+{
+    lemma_subfetch_events_no_surface(rules, urls, fetch, s, e);
+}
+
+/// The user's input paints nothing.
+proof fn lemma_no_paint_input(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
     requires
         reachable(rules, urls, fetch, s),
-        e is Tick || e is Input,
+        e is Input,
     ensures
         forall|k: int| 0 <= k < step(rules, urls, fetch, s, e).1.len() ==> !((#[trigger] step(rules, urls, fetch, s, e).1[k]) is Paint),
 {
     crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
+}
+
+/// A GPU process's exit paints nothing (item 5.17c).
+proof fn lemma_no_paint_gpu_exited(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+    requires
+        reachable(rules, urls, fetch, s),
+        e is GpuExited,
+    ensures
+        forall|k: int| 0 <= k < step(rules, urls, fetch, s, e).1.len() ==> !((#[trigger] step(rules, urls, fetch, s, e).1[k]) is Paint),
+{
+    crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
+    match e {
+        Event::GpuExited { id } => {
+            crate::gpu_theorems::theorem_gpu_exit_contained(rules, urls, fetch, s, id);
+        },
+        _ => {},
+    }
+}
+
+/// The switch to software drawing, and a site's GPU exits, paint nothing
+/// (item 5.17c).
+proof fn lemma_no_paint_gpu_policy(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+    requires
+        reachable(rules, urls, fetch, s),
+        e is GpuSoftware || e is GpuSiteExit,
+    ensures
+        forall|k: int| 0 <= k < step(rules, urls, fetch, s, e).1.len() ==> !((#[trigger] step(rules, urls, fetch, s, e).1[k]) is Paint),
+{
+    crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
+    crate::gpu_theorems::lemma_channel_gpu_events(rules, urls, fetch, s, e);
 }
 
 /// Every event but a GPU process's frame paints nothing. One lemma per
@@ -273,7 +330,10 @@ proof fn lemma_no_paint_but_gpu(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns
         Event::RendererExited { .. } => lemma_no_paint_exited(rules, urls, fetch, s, e),
         Event::Resize { .. } => lemma_no_paint_resize(rules, urls, fetch, s, e),
         Event::FromGpu { .. } => {},
-        Event::Tick { .. } | Event::Input { .. } => lemma_no_paint_rest(rules, urls, fetch, s, e),
+        Event::GpuExited { .. } => lemma_no_paint_gpu_exited(rules, urls, fetch, s, e),
+        Event::GpuSoftware | Event::GpuSiteExit { .. } => lemma_no_paint_gpu_policy(rules, urls, fetch, s, e),
+        Event::Tick { .. } | Event::SubNet { .. } => lemma_no_paint_subfetch(rules, urls, fetch, s, e),
+        Event::Input { .. } => lemma_no_paint_input(rules, urls, fetch, s, e),
     }
 }
 
@@ -638,7 +698,13 @@ pub proof fn theorem_channel_only_own_tab(rules: Seq<clazel_psl::spec::Rule>, ur
                 lemma_closes_no_surface(s.conns, s.renderers[i].tab);
             }
         },
-        Event::Tick { .. } => {},
+        Event::Tick { .. } | Event::SubNet { .. } => {
+            lemma_subfetch_events_no_surface(rules, urls, fetch, s, e);
+        },
+        // Item 5.17c.
+        Event::GpuExited { .. } | Event::GpuSoftware | Event::GpuSiteExit { .. } => {
+            crate::gpu_theorems::lemma_channel_gpu_events(rules, urls, fetch, s, e);
+        },
         _ => {
             lemma_channel_surface(rules, urls, fetch, s, e);
         },

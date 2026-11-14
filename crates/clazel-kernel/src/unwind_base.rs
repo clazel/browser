@@ -252,7 +252,7 @@ pub proof fn lemma_addressed_same(
 {
     if crate::noninterference::addressed_to(rules, d, s1, s1b, o) {
         let r = choose|r: Renderer|
-            (s1.renderers.contains(r) || s1b.renderers.contains(r)) && (if o is Show || o is Paint {
+            (s1.renderers.contains(r) || s1b.renderers.contains(r)) && (if o is Show || o is Paint || o is GpuStopped {
                 r.tab == crate::domain::output_id(o)
             } else {
                 r.id == crate::domain::output_id(o)
@@ -267,7 +267,7 @@ pub proof fn lemma_addressed_same(
     }
     if crate::noninterference::addressed_to(rules, d, s2, s2b, o) {
         let r = choose|r: Renderer|
-            (s2.renderers.contains(r) || s2b.renderers.contains(r)) && (if o is Show || o is Paint {
+            (s2.renderers.contains(r) || s2b.renderers.contains(r)) && (if o is Show || o is Paint || o is GpuStopped {
                 r.tab == crate::domain::output_id(o)
             } else {
                 r.id == crate::domain::output_id(o)
@@ -466,6 +466,7 @@ pub proof fn lemma_navigate_tab_frame(urls: UrlFns, s: State, tab: nat, url: Seq
         navigate_tab(urls, s, tab, url, script).0.now == s.now,
         navigate_tab(urls, s, tab, url, script).0.conns == s.conns,
         navigate_tab(urls, s, tab, url, script).0.next_conn == s.next_conn,
+        navigate_tab(urls, s, tab, url, script).0.gpu == s.gpu,
 {
 }
 
@@ -475,6 +476,7 @@ pub proof fn lemma_carry_out_frame(urls: UrlFns, s: State, tab: nat, partition: 
         carry_out(urls, s, tab, partition, cur, actions).0.jar == s.jar,
         carry_out(urls, s, tab, partition, cur, actions).0.storage == s.storage,
         carry_out(urls, s, tab, partition, cur, actions).0.now == s.now,
+        carry_out(urls, s, tab, partition, cur, actions).0.gpu == s.gpu,
     decreases actions.len(),
 {
     if actions.len() > 0 {
@@ -520,6 +522,8 @@ pub proof fn lemma_navigation_frame(rules: Seq<clazel_psl::spec::Rule>, urls: Ur
         begin_navigation(rules, urls, fetch, s, tab, url).0.storage == s.storage,
         begin_navigation(rules, urls, fetch, s, tab, url).0.now == s.now,
         begin_navigation(rules, urls, fetch, s, tab, url).0.next_id == s.next_id,
+        navigate_tab(urls, s, tab, url, script).0.gpu == s.gpu,
+        begin_navigation(rules, urls, fetch, s, tab, url).0.gpu == s.gpu,
 {
     if let Some(i) = find_by_tab(s.renderers, tab, 0) {
         if lock_of_url(urls, url, s.next_id) is Some {
@@ -561,6 +565,7 @@ pub proof fn lemma_net_frame(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
         }),
         net(rules, urls, fetch, s, conn, input).0.storage == s.storage,
         net(rules, urls, fetch, s, conn, input).0.now == s.now,
+        net(rules, urls, fetch, s, conn, input).0.gpu == s.gpu,
 {
     if let Some((c, i, nav)) = net_target(s, conn) {
         let (fs, actions, ops) = net_transducer_step(fetch, s, nav, input);
@@ -584,6 +589,7 @@ pub proof fn lemma_open_tab_frame(rules: Seq<clazel_psl::spec::Rule>, urls: UrlF
         open_tab(rules, urls, fetch, s, url, script).0.storage == s.storage,
         open_tab(rules, urls, fetch, s, url, script).0.now == s.now,
         open_tab(rules, urls, fetch, s, url, script).0.next_id <= s.next_id + 1,
+        open_tab(rules, urls, fetch, s, url, script).0.gpu == s.gpu,
 {
     let id = s.next_id;
     if let Some(lock) = lock_of_url(urls, url, id) {
@@ -592,6 +598,48 @@ pub proof fn lemma_open_tab_frame(rules: Seq<clazel_psl::spec::Rule>, urls: UrlF
             let s1 = State { renderers: s.renderers.push(rn), next_id: id + 1, ..s };
             lemma_navigation_frame(rules, urls, fetch, s1, id, url, script_document(seq![]));
         }
+    }
+}
+
+/// Item 5.17c: every event but its three and `FromGpu` leaves the crash
+/// policy's state as it is; `FromGpu` changes only its records.
+pub proof fn lemma_step_gpu_frame(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+    ensures
+        !(e is GpuExited || e is GpuSoftware || e is GpuSiteExit || e is FromGpu) ==> step(rules, urls, fetch, s, e).0.gpu == s.gpu,
+        e is FromGpu ==> step(rules, urls, fetch, s, e).0.gpu.demoted == s.gpu.demoted && step(rules, urls, fetch, s, e).0.gpu.sites == s.gpu.sites,
+{
+    match e {
+        Event::FromRenderer { id, bytes } => {
+            if let Some(i) = find_by_id(s.renderers, id, 0) {
+                if let Some(m) = accepted_message(s.renderers[i], bytes) {
+                    let r = s.renderers[i];
+                    crate::lock::lemma_storage_call_frame(s, r, m);
+                    if let clazel_ipc::message::spec::Message::Navigate { url } = m {
+                        if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+                            if let Some(resolved) = (urls.resolve)(r.url, relative) {
+                                lemma_navigation_frame(rules, urls, fetch, s, r.tab, resolved, script_document(seq![]));
+                            }
+                        }
+                    }
+                    if let clazel_ipc::message::spec::Message::FetchStyle { request, url } = m {
+                        crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, request, url);
+                    }
+                }
+            }
+        },
+        Event::OpenTab { url, script } => {
+            lemma_open_tab_frame(rules, urls, fetch, s, url, script);
+        },
+        Event::NavigateTab { tab, url } => {
+            lemma_navigation_frame(rules, urls, fetch, s, tab, url, script_document(seq![]));
+        },
+        Event::Net { conn, input } => {
+            lemma_net_frame(rules, urls, fetch, s, conn, input);
+        },
+        Event::SubNet { renderer, serial, hop, input } => {
+            crate::subfetch_rel::lemma_sub_net_shape(rules, fetch, s, renderer, serial, hop, input);
+        },
+        _ => {},
     }
 }
 
@@ -654,6 +702,9 @@ pub proof fn lemma_jar_no_public_suffix_step(rules: Seq<clazel_psl::spec::Rule>,
         },
         Event::NavigateTab { tab, url } => {
             lemma_navigation_frame(rules, urls, fetch, s, tab, url, script_document(seq![]));
+        },
+        Event::SubNet { renderer, serial, hop, input } => {
+            crate::subfetch_rel::lemma_sub_net_wf(rules, urls, fetch, s, renderer, serial, hop, input);
         },
         Event::Net { conn, input } => {
             lemma_net_frame(rules, urls, fetch, s, conn, input);

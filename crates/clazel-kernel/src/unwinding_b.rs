@@ -41,6 +41,8 @@ pub proof fn lemma_local_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
             } else {
                 crate::domain::output_id(step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1[k]) == id
             },
+        forall|k: int|
+            0 <= k < step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1.len() ==> !(#[trigger] step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1[k] is GpuStopped),
 {
     crate::unwind_base::lemma_found_contained(s, id);
     let i = find_by_id(s.renderers, id, 0)->Some_0;
@@ -55,6 +57,9 @@ pub proof fn lemma_local_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
                     assert(false);
                 }
             }
+        }
+        if let clazel_ipc::message::spec::Message::FetchStyle { request, url } = m {
+            crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, request, url);
         }
     } else {
         crate::net_theorems::lemma_closes_of_tab(s.conns, r.tab);
@@ -104,12 +109,18 @@ pub proof fn lemma_local_respect(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
 {
     if e is FromGpu {
         crate::surface_rel::lemma_local_respect_gpu(rules, urls, fetch, d, s1, s2, e);
+    } else if e is SubNet {
+        crate::subfetch_rel::lemma_local_respect_subnet(rules, urls, fetch, d, s1, s2, e);
+    } else if e is GpuExited {
+        crate::gpu_rel::lemma_local_respect_gpu_exit(rules, urls, fetch, d, s1, s2, e);
     } else {
         lemma_local_respect_renderer(rules, urls, fetch, d, s1, s2, e);
     }
 }
 
 /// [`lemma_local_respect`] for a renderer's frame.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(200)]
 pub proof fn lemma_local_respect_renderer(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s1: State, s2: State, e: Event)
     requires
         crate::noninterference::rel(rules, urls, d, s1, s2),
@@ -137,7 +148,7 @@ pub proof fn lemma_local_respect_renderer(rules: Seq<clazel_psl::spec::Rule>, ur
         if crate::noninterference::addressed_to(rules, d, s1, s1b, out1[k]) {
             assert(crate::noninterference::renderer_bound(out1[k]));
             let q = choose|q: Renderer|
-                (s1.renderers.contains(q) || s1b.renderers.contains(q)) && (if out1[k] is Show || out1[k] is Paint {
+                (s1.renderers.contains(q) || s1b.renderers.contains(q)) && (if out1[k] is Show || out1[k] is Paint || out1[k] is GpuStopped {
                     q.tab == crate::domain::output_id(out1[k])
                 } else {
                     q.id == crate::domain::output_id(out1[k])
@@ -147,7 +158,7 @@ pub proof fn lemma_local_respect_renderer(rules: Seq<clazel_psl::spec::Rule>, ur
             }
             assert(s1.renderers.contains(q));
             assert(s1.renderers.contains(r));
-            if out1[k] is Show || out1[k] is Paint {
+            if out1[k] is Show || out1[k] is Paint || out1[k] is GpuStopped {
                 crate::unwind_base::lemma_same_tab_same_renderer(urls, s1.renderers, s1.next_id, q, r);
             } else {
                 crate::unwind_base::lemma_same_id_same_renderer(urls, s1.renderers, s1.next_id, q, r);
@@ -224,6 +235,12 @@ pub proof fn lemma_local_respect_renderer(rules: Seq<clazel_psl::spec::Rule>, ur
         // another domain.
         if let Some(clazel_ipc::message::spec::Message::Title { title }) = accepted_message(r, bytes) {
             crate::surface_rel::lemma_titles_set_other(rules, s1.titles, r.id, r.lock, title, d);
+        }
+        // Item 5.19: a `FetchStyle` changes only its sender's sub-fetches and
+        // counts, of another domain.
+        if let Some(clazel_ipc::message::spec::Message::FetchStyle { request, url }) = accepted_message(r, bytes) {
+            crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s1, r, request, url);
+            crate::subfetch_rel::lemma_fetch_style_other(rules, urls, fetch, d, s1, r, request, url);
         }
         crate::unwinding_d::lemma_rel_same_table(rules, urls, d, s1, s2, s1b, s2);
     }

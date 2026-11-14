@@ -66,8 +66,8 @@ pub open spec fn user_tabs_open(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns
 /// renderer. A `Show` (item 4.12) is in the observation of the domain of the
 /// renderer of its tab: what the user sees of a tab is that domain's.
 pub open spec fn addressed_to(rules: Seq<clazel_psl::spec::Rule>, d: crate::domain::Domain, s: State, s1: State, o: Output) -> bool {
-    !(o is Connect || o is Send || o is Close) && exists|r: Renderer|
-        (s.renderers.contains(r) || s1.renderers.contains(r)) && (if o is Show || o is Paint {
+    !(o is Connect || o is Send || o is Close || o is SubConnect || o is SubSend || o is SubClose || o is GpuAllSoftware) && exists|r: Renderer|
+        (s.renderers.contains(r) || s1.renderers.contains(r)) && (if o is Show || o is Paint || o is GpuStopped {
             r.tab == crate::domain::output_id(o)
         } else {
             r.id == crate::domain::output_id(o)
@@ -99,7 +99,7 @@ pub open spec fn run_outputs_for(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
 /// the user about a renderer's tab (a `Show`, item 4.12), as opposed to those
 /// addressed to the network shell.
 pub open spec fn renderer_bound(o: Output) -> bool {
-    o is ToRenderer || o is Spawn || o is Kill || o is Show || o is ToGpu || o is Paint
+    o is ToRenderer || o is Spawn || o is Kill || o is Show || o is ToGpu || o is Paint || o is GpuStopped
 }
 
 /// The renderer-bound outputs of `out`, in order. Two related runs' outputs
@@ -130,7 +130,8 @@ pub open spec fn rel_conn(s1: State, s2: State) -> bool {
 /// they are given step the same fetches. Item 5.18: the same viewports (only
 /// the user's `Resize` sets them, and it is kept by every purge), and the
 /// same titles of `d`'s locks (another domain's `Title`, dropped by the
-/// purge, changes only an entry under its own lock).
+/// purge, changes only an entry under its own lock). Item 5.19: the same
+/// sub-fetches and counts under the observer's locks.
 pub open spec fn rel(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, s1: State, s2: State) -> bool {
     &&& crate::invariant::kernel_wf(rules, urls, s1)
     &&& crate::invariant::kernel_wf(rules, urls, s2)
@@ -147,6 +148,11 @@ pub open spec fn rel(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate:
     &&& forall|o: clazel_origin::spec::Origin| o is Tuple && crate::domain::domain_of_lock(rules, o) == d ==> storage_of(s1, o) == storage_of(s2, o)
     &&& s1.viewports == s2.viewports
     &&& crate::domain::titles_of_domain(rules, s1.titles, d) == crate::domain::titles_of_domain(rules, s2.titles, d)
+    &&& crate::domain::subfetches_of_domain(rules, s1.subfetches, d) == crate::domain::subfetches_of_domain(rules, s2.subfetches, d)
+    &&& crate::domain::subcounts_of_domain(rules, s1.subcounts, d) == crate::domain::subcounts_of_domain(rules, s2.subcounts, d)
+    &&& s1.gpu.demoted == s2.gpu.demoted
+    &&& s1.gpu.sites == s2.gpu.sites
+    &&& crate::domain::gpu_recs_of_domain(rules, s1.gpu.recs, d) == crate::domain::gpu_recs_of_domain(rules, s2.gpu.recs, d)
 }
 
 // ---------------------------------------------------------------------
@@ -181,7 +187,7 @@ pub open spec fn step_consistency_statement(rules: Seq<clazel_psl::spec::Rule>, 
 /// that does not is answered with an error to the sender and changes nothing,
 /// like a message that is not a `Navigate`).
 pub open spec fn other_domain_local(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, s1: State, e: Event) -> bool {
-    &&& (e is FromRenderer || e is FromGpu)
+    &&& (e is FromRenderer || e is FromGpu || e is SubNet || e is GpuExited)
     &&& crate::domain::event_domain(rules, s1, e) matches Some(d2) && d2 != d
     &&& crate::domain::declassified(urls, s1, e) is None
 }
@@ -189,6 +195,8 @@ pub open spec fn other_domain_local(rules: Seq<clazel_psl::spec::Rule>, urls: Ur
 /// `lemma_local_respect` (the plan's "not a `Navigate`", widened to "no
 /// declassified part"): such an event leaves the state related to the
 /// unchanged other one, and sends nothing to `d`.
+///
+/// (Item 5.17c widens "an event of a renderer" to a GPU process's exit.)
 pub open spec fn local_respect_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s1: State, s2: State, e: Event) -> bool {
     let (s1b, out1) = step(rules, urls, fetch, s1, e);
     &&& rel(rules, urls, d, s1b, s2)
@@ -206,6 +214,26 @@ pub open spec fn other_domain_navigate(rules: Seq<clazel_psl::spec::Rule>, urls:
 /// `lemma_navigate_declassify`: such an event changes the state, and sends
 /// to `d`, exactly as its declassified `NavigateTab` does in the other run.
 pub open spec fn navigate_declassify_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s1: State, s2: State, e: Event) -> bool {
+    let dn = crate::domain::declassified(urls, s1, e)->Some_0;
+    let (s1b, out1) = step(rules, urls, fetch, s1, e);
+    let (s2b, out2) = step(rules, urls, fetch, s2, dn);
+    &&& rel(rules, urls, d, s1b, s2b)
+    &&& outputs_for(rules, d, s1, s1b, out1) == outputs_for(rules, d, s2, s2b, out2)
+}
+
+/// A GPU process's exit of another domain that has a declassified part
+/// (item 5.17c): it refused the machine's GPU, or it counts its site.
+pub open spec fn other_domain_gpu(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, s1: State, e: Event) -> bool {
+    &&& e is GpuExited
+    &&& crate::domain::event_domain(rules, s1, e) matches Some(d2) && d2 != d
+    &&& crate::domain::declassified(urls, s1, e) is Some
+}
+
+/// `lemma_gpu_declassify` (item 5.17c): such an exit changes the state, and
+/// sends to `d`, exactly as its declassified `GpuSoftware` or `GpuSiteExit`
+/// does in the other run: what crosses domains is the shared bit and count of
+/// rule 3 and the refusal, and nothing else.
+pub open spec fn gpu_declassify_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s1: State, s2: State, e: Event) -> bool {
     let dn = crate::domain::declassified(urls, s1, e)->Some_0;
     let (s1b, out1) = step(rules, urls, fetch, s1, e);
     let (s2b, out2) = step(rules, urls, fetch, s2, dn);

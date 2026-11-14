@@ -401,6 +401,79 @@ pub open spec fn titles_view(v: Seq<TitledRecord>) -> Seq<Titled> {
     v.map_values(|x: TitledRecord| x@)
 }
 
+/// A style sheet fetch in flight (item 5.19), viewed as [`SubFetch`].
+pub struct SubFetchRecord {
+    /// The renderer that asked.
+    pub renderer: u64,
+    /// Its lock.
+    pub lock: ParsedOrigin,
+    /// The renderer's serial number for it.
+    pub serial: u64,
+    /// The renderer's own id for it.
+    pub request: u64,
+    /// The renderer's tab.
+    pub tab: u64,
+    /// The transducer's state.
+    pub fetch: StateBuf,
+    /// The connection the transducer last asked for.
+    pub hop: u64,
+    /// When it started.
+    pub started: u64,
+    /// The partition key of its connections.
+    pub partition: DomainRecord,
+    /// Whether its document has been replaced.
+    pub ended: bool,
+}
+
+impl View for SubFetchRecord {
+    type V = SubFetch;
+
+    open spec fn view(&self) -> SubFetch {
+        SubFetch {
+            renderer: self.renderer as nat,
+            lock: self.lock@,
+            serial: self.serial as nat,
+            request: self.request,
+            tab: self.tab as nat,
+            fetch: self.fetch@,
+            hop: self.hop as nat,
+            started: self.started as int,
+            partition: self.partition@,
+            ended: self.ended,
+        }
+    }
+}
+
+/// The view of the sub-fetches.
+pub open spec fn subfetches_view(v: Seq<SubFetchRecord>) -> Seq<SubFetch> {
+    v.map_values(|x: SubFetchRecord| x@)
+}
+
+/// A renderer's count of sub-fetches (item 5.19), viewed as [`SubCount`].
+pub struct SubCountRecord {
+    /// The renderer.
+    pub renderer: u64,
+    /// Its lock.
+    pub lock: ParsedOrigin,
+    /// Sub-fetches it has started.
+    pub serial: u64,
+    /// Sub-fetches it has started since its last commit.
+    pub in_document: u64,
+}
+
+impl View for SubCountRecord {
+    type V = SubCount;
+
+    open spec fn view(&self) -> SubCount {
+        SubCount { renderer: self.renderer as nat, lock: self.lock@, serial: self.serial as nat, in_document: self.in_document as nat }
+    }
+}
+
+/// The view of the counts.
+pub open spec fn subcounts_view(v: Seq<SubCountRecord>) -> Seq<SubCount> {
+    v.map_values(|x: SubCountRecord| x@)
+}
+
 /// The kernel's state, viewed as [`State`].
 pub struct StateRecord {
     /// The live renderers.
@@ -421,6 +494,87 @@ pub struct StateRecord {
     pub viewports: Vec<TabViewportRecord>,
     /// The renderers' titles (item 5.18).
     pub titles: Vec<TitledRecord>,
+    /// The style sheet fetches in flight (item 5.19).
+    pub subfetches: Vec<SubFetchRecord>,
+    /// The renderers' counts of style sheet fetches (item 5.19).
+    pub subcounts: Vec<SubCountRecord>,
+    /// The GPU crash policy's state (item 5.17c).
+    pub gpu: GpuStateRecord,
+}
+
+/// A renderer's GPU record (item 5.17c), viewed as [`GpuRec`].
+pub struct GpuRecRecord {
+    /// The renderer.
+    pub id: u64,
+    /// Its lock.
+    pub lock: ParsedOrigin,
+    /// In software.
+    pub software: bool,
+    /// Said `GpuReady`.
+    pub running: bool,
+    /// Not restarted.
+    pub stopped: bool,
+    /// The last exits in this mode, newest first.
+    pub exits: Vec<u64>,
+}
+
+impl View for GpuRecRecord {
+    type V = GpuRec;
+
+    open spec fn view(&self) -> GpuRec {
+        GpuRec {
+            id: self.id as nat,
+            lock: self.lock@,
+            software: self.software,
+            running: self.running,
+            stopped: self.stopped,
+            exits: self.exits@.map_values(|t: u64| t as int),
+        }
+    }
+}
+
+/// The view of the GPU records.
+pub open spec fn gpu_recs_view(v: Seq<GpuRecRecord>) -> Seq<GpuRec> {
+    v.map_values(|x: GpuRecRecord| x@)
+}
+
+/// A site with a hardware exit (item 5.17c), viewed as [`SiteExit`].
+pub struct SiteExitRecord {
+    /// The site.
+    pub site: DomainRecord,
+    /// When.
+    pub time: u64,
+}
+
+impl View for SiteExitRecord {
+    type V = SiteExit;
+
+    open spec fn view(&self) -> SiteExit {
+        SiteExit { site: self.site@, time: self.time as int }
+    }
+}
+
+/// The view of the sites.
+pub open spec fn sites_view(v: Seq<SiteExitRecord>) -> Seq<SiteExit> {
+    v.map_values(|x: SiteExitRecord| x@)
+}
+
+/// The crash policy's state (item 5.17c), viewed as [`GpuState`].
+pub struct GpuStateRecord {
+    /// The records.
+    pub recs: Vec<GpuRecRecord>,
+    /// Every tab in software.
+    pub demoted: bool,
+    /// The recent sites.
+    pub sites: Vec<SiteExitRecord>,
+}
+
+impl View for GpuStateRecord {
+    type V = GpuState;
+
+    open spec fn view(&self) -> GpuState {
+        GpuState { recs: gpu_recs_view(self.recs@), demoted: self.demoted, sites: sites_view(self.sites@) }
+    }
 }
 
 impl View for StateRecord {
@@ -437,6 +591,9 @@ impl View for StateRecord {
             now: self.now as int,
             viewports: viewports_view(self.viewports@),
             titles: titles_view(self.titles@),
+            subfetches: subfetches_view(self.subfetches@),
+            subcounts: subcounts_view(self.subcounts@),
+            gpu: self.gpu@,
         }
     }
 }
@@ -450,6 +607,7 @@ impl StateRecord {
     pub open spec fn exec_wf<F: super::fetch::FetchFnsExec>(&self) -> bool {
         &&& buckets_wf(self.storage@)
         &&& super::step::renderers_ok::<F>(self.renderers@)
+        &&& super::subfetch::subfetches_ok::<F>(self.subfetches@)
     }
 }
 
@@ -469,10 +627,17 @@ pub fn init_record<F: super::fetch::FetchFnsExec>() -> (s: StateRecord)
         now: 0,
         viewports: Vec::new(),
         titles: Vec::new(),
+        subfetches: Vec::new(),
+        subcounts: Vec::new(),
+        gpu: GpuStateRecord { recs: Vec::new(), demoted: false, sites: Vec::new() },
     };
     proof {
+        assert(subfetches_view(s.subfetches@) =~= Seq::<SubFetch>::empty());
+        assert(subcounts_view(s.subcounts@) =~= Seq::<SubCount>::empty());
         assert(viewports_view(s.viewports@) =~= Seq::<TabViewport>::empty());
         assert(titles_view(s.titles@) =~= Seq::<Titled>::empty());
+        assert(gpu_recs_view(s.gpu.recs@) =~= Seq::<GpuRec>::empty());
+        assert(sites_view(s.gpu.sites@) =~= Seq::<SiteExit>::empty());
         assert(conns_view(s.conns@) =~= Seq::<Connection>::empty());
         assert(renderers_view(s.renderers@) =~= Seq::<Renderer>::empty());
         assert(clazel_cookie::storage::exec::jar_view(s.jar@) =~= Seq::<clazel_cookie::storage::spec::Cookie>::empty());
@@ -544,6 +709,17 @@ pub enum EventRecord {
         /// Device pixels per CSS pixel.
         scale: u64,
     },
+    /// The network shell reports on a sub-fetch connection (item 5.19).
+    SubNet {
+        /// The renderer.
+        renderer: u64,
+        /// The sub-fetch's serial number.
+        serial: u64,
+        /// The connection.
+        hop: u64,
+        /// What happened to it.
+        input: InputBuf,
+    },
     /// The user's input on a tab's content area (item 5.18).
     Input {
         /// The tab.
@@ -560,6 +736,19 @@ pub enum EventRecord {
         delta: u64,
         /// The key's code.
         key: u64,
+    },
+    /// The GPU process of renderer `id` exited (item 5.17c).
+    GpuExited {
+        /// The renderer.
+        id: u64,
+    },
+    /// Every tab in software from its next start (item 5.17c).
+    GpuSoftware,
+    /// The declassified part of another domain's hardware GPU exit (item
+    /// 5.17c; the host never sends it).
+    GpuSiteExit {
+        /// The renderer's lock.
+        lock: ParsedOrigin,
     },
 }
 
@@ -581,11 +770,20 @@ impl View for EventRecord {
             EventRecord::RendererExited { id } => Event::RendererExited { id: *id as nat },
             EventRecord::Tick { time } => Event::Tick { time: *time as int },
             EventRecord::FromGpu { id, bytes } => Event::FromGpu { id: *id as nat, bytes: bytes@ },
+            EventRecord::SubNet { renderer, serial, hop, input } => Event::SubNet {
+                renderer: *renderer as nat,
+                serial: *serial as nat,
+                hop: *hop as nat,
+                input: input@,
+            },
             EventRecord::Resize { tab, width, height, scale } => Event::Resize { tab: *tab as nat, width: *width, height: *height, scale: *scale },
             EventRecord::Input { tab, kind, x, y, negative, delta, key } => Event::Input {
                 tab: *tab as nat,
                 input: UserInput { kind: *kind, x: *x, y: *y, negative: *negative, delta: *delta, key: *key },
             },
+            EventRecord::GpuExited { id } => Event::GpuExited { id: *id as nat },
+            EventRecord::GpuSoftware => Event::GpuSoftware,
+            EventRecord::GpuSiteExit { lock } => Event::GpuSiteExit { lock: lock@ },
         }
     }
 }
@@ -651,6 +849,41 @@ pub enum OutputRecord {
         /// The links.
         links: Vec<Vec<u8>>,
     },
+    /// Open a sub-fetch connection (item 5.19).
+    SubConnect {
+        /// The renderer.
+        renderer: u64,
+        /// The sub-fetch.
+        serial: u64,
+        /// The connection.
+        hop: u64,
+        /// The host.
+        host: Vec<u8>,
+        /// The port.
+        port: u64,
+        /// Whether to speak TLS.
+        tls: bool,
+    },
+    /// Write to a sub-fetch connection (item 5.19).
+    SubSend {
+        /// The renderer.
+        renderer: u64,
+        /// The sub-fetch.
+        serial: u64,
+        /// The connection.
+        hop: u64,
+        /// The octets.
+        bytes: Vec<u8>,
+    },
+    /// Close a sub-fetch connection (item 5.19).
+    SubClose {
+        /// The renderer.
+        renderer: u64,
+        /// The sub-fetch.
+        serial: u64,
+        /// The connection.
+        hop: u64,
+    },
     /// Send a whole frame to the GPU process of renderer `id` (item 5.18).
     ToGpu {
         /// The renderer.
@@ -674,6 +907,22 @@ pub enum OutputRecord {
         /// The frame's height.
         height: u64,
     },
+    /// Start the GPU process paired with renderer `id` in software (item
+    /// 5.17c).
+    SpawnGpuSoftware {
+        /// The renderer.
+        id: u64,
+    },
+    /// The tab's GPU process is not restarted: the host draws the notice
+    /// (item 5.17c).
+    GpuStopped {
+        /// The tab.
+        tab: u64,
+        /// Its renderer's URL.
+        url: Vec<u32>,
+    },
+    /// Every later `SpawnGpu` in software (item 5.17c).
+    GpuAllSoftware,
 }
 
 impl View for OutputRecord {
@@ -696,6 +945,21 @@ impl View for OutputRecord {
                 links: clazel_ipc::message::codec::strings_view(links@),
             },
             OutputRecord::ToGpu { id, bytes } => Output::ToGpu { id: *id as nat, bytes: bytes@ },
+            OutputRecord::SubConnect { renderer, serial, hop, host, port, tls } => Output::SubConnect {
+                renderer: *renderer as nat,
+                serial: *serial as nat,
+                hop: *hop as nat,
+                host: host@,
+                port: *port as nat,
+                tls: *tls,
+            },
+            OutputRecord::SubSend { renderer, serial, hop, bytes } => Output::SubSend {
+                renderer: *renderer as nat,
+                serial: *serial as nat,
+                hop: *hop as nat,
+                bytes: bytes@,
+            },
+            OutputRecord::SubClose { renderer, serial, hop } => Output::SubClose { renderer: *renderer as nat, serial: *serial as nat, hop: *hop as nat },
             OutputRecord::Paint { tab, url, title, buffer, width, height } => Output::Paint {
                 tab: *tab as nat,
                 url: url@,
@@ -704,6 +968,9 @@ impl View for OutputRecord {
                 width: *width,
                 height: *height,
             },
+            OutputRecord::SpawnGpuSoftware { id } => Output::Spawn { id: *id as nat, policy: Policy::GpuSoftware },
+            OutputRecord::GpuStopped { tab, url } => Output::GpuStopped { tab: *tab as nat, url: url@ },
+            OutputRecord::GpuAllSoftware => Output::GpuAllSoftware,
         }
     }
 }

@@ -518,7 +518,15 @@ proof fn lemma_step_sent(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch
                 lemma_all_remove(s.renderers, o + out, i);
             }
         },
-        Event::Resize { .. } | Event::Input { .. } => {
+        // Item 5.17c: the renderers are unchanged.
+        Event::GpuExited { id } => {
+            lemma_all_prefix(s.renderers, o, out);
+            crate::gpu_theorems::theorem_gpu_exit_contained(rules, urls, fetch, s, id);
+        },
+        Event::GpuSoftware | Event::GpuSiteExit { .. } => {
+            lemma_all_prefix(s.renderers, o, out);
+        },
+        Event::Resize { .. } | Event::Input { .. } | Event::SubNet { .. } => {
             lemma_all_prefix(s.renderers, o, out);
         },
     }

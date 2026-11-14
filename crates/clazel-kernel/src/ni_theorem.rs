@@ -101,7 +101,7 @@ pub proof fn lemma_kept_step(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
     requires
         crate::noninterference::rel(rules, urls, d, s1, s2),
         crate::noninterference::kept_event(rules, urls, d, s1, e),
-        !(e is Resize || e is Input),
+        !(e is Resize || e is Input || e is Tick),
     ensures
         crate::noninterference::renderer_outs(step(rules, urls, fetch, s1, e).1) == crate::noninterference::renderer_outs(step(rules, urls, fetch, s2, e).1),
         crate::noninterference::rel(rules, urls, d, step(rules, urls, fetch, s1, e).0, step(rules, urls, fetch, s2, e).0),
@@ -129,9 +129,7 @@ pub proof fn lemma_kept_step(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
         Event::RendererExited { id } => {
             crate::unwinding::lemma_exited_consistency(rules, urls, fetch, d, s1, s2, id);
         },
-        Event::Tick { time } => {
-            crate::unwinding::lemma_tick_consistency(rules, urls, fetch, d, s1, s2, time);
-        },
+        Event::Tick { .. } => {},
         // Item 5.18. (`Resize` and `Input` are handled apart:
         // `crate::surface_rel::lemma_user_event_consistency`.)
         Event::FromGpu { id, bytes } => {
@@ -143,7 +141,30 @@ pub proof fn lemma_kept_step(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
             }
             crate::surface_rel::lemma_d_gpu_event(rules, urls, fetch, d, s1, s2, id, bytes);
         },
+        // Item 5.17c.
+        Event::GpuExited { id } => {
+            assert(crate::domain::event_domain(rules, s1, e) is Some);
+            let d2 = crate::domain::event_domain(rules, s1, e)->Some_0;
+            if d2 != d {
+                assert(crate::domain::declassified(urls, s1, e) == Some(e));
+                assert(false);
+            }
+            crate::gpu_rel::lemma_d_gpu_exited(rules, urls, fetch, d, s1, s2, id);
+        },
+        Event::GpuSoftware | Event::GpuSiteExit { .. } => {
+            crate::gpu_rel::lemma_shared_event_consistency(rules, urls, fetch, d, s1, s2, e);
+        },
         Event::Resize { .. } | Event::Input { .. } => {},
+        // Item 5.19.
+        Event::SubNet { renderer, serial, hop, input } => {
+            assert(crate::domain::event_domain(rules, s1, e) is Some);
+            let d2 = crate::domain::event_domain(rules, s1, e)->Some_0;
+            if d2 != d {
+                assert(crate::domain::declassified(urls, s1, e) is None);
+                assert(false);
+            }
+            crate::subfetch_rel::lemma_d_subnet(rules, urls, fetch, d, s1, s2, renderer, serial, hop, input);
+        },
     }
 }
 
@@ -157,6 +178,10 @@ pub proof fn lemma_output_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: 
 {
     if e is Resize || e is Input {
         crate::surface_rel::lemma_user_event_consistency(rules, urls, fetch, d, s1, s2, e);
+        return;
+    }
+    if let Event::Tick { time } = e {
+        crate::subfetch_rel::lemma_tick_all_consistency(rules, urls, fetch, d, s1, s2, time);
         return;
     }
     lemma_kept_step(rules, urls, fetch, d, s1, s2, e);
@@ -175,6 +200,8 @@ pub proof fn lemma_step_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: Ur
 {
     if e is Resize || e is Input {
         crate::surface_rel::lemma_user_event_consistency(rules, urls, fetch, d, s1, s2, e);
+    } else if let Event::Tick { time } = e {
+        crate::subfetch_rel::lemma_tick_all_consistency(rules, urls, fetch, d, s1, s2, time);
     } else {
         lemma_kept_step(rules, urls, fetch, d, s1, s2, e);
     }
@@ -222,13 +249,17 @@ pub proof fn lemma_trace_noninterference(rules: Seq<clazel_psl::spec::Rule>, url
                 // A frame of a renderer (or, item 5.18, of a GPU process) that is
                 // not open, or of another domain without a declassified part: the
                 // purged run does nothing.
-                assert(e is FromRenderer || e is FromGpu);
+                assert(e is FromRenderer || e is FromGpu || e is SubNet || e is GpuExited);
                 match crate::domain::event_domain(rules, s1, e) {
                     None => {
                         let id = if e is FromRenderer {
                             e->FromRenderer_id
-                        } else {
+                        } else if e is FromGpu {
                             e->FromGpu_id
+                        } else if e is GpuExited {
+                            e->GpuExited_id
+                        } else {
+                            e->SubNet_renderer
                         };
                         crate::invariant::lemma_find_by_id(s1.renderers, id, 0);
                         assert(find_by_id(s1.renderers, id, 0) is None);
@@ -254,6 +285,17 @@ pub proof fn lemma_trace_noninterference(rules: Seq<clazel_psl::spec::Rule>, url
                     let (s2b, o2) = step(rules, urls, fetch, s2, e);
                     lemma_trace_noninterference(rules, urls, fetch, d, s1b, s2b, rest);
                     lemma_run_outputs_cons(rules, urls, fetch, d, s2, e, crate::domain::ipurge(rules, urls, fetch, s1b, d, rest));
+                } else if e is GpuExited {
+                    // Item 5.17c: the declassified part of another domain's
+                    // GPU exit.
+                    let d2 = crate::domain::event_domain(rules, s1, e)->Some_0;
+                    assert(d2 != d);
+                    assert(crate::domain::declassified(urls, s1, e) == Some(pe));
+                    assert(crate::noninterference::other_domain_gpu(rules, urls, d, s1, e));
+                    crate::gpu_rel::lemma_gpu_declassify(rules, urls, fetch, d, s1, s2, e);
+                    let (s2b, o2) = step(rules, urls, fetch, s2, pe);
+                    lemma_trace_noninterference(rules, urls, fetch, d, s1b, s2b, rest);
+                    lemma_run_outputs_cons(rules, urls, fetch, d, s2, pe, crate::domain::ipurge(rules, urls, fetch, s1b, d, rest));
                 } else {
                     // The declassified NavigateTab of a renderer of another domain.
                     assert(e is FromRenderer);
@@ -316,6 +358,11 @@ pub open spec fn rename_output(f: spec_fn(nat) -> nat, o: Output) -> Output {
         Output::Show { tab, url, title, text, links } => Output::Show { tab: f(tab), url, title, text, links },
         Output::ToGpu { id, bytes } => Output::ToGpu { id: f(id), bytes },
         Output::Paint { tab, url, title, buffer, width, height } => Output::Paint { tab: f(tab), url, title, buffer, width, height },
+        Output::GpuStopped { tab, url } => Output::GpuStopped { tab: f(tab), url },
+        Output::GpuAllSoftware => Output::GpuAllSoftware,
+        Output::SubConnect { renderer, serial, hop, host, port, tls } => Output::SubConnect { renderer: f(renderer), serial, hop, host, port, tls },
+        Output::SubSend { renderer, serial, hop, bytes } => Output::SubSend { renderer: f(renderer), serial, hop, bytes },
+        Output::SubClose { renderer, serial, hop } => Output::SubClose { renderer: f(renderer), serial, hop },
     }
 }
 
@@ -361,6 +408,8 @@ pub proof fn theorem_cookie_noninterference_up_to_ids(rules: Seq<clazel_psl::spe
             Output::Show { .. } => {},
             Output::ToGpu { .. } => {},
             Output::Paint { .. } => {},
+            Output::GpuStopped { .. } | Output::GpuAllSoftware => {},
+            Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => {},
         }
     }
     assert(outs.map_values(|o: Output| rename_output(f, o)) =~= outs);

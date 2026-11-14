@@ -194,6 +194,46 @@ pub proof fn lemma_body_fits_frame(bytes: Seq<u8>)
     assert(crate::cbor::spec::encode_head(2, bytes.len()).len() <= 5);
 }
 
+/// A `StyleBody` of at most [`max_style_chunk`] octets can be sent, and its
+/// bytes fit one frame (item 5.19), whatever its request id.
+pub proof fn lemma_style_body_fits_frame(request: u64, bytes: Seq<u8>)
+    requires
+        bytes.len() <= max_style_chunk(),
+    ensures
+        message_ok(Message::StyleBody { request, bytes }),
+        crate::frame::spec::payload_ok(encode_message(Message::StyleBody { request, bytes })),
+{
+    let t = seq![Token::Array(3), Token::Uint(111), Token::Uint(request), Token::Bytes(bytes)];
+    let rest = seq![Token::Uint(request), Token::Bytes(bytes)];
+    assert(t =~= seq![Token::Array(3), Token::Uint(111)] + rest);
+    lemma_items_head(3, 111, rest);
+    lemma_items_step(rest, 2);
+    assert(rest[0] == Token::Uint(request));
+    assert(rest.drop_first() =~= seq![Token::Bytes(bytes)]);
+    lemma_items_step(seq![Token::Bytes(bytes)], 1);
+    assert(seq![Token::Bytes(bytes)][0] == Token::Bytes(bytes));
+    assert(seq![Token::Bytes(bytes)].drop_first() =~= Seq::<Token>::empty());
+    assert(crate::cbor::spec::token_ok(Token::Bytes(bytes)));
+    assert(crate::cbor::spec::token_ok(Token::Uint(request)));
+    assert(crate::cbor::spec::is_items(Seq::<Token>::empty(), 0));
+    reveal_with_fuel(crate::cbor::spec::encode, 5);
+    assert(t.drop_first() =~= seq![Token::Uint(111), Token::Uint(request), Token::Bytes(bytes)]);
+    assert(t.drop_first().drop_first() =~= rest);
+    assert(t.drop_first().drop_first().drop_first() =~= seq![Token::Bytes(bytes)]);
+    assert(t.drop_first().drop_first().drop_first().drop_first() =~= Seq::<Token>::empty());
+    crate::cbor::lemmas::lemma_be_bytes_len(111, 1);
+    crate::cbor::lemmas::lemma_be_bytes_len(request as nat, 1);
+    crate::cbor::lemmas::lemma_be_bytes_len(request as nat, 2);
+    crate::cbor::lemmas::lemma_be_bytes_len(request as nat, 4);
+    crate::cbor::lemmas::lemma_be_bytes_len(request as nat, 8);
+    crate::cbor::lemmas::lemma_be_bytes_len(bytes.len(), 1);
+    crate::cbor::lemmas::lemma_be_bytes_len(bytes.len(), 2);
+    crate::cbor::lemmas::lemma_be_bytes_len(bytes.len(), 4);
+    assert(crate::cbor::spec::encode(Seq::<Token>::empty()) == Seq::<u8>::empty());
+    assert(crate::cbor::spec::encode_head(0, request as nat).len() <= 9);
+    assert(crate::cbor::spec::encode_head(2, bytes.len()).len() <= 5);
+}
+
 /// The tokens of a sendable message parse back to it.
 pub proof fn lemma_parse_message_tokens(m: Message)
     requires
@@ -245,6 +285,11 @@ pub proof fn lemma_parse_message_tokens(m: Message)
         Message::GpuViewport { width, height, scale } => {
             assert(t.subrange(2, 5) =~= seq![Token::Uint(width), Token::Uint(height), Token::Uint(scale)]);
         },
+        Message::FetchStyle { request, url } => { assert(t.subrange(2, 4) =~= seq![Token::Uint(request), Token::Text(url)]); },
+        Message::StyleResponse { request, content_type } => { assert(t.subrange(2, 4) =~= seq![Token::Uint(request), Token::Bytes(content_type)]); },
+        Message::StyleBody { request, bytes } => { assert(t.subrange(2, 4) =~= seq![Token::Uint(request), Token::Bytes(bytes)]); },
+        Message::StyleEnd { request } => { assert(t.subrange(2, 3) =~= seq![Token::Uint(request)]); },
+        Message::StyleFailed { request } => { assert(t.subrange(2, 3) =~= seq![Token::Uint(request)]); },
     }
 }
 

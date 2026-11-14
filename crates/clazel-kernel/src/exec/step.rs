@@ -438,6 +438,8 @@ pub fn storage_call_exec(s: StateRecord, r: &RendererRecord, m: &Msg) -> (out: (
         buckets_wf(s.storage@),
         crate::invariant::storage_wf(s@.storage),
     ensures
+        out.0.subfetches@ == s.subfetches@,
+        out.0.subcounts@ == s.subcounts@,
         result_view(out) == storage_call(s@, r@, m@),
         buckets_wf(out.0.storage@),
         out.0.renderers@ == s.renderers@,
@@ -609,6 +611,8 @@ pub fn closes_of_tab_exec(conns: &[ConnectionRecord], tab: u64) -> (out: Vec<Out
 /// [`close_tab_conns`]: every connection of the tab is closed.
 pub fn close_tab_conns_exec(s: StateRecord, tab: u64) -> (out: (StateRecord, Vec<OutputRecord>))
     ensures
+        out.0.subfetches@ == s.subfetches@,
+        out.0.subcounts@ == s.subcounts@,
         result_view(out) == close_tab_conns(s@, tab as nat),
         out.0.renderers@ == s.renderers@,
         out.0.storage@ == s.storage@,
@@ -684,6 +688,8 @@ pub fn open_connection_exec(s: StateRecord, tab: u64, partition: &DomainRecord, 
     requires
         s.next_conn < 0xFFFF_FFFF_FFFF_FFFFu64,
     ensures
+        out.0.subfetches@ == s.subfetches@,
+        out.0.subcounts@ == s.subcounts@,
         (out.0@, out.1 as nat, outputs_view(out.2@)) == open_connection(s@, tab as nat, partition@, endpoint@),
         out.0.renderers@ == s.renderers@,
         keeps_storage_jar_now(s, out.0),
@@ -730,12 +736,14 @@ pub fn navigate_tab_exec<U: UrlFnsExec, F: FetchFnsExec>(
         s.next_id < 0xFFFF_FFFF_FFFF_FFFFu64,
         clazel_encoding::utf8::spec::all_scalar_values(url@),
         renderers_ok::<F>(s.renderers@),
+        super::subfetch::subfetches_ok::<F>(s.subfetches@),
     ensures
         result_view(out) == navigate_tab(urls.urls(), s@, tab as nat, url@, Document { content_type: content_type@, kind, body: body@ }),
         keeps_storage_jar_now(s, out.0),
         keeps_conns(s, out.0),
         out.0.next_id <= s.next_id + 1,
         renderers_ok::<F>(out.0.renderers@),
+        super::subfetch::subfetches_ok::<F>(out.0.subfetches@),
 {
     let ghost sv = s@;
     match find_by_tab_exec(s.renderers.as_slice(), tab) {
@@ -753,6 +761,12 @@ pub fn navigate_tab_exec<U: UrlFnsExec, F: FetchFnsExec>(
                     let frame = commit_frames_exec(url, content_type, kind, body);
                     let mut s = s;
                     if same {
+                        // Item 5.19: the old document's sub-fetches end.
+                        let mut table = Vec::new();
+        std::mem::swap(&mut table, &mut s.subfetches);
+                        s.subfetches = super::subfetch::end_subfetches_exec::<F>(table, old.id, &old.lock);
+                        let counts = super::subfetch::new_document_counts_exec(s.subcounts.as_slice(), old.id, &old.lock);
+                        s.subcounts = counts;
                         let ghost old_renderers = s.renderers@;
                         let rec = RendererRecord { committed: true, id: old.id, tab: old.tab, url: copy(url), lock: old.lock, pending: None };
                         let ghost rv = rec@;
@@ -797,6 +811,7 @@ pub fn open_tab_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: Sta
         s.next_conn as nat + conn_headroom() <= 0xFFFF_FFFF_FFFF_FFFFnat,
         clazel_encoding::utf8::spec::all_scalar_values(url@),
         renderers_ok::<F>(s.renderers@),
+        super::subfetch::subfetches_ok::<F>(s.subfetches@),
     ensures
         result_view(out) == open_tab(
             crate::contract::psl(),
@@ -814,6 +829,7 @@ pub fn open_tab_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: Sta
         out.0.next_id <= s.next_id + 2,
         out.0.next_conn as nat <= s.next_conn as nat + conn_headroom(),
         renderers_ok::<F>(out.0.renderers@),
+        super::subfetch::subfetches_ok::<F>(out.0.subfetches@),
 {
     let ghost sv = s@;
     let id = s.next_id;
@@ -860,12 +876,16 @@ pub fn fail_navigation_exec<F: FetchFnsExec>(s: StateRecord, i: usize, code: u64
     requires
         i < s.renderers.len(),
         renderers_ok::<F>(s.renderers@),
+        super::subfetch::subfetches_ok::<F>(s.subfetches@),
     ensures
+        out.0.subfetches@ == s.subfetches@,
+        out.0.subcounts@ == s.subcounts@,
         result_view(out) == fail_navigation(s@, i as int, s@.renderers[i as int], code),
         keeps_storage_jar_now(s, out.0),
         keeps_conns(s, out.0),
         out.0.next_id == s.next_id,
         renderers_ok::<F>(out.0.renderers@),
+        super::subfetch::subfetches_ok::<F>(out.0.subfetches@),
 {
     let old = renderer_at(s.renderers.as_slice(), i);
     let mut s = s;
@@ -883,6 +903,8 @@ pub fn fail_navigation_exec<F: FetchFnsExec>(s: StateRecord, i: usize, code: u64
 
 /// [`commit_navigation`]: the navigation of `tab` ends with the document of
 /// this content type and body (kind 0) at `href`.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(40)]
 pub fn commit_navigation_exec<U: UrlFnsExec, F: FetchFnsExec>(
     urls: &U,
     s: StateRecord,
@@ -897,12 +919,14 @@ pub fn commit_navigation_exec<U: UrlFnsExec, F: FetchFnsExec>(
     requires
         s.next_id < 0xFFFF_FFFF_FFFF_FFFFu64,
         renderers_ok::<F>(s.renderers@),
+        super::subfetch::subfetches_ok::<F>(s.subfetches@),
     ensures
         result_view(out) == commit_navigation(urls.urls(), s@, tab as nat, href@, Document { content_type: content_type@, kind: 0, body: body@ }),
         keeps_storage_jar_now(s, out.0),
         out.0.next_conn == s.next_conn,
         out.0.next_id <= s.next_id + 1,
         renderers_ok::<F>(out.0.renderers@),
+        super::subfetch::subfetches_ok::<F>(out.0.subfetches@),
 {
     let (s1, closes) = close_tab_conns_exec(s, tab);
     match find_by_tab_exec(s1.renderers.as_slice(), tab) {
@@ -943,12 +967,16 @@ pub fn content_type_exec(fields: &[clazel_http::field::types::FieldLineBuf]) -> 
 pub fn abort_navigation_exec<F: FetchFnsExec>(s: StateRecord, tab: u64, code: u64) -> (out: (StateRecord, Vec<OutputRecord>))
     requires
         renderers_ok::<F>(s.renderers@),
+        super::subfetch::subfetches_ok::<F>(s.subfetches@),
     ensures
+        out.0.subfetches@ == s.subfetches@,
+        out.0.subcounts@ == s.subcounts@,
         result_view(out) == abort_navigation(s@, tab as nat, code),
         keeps_storage_jar_now(s, out.0),
         out.0.next_conn == s.next_conn,
         out.0.next_id == s.next_id,
         renderers_ok::<F>(out.0.renderers@),
+        super::subfetch::subfetches_ok::<F>(out.0.subfetches@),
 {
     let (s1, closes) = close_tab_conns_exec(s, tab);
     match find_by_tab_exec(s1.renderers.as_slice(), tab) {
@@ -1054,7 +1082,7 @@ pub open spec fn conn_opt_view(c: Option<u64>) -> Option<nat> {
 }
 
 /// Counting the `Connect`s of a list of actions by its first.
-proof fn lemma_count_head(av: Seq<clazel_fetch::transducer::spec::Action>)
+pub proof fn lemma_count_head(av: Seq<clazel_fetch::transducer::spec::Action>)
     requires
         av.len() > 0,
     ensures
@@ -1123,11 +1151,13 @@ pub fn carry_out_exec<U: UrlFnsExec, F: FetchFnsExec>(
 ) -> (out: (StateRecord, Vec<OutputRecord>))
     requires
         renderers_ok::<F>(s.renderers@),
+        super::subfetch::subfetches_ok::<F>(s.subfetches@),
         s.next_id < 0xFFFF_FFFF_FFFF_FFFFu64,
         s.next_conn as nat + clazel_fetch::transducer::contract::count_connects(clazel_fetch::transducer::types::actions_view(actions@)) <= 0xFFFF_FFFF_FFFF_FFFFnat,
     ensures
         result_view(out) == carry_out(urls.urls(), s@, tab as nat, partition@, conn_opt_view(cur), clazel_fetch::transducer::types::actions_view(actions@)),
         renderers_ok::<F>(out.0.renderers@),
+        super::subfetch::subfetches_ok::<F>(out.0.subfetches@),
         keeps_storage_jar_now(s, out.0),
         out.0.next_id <= s.next_id + 1,
         out.0.next_conn as nat <= s.next_conn as nat + clazel_fetch::transducer::contract::count_connects(clazel_fetch::transducer::types::actions_view(actions@)),
@@ -1197,11 +1227,13 @@ pub fn begin_navigation_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F
 ))
     requires
         renderers_ok::<F>(s.renderers@),
+        super::subfetch::subfetches_ok::<F>(s.subfetches@),
         s.next_id < 0xFFFF_FFFF_FFFF_FFFFu64,
         s.next_conn as nat + conn_headroom() <= 0xFFFF_FFFF_FFFF_FFFFnat,
     ensures
         result_view(out) == begin_navigation(crate::contract::psl(), urls.urls(), fetch.fetch(), s@, tab as nat, url@),
         renderers_ok::<F>(out.0.renderers@),
+        super::subfetch::subfetches_ok::<F>(out.0.subfetches@),
         keeps_storage_jar_now(s, out.0),
         out.0.next_id <= s.next_id + 1,
         out.0.next_conn as nat <= s.next_conn as nat + conn_headroom(),
@@ -1262,12 +1294,14 @@ pub fn net_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRec
     requires
         crate::invariant::navigations_wf(crate::contract::psl(), s@.renderers),
         renderers_ok::<F>(s.renderers@),
+        super::subfetch::subfetches_ok::<F>(s.subfetches@),
         clazel_cookie::set_cookie::contract::now_in_range(s.now as int),
         s.next_id < 0xFFFF_FFFF_FFFF_FFFFu64,
         s.next_conn as nat + conn_headroom() <= 0xFFFF_FFFF_FFFF_FFFFnat,
     ensures
         result_view(out) == net(crate::contract::psl(), urls.urls(), fetch.fetch(), s@, conn as nat, input@),
         renderers_ok::<F>(out.0.renderers@),
+        super::subfetch::subfetches_ok::<F>(out.0.subfetches@),
         out.0.storage@ == s.storage@,
         out.0.now == s.now,
         out.0.next_id <= s.next_id + 1,
@@ -1304,6 +1338,9 @@ pub fn net_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRec
                     let now = s.now;
                     let viewports = s.viewports;
                     let titles = s.titles;
+                    let subfetches = s.subfetches;
+                    let subcounts = s.subcounts;
+                    let gpu = s.gpu;
                     let mut renderers = renderers;
                     let ghost old_renderers = renderers@;
                     let rec = renderers.remove(i);
@@ -1318,7 +1355,7 @@ pub fn net_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRec
                             proof {
                                 assert(false);
                             }
-                            (StateRecord { renderers, jar, storage, next_id, conns, next_conn, now, viewports, titles }, no_outputs())
+                            (StateRecord { renderers, jar, storage, next_id, conns, next_conn, now, viewports, titles, subfetches, subcounts, gpu }, no_outputs())
                         },
                         Some(nav) => {
                             let nurl = nav.url;
@@ -1363,7 +1400,7 @@ pub fn net_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRec
                                 lemma_ok_remove::<F>(old_renderers, i as int);
                                 lemma_ok_insert::<F>(old_renderers.remove(i as int), i as int, rec2);
                             }
-                            let s1 = StateRecord { renderers, jar: jar1, storage, next_id, conns: conns1, next_conn, now, viewports, titles };
+                            let s1 = StateRecord { renderers, jar: jar1, storage, next_id, conns: conns1, next_conn, now, viewports, titles, subfetches, subcounts, gpu };
                             carry_out_exec::<U, F>(urls, s1, ctab, &partition, Some(conn), actions)
                         },
                     }
@@ -1384,6 +1421,7 @@ pub fn tick_exec(s: StateRecord, time: u64) -> (out: (StateRecord, Vec<OutputRec
         out.0.renderers@ == s.renderers@,
         out.0.next_id == s.next_id,
         out.0.next_conn == s.next_conn,
+        out.0.subfetches@ == s.subfetches@,
         clazel_cookie::set_cookie::contract::now_in_range(out.0.now as int),
 {
     let now = if time > s.now { time } else { s.now };
@@ -1399,7 +1437,10 @@ pub fn tick_exec(s: StateRecord, time: u64) -> (out: (StateRecord, Vec<OutputRec
 pub fn renderer_exited_exec<F: FetchFnsExec>(s: StateRecord, id: u64) -> (out: (StateRecord, Vec<OutputRecord>))
     requires
         renderers_ok::<F>(s.renderers@),
+        super::subfetch::subfetches_ok::<F>(s.subfetches@),
     ensures
+        out.0.subfetches@ == s.subfetches@,
+        out.0.subcounts@ == s.subcounts@,
         result_view(out) == renderer_exited(s@, id as nat),
         out.0.storage@ == s.storage@,
         out.0.jar@ == s.jar@,
@@ -1407,6 +1448,7 @@ pub fn renderer_exited_exec<F: FetchFnsExec>(s: StateRecord, id: u64) -> (out: (
         out.0.next_id == s.next_id,
         out.0.next_conn == s.next_conn,
         renderers_ok::<F>(out.0.renderers@),
+        super::subfetch::subfetches_ok::<F>(out.0.subfetches@),
 {
     match find_by_id_exec(s.renderers.as_slice(), id) {
         None => (s, no_outputs()),
@@ -1453,6 +1495,8 @@ proof fn lemma_handle_message_idle(rules: Seq<clazel_psl::spec::Rule>, urls: Url
 }
 
 /// [`handle_message`]: a message that decoded, from the renderer at index `i`.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(40)]
 pub fn handle_message_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRecord, i: usize, m: Msg) -> (out: (StateRecord, Vec<OutputRecord>))
     requires
         state_ok::<F>(urls.urls(), s),
@@ -1546,6 +1590,7 @@ pub fn handle_message_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, 
             let outs = one_output(OutputRecord::Show { tab: r.tab, url: copy(r.url.as_slice()), title, text, links });
             (s, outs)
         },
+        Msg::FetchStyle { request, url } => super::subfetch::fetch_style_exec(urls, fetch, s, &r, request, url.as_slice()),
         Msg::Title { title } => {
             let mut s = s;
             let titles = super::surfaces::set_title_exec(s.titles.as_slice(), r.id, &r.lock, title);
@@ -1562,12 +1607,16 @@ pub fn kill_renderer_exec<F: FetchFnsExec>(s: StateRecord, i: usize, id: u64) ->
     requires
         i < s.renderers.len(),
         renderers_ok::<F>(s.renderers@),
+        super::subfetch::subfetches_ok::<F>(s.subfetches@),
     ensures
+        out.0.subfetches@ == s.subfetches@,
+        out.0.subcounts@ == s.subcounts@,
         result_view(out) == kill_renderer(s@, i as int, id as nat),
         keeps_storage_jar_now(s, out.0),
         out.0.next_id == s.next_id,
         out.0.next_conn == s.next_conn,
         renderers_ok::<F>(out.0.renderers@),
+        super::subfetch::subfetches_ok::<F>(out.0.subfetches@),
 {
     let (tab, rid, lock) = match s.renderers.get(i) {
         Some(r) => (r.tab, r.id, clone_origin(&r.lock)),
@@ -1611,7 +1660,7 @@ pub fn from_renderer_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s
                         Some(r) => r.committed,
                         None => false,
                     };
-                    let display = matches!(m, Msg::Display { .. } | Msg::Title { .. });
+                    let display = matches!(m, Msg::Display { .. } | Msg::Title { .. } | Msg::FetchStyle { .. });
                     if clazel_ipc::message::codec::is_from_renderer(&m) && (committed || !display) {
                         handle_message_exec(urls, fetch, s, i, m)
                     } else {
@@ -1627,6 +1676,8 @@ pub fn from_renderer_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s
 /// The kernel's step function ([`step`]): the one entry point of the
 /// executable kernel. Pure: bytes, ids and time come in as arguments, and
 /// the outputs go out as a value for the host to act on.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(40)]
 pub fn step_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRecord, e: &EventRecord) -> (out: (StateRecord, Vec<OutputRecord>))
     requires
         crate::contract::step_requires(urls.urls(), fetch.fetch(), s@, e@),
@@ -1648,12 +1699,16 @@ pub fn step_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRe
         EventRecord::NavigateTab { tab, url } => begin_navigation_exec(urls, fetch, s, *tab, url.as_slice()),
         EventRecord::Net { conn, input } => net_exec(urls, fetch, s, *conn, input),
         EventRecord::RendererExited { id } => renderer_exited_exec::<F>(s, *id),
-        EventRecord::Tick { time } => tick_exec(s, *time),
+        EventRecord::Tick { time } => super::subfetch::tick_all_exec::<F>(s, *time),
+        EventRecord::SubNet { renderer, serial, hop, input } => super::subfetch::sub_net_exec::<F>(fetch, s, *renderer, *serial, *hop, input),
         EventRecord::FromGpu { id, bytes } => super::surfaces::from_gpu_exec::<F>(s, *id, bytes.as_slice()),
         EventRecord::Resize { tab, width, height, scale } => super::surfaces::resize_exec(s, *tab, *width, *height, *scale),
         EventRecord::Input { tab, kind, x, y, negative, delta, key } => {
             super::surfaces::user_input_exec(s, *tab, (*kind, *x, *y, *negative, *delta, *key))
         },
+        EventRecord::GpuExited { id } => super::gpu::gpu_exited_exec(s, *id),
+        EventRecord::GpuSoftware => super::gpu::gpu_software_exec(s),
+        EventRecord::GpuSiteExit { lock } => super::gpu::gpu_site_exit_lock_exec(s, lock),
     };
     proof {
         clazel_cookie::storage::exec::lemma_jar_view_in_range(out.0.jar@);

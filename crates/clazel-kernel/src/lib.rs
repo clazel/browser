@@ -17,6 +17,7 @@
 //! - [`display_theorems`]: item 4.12's theorems about what the user sees and
 //!   what a committed renderer is given; [`commit_theorems`]: a renderer is
 //!   committed only after the kernel sent it a commit.
+//! - [`gpu_theorems`]: item 5.17c's crash policy theorems.
 //! - [`urls`]: the URL functions of the shipped kernel (item 2.13), built from
 //!   the real URL parser; [`exec::real_urls`] is their executable
 //!   implementation and `step_real`, the function the host shell calls;
@@ -29,6 +30,8 @@ pub mod counterexamples;
 pub mod display_theorems;
 pub mod domain;
 pub mod exec;
+pub mod gpu_rel;
+pub mod gpu_theorems;
 pub mod independent;
 pub mod independent_equivalence;
 pub mod invariant;
@@ -47,6 +50,8 @@ pub mod retrieval_projection;
 pub mod spec;
 pub mod statements;
 pub mod store_projection;
+pub mod subfetch_rel;
+pub mod subfetch_theorems;
 pub mod surface_rel;
 pub mod surface_theorems;
 pub mod theorems;

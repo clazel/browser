@@ -352,6 +352,7 @@ pub fn resize_exec(s: StateRecord, tab: u64, width: u64, height: u64, scale: u64
         out.0.renderers@ == s.renderers@,
         out.0.conns@ == s.conns@,
         out.0.titles@ == s.titles@,
+        out.0.subfetches@ == s.subfetches@,
         keeps_storage_jar_now(s, out.0),
         out.0.next_id == s.next_id,
         out.0.next_conn == s.next_conn,
@@ -419,12 +420,15 @@ pub fn decode_gpu_frame_exec(bytes: &[u8]) -> (r: Option<Msg>)
 pub fn from_gpu_exec<F: FetchFnsExec>(s: StateRecord, id: u64, bytes: &[u8]) -> (out: (StateRecord, Vec<OutputRecord>))
     requires
         renderers_ok::<F>(s.renderers@),
+        super::subfetch::subfetches_ok::<F>(s.subfetches@),
     ensures
         result_view(out) == from_gpu(s@, id as nat, bytes@),
         keeps_storage_jar_now(s, out.0),
         out.0.next_id == s.next_id,
         out.0.next_conn == s.next_conn,
+        out.0.subfetches@ == s.subfetches@,
         renderers_ok::<F>(out.0.renderers@),
+        super::subfetch::subfetches_ok::<F>(out.0.subfetches@),
 {
     match find_by_id_exec(s.renderers.as_slice(), id) {
         None => (s, no_outputs()),
@@ -437,6 +441,12 @@ pub fn from_gpu_exec<F: FetchFnsExec>(s: StateRecord, id: u64, bytes: &[u8]) -> 
                 };
                 if !committed || buffer >= 3 {
                     kill_renderer_exec::<F>(s, i, id)
+                } else if !{
+                    // Item 5.17c: only a running process's frame paints.
+                    let k = super::gpu::key_at(&s, i);
+                    super::gpu::gpu_of_exec(&s, &k, Ghost(s@.renderers[i as int])).running
+                } {
+                    (s, no_outputs())
                 } else {
                     let (vw, vh, _vs) = viewport_of_exec(s.viewports.as_slice(), tab);
                     if width <= vw && height <= vh {
@@ -450,6 +460,12 @@ pub fn from_gpu_exec<F: FetchFnsExec>(s: StateRecord, id: u64, bytes: &[u8]) -> 
                         (s, no_outputs())
                     }
                 }
+            },
+            Some(Msg::GpuReady { software }) => {
+                // Item 5.17c: the start answer.
+                let k = super::gpu::key_at(&s, i);
+                let ghost r = s@.renderers[i as int];
+                (super::gpu::gpu_ready_exec(s, &k, Ghost(r), software), no_outputs())
             },
             Some(_) => (s, no_outputs()),
         },

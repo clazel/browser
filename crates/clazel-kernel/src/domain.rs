@@ -37,6 +37,11 @@
 //!   cookies, and not the id counter or the other domains' storage. Item
 //!   5.18 adds the tabs' viewports (the host's, so every domain's) and the
 //!   titles of the domain's renderers ([`titles_of_domain`]).
+//! - **Item 5.19.** A `SubNet` event belongs to the domain of the renderer
+//!   whose sub-fetch it reports on, and has no declassified part: the
+//!   sub-fetch exists only because that renderer asked. Sub-fetch connection
+//!   outputs are addressed to the network shell. The observation gains the
+//!   domain's sub-fetches and counts.
 //! - **Item 5.18.** A `FromGpu(id, _)` event belongs to the domain of
 //!   renderer `id`, like that renderer's own frames, and has no declassified
 //!   part; `Resize` and `Input` are the user's and are kept for every
@@ -121,9 +126,25 @@ pub struct Observation {
     pub titles: Seq<Titled>,
 }
 
+/// The sub-fetches of `fs` whose lock is in domain `d` (item 5.19).
+pub open spec fn subfetches_of_domain(rules: Seq<clazel_psl::spec::Rule>, fs: Seq<SubFetch>, d: Domain) -> Seq<SubFetch> {
+    fs.filter(|x: SubFetch| domain_of_lock(rules, x.lock) == d)
+}
+
+/// The sub-fetch counts of `cs` whose lock is in domain `d` (item 5.19).
+pub open spec fn subcounts_of_domain(rules: Seq<clazel_psl::spec::Rule>, cs: Seq<SubCount>, d: Domain) -> Seq<SubCount> {
+    cs.filter(|x: SubCount| domain_of_lock(rules, x.lock) == d)
+}
+
 /// The titles of `ts` whose lock is in domain `d` (item 5.18), in order.
 pub open spec fn titles_of_domain(rules: Seq<clazel_psl::spec::Rule>, ts: Seq<Titled>, d: Domain) -> Seq<Titled> {
     ts.filter(|x: Titled| domain_of_lock(rules, x.lock) == d)
+}
+
+/// The GPU records of `gs` whose lock is in domain `d` (item 5.17c), in
+/// order.
+pub open spec fn gpu_recs_of_domain(rules: Seq<clazel_psl::spec::Rule>, gs: Seq<GpuRec>, d: Domain) -> Seq<GpuRec> {
+    gs.filter(|x: GpuRec| domain_of_lock(rules, x.lock) == d)
 }
 
 /// `obs(s, D)`.
@@ -158,6 +179,17 @@ pub open spec fn event_domain(rules: Seq<clazel_psl::spec::Rule>, s: State, e: E
             Some(i) => Some(domain_of_renderer(rules, s.renderers[i])),
             None => None,
         },
+        // Item 5.19: a sub-fetch's connection is its renderer's.
+        Event::SubNet { renderer, .. } => match find_by_id(s.renderers, renderer, 0) {
+            Some(i) => Some(domain_of_renderer(rules, s.renderers[i])),
+            None => None,
+        },
+        // Item 5.17c: a GPU process's exit is its renderer's, as its frames
+        // are (a page can crash its own GPU process on purpose).
+        Event::GpuExited { id } => match find_by_id(s.renderers, id, 0) {
+            Some(i) => Some(domain_of_renderer(rules, s.renderers[i])),
+            None => None,
+        },
         _ => None,
     }
 }
@@ -182,6 +214,26 @@ pub open spec fn declassified(urls: UrlFns, s: State, e: Event) -> Option<Event>
                         },
                     },
                     _ => None,
+                }
+            },
+        },
+        // Item 5.17c: what another domain's GPU exit does to what every tab
+        // shares, and nothing else of it. An exit before `GpuReady` in
+        // hardware refuses the machine's GPU (every tab to software:
+        // `GpuSoftware`); an exit while drawing in hardware counts its site
+        // (rule 3: `GpuSiteExit` with the renderer's lock). Any other exit
+        // changes only its own renderer's record.
+        Event::GpuExited { id } => match find_by_id(s.renderers, id, 0) {
+            None => None,
+            Some(i) => {
+                let r = s.renderers[i];
+                let g = super::spec::gpu_of(s, r);
+                if g.software || (!g.running && g.stopped) {
+                    None
+                } else if !g.running {
+                    Some(Event::GpuSoftware)
+                } else {
+                    Some(Event::GpuSiteExit { lock: r.lock })
                 }
             },
         },
@@ -213,7 +265,7 @@ pub open spec fn ipurge_event(
     e: Event,
 ) -> Option<Event> {
     match e {
-        Event::FromRenderer { .. } | Event::FromGpu { .. } => match event_domain(rules, s, e) {
+        Event::FromRenderer { .. } | Event::FromGpu { .. } | Event::SubNet { .. } | Event::GpuExited { .. } => match event_domain(rules, s, e) {
             Some(d2) => if d2 == d { Some(e) } else { declassified(urls, s, e) },
             None => None,
         },
@@ -261,7 +313,12 @@ pub open spec fn output_id(o: Output) -> nat {
         Output::Close { conn } => conn,
         Output::Show { tab, .. } => tab,
         Output::ToGpu { id, .. } => id,
+        Output::SubConnect { renderer, .. } => renderer,
+        Output::SubSend { renderer, .. } => renderer,
+        Output::SubClose { renderer, .. } => renderer,
         Output::Paint { tab, .. } => tab,
+        Output::GpuStopped { tab, .. } => tab,
+        Output::GpuAllSoftware => 0,
     }
 }
 

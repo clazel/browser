@@ -70,7 +70,7 @@ pub proof fn lemma_tabs_remove(urls: UrlFns, rs: Seq<Renderer>, next_id: nat, i:
 
 /// A state with the renderer table `rs` (for lemmas stated on tables).
 pub open spec fn ghost_state_of(rs: Seq<Renderer>, next_id: nat) -> State {
-    State { renderers: rs, jar: seq![], storage: Map::empty(), next_id, conns: seq![], next_conn: 0, now: 0, viewports: seq![], titles: seq![] }
+    State { renderers: rs, jar: seq![], storage: Map::empty(), next_id, conns: seq![], next_conn: 0, now: 0, viewports: seq![], titles: seq![], subfetches: seq![], subcounts: seq![], gpu: init_gpu() }
 }
 
 // ---------------------------------------------------------------------
@@ -114,6 +114,12 @@ pub proof fn lemma_rel_conns_only(rules: Seq<clazel_psl::spec::Rule>, urls: UrlF
         s1b.titles == s1.titles,
         s2b.viewports == s2.viewports,
         s2b.titles == s2.titles,
+        s1b.subfetches == s1.subfetches,
+        s1b.subcounts == s1.subcounts,
+        s2b.subfetches == s2.subfetches,
+        s2b.subcounts == s2.subcounts,
+        s1b.gpu == s1.gpu,
+        s2b.gpu == s2.gpu,
     ensures
         crate::noninterference::rel(rules, urls, d, s1b, s2b),
 {

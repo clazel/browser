@@ -64,6 +64,8 @@ pub proof fn lemma_navigate_tab_outputs(urls: UrlFns, s: State, tab: nat, url: S
                     Output::Show { .. } => false,
                     Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
                     Output::Paint { .. } => false,
+                    Output::GpuStopped { .. } | Output::GpuAllSoftware => false,
+                    Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
                     Output::Connect { .. } | Output::Send { .. } | Output::Close { .. } => false,
                 }
         }),
@@ -121,6 +123,8 @@ pub proof fn theorem_reply_only_to_sender(rules: Seq<clazel_psl::spec::Rule>, ur
                     Output::Show { .. } => false,
                     Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
                     Output::Paint { .. } => false,
+                    Output::GpuStopped { .. } | Output::GpuAllSoftware => false,
+                    Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
                     Output::Close { conn: x } => exists|i2: int, j: int|
                         0 <= i2 < s.renderers.len() && 0 <= j < s.conns.len() && s.renderers[i2].id == id && s.conns[j].id == x && s.conns[j].tab == s.renderers[i2].tab,
                 } by {
@@ -138,6 +142,10 @@ pub proof fn theorem_reply_only_to_sender(rules: Seq<clazel_psl::spec::Rule>, ur
             Some(m) => {
                 if let clazel_ipc::message::spec::Message::Display { title, text, links } = m {
                     lemma_reply_display(rules, urls, fetch, s, id, bytes, i);
+                } else if let clazel_ipc::message::spec::Message::FetchStyle { request, url } = m {
+                    // Item 5.19: a `FetchStyle` answers its sender and asks for
+                    // its sender's sub-fetch connections only.
+                    crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, request, url);
                 } else if let clazel_ipc::message::spec::Message::Navigate { url } = m {
                     if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
                         if let Some(resolved) = (urls.resolve)(r.url, relative) {
@@ -152,6 +160,8 @@ pub proof fn theorem_reply_only_to_sender(rules: Seq<clazel_psl::spec::Rule>, ur
                                     Output::Show { .. } => false,
                                     Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
                                     Output::Paint { .. } => false,
+                                    Output::GpuStopped { .. } | Output::GpuAllSoftware => false,
+                                    Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
                                     Output::Close { conn: x } => exists|i2: int, j: int|
                                         0 <= i2 < s.renderers.len() && 0 <= j < s.conns.len() && s.renderers[i2].id == id && s.conns[j].id == x && s.conns[j].tab == s.renderers[i2].tab,
                                 } by {

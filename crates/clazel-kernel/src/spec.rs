@@ -380,6 +380,150 @@
 //!   the child window bound the first (items 5.21 to 5.23); the second only
 //!   ever concerns one tab's own drawing.
 
+//!
+//! # Style sheet fetches (phase-5.md item 5.19)
+//!
+//! - **A committed renderer's `FetchStyle { request, url }`** is resolved
+//!   against its committed URL (the URL parser with a base, as `Navigate`)
+//!   and parsed (`FetchFns::parse`), and runs as a fetch of item 3.6's
+//!   transducer, the one navigations use ([`fetch_style`]). Fetch's request
+//!   for a `<link rel=stylesheet>` without `crossorigin` (destination
+//!   "style", mode "no-cors") differs from a navigation's in what the
+//!   transducer does not model (destination, `Sec-Fetch-*`, CORS, which
+//!   "no-cors" does not check) and in its credentials (below); the
+//!   transducer's request and redirect rules are used as they are, and its
+//!   cookie request context stays a navigation's (listed: for a
+//!   credentialed request, which is same-origin with the document, it is
+//!   same-site either way). A `FetchStyle` before the renderer's first commit
+//!   is a disallowed frame (killed), as `Display` and `Title` are.
+//! - **The answer**: `StyleResponse { request, content type }`, `StyleBody`
+//!   frames and `StyleEnd` as one write, or `StyleFailed { request }`, to the
+//!   renderer that asked, under the renderer's own `request` id. A
+//!   `FetchStyle` is refused with `StyleFailed` (nothing started) when the
+//!   renderer has [`max_subfetches_at_once`] (8) in flight, has started
+//!   [`max_subfetches_per_document`] (64) since its last commit, or has used
+//!   [`max_subfetch_serial`] serial numbers; or when the URL does not decode,
+//!   resolve or parse. The renderer's `request` ids are its own: the kernel
+//!   does not require them to be distinct, and answers each fetch under the
+//!   id it was asked with.
+//! - **Credentials per 5.0(h), per hop** ([`credentialed`]): a request whose
+//!   URL is same-origin with the renderer's lock (its origin is the lock, and
+//!   its cookie host the lock's host) is given the kernel's jar, so it
+//!   carries the jar's cookies, and its jar operations (retrieval's update,
+//!   `Set-Cookie` storage) are applied; any other request is given an empty
+//!   jar, so it carries no `Cookie` field, and its operations are dropped.
+//!   Fetch's "no-cors" with credentials "include" would send cookies
+//!   cross-origin too; 5.0(h) chose not to (listed). Each hop of a redirect
+//!   decides for itself, from the transducer's current URL.
+//! - **Sub-fetch state is per renderer and lock-tagged**
+//!   ([`State::subfetches`], [`State::subcounts`]), as 5.18's titles are:
+//!   entries carry the renderer's id and lock, so noninterference compares
+//!   only the observer's entries. A sub-fetch records its tab and its
+//!   partition key (the renderer's domain): its connections are its tab's,
+//!   keyed by its domain, and every connection is new (`Connection: close`
+//!   is one request per connection).
+//! - **Sub-fetch connections are named `(renderer, serial, hop)`**, not by
+//!   [`State::next_conn`]: the outputs are `SubConnect`, `SubSend` and
+//!   `SubClose`, and the shell reports with [`Event::SubNet`]. The serial is
+//!   the renderer's own count of sub-fetches and the hop counts its
+//!   `Connect`s, so no number is shared between domains (a counter shared by
+//!   all renderers would let one domain's sub-fetches change another's
+//!   connection ids, a channel the noninterference theorem would not allow).
+//!   A report on anything but the current connection of a live sub-fetch is
+//!   ignored in full.
+//! - **A navigation ends the old document's sub-fetches.** A commit to the
+//!   same renderer marks its sub-fetches ended and starts a new per-document
+//!   count; a renderer replaced, killed or exited is not live. An ended or
+//!   dead sub-fetch changes nothing and sends nothing from then on; the next
+//!   `Tick` closes its connection and drops it ([`sweep`]). The host gives
+//!   the kernel a `Tick` before every event, so that is at once.
+//! - **A `Tick` fails a sub-fetch** that started [`subfetch_timeout`] (60)
+//!   seconds ago or more: `StyleFailed`, its connection closed.
+//!
+//! # The GPU crash policy (phase-5.md item 5.17c)
+//!
+//! The item's four rules over the host's new event `GpuExited` and 5.18's
+//! `GpuReady` and `GpuRefused`, with the numbers stated once:
+//! [`gpu_window`] (five minutes), [`gpu_exits`] and [`gpu_sites`] (three).
+//! This is the specification of the policy; `clazel-gpu`'s `policy.rs`, built
+//! first (item 5.17c, on its own branch), is to be removed where the two
+//! branches join (the crate README says why).
+//!
+//! - **`GpuExited { id }`, not `{ tab }`.** The host attaches the id of the
+//!   renderer whose GPU process exited, as it does for `FromGpu`. The item
+//!   names `{ tab }`; by id, an exit of a GPU process that was replaced (a
+//!   cross-origin navigation) names no live renderer and is ignored, which a
+//!   tab could not tell.
+//! - **One record per renderer** ([`GpuRec`]), tagged with its id and lock as
+//!   5.18's titles are, and read only by that pair ([`gpu_rec_of`]). A
+//!   renderer with none has a process just started ([`gpu_of`]). Records are
+//!   not removed when their renderer goes (ids are never reused, so a stale
+//!   one is never read); the table grows by one small record per renderer
+//!   that ever had a GPU process message or exit, listed in the README.
+//! - **Per renderer, so per origin, not per site.** Rule 2 says a tab goes to
+//!   software "until it navigates to another site"; here until its renderer
+//!   is replaced, which a navigation to another origin of the same site also
+//!   does. A tab may so go back to hardware sooner, and count afresh.
+//! - **Time is the kernel's** ([`State::now`], seconds, from the host's
+//!   `Tick`, which comes before every event): an exit is counted at `now`. A
+//!   time before a recorded one counts as no time passed.
+//! - **Which mode a process starts in.** A new tab's or a new renderer's GPU
+//!   process is `Spawn { id, Gpu }`, as in item 5.18: the run's mode. The
+//!   kernel tells the host once, with [`Output::GpuAllSoftware`], when every
+//!   tab goes to software; from then on the host starts every `Policy::Gpu`
+//!   process in software. A restart names its mode: [`Policy::GpuSoftware`],
+//!   or `Policy::Gpu` only while not every tab is in software.
+//! - **Rule 1, the restart** ([`gpu_restart_outputs`]): a new GPU process for
+//!   the renderer, and the tab's viewport again to the renderer and the new
+//!   process, which makes the renderer send its whole list again. The
+//!   renderer cannot receive a new descriptor (no `recvmsg` in its sandbox),
+//!   so the host keeps the GPU process's end of the list channel it made at
+//!   the first spawn and gives it to the new process. The tab keeps its last
+//!   `Paint`, which is the host's.
+//! - **Rules 2 and 4 count the record's last exits in its current mode**
+//!   ([`GpuRec::exits`], newest first, at most two): the third within the
+//!   window ([`third_exit`]) moves a hardware process to software, or stops a
+//!   software one ([`Output::GpuStopped`]). A change of mode clears them.
+//! - **Rule 3 counts hardware exits while drawing, by site** (the renderer's
+//!   [`crate::domain::Domain`]), keeping the most recent distinct sites
+//!   ([`GpuState::sites`], at most two): an exit with two other sites within
+//!   the window ([`site_demotes`]) puts every tab in software.
+//! - **A refusal is the machine's.** An exit before `GpuReady` in hardware
+//!   puts every tab in software and restarts the tab in software; it is not
+//!   counted by site, since no page has reached a process before `GpuReady`
+//!   (it reads no list until then). `GpuRefused` itself changes nothing: the
+//!   refused process exits next, and that exit is the refusal. An exit before
+//!   `GpuReady` in software is rule 4 (software cannot start).
+//! - **No fallback (macOS) is the host's.** The kernel always has software to
+//!   ask for; a host with none starts no process for `Policy::GpuSoftware`, or
+//!   for `Policy::Gpu` after `GpuAllSoftware`, and draws the notice itself.
+//!   `--gpu=software` is the host's [`Event::GpuSoftware`] at start.
+//! - **`GpuReady { software: true }` from a process started in hardware**
+//!   (the loader offered only a software driver) marks the record software,
+//!   so its exits count as software ones; `software: false` from one started
+//!   in software changes nothing.
+//! - **A frame is painted only from a running process** (5.18's paint
+//!   theorems over restarts): a `FrameReady` while the record is not running
+//!   (after an exit, until the new process's `GpuReady`) is dropped, so a late
+//!   frame of an exited process is never shown.
+//! - **Every-tab software takes effect at each tab's next start.** No running
+//!   process is ended for it, so an exit changes no other tab's state or
+//!   output (`theorem_gpu_exit_contained`).
+//! - **A reload does not try again.** Rule 4's "reloading tries once more" is
+//!   not built: a stopped tab starts again when its renderer is replaced
+//!   (another origin) or the tab is opened again. Restarting on a same-origin
+//!   commit adds outputs to the commit path every navigation theorem covers,
+//!   and is left for a later change (listed in the README).
+//! - **Noninterference.** A `GpuExited` belongs to its renderer's domain, as
+//!   its frames do. Its declassified part is exactly what it does to what
+//!   every tab shares: an exit before `GpuReady` in hardware is
+//!   [`Event::GpuSoftware`] (every tab to software), a hardware exit while
+//!   drawing is [`Event::GpuSiteExit`] (its site counted, and every tab to
+//!   software if that makes three); nothing else of another domain's exit
+//!   reaches an observer. That is the one channel the item specifies, and it
+//!   carries, per exit, the site's lock to the shared count and one bit out of
+//!   it.
+
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
@@ -533,6 +677,42 @@ pub struct UserInput {
     pub key: u64,
 }
 
+/// A style sheet fetch in flight (item 5.19).
+pub struct SubFetch {
+    /// The renderer that asked.
+    pub renderer: nat,
+    /// Its lock.
+    pub lock: clazel_origin::spec::Origin,
+    /// The renderer's serial number for it.
+    pub serial: nat,
+    /// The renderer's own id for it, which every answer carries.
+    pub request: u64,
+    /// The renderer's tab, which owns its connections.
+    pub tab: nat,
+    /// The transducer's state.
+    pub fetch: FetchState,
+    /// The connection the transducer last asked for (1 the first; 0 none).
+    pub hop: nat,
+    /// When it started.
+    pub started: int,
+    /// The partition key of its connections: the renderer's domain.
+    pub partition: crate::domain::Domain,
+    /// Whether the renderer's document has since been replaced by a commit.
+    pub ended: bool,
+}
+
+/// A renderer's count of sub-fetches (item 5.19).
+pub struct SubCount {
+    /// The renderer.
+    pub renderer: nat,
+    /// Its lock.
+    pub lock: clazel_origin::spec::Origin,
+    /// Sub-fetches it has started (the next serial number).
+    pub serial: nat,
+    /// Sub-fetches it has started since its last commit.
+    pub in_document: nat,
+}
+
 /// A navigation in flight: the fetch of the URL the tab is navigating to.
 pub struct Navigation {
     /// The URL the tab is navigating to (absolute; what `begin_navigation`
@@ -596,6 +776,12 @@ pub struct State {
     pub viewports: Seq<TabViewport>,
     /// The renderers' titles (item 5.18), at most one per renderer.
     pub titles: Seq<Titled>,
+    /// The style sheet fetches in flight (item 5.19).
+    pub subfetches: Seq<SubFetch>,
+    /// The renderers' counts of style sheet fetches (item 5.19).
+    pub subcounts: Seq<SubCount>,
+    /// The GPU crash policy's state (item 5.17c).
+    pub gpu: GpuState,
 }
 
 /// What can happen to the kernel.
@@ -662,6 +848,18 @@ pub enum Event {
         /// Device pixels per CSS pixel (1 or 2).
         scale: u64,
     },
+    /// The network shell reports on connection `hop` of sub-fetch `serial`
+    /// of renderer `renderer` (item 5.19).
+    SubNet {
+        /// The renderer.
+        renderer: nat,
+        /// The sub-fetch's serial number.
+        serial: nat,
+        /// The connection.
+        hop: nat,
+        /// What happened to it.
+        input: NetInput,
+    },
     /// The user clicked, scrolled or typed on the content area of `tab`
     /// (item 5.18).
     Input {
@@ -669,6 +867,26 @@ pub enum Event {
         tab: nat,
         /// What the user did.
         input: UserInput,
+    },
+    /// The GPU process paired with renderer `id` exited (item 5.17c; the host
+    /// attaches `id` from the process it started, as for `FromGpu`).
+    GpuExited {
+        /// The renderer whose GPU process it was.
+        id: nat,
+    },
+    /// Every tab is in software from its next start, for the rest of the run
+    /// (item 5.17c): the host's `--gpu=software`, sent once at start. It is
+    /// also the declassified part of another domain's GPU process refusing
+    /// the machine's GPU (`crate::domain::declassified`).
+    GpuSoftware,
+    /// A hardware GPU process of a renderer locked to `lock` exited while
+    /// drawing (item 5.17c): the shared count of sites. The host never sends
+    /// it; it is the declassified part of another domain's `GpuExited`
+    /// (`crate::domain::declassified`), so that the noninterference theorem
+    /// states exactly what crosses domains: rule 3's count.
+    GpuSiteExit {
+        /// The lock of the renderer whose GPU process it was.
+        lock: clazel_origin::spec::Origin,
     },
 }
 
@@ -678,8 +896,13 @@ pub enum Policy {
     Renderer,
     /// The GPU process paired with the renderer of the same id, in its own
     /// sandbox (items 5.17b, 5.21a): no window-system connection and no
-    /// network (item 5.18).
+    /// network (item 5.18). It runs on the hardware device, or in software
+    /// once the host has been told [`Output::GpuAllSoftware`] (item 5.17c).
     Gpu,
+    /// The GPU process paired with the renderer of the same id, started in
+    /// software (item 5.17c): lavapipe or WARP, in 5.21a's sandbox without
+    /// device access.
+    GpuSoftware,
 }
 
 /// What the kernel does.
@@ -745,6 +968,42 @@ pub enum Output {
         /// The links it displays.
         links: Seq<Seq<u8>>,
     },
+    /// Ask the network shell to open connection `hop` of sub-fetch `serial`
+    /// of renderer `renderer` (item 5.19).
+    SubConnect {
+        /// The renderer.
+        renderer: nat,
+        /// The sub-fetch.
+        serial: nat,
+        /// The connection.
+        hop: nat,
+        /// The host.
+        host: Seq<u8>,
+        /// The port.
+        port: nat,
+        /// Whether to speak TLS on it.
+        tls: bool,
+    },
+    /// Write these octets to that sub-fetch connection (item 5.19).
+    SubSend {
+        /// The renderer.
+        renderer: nat,
+        /// The sub-fetch.
+        serial: nat,
+        /// The connection.
+        hop: nat,
+        /// The octets.
+        bytes: Seq<u8>,
+    },
+    /// Close that sub-fetch connection (item 5.19; harmless if closed).
+    SubClose {
+        /// The renderer.
+        renderer: nat,
+        /// The sub-fetch.
+        serial: nat,
+        /// The connection.
+        hop: nat,
+    },
     /// Send a whole frame to the GPU process paired with renderer `id`
     /// (item 5.18).
     ToGpu {
@@ -772,6 +1031,22 @@ pub enum Output {
         /// The frame's height, in device pixels.
         height: u64,
     },
+    /// The GPU process of `tab`'s renderer is not restarted (item 5.17c, rule
+    /// 4): the host draws the notice in the tab's content area, with `url`
+    /// and the reason, until the tab navigates to another origin. Addressed
+    /// to the user, like `Paint`; `tab` and `url` come from the kernel's
+    /// state.
+    GpuStopped {
+        /// The tab.
+        tab: nat,
+        /// Its renderer's URL.
+        url: Seq<u32>,
+    },
+    /// Every tab is in software from its next start (item 5.17c, rules 3 and
+    /// the refusal): the host starts every later [`Policy::Gpu`] process in
+    /// software. Addressed to the host, not to a renderer or tab; given once,
+    /// when the kernel's bit is set.
+    GpuAllSoftware,
 }
 
 /// A document to commit (phase-4.md item 4.12): its content type, its kind
@@ -787,7 +1062,7 @@ pub struct Document {
 
 /// The kernel before anything happens.
 pub open spec fn init_state() -> State {
-    State { renderers: seq![], jar: seq![], storage: Map::empty(), next_id: 0, conns: seq![], next_conn: 0, now: 0, viewports: seq![], titles: seq![] }
+    State { renderers: seq![], jar: seq![], storage: Map::empty(), next_id: 0, conns: seq![], next_conn: 0, now: 0, viewports: seq![], titles: seq![], subfetches: seq![], subcounts: seq![], gpu: init_gpu() }
 }
 
 // ---------------------------------------------------------------------
@@ -1180,7 +1455,13 @@ pub open spec fn navigate_tab(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, d
                 Some(lock) => if lock is Tuple && lock == old.lock {
                     // The same origin: the renderer stays and commits again.
                     let r = Renderer { url, pending: None, committed: true, ..old };
-                    (State { renderers: s.renderers.update(i, r), ..s }, seq![
+                    // Item 5.19: the old document's sub-fetches end.
+                    (State {
+                        renderers: s.renderers.update(i, r),
+                        subfetches: end_subfetches(s.subfetches, old.id, old.lock),
+                        subcounts: new_document_counts(s.subcounts, old.id, old.lock),
+                        ..s
+                    }, seq![
                         Output::ToRenderer { id: old.id, bytes: commit_frames(url, doc) },
                     ])
                 } else {
@@ -1758,17 +2039,624 @@ pub open spec fn from_gpu(s: State, id: nat, bytes: Seq<u8>) -> (State, Seq<Outp
                 None => kill_renderer(s, i, id),
                 Some(clazel_ipc::message::spec::Message::FrameReady { buffer, width, height }) => if !r.committed || buffer >= ring_size() {
                     kill_renderer(s, i, id)
+                } else if !gpu_of(s, r).running {
+                    // Item 5.17c: no `GpuReady` from the current process yet,
+                    // so the frame is a late one of a process that exited
+                    // (or out of order): dropped.
+                    (s, seq![])
                 } else if fits(viewport_of(s, r.tab), width, height) {
                     (s, seq![Output::Paint { tab: r.tab, url: r.url, title: title_of(s.titles, r), buffer, width, height }])
                 } else {
                     // Drawn for a larger viewport than the tab now has.
                     (s, seq![])
                 },
-                // `GpuReady`, `GpuRefused`: item 5.17c's.
+                // Item 5.17c: the start answer.
+                Some(clazel_ipc::message::spec::Message::GpuReady { software }) => (gpu_ready(s, r, software), seq![]),
+                // `GpuRefused` (item 5.17c): the refused process then exits,
+                // and its exit before `GpuReady` is the refusal
+                // ([`gpu_exited`]); the message itself changes nothing.
                 Some(_) => (s, seq![]),
             }
         },
     }
+}
+
+
+// ---------------------------------------------------------------------
+// The GPU crash policy (phase-5.md item 5.17c).
+// ---------------------------------------------------------------------
+
+/// The window in which GPU process exits are counted: five minutes, in the
+/// kernel's seconds ([`State::now`], the host's `Tick`).
+pub open spec fn gpu_window() -> int {
+    300
+}
+
+/// The exits of one GPU process in one mode within [`gpu_window`] that move
+/// its tab on (rules 2 and 4).
+pub open spec fn gpu_exits() -> nat {
+    3
+}
+
+/// The sites with hardware exits within [`gpu_window`] that put every tab in
+/// software (rule 3).
+pub open spec fn gpu_sites() -> nat {
+    3
+}
+
+/// One renderer's GPU record (item 5.17c), tagged with its id and lock as
+/// titles are. A renderer with no record has a process starting in the mode
+/// every tab starts in ([`gpu_of`]).
+pub struct GpuRec {
+    /// The renderer.
+    pub id: nat,
+    /// Its lock.
+    pub lock: clazel_origin::spec::Origin,
+    /// Its process runs, or will run, in software.
+    pub software: bool,
+    /// Its current process said `GpuReady` (and has not exited since).
+    pub running: bool,
+    /// Not restarted: the host shows the notice (rule 4).
+    pub stopped: bool,
+    /// The times of its last exits in this mode, newest first: at most
+    /// `gpu_exits() - 1` of them.
+    pub exits: Seq<int>,
+}
+
+/// A site with a hardware exit (rule 3), and the time of its latest.
+pub struct SiteExit {
+    /// The site: the domain of the renderer whose GPU process exited.
+    pub site: crate::domain::Domain,
+    /// When.
+    pub time: int,
+}
+
+/// What the crash policy keeps (item 5.17c).
+pub struct GpuState {
+    /// The renderers' records.
+    pub recs: Seq<GpuRec>,
+    /// Every tab is in software from its next start, for the rest of the run.
+    pub demoted: bool,
+    /// The most recent distinct sites with a hardware exit, newest first: at
+    /// most `gpu_sites() - 1` of them.
+    pub sites: Seq<SiteExit>,
+}
+
+/// The crash policy before anything happens.
+pub open spec fn init_gpu() -> GpuState {
+    GpuState { recs: seq![], demoted: false, sites: seq![] }
+}
+
+/// `then` is within [`gpu_window`] before `now` (a later `then` counts as no
+/// time passed).
+pub open spec fn within(then: int, now: int) -> bool {
+    now - then < gpu_window()
+}
+
+/// The record of renderer `id` locked to `lock`: the first entry with both.
+pub open spec fn gpu_rec_of(gs: Seq<GpuRec>, id: nat, lock: clazel_origin::spec::Origin) -> Option<GpuRec>
+    decreases gs.len(),
+{
+    if gs.len() == 0 {
+        None
+    } else if gs[0].id == id && gs[0].lock == lock {
+        Some(gs[0])
+    } else {
+        gpu_rec_of(gs.drop_first(), id, lock)
+    }
+}
+
+/// `gs` with the record of `g`'s renderer set to `g`: any earlier one is
+/// removed and `g` goes last.
+pub open spec fn set_gpu_rec(gs: Seq<GpuRec>, g: GpuRec) -> Seq<GpuRec> {
+    gs.filter(|x: GpuRec| !(x.id == g.id && x.lock == g.lock)).push(g)
+}
+
+/// The record of renderer `r` in `s`: its entry, or that of a process just
+/// started: not yet running, in software exactly when every tab is.
+///
+/// (A renderer's first process is spawned as [`Policy::Gpu`], which the host
+/// starts in software once told [`Output::GpuAllSoftware`]. So a process with
+/// no record runs in software if every tab did when it was spawned; reading
+/// the bit now instead differs only for a process spawned in hardware just
+/// before every tab went to software, which is then taken for a software one:
+/// an exit of it before `GpuReady` stops its tab instead of restarting it in
+/// software, and a reload of another origin starts it again.)
+pub open spec fn gpu_of(s: State, r: Renderer) -> GpuRec {
+    match gpu_rec_of(s.gpu.recs, r.id, r.lock) {
+        Some(g) => g,
+        None => GpuRec { id: r.id, lock: r.lock, software: s.gpu.demoted, running: false, stopped: false, exits: seq![] },
+    }
+}
+
+/// `s` with the record of `g`'s renderer set to `g`.
+pub open spec fn with_gpu_rec(s: State, g: GpuRec) -> State {
+    State { gpu: GpuState { recs: set_gpu_rec(s.gpu.recs, g), ..s.gpu }, ..s }
+}
+
+/// The policy a GPU process is started under: [`Policy::Gpu`] for hardware,
+/// which the kernel asks for only while not every tab is in software.
+pub open spec fn gpu_policy(software: bool) -> Policy {
+    if software { Policy::GpuSoftware } else { Policy::Gpu }
+}
+
+/// `GpuReady { software }` from the GPU process of renderer `r`: its record
+/// is running, and in software if the device it found is a software one (a
+/// process started in software that says otherwise stays in software). A
+/// process already running or stopped is not starting: ignored.
+pub open spec fn gpu_ready(s: State, r: Renderer, software: bool) -> State {
+    let g = gpu_of(s, r);
+    if g.running || g.stopped {
+        s
+    } else {
+        with_gpu_rec(s, GpuRec { running: true, software: g.software || software, ..g })
+    }
+}
+
+/// The third exit within the window (rules 2 and 4): the record already
+/// holds `gpu_exits() - 1` exits and the oldest is within the window.
+pub open spec fn third_exit(g: GpuRec, now: int) -> bool {
+    g.exits.len() >= gpu_exits() - 1 && within(g.exits[gpu_exits() - 2], now)
+}
+
+/// The exits after one more at `now`: it first, then the newest
+/// `gpu_exits() - 2` of the old ones.
+pub open spec fn noted_exits(g: GpuRec, now: int) -> Seq<int> {
+    seq![now] + (if g.exits.len() > gpu_exits() - 2 { g.exits.take(gpu_exits() - 2) } else { g.exits })
+}
+
+/// Hardware exits within the window from sites other than `site` (rule 3).
+pub open spec fn other_sites(sites: Seq<SiteExit>, site: crate::domain::Domain, now: int) -> Seq<SiteExit> {
+    sites.filter(|x: SiteExit| x.site != site && within(x.time, now))
+}
+
+/// A hardware exit of `site` at `now` makes `gpu_sites()` sites (rule 3).
+pub open spec fn site_demotes(sites: Seq<SiteExit>, site: crate::domain::Domain, now: int) -> bool {
+    other_sites(sites, site, now).len() >= gpu_sites() - 1
+}
+
+/// The sites after a hardware exit of `site` at `now`: it first, then the
+/// others, newest first, at most `gpu_sites() - 1` in all.
+pub open spec fn note_site(sites: Seq<SiteExit>, site: crate::domain::Domain, now: int) -> Seq<SiteExit> {
+    let rest = sites.filter(|x: SiteExit| x.site != site);
+    seq![SiteExit { site, time: now }] + (if rest.len() > gpu_sites() - 2 { rest.take(gpu_sites() - 2) } else { rest })
+}
+
+/// Every tab to software from its next start: the bit is set, and the host
+/// told once ([`Output::GpuAllSoftware`]). No running process is ended.
+pub open spec fn demote_all(s: State) -> (State, Seq<Output>) {
+    if s.gpu.demoted {
+        (s, seq![])
+    } else {
+        (State { gpu: GpuState { demoted: true, ..s.gpu }, ..s }, seq![Output::GpuAllSoftware])
+    }
+}
+
+/// The host's `--gpu=software` (or another domain's refusal, declassified):
+/// [`demote_all`].
+pub open spec fn gpu_software(s: State) -> (State, Seq<Output>) {
+    demote_all(s)
+}
+
+/// A hardware exit of `site` while drawing, as the shared count sees it
+/// (rule 3): the site is noted and, if it makes `gpu_sites()` sites within
+/// the window, every tab goes to software. This is all another domain's such
+/// exit does to what `site`'s observers share ([`Event::GpuSiteExit`]).
+pub open spec fn gpu_site_exit(s: State, site: crate::domain::Domain) -> (State, Seq<Output>) {
+    let flips = !s.gpu.demoted && site_demotes(s.gpu.sites, site, s.now);
+    let s1 = State { gpu: GpuState { sites: note_site(s.gpu.sites, site, s.now), ..s.gpu }, ..s };
+    if flips {
+        demote_all(s1)
+    } else {
+        (s1, seq![])
+    }
+}
+
+/// The outputs that start the GPU process of renderer `r` again (rule 1): a
+/// new process in the given mode, and, if the tab has a viewport, the
+/// viewport to both, which makes the renderer send its whole list again.
+/// The host gives the new process the renderer's channel (it kept the GPU
+/// process's end); the renderer's process is not touched.
+pub open spec fn gpu_restart_outputs(s: State, r: Renderer, software: bool) -> Seq<Output> {
+    seq![Output::Spawn { id: r.id, policy: gpu_policy(software) }] + match find_viewport(s.viewports, r.tab, 0) {
+        None => seq![],
+        Some(v) => seq![
+            Output::ToRenderer { id: r.id, bytes: viewport_frame(v) },
+            Output::ToGpu { id: r.id, bytes: gpu_viewport_frame(v) },
+        ],
+    }
+}
+
+/// Restart the GPU process of `r` in the given mode with these exits.
+pub open spec fn gpu_restart(s: State, r: Renderer, g: GpuRec, software: bool, exits: Seq<int>) -> (State, Seq<Output>) {
+    (
+        with_gpu_rec(s, GpuRec { software, running: false, stopped: false, exits, ..g }),
+        gpu_restart_outputs(s, r, software),
+    )
+}
+
+/// Stop the GPU process of `r` (rule 4): no restart; the host draws the
+/// notice.
+pub open spec fn gpu_stop(s: State, r: Renderer, g: GpuRec) -> (State, Seq<Output>) {
+    (with_gpu_rec(s, GpuRec { running: false, stopped: true, ..g }), seq![Output::GpuStopped { tab: r.tab, url: r.url }])
+}
+
+/// `GpuExited(id)` (item 5.17c): the GPU process of renderer `id` exited.
+/// The tab keeps showing its last `Paint` (the host's), and:
+///
+/// - a stopped tab (not running) has no process: nothing;
+/// - **before `GpuReady`, in hardware** (a refused device, a driver 5.21a's
+///   sandbox kills at start): the machine's GPU is refused, so every tab goes
+///   to software ([`demote_all`]) and this one restarts in software; not
+///   counted by site, since no page has reached a process before
+///   `GpuReady`;
+/// - **before `GpuReady`, in software**: software cannot start: rule 4;
+/// - **drawing in software**: the third exit within the window is rule 4;
+///   otherwise rule 1, in software;
+/// - **drawing in hardware**: the site is counted (rule 3, [`gpu_site_exit`]);
+///   then the third exit within the window (rule 2), or every tab being in
+///   software, restarts it in software with no exits recorded (a new mode
+///   counts afresh); otherwise rule 1, in hardware.
+pub open spec fn gpu_exited(rules: Seq<clazel_psl::spec::Rule>, s: State, id: nat) -> (State, Seq<Output>) {
+    match find_by_id(s.renderers, id, 0) {
+        // A replaced (or never started) GPU process: ignored.
+        None => (s, seq![]),
+        Some(i) => gpu_exit_of(rules, s, s.renderers[i]),
+    }
+}
+
+/// [`gpu_exited`] for the live renderer `r`.
+pub open spec fn gpu_exit_of(rules: Seq<clazel_psl::spec::Rule>, s: State, r: Renderer) -> (State, Seq<Output>) {
+    let g = gpu_of(s, r);
+    if !g.running {
+        if g.stopped {
+            (s, seq![])
+        } else if g.software {
+            gpu_stop(s, r, g)
+        } else {
+            let (s1, all) = demote_all(s);
+            let (s2, out) = gpu_restart(s1, r, g, true, seq![]);
+            (s2, all + out)
+        }
+    } else if g.software {
+        if third_exit(g, s.now) {
+            gpu_stop(s, r, g)
+        } else {
+            gpu_restart(s, r, g, true, noted_exits(g, s.now))
+        }
+    } else {
+        let (s1, all) = gpu_site_exit(s, crate::domain::domain_of_renderer(rules, r));
+        let (s2, out) = if third_exit(g, s.now) || s1.gpu.demoted {
+            gpu_restart(s1, r, g, true, seq![])
+        } else {
+            gpu_restart(s1, r, g, false, noted_exits(g, s.now))
+        };
+        (s2, all + out)
+    }
+}
+
+// ---------------------------------------------------------------------
+// Style sheet fetches (phase-5.md item 5.19).
+// ---------------------------------------------------------------------
+
+/// The most sub-fetches one renderer has in flight at once.
+pub open spec fn max_subfetches_at_once() -> nat {
+    8
+}
+
+/// The most sub-fetches one document starts (a commit starts a new count).
+pub open spec fn max_subfetches_per_document() -> nat {
+    64
+}
+
+/// The most sub-fetches one renderer starts in its life (its serial numbers
+/// are below this; the exec kernel's are `u64`s).
+pub open spec fn max_subfetch_serial() -> nat {
+    0xFFFF_FFFF_FFFF_FFFFnat
+}
+
+/// A sub-fetch fails at the first `Tick` at least this many seconds after it
+/// started.
+pub open spec fn subfetch_timeout() -> int {
+    60
+}
+
+/// The renderer's count of sub-fetches: `serial` started in its life (the
+/// next one's serial number) and `in_document` started since its last
+/// commit.
+pub open spec fn subcount_of(cs: Seq<SubCount>, id: nat, lock: clazel_origin::spec::Origin) -> (nat, nat)
+    decreases cs.len(),
+{
+    if cs.len() == 0 {
+        (0, 0)
+    } else if cs[0].renderer == id && cs[0].lock == lock {
+        (cs[0].serial, cs[0].in_document)
+    } else {
+        subcount_of(cs.drop_first(), id, lock)
+    }
+}
+
+/// `cs` with the counts of renderer `id` locked to `lock` set.
+pub open spec fn set_subcount(cs: Seq<SubCount>, id: nat, lock: clazel_origin::spec::Origin, serial: nat, in_document: nat) -> Seq<SubCount> {
+    cs.filter(|c: SubCount| !(c.renderer == id && c.lock == lock)).push(SubCount { renderer: id, lock, serial, in_document })
+}
+
+/// `cs` with the document count of renderer `id` locked to `lock` back to
+/// zero: a commit starts a new document.
+pub open spec fn new_document_counts(cs: Seq<SubCount>, id: nat, lock: clazel_origin::spec::Origin) -> Seq<SubCount> {
+    cs.map_values(|c: SubCount| if c.renderer == id && c.lock == lock { SubCount { in_document: 0, ..c } } else { c })
+}
+
+/// `fs` with the sub-fetches of renderer `id` locked to `lock` ended: a
+/// commit ends the old document's sub-fetches. An ended one changes nothing
+/// and sends nothing; the next `Tick` closes its connection and drops it.
+pub open spec fn end_subfetches(fs: Seq<SubFetch>, id: nat, lock: clazel_origin::spec::Origin) -> Seq<SubFetch> {
+    fs.map_values(|f: SubFetch| if f.renderer == id && f.lock == lock { SubFetch { ended: true, ..f } } else { f })
+}
+
+/// The number of sub-fetches of renderer `id` locked to `lock` in flight
+/// (not ended).
+pub open spec fn live_subfetches(fs: Seq<SubFetch>, id: nat, lock: clazel_origin::spec::Origin) -> nat
+    decreases fs.len(),
+{
+    if fs.len() == 0 {
+        0
+    } else {
+        (if fs[0].renderer == id && fs[0].lock == lock && !fs[0].ended { 1nat } else { 0nat }) + live_subfetches(fs.drop_first(), id, lock)
+    }
+}
+
+/// Whether `f` is sub-fetch `serial` of renderer `id` locked to `lock`.
+pub open spec fn subfetch_is(f: SubFetch, id: nat, lock: clazel_origin::spec::Origin, serial: nat) -> bool {
+    f.renderer == id && f.lock == lock && f.serial == serial
+}
+
+/// The first sub-fetch `serial` of renderer `id` locked to `lock` in `fs`.
+/// (The table is read by key, never by position, so that what a renderer's
+/// entries say does not depend on where another domain's entries are.)
+pub open spec fn subfetch_of(fs: Seq<SubFetch>, id: nat, lock: clazel_origin::spec::Origin, serial: nat) -> Option<SubFetch>
+    decreases fs.len(),
+{
+    if fs.len() == 0 {
+        None
+    } else if subfetch_is(fs[0], id, lock, serial) {
+        Some(fs[0])
+    } else {
+        subfetch_of(fs.drop_first(), id, lock, serial)
+    }
+}
+
+/// `fs` with the first sub-fetch of `f`'s key replaced by `f`.
+pub open spec fn replace_subfetch(fs: Seq<SubFetch>, f: SubFetch) -> Seq<SubFetch>
+    decreases fs.len(),
+{
+    if fs.len() == 0 {
+        fs
+    } else if subfetch_is(fs[0], f.renderer, f.lock, f.serial) {
+        seq![f] + fs.drop_first()
+    } else {
+        seq![fs[0]] + replace_subfetch(fs.drop_first(), f)
+    }
+}
+
+/// `fs` without the first sub-fetch of `f`'s key.
+pub open spec fn drop_subfetch(fs: Seq<SubFetch>, f: SubFetch) -> Seq<SubFetch>
+    decreases fs.len(),
+{
+    if fs.len() == 0 {
+        fs
+    } else if subfetch_is(fs[0], f.renderer, f.lock, f.serial) {
+        fs.drop_first()
+    } else {
+        seq![fs[0]] + drop_subfetch(fs.drop_first(), f)
+    }
+}
+
+/// Whether a request to `url` by a document locked to `lock` carries
+/// credentials (5.0(h)): its URL's origin is the lock, and its cookie host is
+/// the lock's host, which it has (the second holds of every same-origin URL
+/// in the shipped instantiation; it is stated so that the cookies a
+/// sub-fetch reads and writes are visibly the lock's, for every `FetchFns`).
+/// An opaque-origin document has no host, so its requests carry none, as it
+/// is cookie-averse.
+pub open spec fn credentialed(fetch: FetchFns, lock: clazel_origin::spec::Origin, url: clazel_url::url::spec::Url) -> bool {
+    (fetch.urls.origin)(url) == lock && ((fetch.urls.request_url)(url)).host == lock_host(lock) && lock_host(lock) is Some
+}
+
+/// The jar a sub-fetch's step is given: the kernel's if its current request
+/// carries credentials, none otherwise.
+pub open spec fn subfetch_jar(fetch: FetchFns, s: State, f: SubFetch) -> Seq<clazel_cookie::storage::spec::Cookie> {
+    if credentialed(fetch, f.lock, f.fetch.url) {
+        s.jar
+    } else {
+        seq![]
+    }
+}
+
+/// The `StyleBody` frames of `body`, in order: consecutive pieces of at most
+/// `max_style_chunk` octets, none for an empty body.
+pub open spec fn style_body_frames(request: u64, body: Seq<u8>) -> Seq<u8>
+    decreases body.len(),
+{
+    if body.len() == 0 {
+        seq![]
+    } else if body.len() <= clazel_ipc::message::spec::max_style_chunk() {
+        reply_frame(clazel_ipc::message::spec::Message::StyleBody { request, bytes: body })
+    } else {
+        reply_frame(clazel_ipc::message::spec::Message::StyleBody { request, bytes: body.take(clazel_ipc::message::spec::max_style_chunk() as int) })
+            + style_body_frames(request, body.skip(clazel_ipc::message::spec::max_style_chunk() as int))
+    }
+}
+
+/// The frames of a fetched sheet: `StyleResponse`, the `StyleBody` frames and
+/// `StyleEnd`, as one write.
+pub open spec fn style_frames(request: u64, doc: Document) -> Seq<u8> {
+    reply_frame(clazel_ipc::message::spec::Message::StyleResponse { request, content_type: doc.content_type }) + style_body_frames(request, doc.body)
+        + reply_frame(clazel_ipc::message::spec::Message::StyleEnd { request })
+}
+
+/// The frame of `StyleFailed`.
+pub open spec fn style_failed_frame(request: u64) -> Seq<u8> {
+    reply_frame(clazel_ipc::message::spec::Message::StyleFailed { request })
+}
+
+/// The outputs of a sub-fetch's transducer actions, on connection `hop` of
+/// sub-fetch `serial` of renderer `id`: the connection the last `Connect`
+/// gave, the outputs, and the frames to the renderer if the fetch ended
+/// (`Done` or `Fail`; nothing after it is read).
+pub open spec fn sub_actions(id: nat, serial: nat, request: u64, hop: nat, actions: Seq<NetAction>) -> (nat, Seq<Output>, Option<Seq<u8>>)
+    decreases actions.len(),
+{
+    if actions.len() == 0 {
+        (hop, seq![], None)
+    } else {
+        let rest = actions.drop_first();
+        match actions[0] {
+            clazel_fetch::transducer::spec::Action::Connect { host, port, tls } => {
+                let (h, out, end) = sub_actions(id, serial, request, hop + 1, rest);
+                (h, seq![Output::SubConnect { renderer: id, serial, hop: hop + 1, host, port, tls }] + out, end)
+            },
+            clazel_fetch::transducer::spec::Action::Send(bytes) => {
+                let (h, out, end) = sub_actions(id, serial, request, hop, rest);
+                (h, seq![Output::SubSend { renderer: id, serial, hop, bytes }] + out, end)
+            },
+            clazel_fetch::transducer::spec::Action::Close => {
+                let (h, out, end) = sub_actions(id, serial, request, hop, rest);
+                (h, seq![Output::SubClose { renderer: id, serial, hop }] + out, end)
+            },
+            clazel_fetch::transducer::spec::Action::Done { url, response } => (hop, seq![], Some(style_frames(request, response_document(response)))),
+            clazel_fetch::transducer::spec::Action::Fail(_) => (hop, seq![], Some(style_failed_frame(request))),
+        }
+    }
+}
+
+/// `fs` with `f` (by key) replaced, or dropped if the fetch ended; and the
+/// outputs, the frames to the renderer last.
+pub open spec fn sub_finish(fs: Seq<SubFetch>, f: SubFetch, out: Seq<Output>, end: Option<Seq<u8>>) -> (Seq<SubFetch>, Seq<Output>) {
+    match end {
+        None => (replace_subfetch(fs, f), out),
+        Some(frames) => (drop_subfetch(fs, f), out + seq![Output::ToRenderer { id: f.renderer, bytes: frames }]),
+    }
+}
+
+/// A committed renderer's `FetchStyle { request, url }` (item 5.19): refused
+/// with `StyleFailed` past a limit or for a URL that does not decode,
+/// resolve or parse; otherwise a sub-fetch is started by the transducer
+/// navigations use, in the renderer's table, on connections of its tab
+/// whose partition key is its domain.
+pub open spec fn fetch_style(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, r: Renderer, request: u64, url: Seq<u8>) -> (State, Seq<Output>) {
+    let (serial, in_document) = subcount_of(s.subcounts, r.id, r.lock);
+    let refused = (s, reply(r, clazel_ipc::message::spec::Message::StyleFailed { request }));
+    if live_subfetches(s.subfetches, r.id, r.lock) >= max_subfetches_at_once() || in_document >= max_subfetches_per_document() || serial
+        >= max_subfetch_serial() {
+        refused
+    } else {
+        match clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+            None => refused,
+            Some(relative) => match (urls.resolve)(r.url, relative) {
+                None => refused,
+                Some(resolved) => match (fetch.parse)(resolved) {
+                    None => refused,
+                    Some(parsed) => {
+                        let (fs, actions) = clazel_fetch::transducer::spec::start(parsed);
+                        let f = SubFetch {
+                            renderer: r.id,
+                            lock: r.lock,
+                            serial,
+                            request,
+                            tab: r.tab,
+                            fetch: fs,
+                            hop: 0,
+                            started: s.now,
+                            partition: crate::domain::domain_of_renderer(rules, r),
+                            ended: false,
+                        };
+                        let (hop, out, end) = sub_actions(r.id, serial, request, 0, actions);
+                        let counts = set_subcount(s.subcounts, r.id, r.lock, serial + 1, in_document + 1);
+                        let table = match end {
+                            None => s.subfetches.push(SubFetch { hop, ..f }),
+                            Some(_) => s.subfetches,
+                        };
+                        let outs = match end {
+                            None => out,
+                            Some(frames) => out + seq![Output::ToRenderer { id: r.id, bytes: frames }],
+                        };
+                        (State { subfetches: table, subcounts: counts, ..s }, outs)
+                    },
+                },
+            },
+        }
+    }
+}
+
+/// Sub-fetch `f`'s renderer is live, committed and locked to its lock, and
+/// `f` has not ended: `f` belongs to the renderer's current document.
+pub open spec fn subfetch_live(s: State, f: SubFetch) -> bool {
+    !f.ended && match find_by_id(s.renderers, f.renderer, 0) {
+        Some(i) => s.renderers[i].lock == f.lock && s.renderers[i].committed,
+        None => false,
+    }
+}
+
+/// `SubNet { renderer, serial, hop, input }` (item 5.19): the network shell
+/// reports on connection `hop` of a sub-fetch. Anything but the current
+/// connection of a live sub-fetch is ignored in full. Otherwise the
+/// transducer steps with the kernel's jar if the current request carries
+/// credentials and with no jar if not; its jar operations are applied only
+/// in the first case.
+pub open spec fn sub_net(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns, s: State, renderer: nat, serial: nat, hop: nat, input: NetInput) -> (State, Seq<Output>) {
+    match subnet_target(s, renderer, serial) {
+        None => (s, seq![]),
+        Some(f) => if !subfetch_live(s, f) || hop == 0 || f.hop != hop {
+            (s, seq![])
+        } else {
+            let cred = credentialed(fetch, f.lock, f.fetch.url);
+            let (fs, actions, ops) = clazel_fetch::transducer::spec::step(fetch.http, fetch.urls, f.fetch, input, subfetch_jar(fetch, s, f), s.now);
+            let jar = if cred { apply_net_ops(rules, s.jar, ops) } else { s.jar };
+            let (h, out, end) = sub_actions(renderer, serial, f.request, hop, actions);
+            let (table, outs) = sub_finish(s.subfetches, SubFetch { fetch: fs, hop: h, ..f }, out, end);
+            (State { subfetches: table, jar, ..s }, outs)
+        },
+    }
+}
+
+/// The sub-fetch a `SubNet` of renderer `renderer` and serial `serial` is
+/// about: the renderer's (by its current lock), if the renderer is live.
+pub open spec fn subnet_target(s: State, renderer: nat, serial: nat) -> Option<SubFetch> {
+    match find_by_id(s.renderers, renderer, 0) {
+        None => None,
+        Some(i) => subfetch_of(s.subfetches, renderer, s.renderers[i].lock, serial),
+    }
+}
+
+/// What a `Tick` does to the sub-fetches (item 5.19): one that is no longer
+/// live has its connection closed and is dropped; one that started
+/// [`subfetch_timeout`] seconds ago or more fails (its connection closed,
+/// `StyleFailed` to its renderer) and is dropped; the others stay.
+pub open spec fn sweep(s: State, fs: Seq<SubFetch>) -> (Seq<SubFetch>, Seq<Output>)
+    decreases fs.len(),
+{
+    if fs.len() == 0 {
+        (seq![], seq![])
+    } else {
+        let f = fs[0];
+        let (rest, out) = sweep(s, fs.drop_first());
+        let close = if f.hop > 0 { seq![Output::SubClose { renderer: f.renderer, serial: f.serial, hop: f.hop }] } else { seq![] };
+        if !subfetch_live(s, f) {
+            (rest, close + out)
+        } else if s.now >= f.started + subfetch_timeout() {
+            (rest, close + seq![Output::ToRenderer { id: f.renderer, bytes: style_failed_frame(f.request) }] + out)
+        } else {
+            (seq![f] + rest, out)
+        }
+    }
+}
+
+/// `Tick(time)`: [`tick`], then [`sweep`] at the new time.
+pub open spec fn tick_all(s: State, time: int) -> (State, Seq<Output>) {
+    let s1 = tick(s, time).0;
+    let (table, out) = sweep(s1, s1.subfetches);
+    (State { subfetches: table, ..s1 }, out)
 }
 
 /// The message in a frame a renderer sent: it must decode, and be one a
@@ -1785,7 +2673,7 @@ pub open spec fn decode_renderer_frame(bytes: Seq<u8>) -> Option<clazel_ipc::mes
 /// is committed.
 pub open spec fn accepted_message(r: Renderer, bytes: Seq<u8>) -> Option<clazel_ipc::message::spec::Message> {
     match decode_renderer_frame(bytes) {
-        Some(m) => if (m is Display || m is Title) && !r.committed { None } else { Some(m) },
+        Some(m) => if (m is Display || m is Title || m is FetchStyle) && !r.committed { None } else { Some(m) },
         None => None,
     }
 }
@@ -1855,6 +2743,8 @@ pub open spec fn handle_message(
         clazel_ipc::message::spec::Message::Display { title, text, links } => (s, seq![Output::Show { tab: r.tab, url: r.url, title, text, links }]),
         // Item 5.18: the renderer's title, kept for its `Paint`s.
         clazel_ipc::message::spec::Message::Title { title } => (State { titles: set_title(s.titles, r.id, r.lock, title), ..s }, seq![]),
+        // Item 5.19.
+        clazel_ipc::message::spec::Message::FetchStyle { request, url } => fetch_style(rules, urls, fetch, s, r, request, url),
         // A message a renderer may not send: unreachable, see
         // `decode_renderer_frame`.
         _ => (s, seq![]),
@@ -1890,10 +2780,14 @@ pub open spec fn step(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: F
         Event::NavigateTab { tab, url } => begin_navigation(rules, urls, fetch, s, tab, url),
         Event::Net { conn, input } => net(rules, urls, fetch, s, conn, input),
         Event::RendererExited { id } => renderer_exited(s, id),
-        Event::Tick { time } => tick(s, time),
+        Event::Tick { time } => tick_all(s, time),
+        Event::SubNet { renderer, serial, hop, input } => sub_net(rules, fetch, s, renderer, serial, hop, input),
         Event::FromGpu { id, bytes } => from_gpu(s, id, bytes),
         Event::Resize { tab, width, height, scale } => resize(s, tab, Viewport { width, height, scale }),
         Event::Input { tab, input } => user_input(s, tab, input),
+        Event::GpuExited { id } => gpu_exited(rules, s, id),
+        Event::GpuSoftware => gpu_software(s),
+        Event::GpuSiteExit { lock } => gpu_site_exit(s, crate::domain::domain_of_lock(rules, lock)),
     }
 }
 
