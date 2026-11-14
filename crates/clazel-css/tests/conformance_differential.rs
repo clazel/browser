@@ -1,6 +1,7 @@
-//! The tokenizer against Servo's `cssparser` (phase-5.md item 5.4), on random and mutated
-//! sheets and every `css-parsing-tests` input. Tokens are compared here; rule structure is
-//! not compared yet.
+//! The tokenizer and the rule structure against Servo's `cssparser` (phase-5.md item
+//! 5.4), on random and mutated sheets and every `css-parsing-tests` input. The first test
+//! compares tokens; the second compares rules, at-rules and declarations (see "Rule
+//! structure" below).
 //!
 //! `cssparser` hands out blocks and functions nested, so our tokens are nested the same
 //! way first, as `tests/conformance_tokens.rs` does. Both engines read the same text,
@@ -54,12 +55,37 @@
 //! `clazel-conformance:` line and the `pinned` line it prints, check that every new
 //! difference is one of the classes above, and change the constants.
 //!
+//! The rule structure is compared by running `cssparser`'s rule parsers (`StyleSheetParser`
+//! and `RuleBodyParser`, which implement §5.5's algorithms for nested blocks) and ours on
+//! one sheet and comparing at-rule names, preludes and blocks, qualified rules' preludes and
+//! blocks, and declarations' names, values and important flags, all down to the tokens.
+//! `cssparser` leaves what a declaration or rule is "valid" for to its user, so `Theirs`
+//! below accepts every rule and decides one thing, as §5.5.6 step 8 does for a generic
+//! processor: a declaration of a name that is not a custom property name is none if its
+//! value has a top-level {}-block and another non-whitespace value (it is then read as a
+//! rule). Without that, 1,444 of the 51,638 sheets differ; with it, one class remains:
+//! - `cssparser` drops the first rule of a stylesheet if it is an `@charset` at-rule,
+//!   from an older draft (the pinned text, with `charset-is-not-a-rule.html`, has it as an
+//!   ordinary at-rule). That is excused only where ours has such a rule first and
+//!   `cssparser` has exactly the rest, and counted. The random sheets never make one;
+//!   `css-parsing-tests` does.
+//!
+//! Compared the same way as the tokens, with no other difference allowed and the outcome
+//! and the coverage of the sheets that agree (rules, nesting, declarations, `!important`,
+//! custom properties) pinned.
+//!
 //! Skipped under Miri (`#[cfg_attr(miri, ignore)]`, as `clazel-cookie`'s differential
 //! is): `cssparser` has `unsafe` of its own, and our tokenizer has none and runs there
 //! in `tests/conformance_tokens.rs`.
 
-use clazel_css::tokenizer::exec::{ExecNumber, ExecToken, filter, tokenize_all};
-use cssparser::{ParseError, Parser, Token};
+use clazel_css::parser::exec_parse::{ExecParsed, parse_stylesheet_contents};
+use clazel_css::parser::rows::{ExecDeclaration, ExecItemKind};
+use clazel_css::tokenizer::exec::{ExecNumber, ExecToken, filter, next_token, tokenize_all};
+use cssparser::{
+    AtRuleParser, CowRcStr, DeclarationParser, ParseError, Parser, ParserState,
+    QualifiedRuleParser, RuleBodyItemParser, RuleBodyParser, StyleSheetParser, Token,
+    parse_important,
+};
 use std::iter::Peekable;
 use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 use std::vec::IntoIter;
@@ -316,75 +342,82 @@ fn theirs_number(value: f32, int_value: Option<i32>, has_sign: bool) -> Numeric 
 fn theirs_list(parser: &mut Parser<'_>) -> Vec<Tree> {
     let mut out = Vec::new();
     while let Ok(token) = parser.next_including_whitespace_and_comments() {
-        let match_token = |out: &mut Vec<Tree>, first: char| {
-            out.push(Tree::Delim(first));
-            out.push(Tree::Delim('='));
-        };
-        match token.clone() {
-            Token::Comment(_) => {}
-            Token::Ident(v) => out.push(Tree::Ident(v.to_string())),
-            Token::AtKeyword(v) => out.push(Tree::AtKeyword(v.to_string())),
-            Token::Hash(v) => out.push(Tree::Hash(v.to_string(), false)),
-            Token::IDHash(v) => out.push(Tree::Hash(v.to_string(), true)),
-            Token::QuotedString(v) => out.push(Tree::QuotedString(v.to_string())),
-            Token::UnquotedUrl(v) => out.push(Tree::Url(v.to_string())),
-            Token::Delim(c) => out.push(Tree::Delim(c)),
-            Token::Number {
-                has_sign,
-                value,
-                int_value,
-            } => out.push(Tree::Number(theirs_number(value, int_value, has_sign))),
-            Token::Percentage {
-                has_sign,
-                unit_value,
-                int_value,
-            } => out.push(Tree::Percentage(theirs_number(
-                unit_value, int_value, has_sign,
-            ))),
-            Token::Dimension {
-                has_sign,
-                value,
-                int_value,
-                unit,
-            } => out.push(Tree::Dimension(
-                theirs_number(value, int_value, has_sign),
-                unit.to_string(),
-            )),
-            Token::WhiteSpace(_) => out.push(Tree::Whitespace),
-            Token::Colon => out.push(Tree::Colon),
-            Token::Semicolon => out.push(Tree::Semicolon),
-            Token::Comma => out.push(Tree::Comma),
-            Token::IncludeMatch => match_token(&mut out, '~'),
-            Token::DashMatch => match_token(&mut out, '|'),
-            Token::PrefixMatch => match_token(&mut out, '^'),
-            Token::SuffixMatch => match_token(&mut out, '$'),
-            Token::SubstringMatch => match_token(&mut out, '*'),
-            Token::CDO => out.push(Tree::Cdo),
-            Token::CDC => out.push(Tree::Cdc),
-            Token::Function(name) => {
-                let inner = theirs_nested(parser);
-                out.push(Tree::Function(name.to_string(), inner));
-            }
-            Token::ParenthesisBlock => {
-                let inner = theirs_nested(parser);
-                out.push(Tree::Block('(', inner));
-            }
-            Token::SquareBracketBlock => {
-                let inner = theirs_nested(parser);
-                out.push(Tree::Block('[', inner));
-            }
-            Token::CurlyBracketBlock => {
-                let inner = theirs_nested(parser);
-                out.push(Tree::Block('{', inner));
-            }
-            Token::BadUrl(_) => out.push(Tree::BadUrl),
-            Token::BadString(_) => out.push(Tree::BadString),
-            Token::CloseParenthesis => out.push(Tree::Close(')')),
-            Token::CloseSquareBracket => out.push(Tree::Close(']')),
-            Token::CloseCurlyBracket => out.push(Tree::Close('}')),
-        }
+        let token = token.clone();
+        theirs_push(parser, token, &mut out);
     }
     out
+}
+
+/// What `token` is in terms both engines share, onto `out`; a block's or function's
+/// contents are read from `parser`.
+fn theirs_push(parser: &mut Parser<'_>, token: Token<'_>, out: &mut Vec<Tree>) {
+    let match_token = |out: &mut Vec<Tree>, first: char| {
+        out.push(Tree::Delim(first));
+        out.push(Tree::Delim('='));
+    };
+    match token {
+        Token::Comment(_) => {}
+        Token::Ident(v) => out.push(Tree::Ident(v.to_string())),
+        Token::AtKeyword(v) => out.push(Tree::AtKeyword(v.to_string())),
+        Token::Hash(v) => out.push(Tree::Hash(v.to_string(), false)),
+        Token::IDHash(v) => out.push(Tree::Hash(v.to_string(), true)),
+        Token::QuotedString(v) => out.push(Tree::QuotedString(v.to_string())),
+        Token::UnquotedUrl(v) => out.push(Tree::Url(v.to_string())),
+        Token::Delim(c) => out.push(Tree::Delim(c)),
+        Token::Number {
+            has_sign,
+            value,
+            int_value,
+        } => out.push(Tree::Number(theirs_number(value, int_value, has_sign))),
+        Token::Percentage {
+            has_sign,
+            unit_value,
+            int_value,
+        } => out.push(Tree::Percentage(theirs_number(
+            unit_value, int_value, has_sign,
+        ))),
+        Token::Dimension {
+            has_sign,
+            value,
+            int_value,
+            unit,
+        } => out.push(Tree::Dimension(
+            theirs_number(value, int_value, has_sign),
+            unit.to_string(),
+        )),
+        Token::WhiteSpace(_) => out.push(Tree::Whitespace),
+        Token::Colon => out.push(Tree::Colon),
+        Token::Semicolon => out.push(Tree::Semicolon),
+        Token::Comma => out.push(Tree::Comma),
+        Token::IncludeMatch => match_token(out, '~'),
+        Token::DashMatch => match_token(out, '|'),
+        Token::PrefixMatch => match_token(out, '^'),
+        Token::SuffixMatch => match_token(out, '$'),
+        Token::SubstringMatch => match_token(out, '*'),
+        Token::CDO => out.push(Tree::Cdo),
+        Token::CDC => out.push(Tree::Cdc),
+        Token::Function(name) => {
+            let inner = theirs_nested(parser);
+            out.push(Tree::Function(name.to_string(), inner));
+        }
+        Token::ParenthesisBlock => {
+            let inner = theirs_nested(parser);
+            out.push(Tree::Block('(', inner));
+        }
+        Token::SquareBracketBlock => {
+            let inner = theirs_nested(parser);
+            out.push(Tree::Block('[', inner));
+        }
+        Token::CurlyBracketBlock => {
+            let inner = theirs_nested(parser);
+            out.push(Tree::Block('{', inner));
+        }
+        Token::BadUrl(_) => out.push(Tree::BadUrl),
+        Token::BadString(_) => out.push(Tree::BadString),
+        Token::CloseParenthesis => out.push(Tree::Close(')')),
+        Token::CloseSquareBracket => out.push(Tree::Close(']')),
+        Token::CloseCurlyBracket => out.push(Tree::Close('}')),
+    }
 }
 
 /// "non-ASCII ident code point", CSS Syntax §4.2 at the commit the specs here are pinned
@@ -769,4 +802,539 @@ fn known_difference_url_whitespace_backslash() {
             "{source:?}: theirs {theirs:?}"
         );
     }
+}
+
+// ------------------------------------------------------------------------------------
+// Rule structure
+// ------------------------------------------------------------------------------------
+
+/// A rule or declaration in terms both engines share. A block's contents are the items
+/// of "consume a block's contents" in order: `cssparser` hands them out one at a time, so
+/// our lists of declarations are flattened to match.
+#[derive(Debug, Clone)]
+enum Node {
+    At {
+        name: String,
+        prelude: Vec<Tree>,
+        block: Option<Vec<Node>>,
+    },
+    Qualified {
+        prelude: Vec<Tree>,
+        block: Vec<Node>,
+    },
+    Decl {
+        name: String,
+        value: Vec<Tree>,
+        important: bool,
+    },
+}
+
+fn same_nodes(a: &[Node], b: &[Node]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(a, b)| same_node(a, b))
+}
+
+fn same_node(a: &Node, b: &Node) -> bool {
+    match (a, b) {
+        (
+            Node::At {
+                name: n1,
+                prelude: p1,
+                block: b1,
+            },
+            Node::At {
+                name: n2,
+                prelude: p2,
+                block: b2,
+            },
+        ) => {
+            n1 == n2
+                && same_list(p1, p2)
+                && match (b1, b2) {
+                    (Some(b1), Some(b2)) => same_nodes(b1, b2),
+                    (None, None) => true,
+                    _ => false,
+                }
+        }
+        (
+            Node::Qualified {
+                prelude: p1,
+                block: b1,
+            },
+            Node::Qualified {
+                prelude: p2,
+                block: b2,
+            },
+        ) => same_list(p1, p2) && same_nodes(b1, b2),
+        (
+            Node::Decl {
+                name: n1,
+                value: v1,
+                important: i1,
+            },
+            Node::Decl {
+                name: n2,
+                value: v2,
+                important: i2,
+            },
+        ) => n1 == n2 && same_list(v1, v2) && i1 == i2,
+        _ => false,
+    }
+}
+
+/// Our rows and items as [`Node`]s.
+struct OursRules<'a> {
+    parsed: &'a ExecParsed,
+}
+
+impl OursRules<'_> {
+    fn trees(&self, lo: usize, hi: usize) -> Vec<Tree> {
+        let rows = &self.parsed.output.rows;
+        let mut out = Vec::new();
+        let mut k = hi;
+        while k > lo {
+            let last = k.saturating_sub(1);
+            out.push(self.tree(last));
+            k = rows
+                .get(last)
+                .map_or(lo, |row| row.start as usize)
+                .min(last);
+        }
+        out.reverse();
+        out
+    }
+
+    fn tree(&self, k: usize) -> Tree {
+        let Some(row) = self.parsed.output.rows.get(k) else {
+            return Tree::BadString;
+        };
+        let start = row.start as usize;
+        let token = next_token(&self.parsed.text, row.pos as usize, false).0;
+        match token {
+            ExecToken::Function { value } => Tree::Function(text(&value), self.trees(start, k)),
+            ExecToken::OpenParen => Tree::Block('(', self.trees(start, k)),
+            ExecToken::OpenSquare => Tree::Block('[', self.trees(start, k)),
+            ExecToken::OpenCurly => Tree::Block('{', self.trees(start, k)),
+            other => {
+                ours_tree(other, &mut Vec::new().into_iter().peekable()).unwrap_or(Tree::BadString)
+            }
+        }
+    }
+
+    fn declaration(&self, d: &ExecDeclaration) -> Node {
+        let name = match next_token(&self.parsed.text, d.name_pos as usize, false).0 {
+            ExecToken::Ident { value } => text(&value),
+            _ => String::new(),
+        };
+        Node::Decl {
+            name,
+            value: self.trees(d.value_lo as usize, d.value_hi as usize),
+            important: d.important,
+        }
+    }
+
+    /// The items `lo` up to `hi`, flattened.
+    fn nodes(&self, lo: usize, hi: usize) -> Vec<Node> {
+        let items = &self.parsed.output.items;
+        let mut groups: Vec<Vec<Node>> = Vec::new();
+        let mut k = hi;
+        while k > lo {
+            let last = k.saturating_sub(1);
+            groups.push(self.item(last));
+            k = items
+                .get(last)
+                .map_or(lo, |item| item.start as usize)
+                .min(last);
+        }
+        groups.into_iter().rev().flatten().collect()
+    }
+
+    fn item(&self, k: usize) -> Vec<Node> {
+        let Some(item) = self.parsed.output.items.get(k) else {
+            return Vec::new();
+        };
+        let prelude = || self.trees(item.lo as usize, item.hi as usize);
+        let name = || match next_token(&self.parsed.text, item.pos as usize, false).0 {
+            ExecToken::AtKeyword { value } => text(&value),
+            _ => String::new(),
+        };
+        let block = || self.nodes(item.start as usize, k);
+        match item.kind {
+            ExecItemKind::StatementAtRule => vec![Node::At {
+                name: name(),
+                prelude: prelude(),
+                block: None,
+            }],
+            ExecItemKind::BlockAtRule => vec![Node::At {
+                name: name(),
+                prelude: prelude(),
+                block: Some(block()),
+            }],
+            ExecItemKind::QualifiedRule => vec![Node::Qualified {
+                prelude: prelude(),
+                block: block(),
+            }],
+            ExecItemKind::Declarations => (item.lo as usize..item.hi as usize)
+                .filter_map(|i| self.parsed.output.declarations.get(i))
+                .map(|d| self.declaration(d))
+                .collect(),
+        }
+    }
+}
+
+fn ours_rules(sheet: &str) -> Vec<Node> {
+    let parsed = parse_stylesheet_contents(&sheet.chars().map(u32::from).collect::<Vec<_>>());
+    OursRules { parsed: &parsed }.nodes(0, parsed.output.items.len())
+}
+
+/// `cssparser`'s three parser traits, building [`Node`]s. The decisions the crate leaves to
+/// its user are made as §5.5.6 step 8 makes them for a generic processor: every rule is
+/// accepted, and a declaration of a name that is not a custom property name is not one
+/// if its value has a top-level {}-block and anything else but whitespace.
+struct Theirs;
+
+impl<'i> DeclarationParser<'i> for Theirs {
+    type Declaration = Node;
+    type Error = ();
+
+    fn parse_value(
+        &mut self,
+        name: CowRcStr<'i>,
+        input: &mut Parser<'i>,
+        _start: &ParserState,
+    ) -> Result<Node, ParseError<()>> {
+        input.skip_whitespace();
+        let mut value = Vec::new();
+        let mut important = false;
+        loop {
+            // `cssparser`'s own `!important`: the last two tokens, whitespace between them
+            // allowed (`parse_important` skips it), and nothing after.
+            let at_the_end = input.try_parse(|i| {
+                parse_important(i)?;
+                i.expect_exhausted()
+            });
+            if at_the_end.is_ok() {
+                important = true;
+                break;
+            }
+            let Ok(token) = input.next_including_whitespace_and_comments() else {
+                break;
+            };
+            let token = token.clone();
+            theirs_push(input, token, &mut value);
+        }
+        while matches!(value.last(), Some(Tree::Whitespace)) {
+            value.pop();
+        }
+        let blocks = value
+            .iter()
+            .filter(|t| matches!(t, Tree::Block('{', _)))
+            .count();
+        let others = value
+            .iter()
+            .filter(|t| !matches!(t, Tree::Whitespace | Tree::Block('{', _)))
+            .count();
+        if !name.starts_with("--") && blocks > 0 && (blocks > 1 || others > 0) {
+            return Err(ParseError::custom(()));
+        }
+        Ok(Node::Decl {
+            name: name.to_string(),
+            value,
+            important,
+        })
+    }
+}
+
+impl<'i> AtRuleParser<'i> for Theirs {
+    type Prelude = (String, Vec<Tree>);
+    type AtRule = Node;
+    type Error = ();
+
+    fn parse_prelude(
+        &mut self,
+        name: CowRcStr<'i>,
+        input: &mut Parser<'i>,
+    ) -> Result<Self::Prelude, ParseError<()>> {
+        Ok((name.to_string(), theirs_list(input)))
+    }
+
+    fn rule_without_block(
+        &mut self,
+        prelude: Self::Prelude,
+        _start: &ParserState,
+    ) -> Result<Node, ()> {
+        Ok(Node::At {
+            name: prelude.0,
+            prelude: prelude.1,
+            block: None,
+        })
+    }
+
+    fn parse_block(
+        &mut self,
+        prelude: Self::Prelude,
+        _start: &ParserState,
+        input: &mut Parser<'i>,
+    ) -> Result<Node, ParseError<()>> {
+        Ok(Node::At {
+            name: prelude.0,
+            prelude: prelude.1,
+            block: Some(theirs_block(self, input)),
+        })
+    }
+}
+
+impl<'i> QualifiedRuleParser<'i> for Theirs {
+    type Prelude = Vec<Tree>;
+    type QualifiedRule = Node;
+    type Error = ();
+
+    fn parse_prelude(&mut self, input: &mut Parser<'i>) -> Result<Self::Prelude, ParseError<()>> {
+        Ok(theirs_list(input))
+    }
+
+    fn parse_block(
+        &mut self,
+        prelude: Self::Prelude,
+        _start: &ParserState,
+        input: &mut Parser<'i>,
+    ) -> Result<Node, ParseError<()>> {
+        Ok(Node::Qualified {
+            prelude,
+            block: theirs_block(self, input),
+        })
+    }
+}
+
+impl<'i> RuleBodyItemParser<'i, Node, ()> for Theirs {
+    fn parse_declarations(&self) -> bool {
+        true
+    }
+    fn parse_qualified(&self) -> bool {
+        true
+    }
+}
+
+/// The items of the block `input` is inside: "consume a block's contents".
+fn theirs_block<'i>(parser: &mut Theirs, input: &mut Parser<'i>) -> Vec<Node> {
+    RuleBodyParser::new(input, parser)
+        .filter_map(Result::ok)
+        .collect()
+}
+
+fn theirs_rules(source: &str) -> Vec<Node> {
+    let mut parser = Parser::new(source);
+    let mut builder = Theirs;
+    StyleSheetParser::new(&mut parser, &mut builder)
+        .filter_map(Result::ok)
+        .collect()
+}
+
+/// What rule sheets are made of: the pieces of rules, declarations and blocks, with
+/// the stray ones a block's error recovery has to deal with.
+const RULE_FRAGMENTS: &[&str] = &[
+    "a",
+    "b",
+    "x",
+    ".a",
+    "#i",
+    "&",
+    "--c",
+    "-x",
+    "color",
+    "hover",
+    "1",
+    "1px",
+    "\"s\"",
+    "url(u)",
+    "f(",
+    ")",
+    "(",
+    "[",
+    "]",
+    "{",
+    "}",
+    "{}",
+    ";",
+    ":",
+    ",",
+    "!",
+    "!important",
+    "! important",
+    "!IMPORTANT",
+    "@x",
+    "@media",
+    "@x y;",
+    "@x {}",
+    " ",
+    " ",
+    " ",
+    "\n",
+    "/* c */",
+    "<!--",
+    "-->",
+    "a:b;",
+    "a:b;",
+    "a:b",
+    "a:b !important;",
+    "--c:d !important;",
+    "a{b:c;d{e:f}}",
+    "@x{a:b;c:d}",
+    "--c:d;",
+    "--c:{};",
+    "a{",
+    "a{}",
+    "a:b{}",
+    "a:{}",
+];
+
+fn random_rule_sheet(random: &mut Random) -> String {
+    let length = random.next(24);
+    (0..length)
+        .map(|_| {
+            RULE_FRAGMENTS
+                .get(random.next(RULE_FRAGMENTS.len()))
+                .copied()
+                .unwrap_or("")
+        })
+        .collect()
+}
+
+/// What the sheets that agree contain, so that agreeing is not agreeing on nothing.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct Coverage {
+    /// Qualified rules and at-rules, at any depth.
+    rules: usize,
+    /// Of those, the ones inside a block.
+    nested_rules: usize,
+    /// Declarations, at any depth.
+    declarations: usize,
+    /// Declarations with the important flag.
+    important: usize,
+    /// Declarations of a custom property.
+    custom: usize,
+    /// Rules whose block holds a rule and a declaration both.
+    mixed_blocks: usize,
+    /// The deepest nesting of blocks.
+    max_depth: usize,
+}
+
+fn cover(nodes: &[Node], depth: usize, coverage: &mut Coverage) {
+    coverage.max_depth = coverage.max_depth.max(depth);
+    let has = |f: fn(&Node) -> bool| nodes.iter().any(f);
+    if has(|n| matches!(n, Node::Decl { .. })) && has(|n| !matches!(n, Node::Decl { .. })) {
+        coverage.mixed_blocks = coverage.mixed_blocks.saturating_add(1);
+    }
+    for node in nodes {
+        let inside = match node {
+            Node::Decl {
+                name, important, ..
+            } => {
+                coverage.declarations = coverage.declarations.saturating_add(1);
+                if *important {
+                    coverage.important = coverage.important.saturating_add(1);
+                }
+                if name.starts_with("--") {
+                    coverage.custom = coverage.custom.saturating_add(1);
+                }
+                continue;
+            }
+            Node::At { block, .. } => block.as_deref().unwrap_or_default(),
+            Node::Qualified { block, .. } => block.as_slice(),
+        };
+        coverage.rules = coverage.rules.saturating_add(1);
+        if depth > 0 {
+            coverage.nested_rules = coverage.nested_rules.saturating_add(1);
+        }
+        cover(inside, depth.saturating_add(1), coverage);
+    }
+}
+
+enum RulesOutcome {
+    Same,
+    /// Differs only in that `cssparser` leaves out a first `@charset` rule.
+    Charset,
+    Different(Vec<Node>, Vec<Node>),
+}
+
+/// `StyleSheetParser` drops the first rule if it is an at-rule named `charset`
+/// (ASCII case-insensitive), whatever it holds, as §8.3 of the older CSS Syntax has it for
+/// the byte stream; the pinned text has no such step (`charset-is-not-a-rule.html`: it is
+/// an ordinary at-rule), and `tests/conformance_syntax.rs` drops it from our rules in the
+/// same way for the suite's expectations. Excused only where ours has such a rule first and
+/// `cssparser` has exactly the rest.
+fn compare_rules(sheet: &str, coverage: &mut Coverage) -> RulesOutcome {
+    let code_points: Vec<u32> = sheet.chars().map(u32::from).collect();
+    let filtered: Vec<u32> = filter(&code_points)
+        .into_iter()
+        .map(|c| if outside_idents(c) { 1 } else { c })
+        .collect();
+    let source = text(&filtered);
+    let ours = ours_rules(&source);
+    let theirs = theirs_rules(&source);
+    if same_nodes(&ours, &theirs) {
+        cover(&ours, 0, coverage);
+        return RulesOutcome::Same;
+    }
+    if let Some((Node::At { name, .. }, rest)) = ours.split_first()
+        && name.eq_ignore_ascii_case("charset")
+        && same_nodes(rest, &theirs)
+    {
+        return RulesOutcome::Charset;
+    }
+    RulesOutcome::Different(ours, theirs)
+}
+
+/// What the fixed rule corpus gives, as (agree, `@charset` only, different, sheets): see
+/// the module comment for how to update it.
+const PINNED_RULES: (usize, usize, usize, usize) = (51_635, 3, 0, 51_638);
+const PINNED_COVERAGE: Coverage = Coverage {
+    rules: 83_507,
+    nested_rules: 20_907,
+    declarations: 34_140,
+    important: 1_591,
+    custom: 2_076,
+    mixed_blocks: 9_840,
+    max_depth: 6,
+};
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn differential_rules() {
+    let sheets = vendored();
+    let (mut pass, mut charset, mut fail, mut total) = (0usize, 0usize, 0usize, 0usize);
+    let mut coverage = Coverage::default();
+    let mut random = Random(0xD1B5_4A32_D192_ED03);
+    let mut check = |sheet: &str| {
+        total = total.saturating_add(1);
+        match compare_rules(sheet, &mut coverage) {
+            RulesOutcome::Same => pass = pass.saturating_add(1),
+            RulesOutcome::Charset => charset = charset.saturating_add(1),
+            RulesOutcome::Different(ours, theirs) => {
+                fail = fail.saturating_add(1);
+                if fail <= 25 {
+                    println!("DIFFERENT {sheet:?}\n  ours   {ours:?}\n  theirs {theirs:?}");
+                }
+            }
+        }
+    };
+    for sheet in &sheets {
+        check(sheet);
+    }
+    for _ in 0..5 {
+        for sheet in &sheets {
+            let changed = mutated(sheet, &mut random);
+            check(&changed);
+        }
+    }
+    for _ in 0..50_000 {
+        let sheet = random_rule_sheet(&mut random);
+        check(&sheet);
+    }
+    println!(
+        "clazel-conformance: suite=\"cssparser rule differential\" pass={pass} xfail={charset} fail={fail} total={total}"
+    );
+    println!("pinned: {:?} {coverage:?}", (pass, charset, fail, total));
+    assert_eq!(fail, 0);
+    assert_eq!((pass, charset, fail, total), PINNED_RULES);
+    assert_eq!(coverage, PINNED_COVERAGE);
 }
