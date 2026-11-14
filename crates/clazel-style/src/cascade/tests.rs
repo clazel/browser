@@ -682,3 +682,43 @@ fn limited_quirks_mode_is_off() {
         }
     }
 }
+
+/// CSS Fonts 4 §2.2: `font-weight` is `normal | bold | <number [1,1000]> | bolder | lighter`,
+/// so a number outside 1 to 1000 makes the declaration invalid, and it is dropped (CSS Syntax
+/// 3 §5.4.4's error handling): the element keeps the inherited weight. This is what makes
+/// `font_weight_any`'s assumption (an inherited weight in 1 to 1000) true: no path of the
+/// cascade computes a weight outside the range. `bolder` and `lighter` (§2.2.1's table, for
+/// an inherited 700: 900 and 400) stay inside it too.
+#[test]
+fn font_weight_stays_in_one_to_one_thousand() {
+    let weight = |decl: &str| {
+        let html = format!(
+            "<!DOCTYPE html><div style='font-weight: 700'>\
+             <p id=p style='font-weight: {decl}'>x</p></div>"
+        );
+        Doc::new(&html).style("p").font_weight
+    };
+    let n = |v: i64| Num {
+        millionths: v,
+        is_integer: v % 1_000_000 == 0,
+    };
+    // In range: kept as written.
+    assert_eq!(weight("1"), n(1_000_000));
+    assert_eq!(weight("1000"), n(1_000_000_000));
+    assert_eq!(weight("550.5"), n(550_500_000));
+    // Out of range: dropped, so the parent's 700 is inherited.
+    for bad in [
+        "0",
+        "0.999999",
+        "-1",
+        "1000.000001",
+        "1001",
+        "99999999",
+        "1e4",
+        "-0",
+    ] {
+        assert_eq!(weight(bad), n(700_000_000), "{bad}");
+    }
+    assert_eq!(weight("bolder"), n(900_000_000));
+    assert_eq!(weight("lighter"), n(400_000_000));
+}
