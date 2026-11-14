@@ -230,6 +230,21 @@ pub proof fn lemma_parse_message_tokens(m: Message)
         },
         Message::StorageLengthValue { length } => { assert(t.subrange(2, 3) =~= seq![Token::Uint(length)]); },
         Message::Error { code } => { assert(t.subrange(2, 3) =~= seq![Token::Uint(code)]); },
+        Message::Title { title } => { assert(t.subrange(2, 3) =~= seq![Token::Text(title)]); },
+        Message::FrameReady { buffer, width, height } => {
+            assert(t.subrange(2, 5) =~= seq![Token::Uint(buffer), Token::Uint(width), Token::Uint(height)]);
+        },
+        Message::GpuReady { software } => { assert(t.subrange(2, 3) =~= seq![Token::Bool(software)]); },
+        Message::GpuRefused => { assert(t.subrange(2, 2) =~= Seq::<Token>::empty()); },
+        Message::Viewport { width, height, scale } => {
+            assert(t.subrange(2, 5) =~= seq![Token::Uint(width), Token::Uint(height), Token::Uint(scale)]);
+        },
+        Message::Input { kind, x, y, negative, delta, key } => {
+            assert(t.subrange(2, 8) =~= seq![Token::Uint(kind), Token::Uint(x), Token::Uint(y), Token::Bool(negative), Token::Uint(delta), Token::Uint(key)]);
+        },
+        Message::GpuViewport { width, height, scale } => {
+            assert(t.subrange(2, 5) =~= seq![Token::Uint(width), Token::Uint(height), Token::Uint(scale)]);
+        },
     }
 }
 
@@ -312,6 +327,23 @@ pub proof fn lemma_renderer_decode_direction(b: Seq<u8>)
     ensures
         match decode_renderer_message(b) {
             Some(m) => is_from_renderer(m) && decode_message(b) == Some(m),
+            None => true,
+        },
+{
+}
+
+/// The kernel's decoder of a GPU process's frames returns only
+/// GPU-process-to-kernel messages (item 5.18): a GPU process cannot send a
+/// renderer's message (no `Navigate`, no `Display`, no cookie or storage
+/// call), nor a renderer a GPU process's.
+pub proof fn lemma_gpu_decode_direction(b: Seq<u8>)
+    ensures
+        match decode_gpu_message(b) {
+            Some(m) => is_from_gpu(m) && !is_from_renderer(m) && decode_message(b) == Some(m),
+            None => true,
+        },
+        match decode_renderer_message(b) {
+            Some(m) => !is_from_gpu(m),
             None => true,
         },
 {

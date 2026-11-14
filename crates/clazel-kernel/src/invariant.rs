@@ -745,6 +745,18 @@ pub proof fn lemma_step_preserves_wf(rules: Seq<clazel_psl::spec::Rule>, urls: U
         Event::NavigateTab { tab, url } => {
             crate::net_wf::lemma_begin_navigation_wf(rules, urls, fetch, s, tab, url);
         },
+        // Item 5.18: a GPU process's frame keeps the state or kills its
+        // renderer (as a renderer's disallowed frame does); a resize and an
+        // input change only the viewports, which `kernel_wf` does not read.
+        Event::FromGpu { id, bytes } => {
+            lemma_find_by_id(s.renderers, id, 0);
+            if let Some(i) = find_by_id(s.renderers, id, 0) {
+                lemma_renderers_wf_remove(urls, s.renderers, s.next_id, i);
+                crate::net_wf::lemma_navigations_wf_remove(rules, s.renderers, i);
+                crate::net_wf::lemma_conns_wf_remove(urls, s.renderers, s.next_id, s.conns, s.next_conn, i);
+            }
+        },
+        Event::Resize { .. } | Event::Input { .. } => {},
         Event::Net { conn, input } => {
             crate::net_wf::lemma_net_wf(rules, urls, fetch, s, conn, input);
         },

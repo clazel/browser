@@ -101,6 +101,7 @@ pub proof fn lemma_kept_step(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
     requires
         crate::noninterference::rel(rules, urls, d, s1, s2),
         crate::noninterference::kept_event(rules, urls, d, s1, e),
+        !(e is Resize || e is Input),
     ensures
         crate::noninterference::renderer_outs(step(rules, urls, fetch, s1, e).1) == crate::noninterference::renderer_outs(step(rules, urls, fetch, s2, e).1),
         crate::noninterference::rel(rules, urls, d, step(rules, urls, fetch, s1, e).0, step(rules, urls, fetch, s2, e).0),
@@ -131,6 +132,18 @@ pub proof fn lemma_kept_step(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
         Event::Tick { time } => {
             crate::unwinding::lemma_tick_consistency(rules, urls, fetch, d, s1, s2, time);
         },
+        // Item 5.18. (`Resize` and `Input` are handled apart:
+        // `crate::surface_rel::lemma_user_event_consistency`.)
+        Event::FromGpu { id, bytes } => {
+            assert(crate::domain::event_domain(rules, s1, e) is Some);
+            let d2 = crate::domain::event_domain(rules, s1, e)->Some_0;
+            if d2 != d {
+                assert(crate::domain::declassified(urls, s1, e) is None);
+                assert(false);
+            }
+            crate::surface_rel::lemma_d_gpu_event(rules, urls, fetch, d, s1, s2, id, bytes);
+        },
+        Event::Resize { .. } | Event::Input { .. } => {},
     }
 }
 
@@ -142,6 +155,10 @@ pub proof fn lemma_output_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: 
     ensures
         crate::noninterference::output_consistency_statement(rules, urls, fetch, d, s1, s2, e),
 {
+    if e is Resize || e is Input {
+        crate::surface_rel::lemma_user_event_consistency(rules, urls, fetch, d, s1, s2, e);
+        return;
+    }
     lemma_kept_step(rules, urls, fetch, d, s1, s2, e);
     let (s1b, o1) = step(rules, urls, fetch, s1, e);
     let (s2b, o2) = step(rules, urls, fetch, s2, e);
@@ -156,7 +173,11 @@ pub proof fn lemma_step_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: Ur
     ensures
         crate::noninterference::step_consistency_statement(rules, urls, fetch, d, s1, s2, e),
 {
-    lemma_kept_step(rules, urls, fetch, d, s1, s2, e);
+    if e is Resize || e is Input {
+        crate::surface_rel::lemma_user_event_consistency(rules, urls, fetch, d, s1, s2, e);
+    } else {
+        lemma_kept_step(rules, urls, fetch, d, s1, s2, e);
+    }
 }
 
 // ---------------------------------------------------------------------
@@ -198,12 +219,17 @@ pub proof fn lemma_trace_noninterference(rules: Seq<clazel_psl::spec::Rule>, url
         reveal(Seq::filter);
         match pe_opt {
             None => {
-                // A frame of a renderer that is not open, or of another domain without a
-                // declassified part: the purged run does nothing.
-                assert(e is FromRenderer);
+                // A frame of a renderer (or, item 5.18, of a GPU process) that is
+                // not open, or of another domain without a declassified part: the
+                // purged run does nothing.
+                assert(e is FromRenderer || e is FromGpu);
                 match crate::domain::event_domain(rules, s1, e) {
                     None => {
-                        let id = e->FromRenderer_id;
+                        let id = if e is FromRenderer {
+                            e->FromRenderer_id
+                        } else {
+                            e->FromGpu_id
+                        };
                         crate::invariant::lemma_find_by_id(s1.renderers, id, 0);
                         assert(find_by_id(s1.renderers, id, 0) is None);
                         assert(s1b == s1 && o1 == Seq::<Output>::empty());
@@ -223,9 +249,9 @@ pub proof fn lemma_trace_noninterference(rules: Seq<clazel_psl::spec::Rule>, url
             Some(pe) => {
                 if pe == e {
                     assert(crate::noninterference::kept_event(rules, urls, d, s1, e));
-                    lemma_kept_step(rules, urls, fetch, d, s1, s2, e);
+                    lemma_output_consistency(rules, urls, fetch, d, s1, s2, e);
+                    lemma_step_consistency(rules, urls, fetch, d, s1, s2, e);
                     let (s2b, o2) = step(rules, urls, fetch, s2, e);
-                    crate::unwind_base::lemma_outputs_for_same_rb(rules, urls, d, s1, s2, s1b, s2b, o1, o2);
                     lemma_trace_noninterference(rules, urls, fetch, d, s1b, s2b, rest);
                     lemma_run_outputs_cons(rules, urls, fetch, d, s2, e, crate::domain::ipurge(rules, urls, fetch, s1b, d, rest));
                 } else {
@@ -288,6 +314,8 @@ pub open spec fn rename_output(f: spec_fn(nat) -> nat, o: Output) -> Output {
         Output::Send { conn, bytes } => Output::Send { conn, bytes },
         Output::Close { conn } => Output::Close { conn },
         Output::Show { tab, url, title, text, links } => Output::Show { tab: f(tab), url, title, text, links },
+        Output::ToGpu { id, bytes } => Output::ToGpu { id: f(id), bytes },
+        Output::Paint { tab, url, title, buffer, width, height } => Output::Paint { tab: f(tab), url, title, buffer, width, height },
     }
 }
 
@@ -331,6 +359,8 @@ pub proof fn theorem_cookie_noninterference_up_to_ids(rules: Seq<clazel_psl::spe
             Output::Send { conn, bytes } => {},
             Output::Close { conn } => {},
             Output::Show { .. } => {},
+            Output::ToGpu { .. } => {},
+            Output::Paint { .. } => {},
         }
     }
     assert(outs.map_values(|o: Output| rename_output(f, o)) =~= outs);

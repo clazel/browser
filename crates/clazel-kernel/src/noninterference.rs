@@ -22,7 +22,8 @@
 //!   `counterexamples::example_dead_tab_breaks_noninterference`);
 //!
 //! the outputs addressed to the renderers of `d` ([`run_outputs_for`], their
-//! `Spawn` and `Kill` included, and item 4.12's `Show`s of their tabs) are
+//! `Spawn` and `Kill` included, item 4.12's `Show`s of their tabs, and item
+//! 5.18's `Paint`s of their tabs and frames to their GPU processes) are
 //! the same from running `t` as from running
 //! `ipurge(s, d, t)` (`domain.rs`), up to a bijection on renderer ids that is
 //! the identity (the declassified `NavigateTab` takes the same id from the
@@ -66,8 +67,8 @@ pub open spec fn user_tabs_open(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns
 /// renderer of its tab: what the user sees of a tab is that domain's.
 pub open spec fn addressed_to(rules: Seq<clazel_psl::spec::Rule>, d: crate::domain::Domain, s: State, s1: State, o: Output) -> bool {
     !(o is Connect || o is Send || o is Close) && exists|r: Renderer|
-        (s.renderers.contains(r) || s1.renderers.contains(r)) && (if o is Show {
-            r.tab == o->Show_tab
+        (s.renderers.contains(r) || s1.renderers.contains(r)) && (if o is Show || o is Paint {
+            r.tab == crate::domain::output_id(o)
         } else {
             r.id == crate::domain::output_id(o)
         }) && crate::domain::domain_of_renderer(rules, r) == d
@@ -98,7 +99,7 @@ pub open spec fn run_outputs_for(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
 /// the user about a renderer's tab (a `Show`, item 4.12), as opposed to those
 /// addressed to the network shell.
 pub open spec fn renderer_bound(o: Output) -> bool {
-    o is ToRenderer || o is Spawn || o is Kill || o is Show
+    o is ToRenderer || o is Spawn || o is Kill || o is Show || o is ToGpu || o is Paint
 }
 
 /// The renderer-bound outputs of `out`, in order. Two related runs' outputs
@@ -126,7 +127,10 @@ pub open spec fn rel_conn(s1: State, s2: State) -> bool {
 /// connections (every connection of `s1` is in `s2`; `s2` may still hold those
 /// of tabs that closed in the run of `t`, and no others), so the two runs
 /// open the same connections for the tabs they share, and the `Net` events
-/// they are given step the same fetches.
+/// they are given step the same fetches. Item 5.18: the same viewports (only
+/// the user's `Resize` sets them, and it is kept by every purge), and the
+/// same titles of `d`'s locks (another domain's `Title`, dropped by the
+/// purge, changes only an entry under its own lock).
 pub open spec fn rel(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, s1: State, s2: State) -> bool {
     &&& crate::invariant::kernel_wf(rules, urls, s1)
     &&& crate::invariant::kernel_wf(rules, urls, s2)
@@ -141,6 +145,8 @@ pub open spec fn rel(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate:
         d,
     ))
     &&& forall|o: clazel_origin::spec::Origin| o is Tuple && crate::domain::domain_of_lock(rules, o) == d ==> storage_of(s1, o) == storage_of(s2, o)
+    &&& s1.viewports == s2.viewports
+    &&& crate::domain::titles_of_domain(rules, s1.titles, d) == crate::domain::titles_of_domain(rules, s2.titles, d)
 }
 
 // ---------------------------------------------------------------------
@@ -175,7 +181,7 @@ pub open spec fn step_consistency_statement(rules: Seq<clazel_psl::spec::Rule>, 
 /// that does not is answered with an error to the sender and changes nothing,
 /// like a message that is not a `Navigate`).
 pub open spec fn other_domain_local(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, s1: State, e: Event) -> bool {
-    &&& e is FromRenderer
+    &&& (e is FromRenderer || e is FromGpu)
     &&& crate::domain::event_domain(rules, s1, e) matches Some(d2) && d2 != d
     &&& crate::domain::declassified(urls, s1, e) is None
 }

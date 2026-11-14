@@ -115,6 +115,16 @@ theorems = [
     # A renderer is committed only after a `Commit` was sent to it; the proof
     # is in `commit_theorems.rs`.
     "theorem_committed_only_after_commit",
+    # Phase 5 item 5.18: surfaces, viewports and input. The statements are in
+    # `statements.rs`; the proofs in `surface_theorems.rs` (and the second
+    # half of `theorem_address_bar_integrity`, which the theorem above now
+    # also ensures), the noninterference over the new events in
+    # `surface_rel.rs`.
+    "theorem_paint_only_own_tab",
+    "theorem_paint_fits_viewport",
+    "theorem_channel_only_own_tab",
+    "theorem_input_only_to_own_tab",
+    "theorem_viewport_only_to_own_tab",
 ]
 
 [package.metadata.verus]
