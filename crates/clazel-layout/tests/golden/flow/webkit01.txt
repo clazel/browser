@@ -315,12 +315,13 @@ root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
       block (anonymous) 8,8 784x0
-      table-wrapper <table> 8,8 0x0 m=0,784,0,0
-        table <table> 8,8 0x0
-          column-group <colgroup> 8,8 0x0
-          row-group <tbody> 8,8 0x0
-            row <tr> 8,8 0x0
-      block (anonymous) 8,8 784x0
+      table-wrapper <table> 8,8 4x4 m=0,780,0,0
+        table <table> 8,8 4x4
+          column-group <colgroup> 10,10 0x0
+            column <col> 10,10 0x0
+          row-group <tbody> 10,10 0x0
+            row <tr> 10,10 0x0
+      block (anonymous) 8,12 784x0
 
 #case 37
 #data "<kbd><table></kbd><col><select><tr></table><div>"
@@ -328,13 +329,14 @@ root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
       block (anonymous) 8,8 784x0
-      table-wrapper <table> 8,8 0x0 m=0,784,0,0
-        table <table> 8,8 0x0
-          column-group <colgroup> 8,8 0x0
-          row-group <tbody> 8,8 0x0
-            row <tr> 8,8 0x0
-      block <div> 8,8 784x0
-      block (anonymous) 8,8 784x0
+      table-wrapper <table> 8,8 4x4 m=0,780,0,0
+        table <table> 8,8 4x4
+          column-group <colgroup> 10,10 0x0
+            column <col> 10,10 0x0
+          row-group <tbody> 10,10 0x0
+            row <tr> 10,10 0x0
+      block <div> 8,12 784x0
+      block (anonymous) 8,12 784x0
 
 #case 38
 #data "<a><li><style></style><title></title></a>"
@@ -427,28 +429,26 @@ root (anonymous) 0,0 800x600
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      table-wrapper <table> 8,8 2x4 m=0,782,0,0
-        table <table> 8,8 2x4
-          row-group <tbody> 8,8 2x4
-            row <tr> 8,8 2x4
-              cell <td> 8,8 2x2 p=1,1,1,1
-              cell <td> 8,10 2x2 p=1,1,1,1
+      table-wrapper <table> 8,8 10x6 m=0,774,0,0
+        table <table> 8,8 10x6
+          row-group <tbody> 10,10 6x2
+            row <tr> 10,10 6x2
+              cell <td> 10,10 2x2 p=1,1,1,1
+              cell <td> 14,10 2x2 p=1,1,1,1
 
 #case 48
 #data "<svg><tfoot></mi><td>"
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      line 8,8 784x4 base=12
-        inline <svg> 8,-2.859375 2x18.640625 start end
+      line 8,8 784x2 base=9
+        inline <svg> 8,-5.859375 2x18.640625 start end
         atomic (anonymous)
-        table-wrapper (anonymous) 8,8 2x4
-          line 8,10 2x2 base=12
-            atomic (anonymous)
-          table (anonymous) 8,10 2x2
-            row-group <tfoot> 8,10 2x2
-              row (anonymous) 8,10 2x2
-                cell <td> 8,10 2x2 p=1,1,1,1
+        table-wrapper (anonymous) 8,8 2x2
+          table (anonymous) 8,8 2x2
+            row-group <tfoot> 8,8 2x2
+              row (anonymous) 8,8 2x2
+                cell <td> 8,8 2x2 p=1,1,1,1
 
 #case 49
 #data "<math><mrow><mrow><mn>1</mn></mrow><mi>a</mi></mrow></math>"

@@ -31,7 +31,7 @@
 //!   border".
 //! - **Block formatting context roots** (§9.4.1): the root element ("Margins
 //!   of the root element's box do not collapse"), inline blocks, table cells,
-//!   captions, the table placeholder's boxes (`mod.rs`), and block boxes
+//!   captions, table wrapper and table boxes, and block boxes
 //!   whose `overflow` is not `visible` "except when that value has been
 //!   propagated to the viewport": the root element's `overflow` always is,
 //!   and the `body`'s is when the root element's is `visible` (CSS 2.1
@@ -50,7 +50,9 @@ use std::ops::Range;
 
 use clazel_dom::exec::{Arena, ExecKind};
 use clazel_dom::spec::DocumentMode;
-use clazel_style::cascade::computed::{AlignDescendants, ComputedStyle, Overflow};
+use clazel_style::cascade::computed::{
+    AlignDescendants, ComputedStyle, Lp, Overflow, Size, VerticalAlign,
+};
 
 use super::Viewport;
 use super::fonts::TextFns;
@@ -59,7 +61,7 @@ use super::heights::{child_basis, min_max, quirk_fill};
 use super::inline::{
     AtomicSize, Ifc, LineContext, has_inline_content, layout_lines, prepare, union,
 };
-use super::intrinsic::{Intrinsic, sizes};
+use super::intrinsic::{Intrinsic, Tables, sizes};
 use super::length::{lp, max_size_opt, size, size_opt};
 use super::margins::{close, enter, exit, finish, place};
 use super::replaced::{natural, used_height, used_width};
@@ -69,6 +71,9 @@ use super::state::{
 use super::style::{box_styles, is_html};
 use super::widths::{align, min_max as width_min_max, shrink_to_fit, solve_block};
 use crate::boxes::{BoxId, BoxKind, BoxTree, Class, StyleFns};
+use crate::table::grid::{Grid, form};
+use crate::table::state::{CellAlign, TableWidthInput};
+use crate::table::{distribute, is_fixed, measure, rows};
 
 /// The document's mode, as the quirks read it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -82,7 +87,8 @@ pub enum Mode {
 }
 
 /// Whether a box of class `class` lays its content out in a flow of its
-/// own: a block container, or a box of the table placeholder (`mod.rs`).
+/// own: a block container, a table wrapper box, or a table box (whose frame
+/// its cells are laid out in, item 5.15).
 pub fn has_flow(class: Class) -> bool {
     matches!(
         class,
@@ -93,8 +99,6 @@ pub fn has_flow(class: Class) -> bool {
             | Class::Caption
             | Class::TableWrapper { .. }
             | Class::Table { .. }
-            | Class::RowGroup
-            | Class::Row
     )
 }
 
@@ -104,18 +108,18 @@ pub fn role(class: Class) -> Role {
         Class::Root => Role::Root,
         Class::Marker => Role::Marker,
         Class::Column | Class::ColumnGroup => Role::Column,
+        Class::Cell => Role::Cell,
+        Class::RowGroup | Class::Row => Role::Track,
         Class::Inline | Class::Text { .. } => Role::Inline,
         Class::InlineBlock
         | Class::Replaced { inline: true }
         | Class::TableWrapper { inline: true } => Role::Atomic,
-        // A table box is in its wrapper's flow, inline table or not.
+        // A table box and its captions are in their wrapper's flow, inline
+        // table or not.
         Class::Block
         | Class::Replaced { inline: false }
         | Class::TableWrapper { inline: false }
         | Class::Table { .. }
-        | Class::RowGroup
-        | Class::Row
-        | Class::Cell
         | Class::Caption => Role::Flow,
     }
 }
@@ -159,6 +163,21 @@ struct Frame {
     /// Baselines of its content so far, from its content box's top.
     first: Option<i32>,
     last: Option<i32>,
+}
+
+/// A table box being laid out (item 5.15): what leaving it needs from
+/// entering it.
+#[derive(Debug, Clone, Copy)]
+struct TableRun {
+    table: BoxId,
+    /// The grid's width: its columns and the border spacing between them.
+    width: i32,
+    /// The horizontal and vertical border spacing.
+    hs: i32,
+    vs: i32,
+    /// The percentage basis of the table's `height`: its wrapper's
+    /// containing block's (§17.4).
+    basis: Option<i32>,
 }
 
 /// A task of the walk.
@@ -221,6 +240,12 @@ struct Walk<'a, F: TextFns> {
     html_fill: Option<i32>,
     /// The `body`'s `overflow` is propagated to the viewport.
     body_propagates: bool,
+    /// Each table box's grid (item 5.15), until the walk leaves it.
+    grids: HashMap<BoxId, Grid>,
+    /// The tables being laid out, innermost last.
+    runs: Vec<TableRun>,
+    /// Each table wrapper box's containing block's height basis.
+    wrapper_basis: HashMap<BoxId, Option<i32>>,
 }
 
 impl<F: TextFns> Walk<'_, F> {
@@ -292,6 +317,10 @@ impl<F: TextFns> Walk<'_, F> {
     /// Pushes the tasks for `b`'s children: its atomic inlines if it has
     /// inline content, else its in-flow children.
     fn push_children(&mut self, b: BoxId) {
+        if matches!(self.tree.class(b), Class::Table { .. }) {
+            self.enter_table(b);
+            return;
+        }
         if let Some(ifc) = self.ifcs.get(&b) {
             let atomics: Vec<BoxId> = ifc.atomics.iter().rev().copied().collect();
             self.tasks.extend(atomics.into_iter().map(Task::Enter));
@@ -361,7 +390,8 @@ impl<F: TextFns> Walk<'_, F> {
     }
 
     /// The used widths of in-flow block-level box `b` (§10.3.3, §10.3.4,
-    /// the table placeholder; §10.4; align descendants).
+    /// a table wrapper's width from its table (item 5.15); §10.4; align
+    /// descendants).
     fn block_widths(
         &self,
         b: BoxId,
@@ -386,15 +416,11 @@ impl<F: TextFns> Walk<'_, F> {
                 );
                 Some(used_width(n, s, cb))
             }
-            Some(BoxKind::TableWrapper { .. }) => Some(size(s.width, cb).unwrap_or_else(|| {
-                // The placeholder: shrink-to-fit, as an inline block's.
-                let (lo, hi) = self.intrinsic.content.get(b).copied().unwrap_or((0, 0));
-                let available = cb
-                    .saturating_sub(ml.unwrap_or(0))
-                    .saturating_sub(mr.unwrap_or(0))
-                    .saturating_sub(edges_h);
-                shrink_to_fit(lo, hi, available)
-            })),
+            // §17.4: "The width of the table wrapper box is the border-edge
+            // width of the table box inside it" (item 5.15).
+            Some(BoxKind::TableWrapper { .. }) => {
+                Some(self.table_width(b, cb, ml.unwrap_or(0).saturating_add(mr.unwrap_or(0))))
+            }
             _ => size(s.width, cb),
         };
         let input = WidthInput {
@@ -405,7 +431,12 @@ impl<F: TextFns> Walk<'_, F> {
             width,
         };
         let mut used = solve_block(input);
-        if !matches!(self.tree.class(b), Class::Replaced { .. }) {
+        // A table's `min-width` is in its used width already; its
+        // `max-width` is not applied (`table/mod.rs`).
+        if !matches!(
+            self.tree.class(b),
+            Class::Replaced { .. } | Class::TableWrapper { .. }
+        ) {
             // §10.4: percentages of a negative containing block width are 0.
             let basis = Some(cb.max(0));
             let min = size_opt(s.min_width, basis).unwrap_or(0);
@@ -421,8 +452,8 @@ impl<F: TextFns> Walk<'_, F> {
         // one with an applicable align attribute of its own.
         let own_align = s.align_descendants.is_some()
             && !is_html(self.arena, self.tree.get(b).and_then(|x| x.node), "center");
-        // Margins do not apply to the table-internal boxes of the
-        // placeholder (§8.3), so they are never over-constrained.
+        // Margins do not apply to table-internal boxes (§8.3), so they are
+        // never over-constrained.
         if let Some(a) = parent_align
             && ml.is_some()
             && mr.is_some()
@@ -440,7 +471,15 @@ impl<F: TextFns> Walk<'_, F> {
         };
         let cb = parent.width;
         let s = self.style(b).clone();
-        let (border, padding) = edges(&s, cb);
+        let (mut border, padding) = edges(&s, cb);
+        if self.collapsing_quirk(b) {
+            // The Quirks Mode Standard's §3.10: "a used value of the
+            // 'border-style' property of 'none'".
+            border = Sides::ZERO;
+        }
+        if matches!(self.tree.class(b), Class::TableWrapper { .. }) {
+            self.wrapper_basis.insert(b, parent.basis);
+        }
         let edges_h = border.horizontal().saturating_add(padding.horizontal());
         let used = self.block_widths(b, cb, edges_h, parent.align);
         // §10.6.3, §10.6.6: "If 'margin-top', or 'margin-bottom' are 'auto',
@@ -565,6 +604,10 @@ impl<F: TextFns> Walk<'_, F> {
                 .saturating_add(border.vertical())
                 .saturating_add(padding.vertical());
             used_width(n, &s, cb)
+        } else if matches!(kind, Some(BoxKind::TableWrapper { .. })) {
+            // An inline table's wrapper is as wide as its table (§17.4).
+            self.wrapper_basis.insert(b, parent.basis);
+            self.table_width(b, cb, margin.horizontal())
         } else {
             // §10.3.9: "If 'width' is 'auto', the used value is the
             // shrink-to-fit width as for floating elements."
@@ -803,17 +846,26 @@ impl<F: TextFns> Walk<'_, F> {
             self.resolve(Collapsed::NONE);
         }
         self.frames.pop();
+        // A table box's height and baseline are its rows' (item 5.15).
+        let table = if matches!(self.tree.class(b), Class::Table { .. }) {
+            Some(self.exit_table(b))
+        } else {
+            None
+        };
         let (border, padding, margin) = self
             .geo
             .get(b)
             .map(|g| (g.border, g.padding, g.margin))
             .unwrap_or_default();
         let bp = border.vertical().saturating_add(padding.vertical());
-        let mut content = min_max(
-            frame.definite.unwrap_or(fin.content),
-            frame.min_height,
-            frame.max_height,
-        );
+        let mut content = match table {
+            Some((c, _)) => c,
+            None => min_max(
+                frame.definite.unwrap_or(fin.content),
+                frame.min_height,
+                frame.max_height,
+            ),
+        };
         if self.mode == Mode::Quirks && frame.definite.is_none() {
             let normal = content.saturating_add(bp);
             let margins = margin.vertical();
@@ -832,28 +884,15 @@ impl<F: TextFns> Walk<'_, F> {
                 content = f.saturating_sub(bp).max(0);
             }
         }
-        // Columns and column groups of the placeholder: empty, at the top.
-        let columns: Vec<BoxId> = self
-            .tree
-            .children(b)
-            .iter()
-            .copied()
-            .filter(|&c| role(self.tree.class(c)) == Role::Column)
-            .collect();
-        for c in columns {
-            if let Some(g) = self.geo_mut(c) {
-                *g = Geo {
-                    laid: true,
-                    parent: Some(b),
-                    ..Geo::default()
-                };
-            }
-        }
         let content_top = border.top.saturating_add(padding.top);
+        let (first, last) = match table {
+            Some((_, base)) => (Some(base), Some(base)),
+            None => (frame.first, frame.last),
+        };
         if let Some(g) = self.geo_mut(b) {
             g.height = content.saturating_add(bp);
-            g.first = frame.first.map(|v| v.saturating_add(content_top));
-            g.last = frame.last.map(|v| v.saturating_add(content_top));
+            g.first = first.map(|v| v.saturating_add(content_top));
+            g.last = last.map(|v| v.saturating_add(content_top));
         }
         self.marker(b, frame.first);
         if !in_flow {
@@ -938,8 +977,485 @@ impl<F: TextFns> Walk<'_, F> {
                     }
                 }
             }
-            Role::Inline | Role::Marker | Role::Column => {}
+            Role::Cell => self.exit_container(b, false),
+            Role::Inline | Role::Marker | Role::Track | Role::Column => {}
         }
+    }
+}
+
+/// Table layout in the walk (item 5.15, `table/mod.rs`).
+impl<F: TextFns> Walk<'_, F> {
+    fn measure_inputs(&self) -> measure::Inputs<'_> {
+        measure::Inputs {
+            tree: self.tree,
+            arena: self.arena,
+            styles: &self.styles,
+            content: &self.intrinsic.content,
+            quirks: self.mode == Mode::Quirks,
+        }
+    }
+
+    /// The table box of table wrapper box `w`.
+    fn table_of(&self, w: BoxId) -> Option<BoxId> {
+        self.tree
+            .children(w)
+            .iter()
+            .copied()
+            .find(|&c| matches!(self.tree.class(c), Class::Table { .. }))
+    }
+
+    /// Table box `t`'s horizontal and vertical border spacing (CSS 2.1
+    /// §17.6.1); none for a table in the collapsing border model, which is
+    /// laid out with separated borders (`table/mod.rs`).
+    fn spacing(&self, t: BoxId) -> (i32, i32) {
+        let s = self.style(t);
+        if s.border_collapse {
+            (0, 0)
+        } else {
+            (s.border_spacing[0].max(0), s.border_spacing[1].max(0))
+        }
+    }
+
+    /// The Quirks Mode Standard's §3.10, "The collapsing table quirk", for
+    /// box `t`: "table has a computed value of the 'display' property that
+    /// is 'table'", "table has no child 'table-row-group',
+    /// 'table-header-group', 'table-footer-group' or 'table-caption' box",
+    /// "table has no child 'table-column-group' box that itself has a child
+    /// 'table-column' box". Captions are the wrapper's children (§17.4).
+    fn collapsing_quirk(&self, t: BoxId) -> bool {
+        if self.mode != Mode::Quirks || self.tree.class(t) != (Class::Table { inline: false }) {
+            return false;
+        }
+        let caption = self.tree.get(t).and_then(|x| x.parent).is_some_and(|w| {
+            self.tree
+                .children(w)
+                .iter()
+                .any(|&c| self.tree.class(c) == Class::Caption)
+        });
+        let groups = self.tree.children(t).iter().any(|&c| {
+            self.tree.class(c) == Class::RowGroup
+                || (self.tree.class(c) == Class::ColumnGroup
+                    && self
+                        .tree
+                        .children(c)
+                        .iter()
+                        .any(|&k| self.tree.class(k) == Class::Column))
+        });
+        !caption && !groups
+    }
+
+    /// CSS Tables 3 §3.9.1: the used width of the table in wrapper `w`
+    /// (its border box), in a containing block `cb` wide, with `margins`
+    /// the wrapper's horizontal margins that are not `auto`
+    /// (`table/mod.rs`'s available width).
+    fn table_width(&self, w: BoxId, cb: i32, margins: i32) -> i32 {
+        let Some(t) = self.table_of(w) else {
+            return 0;
+        };
+        let (mut border, padding) = edges(self.style(t), cb);
+        if self.collapsing_quirk(t) {
+            border = Sides::ZERO;
+        }
+        let e = border.horizontal().saturating_add(padding.horizontal());
+        // `intrinsic.rs` keeps the table box's column sums with its border
+        // spacing as its content sizes.
+        let (cmin, cmax) = self.intrinsic.content.get(t).copied().unwrap_or((0, 0));
+        // "The caption width minimum (CAPMIN) is the largest of the table
+        // captions min-content contribution."
+        let capmin = self
+            .tree
+            .children(w)
+            .iter()
+            .filter(|&&c| self.tree.class(c) == Class::Caption)
+            .map(|&c| self.intrinsic.outer.get(c).map_or(0, |o| o.0))
+            .max()
+            .unwrap_or(0);
+        // The wrapper box holds the table's `width` and `min-width`
+        // (`style.rs`), border-box values (`table/mod.rs`).
+        let ws = self.style(w);
+        measure::used_width(TableWidthInput {
+            gridmin: cmin.saturating_add(e),
+            gridmax: cmax.saturating_add(e),
+            capmin,
+            min_width: size_opt(ws.min_width, Some(cb.max(0))).unwrap_or(0),
+            width: size(ws.width, cb),
+            available: cb.saturating_sub(margins),
+        })
+    }
+
+    /// Enters table box `b`, whose frame is on top of the stack: its column
+    /// widths (CSS Tables 3 §3.9.3, or CSS 2.1 §17.5.2.1 in fixed layout),
+    /// each cell's and column's horizontal place (§3.11), and a task for
+    /// each cell.
+    fn enter_table(&mut self, b: BoxId) {
+        let Some(frame) = self.frames.last().cloned() else {
+            return;
+        };
+        let Some(grid) = self.grids.remove(&b) else {
+            return;
+        };
+        // §3.2's step B: an empty grid's tracks are laid out empty, with no
+        // spacing.
+        let (hs, vs) = if grid.has_slots() {
+            self.spacing(b)
+        } else {
+            (0, 0)
+        };
+        // "The assignable table width is the used width of the table minus
+        // the total horizontal border spacing (if any)", the used width less
+        // the table's borders and padding being its content width
+        // (`table/mod.rs`).
+        let assignable = frame
+            .width
+            .saturating_sub(measure::total_spacing(grid.columns, hs))
+            .max(0);
+        let widths = if !grid.has_slots() {
+            vec![0; grid.columns]
+        } else if is_fixed(self.tree, &self.styles, b) {
+            let given = measure::fixed_columns(&grid, &self.measure_inputs(), hs);
+            distribute::fixed_widths(&given, assignable)
+        } else {
+            let cols = measure::columns(&grid, &self.measure_inputs(), hs);
+            distribute::auto_widths(&cols, assignable)
+        };
+        // §3.11: a column's left is "the widths of all previous visible
+        // columns" and "the horizontal 'border-spacing' times the amount of
+        // previous visible columns plus one", from the content box.
+        let mut lefts: Vec<i32> = Vec::with_capacity(widths.len());
+        let mut x = hs;
+        for &w in &widths {
+            lefts.push(x);
+            x = x.saturating_add(w).saturating_add(hs);
+        }
+        let end = x.saturating_sub(hs);
+        // "width … is the sum of: the widths … of all spanned visible
+        // columns, the horizontal 'border-spacing' times the amount of
+        // spanned visible columns minus one".
+        let extent = |start: usize, span: usize| -> (i32, i32) {
+            let left = lefts.get(start).copied().unwrap_or(end);
+            let last = start.saturating_add(span).saturating_sub(1);
+            if span == 0 {
+                return (left, 0);
+            }
+            let right = match (lefts.get(last), widths.get(last)) {
+                (Some(&l), Some(&w)) => l.saturating_add(w),
+                _ => left,
+            };
+            (left, right.saturating_sub(left).max(0))
+        };
+        for s in &grid.cells {
+            let (x, width) = extent(s.col, s.cols);
+            if let Some(g) = self.geo_mut(s.cell) {
+                *g = Geo {
+                    x,
+                    width,
+                    laid: true,
+                    parent: Some(b),
+                    ..Geo::default()
+                };
+            }
+        }
+        for t in grid.column_boxes.iter().chain(grid.column_groups.iter()) {
+            let (x, width) = extent(t.start, t.span);
+            if let Some(g) = self.geo_mut(t.owner) {
+                *g = Geo {
+                    x,
+                    width,
+                    laid: true,
+                    parent: Some(b),
+                    ..Geo::default()
+                };
+            }
+        }
+        for &k in &grid.skipped {
+            if let Some(g) = self.geo_mut(k) {
+                *g = Geo {
+                    x: hs,
+                    y: vs,
+                    laid: true,
+                    parent: Some(b),
+                    ..Geo::default()
+                };
+            }
+        }
+        let cells: Vec<BoxId> = grid.cells.iter().rev().map(|s| s.cell).collect();
+        self.tasks.extend(cells.into_iter().map(Task::Enter));
+        let basis = self
+            .tree
+            .get(b)
+            .and_then(|x| x.parent)
+            .and_then(|w| self.wrapper_basis.get(&w).copied())
+            .flatten();
+        self.runs.push(TableRun {
+            table: b,
+            width: if widths.is_empty() {
+                0
+            } else {
+                end.saturating_sub(hs).max(0)
+            },
+            hs,
+            vs,
+            basis,
+        });
+        self.grids.insert(b, grid);
+    }
+
+    /// HTML's "align descendants" for cell `b`'s content: the cell's own,
+    /// else its row's, else its row group's.
+    fn cell_align(&self, b: BoxId) -> Option<Align> {
+        let mut at = Some(b);
+        for _ in 0..3 {
+            let Some(x) = at else { break };
+            if !matches!(
+                self.tree.class(x),
+                Class::Cell | Class::Row | Class::RowGroup
+            ) {
+                break;
+            }
+            if let Some(a) = self.style(x).align_descendants {
+                return Some(align_of(a));
+            }
+            at = self.tree.get(x).and_then(|y| y.parent);
+        }
+        None
+    }
+
+    /// Enters table cell `b`, whose table placed it horizontally: a block
+    /// formatting context root (§9.4.1) of the width its columns give it,
+    /// whose `height` is treated as `auto` (CSS Tables 3 §3.10.2: "cell
+    /// heights are considered auto"; its `height` counts in its row).
+    fn enter_cell(&mut self, b: BoxId) {
+        let Some(parent) = self.frames.last().cloned() else {
+            return;
+        };
+        let s = self.style(b).clone();
+        // A cell's percentage padding is of its table's content width
+        // (`table/mod.rs`).
+        let (border, padding) = edges(&s, parent.width);
+        let edges_h = border.horizontal().saturating_add(padding.horizontal());
+        let (x, width) = self.geo.get(b).map_or((0, 0), |g| (g.x, g.width));
+        if let Some(g) = self.geo_mut(b) {
+            *g = Geo {
+                x,
+                width,
+                border,
+                padding,
+                laid: true,
+                parent: Some(parent.owner),
+                ..Geo::default()
+            };
+        }
+        self.tasks.push(Task::Exit(b));
+        let align = self.cell_align(b).or(parent.align);
+        self.frames.push(Frame {
+            owner: b,
+            flow: Flow::CLOSED,
+            facts: BlockFacts {
+                container: true,
+                bfc_root: true,
+                top_edge: border.top != 0 || padding.top != 0,
+                bottom_edge: border.bottom != 0 || padding.bottom != 0,
+                height_auto: true,
+                height_zero: false,
+                min_height_zero: true,
+            },
+            width: width.saturating_sub(edges_h).max(0),
+            definite: None,
+            min_height: 0,
+            max_height: None,
+            // No second pass (`table/mod.rs`): percentage heights inside a
+            // cell are `auto`.
+            basis: None,
+            align,
+            first: None,
+            last: None,
+        });
+        self.push_children(b);
+    }
+
+    /// Leaves table box `b`, whose cells are laid out: its rows' heights
+    /// (CSS 2.1 §17.5.3, CSS Tables 3 §3.10), its `height` (§3.10.1,
+    /// §3.10.5), every cell's vertical place and extra padding, and the
+    /// rectangles of its rows, columns and their groups (§3.11). Returns its
+    /// content height and its baseline (from its content box's top).
+    fn exit_table(&mut self, b: BoxId) -> (i32, i32) {
+        let Some(run) = self.runs.last().copied().filter(|r| r.table == b) else {
+            return (0, 0);
+        };
+        self.runs.pop();
+        let Some(grid) = self.grids.remove(&b) else {
+            return (0, 0);
+        };
+        let quirks = self.mode == Mode::Quirks;
+        let cells: Vec<rows::CellRow> = grid
+            .cells
+            .iter()
+            .map(|s| {
+                let g = self.geo.get(s.cell).cloned().unwrap_or_default();
+                let st = self.style(s.cell);
+                // §17.5.3: "If there is no such line box or table-row, the
+                // baseline is the bottom of content edge of the cell box."
+                let bottom = g
+                    .height
+                    .saturating_sub(g.border.bottom)
+                    .saturating_sub(g.padding.bottom);
+                let align = match st.vertical_align {
+                    VerticalAlign::Top => CellAlign::Top,
+                    VerticalAlign::Middle => CellAlign::Middle,
+                    VerticalAlign::Bottom => CellAlign::Bottom,
+                    _ => CellAlign::Baseline,
+                };
+                // A cell's `height` is its content box's, or in quirks mode
+                // its border box's (the Quirks Mode Standard's §3.13).
+                let specified = match st.height {
+                    Size::Lp(Lp::Px64(h)) if quirks => h,
+                    Size::Lp(Lp::Px64(h)) => h
+                        .saturating_add(g.border.vertical())
+                        .saturating_add(g.padding.vertical()),
+                    _ => 0,
+                };
+                rows::CellRow {
+                    height: g.height,
+                    baseline: g.first.unwrap_or(bottom),
+                    align,
+                    specified: specified.max(0),
+                }
+            })
+            .collect();
+        let mut specified = vec![0i32; grid.rows];
+        for t in &grid.row_boxes {
+            if let Size::Lp(Lp::Px64(h)) = self.style(t.owner).height
+                && let Some(v) = specified.get_mut(t.start)
+            {
+                *v = (*v).max(h);
+            }
+        }
+        let mut out = rows::rows(&grid, &cells, &specified, run.vs);
+        let collapsed = self.collapsing_quirk(b);
+        let (border, padding) = self
+            .geo
+            .get(b)
+            .map(|g| (g.border, g.padding))
+            .unwrap_or_default();
+        let bp = border.vertical().saturating_add(padding.vertical());
+        // §3.10.1: the table's `height` (its border box's, `table/mod.rs`)
+        // "is treated as a minimum height for the table grid".
+        let wanted = size_opt(self.style(b).height, run.basis)
+            .filter(|_| !collapsed)
+            .map(|h| h.saturating_sub(bp).max(0));
+        if let Some(h) = wanted {
+            let gaps = if grid.rows == 0 {
+                0
+            } else {
+                i64::from(run.vs).saturating_mul(
+                    i64::try_from(grid.rows)
+                        .unwrap_or(i64::MAX)
+                        .saturating_add(1),
+                )
+            };
+            rows::fill(
+                &mut out.heights,
+                &out.auto,
+                i64::from(h).saturating_sub(gaps),
+            );
+        }
+        if !grid.has_slots() {
+            out.heights.iter_mut().for_each(|h| *h = 0);
+        }
+        let (tops, grid_height) = rows::tops(&out.heights, run.vs);
+        let grid_height = if grid.has_slots() { grid_height } else { 0 };
+        let mut content = grid_height.max(wanted.unwrap_or(0));
+        if collapsed {
+            // §3.10: "a used value of the 'height' property of '0'".
+            content = 0;
+        }
+        let span = |start: usize, n: usize| -> i32 {
+            let hs = out
+                .heights
+                .get(start..start.saturating_add(n).min(out.heights.len()))
+                .unwrap_or(&[]);
+            let gaps = run
+                .vs
+                .saturating_mul(i32::try_from(hs.len().saturating_sub(1)).unwrap_or(i32::MAX));
+            hs.iter().fold(gaps, |a, &h| a.saturating_add(h))
+        };
+        // Each row's lowest cell content bottom, for a row with no cell
+        // aligned on its baseline (§3.10.2).
+        let mut lowest: Vec<Option<i32>> = vec![None; grid.rows];
+        for (s, c) in grid.cells.iter().zip(&cells) {
+            let top_of_row = tops.get(s.row).copied().unwrap_or(0);
+            let base = out.baselines.get(s.row).copied().flatten().unwrap_or(0);
+            let rows_h = span(s.row, s.rows);
+            let (top, bottom) = rows::cell_offsets(c.align, rows_h, base, c.height, c.baseline);
+            if let Some(g) = self.geo_mut(s.cell) {
+                g.y = top_of_row;
+                g.height = c.height.saturating_add(top).saturating_add(bottom);
+                // §17.5.3: "Cell boxes that are smaller than the height of
+                // the row receive extra top or bottom padding."
+                g.padding.top = g.padding.top.saturating_add(top);
+                g.padding.bottom = g.padding.bottom.saturating_add(bottom);
+                g.first = g.first.map(|v| v.saturating_add(top));
+                g.last = g.last.map(|v| v.saturating_add(top));
+                let content_bottom = g
+                    .height
+                    .saturating_sub(g.border.bottom)
+                    .saturating_sub(g.padding.bottom);
+                if let Some(l) = lowest.get_mut(s.row) {
+                    *l = Some(l.map_or(content_bottom, |v| v.max(content_bottom)));
+                }
+            }
+        }
+        // "The baseline of a table-root is the baseline of its first row, if
+        // any. Otherwise, it is the bottom content edge of the table-root."
+        // "If a row doesn't have any cell that has 'vertical-align:
+        // baseline', the baseline of that row is the bottom content edge of
+        // the lowest cell in the row."
+        let baseline = match tops.first() {
+            Some(&t0) => {
+                let b0 = out
+                    .baselines
+                    .first()
+                    .copied()
+                    .flatten()
+                    .or_else(|| lowest.first().copied().flatten())
+                    .unwrap_or_else(|| out.heights.first().copied().unwrap_or(0));
+                t0.saturating_add(b0)
+            }
+            None => content,
+        };
+        // §3.11: rows and row groups "span" every column; columns and column
+        // groups every row.
+        for t in grid.row_boxes.iter().chain(grid.row_groups.iter()) {
+            let y = tops
+                .get(t.start)
+                .copied()
+                .unwrap_or_else(|| grid_height.saturating_sub(run.vs).max(0));
+            let height = if t.span == 0 {
+                0
+            } else {
+                span(t.start, t.span)
+            };
+            if let Some(g) = self.geo_mut(t.owner) {
+                *g = Geo {
+                    x: run.hs,
+                    y,
+                    width: run.width,
+                    height,
+                    laid: true,
+                    parent: Some(b),
+                    ..Geo::default()
+                };
+            }
+        }
+        let all = span(0, grid.rows);
+        let col_top = if grid.rows == 0 { 0 } else { run.vs };
+        for t in grid.column_boxes.iter().chain(grid.column_groups.iter()) {
+            if let Some(g) = self.geo_mut(t.owner) {
+                g.y = col_top;
+                g.height = all;
+            }
+        }
+        (content, baseline)
     }
 }
 
@@ -1013,7 +1529,25 @@ pub fn run(
         }
     }
     let role_of = |b: BoxId| role(tree.class(b));
-    let intrinsic = sizes(tree, &styles, &ifcs, &role_of, fonts, arena);
+    let mode = mode(arena);
+    // Item 5.15: every table box's grid, before the intrinsic sizes, which
+    // read it.
+    let grids: HashMap<BoxId, Grid> = (0..n)
+        .filter(|&b| matches!(tree.class(b), Class::Table { .. }))
+        .map(|b| (b, form(tree, arena, b, is_fixed(tree, &styles, b))))
+        .collect();
+    let intrinsic = sizes(
+        tree,
+        &styles,
+        &ifcs,
+        &role_of,
+        fonts,
+        arena,
+        &Tables {
+            grids: &grids,
+            quirks: mode == Mode::Quirks,
+        },
+    );
     let (root_node, body_node) = root_and_body(arena);
     let first_box = |node: Option<usize>| {
         node.and_then(|nd| tree.boxes.iter().position(|b| b.node == Some(nd)))
@@ -1021,7 +1555,6 @@ pub fn run(
     let root_box = first_box(root_node);
     let html = root_box.filter(|&b| is_html(arena, tree.get(b).and_then(|x| x.node), "html"));
     let body = first_box(body_node).filter(|&b| tree.class(b).is_block_level());
-    let mode = mode(arena);
     let html_style = root_box.and_then(|h| styles.get(h));
     let body_propagates = html_style
         .is_some_and(|s| s.overflow_x == Overflow::Visible && s.overflow_y == Overflow::Visible);
@@ -1062,6 +1595,9 @@ pub fn run(
         body,
         html_fill,
         body_propagates,
+        grids,
+        runs: Vec::new(),
+        wrapper_basis: HashMap::new(),
     };
     // Each box is entered at most once and exited at most once.
     for _ in 0..n.saturating_mul(2).saturating_add(2) {
@@ -1071,7 +1607,8 @@ pub fn run(
                 Role::Root => w.enter_root(b),
                 Role::Flow => w.enter_flow(b),
                 Role::Atomic => w.enter_atomic(b),
-                Role::Inline | Role::Marker | Role::Column => {}
+                Role::Cell => w.enter_cell(b),
+                Role::Inline | Role::Marker | Role::Track | Role::Column => {}
             },
             Task::Exit(b) => w.exit(b),
         }

@@ -1,0 +1,122 @@
+#case 0
+#data "<a><p></a></p>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 1
+#data "<a>1<p>2</a>3</p>"
+scale 1
+fill 0,0 800x608 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text -8,26 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,3680
+text 2,26 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1164,3680
+
+#case 2
+#data "<a>1<button>2</a>3</button>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 2,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1164,1463
+text 12,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=1816,1463
+
+#case 3
+#data "<a>1<b>2</a>3</b>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 2,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1164,1463
+text 12,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=1816,1463
+
+#case 4
+#data "<a>1<div>2<div>3</a>4</div>5</div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text -8,10 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,2656
+text -8,28 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,3849
+text 2,28 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1164,3849
+text -8,47 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,5042
+
+#case 5
+#data "<table><a>1<p>2</a>3</p>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text -8,26 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,3680
+text 2,26 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1164,3680
+
+#case 6
+#data "<b><b><a><p></a>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 7
+#data "<b><a><b><p></a>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 8
+#data "<a><b><b><p></a>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 9
+#data "<p>1<s id=\"A\">2<b id=\"B\">3</p>4</s>5</b>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 2,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1164,1463
+fill 18,19 10x1 #ff000000
+text 12,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=1816,1463
+fill 28,19 11x1 #ff000000
+text -8,26 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,3680
+fill 8,53 10x1 #ff000000
+text 2,26 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1164,3680
+
+#case 10
+#data "<table><a>1<td>2</td>3</table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 2,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1164,1463
+text -5,13 42x48 #ff000000 face=0 size=1024 glyphs=1 first=704,2848
+
+#case 11
+#data "<table>A<td>B</td>C</table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 56x48 #ff000000 face=0 size=1024 glyphs=2 first=512,1463
+text -5,13 44x48 #ff000000 face=0 size=1024 glyphs=1 first=704,2848
+
+#case 12
+#data "<a><svg><tr><input></a>"
+scale 1
+fill 0,-7 800x607 #ffffffff
+push-clip 8,8 0x0
+pop-clip
+push-clip 8,8 0x0
+pop-clip
+
+#case 13
+#data "<div><a><b><div><div><div><div><div><div><div><div><div><div></a>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 14
+#data "<div><a><b><u><i><code><div></a>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 15
+#data "<b><b><b><b>x</b></b></b></b>y"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 41x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 1,-9 41x48 #ff000000 face=0 size=1024 glyphs=1 first=1090,1463
+
+#case 16
+#data "<p><b><b><b><b><p>x"
+scale 1
+fill 0,0 800x616 #ffffffff
+text -8,-1 41x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1975
+

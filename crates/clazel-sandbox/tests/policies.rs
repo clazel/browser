@@ -281,3 +281,151 @@ fn seatbelt_profile_shape() {
     assert_eq!(p.matches("(deny default)").count(), 1);
     assert!(!p.contains("(allow default)"));
 }
+
+// Item 5.21a: the GPU process's policies.
+
+#[test]
+fn gpu_programs_allow_exactly_the_gpu_list_below_1024() -> Result<(), String> {
+    use clazel_sandbox::seccomp::{gpu_hardware_program, gpu_program};
+    type Allowed = fn(Arch, u32) -> bool;
+    for arch in Arch::ALL {
+        let software = (
+            gpu_program(arch),
+            syscalls::GPU_EXTRA.len(),
+            syscalls::is_gpu_allowed as Allowed,
+        );
+        let hardware = (
+            gpu_hardware_program(arch),
+            syscalls::GPU_EXTRA.len() + syscalls::GPU_HARDWARE_EXTRA.len(),
+            syscalls::is_gpu_hardware_allowed as Allowed,
+        );
+        for (prog, extra, allowed) in [software, hardware] {
+            let prog = prog.map_err(|e| format!("{e:?}"))?;
+            validate(&prog).map_err(|e| format!("{e:?}"))?;
+            assert_eq!(prog.len(), syscalls::ALLOWLIST.len() + extra + 6);
+            for nr in (0..1024u32).step_by(miri_step()) {
+                let got = run(&prog, &SeccompData::new(nr, arch.audit_arch()));
+                let want = if allowed(arch, nr) {
+                    SECCOMP_RET_ALLOW
+                } else {
+                    SECCOMP_RET_KILL_PROCESS
+                };
+                assert_eq!(got, Ok(want), "{arch:?} syscall {nr}");
+                let other = match arch {
+                    Arch::X86_64 => AUDIT_ARCH_AARCH64,
+                    Arch::Aarch64 => AUDIT_ARCH_X86_64,
+                };
+                assert_eq!(
+                    run(&prog, &SeccompData::new(nr, other)),
+                    Ok(SECCOMP_RET_KILL_PROCESS)
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The GPU lists are the renderer's plus their additions: everything the renderer
+/// may call, the GPU process may too; the software additions are exactly the
+/// measured ones, and a hardware driver gets `ioctl` besides.
+#[test]
+fn gpu_list_is_the_renderers_plus_the_additions() {
+    for arch in Arch::ALL {
+        for s in syscalls::ALLOWLIST {
+            assert!(syscalls::is_gpu_allowed(arch, s.number(arch)), "{}", s.name);
+        }
+        for s in syscalls::GPU_EXTRA {
+            assert!(!syscalls::is_allowed(arch, s.number(arch)), "{}", s.name);
+            assert!(syscalls::is_gpu_allowed(arch, s.number(arch)), "{}", s.name);
+        }
+        for s in syscalls::GPU_HARDWARE_EXTRA {
+            assert!(
+                !syscalls::is_gpu_allowed(arch, s.number(arch)),
+                "{}",
+                s.name
+            );
+            assert!(
+                syscalls::is_gpu_hardware_allowed(arch, s.number(arch)),
+                "{}",
+                s.name
+            );
+        }
+    }
+    let names: Vec<&str> = syscalls::GPU_EXTRA.iter().map(|s| s.name).collect();
+    assert_eq!(
+        names,
+        [
+            "ftruncate",
+            "sched_getaffinity",
+            "set_robust_list",
+            "rseq",
+            "clone3"
+        ]
+    );
+    let names: Vec<&str> = syscalls::GPU_HARDWARE_EXTRA
+        .iter()
+        .map(|s| s.name)
+        .collect();
+    assert_eq!(names, ["ioctl"]);
+    // The GPU process's namespaces are the renderer's without the PID namespace.
+    use clazel_sandbox::namespaces::{self, Namespace};
+    assert!(!namespaces::GPU.contains(&Namespace::Pid));
+    assert_eq!(
+        namespaces::gpu_unshare_flags(),
+        namespaces::renderer_unshare_flags() & !namespaces::CLONE_NEWPID
+    );
+}
+
+/// The GPU profile is `(deny default)` and one Mach lookup, of Metal's compiler
+/// service: the measured profile after the warm-up (`seatbelt.rs`, items 5.21a
+/// and 5.23). No file, network, process or IOKit rule.
+#[test]
+fn gpu_seatbelt_profile_is_deny_default_and_the_metal_compiler() {
+    assert_eq!(
+        seatbelt::gpu_profile(),
+        "(version 1)\n(deny default)\n\
+         (allow mach-lookup (global-name \"com.apple.MTLCompilerService\"))\n"
+    );
+}
+
+/// The Windows GPU policy is the renderer's less `win32k`, plus `registryRead`,
+/// under its own name (the plan's measured decision).
+#[test]
+fn gpu_appcontainer_policy_is_the_renderers_less_win32k() {
+    use clazel_sandbox::appcontainer as ac;
+    let win32k = ac::MITIGATIONS
+        .iter()
+        .find(|m| m.name == "WIN32K_SYSTEM_CALL_DISABLE_ALWAYS_ON")
+        .map(|m| m.mask);
+    assert_eq!(win32k, Some(1 << 28));
+    assert_eq!(
+        ac::gpu_mitigation_mask(),
+        ac::mitigation_mask() & !(1u64 << 28)
+    );
+    assert_eq!(ac::GPU_CAPABILITIES, ["registryRead"]);
+    assert!(ac::CAPABILITIES.is_empty());
+    assert_ne!(ac::GPU_CONTAINER_NAME, ac::CONTAINER_NAME);
+    assert_eq!(ac::GPU_JOB, ac::RENDERER_JOB);
+    for name in ac::GPU_WITHOUT {
+        assert!(ac::MITIGATIONS.iter().any(|m| m.name == *name), "{name}");
+    }
+}
+
+/// The array the Kani harnesses build for the GPU list (`proofs.rs`'s
+/// `gpu_nums`: the renderer's list, then `GPU_EXTRA`) is `gpu_numbers`, and
+/// `is_gpu_allowed` holds exactly for its entries.
+#[test]
+fn gpu_numbers_are_the_two_lists_in_order() {
+    for arch in Arch::ALL {
+        let want: Vec<u32> = syscalls::ALLOWLIST
+            .iter()
+            .chain(syscalls::GPU_EXTRA)
+            .map(|s| s.number(arch))
+            .collect();
+        assert_eq!(syscalls::gpu_numbers(arch), want);
+        assert_eq!(want.len(), 27);
+        for nr in (0..1024u32).step_by(miri_step()) {
+            assert_eq!(syscalls::is_gpu_allowed(arch, nr), want.contains(&nr));
+        }
+    }
+}

@@ -1,0 +1,332 @@
+#case 0
+#data "<!doctype html><p><button><button>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 1
+#data "<!doctype html><p><button><address>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 2
+#data "<!doctype html><p><button><article>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 3
+#data "<!doctype html><p><button><aside>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 4
+#data "<!doctype html><p><button><blockquote>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 5
+#data "<!doctype html><p><button><center>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 6
+#data "<!doctype html><p><button><details>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 7
+#data "<!doctype html><p><button><dialog>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 8
+#data "<!doctype html><p><button><dir>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 9
+#data "<!doctype html><p><button><div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 10
+#data "<!doctype html><p><button><dl>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 11
+#data "<!doctype html><p><button><fieldset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 12
+#data "<!doctype html><p><button><figcaption>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 13
+#data "<!doctype html><p><button><figure>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 14
+#data "<!doctype html><p><button><footer>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 15
+#data "<!doctype html><p><button><header>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 16
+#data "<!doctype html><p><button><hgroup>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 17
+#data "<!doctype html><p><button><main>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 18
+#data "<!doctype html><p><button><menu>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 19
+#data "<!doctype html><p><button><nav>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 20
+#data "<!doctype html><p><button><ol>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 21
+#data "<!doctype html><p><button><p>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 22
+#data "<!doctype html><p><button><search>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 23
+#data "<!doctype html><p><button><section>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 24
+#data "<!doctype html><p><button><summary>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 25
+#data "<!doctype html><p><button><ul>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 26
+#data "<!doctype html><p><button><h1>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 27
+#data "<!doctype html><p><button><h6>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 28
+#data "<!doctype html><p><button><listing>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 29
+#data "<!doctype html><p><button><pre>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 30
+#data "<!doctype html><p><button><form>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 31
+#data "<!doctype html><p><button><li>"
+scale 1
+fill -7,0 807x600 #ffffffff
+text -23,14 47x48 #ff000000 face=0 size=1024 glyphs=2 first=-418,2926
+
+#case 32
+#data "<!doctype html><p><button><dd>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 33
+#data "<!doctype html><p><button><dt>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 34
+#data "<!doctype html><p><button><plaintext>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 35
+#data "<!doctype html><p><button><table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 36
+#data "<!doctype html><p><button><hr>"
+scale 1
+fill 0,0 800x600 #ffffffff
+fill 8,24 2x1 #ff808080
+fill 8,25 2x1 #ff808080
+push-clip 9,25 0x0
+pop-clip
+push-clip 9,25 0x0
+pop-clip
+
+#case 37
+#data "<!doctype html><p><button><xmp>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 38
+#data "<!doctype html><p><button></p>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 39
+#data "<!doctype html><button><p></button>x"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-8 41x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1536
+
+#case 40
+#data "<!doctype html><address><button></address>a"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,10 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,2656
+
+#case 41
+#data "<p><table></p>"
+scale 1
+fill 0,0 800x616 #ffffffff
+
+#case 42
+#data "<!doctype html><svg>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 43
+#data "<!doctype html><p><figcaption>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 44
+#data "<!doctype html><p><summary>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 45
+#data "<!doctype html><form><table><form>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 46
+#data "<!doctype html><table><form><form>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 47
+#data "<!doctype html><table><form></table><form>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 48
+#data "<!doctype html><svg><foreignObject><p>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 49
+#data "<!doctype html><svg><title>abc"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 50
+#data "<option><span><option>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 51
+#data "<option><option>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 52
+#data "<math><annotation-xml><div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 53
+#data "<math><annotation-xml encoding=\"application/svg+xml\"><div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 54
+#data "<math><annotation-xml encoding=\"application/xhtml+xml\"><div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 55
+#data "<math><annotation-xml encoding=\"aPPlication/xhtmL+xMl\"><div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 56
+#data "<math><annotation-xml encoding=\"text/html\"><div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 57
+#data "<math><annotation-xml encoding=\"Text/htmL\"><div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 58
+#data "<math><annotation-xml encoding=\" text/html \"><div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 59
+#data "<math><annotation-xml> </annotation-xml>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 60
+#data "<math><annotation-xml>c</annotation-xml>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 41x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 61
+#data "<math><annotation-xml><!--foo-->"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 62
+#data "<math><annotation-xml></svg>x"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 41x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 63
+#data "<math><annotation-xml><svg>x"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 41x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+

@@ -1,0 +1,97 @@
+/* The HN-shaped fixture's sheet (see README.md): written for this project,
+   MIT licensed, with the shapes phase-5.md's measurement found. */
+
+body  { font-family:Verdana, Geneva, sans-serif; font-size:10pt; color:#7d7d74; }
+td    { font-family:Verdana, Geneva, sans-serif; font-size:10pt; color:#7d7d74; }
+
+.admin td   { font-family:Verdana, Geneva, sans-serif; font-size:8.5pt; color:#000000; }
+.subline td { font-family:Verdana, Geneva, sans-serif; font-size:7pt; color:#7d7d74; }
+
+input    { font-family:monospace; font-size:10pt; }
+input[type='submit'] { font-family:Verdana, Geneva, sans-serif; }
+input[readonly] { background-color:#eeeeee !important; }
+textarea { font-family:monospace; font-size:10pt; resize:both; }
+
+a:link    { color:#000000; text-decoration:none; }
+a:visited { color:#7d7d74; text-decoration:none; }
+a:hover   { text-decoration:underline; cursor:pointer; }
+
+.default { font-family:Verdana, Geneva, sans-serif; font-size:10pt; color:#7d7d74; }
+.headline { font-family:Verdana, Geneva, sans-serif; font-size:10pt; color:#7d7d74; overflow:hidden; }
+.subline  { font-family:Verdana, Geneva, sans-serif; font-size:7pt; color:#7d7d74; }
+.masthead { font-family:Verdana, Geneva, sans-serif; font-size:10pt; color:#1b2a22; line-height:12px; }
+.footer   { font-family:Verdana, Geneva, sans-serif; font-size:9pt; color:#7d7d74; }
+
+.sitename { margin-left:1px; margin-right:5px; }
+span.masthead a:link, span.masthead a:visited { color:#1b2a22; }
+span.masthead b a { color:#ffffff; }
+
+.text { word-break:break-word; overflow-wrap:anywhere; }
+.text p { margin-top:8px; }
+.text a:link { color:#000000; text-decoration:underline; }
+.remark-body { max-width:1215px; }
+
+.titleline > a { font-size:inherit; }
+.ordinal { white-space:nowrap; }
+.host { font-size:8pt; }
+.hostname { color:inherit; }
+.morelink { display:inline-block; padding:1px 0; }
+
+.arrow {
+  width:10px; height:10px; border:0px; margin:3px 2px 6px;
+  background:url("triangle.svg"), linear-gradient(transparent, transparent);
+  background-size:10px; background-repeat:no-repeat;
+}
+.nosee { visibility:hidden; pointer-events:none; cursor:default; }
+.hidden-nav { display:none; }
+
+pre  { overflow:auto; padding:2px; white-space:pre-wrap; overflow-wrap:anywhere; }
+code { font-family:monospace; font-size:9pt; }
+pre code { font-size:9pt; }
+
+.indent img { vertical-align:baseline; }
+.when a { text-overflow:ellipsis; }
+.title-break { page-break-before:always; }
+.vote-turn { transform:rotate(180deg); -webkit-transform:rotate(180deg); -ms-transform:rotate(180deg); }
+.listing { min-width:796px; }
+#frame { min-width:796px; }
+
+@media only screen and (min-width : 300px) and (max-width : 389px) {
+  #frame { width:100%; min-width:0; }
+  .subline { font-size:7pt; }
+  .remark-body { max-width:270px; }
+}
+@media only screen and (min-width : 400px) and (max-width : 479px) {
+  #frame { width:100%; min-width:0; }
+  .remark-body { max-width:330px; }
+}
+@media only screen and (min-width : 480px) and (max-width : 539px) {
+  .remark-body { max-width:390px; }
+}
+@media only screen and (min-width : 540px) and (max-width : 599px) {
+  .remark-body { max-width:450px; }
+}
+@media only screen and (min-width : 600px) and (max-width : 659px) {
+  .remark-body { max-width:510px; }
+}
+@media only screen and (min-width : 660px) and (max-width : 719px) {
+  .remark-body { max-width:570px; }
+}
+@media only screen and (min-width : 720px) and (max-width : 779px) {
+  .remark-body { max-width:630px; }
+}
+@media only screen and (min-width : 780px) and (max-width : 839px) {
+  .remark-body { max-width:690px; }
+}
+@media only screen and (min-width : 840px) and (max-width : 899px) {
+  .remark-body { max-width:750px; }
+}
+@media only screen and (min-width : 900px) and (max-width : 959px) {
+  .remark-body { max-width:810px; }
+}
+@media only screen and (min-width : 960px) and (max-width : 1019px) {
+  .remark-body { max-width:870px; }
+}
+@media only screen and (-webkit-min-device-pixel-ratio : 2), only screen and (min-device-pixel-ratio : 2) {
+  .arrow { background-size:10px; }
+}

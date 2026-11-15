@@ -51,6 +51,7 @@ pub fn translate(message: u32, w_param: usize, l_param: isize) -> Option<Transla
         }),
         WM_KEYDOWN => Some(Translated::Event(Event::Key {
             code: w_param as u32,
+            command: false,
         })),
         WM_CHAR => Some(Translated::Event(Event::Char {
             unit: w_param as u16,
@@ -127,7 +128,10 @@ mod tests {
     fn keys_and_characters() {
         assert_eq!(
             translate(WM_KEYDOWN, 0x41, 0),
-            event(Event::Key { code: 0x41 })
+            event(Event::Key {
+                code: 0x41,
+                command: false
+            })
         );
         assert_eq!(
             translate(WM_CHAR, 0xD83D, 0),

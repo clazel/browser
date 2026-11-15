@@ -2,7 +2,7 @@
 //! took. Click to move the crosshair, use the wheel to shift the gradient, and resize
 //! the window.
 
-#[cfg(windows)]
+#[cfg(any(windows, all(target_os = "macos", target_arch = "aarch64")))]
 fn main() -> Result<(), clazel_window::Error> {
     use std::time::{Duration, Instant};
 
@@ -10,6 +10,9 @@ fn main() -> Result<(), clazel_window::Error> {
     use clazel_window::{Event, Window};
 
     let mut window = Window::open("Clazel: test pattern")?;
+    // On macOS a window opens without the keyboard; this one is for a person.
+    #[cfg(target_os = "macos")]
+    window.activate();
     let mut shift = 0i32;
     let mut mark = None;
     let mut dirty = true;
@@ -55,7 +58,9 @@ fn main() -> Result<(), clazel_window::Error> {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, all(target_os = "macos", target_arch = "aarch64"))))]
 fn main() {
-    println!("clazel-window has only a Windows window so far (phase-5.md item 5.22a).");
+    println!(
+        "clazel-window has a window on Windows (5.22a) and on macOS on Apple silicon (5.21) so far."
+    );
 }

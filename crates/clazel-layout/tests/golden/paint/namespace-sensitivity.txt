@@ -1,0 +1,6 @@
+#case 0
+#data "<body><table><tr><td><svg><td><foreignObject><span></td>Foo"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 62x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+

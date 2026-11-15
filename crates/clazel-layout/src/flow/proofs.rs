@@ -359,9 +359,9 @@ fn role_any() {
         Class::Marker => assert!(r == Role::Marker),
         Class::Column | Class::ColumnGroup => assert!(r == Role::Column),
         Class::Inline | Class::Text { .. } => assert!(r == Role::Inline),
-        Class::Table { .. } | Class::RowGroup | Class::Row | Class::Cell | Class::Caption => {
-            assert!(r == Role::Flow)
-        }
+        Class::Cell => assert!(r == Role::Cell),
+        Class::RowGroup | Class::Row => assert!(r == Role::Track),
+        Class::Table { .. } | Class::Caption => assert!(r == Role::Flow),
         _ => {
             if c.is_block_level() {
                 assert!(r == Role::Flow);

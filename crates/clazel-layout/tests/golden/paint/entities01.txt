@@ -1,0 +1,450 @@
+#case 0
+#data "FOO&gt;BAR"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 118x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 1
+#data "FOO&gtBAR"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 118x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 2
+#data "FOO&gt BAR"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 123x48 #ff000000 face=0 size=1024 glyphs=8 first=512,1463
+
+#case 3
+#data "FOO&gt;;;BAR"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 129x48 #ff000000 face=0 size=1024 glyphs=9 first=512,1463
+
+#case 4
+#data "I'm &notit; I tell you"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 170x48 #ff000000 face=0 size=1024 glyphs=19 first=512,1463
+
+#case 5
+#data "I'm &notin; I tell you"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 152x48 #ff000000 face=0 size=1024 glyphs=16 first=512,1463
+
+#case 6
+#data "&ammmp;"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 117x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 7
+#data "&ammmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmp;"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 14424x48 #ff000000 face=0 size=1024 glyphs=950 first=512,1463
+
+#case 8
+#data "FOO& BAR"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 124x48 #ff000000 face=0 size=1024 glyphs=8 first=512,1463
+
+#case 9
+#data "FOO&<BAR>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 84x48 #ff000000 face=0 size=1024 glyphs=4 first=512,1463
+
+#case 10
+#data "FOO&&&&gt;BAR"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 161x48 #ff000000 face=0 size=1024 glyphs=10 first=512,1463
+
+#case 11
+#data "FOO&#41;BAR"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 111x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 12
+#data "FOO&#x41;BAR"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 116x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 13
+#data "FOO&#X41;BAR"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 116x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 14
+#data "FOO&#BAR"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 132x48 #ff000000 face=0 size=1024 glyphs=8 first=512,1463
+
+#case 15
+#data "FOO&#ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 134x48 #ff000000 face=0 size=1024 glyphs=8 first=512,1463
+
+#case 16
+#data "FOO&#xBAR"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 89x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 17
+#data "FOO&#xZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 143x48 #ff000000 face=0 size=1024 glyphs=9 first=512,1463
+
+#case 18
+#data "FOO&#XZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 146x48 #ff000000 face=0 size=1024 glyphs=9 first=512,1463
+
+#case 19
+#data "FOO&#41BAR"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 111x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 20
+#data "FOO&#x41BAR"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 91x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 21
+#data "FOO&#x41ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 118x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 22
+#data "FOO&#x0000;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 123x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 23
+#data "FOO&#x0078;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 116x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 24
+#data "FOO&#x0079;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 116x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 25
+#data "FOO&#x0080;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 117x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 26
+#data "FOO&#x0081;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 116x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 27
+#data "FOO&#x0082;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 112x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 28
+#data "FOO&#x0083;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 113x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 29
+#data "FOO&#x0084;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 115x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 30
+#data "FOO&#x0085;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 123x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 31
+#data "FOO&#x0086;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 115x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 32
+#data "FOO&#x0087;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 115x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 33
+#data "FOO&#x0088;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 115x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 34
+#data "FOO&#x0089;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 128x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 35
+#data "FOO&#x008A;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 118x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 36
+#data "FOO&#x008B;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 113x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 37
+#data "FOO&#x008C;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 125x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 38
+#data "FOO&#x008D;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 116x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 39
+#data "FOO&#x008E;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 118x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 40
+#data "FOO&#x008F;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 116x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 41
+#data "FOO&#x0090;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 116x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 42
+#data "FOO&#x0091;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 112x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 43
+#data "FOO&#x0092;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 112x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 44
+#data "FOO&#x0093;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 115x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 45
+#data "FOO&#x0094;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 115x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 46
+#data "FOO&#x0095;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 116x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 47
+#data "FOO&#x0096;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 115x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 48
+#data "FOO&#x0097;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 123x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 49
+#data "FOO&#x0098;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 115x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 50
+#data "FOO&#x0099;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 123x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 51
+#data "FOO&#x009A;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 115x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 52
+#data "FOO&#x009B;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 113x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 53
+#data "FOO&#x009C;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 123x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 54
+#data "FOO&#x009D;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 116x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 55
+#data "FOO&#x009E;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 115x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 56
+#data "FOO&#x009F;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 117x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 57
+#data "FOO&#x00A0;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 112x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 58
+#data "FOO&#xD7FF;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 116x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 59
+#data "FOO&#xD800;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 123x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 60
+#data "FOO&#xD801;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 123x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 61
+#data "FOO&#xDFFE;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 123x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 62
+#data "FOO&#xDFFF;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 123x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 63
+#data "FOO&#xE000;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 116x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 64
+#data "FOO&#x10FFFE;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 116x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 65
+#data "FOO&#x1087D4;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 116x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 66
+#data "FOO&#x10FFFF;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 116x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 67
+#data "FOO&#x110000;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 123x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 68
+#data "FOO&#xFFFFFF;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 123x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 69
+#data "FOO&#11111111111"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 86x48 #ff000000 face=0 size=1024 glyphs=4 first=512,1463
+
+#case 70
+#data "FOO&#1111111111"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 86x48 #ff000000 face=0 size=1024 glyphs=4 first=512,1463
+
+#case 71
+#data "FOO&#111111111111"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 86x48 #ff000000 face=0 size=1024 glyphs=4 first=512,1463
+
+#case 72
+#data "FOO&#11111111111ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 123x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 73
+#data "FOO&#1111111111ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 123x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 74
+#data "FOO&#111111111111ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 123x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+

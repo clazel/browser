@@ -1,0 +1,620 @@
+#case 0
+#data "<body><template>Hello</template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 1
+#data "<template>Hello</template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 2
+#data "<template></template><div></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 3
+#data "<html><template>Hello</template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 4
+#data "<head><template><div></div></template></head>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 5
+#data "<div><template><div><span></template><b>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 6
+#data "<div><template></div>Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 7
+#data "<div></template></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 8
+#data "<table><template></template></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 9
+#data "<table><template></template></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 10
+#data "<table><div><template></template></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 11
+#data "<table><template></template><div></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 12
+#data "<table>   <template></template></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 13
+#data "<table><tbody><template></template></tbody>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 14
+#data "<table><tbody><template></tbody></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 15
+#data "<table><tbody><template></template></tbody></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 16
+#data "<table><thead><template></template></thead>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 17
+#data "<table><tfoot><template></template></tfoot>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 18
+#data "<select><template></template></select>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 19
+#data "<select><template><option></option></template></select>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 20
+#data "<template><option></option></select><option></option></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 21
+#data "<select><template></template><option></select>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 22
+#data "<select><option><template></template></select>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 23
+#data "<select><template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 24
+#data "<select><option></option><template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 25
+#data "<select><option></option><template><option>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 26
+#data "<table><thead><template><td></template></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 27
+#data "<table><template><thead></template></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 28
+#data "<body><table><template><td></tr><div></template></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 29
+#data "<table><template><thead></template></thead></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 30
+#data "<table><thead><template><tr></template></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 31
+#data "<table><template><tr></template></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 32
+#data "<table><tr><template><td>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 33
+#data "<table><template><tr><template><td></template></tr></template></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 34
+#data "<table><template><tr><template><td></td></template></tr></template></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 35
+#data "<table><template><td></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 36
+#data "<body><template><td></td></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 37
+#data "<body><template><template><tr></tr></template><td></td></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 38
+#data "<table><colgroup><template><col>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 39
+#data "<frameset><template><frame></frame></template></frameset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 40
+#data "<template><frame></frame></frameset><frame></frame></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 41
+#data "<template><div><frameset><span></span></div><span></span></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 42
+#data "<body><template><div><frameset><span></span></div><span></span></template></body>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 43
+#data "<head><template></template></head><p><frameset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 44
+#data "<template>x</template><p><frameset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 45
+#data "<head></head><template></template><p><frameset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 46
+#data "<p><template></template><frameset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 47
+#data "<p><template><frameset></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 48
+#data "<template></template>x<frameset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 41x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 49
+#data "<body><template><script>var i = 1;</script><td></td></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 50
+#data "<body><template><tr><div></div></tr></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 51
+#data "<table><template><tr><div></div></tr></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 52
+#data "<body><template><tr></tr><td></td></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 53
+#data "<body><template><td></td></tr><td></td></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 54
+#data "<body><template><td></td><tbody><td></td></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 55
+#data "<body><template><td></td><caption></caption><td></td></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 56
+#data "<body><template><td></td><colgroup></caption><td></td></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 57
+#data "<body><template><td></td></table><td></td></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 58
+#data "<body><template><tr></tr><tbody><tr></tr></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 59
+#data "<body><template><tr></tr><caption><tr></tr></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 60
+#data "<body><template><tr></tr></table><tr></tr></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 61
+#data "<body><template><thead></thead><caption></caption><tbody></tbody></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 62
+#data "<body><template><thead></thead></table><tbody></tbody></template></body>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 63
+#data "<body><template><div><tr></tr></div></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 64
+#data "<body><template><em>Hello</em></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 65
+#data "<body><template><!--comment--></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 66
+#data "<body><template><style></style><td></td></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 67
+#data "<body><template><meta><td></td></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 68
+#data "<body><template><link><td></td></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 69
+#data "<body><table><colgroup><template><col></col></template></colgroup></table></body>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 70
+#data "<body a=b><template><div></div><body c=d><div></div></body></template></body>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 71
+#data "<html a=b><template><div><html b=c><span></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 72
+#data "<html a=b><template><col></col><html b=c><col></col></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 73
+#data "<html a=b><template><frame></frame><html b=c><frame></frame></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 74
+#data "<body><template><tr></tr><template></template><td></td></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 75
+#data "<body><template><thead></thead><template><tr></tr></template><tr></tr><tfoot></tfoot></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 76
+#data "<body><template><template><b><template></template></template>text</template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 77
+#data "<body><template><col><colgroup>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 78
+#data "<body><template><col></colgroup>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 79
+#data "<body><template><col><colgroup></template></body>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 80
+#data "<body><template><col><div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 81
+#data "<body><template><col></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 82
+#data "<body><template><col>Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 83
+#data "<body><template><i><menu>Foo</i>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 84
+#data "<body><template></div><div>Foo</div><template></template><tr></tr>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 85
+#data "<body><div><template></div><tr><td>Foo</td></tr></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 86
+#data "<template></figcaption><sub><table></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 87
+#data "<template><template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 88
+#data "<template><div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 89
+#data "<template><template><div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 90
+#data "<template><template><table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 91
+#data "<template><template><tbody>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 92
+#data "<template><template><tr>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 93
+#data "<template><template><td>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 94
+#data "<template><template><caption>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 95
+#data "<template><template><colgroup>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 96
+#data "<template><template><col>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 97
+#data "<template><template><tbody><select>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 98
+#data "<template><template><table>Foo"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 99
+#data "<template><template><frame>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 100
+#data "<template><template><script>var i"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 101
+#data "<template><template><style>var i"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 102
+#data "<template><table></template><body><span>Foo"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 62x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 103
+#data "<template><td></template><body><span>Foo"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 62x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 104
+#data "<template><object></template><body><span>Foo"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 62x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 105
+#data "<template><svg><template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 106
+#data "<template><svg><foo><template><foreignObject><div></template><div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 107
+#data "<dummy><template><span></dummy>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 108
+#data "<body><table><tr><td><select><template>Foo</template><caption>A</table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 109
+#data "<body></body><template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 110
+#data "<head></head><template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 111
+#data "<head></head><template>Foo</template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 112
+#data "<html><head></head><template></template><head>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 113
+#data "<!DOCTYPE HTML><dummy><table><template><table><template><table><script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 114
+#data "<template><a><table><a>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 116
+#data "<template><table><form></table></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 118
+#data "<template><form><form><input></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 120
+#data "<template><form><template></template><form></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 121
+#data "<template><template><form></template><form></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 122
+#data "<form><template><form></template><form>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 124
+#data "<!DOCTYPE HTML><template><tr><td>cell</td></tr></template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 125
+#data "<!DOCTYPE HTML><template> <tr> <td>cell</td> </tr> </template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 126
+#data "<!DOCTYPE HTML><template><tr><td>cell</td></tr>a</template>"
+scale 1
+fill 0,0 800x600 #ffffffff
+

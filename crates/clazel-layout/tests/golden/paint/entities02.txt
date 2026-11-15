@@ -1,0 +1,137 @@
+#case 0
+#data "<div bar=\"ZZ&gt;YY\"></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 1
+#data "<div bar=\"ZZ&\"></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 2
+#data "<div bar='ZZ&'></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 3
+#data "<div bar=ZZ&></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 4
+#data "<div bar=\"ZZ&gt=YY\"></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 5
+#data "<div bar=\"ZZ&gt0YY\"></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 6
+#data "<div bar=\"ZZ&gt9YY\"></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 7
+#data "<div bar=\"ZZ&gtaYY\"></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 8
+#data "<div bar=\"ZZ&gtZYY\"></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 9
+#data "<div bar=\"ZZ&gt YY\"></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 10
+#data "<div bar=\"ZZ&gt\"></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 11
+#data "<div bar='ZZ&gt'></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 12
+#data "<div bar=ZZ&gt></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 13
+#data "<div bar=\"ZZ&pound_id=23\"></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 14
+#data "<div bar=\"ZZ&prod_id=23\"></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 15
+#data "<div bar=\"ZZ&pound;_id=23\"></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 16
+#data "<div bar=\"ZZ&prod;_id=23\"></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 17
+#data "<div bar=\"ZZ&pound=23\"></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 18
+#data "<div bar=\"ZZ&prod=23\"></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 19
+#data "<div>ZZ&pound_id=23</div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 122x48 #ff000000 face=0 size=1024 glyphs=9 first=512,1463
+
+#case 20
+#data "<div>ZZ&prod_id=23</div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 163x48 #ff000000 face=0 size=1024 glyphs=13 first=512,1463
+
+#case 21
+#data "<div>ZZ&pound;_id=23</div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 122x48 #ff000000 face=0 size=1024 glyphs=9 first=512,1463
+
+#case 22
+#data "<div>ZZ&prod;_id=23</div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 124x48 #ff000000 face=0 size=1024 glyphs=9 first=512,1463
+
+#case 23
+#data "<div>ZZ&pound=23</div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 98x48 #ff000000 face=0 size=1024 glyphs=6 first=512,1463
+
+#case 24
+#data "<div>ZZ&prod=23</div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 140x48 #ff000000 face=0 size=1024 glyphs=10 first=512,1463
+
+#case 25
+#data "<div>ZZ&AElig=</div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 84x48 #ff000000 face=0 size=1024 glyphs=4 first=512,1463
+

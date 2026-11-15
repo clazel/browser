@@ -226,32 +226,32 @@ root (anonymous) 0,0 800x600
 #case 31
 #data "<!DOCTYPE html><table><tr><td><math><mtext>\0a"
 root (anonymous) 0,0 800x600
-  block <html> 0,0 800x36.640625
-    block <body> 8,8 784x20.640625 m=8,8,8,8
-      table-wrapper <table> 8,8 11.546875x20.640625 m=0,772.453125,0,0
-        table <table> 8,8 11.546875x20.640625
-          row-group <tbody> 8,8 11.546875x20.640625
-            row <tr> 8,8 11.546875x20.640625
-              cell <td> 8,8 11.546875x20.640625 p=1,1,1,1
-                line 9,9 9.546875x18.640625 base=23.859375
-                  inline <math> 9,9 9.546875x18.640625 start end
-                  inline <mtext> 9,9 9.546875x18.640625 start end
-                  text "a" x=9 base=23.859375 w=9.546875
+  block <html> 0,0 800x40.640625
+    block <body> 8,8 784x24.640625 m=8,8,8,8
+      table-wrapper <table> 8,8 15.546875x24.640625 m=0,768.453125,0,0
+        table <table> 8,8 15.546875x24.640625
+          row-group <tbody> 10,10 11.546875x20.640625
+            row <tr> 10,10 11.546875x20.640625
+              cell <td> 10,10 11.546875x20.640625 p=1,1,1,1
+                line 11,11 9.546875x18.640625 base=25.859375
+                  inline <math> 11,11 9.546875x18.640625 start end
+                  inline <mtext> 11,11 9.546875x18.640625 start end
+                  text "a" x=11 base=25.859375 w=9.546875
 
 #case 32
 #data "<!DOCTYPE html><table><tr><td><svg><foreignObject>\0a"
 root (anonymous) 0,0 800x600
-  block <html> 0,0 800x36.640625
-    block <body> 8,8 784x20.640625 m=8,8,8,8
-      table-wrapper <table> 8,8 11.546875x20.640625 m=0,772.453125,0,0
-        table <table> 8,8 11.546875x20.640625
-          row-group <tbody> 8,8 11.546875x20.640625
-            row <tr> 8,8 11.546875x20.640625
-              cell <td> 8,8 11.546875x20.640625 p=1,1,1,1
-                line 9,9 9.546875x18.640625 base=23.859375
-                  inline <svg> 9,9 9.546875x18.640625 start end
-                  inline <foreignObject> 9,9 9.546875x18.640625 start end
-                  text "a" x=9 base=23.859375 w=9.546875
+  block <html> 0,0 800x40.640625
+    block <body> 8,8 784x24.640625 m=8,8,8,8
+      table-wrapper <table> 8,8 15.546875x24.640625 m=0,768.453125,0,0
+        table <table> 8,8 15.546875x24.640625
+          row-group <tbody> 10,10 11.546875x20.640625
+            row <tr> 10,10 11.546875x20.640625
+              cell <td> 10,10 11.546875x20.640625 p=1,1,1,1
+                line 11,11 9.546875x18.640625 base=25.859375
+                  inline <svg> 11,11 9.546875x18.640625 start end
+                  inline <foreignObject> 11,11 9.546875x18.640625 start end
+                  text "a" x=11 base=25.859375 w=9.546875
 
 #case 33
 #data "<!DOCTYPE html><math><mi>a\0b"

@@ -3,12 +3,11 @@
 A web browser built from the bottom up by AI, using formal verification
 instead of trust.
 
-- **Memory safe:** 100% safe Rust except `clazel-sys`: 138 `unsafe` blocks (338 lines) that enter the OS sandbox, machine-checked and audited. Of those, 21 are `"C-unwind"` casts of `objc_msgSend` to a typed function pointer, one per Objective-C message signature that Metal drawing uses. Shipped dependencies are `libc` and libcrux.
+- **Memory safe:** 100% safe Rust except `clazel-sys`: 343 `unsafe` blocks (929 lines) that enter the OS sandbox, machine-checked and audited. Of those, 40 are `"C-unwind"` casts of `objc_msgSend` to a typed function pointer, one per Objective-C message signature that Metal drawing (21) and the macOS window (19) use. Vulkan drawing on Linux adds 55 (51 direct calls and 4 blocks of declarations), and Direct3D 12 drawing and the GPU process's start on Windows add 56, of which 40 are COM method calls through hand-written vtables. Shipped dependencies are `libc` and libcrux.
 - **Verified where it matters:** the kernel's security policy and every parser
   of untrusted input carry machine-checked proofs (Verus, Kani).
 - **Stated, not implied:** each crate declares its verification tier, and the
   trusted computing base is listed in [docs/VERIFICATION.md](docs/VERIFICATION.md).
-
 
 Recheck every proof yourself, on Linux x86-64, with:
 
@@ -120,15 +119,18 @@ target/release/clazel https://news.ycombinator.com/       # open a window on the
 target/release/clazel                                      # or on no page, with the address bar ready
 ```
 
-In the window, click the address bar (or press Command-L on macOS), type a
-URL and press Return to go there, click a link to follow it, and scroll with
-the wheel, Space, Page Up and Page Down or the arrow keys. The back button
-(Command-`[` on macOS) goes back, and Command-R reloads. The kernel fetches every page and
+In the window, click the address bar (or press Command-L on macOS, Control-L
+elsewhere), type a URL and press Return to go there, click a link to follow
+it, and scroll with the wheel, Space, Page Up and Page Down or the Up and
+Down arrows. The back button (Command-`[`) goes back, and Command-R reloads
+(Control on Linux and Windows). The kernel fetches every page and
 its style sheets, the page is parsed and laid out in a sandboxed renderer,
 one per origin, and drawn by a sandboxed GPU process; the address bar is the
 kernel's, whatever the page says. A window needs macOS on Apple silicon,
 Windows, or Linux with a local X display and the Vulkan loader
-(`libvulkan-dev` to build).
+(`libvulkan-dev` to build). On Windows the browser's window and
+Direct3D 12 drawing have been run by hand; CI there runs the sandbox and the
+host's tests and opens a test window, but never draws with Direct3D 12.
 
 ```sh
 target/release/clazel --headless page.png https://example.com/   # draw one page to a PNG (or a .ppm)
@@ -138,7 +140,10 @@ target/release/clazel --text http://info.cern.ch/                # text mode: ti
 `--headless` takes `--size WxH` (1024x768 if not given). `--text` shows a
 page as text, with its links numbered: type a number to follow a link,
 `g URL` to go elsewhere, `b` to go back, `q` to quit. It is also what
-`clazel URL` runs where no window can be opened.
+`clazel URL` runs where no window can be opened. With a window or
+`--headless`, `--gpu=software` starts every GPU process on the software
+driver (lavapipe on Linux; macOS has none, so nothing is drawn there), and
+`--gpu=hardware` ignores the driver blocklist, with a warning.
 
 ```sh
 target/release/clazel fetch http://example.com/           # GET, redirects followed, response printed
@@ -189,7 +194,9 @@ and much of it is work only a person can do.
   and independent engines (`tests/conformance*.rs`). Point us at suites we have
   not vendored, or at engines worth differential testing against.
 - **Run it on your machine.** Build it, browse with it, and open an issue
-  for what breaks.
+  for what breaks. The sandbox tests run in CI on
+  `ubuntu-24.04`, macOS arm64 and `windows-2025` only; other Linux
+  distributions and kernels are untested.
 - **Read `clazel-sys`.** It is the only crate with `unsafe`. Every change is
   audited by a second model ([docs/SYS-AUDITS.md](docs/SYS-AUDITS.md)); a
   person reading it too is welcome.

@@ -1,0 +1,237 @@
+#case 0
+#data "FOO&#x000D;ZOO"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 112x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 1
+#data "<html>\0<frameset></frameset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 2
+#data "<html> \0 <frameset></frameset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 3
+#data "<html>a\0a<frameset></frameset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 51x48 #ff000000 face=0 size=1024 glyphs=2 first=512,1463
+
+#case 4
+#data "<html>\0\0<frameset></frameset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 5
+#data "<html>\0\n<frameset></frameset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 6
+#data "<html><select>\0"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 7
+#data "\0"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 8
+#data "<body>\0"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 9
+#data "<plaintext>\0filler\0text\0"
+scale 1
+fill 0,0 800x608 #ffffffff
+text -8,-9 151x48 #ff000000 face=0 size=1024 glyphs=13 first=512,1463
+
+#case 10
+#data "<svg><![CDATA[\0filler\0text\0]]>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 151x48 #ff000000 face=0 size=1024 glyphs=13 first=512,1463
+
+#case 11
+#data "<body><!\0>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 12
+#data "<body><!\0filler\0text>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 13
+#data "<body><svg><foreignObject>\0filler\0text"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 102x48 #ff000000 face=0 size=1024 glyphs=10 first=512,1463
+
+#case 14
+#data "<svg>\0filler\0text"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 135x48 #ff000000 face=0 size=1024 glyphs=12 first=512,1463
+
+#case 15
+#data "<svg>\0<frameset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 48x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 16
+#data "<svg>\0 <frameset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 48x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 17
+#data "<svg>\0a<frameset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 58x48 #ff000000 face=0 size=1024 glyphs=2 first=512,1463
+
+#case 18
+#data "<svg>\0</svg><frameset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 19
+#data "<svg>\0 </svg><frameset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 20
+#data "<svg>\0a</svg><frameset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 58x48 #ff000000 face=0 size=1024 glyphs=2 first=512,1463
+
+#case 21
+#data "<svg><![CDATA[\0]]></svg><frameset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 22
+#data "<svg><foreignObject><![CDATA[\0]]></foreignObject></svg><frameset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 23
+#data "<svg>\0&#xFFFD;</svg><frameset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 65x48 #ff000000 face=0 size=1024 glyphs=2 first=512,1463
+
+#case 24
+#data "<!DOCTYPE html><body>a<\0b"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 65x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 25
+#data "<svg><foreignObject><![CDATA[a\0b]]>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 52x48 #ff000000 face=0 size=1024 glyphs=2 first=512,1463
+
+#case 26
+#data "<svg><path></path></svg><frameset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 27
+#data "<svg><p><frameset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 28
+#data "<!DOCTYPE html><pre>\r\n\r\nA</pre>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,18 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,3168
+
+#case 29
+#data "<!DOCTYPE html><pre>\r\rA</pre>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,18 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,3168
+
+#case 30
+#data "<!DOCTYPE html><pre>\rA</pre>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-1 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1975
+
+#case 31
+#data "<!DOCTYPE html><table><tr><td><math><mtext>\0a"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -5,-6 42x48 #ff000000 face=0 size=1024 glyphs=1 first=704,1655
+
+#case 32
+#data "<!DOCTYPE html><table><tr><td><svg><foreignObject>\0a"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -5,-6 42x48 #ff000000 face=0 size=1024 glyphs=1 first=704,1655
+
+#case 33
+#data "<!DOCTYPE html><math><mi>a\0b"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 52x48 #ff000000 face=0 size=1024 glyphs=2 first=512,1463
+
+#case 34
+#data "<!DOCTYPE html><math><mo>a\0b"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 52x48 #ff000000 face=0 size=1024 glyphs=2 first=512,1463
+
+#case 35
+#data "<!DOCTYPE html><math><mn>a\0b"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 52x48 #ff000000 face=0 size=1024 glyphs=2 first=512,1463
+
+#case 36
+#data "<!DOCTYPE html><math><ms>a\0b"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 52x48 #ff000000 face=0 size=1024 glyphs=2 first=512,1463
+
+#case 37
+#data "<!DOCTYPE html><math><mtext>a\0b"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 52x48 #ff000000 face=0 size=1024 glyphs=2 first=512,1463
+
+#case 38
+#data "<math>\0filler\0text"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 135x48 #ff000000 face=0 size=1024 glyphs=12 first=512,1463
+
+#case 39
+#data "<math><![CDATA[\0filler\0text\0]]>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 151x48 #ff000000 face=0 size=1024 glyphs=13 first=512,1463
+
+#case 40
+#data "<math><annotation-xml>\0x"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 57x48 #ff000000 face=0 size=1024 glyphs=2 first=512,1463
+
+#case 41
+#data "<math><annotation-xml encoding=\"text/html\">\0x"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 41x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+

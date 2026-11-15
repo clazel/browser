@@ -1,0 +1,101 @@
+#case 0
+#data "FOO<!-- BAR -->BAZ"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 69x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+text 29,-9 67x48 #ff000000 face=0 size=1024 glyphs=3 first=2902,1463
+
+#case 1
+#data "FOO<!-- BAR --!>BAZ"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 69x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+text 29,-9 67x48 #ff000000 face=0 size=1024 glyphs=3 first=2902,1463
+
+#case 2
+#data "FOO<!-- BAR --! >BAZ"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 69x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 3
+#data "FOO<!-- BAR --!\n>BAZ"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 69x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 4
+#data "FOO<!-- BAR --   >BAZ"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 69x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 5
+#data "FOO<!-- BAR -- <QUX> -- MUX -->BAZ"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 69x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+text 29,-9 67x48 #ff000000 face=0 size=1024 glyphs=3 first=2902,1463
+
+#case 6
+#data "FOO<!-- BAR -- <QUX> -- MUX --!>BAZ"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 69x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+text 29,-9 67x48 #ff000000 face=0 size=1024 glyphs=3 first=2902,1463
+
+#case 7
+#data "FOO<!-- BAR -- <QUX> -- MUX -- >BAZ"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 69x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 8
+#data "FOO<!---->BAZ"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 69x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+text 29,-9 67x48 #ff000000 face=0 size=1024 glyphs=3 first=2902,1463
+
+#case 9
+#data "FOO<!--->BAZ"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 69x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+text 29,-9 67x48 #ff000000 face=0 size=1024 glyphs=3 first=2902,1463
+
+#case 10
+#data "FOO<!-->BAZ"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 69x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+text 29,-9 67x48 #ff000000 face=0 size=1024 glyphs=3 first=2902,1463
+
+#case 11
+#data "<?xml version=\"1.0\">Hi"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 51x48 #ff000000 face=0 size=1024 glyphs=2 first=512,1463
+
+#case 12
+#data "<?xml version=\"1.0\">"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 13
+#data "<?xml version"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 14
+#data "FOO<!----->BAZ"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 69x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+text 29,-9 67x48 #ff000000 face=0 size=1024 glyphs=3 first=2902,1463
+
+#case 15
+#data "<html><!-- comment --><title>Comment before head</title>"
+scale 1
+fill 0,0 800x600 #ffffffff
+

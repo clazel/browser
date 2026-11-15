@@ -1,0 +1,31 @@
+#case 0
+#data "<a><b><big><em><strong><div>X</a>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -11,-13 52x58 #ff000000 face=0 size=1229 glyphs=1 first=512,1653
+
+#case 1
+#data "<a><b><div id=1><div id=2><div id=3><div id=4><div id=5><div id=6><div id=7><div id=8>A</a>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 2
+#data "<a><b><div id=1><div id=2><div id=3><div id=4><div id=5><div id=6><div id=7><div id=8><div id=9>A</a>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 3
+#data "<a><b><div id=1><div id=2><div id=3><div id=4><div id=5><div id=6><div id=7><div id=8><div id=9><div id=10>A</a>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 4
+#data "<cite><b><cite><i><cite><i><cite><i><div>X</b>TEST"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 3,-9 76x48 #ff000000 face=0 size=1024 glyphs=4 first=1241,1463
+

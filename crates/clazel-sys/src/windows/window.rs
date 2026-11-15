@@ -104,8 +104,8 @@ struct BitmapInfo {
 // SAFETY: docs RegisterClassExW, DefWindowProcW, LoadCursorW, CreateWindowExW,
 // DestroyWindow, IsWindow, SetWindowTextW, GetDpiForWindow, PeekMessageW,
 // TranslateMessage, DispatchMessageW, MsgWaitForMultipleObjects, GetClientRect,
-// ScreenToClient, GetDC, ReleaseDC, SetProcessDpiAwarenessContext (user32,
-// winuser.h); docs SetDIBitsToDevice
+// ScreenToClient, GetDC, ReleaseDC, SetProcessDpiAwarenessContext, GetKeyState
+// (user32, winuser.h; `SHORT GetKeyState(int nVirtKey)`); docs SetDIBitsToDevice
 // (gdi32, wingdi.h); docs GetModuleHandleW (kernel32, libloaderapi.h). The
 // declarations below match those prototypes on 64-bit Windows: `BOOL`,
 // `DWORD`, `UINT` and `int` are 32-bit, `ATOM` is 16-bit, `WPARAM` is
@@ -167,6 +167,7 @@ unsafe extern "system" {
         color_use: u32,
     ) -> i32;
     fn GetModuleHandleW(name: *const u16) -> Handle;
+    fn GetKeyState(key: i32) -> i16;
 }
 
 /// A window this module created. Once [`is_window`] says it has ended, stop using
@@ -401,15 +402,31 @@ pub fn screen_to_client(window: WindowHandle, x: i32, y: i32) -> Result<(i32, i3
     Ok((point.x, point.y))
 }
 
-/// Copy `width` by `height` pixels to the client area's top left corner:
-/// `pixels` holds rows from the top, each pixel `0x00RRGGBB`, whose top byte is
-/// ignored. Any other length is `ERROR_INVALID_PARAMETER`. A size of zero draws
-/// nothing.
+/// `VK_CONTROL`.
+const CONTROL: i32 = 0x11;
+
+/// Whether a Ctrl key was down when the message this thread read last was
+/// sent. For the thread that reads the window's messages: the state is that
+/// thread's, as of its last message.
+pub fn control_is_down() -> bool {
+    // SAFETY: docs GetKeyState: returns the state of the virtual key
+    // `nVirtKey` as of the calling thread's last message, the high bit set if
+    // it was down; it takes only the key's number.
+    let state = unsafe { GetKeyState(CONTROL) };
+    state < 0
+}
+
+/// Copy `width` by `height` pixels to the client area, their top left corner at
+/// `at` (x, y) from the client area's: `pixels` holds rows from the top, each
+/// pixel `0x00RRGGBB`, whose top byte is ignored. Any other length is
+/// `ERROR_INVALID_PARAMETER`. A size of zero draws nothing. What falls outside
+/// the client area is not drawn: the device context is the client area's.
 pub fn draw_bgra(
     window: WindowHandle,
     pixels: &[u32],
     width: u32,
     height: u32,
+    at: (i32, i32),
 ) -> Result<(), SpawnError> {
     let invalid = SpawnError::Call("draw_bgra", Errno(INVALID_PARAMETER));
     let expected = u64::from(width).checked_mul(u64::from(height));
@@ -454,8 +471,14 @@ pub fn draw_bgra(
     // `bits` points to `pixels`, whose length is checked above to be exactly
     // width × height `u32`s, and the call reads `height` rows of `width` pixels of
     // it. Being `u32`s, the rows are DWORD-aligned, as the page requires of scan
-    // lines. 0 is DIB_RGB_COLORS. It keeps no pointer.
-    let n = unsafe { SetDIBitsToDevice(dc, 0, 0, width, height, 0, 0, 0, height, bits, head, 0) };
+    // lines. The destination's corner is `at`, two numbers; the source is the
+    // whole image from its first scan line. 0 is DIB_RGB_COLORS. It keeps no
+    // pointer.
+    let n = unsafe {
+        SetDIBitsToDevice(
+            dc, at.0, at.1, width, height, 0, 0, 0, height, bits, head, 0,
+        )
+    };
     let failed = (n == 0).then(|| last("SetDIBitsToDevice"));
     // SAFETY: docs ReleaseDC: releases the context GetDC gave above for this same
     // window; it is not used afterwards.
@@ -485,7 +508,7 @@ mod tests {
         let handle = WindowHandle(0);
         let refused = |pixels: &[u32], w, h| {
             matches!(
-                draw_bgra(handle, pixels, w, h),
+                draw_bgra(handle, pixels, w, h, (0, 0)),
                 Err(SpawnError::Call("draw_bgra", Errno(INVALID_PARAMETER)))
             )
         };

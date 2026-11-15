@@ -1,0 +1,1045 @@
+#case 0
+#data "<!doctype html><script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 1
+#data "<!doctype html><script>a"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 2
+#data "<!doctype html><script><"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 3
+#data "<!doctype html><script></"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 4
+#data "<!doctype html><script></S"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 5
+#data "<!doctype html><script></SC"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 6
+#data "<!doctype html><script></SCR"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 7
+#data "<!doctype html><script></SCRI"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 8
+#data "<!doctype html><script></SCRIP"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 9
+#data "<!doctype html><script></SCRIPT"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 10
+#data "<!doctype html><script></SCRIPT "
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 11
+#data "<!doctype html><script></s"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 12
+#data "<!doctype html><script></sc"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 13
+#data "<!doctype html><script></scr"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 14
+#data "<!doctype html><script></scri"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 15
+#data "<!doctype html><script></scrip"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 16
+#data "<!doctype html><script></script"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 17
+#data "<!doctype html><script></script "
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 18
+#data "<!doctype html><script><!"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 19
+#data "<!doctype html><script><!a"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 20
+#data "<!doctype html><script><!-"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 21
+#data "<!doctype html><script><!-a"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 22
+#data "<!doctype html><script><!--"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 23
+#data "<!doctype html><script><!--a"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 24
+#data "<!doctype html><script><!--<"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 25
+#data "<!doctype html><script><!--<a"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 26
+#data "<!doctype html><script><!--</"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 27
+#data "<!doctype html><script><!--</script"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 28
+#data "<!doctype html><script><!--</script "
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 29
+#data "<!doctype html><script><!--<s"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 30
+#data "<!doctype html><script><!--<script"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 31
+#data "<!doctype html><script><!--<script "
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 32
+#data "<!doctype html><script><!--<script <"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 33
+#data "<!doctype html><script><!--<script <a"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 34
+#data "<!doctype html><script><!--<script </"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 35
+#data "<!doctype html><script><!--<script </s"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 36
+#data "<!doctype html><script><!--<script </script"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 37
+#data "<!doctype html><script><!--<script </scripta"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 38
+#data "<!doctype html><script><!--<script </script "
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 39
+#data "<!doctype html><script><!--<script </script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 40
+#data "<!doctype html><script><!--<script </script/"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 41
+#data "<!doctype html><script><!--<script </script <"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 42
+#data "<!doctype html><script><!--<script </script <a"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 43
+#data "<!doctype html><script><!--<script </script </"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 44
+#data "<!doctype html><script><!--<script </script </script"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 45
+#data "<!doctype html><script><!--<script </script </script "
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 46
+#data "<!doctype html><script><!--<script </script </script/"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 47
+#data "<!doctype html><script><!--<script </script </script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 48
+#data "<!doctype html><script><!--<script -"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 49
+#data "<!doctype html><script><!--<script -a"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 50
+#data "<!doctype html><script><!--<script -<"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 51
+#data "<!doctype html><script><!--<script --"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 52
+#data "<!doctype html><script><!--<script --a"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 53
+#data "<!doctype html><script><!--<script --<"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 54
+#data "<!doctype html><script><!--<script -->"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 55
+#data "<!doctype html><script><!--<script --><"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 56
+#data "<!doctype html><script><!--<script --></"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 57
+#data "<!doctype html><script><!--<script --></script"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 58
+#data "<!doctype html><script><!--<script --></script "
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 59
+#data "<!doctype html><script><!--<script --></script/"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 60
+#data "<!doctype html><script><!--<script --></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 61
+#data "<!doctype html><script><!--<script><\\/script>--></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 62
+#data "<!doctype html><script><!--<script></scr'+'ipt>--></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 63
+#data "<!doctype html><script><!--<script></script><script></script></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 64
+#data "<!doctype html><script><!--<script></script><script></script>--><!--</script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 65
+#data "<!doctype html><script><!--<script></script><script></script>-- ></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 66
+#data "<!doctype html><script><!--<script></script><script></script>- -></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 67
+#data "<!doctype html><script><!--<script></script><script></script>- - ></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 68
+#data "<!doctype html><script><!--<script></script><script></script>-></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 69
+#data "<!doctype html><script><!--<script>--!></script>X"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 70
+#data "<!doctype html><script><!--<scr'+'ipt></script>--></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 56x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 71
+#data "<!doctype html><script><!--<script></scr'+'ipt></script>X"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 72
+#data "<!doctype html><style><!--<style></style>--></style>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 56x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 73
+#data "<!doctype html><style><!--</style>X"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 74
+#data "<!doctype html><style><!--...</style>...--></style>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 71x48 #ff000000 face=0 size=1024 glyphs=6 first=512,1463
+
+#case 75
+#data "<!doctype html><style><!--<br><html xmlns:v=\"urn:schemas-microsoft-com:vml\"><!--[if !mso]><style></style>X"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 76
+#data "<!doctype html><style><!--...<style><!--...--!></style>--></style>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 56x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 77
+#data "<!doctype html><style><!--...</style><!-- --><style>@import ...</style>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 78
+#data "<!doctype html><style>...<style><!--...</style><!-- --></style>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 79
+#data "<!doctype html><style>...<!--[if IE]><style>...</style>X"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 80
+#data "<!doctype html><title><!--<title></title>--></title>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 56x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 81
+#data "<!doctype html><title>&lt;/title></title>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 82
+#data "<!doctype html><title>foo/title><link></head><body>X"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 83
+#data "<!doctype html><noscript><!--<noscript></noscript>--></noscript>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 84
+#data "<!doctype html><noscript><!--<noscript></noscript>--></noscript>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 85
+#data "<!doctype html><noscript><!--</noscript>X<noscript>--></noscript>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 86
+#data "<!doctype html><noscript><!--</noscript>X<noscript>--></noscript>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 87
+#data "<!doctype html><noscript><iframe></noscript>X"
+scale 1
+fill 0,0 800x600 #ffffffff
+fill 8,8 304x2 #ff000000
+fill 310,10 2x150 #ff000000
+fill 8,160 304x2 #ff000000
+fill 8,10 2x150 #ff000000
+
+#case 88
+#data "<!doctype html><noscript><iframe></noscript>X"
+scale 1
+fill 0,0 800x600 #ffffffff
+fill 8,8 304x2 #ff000000
+fill 310,10 2x150 #ff000000
+fill 8,160 304x2 #ff000000
+fill 8,10 2x150 #ff000000
+
+#case 89
+#data "<!doctype html><noframes><!--<noframes></noframes>--></noframes>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 56x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 90
+#data "<!doctype html><noframes><body><script><!--...</script></body></noframes></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 91
+#data "<!doctype html><textarea><!--<textarea></textarea>--></textarea>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text 220,13 56x48 #ff000000 face=0 size=1024 glyphs=3 first=15091,2898
+
+#case 92
+#data "<!doctype html><textarea>&lt;/textarea></textarea>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 93
+#data "<!doctype html><textarea>&lt;</textarea>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 94
+#data "<!doctype html><textarea>a&lt;b</textarea>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 95
+#data "<!doctype html><iframe><!--<iframe></iframe>--></iframe>"
+scale 1
+fill 0,0 800x600 #ffffffff
+fill 8,8 304x2 #ff000000
+fill 310,10 2x150 #ff000000
+fill 8,160 304x2 #ff000000
+fill 8,10 2x150 #ff000000
+text 296,130 56x48 #ff000000 face=0 size=1024 glyphs=3 first=19968,10368
+
+#case 96
+#data "<!doctype html><iframe>...<!--X->...<!--/X->...</iframe>"
+scale 1
+fill 0,0 800x600 #ffffffff
+fill 8,8 304x2 #ff000000
+fill 310,10 2x150 #ff000000
+fill 8,160 304x2 #ff000000
+fill 8,10 2x150 #ff000000
+
+#case 97
+#data "<!doctype html><xmp><!--<xmp></xmp>--></xmp>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-1 124x48 #ff000000 face=0 size=1024 glyphs=9 first=512,1975
+text -8,34 56x48 #ff000000 face=0 size=1024 glyphs=3 first=512,4192
+
+#case 98
+#data "<!doctype html><noembed><!--<noembed></noembed>--></noembed>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 56x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 99
+#data "<script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 100
+#data "<script>a"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 101
+#data "<script><"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 102
+#data "<script></"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 103
+#data "<script></S"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 104
+#data "<script></SC"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 105
+#data "<script></SCR"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 106
+#data "<script></SCRI"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 107
+#data "<script></SCRIP"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 108
+#data "<script></SCRIPT"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 109
+#data "<script></SCRIPT "
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 110
+#data "<script></s"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 111
+#data "<script></sc"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 112
+#data "<script></scr"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 113
+#data "<script></scri"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 114
+#data "<script></scrip"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 115
+#data "<script></script"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 116
+#data "<script></script "
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 117
+#data "<script><!"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 118
+#data "<script><!a"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 119
+#data "<script><!-"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 120
+#data "<script><!-a"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 121
+#data "<script><!--"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 122
+#data "<script><!--a"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 123
+#data "<script><!--<"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 124
+#data "<script><!--<a"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 125
+#data "<script><!--</"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 126
+#data "<script><!--</script"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 127
+#data "<script><!--</script "
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 128
+#data "<script><!--<s"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 129
+#data "<script><!--<script"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 130
+#data "<script><!--<script "
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 131
+#data "<script><!--<script <"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 132
+#data "<script><!--<script <a"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 133
+#data "<script><!--<script </"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 134
+#data "<script><!--<script </s"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 135
+#data "<script><!--<script </script"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 136
+#data "<script><!--<script </scripta"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 137
+#data "<script><!--<script </script "
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 138
+#data "<script><!--<script </script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 139
+#data "<script><!--<script </script/"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 140
+#data "<script><!--<script </script <"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 141
+#data "<script><!--<script </script <a"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 142
+#data "<script><!--<script </script </"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 143
+#data "<script><!--<script </script </script"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 144
+#data "<script><!--<script </script </script "
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 145
+#data "<script><!--<script </script </script/"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 146
+#data "<script><!--<script </script </script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 147
+#data "<script><!--<script -"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 148
+#data "<script><!--<script -a"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 149
+#data "<script><!--<script --"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 150
+#data "<script><!--<script --a"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 151
+#data "<script><!--<script -->"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 152
+#data "<script><!--<script --><"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 153
+#data "<script><!--<script --></"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 154
+#data "<script><!--<script --></script"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 155
+#data "<script><!--<script --></script "
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 156
+#data "<script><!--<script --></script/"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 157
+#data "<script><!--<script --></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 158
+#data "<script><!--<script><\\/script>--></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 159
+#data "<script><!--<script></scr'+'ipt>--></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 160
+#data "<script><!--<script></script><script></script></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 161
+#data "<script><!--<script></script><script></script>--><!--</script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 162
+#data "<script><!--<script></script><script></script>-- ></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 163
+#data "<script><!--<script></script><script></script>- -></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 164
+#data "<script><!--<script></script><script></script>- - ></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 165
+#data "<script><!--<script></script><script></script>-></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 166
+#data "<script><!--<script>--!></script>X"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 167
+#data "<script><!--<scr'+'ipt></script>--></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 56x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 168
+#data "<script><!--<script></scr'+'ipt></script>X"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 169
+#data "<style><!--<style></style>--></style>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 56x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 170
+#data "<style><!--</style>X"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 171
+#data "<style><!--...</style>...--></style>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 71x48 #ff000000 face=0 size=1024 glyphs=6 first=512,1463
+
+#case 172
+#data "<style><!--<br><html xmlns:v=\"urn:schemas-microsoft-com:vml\"><!--[if !mso]><style></style>X"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 173
+#data "<style><!--...<style><!--...--!></style>--></style>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 56x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 174
+#data "<style><!--...</style><!-- --><style>@import ...</style>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 175
+#data "<style>...<style><!--...</style><!-- --></style>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 176
+#data "<style>...<!--[if IE]><style>...</style>X"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 177
+#data "<title><!--<title></title>--></title>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 56x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 178
+#data "<title>&lt;/title></title>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 179
+#data "<title>foo/title><link></head><body>X"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 180
+#data "<noscript><!--<noscript></noscript>--></noscript>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 181
+#data "<noscript><!--<noscript></noscript>--></noscript>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 182
+#data "<noscript><!--</noscript>X<noscript>--></noscript>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 183
+#data "<noscript><!--</noscript>X<noscript>--></noscript>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 184
+#data "<noscript><iframe></noscript>X"
+scale 1
+fill 0,0 800x600 #ffffffff
+fill 8,8 304x2 #ff000000
+fill 310,10 2x150 #ff000000
+fill 8,160 304x2 #ff000000
+fill 8,10 2x150 #ff000000
+
+#case 185
+#data "<noscript><iframe></noscript>X"
+scale 1
+fill 0,0 800x600 #ffffffff
+fill 8,8 304x2 #ff000000
+fill 310,10 2x150 #ff000000
+fill 8,160 304x2 #ff000000
+fill 8,10 2x150 #ff000000
+
+#case 186
+#data "<noframes><!--<noframes></noframes>--></noframes>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 56x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 187
+#data "<noframes><body><script><!--...</script></body></noframes></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 188
+#data "<textarea><!--<textarea></textarea>--></textarea>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text 220,13 56x48 #ff000000 face=0 size=1024 glyphs=3 first=15091,2898
+
+#case 189
+#data "<textarea>&lt;/textarea></textarea>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 190
+#data "<iframe><!--<iframe></iframe>--></iframe>"
+scale 1
+fill 0,0 800x600 #ffffffff
+fill 8,8 304x2 #ff000000
+fill 310,10 2x150 #ff000000
+fill 8,160 304x2 #ff000000
+fill 8,10 2x150 #ff000000
+text 296,130 56x48 #ff000000 face=0 size=1024 glyphs=3 first=19968,10368
+
+#case 191
+#data "<iframe>...<!--X->...<!--/X->...</iframe>"
+scale 1
+fill 0,0 800x600 #ffffffff
+fill 8,8 304x2 #ff000000
+fill 310,10 2x150 #ff000000
+fill 8,160 304x2 #ff000000
+fill 8,10 2x150 #ff000000
+
+#case 192
+#data "<xmp><!--<xmp></xmp>--></xmp>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 124x48 #ff000000 face=0 size=1024 glyphs=9 first=512,1463
+text -8,26 56x48 #ff000000 face=0 size=1024 glyphs=3 first=512,3680
+
+#case 193
+#data "<noembed><!--<noembed></noembed>--></noembed>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 56x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 194
+#data "<!doctype html><table>\n"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 195
+#data "<!doctype html><table><td><span><font></span><span>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 196
+#data "<!doctype html><form><table></form><form></table></form>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
