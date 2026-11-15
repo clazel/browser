@@ -29,6 +29,8 @@
 //!   1), since the renderer (5.20) scrolls on scrolls and ignores keys; Left
 //!   and Right do nothing (scrolling is vertical, 5.20). A click in the strip
 //!   focuses the address bar.
+//! - **The shortcut modifier** is Command on macOS and Control on Linux
+//!   (`clazel_window::Event::Key`'s `command`); "Command" below means either.
 //! - **The address bar**: Command-L focuses it with its URL selected (typing
 //!   replaces it); typing edits it (Backspace deletes the last character);
 //!   Return navigates (`navigate_tab`) to what was typed, Escape cancels. A
@@ -48,7 +50,12 @@ use std::time::{Duration, Instant};
 use clazel::Host;
 use clazel_gpu::channel::SurfaceFrame;
 use clazel_kernel::exec::records::{EventRecord, OutputRecord};
-#[cfg(any(test, all(target_os = "macos", target_arch = "aarch64")))]
+#[cfg(any(
+    test,
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 use clazel_window::keys::Named;
 
 use crate::picture;
@@ -64,6 +71,9 @@ pub const RENDERER_FONTS: &[&str] = &[
     "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
     "C:\\Windows\\Fonts\\arial.ttf",
+    "C:\\Windows\\Fonts\\arialbd.ttf",
+    "C:\\Windows\\Fonts\\times.ttf",
+    "C:\\Windows\\Fonts\\cour.ttf",
 ];
 
 /// The [`RENDERER_FONTS`] that exist here.
@@ -147,7 +157,12 @@ pub fn pixels_for(host: &mut Host, tab: u64, paint: &Paint) -> Option<SurfaceFra
 }
 
 /// The title bar's text.
-#[cfg(any(test, all(target_os = "macos", target_arch = "aarch64")))]
+#[cfg(any(
+    test,
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 pub fn title_bar(url: &str, title: &str) -> String {
     let title: String = title.chars().take(200).collect();
     if title.trim().is_empty() {
@@ -158,7 +173,12 @@ pub fn title_bar(url: &str, title: &str) -> String {
 }
 
 /// The text being typed in the address bar.
-#[cfg(any(test, all(target_os = "macos", target_arch = "aarch64")))]
+#[cfg(any(
+    test,
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Edit {
     /// What is typed.
@@ -170,7 +190,12 @@ pub struct Edit {
 }
 
 /// What a key or a character asks of the loop.
-#[cfg(any(test, all(target_os = "macos", target_arch = "aarch64")))]
+#[cfg(any(
+    test,
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
     /// Nothing.
@@ -188,7 +213,12 @@ pub enum Action {
 }
 
 /// The address bar: the URL shown and, while the user types, the edit.
-#[cfg(any(test, all(target_os = "macos", target_arch = "aarch64")))]
+#[cfg(any(
+    test,
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Bar {
     /// The URL the bar shows (the latest `Paint`'s, or the one asked for).
@@ -199,7 +229,12 @@ pub struct Bar {
     pub edit: Option<Edit>,
 }
 
-#[cfg(any(test, all(target_os = "macos", target_arch = "aarch64")))]
+#[cfg(any(
+    test,
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 impl Bar {
     /// Focus the bar, its URL selected.
     pub fn focus(&mut self) -> Action {
@@ -279,14 +314,24 @@ impl Bar {
 }
 
 /// The URLs a tab committed, the current one last, for going back.
-#[cfg(any(test, all(target_os = "macos", target_arch = "aarch64")))]
+#[cfg(any(
+    test,
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct History {
     urls: Vec<String>,
     going_back: bool,
 }
 
-#[cfg(any(test, all(target_os = "macos", target_arch = "aarch64")))]
+#[cfg(any(
+    test,
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 impl History {
     /// A `Paint` showed `url`.
     pub fn shown(&mut self, url: &str) {
@@ -314,7 +359,12 @@ impl History {
 
 /// The wheel's `delta` (120 a notch, positive away from the user) as device
 /// pixels to scroll, positive down.
-#[cfg(any(test, all(target_os = "macos", target_arch = "aarch64")))]
+#[cfg(any(
+    test,
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 pub fn wheel_pixels(delta: i16, scale: u64) -> i64 {
     let scale = i64::try_from(scale).unwrap_or(1);
     i64::from(delta).saturating_mul(-48).saturating_mul(scale) / 120
@@ -322,7 +372,12 @@ pub fn wheel_pixels(delta: i16, scale: u64) -> i64 {
 
 /// The scroll, in device pixels (positive down), that a key with DOM `keyCode`
 /// `code` asks for in a content area `page` pixels tall at `scale`.
-#[cfg(any(test, all(target_os = "macos", target_arch = "aarch64")))]
+#[cfg(any(
+    test,
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 pub fn key_scroll(code: u32, page: u32, scale: u64) -> Option<i64> {
     let page = (i64::from(page) / 8).saturating_mul(7);
     let line = 40i64.saturating_mul(i64::try_from(scale).unwrap_or(1));
@@ -336,7 +391,12 @@ pub fn key_scroll(code: u32, page: u32, scale: u64) -> Option<i64> {
 }
 
 /// RGBA8 premultiplied pixels as the window's `0x00RRGGBB`, over white.
-#[cfg(any(test, all(target_os = "macos", target_arch = "aarch64")))]
+#[cfg(any(
+    test,
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 pub fn window_pixels(rgba: &[u8]) -> Vec<u32> {
     picture::rgb_over_white(rgba)
         .as_chunks::<3>()
@@ -404,7 +464,11 @@ pub fn headless(
 
 /// The user's input on `tab`'s content area (`EventRecord::Input`): `kind` 0 a
 /// click, 1 a scroll, 2 a key; the scroll delta signed.
-#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+#[cfg(any(
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 pub fn input(host: &mut Host, tab: u64, kind: u64, (x, y): (u64, u64), delta: i64, key: u64) {
     host.event(EventRecord::Input {
         tab,
@@ -417,9 +481,15 @@ pub fn input(host: &mut Host, tab: u64, kind: u64, (x, y): (u64, u64), delta: i6
     });
 }
 
-/// The window loop, on macOS on Apple silicon.
-#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-pub mod mac {
+/// The window loop, on macOS on Apple silicon, on Linux and on Windows: the same
+/// loop over `clazel_window::Window`, whose three backends give the same calls.
+/// On Windows it has been compiled and never run.
+#[cfg(any(
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
+pub mod windowed {
     use std::time::Duration;
 
     use clazel::Host;

@@ -200,11 +200,15 @@ pub fn fixture(tag: &str) -> Result<Fixture, String> {
     })
 }
 
-/// Whether there is a Metal device; if not, why.
-pub fn metal() -> Result<(), String> {
-    clazel_gpu::metal::MetalBackend::new()
-        .map(drop)
-        .map_err(|e| e.what.to_owned())
+/// Whether there is a GPU device the GPU process can draw with (Metal on macOS,
+/// Vulkan on Linux, where lavapipe counts); if not, why.
+pub fn device() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    let made = clazel_gpu::metal::MetalBackend::new();
+    #[cfg(target_os = "linux")]
+    let made = clazel_gpu::vulkan::VulkanBackend::new(false);
+    made.map(drop)
+        .map_err(|e| format!("{} ({})", e.what, e.code))
 }
 
 /// A host whose renderer is the stand-in and whose GPU process is real.

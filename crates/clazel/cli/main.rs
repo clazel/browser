@@ -2,14 +2,16 @@
 //! `src/`: it only calls `Host`'s public functions).
 //!
 //! - `clazel [URL]`: the browser with a window of phase-5.md item 5.23
-//!   (`window.rs`), on macOS on Apple silicon in a window server session, at
-//!   URL, or with no page and the address bar focused. Elsewhere, or with
-//!   `--text`, the text-mode browser of phase-4.md item 4.15 (`browse.rs`),
-//!   which needs the URL. The host's log of frames goes to standard error.
+//!   (`window.rs`), on macOS on Apple silicon in a window server session, on
+//!   Linux with a local X display (`DISPLAY`) and on Windows, at URL, or with
+//!   no page and the address bar focused. Elsewhere, or with `--text`, the
+//!   text-mode browser of phase-4.md item 4.15 (`browse.rs`), which needs the
+//!   URL. The host's log of frames goes to standard error.
 //! - `clazel --headless OUT [--size WxH] [--wait S] URL`: render one page to
 //!   `OUT`, a PNG or (`.ppm`) a PPM, without a window (item 5.23).
 //! - `--gpu=hardware` with either ignores the driver blocklist (item 5.17c),
-//!   with a warning.
+//!   with a warning. `--gpu=software` starts every GPU process on the software
+//!   driver (lavapipe on Linux; macOS has none, so nothing is drawn there).
 //! - `clazel URL SCRIPT`: open a tab at URL running SCRIPT (operations, one
 //!   per line, in `clazel-renderer`'s format) and print what the renderer and
 //!   the kernel say to each other.
@@ -30,7 +32,12 @@ mod browse;
 mod demo;
 mod fetch;
 mod picture;
-#[cfg(any(test, all(target_os = "macos", target_arch = "aarch64")))]
+#[cfg(any(
+    test,
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 mod strip;
 #[cfg(test)]
 mod strip_tests;
@@ -145,7 +152,8 @@ fn main() -> ExitCode {
 
 fn usage() -> ExitCode {
     eprintln!(
-        "usage: clazel [--text | --headless OUT [--size WxH] [--wait S]] [--gpu=hardware] [URL] | \
+        "usage: clazel [--text | --headless OUT [--size WxH] [--wait S]] \
+         [--gpu=hardware | --gpu=software] [URL] | \
          clazel URL SCRIPT | clazel demo | clazel fetch URL"
     );
     ExitCode::from(2)
@@ -222,6 +230,10 @@ fn browse_command(renderer: PathBuf, args: &[String], url: Option<&str>, width: 
     if ignore {
         eprintln!("clazel: --gpu=hardware: the driver blocklist is ignored");
     }
+    // Item 5.17c's `--gpu=software`, here as far as the GPU process's start: every
+    // GPU process is started for the software driver. The kernel's part (falling
+    // back by itself after a refusal or a crash) is not wired to the host yet.
+    let software = flag("--gpu=software");
     // Item 5.23: renderers paired with a GPU process get its list socket
     // (`--list-fd`, added by the host) and the fonts to lay out in.
     let fonts = window::renderer_fonts();
@@ -237,6 +249,9 @@ fn browse_command(renderer: PathBuf, args: &[String], url: Option<&str>, width: 
         let mut c = Command::new(&gpu);
         if ignore {
             c.arg("--ignore-blocklist");
+        }
+        if software {
+            c.arg("--software");
         }
         c
     });
@@ -265,19 +280,34 @@ fn browse_command(renderer: PathBuf, args: &[String], url: Option<&str>, width: 
 
 /// Whether `browse` can open a window here, or why not.
 fn window_available() -> Result<(), &'static str> {
-    if !cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-        return Err("no window on this platform yet (phase-5.md items 5.22, 5.22a)");
-    }
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
     if !clazel_window::has_window_server() {
         return Err("no window server session");
     }
-    Ok(())
+    #[cfg(target_os = "linux")]
+    if !clazel_window::has_display() {
+        return Err("DISPLAY names no local X display");
+    }
+    // On Windows nothing is asked first: a process with no desktop to open a
+    // window on finds out when the window fails to open.
+    if cfg!(any(
+        all(target_os = "macos", target_arch = "aarch64"),
+        target_os = "linux",
+        windows
+    )) {
+        Ok(())
+    } else {
+        Err("no window on this platform (phase-5.md items 5.21 to 5.22a)")
+    }
 }
 
-#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+#[cfg(any(
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 fn browse_window(mut host: clazel::Host, url: Option<&str>, _width: usize) -> ExitCode {
-    match window::mac::run(&mut host, url) {
+    match window::windowed::run(&mut host, url) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("clazel: browse: {e}");
@@ -286,7 +316,11 @@ fn browse_window(mut host: clazel::Host, url: Option<&str>, _width: usize) -> Ex
     }
 }
 
-#[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
+#[cfg(not(any(
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+)))]
 fn browse_window(host: clazel::Host, url: Option<&str>, width: usize) -> ExitCode {
     match url {
         Some(url) => browse_stdio(host, url, width),

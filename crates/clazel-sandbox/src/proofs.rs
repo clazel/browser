@@ -15,14 +15,16 @@
 //!   32-bit syscall number (so, in particular, every number below 1024) with
 //!   the right architecture, and for every other architecture value (so, in
 //!   particular, the other supported architecture).
-//! - For the GPU process's program (item 5.21a: the renderer's list and
-//!   `GPU_EXTRA`, 37 instructions), on x86-64 and on aarch64: every other
-//!   architecture value is killed, whatever the syscall number. That the program
+//! - For the GPU process's program on a software driver (item 5.21a: the
+//!   renderer's list and `GPU_EXTRA`, 33 instructions), on x86-64 and on
+//!   aarch64: every other architecture value is killed, whatever the syscall
+//!   number. The hardware program (one more number) has no harness;
+//!   `tests/policies.rs` sweeps it. That the program
 //!   allows exactly its list for every 32-bit number under the right architecture
 //!   is **not** proven: a harness for it exceeded the machine's 8 GB cap during
 //!   symbolic execution (4.4 million steps), so it was removed. `tests/policies.rs`
 //!   sweeps every number below 1024 on both architectures instead. Neither says
-//!   whether the list is right, which is not measured.
+//!   whether the list is right: `GPU_EXTRA` states what was measured.
 //! - The validator and interpreter never panic, on any program of up to two
 //!   instructions with any field values, over any data.
 //!
@@ -152,7 +154,7 @@ fn real_allowlist_aarch64() {
     check_real_allowlist(Arch::Aarch64);
 }
 
-const GPU: usize = 31;
+const GPU: usize = 27;
 
 /// The GPU process's list for `arch` as an array: the renderer's, then
 /// `GPU_EXTRA`.
@@ -169,7 +171,7 @@ fn gpu_nums(arch: Arch) -> [u32; GPU] {
 /// whatever the syscall number.
 fn check_gpu_other_arch(arch: Arch) {
     let nums = gpu_nums(arch);
-    let prog: [SockFilter; 37] = build(arch.audit_arch(), &nums);
+    let prog: [SockFilter; 33] = build(arch.audit_arch(), &nums);
     let nr: u32 = kani::any();
     let other: u32 = kani::any();
     kani::assume(other != arch.audit_arch());

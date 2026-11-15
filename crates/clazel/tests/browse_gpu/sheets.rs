@@ -18,7 +18,7 @@
 use std::process::Command;
 use std::time::{Duration, Instant};
 
-use crate::gpu::{self, Fixture, fixture, metal, painted};
+use crate::gpu::{self, Fixture, device, fixture, painted};
 use crate::server::{self, Reply, Request, field, serve};
 use clazel::Host;
 use clazel_kernel::exec::records::EventRecord;
@@ -29,11 +29,11 @@ const DEJAVU: &str = concat!(
 );
 
 fn runs() -> bool {
-    match metal() {
+    match device() {
         Ok(()) => true,
         Err(why) => {
-            eprintln!("clazel sheets: skipped: no Metal device ({why})");
-            assert!(std::env::var_os("CI").is_none(), "no Metal device under CI");
+            eprintln!("clazel sheets: skipped: no GPU device ({why})");
+            assert!(std::env::var_os("CI").is_none(), "no GPU device under CI");
             false
         }
     }

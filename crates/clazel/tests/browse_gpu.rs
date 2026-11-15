@@ -1,7 +1,7 @@
 //! Phase-5.md item 5.23 through real processes, before the renderer draws (5.20):
 //! a stand-in renderer (`support/gpu.rs`) writes a hand-built display list to the
 //! list socket it inherits; the real GPU process (`clazel-gpu`, in its 5.21a
-//! sandbox, on Metal) draws it; the kernel turns its `FrameReady` into a `Paint`
+//! sandbox, on Metal or Vulkan) draws it; the kernel turns its `FrameReady` into a `Paint`
 //! under the kernel's URL; and `clazel browse --headless` writes the frame as a
 //! PNG and a PPM. Every image is compared with `clazel-gpu`'s software reference
 //! for the list, within one level per channel. `browse_window.rs` shows the same
@@ -14,10 +14,11 @@
 //! page's PNG, checked for its size, its background and some ink where its text
 //! is.
 //!
-//! macOS on Apple silicon only (the GPU process's only backend). Without a Metal
-//! device the tests say so and pass, except under CI, as `clazel-gpu`'s tests.
+//! macOS on Apple silicon (Metal) and Linux (Vulkan; lavapipe in CI): the GPU
+//! process's backends. Without a device the tests say so and pass, except under
+//! CI, as `clazel-gpu`'s tests.
 
-#![cfg(all(target_os = "macos", target_arch = "aarch64"))]
+#![cfg(any(all(target_os = "macos", target_arch = "aarch64"), target_os = "linux"))]
 
 #[path = "support/gpu.rs"]
 mod gpu;
@@ -36,17 +37,17 @@ use std::process::Command;
 
 use clazel::Host;
 use clazel_kernel::exec::records::EventRecord;
-use gpu::{Fixture, close, fixture, host, metal, open, painted, reference};
+use gpu::{Fixture, close, device, fixture, host, open, painted, reference};
 use picture::check::decode_png;
 use server::{Reply, Request, field, serve};
 
-/// Whether to run: a Metal device, or fail under CI.
+/// Whether to run: a GPU device, or fail under CI.
 fn runs() -> bool {
-    match metal() {
+    match device() {
         Ok(()) => true,
         Err(why) => {
-            eprintln!("clazel browse_gpu: skipped: no Metal device ({why})");
-            assert!(std::env::var_os("CI").is_none(), "no Metal device under CI");
+            eprintln!("clazel browse_gpu: skipped: no GPU device ({why})");
+            assert!(std::env::var_os("CI").is_none(), "no GPU device under CI");
             false
         }
     }

@@ -167,20 +167,18 @@ information, not noise.
 
 ## What is left of item 5.17b
 
-- **The Vulkan backend** (Linux, lavapipe in CI). It needs: `clazel-sys` linking only
-  `libvulkan`; hand-written `#[repr(C)]` structures checked against the
-  specification; extension functions (`VK_KHR_external_memory_fd`,
-  `VK_EXT_external_memory_dma_buf`) looked up with `vkGetDeviceProcAddr`, which needs
-  the checker's dispatcher casts (below) extended to a second kind of dispatcher, a
-  looked-up pointer rather than a symbol, decided when that backend is built; no WSI
-  extension; the SPIR-V committed here; and the atlas uploads as buffer copies like
-  Metal's, or rows copied into a mapped buffer by one audited call.
-- **The Direct3D 12 backend** (Windows, WARP as fallback). It needs: the checker
-  taught to accept a COM call through a vtable, with hand-written vtable declarations
-  audited against the headers; the shaders stored compiled for Direct3D (DXBC, unless
-  the prototype finds DXIL's signing workable) with a check like the SPIR-V one;
-  presenting with `CreateSwapChainForCompositionSurfaceHandle`, with no window.
-- **Neither can run on the development machine** (an Apple-silicon Mac).
+- **The Vulkan backend's buffer export.** The backend itself is built
+  (`src/vulkan.rs`, "The Vulkan backend" below). What is left is the plan's
+  zero-copy route: extension functions (`VK_KHR_external_memory_fd`,
+  `VK_EXT_external_memory_dma_buf`) looked up with `vkGetDeviceProcAddr`, which
+  needs the checker's dispatcher casts (below) extended to a second kind of
+  dispatcher, a looked-up pointer rather than a symbol. Today the target is read
+  back and its pixels are copied to the host (`src/channel.rs`).
+- **The Direct3D 12 backend's presentation** (Windows). The backend exists
+  (`src/d3d12.rs`, below) and, like the others, reads its target back; presenting
+  with `CreateSwapChainForCompositionSurfaceHandle`, with no window, is not built.
+- **The Direct3D 12 backend has never run**: it was written on the development
+  machine (an Apple-silicon Mac), where it can only be compiled.
 - **Intel Macs** are not supported by the Metal backend (shared-storage textures and
   `BOOL` as `bool` are Apple silicon's).
 - **The shared buffers and the process boundary** are items 5.18 and 5.21a.
@@ -206,8 +204,10 @@ built here, and what waits for other items:
   for 5.18 to take over (below).
 - **The software path is the same code on a software driver** (5.0(d): no second
   drawing backend): lavapipe on Linux, WARP on Windows. `SoftBackend` stays a test
-  double and is never a fallback. Neither software driver can be reached yet: the
-  Vulkan and Direct3D 12 backends are item 5.17b's rest.
+  double and is never a fallback. lavapipe is reached through the Vulkan backend
+  (`clazel-gpu --software`, `browse --gpu=software`, or by itself when the loader
+  lists no other device); WARP through the Direct3D 12 backend (`--software`, or
+  by itself when DXGI lists no hardware adapter), which has not run.
 
 ### Decisions
 
@@ -339,9 +339,10 @@ starting through `Gpu::start`, and were not run again under Miri here.
   `driverVersion` decoding) and DXGI's adapter description and driver version, with
   those backends. Metal's driver version (the OS version) would need a new audited
   `clazel-sys` call.
-- **The GPU process's sandbox**: macOS is below (item 5.21a); a sandbox's kill at
-  start counting as a refusal, and lavapipe's profile without device access, wait
-  for the GPU process and the Linux backend.
+- **The GPU process's sandbox**: macOS and Linux are below (item 5.21a). On Linux
+  a software device gets the list without `ioctl` (lavapipe's profile without
+  device access); a sandbox's kill counting as a refusal is the crash policy's,
+  which the host does not act on yet.
 - **The host's side**: `browse --gpu=software|hardware` and the warning, the
   software indicator in the address bar strip, and the notice in the content area
   (items 5.18 and 5.23).
@@ -384,8 +385,69 @@ CI; under Miri it does nothing.
 - a long-running or memory-starved GPU process;
 - the Mach port that will bring the host's surfaces (item 5.18).
 
-Linux and Windows have no GPU backend yet, so nothing in this crate enters their
-policies.
+### Linux (`sandbox::start_vulkan`)
+
+The order is in `src/sandbox.rs`: a check that the host turned off Mesa's
+on-disk shader cache (`MESA_SHADER_CACHE_DISABLE=true`, `sandbox::LINUX_ENVIRONMENT`;
+with a cold cache its worker thread wrote cache files after the filter and was
+killed for it, in 3 runs of `browse_gpu.rs` in 10); `no_new_privs` and the namespaces (user, mount,
+network, IPC; no PID namespace, after which the kernel refuses new threads) while
+there is one thread; the Vulkan backend; a warm-up frame of our own, drawn, read
+back and checked; Landlock with no rule; then the seccomp list on every thread at
+once. The list (`clazel-sandbox`'s `syscalls::GPU_EXTRA`) was measured on lavapipe
+on aarch64 Linux and narrowed to what was called; with a hardware device `ioctl`
+is added, which **no hardware driver has been measured with**. x86-64 has not been
+measured either.
+
+On Windows a running process cannot be confined, so the host starts the GPU
+process already inside its AppContainer and Job Object (`clazel-renderer`'s
+`launch`, with `clazel-sandbox`'s `GPU_*` policy: the renderer's, less the
+`win32k` lockdown, plus the `registryRead` capability, under its own container
+name). `sandbox::start_d3d12` checks that the process is in an AppContainer,
+makes the backend, and draws and checks the warm-up frame. **None of it has
+run.**
+
+## The Direct3D 12 backend
+
+`src/d3d12.rs`, over `clazel_sys::windows::d3d12`, in the shape of the Vulkan
+backend below: offscreen, read back, one submission per run of draws, each
+waited for. **Written on a Mac, compiled for `x86_64-pc-windows-msvc` without
+tests, never run.** What is checked without Windows: the structures, vtable
+slots and constants it passes, against the headers (`clazel-sys`'s `d3d12_abi`
+tests, which run on every target); the shaders' containers, and their bytes
+against the HLSL where `vkd3d-compiler` 1.19 is installed (`cargo xtask check`).
+What is not: every call's order and arguments, whether Direct3D accepts
+bytecode that `vkd3d-compiler` (not Microsoft's compiler) produced, and every
+pixel. Its differences from the Vulkan backend are listed at the top of the
+file: the atlas is kept in memory too and written whole after an upload, each
+draw's first quad is a constant (Direct3D numbers a draw's instances from 0),
+and copied rows are unpadded. The shaders are `shaders/quad.hlsl`.
+
+## The Vulkan backend
+
+`src/vulkan.rs`, over `clazel_sys::linux::vulkan` (46 Vulkan functions, every one
+in Vulkan 1.0, and `memcpy`; the audit of that change is outstanding). It draws
+offscreen into an `R8G8B8A8_UNORM` image with the committed SPIR-V and reads the
+target back; the file's head lists its choices (one submission for each run of
+draws, each waited for; storage buffers for the quads and the atlas; which device
+is chosen). The instance asks for Vulkan 1.1 and older devices are refused,
+because the SPIR-V uses the `StorageBuffer` storage class.
+
+**Where it has run**: only on lavapipe (Mesa 25.2.8, LLVM 20.1.2) in an aarch64
+Ubuntu 24.04 container on an Apple silicon Mac.
+
+- `tests/vulkan.rs`: every scene is within one level of the software reference
+  (the two mask scenes differ by one level in 128 and 192 channels, the rest by
+  nothing), and equals the pixels stored for aarch64 (`tests/pixels-lavapipe-aarch64`).
+- The Khronos validation layer (1.3.275) reports nothing over those tests. It
+  did report the SPIR-V's storage class against a 1.0 instance, which is why the
+  instance asks for 1.1.
+- `clazel`'s `tests/browse_gpu.rs` (16 tests: hand-built lists, real pages,
+  resizes, scrolls, a navigation, `browse --headless`) passes with the GPU
+  process in its sandbox.
+
+**Not run**: x86-64 (CI's architecture; no pixels are stored for it, so CI
+compares with the reference only), any hardware driver, another Mesa version.
 
 ## Item 5.23: the GPU process
 

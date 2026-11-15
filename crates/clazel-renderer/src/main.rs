@@ -43,6 +43,21 @@ fn list_fd() -> Option<u32> {
     args.get(i.checked_add(1)?)?.parse().ok()
 }
 
+/// The list socket, from its descriptor number: opened again through `/dev/fd`.
+#[cfg(not(windows))]
+fn open_list(n: u32) -> io::Result<std::fs::File> {
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(format!("/dev/fd/{n}"))
+}
+
+/// The list pipe, from the value of the handle this process inherited
+/// (`clazel_sys::windows::Inherited`, a duplicate of it).
+#[cfg(windows)]
+fn open_list(n: u32) -> io::Result<clazel_sys::windows::Inherited> {
+    clazel_sys::windows::Inherited::open(u64::from(n)).map_err(io::Error::other)
+}
+
 fn main() -> ExitCode {
     let width = width();
     // Fonts and the list socket are opened before the sandbox, which forbids
@@ -52,10 +67,7 @@ fn main() -> ExitCode {
     let fonts = clazel_renderer::page::fonts::Fonts::read(&refs);
     let list = match list_fd() {
         None => None,
-        Some(n) => match std::fs::OpenOptions::new()
-            .write(true)
-            .open(format!("/dev/fd/{n}"))
-        {
+        Some(n) => match open_list(n) {
             Ok(f) => Some(f),
             Err(e) => {
                 eprintln!("clazel-renderer: cannot open the list socket {n}: {e}");
