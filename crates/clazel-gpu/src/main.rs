@@ -145,7 +145,12 @@ fn run(args: Args) -> Result<String, String> {
     use clazel_gpu::process::{Server, ready_frame, refused_frame, run};
     use clazel_gpu::start::{Check, Launch, Mode};
 
+    // Both channels live until the process exits, never dropped: a debug build's
+    // std checks a descriptor it drops with `fcntl(F_GETFD)`, which the seccomp
+    // filter refuses by killing the process (`SIGSYS`), before the reason it
+    // ended reaches standard error. Measured: every debug GPU process died so.
     let (list, surface) = channels(args)?;
+    let (list, surface) = (Box::leak(Box::new(list)), Box::leak(Box::new(surface)));
     let backend = backend(args.software)?;
     let launch = Launch {
         mode: if args.software {
