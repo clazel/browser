@@ -149,8 +149,8 @@ impl Host {
                 OutputRecord::Close { conn } => self.net_op(conn, Op::Close, &mut failed),
                 show @ OutputRecord::Show { .. } => self.shown.push(show),
                 // The Sub* outputs are carried out above. Item 5.17c: the kernel answers only
-                // `GpuExited`, `GpuSoftware` and `GpuSiteExit` with the others, and this host
-                // sends none of them yet (no software mode, no exit watch), so none arrives.
+                // `GpuExited`, `GpuSoftware` and `GpuSiteExit` with the others; this host sends
+                // none yet (no software mode; a GPU process's end is only logged, `Gpus::gone`).
                 OutputRecord::SubConnect { .. }
                 | OutputRecord::SubSend { .. }
                 | OutputRecord::SubClose { .. }
@@ -160,9 +160,7 @@ impl Host {
                 paint @ OutputRecord::Paint { .. } => self.shown.push(paint),
             }
         }
-        for (id, why) in dead {
-            self.exit(id, why);
-        }
+        dead.into_iter().for_each(|(id, why)| self.exit(id, why));
         for conn in failed {
             self.net_report(conn, Report::Failed("write failed".to_owned()));
         }
@@ -267,6 +265,7 @@ impl Host {
                 self.event(EventRecord::FromGpu { id, bytes });
             }
             Ok(Ev::Gpu(id, GpuReport::Pixels(frame))) => self.gpus.keep(id, frame),
+            Ok(Ev::Gpu(id, GpuReport::Gone(why))) => self.gpus.gone(id, &why, &mut self.log),
             Ok(_) => {}
             Err(_) => {
                 // Idle, the kernel's clock still moves, so its timeouts fire.
