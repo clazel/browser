@@ -365,8 +365,12 @@ fn append_attribute_leaves_every_other_field() {
     a.append_attribute(e, attr(Some(Namespace::Xml), Some("xml"), "lang", "en"));
     let after = element_fields(&a, e);
     let mut want = before;
-    want.attrs
-        .push(("xml", Some("xml".to_owned()), "lang".to_owned(), "en".to_owned()));
+    want.attrs.push((
+        "xml",
+        Some("xml".to_owned()),
+        "lang".to_owned(),
+        "en".to_owned(),
+    ));
     assert_eq!(after, want);
     assert_eq!(after.prefix.as_deref(), Some("pfx"));
     assert_eq!(after.form_owner, Some(form));
@@ -400,7 +404,11 @@ fn create_template_contents_leaves_every_other_field() {
 /// to set it apart).
 fn document_fields(a: &Arena) -> (&'static str, String, String) {
     match a.kind(0) {
-        ExecKind::Document { mode, url, base_url } => (
+        ExecKind::Document {
+            mode,
+            url,
+            base_url,
+        } => (
             match mode {
                 DocumentMode::NoQuirks => "no-quirks",
                 DocumentMode::Quirks => "quirks",

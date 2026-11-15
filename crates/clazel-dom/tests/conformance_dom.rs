@@ -550,7 +550,11 @@ fn mode_copy(m: &DocumentMode) -> DocumentMode {
 /// under test).
 fn bare(kind: &ExecKind) -> ExecKind {
     match kind {
-        ExecKind::Document { mode, url, base_url } => ExecKind::Document {
+        ExecKind::Document {
+            mode,
+            url,
+            base_url,
+        } => ExecKind::Document {
             mode: mode_copy(mode),
             url: url.clone(),
             base_url: base_url.clone(),
