@@ -194,17 +194,35 @@ fn wrap_at_any() {
     }
 }
 
-/// Measuring: any measure, any unit, any advance.
+/// Measuring, stated from CSS Text 3 §4.1.2 Phase II and not through the
+/// implementation's `takes_width`: any measure, any unit, any advance.
+/// Step 1, "A sequence of collapsible spaces at the beginning of a line is
+/// removed": a collapsible space on a line that has only had such spaces
+/// leaves the measure as it was. §5.5: a forced break is not content that
+/// takes width. Any other unit moves the pen by its advance (saturating)
+/// and ends the line's leading run; a character or atomic inline counts
+/// for the width that must fit, and a collapsible space after content
+/// moves the pen but not the width for fit (step 3: "A sequence of
+/// collapsible spaces at the end of a line is removed").
 #[kani::proof]
 fn measure_add_any() {
     let m: Measure = kani::any();
     let u: Unit = kani::any();
     let advance: i32 = kani::any();
     let after = m.add(&u, advance);
-    if !m.takes_width(&u) {
+    if (m.leading && u.kind == Kind::CollapsibleSpace) || u.kind == Kind::ForcedBreak {
         assert!(after == m);
     } else {
         assert!(!after.leading);
+        assert!(after.pen == m.pen.saturating_add(advance));
+        // (Except U+1680 OGHAM SPACE MARK, which step 3 also removes at the
+        // end of a line when `white-space` collapses.)
+        if (u.kind == Kind::Char || u.kind == Kind::Atomic) && u.ch != '\u{1680}' {
+            assert!(after.fit == after.pen);
+        }
+        if u.kind == Kind::CollapsibleSpace {
+            assert!(after.fit == m.fit);
+        }
     }
 }
 

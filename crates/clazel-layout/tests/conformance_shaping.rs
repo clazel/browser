@@ -26,7 +26,8 @@
 //! mark (we place marks at the pen with no offset; HarfBuzz's fallback mark
 //! positioning moves them).
 //!
-//! Both suites gate, as `clazel-font`'s system font suite does: the vendored
+//! Both suites gate (the system suite's result is machine-dependent
+//! evidence, the vendored suite's is exact: see `VENDORED_EXPECTED`), as `clazel-font`'s system font suite does: the vendored
 //! suite's input is fixed, and the system suite runs on whatever fonts each
 //! CI runner has. A difference on a system font is never ignored: it is a
 //! shaper bug to fix, or a new kind below with its reason. On failure the
@@ -41,15 +42,25 @@
 //! Expected differences. A case that differs is counted under the first
 //! of these that applies, in this order: first what the case itself shows,
 //! then what the face has (so a face-wide name counts only cases nothing
-//! more specific explains):
+//! more specific explains). Each reason excuses only the kind of difference
+//! it explains. Differences are compared cluster by cluster. Reasons that
+//! change glyphs (composition, unmapped characters, AAT substitutions) may
+//! change glyph ids, but composition and unmapped characters only in the
+//! window of the characters they concern; any differing cluster outside the
+//! window (the residue) must have identical glyph ids and be explained by a
+//! positioning reason (the kern table split run by run, or a face-wide
+//! positioning trait). Every other reason is positioning only: the glyph
+//! ids and clusters must be identical.
 //!
 //! - `canonical composition`: the case has a combining mark and HarfBuzz
 //!   drew fewer glyphs: its normalization composed a base and mark into
 //!   the precomposed character the face maps (`y` with U+0308 to `ÿ`), where
 //!   we map each character as it is (listed in `shape`'s modelling choices).
+//!   Window: two characters before to one after each combining mark.
 //! - `unmapped character`: the face does not map a character of the case,
 //!   and HarfBuzz's normalization (composing or decomposing to what the
-//!   face maps) and space fallback change the glyphs.
+//!   face maps) and space fallback change the glyphs. Window: the
+//!   character's base and combining marks, and one character either side.
 //! - `kern table split`: the face is kerned from its `kern` table, and
 //!   HarfBuzz splits each pair's value between the two glyphs (half to the
 //!   first glyph's advance, the rest to the second's advance and offset)
@@ -57,32 +68,39 @@
 //!   if every glyph's position (pen plus offset) and the run's width agree.
 //! - `GDEF mark classes`: HarfBuzz reads `GDEF` glyph classes to decide
 //!   what a mark is, and gives a mark a zero advance; we use the
-//!   character's block. Counted when every glyph whose advance differs is
-//!   a `GDEF` mark (class 3) to which HarfBuzz gave zero advance (Times New
-//!   Roman Bold Italic classes `"` as a mark), or the case has a
-//!   combining mark whose advance differs and the face has `GDEF` classes.
-//! - `marks in kern pairs`: the case has a combining mark and the face is
-//!   kerned. We skip marks when forming pairs; HarfBuzz skips them only
+//!   character's block. Counted when the glyph ids, clusters and the offsets
+//!   of non-marks agree, at least one advance differs, and every glyph whose
+//!   advance differs is a `GDEF` mark (class 3) to which HarfBuzz gave zero
+//!   advance (Times New Roman Bold Italic classes `"` as a mark).
+//! - `marks in kern pairs`: positioning only; the case has a combining mark
+//!   and the face is kerned, and every differing cluster is the mark or
+//!   next to one. We skip marks when forming pairs; HarfBuzz skips them only
 //!   for a lookup whose `lookupFlag` says so, and only glyphs `GDEF` (or
 //!   the character's category) calls marks.
 //! - `AAT tables`: the face has `morx`, `mort` or `kerx`, Apple's layout
 //!   tables, which `rustybuzz` applies (substitutions included, which no
-//!   feature setting turns off) and we do not read.
-//! - `Apple kern table`: the face's `kern` table is Apple's version 1,
-//!   which `clazel-font` does not read (5.9) and `rustybuzz` does.
-//! - `kern subtable formats`: the face's `kern` table has subtables we do
-//!   not use (format 2, cross-stream or minimum values; 5.9).
-//! - `non-pair lookups under kern`: the face's `kern` feature has lookups
-//!   that are not pair adjustment (Euphemia UCAS has a single adjustment
-//!   that narrows the space), which HarfBuzz applies and H1 does not.
-//! - `unordered GPOS`: a `kern` lookup's Coverage, ClassDef or PairSet is
-//!   not in the order the chapters require, so each engine's bisection may
-//!   find a different element.
-//! - `GPOS without kern for the script`: the face has `GPOS`, but the
-//!   script table chosen for Latin (the first listed of `latn`, `DFLT`,
-//!   `dflt`) has no `kern` lookup, so we kern it from its `kern` table or
-//!   not at all, where HarfBuzz may also apply the `GPOS` features it
-//!   always applies (a LangSys's required feature).
+//!   feature setting turns off, so any difference, glyph ids too) and we do
+//!   not read.
+//! - `Apple kern table`: positioning only; the face's `kern` table is
+//!   Apple's version 1, which `clazel-font` does not read (5.9) and
+//!   `rustybuzz` does.
+//! - `kern subtable formats`: positioning only; the face's `kern` table has
+//!   subtables we do not use (format 2, cross-stream or minimum values; 5.9).
+//! - `non-pair lookups under kern`: positioning only; the face's `kern`
+//!   feature has lookups that are not pair adjustment (Euphemia UCAS has a
+//!   single adjustment that narrows the space), which HarfBuzz applies and
+//!   H1 does not.
+//! - `unordered GPOS`: positioning only; a `kern` lookup's Coverage,
+//!   ClassDef or PairSet is not in the order the chapters require, so each
+//!   engine's bisection may find a different element.
+//! - `GPOS without kern for the script`: positioning only; the face has
+//!   `GPOS`, but the script table chosen for Latin (the first listed of
+//!   `latn`, `DFLT`, `dflt`) has no `kern` lookup, so we kern it from its
+//!   `kern` table or not at all, where HarfBuzz may also apply the `GPOS`
+//!   features it always applies (a LangSys's required feature).
+//!
+//! The vendored suite pins its expected differences per case
+//! (`VENDORED_EXPECTED`); the system suite cannot.
 
 use clazel_font::file::FontFile;
 use clazel_font::kern::coverage;
@@ -239,6 +257,10 @@ struct Tally {
     failing_faces: BTreeMap<String, u64>,
     /// Faces by kerning table.
     kerning: BTreeMap<&'static str, u64>,
+    /// Faces whose cases were taken (readable and parsed by both engines).
+    faces: u64,
+    /// Every expected difference: `(file#face, text, reason)`.
+    xfail_cases: Vec<(String, String, &'static str)>,
 }
 
 impl Tally {
@@ -264,6 +286,7 @@ impl Tally {
             self.xfail_total(),
             self.fail
         );
+        println!("  faces shaped: {}", self.faces);
         for (k, n) in &self.kerning {
             println!("  faces kerned from {k}: {n}");
         }
@@ -288,7 +311,6 @@ struct FaceTraits {
     apple_kern: bool,
     kern_formats: bool,
     unordered_gpos: bool,
-    gdef_classes: bool,
     gpos_without_kern: bool,
 }
 
@@ -373,14 +395,6 @@ fn traits(data: &[u8], index: u32, face: &Face<'_>, shaper: &Shaper<'_>) -> Face
         apple_kern: has(face, b"kern") && face.kern().is_err() && table != KerningTable::Gpos,
         kern_formats: kern_formats && table == KerningTable::Kern,
         unordered_gpos,
-        // GDEF's glyphClassDefOffset (at 4) is non-zero.
-        gdef_classes: face
-            .directory()
-            .table(Tag(*b"GDEF"))
-            .ok()
-            .flatten()
-            .and_then(|d| d.get(4..6))
-            .is_some_and(|o| o != [0, 0]),
         gpos_without_kern: has(face, b"GPOS") && table != KerningTable::Gpos,
     }
 }
@@ -436,9 +450,62 @@ fn positions(advances_offsets: impl Iterator<Item = (i32, i32)>) -> (Vec<i64>, i
     (out, pen)
 }
 
-/// Compare one case; `None` if it agrees, else the kinds of difference
-/// that may explain it and a message.
-fn compare(ours: &[UnitGlyph], theirs: &[Theirs]) -> Option<(Vec<&'static str>, String)> {
+/// How one case differs from rustybuzz.
+struct Diff {
+    /// Kinds of difference that may explain it (`glyphs`, `marks`, `split`).
+    kinds: Vec<&'static str>,
+    message: String,
+    /// Same glyph count, and per glyph the same id and cluster.
+    ids_same: bool,
+    /// Some glyph that is not a combining mark has another x or y offset.
+    offsets_differ: bool,
+    /// Indices of the glyphs whose advance differs (only if `ids_same`).
+    advance_diffs: Vec<usize>,
+    /// Byte offsets of the clusters whose glyphs (ids, advances, and the
+    /// offsets of non-marks) differ between the two engines, compared
+    /// cluster by cluster, so that it works when the glyph counts differ.
+    clusters: Vec<usize>,
+}
+
+/// One glyph of a cluster, as compared: id, advance, offsets (zero for a
+/// combining mark, whose offset is not compared).
+type Cell = (u32, i32, i32, i32);
+
+/// The byte offsets of `text`'s clusters that differ (see [`Diff`]).
+fn differing_clusters(text: &str, ours: &[UnitGlyph], theirs: &[Theirs]) -> Vec<usize> {
+    let mark_at = |cluster: usize| {
+        text.get(cluster..)
+            .and_then(|r| r.chars().next())
+            .is_some_and(is_combining_mark)
+    };
+    let mut a: BTreeMap<usize, Vec<Cell>> = BTreeMap::new();
+    let mut b: BTreeMap<usize, Vec<Cell>> = BTreeMap::new();
+    for g in ours {
+        let (x, y) = if g.mark {
+            (0, 0)
+        } else {
+            (g.x_offset, g.y_offset)
+        };
+        a.entry(g.cluster)
+            .or_default()
+            .push((u32::from(g.glyph), g.x_advance, x, y));
+    }
+    for g in theirs {
+        let c = usize::try_from(g.cluster).unwrap_or(usize::MAX);
+        let (x, y) = if mark_at(c) {
+            (0, 0)
+        } else {
+            (g.x_offset, g.y_offset)
+        };
+        b.entry(c).or_default().push((g.glyph, g.x_advance, x, y));
+    }
+    let keys: std::collections::BTreeSet<usize> = a.keys().chain(b.keys()).copied().collect();
+    keys.into_iter().filter(|k| a.get(k) != b.get(k)).collect()
+}
+
+/// Compare one case; `None` if it agrees.
+fn compare(text: &str, ours: &[UnitGlyph], theirs: &[Theirs]) -> Option<Diff> {
+    let clusters = differing_clusters(text, ours, theirs);
     let same_ids = ours.len() == theirs.len()
         && ours.iter().zip(theirs).all(|(o, t)| {
             u32::from(o.glyph) == t.glyph && u32::try_from(o.cluster).ok() == Some(t.cluster)
@@ -446,13 +513,23 @@ fn compare(ours: &[UnitGlyph], theirs: &[Theirs]) -> Option<(Vec<&'static str>, 
     if !same_ids {
         let o: Vec<u16> = ours.iter().map(|g| g.glyph).collect();
         let t: Vec<u32> = theirs.iter().map(|g| g.glyph).collect();
-        return Some((vec!["glyphs"], format!("glyphs {o:?}, rustybuzz {t:?}")));
+        return Some(Diff {
+            kinds: vec!["glyphs"],
+            message: format!("glyphs {o:?}, rustybuzz {t:?}"),
+            ids_same: false,
+            offsets_differ: false,
+            advance_diffs: Vec::new(),
+            clusters,
+        });
     }
     let mut kinds = Vec::new();
-    let advances_differ = ours
+    let advance_diffs: Vec<usize> = ours
         .iter()
         .zip(theirs)
-        .any(|(o, t)| o.x_advance != t.x_advance);
+        .enumerate()
+        .filter(|(_, (o, t))| o.x_advance != t.x_advance)
+        .map(|(i, _)| i)
+        .collect();
     let offsets_differ = ours
         .iter()
         .zip(theirs)
@@ -461,7 +538,7 @@ fn compare(ours: &[UnitGlyph], theirs: &[Theirs]) -> Option<(Vec<&'static str>, 
         .iter()
         .zip(theirs)
         .any(|(o, t)| o.mark && o.x_advance != t.x_advance);
-    if !advances_differ && !offsets_differ {
+    if advance_diffs.is_empty() && !offsets_differ {
         return None;
     }
     if mark_advances_differ {
@@ -484,7 +561,139 @@ fn compare(ours: &[UnitGlyph], theirs: &[Theirs]) -> Option<(Vec<&'static str>, 
         .iter()
         .map(|g| (g.x_advance, g.x_offset, g.y_offset))
         .collect();
-    Some((kinds, format!("(advance, x, y) {o:?}, rustybuzz {t:?}")))
+    Some(Diff {
+        kinds,
+        message: format!("(advance, x, y) {o:?}, rustybuzz {t:?}"),
+        ids_same: true,
+        offsets_differ,
+        advance_diffs,
+        clusters,
+    })
+}
+
+/// The char index of the character at byte offset `byte` of `text`.
+fn char_index(text: &str, byte: usize) -> Option<usize> {
+    text.char_indices().position(|(b, _)| b == byte)
+}
+
+/// The windows (inclusive char index ranges) around each combining mark
+/// `m`: `[m - before, m + after]`.
+fn mark_windows(text: &str, before: usize, after: usize) -> Vec<(usize, usize)> {
+    text.chars()
+        .enumerate()
+        .filter(|(_, c)| is_combining_mark(*c))
+        .map(|(m, _)| (m.saturating_sub(before), m.saturating_add(after)))
+        .collect()
+}
+
+/// The windows around each character the face does not map: its base and
+/// combining marks (HarfBuzz normalizes the whole sequence), and one
+/// character either side (a kern pair with a glyph that changed).
+fn unmapped_windows(text: &str, face: &Face<'_>) -> Vec<(usize, usize)> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut windows = Vec::new();
+    for (i, c) in chars.iter().enumerate() {
+        if matches!(face.glyph_index(*c), Ok(Some(_))) {
+            continue;
+        }
+        let mut lo = i;
+        while lo > 0 && chars.get(lo).copied().is_some_and(is_combining_mark) {
+            lo = lo.saturating_sub(1);
+        }
+        let mut hi = i;
+        while chars
+            .get(hi.saturating_add(1))
+            .copied()
+            .is_some_and(is_combining_mark)
+        {
+            hi = hi.saturating_add(1);
+        }
+        windows.push((lo.saturating_sub(1), hi.saturating_add(1)));
+    }
+    windows
+}
+
+/// The differing clusters (byte offsets) outside every window.
+fn outside(text: &str, clusters: &[usize], windows: &[(usize, usize)]) -> Vec<usize> {
+    clusters
+        .iter()
+        .copied()
+        .filter(|&c| {
+            !char_index(text, c)
+                .is_some_and(|ci| windows.iter().any(|&(lo, hi)| ci >= lo && ci <= hi))
+        })
+        .collect()
+}
+
+/// Whether the glyphs of the clusters `residual` (differing, outside the
+/// windows of a glyph-changing reason) are explained by a positioning
+/// reason: the glyph ids agree cluster by cluster, and either the face is
+/// kerned from its `kern` table and each run of consecutive such clusters
+/// splits a pair's values (every glyph's position relative to the run's
+/// start, and the run's width, agree), or the face has a face-wide
+/// positioning trait.
+fn residual_is_positioning(
+    text: &str,
+    ours: &[UnitGlyph],
+    theirs: &[Theirs],
+    residual: &[usize],
+    kern_table: bool,
+    traits: &FaceTraits,
+) -> bool {
+    let of = |c: usize| -> Vec<&UnitGlyph> { ours.iter().filter(|g| g.cluster == c).collect() };
+    let tf = |c: usize| -> Vec<&Theirs> {
+        theirs
+            .iter()
+            .filter(|g| usize::try_from(g.cluster).ok() == Some(c))
+            .collect()
+    };
+    let ids_agree = residual.iter().all(|&c| {
+        let (a, b) = (of(c), tf(c));
+        !a.is_empty()
+            && a.len() == b.len()
+            && a.iter().zip(&b).all(|(x, y)| u32::from(x.glyph) == y.glyph)
+    });
+    if !ids_agree {
+        return false;
+    }
+    if traits.apple_kern
+        || traits.kern_formats
+        || traits.non_pair_kern
+        || traits.unordered_gpos
+        || traits.gpos_without_kern
+    {
+        return true;
+    }
+    if !kern_table {
+        return false;
+    }
+    // Runs of residual clusters at consecutive char indices.
+    let idx: Vec<(usize, usize)> = residual
+        .iter()
+        .filter_map(|&c| char_index(text, c).map(|i| (i, c)))
+        .collect();
+    let mut runs: Vec<Vec<usize>> = Vec::new();
+    let mut last: Option<usize> = None;
+    for &(i, c) in &idx {
+        if last.is_some_and(|l| l.saturating_add(1) == i) {
+            if let Some(r) = runs.last_mut() {
+                r.push(c);
+            }
+        } else {
+            runs.push(vec![c]);
+        }
+        last = Some(i);
+    }
+    runs.iter().all(|run| {
+        let a: Vec<&UnitGlyph> = run.iter().flat_map(|&c| of(c)).collect();
+        let b: Vec<&Theirs> = run.iter().flat_map(|&c| tf(c)).collect();
+        let pa = positions(a.iter().map(|g| (g.x_advance, g.x_offset)));
+        let pb = positions(b.iter().map(|g| (g.x_advance, g.x_offset)));
+        pa == pb
+            && a.iter()
+                .zip(&b)
+                .all(|(x, y)| x.mark || x.y_offset == y.y_offset)
+    })
 }
 
 /// Shape every `stride`-th case (from `offset`) in every face of `data`.
@@ -516,6 +725,7 @@ fn compare_file(
         };
         let n = t.kerning.entry(key).or_default();
         *n = n.saturating_add(1);
+        t.faces = t.faces.saturating_add(1);
         // Skip parsing for rustybuzz a face none of whose cases is taken
         // (under Miri, where the stride exceeds a face's cases).
         let skip = first
@@ -598,47 +808,95 @@ fn compare_file(
                     y_offset: p.y_offset,
                 })
                 .collect();
-            let Some((kinds, message)) = compare(&ours, &theirs) else {
+            let Some(diff) = compare(text, &ours, &theirs) else {
                 t.pass = t.pass.saturating_add(1);
                 continue;
             };
-            let unmapped = text
-                .chars()
-                .any(|c| !matches!(face.glyph_index(c), Ok(Some(_))));
+            let message = format!(
+                "{} [differing char indices {:?}]",
+                diff.message,
+                diff.clusters
+                    .iter()
+                    .map(|&c| char_index(text, c))
+                    .collect::<Vec<_>>()
+            );
+            let message = message.as_str();
+            let kinds = &diff.kinds;
             let has_mark = text.chars().any(is_combining_mark);
-            // Every glyph whose advance differs is a GDEF mark that
+            let kerned = shaper.kerning_table() != KerningTable::None;
+            // GDEF mark classes: glyph ids, clusters and the offsets of
+            // non-marks agree; at least one advance differs; and every
+            // glyph whose advance differs is a GDEF mark (class 3) that
             // HarfBuzz gave a zero advance.
-            let gdef_zeroed = ours.len() == theirs.len()
-                && ours.iter().zip(&theirs).all(|(o, t)| {
-                    o.x_advance == t.x_advance
-                        || (t.x_advance == 0 && gdef_class(&face, o.glyph) == 3)
+            let gdef_zeroed = diff.ids_same
+                && !diff.offsets_differ
+                && !diff.advance_diffs.is_empty()
+                && diff.advance_diffs.iter().all(|&i| {
+                    matches!((ours.get(i), theirs.get(i)),
+                        (Some(o), Some(t)) if t.x_advance == 0 && gdef_class(&face, o.glyph) == 3)
                 });
             let face_traits =
                 face_traits.get_or_insert_with(|| traits(data, index, &face, &latin_shaper));
-            // Per-case causes first, then what the face has.
-            let explained: Option<&'static str> = if has_mark && theirs.len() < ours.len() {
+            // Each reason excuses only the kind of difference it explains.
+            // Reasons that change glyphs (composition, unmapped characters,
+            // AAT substitutions) may differ in ids, but only at the clusters
+            // they affect; every other reason is about positioning, so the
+            // glyph ids and clusters must be identical.
+            let positioning_only = diff.ids_same;
+            let kern_table = shaper.kerning_table() == KerningTable::Kern;
+            // Glyph-changing reasons: the differing clusters inside their
+            // windows are excused; the rest (the residue) must be
+            // positioning explained by another reason.
+            let composed = has_mark && theirs.len() < ours.len();
+            let comp_w = if composed {
+                mark_windows(text, 2, 1)
+            } else {
+                Vec::new()
+            };
+            let unm_w = unmapped_windows(text, &face);
+            let both_w: Vec<(usize, usize)> = comp_w.iter().chain(&unm_w).copied().collect();
+            let residue_ok = |w: &[(usize, usize)]| {
+                let r = outside(text, &diff.clusters, w);
+                r.is_empty()
+                    || residual_is_positioning(text, &ours, &theirs, &r, kern_table, face_traits)
+            };
+            let glyph_reason: Option<&'static str> = if positioning_only {
+                None
+            } else if !comp_w.is_empty() && residue_ok(&comp_w) {
                 Some("canonical composition")
-            } else if unmapped {
+            } else if !unm_w.is_empty() && residue_ok(&unm_w) {
                 Some("unmapped character")
+            } else if !both_w.is_empty() && residue_ok(&both_w) {
+                // Both in one text: counted under the second.
+                Some("unmapped character")
+            } else {
+                None
+            };
+            let explained: Option<&'static str> = if glyph_reason.is_some() {
+                glyph_reason
             } else if kinds.contains(&"split") && shaper.kerning_table() == KerningTable::Kern {
                 Some("kern table split")
-            } else if gdef_zeroed
-                || (has_mark && face_traits.gdef_classes && kinds.contains(&"marks"))
-            {
+            } else if gdef_zeroed {
                 Some("GDEF mark classes")
-            } else if has_mark && shaper.kerning_table() != KerningTable::None {
+            } else if positioning_only
+                && has_mark
+                && kerned
+                && !diff.clusters.is_empty()
+                && outside(text, &diff.clusters, &mark_windows(text, 1, 1)).is_empty()
+            {
                 Some("marks in kern pairs")
             } else if face_traits.aat {
+                // morx/mort substitutions change glyphs anywhere.
                 Some("AAT tables")
-            } else if face_traits.apple_kern {
+            } else if positioning_only && face_traits.apple_kern {
                 Some("Apple kern table")
-            } else if face_traits.kern_formats {
+            } else if positioning_only && face_traits.kern_formats {
                 Some("kern subtable formats")
-            } else if face_traits.non_pair_kern {
+            } else if positioning_only && face_traits.non_pair_kern {
                 Some("non-pair lookups under kern")
-            } else if face_traits.unordered_gpos {
+            } else if positioning_only && face_traits.unordered_gpos {
                 Some("unordered GPOS")
-            } else if face_traits.gpos_without_kern {
+            } else if positioning_only && face_traits.gpos_without_kern {
                 Some("GPOS without kern for the script")
             } else {
                 None
@@ -650,6 +908,8 @@ fn compare_file(
                     }
                     let n = t.xfail.entry(k).or_default();
                     *n = n.saturating_add(1);
+                    t.xfail_cases
+                        .push((format!("{name}#{index}"), text.to_owned(), k));
                 }
                 None => t.failure(
                     format!("{name}#{index}"),
@@ -669,6 +929,36 @@ fn script_name(s: Script) -> &'static str {
     }
 }
 
+/// The vendored suite's expected differences, per case: `(file#face, text,
+/// reason)`. Its input is fixed (the vendored fonts, the cases above), so
+/// the list is exact: a case that differs and is not here fails, and so
+/// does a case here that now agrees (an unexpected pass: the shaper
+/// improved, or the test went blind). Measured with `SHAPE_DEBUG`.
+const VENDORED_EXPECTED: &[(&str, &str, &str)] = &[
+    (
+        "fonts-dejavu/DejaVuSerif.ttf#0",
+        COMBINING,
+        "canonical composition",
+    ),
+    (
+        "fonts-source-serif/SourceSerif4-Regular.ttf#0",
+        COMBINING,
+        "canonical composition",
+    ),
+    // Source Serif 4 lacks the precomposed polytonic Greek characters.
+    (
+        "fonts-source-serif/SourceSerif4-Regular.ttf#0",
+        "Πολυτονικό: ἀρχὴ ἡμέρας, Ἀθῆναι, ᾠδή",
+        "unmapped character",
+    ),
+];
+
+const COMBINING: &str = "Combining marks: q\u{303} x\u{301}y\u{308} a\u{30A}\u{301}b n\u{331}";
+
+/// Faces of the vendored fonts that both engines read and that we shape
+/// (measured; Source Code Pro is CFF, which `clazel-font` does not read).
+const VENDORED_FACES: u64 = 5;
+
 #[test]
 fn vendored_fonts() {
     let stride = if cfg!(miri) { MIRI_STRIDE } else { 1 };
@@ -681,6 +971,45 @@ fn vendored_fonts() {
     println!("cases per face: {}", all.len());
     t.report("vendored fonts vs rustybuzz");
     assert!(t.fail == 0, "{} unexpected differences", t.fail);
+    // Never a silent success: zero faces or zero cases would pass the
+    // check above with nothing compared.
+    let total = t
+        .pass
+        .saturating_add(t.xfail_total())
+        .saturating_add(t.fail);
+    assert!(total > 0, "the vendored suite compared no cases");
+    assert!(t.pass > 0, "the vendored suite had no agreeing case");
+    assert_eq!(
+        t.faces, VENDORED_FACES,
+        "faces shaped in the vendored suite"
+    );
+    if cfg!(miri) {
+        // Only a stride of the cases ran: the per-case list is checked in
+        // normal runs.
+        return;
+    }
+    assert_eq!(
+        total,
+        VENDORED_FACES.saturating_mul(all.len() as u64),
+        "every case of every face is taken"
+    );
+    let mut got: Vec<(&str, &str, &str)> = t
+        .xfail_cases
+        .iter()
+        .map(|(f, x, r)| (f.as_str(), x.as_str(), *r))
+        .collect();
+    got.sort_unstable();
+    let mut want: Vec<(&str, &str, &str)> = VENDORED_EXPECTED.to_vec();
+    want.sort_unstable();
+    assert!(
+        !got.is_empty(),
+        "expected differences were pinned, none seen"
+    );
+    assert_eq!(
+        got, want,
+        "the vendored suite's expected differences changed (new difference \
+         with a reason, or an unexpected pass)"
+    );
 }
 
 /// Font directories by OS, read without enumeration services (5.0(c), S1).
@@ -741,6 +1070,25 @@ fn system_fonts() {
         );
     }
     println!("system font files read: {read}");
+    // This suite depends on the machine: its counts and expected
+    // differences cannot be pinned, and a machine without fonts compares
+    // nothing. Say so loudly; CLAZEL_REQUIRE_SYSTEM_FONTS=1 makes it fail.
+    println!(
+        "NOTE: the system-fonts suite is MACHINE-DEPENDENT evidence (fonts \
+         found: {read}, faces shaped: {}). Only the vendored suite's \
+         result is reproducible.",
+        t.faces
+    );
+    if t.faces == 0 {
+        println!(
+            "WARNING: ZERO system font faces were compared on this machine; \
+             this test proved nothing here."
+        );
+        assert!(
+            std::env::var_os("CLAZEL_REQUIRE_SYSTEM_FONTS").is_none(),
+            "CLAZEL_REQUIRE_SYSTEM_FONTS is set but no system font face was compared"
+        );
+    }
     t.report("system fonts vs rustybuzz");
     assert!(t.fail == 0, "{} unexpected differences", t.fail);
 }

@@ -22,7 +22,10 @@ use super::dump::dump;
 use super::fragment::{BoxFragment, LineItem, Rect};
 use super::{BoxFont, FragmentTree, Viewport, layout};
 use crate::boxes::replaced::string;
-use crate::boxes::{BoxId, BoxKind, BoxTree, LayoutBox, StyleFns, build};
+use crate::boxes::{
+    BoxId, BoxKind, BoxTree, Fragment, LayoutBox, RowGroup, StyleFns, TextRun, build,
+};
+use crate::text::TextStyle;
 
 struct NoEncodings;
 
@@ -112,7 +115,8 @@ fn quirks(body: &str) -> Laid {
 }
 
 impl Laid {
-    /// The principal box of the element with `id`.
+    /// The principal box of the element with `id`; panics naming the id if
+    /// the document has no such element or it generated no box.
     fn id(&self, id: &str) -> BoxId {
         let node = (0..self.arena.len()).find(|&x| match self.arena.kind(x) {
             ExecKind::Element { attributes, .. } => {
@@ -120,19 +124,29 @@ impl Laid {
             }
             _ => false,
         });
-        self.tree
+        assert!(node.is_some(), "no element with id={id:?}");
+        let found = self
+            .tree
             .boxes
             .iter()
-            .position(|b| node.is_some() && b.node == node)
-            .unwrap_or(usize::MAX)
+            .position(|b| node.is_some() && b.node == node);
+        assert!(found.is_some(), "element id={id:?} generated no box");
+        found.unwrap_or(usize::MAX)
     }
 
-    /// The fragment of the element with `id`.
+    /// The fragment of the element with `id`, if it has one (for tests
+    /// where "no fragment" is the expected result); panics if there is no
+    /// such element or box.
+    fn frag_if_any(&self, id: &str) -> Option<BoxFragment> {
+        self.frags.fragment(self.id(id)).cloned()
+    }
+
+    /// The fragment of the element with `id`; panics naming the id if it
+    /// has none.
     fn frag(&self, id: &str) -> BoxFragment {
-        self.frags
-            .fragment(self.id(id))
-            .cloned()
-            .unwrap_or_default()
+        let f = self.frag_if_any(id);
+        assert!(f.is_some(), "element id={id:?} has no fragment");
+        f.unwrap_or_default()
     }
 
     /// The border box of the element with `id`.
@@ -479,15 +493,42 @@ fn percentage_heights() {
 #[test]
 fn html_and_body_fill_the_viewport_in_quirks_mode() {
     let l = quirks("<body id=b style='margin:8px'><div style='height:10px'></div>");
-    let html = l
-        .frags
-        .fragment(1)
-        .map(|f| f.border_box)
-        .unwrap_or_default();
-    assert_eq!(html, rect(0, 0, 200, 100), "{}", l.dump());
+    let html = l.frags.fragment(1).map(|f| f.border_box);
+    assert_eq!(html, Some(rect(0, 0, 200, 100)), "{}", l.dump());
     assert_eq!(l.bb("b"), rect(8, 8, 184, 84));
     let l = std("<body id=b style='margin:8px'><div style='height:10px'></div>");
     assert_eq!(l.bb("b").height, px(10));
+}
+
+/// KNOWN BUG, pinned (suspected; see the README's "A consequence to check"
+/// and the report of the test-gap review). In quirks mode the `body` is
+/// stretched to fill the `html` element less its margins (Quirks Mode
+/// Standard §3.7), and the `html` element to fill the viewport (§3.6). When
+/// the `body`'s last child has a bottom margin larger than the `body`'s, the
+/// two collapse (CSS 2.1 §8.3.1: the `body`'s computed `height` is `auto`),
+/// so the `body`'s used bottom margin is the larger one. We subtract only
+/// the `body`'s own margin (8) when stretching it, so the `body` is 16px too
+/// tall and the `html` element ends 8px below the viewport (§10.6.7: its
+/// content ends at the bottom margin edge of its last child). Chrome, run on
+/// `<p>One<p>Two` in an 800 by 600 viewport in quirks mode, gives `html`
+/// 600 and `body` 576 high: it subtracts the collapsed margin (8 + 16), so
+/// the page exactly fits and does not scroll. Here the viewport is 100 high,
+/// the `body`'s margin 8 and its child's bottom margin 16: the browser-like
+/// result is `html` 100 and `body` 76; this test pins what we give (108 and
+/// 84) and fails when it is fixed, so that it is then replaced by the
+/// browser-like assertion.
+#[test]
+fn known_bug_quirks_body_fill_ignores_the_collapsed_bottom_margin() {
+    let l =
+        quirks("<body id=b style='margin:8px'><div style='height:10px;margin-bottom:16px'></div>");
+    let html = l.frags.fragment(1).map(|f| f.border_box.height);
+    // Not the browser-like (px(100), px(76)).
+    assert_eq!(
+        (html, l.bb("b").height),
+        (Some(px(108)), px(84)),
+        "{}",
+        l.dump()
+    );
 }
 
 // ---- CSS 2.1 §10.8, line heights ----
@@ -557,15 +598,85 @@ fn vertical_align() {
     let l = std("<div id=d>x<img id=i style='vertical-align:bottom;width:1px;height:30px'></div>");
     assert_eq!(l.bb("d").height, px(30));
     assert_eq!(l.lines("d").first().map(|x| x.baseline), Some(px(28)));
-    // `middle`: the midpoint at the baseline less half the x-height (8).
-    let l = std("<div id=d>x<img id=i style='vertical-align:middle;width:1px;height:20px'></div>");
-    // Midpoint at 4 above the baseline: the image spans 14 above to 6 below.
-    assert_eq!(l.bb("d").height, px(20));
-    assert_eq!(l.bb("i").y, 0);
-    // `text-top`: the top at the parent's content area's top (8 above).
+    // The tests below add a 30px image on the baseline (30 above, none
+    // below), so the line has 30 above and 2 (the strut's D) below the
+    // baseline, and the baseline is 30px from the line top: `top`,
+    // `bottom`, `middle`, `text-top` and `text-bottom` then each put the
+    // 20px image at a different y.
+    let base30 = "<img style='width:1px;height:30px'>";
+    let doc = |va: &str| {
+        std(&format!(
+            "<div id=d>x<img id=i style='vertical-align:{va};width:1px;height:20px'>{base30}</div>"
+        ))
+    };
+    let baseline = |l: &Laid| l.lines("d").first().map(|x| x.baseline);
+    // `middle`: "Align the vertical midpoint of the box with the baseline of
+    // the parent box plus half the x-height of the parent." The x-height of
+    // the Ahem-like font is its ascent, 8, so the midpoint is 4 above the
+    // baseline: the image spans 14 above to 6 below; the line is 30 above
+    // and 6 below, 36 high, and the image's top is 30 - 14 = 16 down.
+    let l = doc("middle");
+    assert_eq!(baseline(&l), Some(px(30)), "{}", l.dump());
+    assert_eq!(l.bb("d").height, px(36));
+    assert_eq!(l.bb("i").y, px(16));
+    // `text-top`: "Align the top of the box with the top of the parent's
+    // content area": A = 8 above the baseline, so the image's top is 30 - 8
+    // = 22 down, and it hangs 12 below the baseline: the line is 30 + 12.
+    let l = doc("text-top");
+    assert_eq!(baseline(&l), Some(px(30)), "{}", l.dump());
+    assert_eq!(l.bb("d").height, px(42));
+    assert_eq!(l.bb("i").y, px(22));
+    // `text-bottom`: "Align the bottom of the box with the bottom of the
+    // parent's content area": D = 2 below the baseline, so the image spans
+    // 18 above to 2 below, and its top is 30 - 18 = 12 down; the line is
+    // 30 + 2 high.
+    let l = doc("text-bottom");
+    assert_eq!(baseline(&l), Some(px(30)), "{}", l.dump());
+    assert_eq!(l.bb("d").height, px(32));
+    assert_eq!(l.bb("i").y, px(12));
+    // `bottom`: "Align the bottom of the aligned subtree with the bottom of
+    // the line box": the line is 30 + 2 = 32 high, the image's top 12 down
+    // (the same as `text-bottom` here); `top` puts it at the line's top.
+    let l = doc("bottom");
+    assert_eq!((l.bb("d").height, l.bb("i").y), (px(32), px(12)));
+    let l = doc("top");
+    assert_eq!((l.bb("d").height, l.bb("i").y), (px(32), 0));
+    // `text-bottom` and `bottom` differ when something hangs below the
+    // baseline: a span lowered 10px has its content area 2 to 12 below the
+    // baseline. The line is 18 above (the image) and 12 below, 30 high;
+    // `text-bottom` puts the 20px image's top at 0 (18 above the
+    // baseline); with `bottom` the line is 20 high instead (below).
+    let low = "<span style='vertical-align:-10px'>y</span>";
+    let l = std(&format!(
+        "<div id=d>x{low}<img id=i style='vertical-align:text-bottom;width:1px;height:20px'></div>"
+    ));
+    assert_eq!(baseline(&l), Some(px(18)), "{}", l.dump());
+    assert_eq!((l.bb("d").height, l.bb("i").y), (px(30), 0));
+    let l = std(&format!(
+        "<div id=d>x{low}<img id=i style='vertical-align:bottom;width:1px;height:20px'></div>"
+    ));
+    // `bottom` does not count towards the line's extent: 8 above (strut)
+    // and 12 below make it 20 high, which the 20px image fills.
+    assert_eq!((l.bb("d").height, l.bb("i").y), (px(20), 0));
+    // `baseline` on an atomic inline: "Align the baseline of the box with
+    // the baseline of the parent box. If the box does not have a baseline,
+    // align the bottom margin edge with the parent's baseline": a 20px
+    // image sits 20 above the baseline; the line is 20 + 2 high.
     let l =
-        std("<div id=d>x<img id=i style='vertical-align:text-top;width:1px;height:20px'></div>");
-    assert_eq!(l.bb("d").height, px(20));
+        std("<div id=d>x<img id=i style='vertical-align:baseline;width:1px;height:20px'></div>");
+    assert_eq!(baseline(&l), Some(px(20)), "{}", l.dump());
+    assert_eq!((l.bb("d").height, l.bb("i").y), (px(22), 0));
+    // A percentage: "Raise (positive value) or lower (negative value) the
+    // box by this distance (a percentage of the 'line-height' value)". The
+    // span's `line-height: normal` is A + D = 10px, so 50% is 5px.
+    let l = std("<div id=d>x<span style='vertical-align:50%'>y</span></div>");
+    let runs = l.runs("d");
+    let base = runs.first().map_or(0, |r| r.2);
+    assert_eq!(runs.get(1).map(|r| r.2), Some(base.saturating_sub(px(5))));
+    let l = std("<div id=d>x<span style='vertical-align:-100%'>y</span></div>");
+    let runs = l.runs("d");
+    let base = runs.first().map_or(0, |r| r.2);
+    assert_eq!(runs.get(1).map(|r| r.2), Some(base.saturating_add(px(10))));
     // `super` and `sub`: a third and a fifth of the parent's font size.
     let l = std(
         "<div id=d>x<span style='vertical-align:super'>y</span><span style='vertical-align:sub'>z</span></div>",
@@ -658,6 +769,305 @@ fn inline_edges() {
     assert_eq!(xs, [0, px(18), px(33)], "{}", l.dump());
 }
 
+// ---- Features with no test before: expected values derived by hand ----
+
+/// The x of every glyph run of the element with `id`, in CSS px.
+fn run_xs(l: &Laid, id: &str) -> Vec<i32> {
+    l.runs(id).iter().map(|r| r.1.div_euclid(64)).collect()
+}
+
+/// The text of every glyph run of the element with `id`.
+fn run_texts(l: &Laid, id: &str) -> Vec<String> {
+    l.runs(id).into_iter().map(|r| r.0).collect()
+}
+
+/// CSS Text 3 §9.1 (`text-indent`), `each-line`: "Indentation affects the
+/// first line of the block container as well as each line after a forced
+/// line break, but does not affect lines after a soft wrap break." A 10px
+/// em square font: "aaaa bbbb" at width 60 wraps after "aaaa" (indent 20 +
+/// 40 = 60 fits; the next word does not).
+#[test]
+fn text_indent_each_line() {
+    let l = std("<div id=d style='text-indent:20px each-line;width:60px'>aaaa bbbb<br>cc</div>");
+    // Line 1 indented (first line); line 2 is after a soft wrap: not; line
+    // 3 is after the forced break: indented.
+    assert_eq!(run_xs(&l, "d"), [20, 0, 20], "{}", l.dump());
+    // Without `each-line`, only the first line.
+    let l = std("<div id=d style='text-indent:20px;width:60px'>aaaa bbbb<br>cc</div>");
+    assert_eq!(run_xs(&l, "d"), [20, 0, 0], "{}", l.dump());
+}
+
+/// `hanging`: "Inverts which lines are affected." The first line is not
+/// indented and every line after a soft wrap is; with `each-line` too, the
+/// lines after forced breaks are the ones not indented.
+#[test]
+fn text_indent_hanging() {
+    let l = std("<div id=d style='text-indent:20px hanging;width:60px'>aaaa bbbb cccc</div>");
+    // Line 1 "aaaa" (0 + 40 of 60; "bbbb" does not fit), lines 2 and 3 are
+    // after soft wraps: indented by 20, so 40 fit: "bbbb" then "cccc".
+    assert_eq!(run_xs(&l, "d"), [0, 20, 20], "{}", l.dump());
+    let l = std(
+        "<div id=d style='text-indent:20px each-line hanging;width:60px'>aaaa bbbb<br>cc</div>",
+    );
+    // First line: not indented, so "aaaa bbbb" does not fit in 60 (90):
+    // "aaaa" then, after a soft wrap, indented "bbbb"; after the forced
+    // break, "cc" is not indented.
+    assert_eq!(run_xs(&l, "d"), [0, 20, 0], "{}", l.dump());
+}
+
+/// §9.1: "<percentage>: Gives the amount of the indent as a percentage of
+/// the block container's own content box inline size": 25% of 80 is 20; a
+/// negative value moves the first line outwards.
+#[test]
+fn text_indent_percentage_and_negative() {
+    let l = std("<div id=d style='text-indent:25%;width:80px'>a</div>");
+    assert_eq!(run_xs(&l, "d"), [20], "{}", l.dump());
+    let l = std("<div style='padding-left:30px'><div id=d style='text-indent:-10px'>a</div></div>");
+    assert_eq!(run_xs(&l, "d"), [20], "{}", l.dump());
+}
+
+/// HTML §15.5.17 and §15.5.6: a `textarea` is `cols` characters wide
+/// (`cols × average + (maximum − average)`: 10px each here, average equal to
+/// maximum) and `rows` lines high (10px lines); the defaults are 20 and 2.
+/// A checkbox, a radio button (HTML leaves their size to the user agent: 13
+/// by 13, as the README lists) and buttons (the width of their label:
+/// "Submit" and "Reset" by default, or the `value`).
+#[test]
+fn form_control_sizes() {
+    let l = lay(
+        &format!(
+            "{STD}<div id=d><textarea id=t cols=5 rows=3></textarea><textarea id=u></textarea>\
+             <input id=c type=checkbox><input id=r type=radio>\
+             <input id=s type=submit><input id=x type=reset>\
+             <input id=b type=button value=OK></div>"
+        ),
+        2000,
+        600,
+    );
+    let size = |id: &str| (l.bb(id).width, l.bb(id).height);
+    // 5 × 10 wide, 3 × 10 high.
+    assert_eq!(size("t"), (px(50), px(30)), "{}", l.dump());
+    // cols 20 × 10, rows 2 × 10.
+    assert_eq!(size("u"), (px(200), px(20)));
+    assert_eq!(size("c"), (px(13), px(13)));
+    assert_eq!(size("r"), (px(13), px(13)));
+    // "Submit" is six em squares, "Reset" five, "OK" two; one 10px line.
+    assert_eq!(size("s"), (px(60), px(10)));
+    assert_eq!(size("x"), (px(50), px(10)));
+    assert_eq!(size("b"), (px(20), px(10)));
+}
+
+/// CSS Text 3 §3 (`white-space`): `nowrap` collapses white space like
+/// `normal` but "wrap … no": "aa bb cc dd" stays on one line in a 50px box.
+#[test]
+fn white_space_nowrap() {
+    let l = std("<div id=d style='width:50px;white-space:nowrap'>aa bb cc dd</div>");
+    assert_eq!(l.lines("d").len(), 1, "{}", l.dump());
+    assert_eq!(run_texts(&l, "d"), ["aa bb cc dd"]);
+}
+
+/// `pre-wrap`: "Preserve … wrap": a segment break is a forced break, runs of
+/// spaces are kept, and lines wrap at soft wrap opportunities; "a sequence
+/// of preserved spaces at the end of a line hangs" (does not wrap on its
+/// own).
+#[test]
+fn white_space_pre_wrap() {
+    // The newline is preserved: two lines even though both fit.
+    let l = std("<div id=d style='white-space:pre-wrap'>a\nb</div>");
+    assert_eq!(l.lines("d").len(), 2, "{}", l.dump());
+    // Two spaces are two em squares: "a  b" is 40px wide.
+    let l = std("<div id=d style='white-space:pre-wrap'>a  b</div>");
+    assert_eq!(l.lines("d").len(), 1);
+    assert_eq!(run_texts(&l, "d"), ["a  b"], "{}", l.dump());
+    // At 30px "aa  bb": the spaces hang after "aa" (they are not counted
+    // against the line's width) and "bb" starts the second line at x = 0.
+    let l = std("<div id=d style='width:30px;white-space:pre-wrap'>aa  bb</div>");
+    assert_eq!(l.lines("d").len(), 2, "{}", l.dump());
+    assert_eq!(run_xs(&l, "d").last().copied(), Some(0));
+    assert_eq!(run_texts(&l, "d").last().map(String::as_str), Some("bb"));
+}
+
+/// `break-spaces`: "like pre-wrap, except that preserved white space
+/// sequences at the end of a line take up space and do not hang, and there
+/// is a soft wrap opportunity after every preserved white space character".
+/// At 30px, "aa" and one space fill line 1; the second space wraps, so line 2
+/// is " " + " " + "b" = 30px.
+#[test]
+fn white_space_break_spaces() {
+    let l = std("<div id=d style='width:30px;white-space:break-spaces'>aa   b</div>");
+    assert_eq!(l.lines("d").len(), 2, "{}", l.dump());
+    assert_eq!(run_texts(&l, "d"), ["aa ", "  b"], "{}", l.dump());
+}
+
+/// CSS Text 3 §5.5 (`overflow-wrap: break-word`): "An otherwise unbreakable
+/// sequence of characters may be broken at an arbitrary point if there are
+/// no otherwise-acceptable break points in the line": "abcdef" (60px) in a
+/// 30px box is three characters per line. Without it, one overflowing line.
+#[test]
+fn overflow_wrap_break_word() {
+    let l = std("<div id=d style='width:30px;overflow-wrap:break-word'>abcdef</div>");
+    assert_eq!(run_texts(&l, "d"), ["abc", "def"], "{}", l.dump());
+    let l = std("<div id=d style='width:30px'>abcdef</div>");
+    assert_eq!(run_texts(&l, "d"), ["abcdef"]);
+    // `anywhere` also counts for min-content: "soft wrap opportunities
+    // introduced by `anywhere` are considered when calculating min-content
+    // intrinsic sizes"; those of `break-word` are not. An inline block in a
+    // 30px container is min(max(min-content, 30), max-content 60).
+    let l = std(
+        "<div style='width:30px'><span id=s style='display:inline-block;overflow-wrap:anywhere'>abcdef</span></div>",
+    );
+    assert_eq!(l.bb("s").width, px(30), "{}", l.dump());
+    let l = std(
+        "<div style='width:30px'><span id=s style='display:inline-block;overflow-wrap:break-word'>abcdef</span></div>",
+    );
+    assert_eq!(l.bb("s").width, px(60), "{}", l.dump());
+}
+
+/// CSS Text 3 §5.2 (`word-break: break-all`): "Breaking is allowed within
+/// 'words'": "abcdef" in 30px breaks after three characters.
+#[test]
+fn word_break_break_all() {
+    let l = std("<div id=d style='width:30px;word-break:break-all'>abcdef</div>");
+    assert_eq!(run_texts(&l, "d"), ["abc", "def"], "{}", l.dump());
+    let l = std("<div id=d style='width:30px;word-break:keep-all'>abcdef</div>");
+    assert_eq!(run_texts(&l, "d"), ["abcdef"]);
+}
+
+/// The Quirks Mode Standard §3.3 and §3.4 apply in limited-quirks mode as
+/// in quirks mode; §3.5 to §3.7 (percentage heights, filling the viewport)
+/// do not. (`XHTML 1.0 Transitional`'s public identifier puts a document in
+/// limited-quirks mode: HTML §13.2.6.4.1.)
+#[test]
+fn limited_quirks_mode() {
+    let head = "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \
+        \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\
+        <style>html { font-size: 10px } body { margin: 0 }</style>";
+    let limited = |body: &str| lay(&format!("{head}{body}"), 200, 100);
+    // §3.3: a span without text and borders has a line-height of zero; the
+    // line with a 1px image is 1px high (no-quirks: 10, the strut).
+    let doc = "<div id=d><span><img style='width:1px;height:1px'></span></div>";
+    assert_eq!(limited(doc).bb("d").height, px(1));
+    // §3.4: blocks ignore the strut: 10px in an element of font-size 20.
+    let doc = "<div id=d style='font-size:20px'><span style='font-size:10px'>x</span></div>";
+    assert_eq!(limited(doc).bb("d").height, px(10));
+    // §3.5: no percentage-height lookup past an `auto` ancestor: computes to
+    // auto, so 0 (quirks mode: 50).
+    let l = limited("<div id=d style='height:50%'></div>");
+    assert_eq!(l.bb("d").height, 0, "{}", l.dump());
+    // §3.6, §3.7: the `body` is not stretched: 10px, not 84.
+    let l = limited("<body id=b style='margin:8px'><div style='height:10px'></div>");
+    assert_eq!(l.bb("b").height, px(10), "{}", l.dump());
+}
+
+/// CSS 2.1 §8.3: "<percentage>: The percentage is calculated with respect to
+/// the width of the generated box's containing block. Note that this is true
+/// for 'margin-top' and 'margin-bottom' as well"; §8.4 says the same of
+/// padding. In a 100px containing block, `margin: 10% 20%` is 10px above and
+/// below and 20px at the sides, and `padding: 5%` is 5px all round.
+#[test]
+fn percentage_margins_and_padding() {
+    let l = std(
+        "<div style='width:100px'><div id=c style='margin:10% 20%;padding:5%;height:1px'></div></div>",
+    );
+    let f = l.frag("c");
+    assert_eq!(f.margin.top, px(10), "{}", l.dump());
+    assert_eq!(f.margin.bottom, px(10));
+    assert_eq!((f.margin.left, f.margin.right), (px(20), px(20)));
+    assert_eq!(
+        (
+            f.padding.top,
+            f.padding.right,
+            f.padding.bottom,
+            f.padding.left
+        ),
+        (px(5), px(5), px(5), px(5))
+    );
+    // §10.3.3: width auto = 100 − 20 − 20 (margins) = 60 border box; the
+    // height 1 plus padding 5 + 5 = 11; the top margin collapses through
+    // the parent (§8.3.1), so the box is at y = 10.
+    assert_eq!(f.border_box, rect(20, 10, 60, 11));
+}
+
+/// CSS 2.1 §9.4.2: an inline box "is split into several boxes and these boxes
+/// are distributed across several line boxes"; "margins, borders, and padding
+/// have no visual effect where the split occurs". A bordered, padded span
+/// across two lines has its start edge (2px border + 3px padding) on line 1
+/// only, so line 1's text starts at 5 and line 2's at 0, and its end edge on
+/// line 2 only.
+#[test]
+fn split_inline_with_borders() {
+    let l = std(
+        "<div id=d style='width:50px'><span style='border:2px solid;padding:0 3px'>aaa bbb</span></div>",
+    );
+    assert_eq!(l.lines("d").len(), 2, "{}", l.dump());
+    assert_eq!(run_xs(&l, "d"), [5, 0]);
+    let pieces: Vec<(bool, bool)> = l
+        .lines("d")
+        .iter()
+        .flat_map(|line| line.items.iter())
+        .filter_map(|i| match i {
+            LineItem::Inline(p) => Some((p.start_edge, p.end_edge)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(pieces, [(true, false), (false, true)]);
+}
+
+/// CSS 2.1 §11.1.1: "UAs must apply the 'overflow' property set on the root
+/// element to the viewport. When the root element is an 'HTML' element …
+/// and its 'overflow' is 'visible' … user agents must instead apply the
+/// 'overflow' from the first such child element to the viewport. The element
+/// from which the value is propagated must have a used value for 'overflow'
+/// of 'visible'." So a `body` with `overflow: hidden` under a `visible` root
+/// is not a block formatting context root: its first child's top margin
+/// collapses through it (§8.3.1), putting the `body` at y = 20. If the root
+/// has its own non-`visible` `overflow`, the `body`'s is not propagated and
+/// the `body` does establish one: it stays at y = 0 with the margin inside.
+#[test]
+fn overflow_propagates_from_body_to_the_viewport() {
+    let doc = |html_style: &str| {
+        lay(
+            &format!(
+                "<!DOCTYPE html><style>html {{ font-size: 10px;{html_style} }} body {{ margin: 0 }}</style>\
+                 <body id=b style='overflow:hidden'><div id=c style='margin-top:20px;height:5px'></div>"
+            ),
+            200,
+            100,
+        )
+    };
+    let l = doc("");
+    assert_eq!((l.bb("b").y, l.bb("c").y), (px(20), px(20)), "{}", l.dump());
+    let l = doc("overflow:hidden");
+    assert_eq!((l.bb("b").y, l.bb("c").y), (0, px(20)), "{}", l.dump());
+    // The body's height then holds the child's margin (§10.6.7).
+    assert_eq!(l.bb("b").height, px(25));
+}
+
+/// `ol` markers through layout: the decimal counter style's marker is the
+/// ordinal and ". " (CSS Counter Styles 3 §6.1: suffix ". "), placed in the
+/// margin, ending at the content edge of the list item (§12.5: `outside`).
+/// `value=10` sets the counter (HTML §4.4.8), so "10. " is four em squares.
+#[test]
+fn ol_markers_through_layout() {
+    let l = std(
+        "<ol style='padding-left:50px'><li id=a style='list-style-type:decimal'>x\
+         <li id=b style='list-style-type:decimal'>y\
+         <li id=c value=10 style='list-style-type:decimal'>z</ol>",
+    );
+    let marker = |id: &str| {
+        l.tree
+            .children(l.id(id))
+            .first()
+            .and_then(|&m| l.frags.fragment(m))
+            .map(|f| f.border_box)
+    };
+    // "1. " and "2. " are three em squares ending at the content edge, 50.
+    assert_eq!(marker("a"), Some(rect(20, 0, 30, 10)), "{}", l.dump());
+    assert_eq!(marker("b"), Some(rect(20, 10, 30, 10)));
+    // "10. " is four.
+    assert_eq!(marker("c"), Some(rect(10, 20, 40, 10)));
+}
+
 // ---- Markers, the table placeholder, depth ----
 
 /// A list item's marker ends at its content edge, on its first baseline.
@@ -669,10 +1079,10 @@ fn markers_sit_outside() {
         .tree
         .children(li)
         .first()
-        .and_then(|&m| l.frags.fragment(m).cloned())
-        .unwrap_or_default();
+        .and_then(|&m| l.frags.fragment(m))
+        .map(|f| f.border_box);
     // The marker "• " is two em squares, ending at the content edge (40).
-    assert_eq!(marker.border_box, rect(20, 0, 20, 10), "{}", l.dump());
+    assert_eq!(marker, Some(rect(20, 0, 20, 10)), "{}", l.dump());
 }
 
 /// The table placeholder (`mod.rs`): rows and cells as blocks, one below
@@ -707,4 +1117,232 @@ fn deep_trees_lay_out_without_recursion() {
         f.boxes.iter().filter(|b| b.is_some()).count(),
         depth.saturating_add(1)
     );
+}
+
+// ---- Depth: other shapes than plain blocks ----
+
+/// The text run of a document with the text "x" (units after Phase I), to
+/// put into hand-built box trees (the units are made by `boxes::build`).
+fn x_run() -> TextRun {
+    let l = std("<p>x</p>");
+    let found = l.tree.boxes.iter().find_map(|b| match &b.kind {
+        BoxKind::Text(run) => Some(run.clone()),
+        _ => None,
+    });
+    assert!(found.is_some(), "the document has a text run");
+    found.unwrap_or(TextRun {
+        text: "x".to_owned(),
+        style: TextStyle::INITIAL,
+        units: Vec::new(),
+    })
+}
+
+/// How deep: far past a recursive implementation's stack (100,000), less
+/// under Miri, where every box costs far more.
+fn deep(native: usize) -> usize {
+    if cfg!(miri) { 200 } else { native }
+}
+
+/// Lays out `tree` (every style initial: the boxes have no nodes) and
+/// returns what must not depend on how deeply the content is nested: the
+/// outermost block's border box, and the text runs (x, baseline), with the
+/// time layout took.
+fn laid_signature(tree: &BoxTree) -> (Option<Rect>, Vec<(i32, i32)>, std::time::Duration) {
+    struct NoStyle;
+    impl StyleFns for NoStyle {
+        fn style(&self, _node: usize) -> Option<&ComputedStyle> {
+            None
+        }
+    }
+    let arena = Arena::new(Vec::new());
+    let start = std::time::Instant::now();
+    let f = layout(tree, &arena, &NoStyle, &BoxFont, Viewport::px(800, 600));
+    let took = start.elapsed();
+    let runs = f
+        .lines
+        .iter()
+        .flat_map(|l| l.items.iter())
+        .filter_map(|i| match i {
+            LineItem::Text(r) => Some((r.x, r.baseline)),
+            _ => None,
+        })
+        .collect();
+    // Box 1 is the first child of the root in every tree below.
+    (f.fragment(1).map(|b| b.border_box), runs, took)
+}
+
+/// The depth-`n` tree of `shape` and its signature.
+fn signature_of(shape: &str, n: usize) -> (Option<Rect>, Vec<(i32, i32)>, std::time::Duration) {
+    let mut t = BoxTree::new();
+    let mut p = t.add_child(BoxTree::ROOT, BoxKind::Block, None);
+    match shape {
+        // `<span><span>…x…</span></span>`: one inline formatting context.
+        "inline" => {
+            for _ in 0..n {
+                p = t.add_child(p, BoxKind::Inline(Fragment::WHOLE), None);
+            }
+        }
+        // Each inline block holds the next in its own line.
+        "inline-block" => {
+            for _ in 0..n {
+                p = t.add_child(p, BoxKind::InlineBlock, None);
+            }
+        }
+        // `<span><div>…</div></span>` n times, as `boxes::build` splits it
+        // (CSS 2.1 §9.2.1.1): an anonymous block with the first fragment,
+        // the div, an anonymous block with the last.
+        "split" => {
+            for _ in 0..n {
+                let a = t.add_child(p, BoxKind::Block, None);
+                t.add_child(
+                    a,
+                    BoxKind::Inline(Fragment {
+                        first: true,
+                        last: false,
+                    }),
+                    None,
+                );
+                let d = t.add_child(p, BoxKind::Block, None);
+                let c = t.add_child(p, BoxKind::Block, None);
+                t.add_child(
+                    c,
+                    BoxKind::Inline(Fragment {
+                        first: false,
+                        last: true,
+                    }),
+                    None,
+                );
+                p = d;
+            }
+        }
+        // `<table><tr><td>` n times.
+        _ => {
+            for _ in 0..n {
+                let w = t.add_child(p, BoxKind::TableWrapper { inline: false }, None);
+                let table = t.add_child(w, BoxKind::Table { inline: false }, None);
+                let group = t.add_child(table, BoxKind::RowGroup(RowGroup::Body), None);
+                let row = t.add_child(group, BoxKind::Row, None);
+                p = t.add_child(row, BoxKind::Cell, None);
+            }
+        }
+    }
+    t.add_child(p, BoxKind::Text(x_run()), None);
+    laid_signature(&t)
+}
+
+/// No recursion in the inline formatting context, inline blocks, split
+/// inlines and the table placeholder: each shape nested far deeper than a
+/// recursive implementation's stack lays out, and (nothing in them has
+/// edges, margins or size) gives exactly what one level gives: the same
+/// outermost block, the same text run at the same place (CSS 2.1 §9.4.2:
+/// an inline box without edges does not move its content; §10.6.3 and
+/// §10.6.7: the heights are the content's). The time is printed, to see
+/// growth: each shape was measured at several depths while writing this
+/// (layout alone is linear in the number of boxes; parsing and the cascade
+/// of such documents are not, which is why the trees are built by hand:
+/// measured in a debug build from 500 to 4,000 nested levels, each doubling
+/// took layout 2x, but the parser about 4x for the inline shapes and the
+/// cascade about 4x for the block-in-inline and table shapes).
+#[test]
+fn deep_shapes_lay_out_without_recursion_and_unchanged() {
+    for (shape, native) in [
+        ("inline", 100_000),
+        ("inline-block", 100_000),
+        ("split", 50_000),
+        ("table", 40_000),
+    ] {
+        let n = deep(native);
+        let (outer, runs, took) = signature_of(shape, n);
+        let (outer1, runs1, _) = signature_of(shape, 1);
+        eprintln!("deep {shape} depth {n}: layout took {took:?}");
+        assert!(outer.is_some(), "{shape}: the outer block has a fragment");
+        assert_eq!(runs.len(), 1, "{shape}: one text run");
+        assert_eq!(runs, runs1, "{shape}: the text is where depth 1 puts it");
+        assert_eq!(outer, outer1, "{shape}: the outer block is as at depth 1");
+    }
+}
+
+// ---- Extremes ----
+
+/// Lengths far past any real page, and past `i32` in 1/64 px (a pixel is 64
+/// units, so `i32::MAX` is 33,554,431 px), go through the whole pipeline.
+#[test]
+fn extreme_lengths_saturate_and_never_panic() {
+    let l = lay(
+        &format!(
+            "{STD}<div id=a style='width:99999999px;height:99999999px'></div>\
+             <div id=b style='margin:-99999999px 0 0 -99999999px;height:10px'></div>\
+             <div id=c style='padding:99999999px;margin:99999999px;border:99999999px solid'>x</div>\
+             <div id=d style='font-size:99999999px'>x y</div>\
+             <div id=e style='width:2147483647px;margin-left:2147483647px;height:2147483647px'></div>\
+             <div id=f style='line-height:99999999px;text-indent:-99999999px'>x</div>\
+             <div id=g style='width:-5px;height:-5px;margin:-2147483648px'>x</div>\
+             <div><span id=h style='display:inline-block;width:99999999px'>y</span><img id=i style='width:99999999px;height:99999999px'></div>"
+        ),
+        200,
+        100,
+    );
+    let dump = l.dump();
+    // No fragment has a negative size or an edge that wrapped around.
+    for f in l.frags.boxes.iter().flatten() {
+        let r = f.border_box;
+        assert!(r.width >= 0 && r.height >= 0, "negative size: {dump}");
+        assert!(r.right() >= r.x && r.bottom() >= r.y, "wrapped: {dump}");
+    }
+    for line in &l.frags.lines {
+        assert!(line.rect.width >= 0 && line.rect.height >= 0, "{dump}");
+    }
+    // A length beyond what the style crate keeps is clamped to the same
+    // value however far beyond: 99,999,999px and 2,147,483,647px give the
+    // same used width and height.
+    let (a, e) = (l.frag("a"), l.frag("e"));
+    assert_eq!(a.border_box.width, e.border_box.width, "{dump}");
+    assert_eq!(a.border_box.height, e.border_box.height, "{dump}");
+    assert!(a.border_box.width > px(10_000_000), "{dump}");
+    // CSS 2.1 §10.3.3 for an `auto` width: the margins, borders, padding and
+    // width add up to the containing block's 200px, as long as nothing
+    // saturated: `b`'s margin-left is minus the clamp and its width 200px
+    // more.
+    let b = l.frag("b");
+    assert!(b.margin.left < px(-10_000_000), "{dump}");
+    assert_eq!(
+        b.margin
+            .left
+            .saturating_add(b.border_box.width)
+            .saturating_add(b.margin.right),
+        px(200),
+        "{dump}"
+    );
+    // A margin of i32::MIN px is clamped like -99,999,999px, on every side.
+    let g = l.frag("g");
+    assert_eq!(
+        (g.margin.top, g.margin.right, g.margin.bottom, g.margin.left),
+        (b.margin.left, b.margin.left, b.margin.left, b.margin.left),
+        "{dump}"
+    );
+    // `c`'s border box, padding and borders, each at the clamp, sum past
+    // `i32::MAX` and stop there; its text is as far right.
+    let c = l.frag("c");
+    assert_eq!(c.border_box.width, i32::MAX, "{dump}");
+    assert_eq!(c.border_box.height, i32::MAX, "{dump}");
+    // Boxes in flow with non-negative margins below one another do not
+    // move up: a, c, d, e in order (§9.4.1).
+    let ys: Vec<i32> = ["a", "c", "d", "e"].iter().map(|i| l.bb(i).y).collect();
+    assert!(
+        ys.windows(2).all(|w| w.first() <= w.get(1)),
+        "{ys:?} {dump}"
+    );
+    // A huge `font-size` gives lines as high as the (clamped) font: `d`'s
+    // two lines are each as high as one, and its height is their sum.
+    let d = l.lines("d");
+    assert_eq!(d.len(), 2, "{dump}");
+    let line_height = d.first().map(|x| x.rect.height);
+    assert!(line_height > Some(px(10_000_000)), "{dump}");
+    assert_eq!(
+        Some(l.bb("d").height),
+        line_height.map(|h| h.saturating_mul(2)),
+        "{dump}"
+    );
+    // A negative `text-indent` moves the first line left of the box.
+    assert!(l.runs("f").first().is_some_and(|r| r.1 < 0), "{dump}");
 }
