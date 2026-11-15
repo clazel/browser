@@ -204,7 +204,7 @@ fn send_list<L: Write>(
         return Ok(());
     };
     let items = page::frame::frame(dl, view.width, view.height, page.scroll, fonts, cache);
-    let bytes = page::frame::frame_bytes(&items)
+    let bytes = page::frame::frame_bytes(&items, view)
         .ok_or(RunError::Protocol("display list over its limits"))?;
     list.write_all(&bytes)?;
     list.flush()?;

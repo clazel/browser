@@ -93,7 +93,7 @@ fn run(input: &[Msg]) -> Result<Sent, RunError> {
     // The lists as the GPU process reads them (`clazel_gpu::channel`).
     let mut raw = Vec::new();
     let mut rest = &list[..];
-    while let Ok(Some(l)) = clazel_gpu::channel::read_list(&mut rest) {
+    while let Ok(Some((_, l))) = clazel_gpu::channel::read_list(&mut rest) {
         raw.push(l);
     }
     assert!(rest.is_empty(), "bytes left after the last list");
@@ -178,10 +178,12 @@ fn the_gpu_process_reads_what_the_renderer_writes() -> Result<(), RunError> {
     assert_eq!(server.kernel(&size), Ok(Vec::new()));
     let mut rest = &list[..];
     let mut frames_drawn = Vec::new();
-    while let Ok(Some(l)) = clazel_gpu::channel::read_list(&mut rest) {
-        let frame = server.list(&l);
-        assert!(matches!(frame, Ok(Some(_))), "{frame:?}");
-        frames_drawn.extend(frame.ok().flatten());
+    while let Ok(Some((laid, l))) = clazel_gpu::channel::read_list(&mut rest) {
+        // Laid out for the viewport the renderer was given, which is the kernel's.
+        assert_eq!((laid.width, laid.height), (100, 40));
+        let frames = server.list(laid, &l);
+        assert!(frames.as_ref().is_ok_and(|f| f.len() == 1), "{frames:?}");
+        frames_drawn.extend(frames.unwrap_or_default());
     }
     assert!(rest.is_empty());
     assert_eq!(frames_drawn.len(), 1);
