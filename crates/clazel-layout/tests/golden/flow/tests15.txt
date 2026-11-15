@@ -106,20 +106,20 @@ root (anonymous) 0,0 800x600
 #case 11
 #data "<!doctype html><div><table><a>foo</a> <tr><td>bar</td> </tr></table></div>"
 root (anonymous) 0,0 800x600
-  block <html> 0,0 800x55.28125
-    block <body> 8,8 784x39.28125 m=8,8,8,8
-      block <div> 8,8 784x39.28125
+  block <html> 0,0 800x59.28125
+    block <body> 8,8 784x43.28125 m=8,8,8,8
+      block <div> 8,8 784x43.28125
         block (anonymous) 8,8 784x18.640625
           line 8,8 784x18.640625 base=22.859375
             inline <a> 8,8 25.1875x18.640625 start end
             text "foo" x=8 base=22.859375 w=25.1875
-        table-wrapper <table> 8,26.640625 29.4375x20.640625 m=0,754.5625,0,0
-          table <table> 8,26.640625 29.4375x20.640625
-            row-group <tbody> 8,26.640625 29.4375x20.640625
-              row <tr> 8,26.640625 29.4375x20.640625
-                cell <td> 8,26.640625 29.4375x20.640625 p=1,1,1,1
-                  line 9,27.640625 27.4375x18.640625 base=42.5
-                    text "bar" x=9 base=42.5 w=27.4375
+        table-wrapper <table> 8,26.640625 33.4375x24.640625 m=0,750.5625,0,0
+          table <table> 8,26.640625 33.4375x24.640625
+            row-group <tbody> 10,28.640625 29.4375x20.640625
+              row <tr> 10,28.640625 29.4375x20.640625
+                cell <td> 10,28.640625 29.4375x20.640625 p=1,1,1,1
+                  line 11,29.640625 27.4375x18.640625 base=44.5
+                    text "bar" x=11 base=44.5 w=27.4375
 
 #case 12
 #data "<frame></frame></frame><frameset><frame><frameset><frame></frameset><noframes></frameset><noframes>"

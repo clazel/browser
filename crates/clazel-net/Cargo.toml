@@ -17,6 +17,8 @@ clazel-dns = { path = "../clazel-dns" }
 clazel-url = { path = "../clazel-url" }
 clazel-cookie = { path = "../clazel-cookie" }
 clazel-fetch = { path = "../clazel-fetch" }
+# The kernel's sub-fetch outputs and `SubNet` event (item 5.19, `named.rs`).
+clazel-kernel = { path = "../clazel-kernel" }
 clazel-http = { path = "../clazel-http" }
 
 # `TlsConnection` carries bytes between a socket and the TLS 1.3 client

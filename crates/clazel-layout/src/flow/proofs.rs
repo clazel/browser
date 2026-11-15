@@ -396,13 +396,14 @@ fn align_offset_any() {
 /// flagged atomic by `Class::is_atomic_inline` but is laid out in the
 /// wrapper's flow, §17.4: only the wrapper is whole on the line, so it is
 /// left out.) The roles of the root, markers, columns and the
-/// table-internal boxes are not in §9.2 (they are `flow/mod.rs`'s
-/// placeholder's choices): for those the harness checks only that the
-/// function is total.
+/// table-internal boxes are not in §9.2: for those, and for every other
+/// class, the harness also pins the exact role the walk gives (a cell is
+/// laid out by §17's table layout, rows and row groups as its tracks).
 #[kani::proof]
 fn role_any() {
     let c: Class = kani::any();
     let r = role(c);
+    // §9.2's classification, where it gives one.
     if c.is_block_level() {
         assert!(r == Role::Flow);
     }
@@ -411,6 +412,24 @@ fn role_any() {
     }
     if c.is_inline_level() && !c.is_atomic_inline() {
         assert!(r == Role::Inline);
+    }
+    // Every class's exact role, the ones §9.2 is silent on included.
+    match c {
+        Class::Root => assert!(r == Role::Root),
+        Class::Marker => assert!(r == Role::Marker),
+        Class::Column | Class::ColumnGroup => assert!(r == Role::Column),
+        Class::Inline | Class::Text { .. } => assert!(r == Role::Inline),
+        Class::Cell => assert!(r == Role::Cell),
+        Class::RowGroup | Class::Row => assert!(r == Role::Track),
+        Class::Table { .. } | Class::Caption => assert!(r == Role::Flow),
+        _ => {
+            if c.is_block_level() {
+                assert!(r == Role::Flow);
+            }
+            if c.is_atomic_inline() {
+                assert!(r == Role::Atomic);
+            }
+        }
     }
 }
 

@@ -1,0 +1,137 @@
+#case 0
+#data "<!DOCTYPE html><body><a href='#1'><nobr>1<nobr></a><br><a href='#2'><nobr>2<nobr></a><br><a href='#3'><nobr>3<nobr></a>"
+scale 1
+fill 0,0 800x600 #ffffffff
+fill 8,24 10x1 #ff0000ee
+text -8,-9 42x48 #ff0000ee face=0 size=1024 glyphs=1 first=512,1463
+fill 8,43 10x1 #ff0000ee
+text -8,10 42x48 #ff0000ee face=0 size=1024 glyphs=1 first=512,2656
+fill 8,61 10x1 #ff0000ee
+text -8,28 42x48 #ff0000ee face=0 size=1024 glyphs=1 first=512,3849
+hit 8,8 10x19 node=5 http://example.com/dir/page#1
+hit 8,8 10x19 node=5 http://example.com/dir/page#1
+hit 8,27 10x18 node=12 http://example.com/dir/page#2
+hit 8,27 10x18 node=12 http://example.com/dir/page#2
+hit 8,45 10x19 node=19 http://example.com/dir/page#3
+hit 8,45 10x19 node=19 http://example.com/dir/page#3
+
+#case 1
+#data "<!DOCTYPE html><body><b><nobr>1<nobr></b><i><nobr>2<nobr></i>3"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 2,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1164,1463
+text 12,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=1816,1463
+
+#case 2
+#data "<!DOCTYPE html><body><b><nobr>1<table><nobr></b><i><nobr>2<nobr></i>3"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 2,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1164,1463
+text 12,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=1816,1463
+
+#case 3
+#data "<!DOCTYPE html><body><b><nobr>1<table><tr><td><nobr></b><i><nobr>2<nobr></i>3"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text -5,13 42x48 #ff000000 face=0 size=1024 glyphs=1 first=704,2848
+text 5,13 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1356,2848
+
+#case 4
+#data "<!DOCTYPE html><body><b><nobr>1<div><nobr></b><i><nobr>2<nobr></i>3"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text -8,10 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,2656
+text 2,10 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1164,2656
+
+#case 5
+#data "<!DOCTYPE html><body><b><nobr>1<nobr></b><div><i><nobr>2<nobr></i>3"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text -8,10 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,2656
+text 2,10 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1164,2656
+
+#case 6
+#data "<!DOCTYPE html><body><b><nobr>1<nobr><ins></b><i><nobr>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 7
+#data "<!DOCTYPE html><body><b><nobr>1<ins><nobr></b><i>2"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 2,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1164,1463
+
+#case 8
+#data "<!DOCTYPE html><body><b>1<nobr></b><i><nobr>2</i>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 2,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1164,1463
+
+#case 9
+#data "<p><code x</code></p>\n"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 10
+#data "<!DOCTYPE html><svg><foreignObject><p><i></p>a"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-1 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1975
+
+#case 11
+#data "<!DOCTYPE html><table><tr><td><svg><foreignObject><p><i></p>a"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -5,10 42x48 #ff000000 face=0 size=1024 glyphs=1 first=704,2679
+
+#case 12
+#data "<!DOCTYPE html><math><mtext><p><i></p>a"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-1 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1975
+
+#case 13
+#data "<!DOCTYPE html><table><tr><td><math><mtext><p><i></p>a"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -5,10 42x48 #ff000000 face=0 size=1024 glyphs=1 first=704,2679
+
+#case 14
+#data "<!DOCTYPE html><body><div><!/div>a"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 15
+#data "<button><p><button>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 16
+#data "<svg></p><foo>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 17
+#data "<svg></br><foo>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 18
+#data "<math></p><foo>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 19
+#data "<math></br><foo>"
+scale 1
+fill 0,0 800x600 #ffffffff
+

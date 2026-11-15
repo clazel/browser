@@ -1,0 +1,183 @@
+#case 0
+#data "<!doctype html><body><title>X</title>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 1
+#data "<!doctype html><table><title>X</title></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 2
+#data "<!doctype html><head></head><title>X</title>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 3
+#data "<!doctype html></head><title>X</title>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 4
+#data "<!doctype html></head><base>X"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 5
+#data "<!doctype html></head><basefont>X"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 6
+#data "<!doctype html></head><bgsound>X"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 7
+#data "<!doctype html><table><meta></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 8
+#data "<!doctype html><table>X<tr><td><table> <meta></table></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 9
+#data "<!doctype html><html> <head>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 10
+#data "<!doctype html> <head>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 11
+#data "<!doctype html><table><style> <tr>x </style> </table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 12
+#data "<!doctype html><table><TBODY><script> <tr>x </script> </table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 13
+#data "<!doctype html><p><applet><p>X</p></applet>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-1 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1975
+
+#case 14
+#data "<!doctype html><p><object type=\"application/x-non-existant-plugin\"><p>X</p></object>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-1 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1975
+
+#case 15
+#data "<!doctype html><listing>\nX</listing>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-1 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1975
+
+#case 16
+#data "<!doctype html><select><input>X"
+scale 1
+fill 0,0 800x600 #ffffffff
+text 220,-5 43x48 #ff000000 face=0 size=1024 glyphs=1 first=15091,1705
+
+#case 17
+#data "<!doctype html><select><select>X"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 18
+#data "<!doctype html><table><input type=hidDEN></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 19
+#data "<!doctype html><table>X<input type=hidDEN></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 20
+#data "<!doctype html><table>  <input type=hidDEN></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 21
+#data "<!doctype html><table>  <input type='hidDEN'></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 22
+#data "<!doctype html><table><input type=\" hidden\"><input type=hidDEN></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 23
+#data "<!doctype html><table><select>X<tr>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 24
+#data "<!doctype html><select>X</select>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 25
+#data "<!DOCTYPE hTmL><html></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 26
+#data "<!DOCTYPE HTML><html></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 28
+#data "<div><p>a</x> b"
+scale 1
+fill 0,0 800x616 #ffffffff
+text -8,-1 57x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1975
+
+#case 29
+#data "<table><tr><td><code></code> </table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 30
+#data "<table><b><tr><td>aaa</td></tr>bbb</table>ccc"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 63x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+text -5,13 61x48 #ff000000 face=0 size=1024 glyphs=3 first=704,2848
+text -8,34 59x48 #ff000000 face=0 size=1024 glyphs=3 first=512,4233
+
+#case 31
+#data "A<table><tr> B</tr> B</table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 77x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 32
+#data "A<table><tr> B</tr> </em>C</table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 73x48 #ff000000 face=0 size=1024 glyphs=4 first=512,1463
+
+#case 33
+#data "<select><keygen>"
+scale 1
+fill 0,0 800x600 #ffffffff
+

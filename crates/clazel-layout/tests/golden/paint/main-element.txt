@@ -1,0 +1,21 @@
+#case 0
+#data "<!doctype html><p>foo<main>bar<p>baz"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-1 57x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1975
+text -8,34 59x48 #ff000000 face=0 size=1024 glyphs=3 first=512,4192
+text -8,68 60x48 #ff000000 face=0 size=1024 glyphs=3 first=512,6409
+
+#case 1
+#data "<!doctype html><main><p>foo</main>bar"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-1 57x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1975
+text -8,34 59x48 #ff000000 face=0 size=1024 glyphs=3 first=512,4192
+
+#case 2
+#data "<!DOCTYPE html>xxx<svg><x><g><a><main><b>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 59x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+

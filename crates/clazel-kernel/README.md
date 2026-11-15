@@ -100,9 +100,13 @@ same-origin URL (listed in the item).
 A committed renderer asks for a style sheet with `FetchStyle { request, url }`;
 the kernel fetches it with item 3.6's transducer, the one navigations use,
 and answers `StyleResponse`, `StyleBody` frames and `StyleEnd` in one write,
-or `StyleFailed`, under the renderer's own `request` id. The renderer's use
-of `FetchStyle` is item 5.20's; until then no renderer sends it, and the
-host ignores the new outputs.
+or `StyleFailed`, under the renderer's own `request` id. The renderer
+sends `FetchStyle` for each linked sheet (item 5.20, `clazel-renderer`'s
+`page/sheets.rs`). The host carries out the `Sub*` outputs on its network
+driver, as it does a navigation's, and feeds back `SubNet`
+(`clazel_net::SubConns` keeps the names). It steps a `Tick` when idle, so
+decision 6's timeout fires on a page that is waiting for a sheet and nothing
+else.
 
 - **Event** `SubNet { renderer, serial, hop, input }` (the network shell's
   report on a sub-fetch connection). **Outputs** `SubConnect`, `SubSend` and

@@ -38,6 +38,9 @@ jobs:
       # rustup reads rust-toolchain.toml and installs the pinned toolchain.
       - name: Install Rust
         run: rustup toolchain install
+      # `clazel-sys` links libvulkan (phase-5.md item 5.17b).
+      - name: Install the Vulkan loader's development files
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libvulkan-dev
       - name: cargo build --release
         run: cargo build --release --locked --bin clazel --bin clazel-renderer
       - name: Package

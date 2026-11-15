@@ -24,6 +24,7 @@ use clazel_sys::macos::metal::{
 };
 
 use crate::backend::{Backend, BackendError, Frame, Op, quad_bytes};
+use crate::blocklist::{APPLE, Adapter, Api};
 use crate::geom::{Rect, Viewport};
 
 /// The shaders, fixed at build time.
@@ -250,6 +251,19 @@ fn scissor_of(r: Rect) -> Option<(usize, usize, usize, usize)> {
 impl Backend for MetalBackend {
     fn draw_frame(&mut self, frame: &Frame) -> Result<(), BackendError> {
         with_autorelease_pool(|| self.draw_inner(frame)).map_err(backend_error)?
+    }
+
+    /// Apple's vendor id, no device id (Apple silicon has no PCI device id) and no
+    /// driver version: the `clazel-sys` wrappers read neither the device's name nor
+    /// the OS version without new foreign calls (item 5.17c, `src/blocklist.rs`).
+    fn adapter(&self) -> Adapter {
+        Adapter {
+            api: Api::Metal,
+            vendor: APPLE,
+            device: 0,
+            driver: None,
+            software: false,
+        }
     }
 
     fn read_pixels(&mut self, out: &mut Vec<u8>) -> Result<(), BackendError> {

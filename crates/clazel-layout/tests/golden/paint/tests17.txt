@@ -1,0 +1,66 @@
+#case 0
+#data "<!doctype html><table><tbody><select><tr>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 1
+#data "<!doctype html><table><tr><select><td>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 2
+#data "<!doctype html><table><tr><td><select><td>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 3
+#data "<!doctype html><table><tr><th><select><td>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 4
+#data "<!doctype html><table><caption><select><tr>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 5
+#data "<!doctype html><select><tr>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 6
+#data "<!doctype html><select><td>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 7
+#data "<!doctype html><select><th>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 8
+#data "<!doctype html><select><tbody>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 9
+#data "<!doctype html><select><thead>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 10
+#data "<!doctype html><select><tfoot>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 11
+#data "<!doctype html><select><caption>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 12
+#data "<!doctype html><table><tr></table>a"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+

@@ -1,0 +1,26 @@
+#case 0
+#data "<button>1</foo>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 1
+#data "<foo>1<p>2</foo>"
+scale 1
+fill 0,0 800x608 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text -8,26 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,3680
+
+#case 2
+#data "<dd>1</foo>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text 32,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=3072,1463
+
+#case 3
+#data "<foo>1<dd>2</foo>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 32,10 42x48 #ff000000 face=0 size=1024 glyphs=1 first=3072,2656
+

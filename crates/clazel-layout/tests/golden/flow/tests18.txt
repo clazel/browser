@@ -100,16 +100,16 @@ root (anonymous) 0,0 800x600
 #case 10
 #data "<!doctype html><table><td><plaintext></plaintext>"
 root (anonymous) 0,0 800x600
-  block <html> 0,0 800x68.640625
-    block <body> 8,8 784x52.640625 m=8,8,8,8
-      table-wrapper <table> 8,8 105.875x52.640625 m=0,678.125,0,0
-        table <table> 8,8 105.875x52.640625
-          row-group <tbody> 8,8 105.875x52.640625
-            row <tr> 8,8 105.875x52.640625
-              cell <td> 8,8 105.875x52.640625 p=1,1,1,1
-                block <plaintext> 9,25 103.875x18.640625 m=16,0,16,0
-                  line 9,25 103.875x18.640625 base=39.859375
-                    text "</plaintext>" x=9 base=39.859375 w=103.875
+  block <html> 0,0 800x72.640625
+    block <body> 8,8 784x56.640625 m=8,8,8,8
+      table-wrapper <table> 8,8 109.875x56.640625 m=0,674.125,0,0
+        table <table> 8,8 109.875x56.640625
+          row-group <tbody> 10,10 105.875x52.640625
+            row <tr> 10,10 105.875x52.640625
+              cell <td> 10,10 105.875x52.640625 p=1,1,1,1
+                block <plaintext> 11,27 103.875x18.640625 m=16,0,16,0
+                  line 11,27 103.875x18.640625 base=41.859375
+                    text "</plaintext>" x=11 base=41.859375 w=103.875
 
 #case 11
 #data "<!doctype html><table><caption><plaintext></plaintext>"
@@ -258,15 +258,15 @@ root (anonymous) 0,0 800x600
 #case 26
 #data "<!doctype html><table><td><style></script></style>abc"
 root (anonymous) 0,0 800x600
-  block <html> 0,0 800x36.640625
-    block <body> 8,8 784x20.640625 m=8,8,8,8
-      table-wrapper <table> 8,8 30.75x20.640625 m=0,753.25,0,0
-        table <table> 8,8 30.75x20.640625
-          row-group <tbody> 8,8 30.75x20.640625
-            row <tr> 8,8 30.75x20.640625
-              cell <td> 8,8 30.75x20.640625 p=1,1,1,1
-                line 9,9 28.75x18.640625 base=23.859375
-                  text "abc" x=9 base=23.859375 w=28.75
+  block <html> 0,0 800x40.640625
+    block <body> 8,8 784x24.640625 m=8,8,8,8
+      table-wrapper <table> 8,8 34.75x24.640625 m=0,749.25,0,0
+        table <table> 8,8 34.75x24.640625
+          row-group <tbody> 10,10 30.75x20.640625
+            row <tr> 10,10 30.75x20.640625
+              cell <td> 10,10 30.75x20.640625 p=1,1,1,1
+                line 11,11 28.75x18.640625 base=25.859375
+                  text "abc" x=11 base=25.859375 w=28.75
 
 #case 27
 #data "<!doctype html><select><script></style></script>abc"
@@ -337,14 +337,14 @@ root (anonymous) 0,0 800x600
 #case 35
 #data "<!doctype html><table><td><svg></svg>abc<td>"
 root (anonymous) 0,0 800x600
-  block <html> 0,0 800x38.640625
-    block <body> 8,8 784x22.640625 m=8,8,8,8
-      table-wrapper <table> 8,8 30.75x22.640625 m=0,753.25,0,0
-        table <table> 8,8 30.75x22.640625
-          row-group <tbody> 8,8 30.75x22.640625
-            row <tr> 8,8 30.75x22.640625
-              cell <td> 8,8 30.75x20.640625 p=1,1,1,1
-                line 9,9 28.75x18.640625 base=23.859375
-                  text "abc" x=9 base=23.859375 w=28.75
-              cell <td> 8,28.640625 30.75x2 p=1,1,1,1
+  block <html> 0,0 800x40.640625
+    block <body> 8,8 784x24.640625 m=8,8,8,8
+      table-wrapper <table> 8,8 38.75x24.640625 m=0,745.25,0,0
+        table <table> 8,8 38.75x24.640625
+          row-group <tbody> 10,10 34.75x20.640625
+            row <tr> 10,10 34.75x20.640625
+              cell <td> 10,10 30.75x20.640625 p=1,1,1,1
+                line 11,11 28.75x18.640625 base=25.859375
+                  text "abc" x=11 base=25.859375 w=28.75
+              cell <td> 42.75,10 2x20.640625 p=10.3125,1,10.328125,1
 

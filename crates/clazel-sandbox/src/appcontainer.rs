@@ -37,6 +37,25 @@
 //! tests of item 8.x (a real sandboxed process trying to open files, sockets
 //! and processes) are the only check that they deny what they should and
 //! allow what a renderer needs.
+//!
+//! # The GPU process's policy (phase-5.md item 5.21a)
+//!
+//! Decided in the plan from a measurement on Windows (2026-11-04, one RTX 5060 Ti
+//! and WARP; the table is in `docs/phases/phase-5.md`, section 5.21a), not measured
+//! again here: this crate was changed on a Mac. **The renderer's whole policy (its
+//! mitigations, job and no children) less `WIN32K_SYSTEM_CALL_DISABLE` and plus the
+//! `registryRead` capability, under its own container name.** Direct3D needs
+//! `win32k` with or without the capability, and the driver cannot read the
+//! registry keys it needs without it. The cost, which the plan states: a
+//! compromised GPU process can read `HKCU\Software`, `HKCU\Environment` and
+//! `HKLM\SOFTWARE`, and it has the whole `win32k` system call table. The separate
+//! [`GPU_CONTAINER_NAME`] keeps it from sharing the renderer's writable folder.
+//!
+//! Only the data is here. `clazel-renderer`'s `launch` starts the GPU process
+//! with it, through `clazel_sys::windows::spawn`, which takes capabilities by
+//! name (`DeriveCapabilitySidsFromName`). That code was written on a Mac and
+//! compiled for Windows; **no process has been started with this policy by this
+//! code** (the plan's measurement used a throwaway probe).
 
 /// The AppContainer profile name, which the SID is derived from. Changing it
 /// changes the SID, so files granted to the old one are no longer readable.
@@ -150,3 +169,28 @@ pub const OPT_OUT_ALL_APPLICATION_PACKAGES: bool = true;
 /// `PROCESS_CREATION_CHILD_PROCESS_RESTRICTED`: the renderer cannot create a
 /// child process at all.
 pub const CHILD_PROCESS_RESTRICTED: bool = true;
+
+/// The GPU process's AppContainer profile name (item 5.21a): its own, so that it
+/// shares no writable folder with renderers.
+pub const GPU_CONTAINER_NAME: &str = "clazel.gpu";
+
+/// The GPU process's capabilities (item 5.21a): `registryRead`, without which the
+/// driver cannot read `Control\Class`, `GraphicsDrivers` or `Microsoft\DirectX`
+/// under `HKLM` (measured in the plan).
+pub const GPU_CAPABILITIES: &[&str] = &["registryRead"];
+
+/// The mitigation the GPU process goes without (item 5.21a): Direct3D needs
+/// `win32k`.
+pub const GPU_WITHOUT: &[&str] = &["WIN32K_SYSTEM_CALL_DISABLE_ALWAYS_ON"];
+
+/// The GPU process's mitigations: [`MITIGATIONS`] less [`GPU_WITHOUT`].
+pub fn gpu_mitigation_mask() -> u64 {
+    MITIGATIONS
+        .iter()
+        .filter(|m| !GPU_WITHOUT.contains(&m.name))
+        .fold(0, |mask, m| mask | m.mask)
+}
+
+/// The GPU process's job: the renderer's (one process, killed with its handle,
+/// every UI limit, the same memory limit).
+pub const GPU_JOB: Job = RENDERER_JOB;

@@ -16,8 +16,8 @@
 //! page is compared byte for byte with `tests/golden/flow/<name>.txt`.
 //!
 //! Not laid out: the `#document-fragment` cases and the `scripted_*.dat`
-//! cases, as for the box trees. Tables are laid out by the placeholder of
-//! `flow/mod.rs` until item 5.15.
+//! cases, as for the box trees. Tables are laid out by item 5.15
+//! (`src/table/`).
 //!
 //! The fixtures are snapshots this code generated from itself (blessed
 //! with `CLAZEL_BLESS=1` and reviewed once): regression pins that say "the

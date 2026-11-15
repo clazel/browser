@@ -1,0 +1,22 @@
+#case 0
+#data "<isindex>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 1
+#data "<isindex name=\"A\" action=\"B\" prompt=\"C\" foo=\"D\">"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 2
+#data "<form><isindex>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 3
+#data "<!doctype html><isindex>x</isindex>x"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 41x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 1,-9 41x48 #ff000000 face=0 size=1024 glyphs=1 first=1090,1463
+

@@ -1,0 +1,170 @@
+#case 0
+#data "<div<div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 1
+#data "<div foo<bar=''>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 2
+#data "<div foo=`bar`>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 3
+#data "<div \\\"foo=''>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 4
+#data "<a href='\\nbar'></a>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 5
+#data "<!DOCTYPE html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 6
+#data "&lang;&rang;"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=2 first=512,1463
+
+#case 7
+#data "&apos;"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 36x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 8
+#data "&ImaginaryI;"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 38x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 9
+#data "&Kopf;"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 46x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 10
+#data "&notinva;"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 11
+#data "<?import namespace=\"foo\" implementation=\"#bar\">"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 12
+#data "<!--foo--bar-->"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 13
+#data "<svg><title><![CDATA[x]]>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 14
+#data "<svg><foreignobject><![CDATA[x]]>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 41x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 15
+#data "<svg><foreignobject><p><![CDATA[x]]>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 16
+#data "<math><![CDATA[x]]>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 41x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 17
+#data "<math><mtext><![CDATA[x]]>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 41x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 18
+#data "<math><mtext><i><![CDATA[x]]>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 19
+#data "<![CDATA[x]]>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 20
+#data "<textarea><!--</textarea>--></textarea>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text 220,13 56x48 #ff000000 face=0 size=1024 glyphs=3 first=15091,2898
+
+#case 21
+#data "<textarea><!--</textarea>-->"
+scale 1
+fill 0,0 800x600 #ffffffff
+text 220,13 56x48 #ff000000 face=0 size=1024 glyphs=3 first=15091,2898
+
+#case 22
+#data "<style><!--</style>--></style>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 56x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 23
+#data "<style><!--</style>-->"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 56x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 24
+#data "<ul><li>A </li> <li>B</li></ul>"
+scale 1
+fill 0,0 800x608 #ffffffff
+text 17,-9 47x48 #ff000000 face=0 size=1024 glyphs=2 first=2142,1463
+text 32,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=3072,1463
+text 17,10 47x48 #ff000000 face=0 size=1024 glyphs=2 first=2142,2656
+text 32,10 44x48 #ff000000 face=0 size=1024 glyphs=1 first=3072,2656
+
+#case 25
+#data "<table><form><input type=hidden><input></form><div></div></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 26
+#data "<i>A<b>B<p></i>C</b>D"
+scale 1
+fill 0,0 800x608 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 4,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=1252,1463
+text -8,26 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,3680
+text 4,26 45x48 #ff000000 face=0 size=1024 glyphs=1 first=1296,3680
+
+#case 27
+#data "<div></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 28
+#data "<svg></svg>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 29
+#data "<math></math>"
+scale 1
+fill 0,0 800x600 #ffffffff
+

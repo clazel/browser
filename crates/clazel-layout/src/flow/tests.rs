@@ -1068,7 +1068,7 @@ fn ol_markers_through_layout() {
     assert_eq!(marker("c"), Some(rect(10, 20, 40, 10)));
 }
 
-// ---- Markers, the table placeholder, depth ----
+// ---- Markers, depth ----
 
 /// A list item's marker ends at its content edge, on its first baseline.
 #[test]
@@ -1085,14 +1085,7 @@ fn markers_sit_outside() {
     assert_eq!(marker, Some(rect(20, 0, 20, 10)), "{}", l.dump());
 }
 
-/// The table placeholder (`mod.rs`): rows and cells as blocks, one below
-/// the other.
-#[test]
-fn table_placeholder_stacks_cells() {
-    let l = std("<table><tr><td id=a>a</td><td id=b>b</td></tr></table>");
-    assert_eq!(l.bb("a").y, 0, "{}", l.dump());
-    assert_eq!(l.bb("b").y, px(10));
-}
+// Tables are item 5.15's: their tests are in `table/tests.rs`.
 
 /// No recursion: a box tree 100,000 blocks deep (300 under Miri, where
 /// each box costs far more) lays out.

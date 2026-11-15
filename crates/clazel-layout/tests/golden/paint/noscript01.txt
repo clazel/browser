@@ -1,0 +1,91 @@
+#case 0
+#data "<head><noscript><!doctype html><!--foo--></noscript>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 1
+#data "<head><noscript><html class=\"foo\"><!--foo--></noscript>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 2
+#data "<head><noscript></noscript>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 3
+#data "<head><noscript>   </noscript>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 4
+#data "<head><noscript><!--foo--></noscript>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 5
+#data "<head><noscript><basefont><!--foo--></noscript>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 6
+#data "<head><noscript><bgsound><!--foo--></noscript>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 7
+#data "<head><noscript><link><!--foo--></noscript>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 8
+#data "<head><noscript><meta><!--foo--></noscript>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 9
+#data "<head><noscript><noframes>XXX</noscript></noframes></noscript>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 10
+#data "<head><noscript><style>XXX</style></noscript>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 11
+#data "<head><noscript></br><!--foo--></noscript>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 12
+#data "<head><noscript><head class=\"foo\"><!--foo--></noscript>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 13
+#data "<head><noscript><noscript class=\"foo\"><!--foo--></noscript>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 14
+#data "<head><noscript></p><!--foo--></noscript>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 15
+#data "<head><noscript><p><!--foo--></noscript>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 16
+#data "<head><noscript>XXX<!--foo--></noscript></head>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 66x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 17
+#data "<head><noscript>"
+scale 1
+fill 0,0 800x600 #ffffffff
+

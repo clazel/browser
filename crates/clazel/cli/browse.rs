@@ -1,4 +1,4 @@
-//! `clazel browse URL` (phase-4.md item 4.15): a text-mode browser in the
+//! `clazel --text URL` (phase-4.md item 4.15): a text-mode browser in the
 //! style of Lynx, as a loop over the host shell's public functions. Outside
 //! the line-counted shell in `src/`.
 //!

@@ -14,8 +14,8 @@
 //!   Scrolling is the renderer's (item 5.20) and does not change them.
 //! - **One [`BoxFragment`] per box that is laid out as a box**: the root
 //!   (the initial containing block), block-level boxes, atomic inlines
-//!   (inline blocks, replaced elements, inline table wrappers), markers, the
-//!   table placeholder's boxes (`flow/mod.rs`), and inline boxes, whose
+//!   (inline blocks, replaced elements, inline table wrappers), markers,
+//!   every box of a table (item 5.15), and inline boxes, whose
 //!   fragment is the bounding rectangle of their pieces with their used
 //!   margins, borders and padding. Text runs have none: their glyphs are in
 //!   the line boxes. A box that is not laid out has `None`.
@@ -34,6 +34,7 @@ use crate::boxes::BoxId;
 
 /// A rectangle in 1/64 px.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[cfg_attr(kani, derive(kani::Arbitrary))]
 pub struct Rect {
     /// Left edge.
     pub x: i32,
@@ -47,6 +48,7 @@ pub struct Rect {
 
 /// Four lengths, one per side, in 1/64 px.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[cfg_attr(kani, derive(kani::Arbitrary))]
 pub struct Sides {
     /// Top.
     pub top: i32,
