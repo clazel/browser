@@ -1,0 +1,196 @@
+#case 0
+#data "<!doctype html></head> <head>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 1
+#data "<!doctype html><form><div></form><div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 2
+#data "<!doctype html><title>&amp;</title>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 3
+#data "<!doctype html><title><!--&amp;--></title>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 4
+#data "<!doctype>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 5
+#data "<!---x"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 7
+#data "<frameset></frameset>\nfoo"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 8
+#data "<frameset></frameset>\n<noframes>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 9
+#data "<frameset></frameset>\n<div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 10
+#data "<frameset></frameset>\n</html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 11
+#data "<frameset></frameset>\n</div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 12
+#data "<form><form>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 13
+#data "<button><button>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 14
+#data "<table><tr><td></th>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 15
+#data "<table><caption><td>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 16
+#data "<table><caption><div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 18
+#data "<table><caption><div></caption>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 19
+#data "<table><caption></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 21
+#data "<table><caption></body></col></colgroup></html></tbody></td></tfoot></th></thead></tr>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 22
+#data "<table><caption><div></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 23
+#data "<table><tr><td></body></caption></col></colgroup></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 25
+#data "<table><colgroup>foo"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 57x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 27
+#data "<table><colgroup></col>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 28
+#data "<frameset><div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 30
+#data "<frameset></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 32
+#data "<table><tr><div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 35
+#data "<table><tr><div><td>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 37
+#data "<table><tbody></thead>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 39
+#data "<table><tbody></body></caption></col></colgroup></html></td></th></tr>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 40
+#data "<table><tbody></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 41
+#data "<table><table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 42
+#data "<table></body></caption></col></colgroup></html></tbody></td></tfoot></th></thead></tr>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 45
+#data "<html><frameset></frameset></html> "
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 46
+#data "<!DOCTYPE html PUBLIC \"-//W3C//DTD HTML 4.01//EN\"><html></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 47
+#data "<param><frameset></frameset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 48
+#data "<source><frameset></frameset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 49
+#data "<track><frameset></frameset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 50
+#data "</html><frameset></frameset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 51
+#data "</body><frameset></frameset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+

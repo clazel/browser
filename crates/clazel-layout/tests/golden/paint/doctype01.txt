@@ -1,0 +1,215 @@
+#case 0
+#data "<!DOCTYPE html>Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 75x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 1
+#data "<!dOctYpE HtMl>Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 75x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 2
+#data "<!DOCTYPEhtml>Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 75x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 3
+#data "<!DOCTYPE>Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 75x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 4
+#data "<!DOCTYPE >Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 75x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 5
+#data "<!DOCTYPE potato>Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 75x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 6
+#data "<!DOCTYPE potato >Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 75x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 7
+#data "<!DOCTYPE potato taco>Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 75x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 8
+#data "<!DOCTYPE potato taco \"ddd>Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 75x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 9
+#data "<!DOCTYPE potato sYstEM>Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 75x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 10
+#data "<!DOCTYPE potato sYstEM    >Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 75x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 11
+#data "<!DOCTYPE   potato       sYstEM  ggg>Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 75x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 12
+#data "<!DOCTYPE potato SYSTEM taco  >Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 75x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 13
+#data "<!DOCTYPE potato SYSTEM 'taco\"'>Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 75x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 14
+#data "<!DOCTYPE potato SYSTEM \"taco\">Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 75x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 15
+#data "<!DOCTYPE potato SYSTEM \"tai'co\">Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 75x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 16
+#data "<!DOCTYPE potato SYSTEMtaco \"ddd\">Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 75x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 17
+#data "<!DOCTYPE potato grass SYSTEM taco>Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 75x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 18
+#data "<!DOCTYPE potato pUbLIc>Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 75x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 19
+#data "<!DOCTYPE potato pUbLIc >Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 75x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 20
+#data "<!DOCTYPE potato pUbLIcgoof>Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 75x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 21
+#data "<!DOCTYPE potato PUBLIC goof>Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 75x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 22
+#data "<!DOCTYPE potato PUBLIC \"go'of\">Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 75x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 23
+#data "<!DOCTYPE potato PUBLIC 'go'of'>Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 75x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 24
+#data "<!DOCTYPE potato PUBLIC 'go:hh   of' >Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 75x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 25
+#data "<!DOCTYPE potato PUBLIC \"W3C-//dfdf\" SYSTEM ggg>Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 75x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 26
+#data "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\"\n   \"http://www.w3.org/TR/html4/strict.dtd\">Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 75x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 27
+#data "<!DOCTYPE ...>Hello"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 75x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 28
+#data "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"\n\"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 29
+#data "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Frameset//EN\"\n\"http://www.w3.org/TR/xhtml1/DTD/xhtml1-frameset.dtd\">"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 30
+#data "<!DOCTYPE root-element [SYSTEM OR PUBLIC FPI] \"uri\" [ \n<!-- internal declarations -->\n]>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 52x48 #ff000000 face=0 size=1024 glyphs=2 first=512,1463
+
+#case 31
+#data "<!DOCTYPE html PUBLIC\n  \"-//WAPFORUM//DTD XHTML Mobile 1.0//EN\"\n    \"http://www.wapforum.org/DTD/xhtml-mobile10.dtd\">"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 32
+#data "<!DOCTYPE HTML SYSTEM \"http://www.w3.org/DTD/HTML4-strict.dtd\"><body><b>Mine!</b></body>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 80x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 33
+#data "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\"\"http://www.w3.org/TR/html4/strict.dtd\">"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 34
+#data "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\"'http://www.w3.org/TR/html4/strict.dtd'>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 35
+#data "<!DOCTYPE HTML PUBLIC\"-//W3C//DTD HTML 4.01//EN\"'http://www.w3.org/TR/html4/strict.dtd'>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 36
+#data "<!DOCTYPE HTML PUBLIC'-//W3C//DTD HTML 4.01//EN''http://www.w3.org/TR/html4/strict.dtd'>"
+scale 1
+fill 0,0 800x600 #ffffffff
+

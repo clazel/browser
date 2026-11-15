@@ -12,38 +12,38 @@ root (anonymous) 0,0 800x600
 #case 1
 #data "<!doctype html><table><tr><select><td>"
 root (anonymous) 0,0 800x600
-  block <html> 0,0 800x18
-    block <body> 8,8 784x2 m=8,8,8,8
+  block <html> 0,0 800x22
+    block <body> 8,8 784x6 m=8,8,8,8
       block (anonymous) 8,8 784x0
-      table-wrapper <table> 8,8 2x2 m=0,782,0,0
-        table <table> 8,8 2x2
-          row-group <tbody> 8,8 2x2
-            row <tr> 8,8 2x2
-              cell <td> 8,8 2x2 p=1,1,1,1
+      table-wrapper <table> 8,8 6x6 m=0,778,0,0
+        table <table> 8,8 6x6
+          row-group <tbody> 10,10 2x2
+            row <tr> 10,10 2x2
+              cell <td> 10,10 2x2 p=1,1,1,1
 
 #case 2
 #data "<!doctype html><table><tr><td><select><td>"
 root (anonymous) 0,0 800x600
-  block <html> 0,0 800x20
-    block <body> 8,8 784x4 m=8,8,8,8
-      table-wrapper <table> 8,8 2x4 m=0,782,0,0
-        table <table> 8,8 2x4
-          row-group <tbody> 8,8 2x4
-            row <tr> 8,8 2x4
-              cell <td> 8,8 2x2 p=1,1,1,1
-              cell <td> 8,10 2x2 p=1,1,1,1
+  block <html> 0,0 800x22
+    block <body> 8,8 784x6 m=8,8,8,8
+      table-wrapper <table> 8,8 10x6 m=0,774,0,0
+        table <table> 8,8 10x6
+          row-group <tbody> 10,10 6x2
+            row <tr> 10,10 6x2
+              cell <td> 10,10 2x2 p=1,1,1,1
+              cell <td> 14,10 2x2 p=1,1,1,1
 
 #case 3
 #data "<!doctype html><table><tr><th><select><td>"
 root (anonymous) 0,0 800x600
-  block <html> 0,0 800x20
-    block <body> 8,8 784x4 m=8,8,8,8
-      table-wrapper <table> 8,8 2x4 m=0,782,0,0
-        table <table> 8,8 2x4
-          row-group <tbody> 8,8 2x4
-            row <tr> 8,8 2x4
-              cell <th> 8,8 2x2 p=1,1,1,1
-              cell <td> 8,10 2x2 p=1,1,1,1
+  block <html> 0,0 800x22
+    block <body> 8,8 784x6 m=8,8,8,8
+      table-wrapper <table> 8,8 10x6 m=0,774,0,0
+        table <table> 8,8 10x6
+          row-group <tbody> 10,10 6x2
+            row <tr> 10,10 6x2
+              cell <th> 10,10 2x2 p=1,1,1,1
+              cell <td> 14,10 2x2 p=1,1,1,1
 
 #case 4
 #data "<!doctype html><table><caption><select><tr>"

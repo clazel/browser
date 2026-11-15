@@ -70,17 +70,14 @@
 //!   `direction` is `ltr` and the writing mode horizontal.
 //! - **Content that does not fit overflows** (phase-5.md); `overflow:
 //!   hidden` makes a block formatting context here and clips in item 5.16.
-//! - **Tables are item 5.15's.** Until then their boxes have this
-//!   placeholder layout, which keeps every box in them laid out and their
-//!   text readable: a table wrapper box is laid out as a block box with the
-//!   table element's margins and `width` (shrink-to-fit when `auto`, as an
-//!   inline block would be); the table box as a block box filling it, with
-//!   the table's borders and padding; row groups, rows, cells and captions
-//!   as block boxes in their parent's flow, in tree order, one below the
-//!   other, each cell and caption a block formatting context root (as §9.4.1
-//!   says they are); columns and column groups as empty boxes at their
-//!   parent's top. `border-spacing`, column widths, cell `vertical-align`
-//!   and `colspan` have no effect yet.
+//! - **Tables are item 5.15's** ([`crate::table`]), laid out by this walk:
+//!   a table wrapper box is a block box (or an atomic inline) as wide as its
+//!   table (CSS Tables 3 §3.9.1), holding its captions and then its table
+//!   box in its flow; entering the table box gives its column widths and
+//!   each cell's horizontal place, each cell is laid out here as a block
+//!   formatting context root at that width, and leaving the table box gives
+//!   its rows' heights, its cells' vertical places and the rectangles of its
+//!   rows, columns and their groups.
 //! - **A list item's marker** (item 5.13: always `outside`, its list item's
 //!   first child) is laid out as a line of its own text in the list item's
 //!   font, ending at the list item's content edge (the marker text's suffix,

@@ -80,6 +80,12 @@ client and the DNS query ID, come from the OS through
 - The host must be UTF-8 for the literal and `localhost` checks, and an IPv4
   literal must be the four-part form `std` accepts; the caller passes the
   host the URL parser produced.
+- **Sub-fetch connections share the Driver** (`src/named.rs`, item 5.19).
+  The kernel names a sub-fetch connection `(renderer, serial, hop)`, not by
+  a number. `SubConns` gives each name a Driver number from 2^63 up, so it
+  cannot meet a navigation's `next_conn`. It turns `SubConnect`, `SubSend`
+  and `SubClose` into the Driver's operations, and a report on such a
+  number back into `SubNet`. It holds a map and decides nothing.
 
 ## Verification
 

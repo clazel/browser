@@ -1,0 +1,78 @@
+#case 0
+#data "<b><p>Bold </b> Not bold</p>\nAlso not bold."
+scale 1
+fill 0,0 800x608 #ffffffff
+text -8,-1 74x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1975
+text 34,-1 102x48 #ff000000 face=0 size=1024 glyphs=8 first=3190,1975
+text -8,34 143x48 #ff000000 face=0 size=1024 glyphs=14 first=512,4192
+
+#case 1
+#data "<html>\n<font color=red><i>Italic and Red<p>Italic and Red </font> Just italic.</p> Italic only.</i> Plain\n<p>I should not be red. <font color=red>Red. <i>Italic and red.</p>\n<p>Italic and red. </i> Red.</font> I should not be red.</p>\n<b>Bold <i>Bold and italic</b> Only Italic </i> Plain"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 146x48 #ffff0000 face=0 size=1024 glyphs=14 first=512,1463
+text -8,26 151x48 #ffff0000 face=0 size=1024 glyphs=15 first=512,3680
+text 111,26 113x48 #ff000000 face=0 size=1024 glyphs=12 first=8102,3680
+text -8,60 116x48 #ff000000 face=0 size=1024 glyphs=12 first=512,5897
+text 76,60 78x48 #ff000000 face=0 size=1024 glyphs=6 first=5864,5897
+text -8,95 196x48 #ff000000 face=0 size=1024 glyphs=21 first=512,8114
+text 156,95 74x48 #ffff0000 face=0 size=1024 glyphs=5 first=11014,8114
+text 198,95 146x48 #ffff0000 face=0 size=1024 glyphs=15 first=13698,8114
+text -8,129 151x48 #ffff0000 face=0 size=1024 glyphs=16 first=512,10331
+text 111,129 69x48 #ffff0000 face=0 size=1024 glyphs=4 first=8146,10331
+text 148,129 196x48 #ff000000 face=0 size=1024 glyphs=21 first=10504,10331
+text -8,164 74x48 #ff000000 face=0 size=1024 glyphs=5 first=512,12548
+text 34,164 149x48 #ff000000 face=0 size=1024 glyphs=15 first=3190,12548
+text 151,164 126x48 #ff000000 face=0 size=1024 glyphs=13 first=10697,12548
+text 245,164 73x48 #ff000000 face=0 size=1024 glyphs=5 first=16734,12548
+
+#case 2
+#data "<html><body>\n<p><font size=\"7\">First paragraph.</p>\n<p>Second paragraph.</p></font>\n<b><p><i>Bold and Italic</b> Italic</p>"
+scale 1
+fill 0,0 800x608 #ffffffff
+text -40,-43 497x144 #ff000000 face=0 size=3072 glyphs=16 first=512,3364
+text -40,60 560x144 #ff000000 face=0 size=3072 glyphs=17 first=512,10013
+text -8,199 151x48 #ff000000 face=0 size=1024 glyphs=15 first=512,14761
+text 111,199 78x48 #ff000000 face=0 size=1024 glyphs=7 first=8096,14761
+
+#case 3
+#data "<html>\n<dl>\n<dt><b>Boo\n<dd>Goo?\n</dl>\n</html>"
+scale 1
+fill 0,0 800x608 #ffffffff
+text -8,-9 63x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+text 32,10 73x48 #ff000000 face=0 size=1024 glyphs=4 first=3072,2656
+
+#case 4
+#data "<html><body>\n<label><a><div>Hello<div>World</div></a></label>  \n</body></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 75x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+text -8,10 80x48 #ff000000 face=0 size=1024 glyphs=5 first=512,2656
+
+#case 5
+#data "<table><center> <font>a</center> <img> <tr><td> </td> </tr> </table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text 379,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=25294,1463
+
+#case 6
+#data "<table><tr><p><a><p>You should see this text."
+scale 1
+fill 0,0 800x608 #ffffffff
+text -8,-1 229x48 #ff000000 face=0 size=1024 glyphs=25 first=512,1975
+
+#case 7
+#data "<TABLE>\n<TR>\n<CENTER><CENTER><TD></TD></TR><TR>\n<FONT>\n<TABLE><tr></tr></TABLE>\n</P>\n<a></font><font></a>\nThis page contains an insanely badly-nested tag sequence."
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,15 508x48 #ff000000 face=0 size=1024 glyphs=57 first=512,2999
+
+#case 8
+#data "<html>\n<body>\n<b><nobr><div>This text is in a div inside a nobr</nobr>More text that should not be in the nobr, i.e., the\nnobr should have closed the div inside it implicitly. </b><pre>A pre tag outside everything else.</pre>\n</body>\n</html>"
+scale 1
+fill 0,0 800x608 #ffffffff
+text -8,-9 297x48 #ff000000 face=0 size=1024 glyphs=35 first=512,1463
+text 257,-9 530x48 #ff000000 face=0 size=1024 glyphs=63 first=17463,1463
+text -8,10 342x48 #ff000000 face=0 size=1024 glyphs=41 first=512,2656
+text -8,44 306x48 #ff000000 face=0 size=1024 glyphs=34 first=512,4873
+

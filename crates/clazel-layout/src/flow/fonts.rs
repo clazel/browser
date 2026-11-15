@@ -63,6 +63,11 @@ pub struct FontMetrics {
     pub average: i32,
     /// The maximum character width.
     pub maximum: i32,
+    /// The top of an underline, below the baseline (positive downwards):
+    /// the `post` table's `underlinePosition` negated (item 5.16).
+    pub underline_position: i32,
+    /// An underline's thickness: `post`'s `underlineThickness` (item 5.16).
+    pub underline_thickness: i32,
 }
 
 /// One shaped glyph, in 1/64 px.
@@ -121,6 +126,10 @@ impl TextFns for BoxFont {
             x_height: ascent,
             average: size,
             maximum: size,
+            // A tenth of an em below the baseline and a tenth thick, so that
+            // tests' decorations are whole pixels at 10px.
+            underline_position: size.div_euclid(10),
+            underline_thickness: size.div_euclid(10),
         }
     }
 
@@ -249,6 +258,17 @@ impl TextFns for FaceFonts<'_> {
             .flatten()
             .and_then(|g| face.advance_width(g).ok())
             .map_or(size.div_euclid(2), |w| s(i32::from(w)));
+        // `post`'s "underlinePosition: the suggested distance of the top of
+        // the underline from the baseline (negative values indicate below
+        // baseline)"; without a `post` table, half the descent below the
+        // baseline and a sixteenth of an em thick (item 5.16).
+        let (underline_position, underline_thickness) = match face.post().ok().flatten() {
+            Some(p) => (
+                s(i32::from(p.underline_position)).saturating_neg(),
+                s(i32::from(p.underline_thickness)).max(0),
+            ),
+            None => (s(d).saturating_neg().div_euclid(2), size.div_euclid(16)),
+        };
         FontMetrics {
             ascent: s(a),
             // `descender` is negative below the baseline.
@@ -257,6 +277,8 @@ impl TextFns for FaceFonts<'_> {
             x_height,
             average: zero,
             maximum: s(i32::from(face.hhea.advance_width_max)),
+            underline_position,
+            underline_thickness,
         }
     }
 

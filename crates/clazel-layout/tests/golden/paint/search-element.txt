@@ -1,0 +1,58 @@
+#case 0
+#data "<!doctype html><p>foo<search>bar<p>baz"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-1 57x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1975
+text -8,34 59x48 #ff000000 face=0 size=1024 glyphs=3 first=512,4192
+text -8,68 60x48 #ff000000 face=0 size=1024 glyphs=3 first=512,6409
+
+#case 1
+#data "<!doctype html><search><p>foo</search>bar"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-1 57x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1975
+text -8,34 59x48 #ff000000 face=0 size=1024 glyphs=3 first=512,4192
+
+#case 2
+#data "<!DOCTYPE html>xxx<svg><x><g><a><search><b>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 59x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 3
+#data "<!doctype html><a><search>x</a>y"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 41x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 1,-9 41x48 #ff000000 face=0 size=1024 glyphs=1 first=1090,1463
+
+#case 4
+#data "<!doctype html><a><search>x<p>y<a>z"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 41x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text -8,26 41x48 #ff000000 face=0 size=1024 glyphs=1 first=512,3680
+text 1,26 40x48 #ff000000 face=0 size=1024 glyphs=1 first=1091,3680
+
+#case 5
+#data "<!doctype html><li>a<search><li>b"
+scale 1
+fill -7,0 807x600 #ffffffff
+text -23,-9 47x48 #ff000000 face=0 size=1024 glyphs=2 first=-418,1463
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text -23,10 47x48 #ff000000 face=0 size=1024 glyphs=2 first=-418,2656
+text -8,10 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,2656
+
+#case 6
+#data "<!doctype html><dd>a<search><dt>b"
+scale 1
+fill 0,0 800x600 #ffffffff
+text 32,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=3072,1463
+text 32,10 42x48 #ff000000 face=0 size=1024 glyphs=1 first=3072,2656
+
+#case 7
+#data "<!doctype html><x><search></x>y"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 41x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+

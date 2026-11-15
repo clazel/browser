@@ -127,11 +127,11 @@ root (anonymous) 0,0 800x600
           inline <font> 8,11.78125 0x18.640625 start
           atomic <img>
           replaced <img> 8,26.640625 0x0
-      table-wrapper <table> 8,26.640625 2x2 m=0,782,0,0
-        table <table> 8,26.640625 2x2
-          row-group <tbody> 8,26.640625 2x2
-            row <tr> 8,26.640625 2x2
-              cell <td> 8,26.640625 2x2 p=1,1,1,1
+      table-wrapper <table> 8,26.640625 6x6 m=0,778,0,0
+        table <table> 8,26.640625 6x6
+          row-group <tbody> 10,28.640625 2x2
+            row <tr> 10,28.640625 2x2
+              cell <td> 10,28.640625 2x2 p=1,1,1,1
 
 #case 6
 #data "<table><tr><p><a><p>You should see this text."
@@ -156,22 +156,22 @@ root (anonymous) 0,0 800x600
       block <center> 8,8 784x0
         block <center> 8,8 784x0
       block (anonymous) 8,8 784x0
-      table-wrapper <table> 8,8 2x2 m=0,782,0,0
-        table <table> 8,8 2x2
-          row-group <tbody> 8,8 2x2
-            row <tr> 8,8 2x2
-              cell <td> 8,8 2x2 p=1,1,1,1
-            row <tr> 8,10 2x0
-      table-wrapper <table> 8,10 0x0 m=0,784,0,0
-        table <table> 8,10 0x0
-          row-group <tbody> 8,10 0x0
-            row <tr> 8,10 0x0
-      block (anonymous) 8,10 784x0
-      block <p> 8,26 784x0 m=16,0,16,0
-      block (anonymous) 8,26 784x18.640625
-        line 8,26 784x18.640625 base=40.859375
-          inline <font> 8,26 476.28125x18.640625 start end
-          text "This page contains an insanely badly-nested tag sequence." x=8 base=40.859375 w=476.28125
+      table-wrapper <table> 8,8 6x8 m=0,778,0,0
+        table <table> 8,8 6x8
+          row-group <tbody> 10,10 2x4
+            row <tr> 10,10 2x2
+              cell <td> 10,10 2x2 p=1,1,1,1
+            row <tr> 10,14 2x0
+      table-wrapper <table> 8,16 0x0 m=0,784,0,0
+        table <table> 8,16 0x0
+          row-group <tbody> 8,16 0x0
+            row <tr> 8,16 0x0
+      block (anonymous) 8,16 784x0
+      block <p> 8,32 784x0 m=16,0,16,0
+      block (anonymous) 8,32 784x18.640625
+        line 8,32 784x18.640625 base=46.859375
+          inline <font> 8,32 476.28125x18.640625 start end
+          text "This page contains an insanely badly-nested tag sequence." x=8 base=46.859375 w=476.28125
 
 #case 8
 #data "<html>\n<body>\n<b><nobr><div>This text is in a div inside a nobr</nobr>More text that should not be in the nobr, i.e., the\nnobr should have closed the div inside it implicitly. </b><pre>A pre tag outside everything else.</pre>\n</body>\n</html>"

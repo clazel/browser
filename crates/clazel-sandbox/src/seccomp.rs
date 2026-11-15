@@ -127,3 +127,10 @@ pub fn generate(audit_arch: u32, numbers: &[u32]) -> Result<Vec<SockFilter>, Gen
 pub fn renderer_program(arch: Arch) -> Result<Vec<SockFilter>, GenError> {
     generate(arch.audit_arch(), &syscalls::numbers(arch))
 }
+
+/// The GPU process's seccomp program for `arch` (item 5.21a), from
+/// [`syscalls::gpu_numbers`]: the same layout, over the renderer's list and
+/// [`syscalls::GPU_EXTRA`]. **Not measured** (see `GPU_EXTRA`).
+pub fn gpu_program(arch: Arch) -> Result<Vec<SockFilter>, GenError> {
+    generate(arch.audit_arch(), &syscalls::gpu_numbers(arch))
+}

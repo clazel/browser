@@ -1,0 +1,31 @@
+#case 0
+#data "<p><font size=4><font color=red><font size=4><font size=4><font size=4><font size=4><font size=4><font color=red><p>X"
+scale 1
+fill 0,0 800x616 #ffffffff
+text -10,-3 49x54 #ffff0000 face=0 size=1152 glyphs=1 first=512,2093
+
+#case 1
+#data "<p><font size=4><font size=4><font size=4><font size=4><p>X"
+scale 1
+fill 0,0 800x616 #ffffffff
+text -10,-3 49x54 #ff000000 face=0 size=1152 glyphs=1 first=512,2093
+
+#case 2
+#data "<p><font size=4><font size=4><font size=4><font size=\"5\"><font size=4><p>X"
+scale 1
+fill 0,0 800x616 #ffffffff
+text -10,2 49x54 #ff000000 face=0 size=1152 glyphs=1 first=512,2450
+
+#case 3
+#data "<p><font size=4 id=a><font size=4 id=b><font size=4><font size=4><p>X"
+scale 1
+fill 0,0 800x616 #ffffffff
+text -10,-3 49x54 #ff000000 face=0 size=1152 glyphs=1 first=512,2093
+
+#case 4
+#data "<p><b id=a><b id=a><b id=a><b><object><b id=a><b id=a>X</object><p>Y"
+scale 1
+fill 0,0 800x608 #ffffffff
+text -8,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text -8,26 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,3680
+

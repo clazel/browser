@@ -1,0 +1,29 @@
+scale 1
+fill 0,0 800x600 #ffffffff
+fill 199,147 402x1 #ff000000
+fill 600,148 1x27 #ff000000
+fill 199,175 402x1 #ff000000
+fill 199,148 1x27 #ff000000
+push-clip 8,186 784x49
+pop-clip
+text -24,-13 202x96 #ff000000 face=0 size=2048 glyphs=7 first=512,3273
+text -8,63 793x48 #ff000000 face=0 size=1024 glyphs=88 first=512,6079
+text -8,82 355x48 #ff000000 face=0 size=1024 glyphs=40 first=512,7272
+fill 444,151 114x1 #ff000000
+fill 557,152 1x19 #ff000000
+fill 444,171 114x1 #ff000000
+fill 444,152 1x19 #ff000000
+text 188,135 272x48 #ff000000 face=0 size=1024 glyphs=30 first=13056,10705
+text 433,135 136x48 #ff000000 face=0 size=1024 glyphs=13 first=28725,10705
+text 542,135 37x48 #ff000000 face=0 size=1024 glyphs=1 first=35723,10705
+push-clip 8,186 784x49
+text -8,184 307x48 #ff000000 face=0 size=1024 glyphs=34 first=512,13818
+pop-clip
+text 17,234 47x48 #ff000000 face=0 size=1024 glyphs=2 first=2142,16995
+text 32,234 65x48 #ff000000 face=0 size=1024 glyphs=3 first=3072,16995
+text 17,256 47x48 #ff000000 face=0 size=1024 glyphs=2 first=2142,18453
+text 32,256 71x48 #ff000000 face=0 size=1024 glyphs=4 first=3072,18453
+text 288,301 256x48 #ff000000 face=0 size=1024 glyphs=27 first=19431,21303
+text 305,325 190x48 #ff000000 face=0 size=1024 glyphs=19 first=20530,22839
+text -8,362 226x48 #ff000000 face=0 size=1024 glyphs=18 first=512,25228
+text -8,381 113x48 #ff000000 face=0 size=1024 glyphs=10 first=512,26421

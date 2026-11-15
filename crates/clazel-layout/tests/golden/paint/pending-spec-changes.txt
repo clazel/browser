@@ -1,0 +1,17 @@
+#case 0
+#data "<input type=\"hidden\"><frameset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 1
+#data "<!DOCTYPE html><table><caption><svg>foo</table>bar"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 57x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+text -8,10 59x48 #ff000000 face=0 size=1024 glyphs=3 first=512,2656
+
+#case 2
+#data "<table><tr><td><svg><desc><td></desc><circle>"
+scale 1
+fill 0,0 800x600 #ffffffff
+

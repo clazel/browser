@@ -1,6 +1,7 @@
 # clazel-sandbox
 
-The sandbox policies for Clazel renderer processes, as plain data. Part of
+The sandbox policies for Clazel renderer processes and the GPU process, as
+plain data. Part of
 [Clazel](../../README.md), a web browser whose parsers of untrusted input
 carry machine-checked proofs.
 
@@ -95,6 +96,157 @@ assert_ne!(flags & namespaces::CLONE_NEWNET, 0);
 // macOS: the SBPL text, to hand to the OS elsewhere.
 assert!(seatbelt::renderer_profile().starts_with("(version 1)\n(deny default)\n"));
 ```
+
+## The GPU process (item 5.21a)
+
+A GPU driver cannot run in the renderer's sandbox, so the GPU process has its
+own policies. **This sandbox is weaker than the renderer's on every OS**, and
+how is stated per OS below. An unlisted driver that the sandbox breaks makes the
+GPU process fail and exit; the crash policy (`clazel-gpu`, item 5.17c) then
+moves the tab to software, or on macOS, which has no software fallback, shows
+the notice. The sandbox is never widened at run time.
+
+On every OS the GPU process **warms up, then enters**. Before installing the
+sandbox and before reading any message, it loads its driver, makes its device
+and compiles its fixed pipelines from our own shader source, never a page's.
+
+| OS | Policy | State |
+|----|--------|-------|
+| macOS | `seatbelt::GPU`: `(deny default)` and one rule, `mach-lookup` of `com.apple.MTLCompilerService` (item 5.23) | **measured** on one machine (below); entered by `clazel_gpu::sandbox::start_metal` |
+| Linux | `syscalls::GPU_EXTRA` added to the renderer's list, built by `seccomp::gpu_program` | **not measured**: written on a Mac, every entry says so |
+| Windows | `appcontainer::GPU_*`: the renderer's policy less `WIN32K`, plus `registryRead`, container `clazel.gpu` | decided by the plan's measurement (2026-11-04); data only, nothing starts a process with it yet |
+
+### macOS, measured
+
+Measured on an Apple M1 Pro, macOS 26.7.2, on 2026-11-13. The method:
+- A process drew every scene of `clazel-gpu` (the clear and the fixed pipeline, 7
+  lists) through the Metal backend, read the pixels back and compared them with
+  the software reference.
+- Seatbelt's denials were read from the system log.
+
+After the warm-up, `(deny default)` alone drew every list correctly and logged
+no denial. This includes making a new IOSurface of each scene's size inside the
+sandbox. Metal opens its IOKit connections during the warm-up, and Seatbelt
+checks a connection only when it is opened.
+
+Entering *before* the warm-up was measured too, and is not used. It needs six
+rules, and without any one of them Metal fails or the process crashes:
+- `iokit-open-user-client` for `AGXDeviceUserClient` and for `IOSurfaceRootUserClient`;
+- `mach-lookup` of `com.apple.MTLCompilerService`;
+- `file-read*` under `/System/Library/Extensions`;
+- `sysctl-read` of four names;
+- `file-read-metadata` of the executable's directory.
+
+Making a device also looks up `com.apple.windowserver.active`. Denying it
+changed nothing, and the profile denies it.
+
+**Item 5.23 added one rule.** Drawing real pages (5.20's lists, a second page's
+glyph uploads) made the sandboxed process abort inside Apple's driver while it
+compiled a blit program variant on Metal's compiler queue; the system log showed
+the lookup of `com.apple.MTLCompilerService` denied. The driver compiles such
+variants when first needed, so a warm-up cannot promise to reach them (drawing
+every scene and every upload offset before entering did not prevent it). With
+`(allow mach-lookup (global-name "com.apple.MTLCompilerService"))` the page flow
+passes, the escape attempts below are still denied, and the only denial logged is
+`com.apple.analyticsd` (the driver's telemetry), without effect. The cost: a
+compromised GPU process can send requests to Metal's compiler service, an XPC
+service sandboxed by Apple; Chromium's GPU sandbox allows the same. The plan's
+5.21a text names "the IOKit and Mach services Metal needs".
+
+`clazel-gpu`'s `tests/sandbox_macos.rs` repeats the measurement in child
+processes. It attempts each of the following from inside the sandbox, after an
+unsandboxed control of the same attempt succeeds:
+
+| Attempt | Result |
+|---------|--------|
+| Draw every scene, read back, compare with the reference | **allowed**, equal to the unsandboxed control |
+| Make the Metal device *after* entering | denied: `MTLCreateSystemDefaultDevice` fails |
+| Read a file the test wrote | denied, `EPERM` |
+| Create a file in the test's directory | denied, `EPERM` |
+| List the home directory | denied, `EPERM` |
+| Connect to a loopback TCP port | denied, `EPERM` (`network-outbound`) |
+| Bind a UDP socket | denied, `EPERM` (`network-bind`) |
+| Connect to a Unix socket | denied, `EPERM` |
+| Reach the WindowServer (`CGSessionCopyCurrentDictionary`) | denied: no session (`mach-lookup com.apple.windowserver.active`) |
+| `fork` | denied, `EPERM` (`process-fork`) |
+| Start `/usr/bin/true` | denied, `EPERM` |
+
+**How it is weaker than the renderer's.**
+- The process keeps open connections to the GPU's kernel driver
+  (`AGXDeviceUserClient`) and to IOSurface. It can make any call those user
+  clients accept, and Seatbelt cannot filter them.
+- The Metal driver's own code runs in the process.
+
+The profile text is shorter than the renderer's only because the warm-up does the
+opening.
+
+**Not measured:**
+- other Macs, GPUs and macOS versions;
+- an Intel Mac (not supported);
+- a GPU process running for a long time, or under memory pressure;
+- the Mach port that brings the host's surfaces (item 5.18).
+
+### Linux, not measured
+
+`GPU_EXTRA` adds nine calls to the renderer's list:
+- `ioctl`, for a hardware driver's commands;
+- `sendmsg` and `recvmsg`, for buffer descriptors to and from the host;
+- `clone` and `clone3`, for threads;
+- `set_robust_list`, `rseq` and `sched_getaffinity`, which a new thread and
+  lavapipe's thread pool need;
+- `getpid`.
+
+There is still no `open`, `openat`, `socket` or `connect`, so the process has no
+new files, no X server and no network. Lavapipe's compiled shaders need
+executable memory, which `mmap` and `mprotect` already allow. Its compiled
+shaders are our fixed ones, never a page's.
+
+**How it is weaker than the renderer's:**
+- Those nine calls, with no argument filtering. `ioctl` reaches every ioctl of
+  every descriptor the process holds, which is the hardware driver's kernel
+  surface; per-driver `ioctl` filtering is absent.
+- `clone` can make a process as well as a thread; that process runs under the
+  same filter.
+
+**None of this has run.**
+- The list needs measuring on Linux, with lavapipe and with each real driver
+  (Intel, AMD, NVIDIA).
+- Landlock and namespaces for the GPU process are not decided here.
+- Nothing installs the filter yet: there is no Linux GPU backend (item 5.17b's
+  rest).
+
+### Windows, data only
+
+The plan measured the Windows policy and decided it. It is restated here as
+data, without a new measurement. The cost the plan states: the GPU process can
+read `HKCU\Software`, `HKCU\Environment` and `HKLM\SOFTWARE`, and it has
+`win32k`.
+
+Starting a process with the `registryRead` capability needs
+`clazel_sys::windows::spawn` to take capabilities (`DeriveCapabilitySidsFromName`).
+That change to `clazel-sys` cannot be compiled or run from a Mac, so it waits
+for a Windows machine.
+
+### Kani
+
+Each harness ran alone, in its own process group, with a 20-minute and 8 GB cap
+polled every 5 s.
+
+| Harness | Covers | Result | Verification time | Peak |
+|---------|--------|--------|-------------------|------|
+| `gpu_other_arch_x86_64` | the GPU program (37 instructions), any syscall number, every other architecture value | passed, 451 checks | 220 s | 7.99 GB |
+| `gpu_other_arch_aarch64` | the same on aarch64 | passed, 451 checks | 222 s | 7.90 GB |
+| `gpu_allowlist_x86_64` | the GPU program allows exactly its list, every 32-bit number, right architecture | **capped at 8 GB** in symbolic execution, three tries; **removed** | — | > 8 GB |
+
+**Not proven by Kani:**
+- That the GPU program allows exactly its list for every 32-bit number.
+  `tests/policies.rs` sweeps every number below 1024 on both architectures
+  instead. Kani's generator theorem covers symbolic lists of up to three numbers
+  (`list_0` to `list_3`), not 31.
+- That the list is right. It is not measured.
+
+The two passing harnesses peak just under 8 GB, so a smaller machine may not run
+them.
 
 ## Licence
 

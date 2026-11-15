@@ -1,0 +1,104 @@
+#case 0
+#data "<style> <!-- </style>x"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 41x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 1
+#data "<style> <!-- </style> --> </style>x"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 70x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 2
+#data "<style> <!--> </style>x"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 41x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 3
+#data "<style> <!---> </style>x"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 41x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 4
+#data "<iframe> <!---> </iframe>x"
+scale 1
+fill 0,0 800x600 #ffffffff
+fill 8,8 304x2 #ff000000
+fill 310,10 2x150 #ff000000
+fill 8,160 304x2 #ff000000
+fill 8,10 2x150 #ff000000
+text 296,130 41x48 #ff000000 face=0 size=1024 glyphs=1 first=19968,10368
+
+#case 5
+#data "<iframe> <!--- </iframe>->x</iframe> --> </iframe>x"
+scale 1
+fill 0,0 800x600 #ffffffff
+fill 8,8 304x2 #ff000000
+fill 310,10 2x150 #ff000000
+fill 8,160 304x2 #ff000000
+fill 8,10 2x150 #ff000000
+text 296,130 103x48 #ff000000 face=0 size=1024 glyphs=9 first=19968,10368
+
+#case 6
+#data "<script> <!-- </script> --> </script>x"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 70x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 7
+#data "<title> <!-- </title> --> </title>x"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 70x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
+
+#case 8
+#data "<textarea> <!--- </textarea>->x</textarea> --> </textarea>x"
+scale 1
+fill 0,0 800x600 #ffffffff
+text 220,13 103x48 #ff000000 face=0 size=1024 glyphs=9 first=15091,2898
+
+#case 9
+#data "<style> <!</-- </style>x"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 41x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 10
+#data "<p><xmp></xmp>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 11
+#data "<xmp> <!-- > --> </xmp>"
+scale 1
+fill 0,0 800x608 #ffffffff
+text -8,-9 121x48 #ff000000 face=0 size=1024 glyphs=12 first=512,1463
+
+#case 12
+#data "<title>&amp;</title>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 13
+#data "<title><!--&amp;--></title>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 14
+#data "<title><!--</title>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 15
+#data "<noscript><!--</noscript>--></noscript>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 16
+#data "<noscript><!--</noscript>--></noscript>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
