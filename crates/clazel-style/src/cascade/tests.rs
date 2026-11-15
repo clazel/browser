@@ -650,6 +650,10 @@ fn limited_quirks_mode_is_off() {
         (limited, "limited-quirks", false),
         (none, "no-quirks", false),
     ] {
+        // Under Miri a document takes over a minute: only the mode this test is for.
+        if cfg!(miri) && mode != "limited-quirks" {
+            continue;
+        }
         let html = format!("{doctype}{body}");
         let arena = parse(&html);
         let got = match arena.kind(0) {
@@ -702,6 +706,12 @@ fn font_weight_stays_in_one_to_one_thousand() {
         millionths: v,
         is_integer: v % 1_000_000 == 0,
     };
+    // Under Miri a document takes most of a minute: one value of each kind.
+    if cfg!(miri) {
+        assert_eq!(weight("1000"), n(1_000_000_000));
+        assert_eq!(weight("1000.000001"), n(700_000_000));
+        return;
+    }
     // In range: kept as written.
     assert_eq!(weight("1"), n(1_000_000));
     assert_eq!(weight("1000"), n(1_000_000_000));

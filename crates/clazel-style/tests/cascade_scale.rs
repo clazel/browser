@@ -146,7 +146,13 @@ fn index_candidates_do_not_grow_with_the_rule_count() {
         }
         (total, spans, elements)
     };
-    for rules in [50, 200, 800] {
+    // Under Miri the largest page takes most of half an hour: small pages only.
+    let sizes: &[usize] = if cfg!(miri) {
+        &[12, 24]
+    } else {
+        &[50, 200, 800]
+    };
+    for &rules in sizes {
         let (total, spans, elements) = candidates_for(rules);
         assert_eq!(spans, rules.saturating_mul(2));
         assert_eq!(total, spans, "{rules} rules: one candidate per span");
