@@ -227,7 +227,7 @@ pub open spec fn ml_attr(v: u32) -> Attr {
     Attr { namespace: None, prefix: None, local_name: seq![], value: seq![v] }
 }
 
-/// `theorem_set_mode_wf` on [`ml_doc_urls`]: the base URL stays `[2]`.
+/// `theorem_set_mode_frame` on [`ml_doc_urls`]: the base URL stays `[2]`.
 pub proof fn ml_set_mode_keeps_urls()
     ensures
         set_mode(ml_doc_urls(), DocumentMode::Quirks).nodes[0].kind->Document_base_url[0] == 2u32,
@@ -240,6 +240,7 @@ pub proof fn ml_set_mode_keeps_urls()
     lemma_set_kind_wf(d0, paths, 0, k);
     assert(ml_doc_urls().nodes[0].kind == k);
     theorem_set_mode_wf(ml_doc_urls(), DocumentMode::Quirks);
+    theorem_set_mode_frame(ml_doc_urls(), DocumentMode::Quirks);
 }
 
 /// `theorem_append_attribute_wf` twice on an element: the first attribute
@@ -257,7 +258,7 @@ pub proof fn ml_append_attribute_order()
     theorem_append_attribute_wf(d1, 3, ml_attr(2));
 }
 
-/// `theorem_create_template_contents_wf` on [`ml_doc_form`]: the element's
+/// `theorem_create_template_contents_frame` on [`ml_doc_form`]: the element's
 /// form owner stays set.
 pub proof fn ml_ctc_keeps_form_owner()
     ensures
@@ -271,9 +272,10 @@ pub proof fn ml_ctc_keeps_form_owner()
     assert(ml_doc_form().nodes.len() == 4) by (compute_only);
     assert(can_create(ml_doc_form(), 1)) by (compute_only);
     theorem_create_template_contents_wf(ml_doc_form(), 3);
+    theorem_create_template_contents_frame(ml_doc_form(), 3);
 }
 
-/// `theorem_remove_wf` on the document with children 1, 2 and 3: removing
+/// `theorem_remove_keeps_order` on the document with children 1, 2 and 3: removing
 /// 3 leaves 1 first.
 pub proof fn ml_remove_keeps_order()
     ensures
@@ -297,6 +299,7 @@ pub proof fn ml_remove_keeps_order()
     assert(kids.no_duplicates());
     lemma_index_of_unique(kids, 2);
     theorem_remove_wf(d, 3);
+    theorem_remove_keeps_order(d, 3);
 }
 
 /// `theorem_append_wf` on [`ml_doc_child`], moving its child 1 to the end

@@ -76,7 +76,7 @@
       "find": "NodeKind::Document { url, base_url, .. } => NodeKind::Document { mode, url, base_url },",
       "replace": "NodeKind::Document { url, base_url, .. } => NodeKind::Document { mode, url: base_url, base_url: url },",
       "expect": "killed",
-      "reason": "set_mode swaps the document's URL and base URL: theorem_set_mode_wf (the URL and the base URL are each kept) is false for a document whose two differ.",
+      "reason": "set_mode swaps the document's URL and base URL: theorem_set_mode_frame (the URL and the base URL are each kept) is false for a document whose two differ.",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
         "lemma": "ml_set_mode_keeps_urls()",
@@ -104,7 +104,7 @@
       "find": "            template_contents: Some(f),\n            form_owner,\n",
       "replace": "            template_contents: Some(f),\n            form_owner: match form_owner {\n                Some(_) => None,\n                None => None,\n            },\n",
       "expect": "killed",
-      "reason": "Establishing template contents clears the element's form owner: theorem_create_template_contents_wf (every other field of the template is kept) is false for an element with a form owner.",
+      "reason": "Establishing template contents clears the element's form owner: theorem_create_template_contents_frame (every other field of the template is kept) is false for an element with a form owner.",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
         "lemma": "ml_ctc_keeps_form_owner()",
@@ -118,7 +118,7 @@
       "find": "Node { children: pn.children.remove(i), ..pn }",
       "replace": "Node { children: pn.children.remove(i).drop_first() + pn.children.remove(i).take(1), ..pn }",
       "expect": "killed",
-      "reason": "remove keeps the same siblings but rotates them (length, membership and absence of duplicates are as before, so only the order is wrong): theorem_remove_wf (the old parent's children are the old ones with the entry at node's index taken out, in order) is false with two siblings left.",
+      "reason": "remove keeps the same siblings but rotates them (length, membership and absence of duplicates are as before, so only the order is wrong): theorem_remove_keeps_order (the old parent's children are the old ones with the entry at node's index taken out, in order) is false with two siblings left.",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
         "lemma": "ml_remove_keeps_order()",

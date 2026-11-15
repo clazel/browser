@@ -55,8 +55,12 @@ not the tier. The conformance evidence is the crate's own
   `reparent_children` moves all children in order. `remove` changes only
   the node's parent and its parent's children, and no operation shrinks the
   arena or changes an existing node's kind except its own target
-  (`theorem_remove_keeps_record`, `theorem_ids_stable`). The thirteen
-  theorems are listed in `Cargo.toml`.
+  (`theorem_remove_keeps_record`, `theorem_ids_stable`). What template
+  contents, "append an attribute" and setting the mode leave alone, and
+  that "remove" keeps the siblings' order, are theorems of their own
+  (`theorem_*_frame`, `theorem_remove_keeps_order`), so that proofs needing
+  only well-formedness do not carry them. The seventeen theorems are listed
+  in `Cargo.toml`.
 - **Proven (`src/exec.rs`):** the executable arena equals the spec, for
   every operation and reader (the contracts are `src/contract.rs`). It is
   safe Rust with no recursion; a node's children are edited in place, and
