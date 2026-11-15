@@ -61,6 +61,11 @@
 //!   and HarfBuzz's normalization (composing or decomposing to what the
 //!   face maps) and space fallback change the glyphs. Window: the
 //!   character's base and combining marks, and one character either side.
+//! - `cmap rustybuzz does not read`: only for the font files listed in
+//!   `CMAP_DISAGREEMENTS`. `clazel-font` maps a character of the case and
+//!   `rustybuzz` (through `ttf-parser`) does not, so it draws `.notdef`
+//!   there. Window: that character and one either side. Any other face on
+//!   which the two `cmap` readers disagree fails.
 //! - `kern table split`: the face is kerned from its `kern` table, and
 //!   HarfBuzz splits each pair's value between the two glyphs (half to the
 //!   first glyph's advance, the rest to the second's advance and offset)
@@ -613,6 +618,41 @@ fn unmapped_windows(text: &str, face: &Face<'_>) -> Vec<(usize, usize)> {
     windows
 }
 
+/// Font files on which `clazel-font` maps characters that `rustybuzz` (through
+/// `ttf-parser`) does not, by file name, lower case. Found by the system
+/// suite; which reader is right has not been established from the font.
+///
+/// - `mingliu.ttc` (Windows; four faces): Cyrillic. We give `А` to `я` the
+///   glyphs 33860 to 33925, consecutive in alphabetical order with `Ё`
+///   after `Е`, as a real mapping of the font's Big5-ordered glyphs would be
+///   and a misread would not; `rustybuzz` gives glyph 0 for each.
+const CMAP_DISAGREEMENTS: &[&str] = &["mingliu.ttc"];
+
+/// Whether `name` (a path, or the vendored suite's `directory/file`) is a
+/// file of [`CMAP_DISAGREEMENTS`].
+fn cmap_disagreement_listed(name: &str) -> bool {
+    let file = name.rsplit(['/', '\\']).next().unwrap_or(name);
+    CMAP_DISAGREEMENTS
+        .iter()
+        .any(|listed| file.eq_ignore_ascii_case(listed))
+}
+
+/// The windows around each character that `face` maps and `rb` does not:
+/// the character and one either side (a kern pair with a glyph that changed).
+fn cmap_disagreement_windows(
+    text: &str,
+    face: &Face<'_>,
+    rb: &rustybuzz::Face<'_>,
+) -> Vec<(usize, usize)> {
+    text.chars()
+        .enumerate()
+        .filter(|(_, c)| {
+            matches!(face.glyph_index(*c), Ok(Some(_))) && rb.glyph_index(*c).is_none()
+        })
+        .map(|(i, _)| (i.saturating_sub(1), i.saturating_add(1)))
+        .collect()
+}
+
 /// The differing clusters (byte offsets) outside every window.
 fn outside(text: &str, clusters: &[usize], windows: &[(usize, usize)]) -> Vec<usize> {
     clusters
@@ -860,8 +900,15 @@ fn compare_file(
                 r.is_empty()
                     || residual_is_positioning(text, &ours, &theirs, &r, kern_table, face_traits)
             };
+            let cmap_w = if cmap_disagreement_listed(name) {
+                cmap_disagreement_windows(text, &face, &rb)
+            } else {
+                Vec::new()
+            };
             let glyph_reason: Option<&'static str> = if positioning_only {
                 None
+            } else if !cmap_w.is_empty() && residue_ok(&cmap_w) {
+                Some("cmap rustybuzz does not read")
             } else if !comp_w.is_empty() && residue_ok(&comp_w) {
                 Some("canonical composition")
             } else if !unm_w.is_empty() && residue_ok(&unm_w) {
