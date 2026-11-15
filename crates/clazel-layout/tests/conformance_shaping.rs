@@ -65,7 +65,11 @@
 //!   `CMAP_DISAGREEMENTS`. `clazel-font` maps a character of the case and
 //!   `rustybuzz` (through `ttf-parser`) does not, so it draws `.notdef`
 //!   there. Window: that character and one either side. Any other face on
-//!   which the two `cmap` readers disagree fails.
+//!   which the two `cmap` readers disagree fails. A case that also has a
+//!   character neither reader maps, or a combining mark HarfBuzz composed,
+//!   counts here when the windows of all three reasons together cover
+//!   every differing glyph (MingLiU maps `ě` and not `ř`: HarfBuzz
+//!   decomposes both, finding `e` and `r` and the caron).
 //! - `kern table split`: the face is kerned from its `kern` table, and
 //!   HarfBuzz splits each pair's value between the two glyphs (half to the
 //!   first glyph's advance, the rest to the second's advance and offset)
@@ -595,10 +599,16 @@ fn mark_windows(text: &str, before: usize, after: usize) -> Vec<(usize, usize)> 
 /// combining marks (HarfBuzz normalizes the whole sequence), and one
 /// character either side (a kern pair with a glyph that changed).
 fn unmapped_windows(text: &str, face: &Face<'_>) -> Vec<(usize, usize)> {
+    unmapped_windows_by(text, |c| matches!(face.glyph_index(c), Ok(Some(_))))
+}
+
+/// [`unmapped_windows`], with `maps` saying whether the face maps a
+/// character.
+fn unmapped_windows_by(text: &str, maps: impl Fn(char) -> bool) -> Vec<(usize, usize)> {
     let chars: Vec<char> = text.chars().collect();
     let mut windows = Vec::new();
     for (i, c) in chars.iter().enumerate() {
-        if matches!(face.glyph_index(*c), Ok(Some(_))) {
+        if maps(*c) {
             continue;
         }
         let mut lo = i;
@@ -644,13 +654,56 @@ fn cmap_disagreement_windows(
     face: &Face<'_>,
     rb: &rustybuzz::Face<'_>,
 ) -> Vec<(usize, usize)> {
+    cmap_disagreement_windows_by(text, |c| {
+        matches!(face.glyph_index(c), Ok(Some(_))) && rb.glyph_index(c).is_none()
+    })
+}
+
+/// [`cmap_disagreement_windows`], with `disagree` saying whether we map a
+/// character and `rustybuzz` does not.
+fn cmap_disagreement_windows_by(
+    text: &str,
+    disagree: impl Fn(char) -> bool,
+) -> Vec<(usize, usize)> {
     text.chars()
         .enumerate()
-        .filter(|(_, c)| {
-            matches!(face.glyph_index(*c), Ok(Some(_))) && rb.glyph_index(*c).is_none()
-        })
+        .filter(|(_, c)| disagree(*c))
         .map(|(i, _)| (i.saturating_sub(1), i.saturating_add(1)))
         .collect()
+}
+
+/// The glyph-changing reason for a case whose glyph ids differ, from the
+/// windows of each such reason (`cmap rustybuzz does not read`, `canonical
+/// composition`, `unmapped character`; see the module comment), or `None`.
+/// `residue_ok` says whether the differing clusters outside the windows
+/// given are explained by a positioning reason. The first reason whose own
+/// windows cover the case is counted; a case that needs the windows of
+/// several is counted under the one the comment at its branch names.
+fn glyph_reason(
+    cmap_w: &[(usize, usize)],
+    comp_w: &[(usize, usize)],
+    unm_w: &[(usize, usize)],
+    residue_ok: impl Fn(&[(usize, usize)]) -> bool,
+) -> Option<&'static str> {
+    let both_w: Vec<(usize, usize)> = comp_w.iter().chain(unm_w).copied().collect();
+    let all_w: Vec<(usize, usize)> = cmap_w.iter().chain(&both_w).copied().collect();
+    if !cmap_w.is_empty() && residue_ok(cmap_w) {
+        Some("cmap rustybuzz does not read")
+    } else if !comp_w.is_empty() && residue_ok(comp_w) {
+        Some("canonical composition")
+    } else if !unm_w.is_empty() && residue_ok(unm_w) {
+        Some("unmapped character")
+    } else if !both_w.is_empty() && residue_ok(&both_w) {
+        // Composition and an unmapped character in one text: counted under
+        // the second.
+        Some("unmapped character")
+    } else if !cmap_w.is_empty() && !both_w.is_empty() && residue_ok(&all_w) {
+        // A character only we map, with composition or a character neither
+        // maps: counted under the first, the one only a listed file has.
+        Some("cmap rustybuzz does not read")
+    } else {
+        None
+    }
 }
 
 /// The differing clusters (byte offsets) outside every window.
@@ -894,7 +947,6 @@ fn compare_file(
                 Vec::new()
             };
             let unm_w = unmapped_windows(text, &face);
-            let both_w: Vec<(usize, usize)> = comp_w.iter().chain(&unm_w).copied().collect();
             let residue_ok = |w: &[(usize, usize)]| {
                 let r = outside(text, &diff.clusters, w);
                 r.is_empty()
@@ -907,17 +959,8 @@ fn compare_file(
             };
             let glyph_reason: Option<&'static str> = if positioning_only {
                 None
-            } else if !cmap_w.is_empty() && residue_ok(&cmap_w) {
-                Some("cmap rustybuzz does not read")
-            } else if !comp_w.is_empty() && residue_ok(&comp_w) {
-                Some("canonical composition")
-            } else if !unm_w.is_empty() && residue_ok(&unm_w) {
-                Some("unmapped character")
-            } else if !both_w.is_empty() && residue_ok(&both_w) {
-                // Both in one text: counted under the second.
-                Some("unmapped character")
             } else {
-                None
+                glyph_reason(&cmap_w, &comp_w, &unm_w, residue_ok)
             };
             let explained: Option<&'static str> = if glyph_reason.is_some() {
                 glyph_reason
@@ -1057,6 +1100,56 @@ fn vendored_fonts() {
         "the vendored suite's expected differences changed (new difference \
          with a reason, or an unexpected pass)"
     );
+}
+
+/// The classification of the case the Windows system suite failed on
+/// (`mingliu.ttc#1`, the Polish and Czech pangram), rebuilt from that run's
+/// log so it is checked on every machine: which characters we map, which
+/// only we map, and which characters' glyphs differed. HarfBuzz decomposed
+/// `ř ž ť č ň ď` (which neither reader maps) and `ě` (which only we map)
+/// into a base letter and the caron, which the face maps; we drew `.notdef`
+/// for the first six and the face's `ě` for the last. No reason's windows
+/// alone cover the seven differences; together they do, and only those.
+#[test]
+fn mingliu_pangram_classification() {
+    let text = "Pchnąć w tę łódź jeża lub ośm skrzyń fig. Příliš žluťoučký kůň úpěl ďábelské ódy.";
+    // We draw glyph 0 for these (the log's "glyphs" list).
+    let unmapped = "ąćęłźżśńřžťčůňď";
+    // We map this one and rustybuzz does not (we gave glyph 32871).
+    let only_ours = "ě";
+    let differing = [43, 49, 52, 55, 61, 65, 68];
+    let chars: Vec<char> = text.chars().collect();
+    let at: String = differing
+        .iter()
+        .filter_map(|&i| chars.get(i).copied())
+        .collect();
+    assert_eq!(at, "řžťčňěď", "the differing characters of the log");
+    let clusters: Vec<usize> = differing
+        .iter()
+        .filter_map(|&i| text.char_indices().nth(i).map(|(b, _)| b))
+        .collect();
+    let cmap_w = cmap_disagreement_windows_by(text, |c| only_ours.contains(c));
+    let comp_w = mark_windows(text, 2, 1);
+    let unm_w = unmapped_windows_by(text, |c| !unmapped.contains(c));
+    assert!(comp_w.is_empty(), "the pangram has no combining mark");
+    // No residue may be excused by positioning here: every difference is in
+    // the glyph ids.
+    let covers = |w: &[(usize, usize)]| outside(text, &clusters, w).is_empty();
+    assert!(
+        !covers(&cmap_w) && !covers(&unm_w),
+        "no one reason covers it"
+    );
+    assert_eq!(
+        glyph_reason(&cmap_w, &comp_w, &unm_w, covers),
+        Some("cmap rustybuzz does not read")
+    );
+    // Precise: a difference outside every window (at `P`) is not excused,
+    // and nor is the case without the character only we map.
+    let mut more = clusters.clone();
+    more.push(0);
+    let covers_more = |w: &[(usize, usize)]| outside(text, &more, w).is_empty();
+    assert_eq!(glyph_reason(&cmap_w, &comp_w, &unm_w, covers_more), None);
+    assert_eq!(glyph_reason(&[], &comp_w, &unm_w, covers), None);
 }
 
 /// Font directories by OS, read without enumeration services (5.0(c), S1).
