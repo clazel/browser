@@ -54,8 +54,7 @@ fn code_points(s: &str) -> Vec<u32> {
 }
 
 impl Host {
-    /// A host whose renderers are started with `command(id)` (the host sets
-    /// their stdio).
+    /// A host whose renderers are started with `command(id)` (the host sets their stdio).
     pub fn new(command: impl FnMut(u64) -> Command + 'static) -> Host {
         let (tx, rx) = channel();
         Host {
@@ -80,9 +79,8 @@ impl Host {
         self
     }
 
-    /// Test hook, like `route`: validate TLS certificates against the
-    /// anchors of `verifier()` instead of Mozilla's. Call it before any
-    /// connection is opened: it replaces the driver.
+    /// Test hook, like `route`: validate TLS certificates against the anchors of `verifier()`
+    /// instead of Mozilla's. Call it before any connection is opened: it replaces the driver.
     pub fn trust(&mut self, verifier: fn() -> ChainVerifier<'static>) {
         self.net = Driver::with_verifier(self.tx.clone(), Ev::Net, verifier);
     }
@@ -150,16 +148,15 @@ impl Host {
                 }
                 OutputRecord::Close { conn } => self.net_op(conn, Op::Close, &mut failed),
                 show @ OutputRecord::Show { .. } => self.shown.push(show),
-                // Item 5.17c: the kernel answers only `GpuExited`,
-                // `GpuSoftware` and `GpuSiteExit` with these, and this host
-                // sends none of them yet (no software mode, no exit watch),
-                // so none arrives; the host's part of 5.17c carries them out.
-                OutputRecord::SpawnGpuSoftware { .. }
-                | OutputRecord::GpuStopped { .. }
-                | OutputRecord::GpuAllSoftware => {}
+                // The Sub* outputs are carried out above. Item 5.17c: the kernel answers only
+                // `GpuExited`, `GpuSoftware` and `GpuSiteExit` with the others, and this host
+                // sends none of them yet (no software mode, no exit watch), so none arrives.
                 OutputRecord::SubConnect { .. }
                 | OutputRecord::SubSend { .. }
-                | OutputRecord::SubClose { .. } => {} // carried out above
+                | OutputRecord::SubClose { .. }
+                | OutputRecord::SpawnGpuSoftware { .. }
+                | OutputRecord::GpuStopped { .. }
+                | OutputRecord::GpuAllSoftware => {}
                 paint @ OutputRecord::Paint { .. } => self.shown.push(paint),
             }
         }
@@ -179,14 +176,12 @@ impl Host {
         failed.extend((!ok).then_some(conn));
     }
 
-    /// A connection reported: hand the kernel what it means, if it still
-    /// wants the connection.
+    /// A connection reported: hand the kernel what it means, if it still wants the connection.
     fn net_report(&mut self, conn: u64, report: Report) {
         let (input, note) = self.net.accept(conn, report);
         note.into_iter().for_each(|l| self.say(l));
         if let Some(input) = input {
-            let e = self.sub.event(conn, input);
-            self.event(e);
+            self.event(self.sub.event(conn, input));
         }
     }
 
@@ -248,10 +243,8 @@ impl Host {
             return;
         };
         let (status, stderr) = link.finish(grace);
-        self.say(format!(
-            "renderer {id} exited: {why}; {status}{}",
-            launch::note(&stderr)
-        ));
+        let note = launch::note(&stderr);
+        self.say(format!("renderer {id} exited: {why}; {status}{note}"));
     }
 
     /// A renderer is gone (or never started): tell the kernel.
