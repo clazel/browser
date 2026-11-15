@@ -1,4 +1,6 @@
-//! §17 specificity, proven to meet [`super::contract::specificity_ensures`].
+//! §17 specificity: each function is proven equal to the spec's of the same name. (The
+//! planned contract [`super::contract::specificity_ensures`] states this for a complex
+//! selector's (A, B, C) and is not attached to them.)
 
 use super::exec_types::*;
 #[allow(unused_imports)]

@@ -1,10 +1,9 @@
 //! The converted WPT `css/selectors/parsing/` table (phase-5.md item 5.1).
 //!
-//! There is no parser to run the cases through yet, so this checks only the table:
-//! that each page's cases are there, that a sample came through unchanged, and that
-//! what could not be read is still listed. Item 5.5's conformance test takes over from
-//! this one, so no conformance is claimed here, and this file prints no
-//! `clazel-conformance:` line.
+//! This checks only the table: that each page's cases are there, that a sample came through
+//! unchanged, and that what could not be read is still listed. The parser and serializer are
+//! run over the same cases by `conformance_selectors.rs`, which claims the conformance and
+//! prints the `clazel-conformance:` line, so this file claims none and prints none.
 
 /// One check of a WPT page. A string is UTF-16 code units, as JavaScript has it.
 /// `serialized` is what a valid selector may serialize to.
