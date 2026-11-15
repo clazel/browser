@@ -62,11 +62,137 @@
       "find": "doc.nodes.len() + k <= max_nodes()",
       "replace": "doc.nodes.len() + k < max_nodes()",
       "expect": "killed",
-      "reason": "The arena refuses its 4,000,000th node: lemma_limit_exact (creation is allowed exactly while the arena stays within max_nodes, the bound wf states) is false.",
+      "reason": "The arena refuses its 4,000,000th node: lemma_limit_exact (creation is allowed exactly while the arena stays within max_nodes, the bound wf states; and where it is refused no arena that long is well formed) is false.",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
         "lemma": "ml_limit()",
         "witness": "!can_create(new_document(seq![]), 3999999nat)"
+      },
+      "module": "lemmas"
+    },
+    {
+      "id": "set-mode-swaps-urls",
+      "file": "src/spec.rs",
+      "find": "NodeKind::Document { url, base_url, .. } => NodeKind::Document { mode, url, base_url },",
+      "replace": "NodeKind::Document { url, base_url, .. } => NodeKind::Document { mode, url: base_url, base_url: url },",
+      "expect": "killed",
+      "reason": "set_mode swaps the document's URL and base URL: theorem_set_mode_wf (the URL and the base URL are each kept) is false for a document whose two differ.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_set_mode_keeps_urls()",
+        "witness": "set_mode(ml_doc_urls(), DocumentMode::Quirks).nodes[0].kind->Document_base_url[0] == 1u32"
+      },
+      "module": "lemmas"
+    },
+    {
+      "id": "append-attribute-prepends",
+      "file": "src/spec.rs",
+      "find": "attributes: attributes.push(attr),",
+      "replace": "attributes: seq![attr] + attributes,",
+      "expect": "killed",
+      "reason": "append an attribute puts the new attribute first: theorem_append_attribute_wf (the list is the old one followed by attr) is false once an element has an attribute.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_append_attribute_order()",
+        "witness": "append_attribute(append_attribute(ml_doc4(), 3, ml_attr(1)), 3, ml_attr(2)).nodes[3].kind->Element_attributes[0].value[0] == 2u32"
+      },
+      "module": "lemmas"
+    },
+    {
+      "id": "template-contents-drops-form-owner",
+      "file": "src/spec.rs",
+      "find": "            template_contents: Some(f),\n            form_owner,\n",
+      "replace": "            template_contents: Some(f),\n            form_owner: match form_owner {\n                Some(_) => None,\n                None => None,\n            },\n",
+      "expect": "killed",
+      "reason": "Establishing template contents clears the element's form owner: theorem_create_template_contents_wf (every other field of the template is kept) is false for an element with a form owner.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_ctc_keeps_form_owner()",
+        "witness": "create_template_contents(ml_doc_form(), 3).0.nodes[3].kind->Element_form_owner is None"
+      },
+      "module": "lemmas"
+    },
+    {
+      "id": "remove-rotates-siblings",
+      "file": "src/spec.rs",
+      "find": "Node { children: pn.children.remove(i), ..pn }",
+      "replace": "Node { children: pn.children.remove(i).drop_first() + pn.children.remove(i).take(1), ..pn }",
+      "expect": "killed",
+      "reason": "remove keeps the same siblings but rotates them (length, membership and absence of duplicates are as before, so only the order is wrong): theorem_remove_wf (the old parent's children are the old ones with the entry at node's index taken out, in order) is false with two siblings left.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_remove_keeps_order()",
+        "witness": "remove(append(ml_doc_reparent(), 0, 3), 3).nodes[0].children[0] == 2usize"
+      },
+      "module": "lemmas"
+    },
+    {
+      "id": "adopt-skips-remove",
+      "file": "src/spec.rs",
+      "find": "        remove(doc, node)\n    } else {\n        doc\n    }",
+      "replace": "        doc\n    } else {\n        doc\n    }",
+      "expect": "killed",
+      "reason": "adopt never detaches the node from its old parent, so moving a node leaves it listed there (and twice, when moved within one parent): theorem_append_wf and theorem_insert_wf (the parent's children are those after step 7.1, one more) are false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_append_moves_once()",
+        "witness": "append(ml_doc_child(), 0, 1).nodes[0].children.len() == 2"
+      },
+      "module": "lemmas"
+    },
+    {
+      "id": "previous-sibling-first-child",
+      "file": "src/spec.rs",
+      "find": "Some(children(doc, p)[i - 1])",
+      "replace": "Some(children(doc, p)[0])",
+      "expect": "killed",
+      "reason": "previous sibling is the parent's first child, not the one just before: theorem_insert_before_wf (child's previous sibling is the node inserted before it) is false at index 2.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_previous_sibling()",
+        "witness": "previous_sibling(insert_before(ml_doc_reparent(), 0, 3, 2), 2) == Some(1usize)"
+      },
+      "module": "lemmas"
+    },
+    {
+      "id": "last-child-first",
+      "file": "src/spec.rs",
+      "find": "Some(c.last())",
+      "replace": "Some(c[0])",
+      "expect": "killed",
+      "reason": "last child is the first child: theorem_append_wf (the appended node is its parent's last child) is false once there are two children.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_last_child()",
+        "witness": "last_child(append(ml_doc_reparent(), 0, 3), 0) == Some(1usize)"
+      },
+      "module": "lemmas"
+    },
+    {
+      "id": "append-data-prepends",
+      "file": "src/spec.rs",
+      "find": "NodeKind::Text { data: old + data }",
+      "replace": "NodeKind::Text { data: data + old }",
+      "expect": "killed",
+      "reason": "append data puts the new data before the old: theorem_append_data_wf (the data is the old data followed by the new) is false for a non-empty text.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_append_data_order()",
+        "witness": "append_data(ml_doc_data(), 1, seq![2u32]).nodes[1].kind->Text_data[0] == 2u32"
+      },
+      "module": "lemmas"
+    },
+    {
+      "id": "fragments-cannot-have-children",
+      "file": "src/spec.rs",
+      "find": "k is Document || k is Element || k is DocumentFragment",
+      "replace": "k is Document || k is Element",
+      "expect": "killed",
+      "reason": "A document fragment may not have children (may_have_children, read by wf and by insert_requires): template contents could never be filled, and theorem_append_wf (appending to a fragment gives a well-formed arena) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_fragment_takes_children()",
+        "witness": "append(ml_doc_template(), 4, 1).nodes[4].children.len() == 1 && append(ml_doc_template(), 4, 1).nodes[4].kind is DocumentFragment"
       },
       "module": "lemmas"
     }

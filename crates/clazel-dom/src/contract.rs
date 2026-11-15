@@ -1,7 +1,11 @@
-//! Contracts the executable arena (`exec`) must be proven to meet. Each exec
-//! function's `requires` and `ensures` are exactly these predicates, stated
-//! over the spec's [`Document`] (the exec arena's view), so reviewing these
-//! and [`super::spec`] is enough to know what the implementation guarantees.
+//! Contracts the executable arena (`exec`) must be proven to meet. Each
+//! mutating exec function's `requires` and `ensures` are exactly the
+//! predicates here, stated over the spec's [`Document`] (the exec arena's
+//! view), so reviewing these and [`super::spec`] is enough to know what the
+//! mutators guarantee. The readers (`kind`, `parent`, `children`, `wrapper`,
+//! `last_child`, `has_child`, `previous_sibling`, `is_inclusive_ancestor`)
+//! have no predicate here: each states in its own `ensures`, in
+//! `exec.rs`, that it returns the spec reader of the same name.
 //!
 //! Every mutation keeps [`wf`]; that is proven once about the spec
 //! (`lemmas`: `theorem_insert_wf`, …), so the exec functions need only be
@@ -107,14 +111,6 @@ pub open spec fn append_attribute_ensures(doc: Document, e: NodeId, attr: Attr, 
 /// Contract for `Arena::set_mode(mode)`, under `wf(doc)`.
 pub open spec fn set_mode_ensures(doc: Document, mode: DocumentMode, out: Document) -> bool {
     out == set_mode(doc, mode)
-}
-
-/// Contract for the readers `Arena::parent(n)`, `Arena::previous_sibling(n)`
-/// and `Arena::last_child(n)`, under `wf(doc)` and `valid(doc, n)`.
-pub open spec fn readers_ensures(doc: Document, n: NodeId, parent_out: Option<NodeId>, prev_out: Option<NodeId>, last_out: Option<NodeId>) -> bool {
-    &&& parent_out == parent(doc, n)
-    &&& prev_out == previous_sibling(doc, n)
-    &&& last_out == last_child(doc, n)
 }
 
 } // verus!
