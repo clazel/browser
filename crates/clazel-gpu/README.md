@@ -387,7 +387,10 @@ CI; under Miri it does nothing.
 
 ### Linux (`sandbox::start_vulkan`)
 
-The order is in `src/sandbox.rs`: `no_new_privs` and the namespaces (user, mount,
+The order is in `src/sandbox.rs`: a check that the host turned off Mesa's
+on-disk shader cache (`MESA_SHADER_CACHE_DISABLE=true`, `sandbox::LINUX_ENVIRONMENT`;
+with a cold cache its worker thread wrote cache files after the filter and was
+killed for it, in 3 runs of `browse_gpu.rs` in 10); `no_new_privs` and the namespaces (user, mount,
 network, IPC; no PID namespace, after which the kernel refuses new threads) while
 there is one thread; the Vulkan backend; a warm-up frame of our own, drawn, read
 back and checked; Landlock with no rule; then the seccomp list on every thread at
