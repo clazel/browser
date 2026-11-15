@@ -1708,6 +1708,17 @@ pub proof fn theorem_create_template_contents_frame(doc: Document, t: NodeId)
             &&& new.wrapper == old.wrapper
         }),
 {
+    let paths = wf_witness(doc);
+    lemma_wf_witness_is(doc);
+    let d = create_template_contents(doc, t).0;
+    let q = paths.push(seq![doc.nodes.len() as NodeId]);
+    lemma_wf_split(doc, paths);
+    lemma_ctc_kinds(doc, t);
+    lemma_ctc_links(doc, t);
+    lemma_ctc_paths(doc, t);
+    let n = doc.nodes.len();
+    assert forall|i: int| 0 <= i < n && i != t implies #[trigger] d.nodes[i] == doc.nodes[i] by {}
+    lemma_wf_split(d, q);
 }
 
 // ---------------------------------------------------------------------
@@ -1858,6 +1869,13 @@ pub proof fn theorem_remove_keeps_order(doc: Document, node: NodeId)
                     == children(doc, p)[k + 1]
         }),
 {
+    let paths = lemma_wf_witness(doc);
+    lemma_remove_wf_with(doc, paths, node);
+    lemma_remove_nodes(doc, paths, node);
+    let p = doc.nodes[node as int].parent->Some_0;
+    let kids = doc.nodes[p as int].children;
+    assert(kids.no_duplicates());
+    lemma_seq_remove(kids, index_of(kids, node));
 }
 
 /// "remove" detaches and never deletes: it changes only `node`'s parent
@@ -2045,6 +2063,10 @@ pub proof fn theorem_append_attribute_frame(doc: Document, e: NodeId, attr: Attr
         append_attribute(doc, e, attr).nodes.len() == doc.nodes.len(),
         forall|i: int| 0 <= i < doc.nodes.len() && i != e ==> #[trigger] append_attribute(doc, e, attr).nodes[i] == doc.nodes[i],
 {
+    let paths = lemma_wf_witness(doc);
+    let k = append_attribute(doc, e, attr).nodes[e as int].kind;
+    assert(append_attribute(doc, e, attr) == set_kind(doc, e, k));
+    lemma_set_kind_wf(doc, paths, e, k);
 }
 
 /// Setting the document's mode keeps the arena well formed, and the mode
@@ -2082,6 +2104,10 @@ pub proof fn theorem_set_mode_frame(doc: Document, mode: DocumentMode)
         set_mode(doc, mode).nodes.len() == doc.nodes.len(),
         forall|i: int| 0 < i < doc.nodes.len() ==> #[trigger] set_mode(doc, mode).nodes[i] == doc.nodes[i],
 {
+    let paths = lemma_wf_witness(doc);
+    let k = set_mode(doc, mode).nodes[0].kind;
+    assert(set_mode(doc, mode) == set_kind(doc, 0, k));
+    lemma_set_kind_wf(doc, paths, 0, k);
 }
 
 /// The node limit is exactly [`max_nodes`]: the arena may grow by `k`
