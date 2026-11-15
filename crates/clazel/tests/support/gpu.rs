@@ -3,8 +3,10 @@
 //! socket it inherits, the real GPU process, and the reference pixels of the list.
 //!
 //! The stand-in renderer is a Perl script: it waits for the kernel's `BodyEnd`
-//! (the tab is committed, so a `FrameReady` is allowed), writes the list to
-//! `--list-fd N`, then reads its kernel channel until the host closes it.
+//! (the tab is committed, so a `FrameReady` is allowed) and its first
+//! `Viewport`, writes the list to `--list-fd N` laid out for that viewport (the
+//! socket's framing, `clazel_gpu::channel`), then reads its kernel channel until
+//! the host closes it.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -12,20 +14,23 @@ use std::time::{Duration, Instant};
 
 use clazel::Host;
 use clazel_displaylist::exec::{ExecItem, encode_list};
-use clazel_gpu::channel::{SurfaceFrame, write_list};
+use clazel_gpu::channel::SurfaceFrame;
 use clazel_gpu::geom::Viewport;
 use clazel_gpu::reference::{Masks, draw};
 use clazel_kernel::exec::records::{EventRecord, OutputRecord};
 
 /// The stand-in renderer, in Perl (the shell cannot read frames): it reads the
-/// kernel's frames (a 4-byte big-endian length, then the message) until
-/// `BodyEnd` (CBOR `[107]`, `81 18 6b`), when the kernel has committed it, then
-/// writes the list to `--list-fd N` once, and reads on until the host closes its
-/// channel.
+/// kernel's frames (a 4-byte big-endian length, then the message) until it has
+/// seen both `BodyEnd` (CBOR `[107]`, `81 18 6b`), when the kernel has committed
+/// it, and a `Viewport` (CBOR `[108, width, height, scale]`, `84 18 6c ...`),
+/// then writes the list to `--list-fd N` once, framed as
+/// `clazel_gpu::channel::write_list` frames it (a 4-byte little-endian length,
+/// the viewport's width and height, the list), and reads on until the host
+/// closes its channel.
 const RENDERER: &str = r#"#!/usr/bin/perl
 use strict;
 use IO::Handle;
-my ($fd, $list);
+my ($fd, $list, $committed, $w, $h);
 for my $i (0 .. $#ARGV - 1) { $fd = $ARGV[$i + 1] if $ARGV[$i] eq '--list-fd'; }
 sub exactly {
     my ($n) = @_;
@@ -36,10 +41,25 @@ sub exactly {
     }
     return $got;
 }
+# A CBOR unsigned integer at offset $i of $b: its value and the next offset.
+sub uint {
+    my ($b, $i) = @_;
+    my $t = ord(substr($b, $i, 1));
+    return ($t, $i + 1) if $t < 24;
+    return (ord(substr($b, $i + 1, 1)), $i + 2) if $t == 0x18;
+    return (unpack('n', substr($b, $i + 1, 2)), $i + 3) if $t == 0x19;
+    return (unpack('N', substr($b, $i + 1, 4)), $i + 5);
+}
 while (defined(my $head = exactly(4))) {
     my $body = exactly(unpack('N', $head));
     last if !defined $body;
-    next unless $body eq "\x81\x18\x6b" && defined $fd && !defined $list;
+    $committed = 1 if $body eq "\x81\x18\x6b";
+    if (substr($body, 0, 3) eq "\x84\x18\x6c" && !defined $w) {
+        my $i = 3;
+        ($w, $i) = uint($body, $i);
+        ($h, $i) = uint($body, $i);
+    }
+    next unless $committed && defined $w && defined $fd && !defined $list;
     # The handle lives as long as the script: a lexical one would close the
     # socket at the end of this iteration, and the GPU process ends when its list
     # socket closes (measured: that lost the frame in 4 runs of 20).
@@ -48,7 +68,8 @@ while (defined(my $head = exactly(4))) {
     open(my $f, '<', $ENV{CLAZEL_TEST_LIST}) or die "list file: $!";
     binmode $f;
     local $/;
-    print {$list} <$f>;
+    my $items = <$f>;
+    print {$list} pack('VVV', length($items) + 8, $w, $h) . $items;
     $list->flush;
 }
 "#;
@@ -185,11 +206,10 @@ pub fn fixture(tag: &str) -> Result<Fixture, String> {
     use std::os::unix::fs::PermissionsExt;
     let executable = std::fs::Permissions::from_mode(0o755);
     std::fs::set_permissions(&script, executable).map_err(|e| e.to_string())?;
-    let mut framed = Vec::new();
-    let list = encode_list(&items()).ok_or("the list does not encode")?;
-    write_list(&mut framed, &list).map_err(|e| e.to_string())?;
+    // The encoded list alone: the stand-in frames it for the viewport it is given.
+    let encoded = encode_list(&items()).ok_or("the list does not encode")?;
     let list = dir.join("list");
-    std::fs::write(&list, framed).map_err(|e| e.to_string())?;
+    std::fs::write(&list, encoded).map_err(|e| e.to_string())?;
     Ok(Fixture {
         dir,
         gpu: bin.join("clazel-gpu"),

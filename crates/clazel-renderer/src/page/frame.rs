@@ -341,14 +341,19 @@ pub fn frame(
     items
 }
 
-/// `items` encoded (item 5.17a) and framed for the socket as the GPU process
-/// reads it: `clazel_gpu::channel::write_list`, the one definition of the list
-/// socket's framing (a 4-byte little-endian length, then the list), so the
-/// writer and the reader cannot disagree (`state.rs`'s contract); `None` if the
-/// list does not encode within 5.17a's limits.
-pub fn frame_bytes(items: &[ExecItem]) -> Option<Vec<u8>> {
+/// `items`, laid out for `view`, encoded (item 5.17a) and framed for the socket
+/// as the GPU process reads it: `clazel_gpu::channel::write_list`, the one
+/// definition of the list socket's framing (a 4-byte little-endian length, the
+/// viewport's width and height, then the list), so the writer and the reader
+/// cannot disagree (`state.rs`'s contract); `None` if the list does not encode
+/// within 5.17a's limits.
+pub fn frame_bytes(items: &[ExecItem], view: super::View) -> Option<Vec<u8>> {
     let list = encode_list(items)?;
-    let mut out = Vec::with_capacity(list.len().saturating_add(4));
-    clazel_gpu::channel::write_list(&mut out, &list).ok()?;
+    let laid = clazel_gpu::channel::Laid {
+        width: view.width,
+        height: view.height,
+    };
+    let mut out = Vec::with_capacity(list.len().saturating_add(12));
+    clazel_gpu::channel::write_list(&mut out, laid, &list).ok()?;
     Some(out)
 }

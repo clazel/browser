@@ -699,6 +699,21 @@ impl<E: Send + 'static> Gpus<E> {
         let (status, stderr) = self.links.remove(&id)?.finish(grace);
         Some(format!("gpu {id} exited: {why}; {status}{}", note(&stderr)))
     }
+
+    /// `id`'s process's kernel channel ended ([`GpuReport::Gone`], `why`): end it
+    /// now, as [`Gpus::finish`] does with a second's grace, and write its line to
+    /// standard error and to the host's `log`, as the host writes its own lines.
+    /// So how it ended and what it wrote to stderr are logged when it happens,
+    /// not at the host's shutdown, when a process that died early cannot be told
+    /// from one that was killed. The kernel is not told (no `GpuExited` yet, item
+    /// 5.17c): the renderer's lists are then not drawn.
+    pub fn gone(&mut self, id: u64, why: &str, log: &mut Vec<String>) {
+        let why = format!("its channel ended ({why})");
+        if let Some(line) = self.finish(id, &why, Duration::from_secs(1)) {
+            eprintln!("{line}");
+            log.push(line);
+        }
+    }
 }
 
 impl<E> Drop for Gpus<E> {

@@ -9,15 +9,23 @@
 //!   the renderer on the list socket ([`crate::channel`]). Each has its own reader
 //!   thread, and the loop takes whichever comes first.
 //! - **Every list is drawn, in order**, so the masks the validator and the atlas
-//!   hold stay the renderer's. A list that arrives while there is no viewport
-//!   (before the first `GpuViewport`, or after one of 0 by 0) is **held**, and
-//!   the held lists are drawn in order, each giving a frame, when a viewport
-//!   arrives. The two sockets are read by two threads, so a list the renderer
-//!   wrote after the kernel's `Viewport` can still be read before the kernel's
-//!   `GpuViewport` (measured, item 5.26: a GPU process slow to start had both
-//!   waiting); drawing it at 1 by 1 then lost the frame. At most [`MAX_HELD`]
-//!   lists and [`crate::channel::LIST_MAX`] bytes are held; more ends the
-//!   process (a renderer paints nothing without a viewport, 5.20).
+//!   hold stay the renderer's, and only ever at the kernel's viewport. A list
+//!   names the viewport the renderer laid it out for ([`crate::channel::Laid`]).
+//!   One that arrives while there is no viewport (before the first
+//!   `GpuViewport`, or after one of 0 by 0), or that names another viewport than
+//!   the kernel's, is **held**; the held lists are drawn in order, each giving a
+//!   frame, at the next `GpuViewport`, or before the next list that names the
+//!   kernel's viewport. The two sockets are read by two threads, so a list the
+//!   renderer wrote after the kernel's `Viewport` can still be read before the
+//!   kernel's `GpuViewport` (measured, item 5.26: a GPU process slow to start had
+//!   both waiting, and drawing the list at 1 by 1 lost the frame; and after a
+//!   resize, 5 runs in 104 of `clazel`'s `tests/browse_gpu.rs` on Linux drew
+//!   the new list at the old size, and no frame at the new size followed). A
+//!   list the renderer laid out for a viewport the kernel has already replaced
+//!   is held too, until the renderer's list for the new one (it lays out again
+//!   on every `Viewport`, 5.20), and then drawn at the kernel's viewport, as
+//!   before. At most [`MAX_HELD`] lists and [`crate::channel::LIST_MAX`] bytes
+//!   are held; more ends the process.
 //! - **A drawn list gives one frame**: its pixels on the surface socket in the
 //!   next ring slot (0, 1, 2, 0, …), then `FrameReady { buffer: slot, width,
 //!   height }` to the kernel, in that order, so the host has the pixels a
@@ -37,7 +45,7 @@ use clazel_ipc::frame::codec::payload_length;
 use clazel_ipc::message::codec::{Msg, decode_framed, encode_framed};
 
 use crate::backend::Backend;
-use crate::channel::{SLOTS, SurfaceFrame, read_list, write_surface};
+use crate::channel::{Laid, SLOTS, SurfaceFrame, read_list, write_surface};
 use crate::geom::Viewport;
 use crate::start::Ready;
 use crate::{Error, Gpu};
@@ -132,29 +140,45 @@ impl<B: Backend> Server<B> {
                     (Some(w), Some(h)) => Some(Viewport::new(w, h).ok_or(Exit::Unexpected)?),
                     _ => return Err(Exit::Unexpected),
                 };
-                let mut frames = Vec::new();
-                if self.viewport.is_some() {
-                    self.held_bytes = 0;
-                    for list in std::mem::take(&mut self.held) {
-                        frames.extend(self.list(&list)?);
-                    }
+                match self.viewport {
+                    Some(v) => self.draw_held(v),
+                    None => Ok(Vec::new()),
                 }
-                Ok(frames)
             }
             _ => Err(Exit::Unexpected),
         }
     }
 
-    /// Draw a list and give its pixels, or hold it while there is no viewport.
-    pub fn list(&mut self, bytes: &[u8]) -> Result<Option<SurfaceFrame>, Exit> {
-        let Some(viewport) = self.viewport else {
+    /// A list laid out for `laid`: drawn after the held lists, each giving a
+    /// frame, if `laid` is the kernel's viewport; otherwise held (see the module).
+    pub fn list(&mut self, laid: Laid, bytes: &[u8]) -> Result<Vec<SurfaceFrame>, Exit> {
+        let kernels = self
+            .viewport
+            .filter(|v| (v.width, v.height) == (laid.width, laid.height));
+        let Some(viewport) = kernels else {
             self.held_bytes = self.held_bytes.saturating_add(bytes.len());
             if self.held.len() >= MAX_HELD || self.held_bytes > crate::channel::LIST_MAX {
-                return Err(Exit::Channel("too many lists before a viewport".to_owned()));
+                return Err(Exit::Channel("too many lists held".to_owned()));
             }
             self.held.push(bytes.to_vec());
-            return Ok(None);
+            return Ok(Vec::new());
         };
+        let mut frames = self.draw_held(viewport)?;
+        frames.push(self.draw(bytes, viewport)?);
+        Ok(frames)
+    }
+
+    /// Draw the held lists in order at `viewport`; their frames.
+    fn draw_held(&mut self, viewport: Viewport) -> Result<Vec<SurfaceFrame>, Exit> {
+        self.held_bytes = 0;
+        std::mem::take(&mut self.held)
+            .iter()
+            .map(|list| self.draw(list, viewport))
+            .collect()
+    }
+
+    /// Draw a list at `viewport` and give its pixels in the next ring slot.
+    fn draw(&mut self, bytes: &[u8], viewport: Viewport) -> Result<SurfaceFrame, Exit> {
         self.gpu.draw(bytes, viewport).map_err(Exit::Draw)?;
         let mut pixels = Vec::new();
         self.gpu
@@ -163,19 +187,19 @@ impl<B: Backend> Server<B> {
             .map_err(|e| Exit::Draw(Error::Backend(e)))?;
         let slot = self.next;
         self.next = slot.saturating_add(1) % SLOTS;
-        Ok(Some(SurfaceFrame {
+        Ok(SurfaceFrame {
             slot,
             width: viewport.width,
             height: viewport.height,
             pixels,
-        }))
+        })
     }
 }
 
 /// What a reader thread hands the loop.
 enum Input {
     Kernel(Vec<u8>),
-    List(Vec<u8>),
+    List(Laid, Vec<u8>),
     Ended(Exit),
 }
 
@@ -207,8 +231,8 @@ fn kernel_reader<R: Read>(mut r: R, tx: &Sender<Input>) -> Exit {
 fn list_reader<R: Read>(mut r: R, tx: &Sender<Input>) -> Exit {
     loop {
         match read_list(&mut r) {
-            Ok(Some(list)) => {
-                if tx.send(Input::List(list)).is_err() {
+            Ok(Some((laid, list))) => {
+                if tx.send(Input::List(laid, list)).is_err() {
                     return Exit::ListClosed;
                 }
             }
@@ -249,17 +273,14 @@ where
         let step = match rx.recv() {
             Err(_) => return Exit::KernelClosed,
             Ok(Input::Ended(why)) => return why,
-            Ok(Input::Kernel(frame)) => server.kernel(&frame).and_then(|frames| {
-                frames
-                    .iter()
-                    .try_for_each(|f| send(f, &mut kernel_out, &mut surface_out))
-            }),
-            Ok(Input::List(list)) => match server.list(&list) {
-                Ok(Some(frame)) => send(&frame, &mut kernel_out, &mut surface_out),
-                Ok(None) => Ok(()),
-                Err(e) => Err(e),
-            },
-        };
+            Ok(Input::Kernel(frame)) => server.kernel(&frame),
+            Ok(Input::List(laid, list)) => server.list(laid, &list),
+        }
+        .and_then(|frames| {
+            frames
+                .iter()
+                .try_for_each(|f| send(f, &mut kernel_out, &mut surface_out))
+        });
         if let Err(why) = step {
             return why;
         }
@@ -285,6 +306,7 @@ mod tests {
     use clazel_ipc::message::codec::{Msg, encode_framed};
 
     use super::{Exit, Server};
+    use crate::channel::Laid;
     use crate::geom::Viewport;
     use crate::soft::SoftBackend;
     use crate::{Gpu, start::Launch};
@@ -303,25 +325,29 @@ mod tests {
         .unwrap_or_default()
     }
 
+    pub(super) fn laid(width: u32, height: u32) -> Laid {
+        Laid { width, height }
+    }
+
+    /// Each frame's slot and size.
+    fn sizes(frames: &[crate::channel::SurfaceFrame]) -> Vec<(u32, u32, u32)> {
+        frames.iter().map(|f| (f.slot, f.width, f.height)).collect()
+    }
+
     #[test]
     fn lists_before_a_viewport_are_held_then_drawn_and_the_ring_turns() {
         let s = server();
         assert!(s.is_some(), "the fake backend did not start");
         let Some(mut s) = s else { return };
         let list = encode_list(&[]).unwrap_or_default();
-        assert_eq!(s.list(&list), Ok(None));
-        assert_eq!(s.list(&list), Ok(None));
+        assert_eq!(s.list(laid(4, 3), &list), Ok(Vec::new()));
+        assert_eq!(s.list(laid(4, 3), &list), Ok(Vec::new()));
         // The viewport draws both held lists, in slots 0 and 1.
         let held = s.kernel(&viewport(4, 3)).unwrap_or_default();
-        assert_eq!(
-            held.iter()
-                .map(|f| (f.slot, f.width, f.height))
-                .collect::<Vec<_>>(),
-            [(0, 4, 3), (1, 4, 3)]
-        );
+        assert_eq!(sizes(&held), [(0, 4, 3), (1, 4, 3)]);
         assert_eq!(s.viewport(), Viewport::new(4, 3));
         let slots: Vec<u32> = (0..4)
-            .filter_map(|_| s.list(&list).ok().flatten())
+            .flat_map(|_| s.list(laid(4, 3), &list).unwrap_or_default())
             .map(|f| f.slot)
             .collect();
         assert_eq!(slots, [2, 0, 1, 2]);
@@ -329,9 +355,42 @@ mod tests {
         assert_eq!(s.viewport(), None);
         // Held again, up to the limit; one more ends the process.
         for _ in 0..super::MAX_HELD {
-            assert_eq!(s.list(&list), Ok(None));
+            assert_eq!(s.list(laid(4, 3), &list), Ok(Vec::new()));
         }
-        assert!(matches!(s.list(&list), Err(Exit::Channel(_))));
+        assert!(matches!(s.list(laid(4, 3), &list), Err(Exit::Channel(_))));
+    }
+
+    /// The race of item 5.26's resize: the renderer's list for the new viewport
+    /// read before the kernel's `GpuViewport` for it is held, then drawn at the
+    /// new size, never at the old one.
+    #[test]
+    fn a_list_for_a_viewport_not_yet_given_waits_for_it() {
+        let s = server();
+        assert!(s.is_some(), "the fake backend did not start");
+        let Some(mut s) = s else { return };
+        let list = encode_list(&[]).unwrap_or_default();
+        assert_eq!(s.kernel(&viewport(4, 3)), Ok(Vec::new()));
+        let first = s.list(laid(4, 3), &list).unwrap_or_default();
+        assert_eq!(sizes(&first), [(0, 4, 3)]);
+        // The list for 6 by 5 comes first: held, not drawn at 4 by 3.
+        assert_eq!(s.list(laid(6, 5), &list), Ok(Vec::new()));
+        let resized = s.kernel(&viewport(6, 5)).unwrap_or_default();
+        assert_eq!(sizes(&resized), [(1, 6, 5)]);
+    }
+
+    /// A list laid out for a viewport the kernel has already replaced waits for
+    /// the renderer's next list, and both are drawn, in order, at the kernel's.
+    #[test]
+    fn a_list_for_a_replaced_viewport_is_drawn_before_the_next() {
+        let s = server();
+        assert!(s.is_some(), "the fake backend did not start");
+        let Some(mut s) = s else { return };
+        let list = encode_list(&[]).unwrap_or_default();
+        assert_eq!(s.kernel(&viewport(4, 3)), Ok(Vec::new()));
+        assert_eq!(s.kernel(&viewport(6, 5)), Ok(Vec::new()));
+        assert_eq!(s.list(laid(4, 3), &list), Ok(Vec::new()));
+        let both = s.list(laid(6, 5), &list).unwrap_or_default();
+        assert_eq!(sizes(&both), [(0, 6, 5), (1, 6, 5)]);
     }
 
     #[test]
@@ -344,7 +403,10 @@ mod tests {
         assert_eq!(s.kernel(b"\x00\x00\x00\x01\xff"), Err(Exit::Unexpected));
         assert_eq!(s.kernel(&viewport(8193, 1)), Err(Exit::Unexpected));
         assert_eq!(s.kernel(&viewport(4, 3)), Ok(Vec::new()));
-        assert!(matches!(s.list(b"not a list"), Err(Exit::Draw(_))));
+        assert!(matches!(
+            s.list(laid(4, 3), b"not a list"),
+            Err(Exit::Draw(_))
+        ));
     }
 }
 
@@ -359,7 +421,7 @@ mod socket_tests {
     use clazel_ipc::frame::codec::payload_length;
     use clazel_ipc::message::codec::{Msg, decode_framed};
 
-    use super::tests::{server, viewport};
+    use super::tests::{laid, server, viewport};
     use super::{Exit, run};
     use crate::channel::{read_surface, write_list};
     use crate::geom::Viewport;
@@ -397,7 +459,8 @@ mod socket_tests {
                 // Lists read before the viewport are held, so no pause is needed.
                 let mut masks = Masks::default();
                 for (i, items) in scene.lists.iter().enumerate() {
-                    write_list(&mut renderer, &encode_list(items)?).ok()?;
+                    let size = laid(scene.width, scene.height);
+                    write_list(&mut renderer, size, &encode_list(items)?).ok()?;
                     let got = read_surface(&mut host).ok().flatten()?;
                     assert_eq!(
                         Some(got.pixels),
