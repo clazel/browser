@@ -471,34 +471,40 @@ fn nesting_is_accepted_at_max_nesting_and_refused_one_past() {
     // limit, so 33 levels of an otherwise valid selector are the one place the parser may
     // answer "invalid" where the standard does not.
     assert_eq!(clazel_selectors::contract::MAX_NESTING, 32);
-    // Under Miri (docs/VERIFICATION.md: a suite must stay far below five minutes there) only
-    // `:is(` is matched, and the other functions and the mixed selectors are checked by
-    // parsing alone; all of it is matched in the normal run. The code path at 32 and 33 is
-    // the same.
+    // Under Miri (docs/VERIFICATION.md: one test must take far less than 300 s there, and
+    // this one took 318 s with everything) only `:is(` is parsed at 32 and 33 levels; matching,
+    // the other functions, 31 levels, the mixed selectors and the long list are checked in the
+    // normal run. The code path at 32 and 33 is the same for each function.
     let miri = cfg!(miri);
-    for open in [":is(", ":where(", ":not("] {
+    let functions: &[&str] = if miri {
+        &[":is("]
+    } else {
+        &[":is(", ":where(", ":not("]
+    };
+    for open in functions {
         let ok = nested(open, "ul", 32);
         let over = nested(open, "ul", 33);
-        let few = nested(open, "ul", 31);
-        assert!(parse_selector(&cps(&ok)).is_some(), "{open} x32 parses");
-        assert!(
-            parse_selector(&cps(&over)).is_none(),
-            "{open} x33 is refused"
-        );
-        assert!(parse_selector(&cps(&few)).is_some(), "{open} x31 parses");
-        if miri && open != ":is(" {
+        if miri {
+            assert!(parse_selector(&cps(&ok)).is_some(), "{open} x32 parses");
+            assert!(
+                parse_selector(&cps(&over)).is_none(),
+                "{open} x33 is refused"
+            );
             continue;
         }
         // 32 levels of :not() is an even number of negations: `ul` itself (§4.3).
         assert_eq!(matched_small(&ok), ["ul"], "{open} x32");
         assert_eq!(matched_small(&over), ["<invalid>"], "{open} x33");
         // 31 levels of :not() is odd: every element but `ul`.
-        let want: &[&str] = if open == ":not(" {
+        let want: &[&str] = if *open == ":not(" {
             &["html", "body"]
         } else {
             &["ul"]
         };
-        assert_eq!(matched_small(&few), want, "{open} x31");
+        assert_eq!(matched_small(&nested(open, "ul", 31)), want, "{open} x31");
+    }
+    if miri {
+        return;
     }
     // Mixed functions count together.
     let mixed32 = format!(

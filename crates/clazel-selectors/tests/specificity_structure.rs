@@ -269,7 +269,10 @@ fn deeply_nested_sums_are_exact_below_the_limit() {
     // next component). `saturating` in exec_specificity.rs is proven equal to the spec's
     // `saturate`, and the spec's is pinned by the mutation `saturate-limit`.
     for join in [Join::InOneCompound, Join::InTwoCompounds] {
-        for k in 0..=18u32 {
+        // Level k is evaluated 2^k times over; under Miri (docs/VERIFICATION.md) stop at 8,
+        // which takes the same code path.
+        let top: u32 = if cfg!(miri) { 8 } else { 18 };
+        for k in 0..=top {
             let s = doubling(k as usize, join);
             let last = s.lists.len().saturating_sub(1);
             let got = list_specificity_of(&s, last);
