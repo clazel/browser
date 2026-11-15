@@ -173,6 +173,7 @@ pub proof fn ml_doc_reparent_wf()
     ensures
         wf(ml_doc_reparent()),
         ml_doc_reparent().nodes.len() == 4,
+        ml_doc_reparent().nodes[2].parent == Some(0usize),
 {
     ml_doc3_wf();
     theorem_create_node_wf(ml_doc3(), ml_element());
@@ -324,7 +325,6 @@ pub proof fn ml_previous_sibling()
     assert(ml_doc_reparent().nodes[0].kind is Document) by (compute_only);
     assert(ml_doc_reparent().nodes[3].kind is Element) by (compute_only);
     assert(!is_inclusive_ancestor(ml_doc_reparent(), 3, 0)) by (compute_only);
-    assert(ml_doc_reparent().nodes[2].parent == Some(0usize)) by (compute_only);
     theorem_insert_before_wf(ml_doc_reparent(), 0, 3, 2);
 }
 
