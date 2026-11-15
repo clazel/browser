@@ -82,8 +82,14 @@ fn main() -> ExitCode {
     }
     // The host gave this process one socket as both stdin and stdout.
     let (mut r, mut w) = (io::stdin().lock(), io::stdout().lock());
+    // The list socket lives until the process exits, never dropped: a debug
+    // build's std checks a descriptor it drops with `fcntl(F_GETFD)`, which the
+    // seccomp filter refuses by killing the process (`SIGSYS`).
     let ran = match list {
-        Some(mut list) => clazel_renderer::run_graphics(&mut r, &mut w, &mut list, &fonts),
+        Some(list) => {
+            let list = Box::leak(Box::new(list));
+            clazel_renderer::run_graphics(&mut r, &mut w, list, &fonts)
+        }
         None => clazel_renderer::run_with_width(&mut r, &mut w, width),
     };
     match ran {

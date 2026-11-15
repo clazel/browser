@@ -19,6 +19,13 @@
 //! cases, as for the box trees. Tables are laid out by item 5.15
 //! (`src/table/`).
 //!
+//! The fixtures are snapshots this code generated from itself (blessed
+//! with `CLAZEL_BLESS=1` and reviewed once): regression pins that say "the
+//! layout did not change", not evidence that it is right. Conformance
+//! evidence for layout is the hand-derived unit tests
+//! (`src/flow/tests.rs`). The test also asserts the number of documents laid
+//! out ([`BUILT`]) and fails on a fixture file nothing produces.
+//!
 //! To regenerate the fixtures after a deliberate change, run
 //! `CLAZEL_BLESS=1 cargo test -p clazel-layout --test golden_flow` and
 //! review the diff before committing it.
@@ -39,6 +46,11 @@ use clazel_treebuilder::exec::driver::parse_real;
 use clazel_treebuilder::exec::types::EncFnsExec;
 
 include!("../../clazel-treebuilder/tests/generated/wpt_tree_construction.rs");
+
+/// The documents laid out: the document cases of the vendored suite
+/// (1761) and our two pages (measured; the first changes only when the
+/// vendored html5lib tests do).
+const BUILT: usize = 1763;
 
 const DEJAVU_SERIF: &[u8] =
     include_bytes!("../../clazel-font/tests/data/fonts-dejavu/DejaVuSerif.ttf");
@@ -71,6 +83,24 @@ fn parse(html: &str) -> Arena {
     parse_real(&NoEncodings, &input, Vec::new(), false, false)
         .0
         .arena
+}
+
+/// The fixture files in `dir` (`.txt`) that no document of this run
+/// produces: stale fixtures, left behind when a case or page went away.
+fn stale_fixtures(
+    dir: &std::path::Path,
+    produced: &std::collections::BTreeSet<String>,
+) -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return vec![format!("{}: cannot list the fixtures", dir.display())];
+    };
+    let mut stale: Vec<String> = entries
+        .flatten()
+        .filter_map(|e| e.file_name().into_string().ok())
+        .filter(|n| n.ends_with(".txt") && !produced.contains(n))
+        .collect();
+    stale.sort();
+    stale
 }
 
 /// Counts of what the documents produce.
@@ -182,5 +212,16 @@ fn golden_fragment_trees() -> Result<(), clazel_font::Error> {
         counts.fragments, counts.lines, counts.runs
     );
     assert!(differ.is_empty(), "golden fixtures: {differ:#?}");
+    if !cfg!(miri) && !bless {
+        assert_eq!(built, BUILT, "documents laid out");
+        let produced: std::collections::BTreeSet<String> = compared
+            .iter()
+            .filter(|(_, t)| !t.is_empty())
+            .map(|(f, _)| f.clone())
+            .collect();
+        assert!(!produced.is_empty(), "no fixture produced");
+        let stale = stale_fixtures(&dir, &produced);
+        assert!(stale.is_empty(), "stale fixture files: {stale:?}");
+    }
     Ok(())
 }

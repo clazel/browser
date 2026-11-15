@@ -158,6 +158,11 @@ jobs:
         run: sudo packaging/apparmor/allow-userns.sh clazel-test "$GITHUB_WORKSPACE/target/{debug,release}/{clazel-renderer,clazel-gpu,clazel-adversary,deps/sandbox-*}"
       - name: Verify (base)
         run: cargo xtask verify --part base
+      # A sandboxed process the seccomp filter killed (SIGSYS) is named only in
+      # the kernel's audit lines (type=1326: the syscall number and the thread).
+      - name: Seccomp kills, on failure
+        if: failure()
+        run: sudo dmesg | grep 'type=1326' || echo "no seccomp audit line"
 
   base-macos:
     name: Verify (base, macOS)
@@ -282,6 +287,11 @@ jobs:
         run: sudo packaging/apparmor/allow-userns.sh clazel-test "$GITHUB_WORKSPACE/target/{debug,release}/{clazel-renderer,clazel-gpu,clazel-adversary,deps/sandbox-*}"
       - name: Verify ${{ matrix.crate }}
         run: cargo xtask verify --part crate "${{ matrix.crate }}" --metrics parts
+      # A sandboxed process the seccomp filter killed (SIGSYS) is named only in
+      # the kernel's audit lines (type=1326: the syscall number and the thread).
+      - name: Seccomp kills, on failure
+        if: failure()
+        run: sudo dmesg | grep 'type=1326' || echo "no seccomp audit line"
       # One `<crate>.json` per crate of the job, all under parts/.
       - name: Upload measurements
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

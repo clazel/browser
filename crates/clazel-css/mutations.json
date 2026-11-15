@@ -1185,6 +1185,1042 @@
         "lemma": "super::examples::lemma_example_unicode_ranges()",
         "witness": "!(consume_a_token(seq![0x55u32, 0x2B, 0x67], 0, true).0 == (Token::Ident { value: seq![0x55u32] }))"
       }
+    },
+    {
+      "id": "newline-is-vertical-tab",
+      "file": "src/tokenizer/spec.rs",
+      "find": "pub open spec fn is_newline(c: u32) -> bool {\n    c == 0x0A\n}",
+      "replace": "pub open spec fn is_newline(c: u32) -> bool {\n    c == 0x0B\n}",
+      "expect": "killed",
+      "reason": "A line feed would not be a newline, so a string would run over it.",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_bad_string()",
+        "witness": "super::examples::after(seq![0x22u32, 0x61, 0x0A]) == 3"
+      }
+    },
+    {
+      "id": "non-printable-ends-at-07",
+      "file": "src/tokenizer/spec.rs",
+      "find": "    c <= 0x08 || c == 0x0B || 0x0E <= c <= 0x1F || c == 0x7F\n",
+      "replace": "    c <= 0x07 || c == 0x0B || 0x0E <= c <= 0x1F || c == 0x7F\n",
+      "expect": "killed",
+      "reason": "U+0008 BACKSPACE would be printable in a url.",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_printable()",
+        "witness": "super::examples::first(super::examples::url_with(0x08)) == (Token::Url { value: seq![0x61u32, 0x08] })"
+      }
+    },
+    {
+      "id": "non-printable-vt-moved",
+      "file": "src/tokenizer/spec.rs",
+      "find": "    c <= 0x08 || c == 0x0B || 0x0E <= c <= 0x1F || c == 0x7F\n",
+      "replace": "    c <= 0x08 || c == 0x0C || 0x0E <= c <= 0x1F || c == 0x7F\n",
+      "expect": "killed",
+      "reason": "U+000B LINE TABULATION would be printable in a url.",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_printable()",
+        "witness": "super::examples::first(super::examples::url_with(0x0B)) == (Token::Url { value: seq![0x61u32, 0x0B] })"
+      }
+    },
+    {
+      "id": "non-printable-starts-at-0d",
+      "file": "src/tokenizer/spec.rs",
+      "find": "    c <= 0x08 || c == 0x0B || 0x0E <= c <= 0x1F || c == 0x7F\n",
+      "replace": "    c <= 0x08 || c == 0x0B || 0x0D <= c <= 0x1F || c == 0x7F\n",
+      "expect": "killed",
+      "reason": "U+000D would be non-printable in a url.",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_printable()",
+        "witness": "super::examples::first(super::examples::url_with(0x0D)) == Token::BadUrl"
+      }
+    },
+    {
+      "id": "non-printable-ends-at-1e",
+      "file": "src/tokenizer/spec.rs",
+      "find": "    c <= 0x08 || c == 0x0B || 0x0E <= c <= 0x1F || c == 0x7F\n",
+      "replace": "    c <= 0x08 || c == 0x0B || 0x0E <= c <= 0x1E || c == 0x7F\n",
+      "expect": "killed",
+      "reason": "U+001F would be printable in a url.",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_printable()",
+        "witness": "super::examples::first(super::examples::url_with(0x1F)) == (Token::Url { value: seq![0x61u32, 0x1F] })"
+      }
+    },
+    {
+      "id": "non-printable-del-moved",
+      "file": "src/tokenizer/spec.rs",
+      "find": "    c <= 0x08 || c == 0x0B || 0x0E <= c <= 0x1F || c == 0x7F\n",
+      "replace": "    c <= 0x08 || c == 0x0B || 0x0E <= c <= 0x1F || c == 0x80\n",
+      "expect": "killed",
+      "reason": "U+007F DELETE would be printable in a url.",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_printable()",
+        "witness": "super::examples::first(super::examples::url_with(0x7F)) == (Token::Url { value: seq![0x61u32, 0x7F] })"
+      }
+    },
+    {
+      "id": "comment-end-one-short",
+      "file": "src/tokenizer/spec.rs",
+      "find": "        pos + 2\n    } else {\n        end_of_comment(input, pos + 1)",
+      "replace": "        pos + 1\n    } else {\n        end_of_comment(input, pos + 1)",
+      "expect": "killed",
+      "reason": "A comment would end after its asterisk, leaving the slash.",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_comment_ends()",
+        "witness": "consume_comments(seq![0x2Fu32, 0x2A, 0x61, 0x2A, 0x2F, 0x62], 0) == 4"
+      }
+    },
+    {
+      "id": "comment-ends-at-slash",
+      "file": "src/tokenizer/spec.rs",
+      "find": "    } else if at(input, pos) == 0x2A && at(input, pos + 1) == 0x2F {\n        pos + 2",
+      "replace": "    } else if at(input, pos) == 0x2A || at(input, pos + 1) == 0x2F {\n        pos + 2",
+      "expect": "killed",
+      "reason": "A comment would end at any slash or any asterisk.",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_comment_ends()",
+        "witness": "consume_comments(seq![0x2Fu32, 0x2A, 0x61, 0x2F, 0x62, 0x2A, 0x2F, 0x63], 0) == 4"
+      }
+    },
+    {
+      "id": "hex-digit-off-by-one",
+      "file": "src/tokenizer/spec.rs",
+      "find": "        (c - 0x30) as nat\n",
+      "replace": "        (c - 0x2F) as nat\n",
+      "expect": "killed",
+      "reason": "The digit 9 would be ten.",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_hex_values()",
+        "witness": "consume_escaped_code_point(seq![0x39u32], 0).0 == 0x0Au32"
+      }
+    },
+    {
+      "id": "hex-upper-off-by-one",
+      "file": "src/tokenizer/spec.rs",
+      "find": "        (c - 0x41 + 10) as nat\n",
+      "replace": "        (c - 0x41 + 11) as nat\n",
+      "expect": "killed",
+      "reason": "The digit A would be eleven.",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_hex_values()",
+        "witness": "consume_escaped_code_point(seq![0x41u32], 0).0 == 0x0Bu32"
+      }
+    },
+    {
+      "id": "hex-lower-off-by-one",
+      "file": "src/tokenizer/spec.rs",
+      "find": "        (c - 0x61 + 10) as nat\n",
+      "replace": "        (c - 0x61 + 11) as nat\n",
+      "expect": "killed",
+      "reason": "The digit a would be eleven.",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_hex_values()",
+        "witness": "consume_escaped_code_point(seq![0x61u32], 0).0 == 0x0Bu32"
+      }
+    },
+    {
+      "id": "hex-base-ten",
+      "file": "src/tokenizer/spec.rs",
+      "find": "            value * 16 + hex_value(at(input, pos)),",
+      "replace": "            value * 10 + hex_value(at(input, pos)),",
+      "expect": "killed",
+      "reason": "Hex digits would be read in base ten.",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_hex_values()",
+        "witness": "consume_escaped_code_point(seq![0x31u32, 0x30], 0).0 == 0x0Au32"
+      }
+    },
+    {
+      "id": "hex-no-capital-f",
+      "file": "src/tokenizer/spec.rs",
+      "find": "    is_digit(c) || 0x41 <= c <= 0x46 || 0x61 <= c <= 0x66\n",
+      "replace": "    is_digit(c) || 0x41 <= c <= 0x45 || 0x61 <= c <= 0x66\n",
+      "expect": "killed",
+      "reason": "F would not be a hex digit.",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_hex_values()",
+        "witness": "consume_escaped_code_point(seq![0x46u32], 0).0 == 0x46u32"
+      }
+    },
+    {
+      "id": "hex-no-small-f",
+      "file": "src/tokenizer/spec.rs",
+      "find": "    is_digit(c) || 0x41 <= c <= 0x46 || 0x61 <= c <= 0x66\n",
+      "replace": "    is_digit(c) || 0x41 <= c <= 0x46 || 0x61 <= c <= 0x65\n",
+      "expect": "killed",
+      "reason": "f would not be a hex digit.",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_hex_values()",
+        "witness": "consume_escaped_code_point(seq![0x66u32], 0).0 == 0x66u32"
+      }
+    },
+    {
+      "id": "ident-continues-with-start-only",
+      "file": "src/tokenizer/spec.rs",
+      "find": "    if is_ident_code_point(c) {\n        consume_ident_sequence_loop(input, pos + 1, result.push(c))",
+      "replace": "    if is_ident_start_code_point(c) {\n        consume_ident_sequence_loop(input, pos + 1, result.push(c))",
+      "expect": "killed",
+      "reason": "A digit would end an ident.",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_ident_sequence()",
+        "witness": "super::examples::first(seq![0x61u32, 0x31]) == (Token::Ident { value: seq![0x61u32] })"
+      }
+    },
+    {
+      "id": "ident-ignores-escapes",
+      "file": "src/tokenizer/spec.rs",
+      "find": "    } else if are_a_valid_escape(c, at(input, pos + 1)) {\n        let (code_point, next) = consume_escaped_code_point(input, pos + 1);\n        consume_ident_sequence_loop(input, next, result.push(code_point))",
+      "replace": "    } else if false {\n        let (code_point, next) = consume_escaped_code_point(input, pos + 1);\n        consume_ident_sequence_loop(input, next, result.push(code_point))",
+      "expect": "killed",
+      "reason": "An escape would end an ident.",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_ident_sequence()",
+        "witness": "super::examples::after(seq![0x61u32, 0x5C, 0x67]) == 1"
+      }
+    },
+    {
+      "id": "ident-escape-keeps-backslash",
+      "file": "src/tokenizer/spec.rs",
+      "find": "        consume_ident_sequence_loop(input, next, result.push(code_point))",
+      "replace": "        consume_ident_sequence_loop(input, next, result.push(c))",
+      "expect": "killed",
+      "reason": "An escape would append its backslash, not what it stands for.",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_ident_sequence()",
+        "witness": "super::examples::first(seq![0x61u32, 0x5C, 0x67]) == (Token::Ident { value: seq![0x61u32, 0x5Cu32] })"
+      }
+    },
+    {
+      "id": "declaration-name-any-token",
+      "file": "src/parser/spec.rs",
+      "find": "    if is_ident(next_token(input, index)) {\n        let (token, after_name) = consume_a_token(input, index);",
+      "replace": "    if true {\n        let (token, after_name) = consume_a_token(input, index);",
+      "expect": "killed",
+      "reason": "A declaration could start with a token that is not an ident.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_declaration_steps()",
+        "witness": "parse_a_list_of_declarations(Input::String { string: seq![0x31u32, 0x3A, 0x78, 0x3B, 0x61, 0x3A, 0x62] }).len() == 2"
+      }
+    },
+    {
+      "id": "declaration-no-space-before-colon",
+      "file": "src/parser/spec.rs",
+      "find": "        let after_whitespace = discard_whitespace(input, after_name);",
+      "replace": "        let after_whitespace = after_name;",
+      "expect": "killed",
+      "reason": "Whitespace between the name and the colon would end the declaration.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_declaration_steps()",
+        "witness": "parse_a_list_of_declarations(Input::String { string: seq![0x61u32, 0x20, 0x3A, 0x62] }).len() == 0"
+      }
+    },
+    {
+      "id": "declaration-colon-not-needed",
+      "file": "src/parser/spec.rs",
+      "find": "        if is(next_token(input, after_whitespace), Token::Colon) {",
+      "replace": "        if true {",
+      "expect": "killed",
+      "reason": "A declaration would not need a colon.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_declaration_steps()",
+        "witness": "parse_a_list_of_declarations(Input::String { string: seq![0x61u32, 0x20, 0x62, 0x3B, 0x63, 0x3A, 0x64] }).len() == 2"
+      }
+    },
+    {
+      "id": "declaration-space-after-colon-kept",
+      "file": "src/parser/spec.rs",
+      "find": "            let start = discard_whitespace(input, after_colon);",
+      "replace": "            let start = after_colon;",
+      "expect": "killed",
+      "reason": "Whitespace after the colon would be the first value.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_declaration_steps()",
+        "witness": "parse_a_declaration(Input::String { string: seq![0x61u32, 0x3A, 0x20, 0x62] }) == Some(super::examples::declaration(0x61, seq![super::examples::token(Token::Whitespace), super::examples::ident(0x62)]))"
+      }
+    },
+    {
+      "id": "custom-name-first-dash",
+      "file": "src/parser/spec.rs",
+      "find": "    string.len() >= 2 && string[0] == 0x2D && string[1] == 0x2D\n",
+      "replace": "    string.len() >= 2 && string[0] == 0x2E && string[1] == 0x2D\n",
+      "expect": "killed",
+      "reason": "A custom property name would start with a dot and a dash.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_parse_a_declaration()",
+        "witness": "parse_a_declaration(Input::String { string: seq![0x2Du32, 0x2D, 0x78, 0x3A, 0x79] }) == Some(Declaration { name: seq![0x2Du32, 0x2D, 0x78], value: seq![super::examples::ident(0x79)], important: false, original_text: None })"
+      }
+    },
+    {
+      "id": "custom-name-one-dash",
+      "file": "src/parser/spec.rs",
+      "find": "    string.len() >= 2 && string[0] == 0x2D && string[1] == 0x2D\n",
+      "replace": "    string.len() >= 2 && string[0] == 0x2D\n",
+      "expect": "killed",
+      "reason": "One dash would make a custom property name.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_parse_a_declaration()",
+        "witness": "parse_a_declaration(Input::String { string: seq![0x2Du32, 0x78, 0x3A, 0x79] }) == Some(Declaration { name: seq![0x2Du32, 0x78], value: seq![super::examples::ident(0x79)], important: false, original_text: Some(seq![0x79u32]) })"
+      }
+    },
+    {
+      "id": "rule-leading-space-kept",
+      "file": "src/parser/spec.rs",
+      "find": "    let start = discard_whitespace(stream, index);\n    // 3. \"If input is empty, return a syntax error.\"\n    if is_empty(stream, start) {\n        None\n    // \"Otherwise, if the next token",
+      "replace": "    let start = index;\n    // 3. \"If input is empty, return a syntax error.\"\n    if is_empty(stream, start) {\n        None\n    // \"Otherwise, if the next token",
+      "expect": "killed",
+      "reason": "Whitespace before a rule would be part of its prelude.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_parse_a_rule()",
+        "witness": "parse_a_rule(Input::String { string: seq![0x20u32, 0x61, 0x7B, 0x7D, 0x20] }) == Some(Rule::QualifiedRule { prelude: seq![super::examples::token(Token::Whitespace), super::examples::ident(0x61)], declarations: Seq::empty(), child_rules: Seq::empty() })"
+      }
+    },
+    {
+      "id": "rule-trailing-space-kept",
+      "file": "src/parser/spec.rs",
+      "find": "    let end = discard_whitespace(input, index);\n    // 5. \"If input is empty, return rule.",
+      "replace": "    let end = index;\n    // 5. \"If input is empty, return rule.",
+      "expect": "killed",
+      "reason": "Whitespace after a rule would be extra input.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_parse_a_rule()",
+        "witness": "parse_a_rule(Input::String { string: seq![0x20u32, 0x61, 0x7B, 0x7D, 0x20] }) == None::<Rule>"
+      }
+    },
+    {
+      "id": "rule-extra-input-allowed",
+      "file": "src/parser/spec.rs",
+      "find": "    if is_empty(input, end) {\n        rule\n    } else {\n        None\n    }",
+      "replace": "    if true {\n        rule\n    } else {\n        None\n    }",
+      "expect": "killed",
+      "reason": "A rule could be followed by anything.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_parse_a_rule()",
+        "witness": "parse_a_rule(Input::String { string: seq![0x61u32, 0x7B, 0x7D, 0x62] }) == Some(super::examples::style_rule(0x61, Seq::empty(), Seq::empty()))"
+      }
+    },
+    {
+      "id": "rule-at-keyword-not-special",
+      "file": "src/parser/spec.rs",
+      "find": "    } else if is_at_keyword(next_token(stream, start)) {\n        let (rule, next) = consume_an_at_rule(stream, start, false);\n        finish_rule(stream, rule, next)",
+      "replace": "    } else if false {\n        let (rule, next) = consume_an_at_rule(stream, start, false);\n        finish_rule(stream, rule, next)",
+      "expect": "killed",
+      "reason": "parse a rule would read an at-rule as a qualified rule.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_parse_a_rule()",
+        "witness": "parse_a_rule(Input::String { string: seq![0x40u32, 0x61, 0x3B] }) == None::<Rule>"
+      }
+    },
+    {
+      "id": "declaration-leading-space-kept",
+      "file": "src/parser/spec.rs",
+      "find": "    let start = discard_whitespace(stream, index);\n    // 3. \"If input is empty, return a syntax error.\"\n    if is_empty(stream, start) {\n        None\n    } else {\n        // 4. \"Consume a declaration",
+      "replace": "    let start = index;\n    // 3. \"If input is empty, return a syntax error.\"\n    if is_empty(stream, start) {\n        None\n    } else {\n        // 4. \"Consume a declaration",
+      "expect": "killed",
+      "reason": "Whitespace before a declaration would end it before it began.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_parse_a_declaration()",
+        "witness": "parse_a_declaration(Input::String { string: seq![0x20u32, 0x20, 0x61, 0x3A, 0x62, 0x20, 0x20] }) == None::<Declaration>"
+      }
+    },
+    {
+      "id": "declaration-extra-input-allowed",
+      "file": "src/parser/spec.rs",
+      "find": "                if is_empty(stream, end) {\n                    Some(value)\n                } else {\n                    None\n                }",
+      "replace": "                if true {\n                    Some(value)\n                } else {\n                    None\n                }",
+      "expect": "killed",
+      "reason": "A declaration could be followed by anything.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_parse_a_declaration()",
+        "witness": "parse_a_declaration(Input::String { string: seq![0x61u32, 0x3A, 0x62, 0x3B, 0x63] }) == Some(super::examples::declaration(0x61, seq![super::examples::ident(0x62)]))"
+      }
+    },
+    {
+      "id": "function-loses-its-name",
+      "file": "src/parser/spec.rs",
+      "find": "    function_loop(input, next, token_value(token), Seq::empty())",
+      "replace": "    function_loop(input, next, Seq::empty(), Seq::empty())",
+      "expect": "killed",
+      "reason": "A function would have no name.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_function()",
+        "witness": "parse_a_list_of_component_values(Input::String { string: seq![0x66u32, 0x28, 0x61, 0x29, 0x62] })[0]->name.len() == 0"
+      }
+    },
+    {
+      "id": "function-runs-past-its-paren",
+      "file": "src/parser/spec.rs",
+      "find": "    if is(item, Token::Eof) || is(item, Token::CloseParen) {\n        (ComponentValue::Function",
+      "replace": "    if is(item, Token::Eof) {\n        (ComponentValue::Function",
+      "expect": "killed",
+      "reason": "A function would not end at its closing parenthesis.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_function()",
+        "witness": "parse_a_list_of_component_values(Input::String { string: seq![0x66u32, 0x28, 0x61, 0x29, 0x62] }).len() == 1"
+      }
+    },
+    {
+      "id": "function-token-is-only-a-token",
+      "file": "src/parser/spec.rs",
+      "find": "    } else if is_function_token(item) {\n        consume_a_function(input, index)",
+      "replace": "    } else if is_function_token(item) {\n        consume_a_token(input, index)",
+      "expect": "killed",
+      "reason": "A function token would not start a function.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_function()",
+        "witness": "parse_a_list_of_component_values(Input::String { string: seq![0x66u32, 0x28, 0x61, 0x29, 0x62] }).len() == 4"
+      }
+    },
+    {
+      "id": "block-token-is-only-a-token",
+      "file": "src/parser/spec.rs",
+      "find": "    if is_open_bracket(item) {\n        consume_a_simple_block(input, index)",
+      "replace": "    if is_open_bracket(item) {\n        consume_a_token(input, index)",
+      "expect": "killed",
+      "reason": "An opening bracket would not start a block.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_block_closes_on_its_mirror()",
+        "witness": "parse_a_component_value(Input::String { string: seq![0x28u32, 0x61, 0x7D, 0x5D, 0x62] }) == None::<ComponentValue>"
+      }
+    },
+    {
+      "id": "qualified-rule-ignores-stop-token",
+      "file": "src/parser/spec.rs",
+      "find": "    if is(item, Token::Eof) || is_stop(item, stop_token) {\n        (QualifiedRuleResult::Nothing, index)",
+      "replace": "    if is(item, Token::Eof) {\n        (QualifiedRuleResult::Nothing, index)",
+      "expect": "killed",
+      "reason": "A rule would not stop at its stop token.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_qualified_rule_stops()",
+        "witness": "super::examples::first_child_prelude(seq![0x61u32, 0x7B, 0x62, 0x20, 0x63, 0x3B, 0x64, 0x7B, 0x7D, 0x7D]).len() == 5"
+      }
+    },
+    {
+      "id": "qualified-rule-takes-nested-close-curly",
+      "file": "src/parser/spec.rs",
+      "find": "        // \"This is a parse error. If nested is true, return nothing.\"\n        if nested {\n            (QualifiedRuleResult::Nothing, index)",
+      "replace": "        // \"This is a parse error. If nested is true, return nothing.\"\n        if false {\n            (QualifiedRuleResult::Nothing, index)",
+      "expect": "killed",
+      "reason": "A nested rule would take a } into its prelude.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_qualified_rule_stops()",
+        "witness": "super::examples::rules(seq![0x61u32, 0x7B, 0x62, 0x7D, 0x63, 0x7B, 0x7D]) == seq![super::examples::style_rule(0x61, Seq::empty(), seq![Rule::QualifiedRule { prelude: seq![super::examples::ident(0x62), super::examples::token(Token::CloseCurly), super::examples::ident(0x63)], declarations: Seq::empty(), child_rules: Seq::empty() }])]"
+      }
+    },
+    {
+      "id": "at-rule-semicolon-not-an-end",
+      "file": "src/parser/spec.rs",
+      "find": "    if is(item, Token::Semicolon) || is(item, Token::Eof) {\n        (rule_if_valid(statement)",
+      "replace": "    if is(item, Token::Eof) {\n        (rule_if_valid(statement)",
+      "expect": "killed",
+      "reason": "An at-rule would not end at a semicolon.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_at_rules()",
+        "witness": "super::examples::rules(seq![0x40u32, 0x61, 0x3B, 0x62, 0x7B, 0x7D]).len() == 1"
+      }
+    },
+    {
+      "id": "at-rule-block-dropped",
+      "file": "src/parser/spec.rs",
+      "find": "(rule_if_valid(Rule::AtRule { name, prelude, child_rules: Some(child_rules) }), next)",
+      "replace": "(rule_if_valid(Rule::AtRule { name, prelude, child_rules: None }), next)",
+      "expect": "killed",
+      "reason": "An at-rule would lose its block.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_at_rules()",
+        "witness": "super::examples::first_at_rule_block_len(seq![0x40u32, 0x61, 0x7B, 0x62, 0x3A, 0x63, 0x7D]) == -1"
+      }
+    },
+    {
+      "id": "at-rule-prelude-dropped",
+      "file": "src/parser/spec.rs",
+      "find": "        at_rule_loop(input, moved(index, next), nested, name, prelude.push(value))",
+      "replace": "        at_rule_loop(input, moved(index, next), nested, name, prelude)",
+      "expect": "killed",
+      "reason": "An at-rule would lose its prelude.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_at_rules()",
+        "witness": "super::examples::first_at_rule_prelude(seq![0x40u32, 0x61, 0x20, 0x62, 0x3B]).len() == 0"
+      }
+    },
+    {
+      "id": "anb-dimension-a-is-one",
+      "file": "src/parser/spec.rs",
+      "find": "        Some((dimension_value(last), negative_remainder(dimension_unit(last), 1)))",
+      "replace": "        Some((1, negative_remainder(dimension_unit(last), 1)))",
+      "expect": "killed",
+      "reason": "A would be 1 for <ndashdigit-dimension>.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_a_n_plus_b()",
+        "witness": "super::examples::anb(seq![0x33u32, 0x6E, 0x2D, 0x36]) == Some((1int, -6int))"
+      }
+    },
+    {
+      "id": "anb-ident-a-is-minus-one",
+      "file": "src/parser/spec.rs",
+      "find": "        Some((1, negative_remainder(token_value(last), 1)))",
+      "replace": "        Some((-1, negative_remainder(token_value(last), 1)))",
+      "expect": "killed",
+      "reason": "A would be -1 for <ndashdigit-ident>.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_a_n_plus_b()",
+        "witness": "super::examples::anb(seq![0x6Eu32, 0x2D, 0x31]) == Some((-1int, -1int))"
+      }
+    },
+    {
+      "id": "anb-dash-ident-a-is-one",
+      "file": "src/parser/spec.rs",
+      "find": "        Some((-1, negative_remainder(token_value(last), 2)))",
+      "replace": "        Some((1, negative_remainder(token_value(last), 2)))",
+      "expect": "killed",
+      "reason": "A would be 1 for <dashndashdigit-ident>.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_a_n_plus_b()",
+        "witness": "super::examples::anb(seq![0x2Du32, 0x6E, 0x2D, 0x31]) == Some((1int, -1int))"
+      }
+    },
+    {
+      "id": "anb-plus-may-have-a-space-before-ident",
+      "file": "src/parser/spec.rs",
+      "find": "    let plussed = items.len() == 2 && is_plus(items[0]) && plus_adjacent;",
+      "replace": "    let plussed = items.len() == 2 && is_plus(items[0]);",
+      "expect": "killed",
+      "reason": "'+' followed by whitespace would count before <ndashdigit-ident>.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_a_n_plus_b_more()",
+        "witness": "super::examples::anb(seq![0x2Bu32, 0x20, 0x6E, 0x2D, 0x31]) == Some((1int, -1int))"
+      }
+    },
+    {
+      "id": "anb-ndash-ident-a-is-minus-one",
+      "file": "src/parser/spec.rs",
+      "find": "    } else if is_keyword(items[0], n_dash_string()) {\n        Some((1, 1))",
+      "replace": "    } else if is_keyword(items[0], n_dash_string()) {\n        Some((-1, 1))",
+      "expect": "killed",
+      "reason": "A would be -1 for <ndash-ident>.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_a_n_plus_b_more()",
+        "witness": "super::examples::anb(seq![0x6Eu32, 0x2D, 0x20, 0x31]) == Some((-1int, -1int))"
+      }
+    },
+    {
+      "id": "anb-ndash-dimension-a-is-zero",
+      "file": "src/parser/spec.rs",
+      "find": "        n_dash_string(),\n    ) {\n        Some((dimension_value(items[0]), 1))",
+      "replace": "        n_dash_string(),\n    ) {\n        Some((0, 1))",
+      "expect": "killed",
+      "reason": "A would be 0 for <ndash-dimension>.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_a_n_plus_b_more()",
+        "witness": "super::examples::anb(seq![0x33u32, 0x6E, 0x2D, 0x20, 0x31]) == Some((0int, -1int))"
+      }
+    },
+    {
+      "id": "anb-plus-ndash-takes-one",
+      "file": "src/parser/spec.rs",
+      "find": "        n_dash_string(),\n    ) {\n        Some((1, 2))",
+      "replace": "        n_dash_string(),\n    ) {\n        Some((1, 1))",
+      "expect": "killed",
+      "reason": "'+' n- would take one item, not two.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_a_n_plus_b_more()",
+        "witness": "super::examples::anb(seq![0x2Bu32, 0x6E, 0x2D, 0x20, 0x31]) == None::<(int, int)>"
+      }
+    },
+    {
+      "id": "anb-n-dash-needs-no-digit",
+      "file": "src/parser/spec.rs",
+      "find": "    string.len() >= start + 3 && ascii_lowercase(string[start]) == 0x6E",
+      "replace": "    string.len() >= start + 2 && ascii_lowercase(string[start]) == 0x6E",
+      "expect": "killed",
+      "reason": "n- would be n-dash-digits with no digits.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_a_n_plus_b_more()",
+        "witness": "super::examples::anb(seq![0x6Eu32, 0x2D]) == Some((1int, 0int))"
+      }
+    },
+    {
+      "id": "anb-signless-takes-signed",
+      "file": "src/parser/spec.rs",
+      "find": "        Some(number) => if number.sign_character is None {\n            Some(integer_value(number))",
+      "replace": "        Some(number) => if number.sign_character is Some {\n            Some(integer_value(number))",
+      "expect": "killed",
+      "reason": "<signless-integer> would need a sign.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_a_n_plus_b()",
+        "witness": "super::examples::anb(seq![0x33u32, 0x6E, 0x20, 0x2B, 0x20, 0x31]) == None::<(int, int)>"
+      }
+    },
+    {
+      "id": "anb-signless-negated",
+      "file": "src/parser/spec.rs",
+      "find": "        Some(number) => if number.sign_character is None {\n            Some(integer_value(number))",
+      "replace": "        Some(number) => if number.sign_character is None {\n            Some(-integer_value(number))",
+      "expect": "killed",
+      "reason": "<signless-integer> would be negated.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_a_n_plus_b()",
+        "witness": "super::examples::anb(seq![0x33u32, 0x6E, 0x20, 0x2B, 0x20, 0x31]) == Some((3int, -1int))"
+      }
+    },
+    {
+      "id": "anb-signed-takes-unsigned",
+      "file": "src/parser/spec.rs",
+      "find": "        Some(number) => if number.sign_character is Some {\n            Some(integer_value(number))",
+      "replace": "        Some(number) => if number.sign_character is None {\n            Some(integer_value(number))",
+      "expect": "killed",
+      "reason": "<signed-integer> would need no sign.",
+      "module": "parser::examples",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_a_n_plus_b()",
+        "witness": "super::examples::anb(seq![0x2Du32, 0x6E, 0x2B, 0x36]) == None::<(int, int)>"
+      }
+    },
+    {
+      "id": "non-ascii-b8-widened",
+      "file": "src/tokenizer/spec.rs",
+      "find": "c == 0xB7 ||",
+      "replace": "c == 0xB8 ||",
+      "expect": "killed",
+      "reason": "U+00B8 would be an ident code point (the singleton U+00B7 moved)",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_ascii_boundaries()",
+        "witness": "super::examples::first(seq![0xB8u32]) == (Token::Ident { value: seq![0xB8u32] })"
+      }
+    },
+    {
+      "id": "non-ascii-bf-widened",
+      "file": "src/tokenizer/spec.rs",
+      "find": "|| 0xC0 <= c",
+      "replace": "|| 0xBF <= c",
+      "expect": "killed",
+      "reason": "U+00BF would be an ident code point",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_ascii_boundaries()",
+        "witness": "super::examples::first(seq![0xBFu32]) == (Token::Ident { value: seq![0xBFu32] })"
+      }
+    },
+    {
+      "id": "non-ascii-d6-narrowed",
+      "file": "src/tokenizer/spec.rs",
+      "find": "<= 0xD6",
+      "replace": "<= 0xD5",
+      "expect": "killed",
+      "reason": "U+00D6 would not be an ident code point",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_ascii_boundaries()",
+        "witness": "super::examples::first(seq![0xD6u32]) == (Token::Delim { value: 0xD6u32 })"
+      }
+    },
+    {
+      "id": "non-ascii-d7-widened",
+      "file": "src/tokenizer/spec.rs",
+      "find": "|| 0xD8 <= c",
+      "replace": "|| 0xD7 <= c",
+      "expect": "killed",
+      "reason": "U+00D7, the multiplication sign, would be an ident code point",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_ascii_boundaries()",
+        "witness": "super::examples::first(seq![0xD7u32]) == (Token::Ident { value: seq![0xD7u32] })"
+      }
+    },
+    {
+      "id": "non-ascii-f6-narrowed",
+      "file": "src/tokenizer/spec.rs",
+      "find": "<= 0xF6",
+      "replace": "<= 0xF5",
+      "expect": "killed",
+      "reason": "U+00F6 would not be an ident code point",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_ascii_boundaries()",
+        "witness": "super::examples::first(seq![0xF6u32]) == (Token::Delim { value: 0xF6u32 })"
+      }
+    },
+    {
+      "id": "non-ascii-f7-widened",
+      "file": "src/tokenizer/spec.rs",
+      "find": "|| 0xF8 <= c",
+      "replace": "|| 0xF7 <= c",
+      "expect": "killed",
+      "reason": "U+00F7, the division sign, would be an ident code point",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_ascii_boundaries()",
+        "witness": "super::examples::first(seq![0xF7u32]) == (Token::Ident { value: seq![0xF7u32] })"
+      }
+    },
+    {
+      "id": "non-ascii-37d-narrowed",
+      "file": "src/tokenizer/spec.rs",
+      "find": "<= 0x37D",
+      "replace": "<= 0x37C",
+      "expect": "killed",
+      "reason": "U+037D would not be an ident code point",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_ascii_boundaries()",
+        "witness": "super::examples::first(seq![0x37Du32]) == (Token::Delim { value: 0x37Du32 })"
+      }
+    },
+    {
+      "id": "non-ascii-37e-widened",
+      "file": "src/tokenizer/spec.rs",
+      "find": "|| 0x37F <= c",
+      "replace": "|| 0x37E <= c",
+      "expect": "killed",
+      "reason": "U+037E, the Greek question mark, would be an ident code point",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_ascii_boundaries()",
+        "witness": "super::examples::first(seq![0x37Eu32]) == (Token::Ident { value: seq![0x37Eu32] })"
+      }
+    },
+    {
+      "id": "non-ascii-1fff-narrowed",
+      "file": "src/tokenizer/spec.rs",
+      "find": "<= 0x1FFF",
+      "replace": "<= 0x1FFE",
+      "expect": "killed",
+      "reason": "U+1FFF would not be an ident code point",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_ascii_boundaries()",
+        "witness": "super::examples::first(seq![0x1FFFu32]) == (Token::Delim { value: 0x1FFFu32 })"
+      }
+    },
+    {
+      "id": "non-ascii-200b-widened",
+      "file": "src/tokenizer/spec.rs",
+      "find": "c == 0x200C",
+      "replace": "c == 0x200B",
+      "expect": "killed",
+      "reason": "U+200B would be an ident code point (U+200C moved)",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_ascii_boundaries()",
+        "witness": "super::examples::first(seq![0x200Bu32]) == (Token::Ident { value: seq![0x200Bu32] })"
+      }
+    },
+    {
+      "id": "non-ascii-200e-widened",
+      "file": "src/tokenizer/spec.rs",
+      "find": "c == 0x200D",
+      "replace": "c == 0x200E",
+      "expect": "killed",
+      "reason": "U+200E would be an ident code point (U+200D moved)",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_ascii_boundaries()",
+        "witness": "super::examples::first(seq![0x200Eu32]) == (Token::Ident { value: seq![0x200Eu32] })"
+      }
+    },
+    {
+      "id": "non-ascii-203e-widened",
+      "file": "src/tokenizer/spec.rs",
+      "find": "c == 0x203F",
+      "replace": "c == 0x203E",
+      "expect": "killed",
+      "reason": "U+203E would be an ident code point (U+203F moved)",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_ascii_boundaries()",
+        "witness": "super::examples::first(seq![0x203Eu32]) == (Token::Ident { value: seq![0x203Eu32] })"
+      }
+    },
+    {
+      "id": "non-ascii-2041-widened",
+      "file": "src/tokenizer/spec.rs",
+      "find": "c == 0x2040",
+      "replace": "c == 0x2041",
+      "expect": "killed",
+      "reason": "U+2041 would be an ident code point (U+2040 moved)",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_ascii_boundaries()",
+        "witness": "super::examples::first(seq![0x2041u32]) == (Token::Ident { value: seq![0x2041u32] })"
+      }
+    },
+    {
+      "id": "non-ascii-206f-widened",
+      "file": "src/tokenizer/spec.rs",
+      "find": "|| 0x2070 <= c",
+      "replace": "|| 0x206F <= c",
+      "expect": "killed",
+      "reason": "U+206F would be an ident code point",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_ascii_boundaries()",
+        "witness": "super::examples::first(seq![0x206Fu32]) == (Token::Ident { value: seq![0x206Fu32] })"
+      }
+    },
+    {
+      "id": "non-ascii-2190-widened",
+      "file": "src/tokenizer/spec.rs",
+      "find": "<= 0x218F",
+      "replace": "<= 0x2190",
+      "expect": "killed",
+      "reason": "U+2190 would be an ident code point",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_ascii_boundaries()",
+        "witness": "super::examples::first(seq![0x2190u32]) == (Token::Ident { value: seq![0x2190u32] })"
+      }
+    },
+    {
+      "id": "non-ascii-2bff-widened",
+      "file": "src/tokenizer/spec.rs",
+      "find": "|| 0x2C00 <= c",
+      "replace": "|| 0x2BFF <= c",
+      "expect": "killed",
+      "reason": "U+2BFF would be an ident code point",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_ascii_boundaries()",
+        "witness": "super::examples::first(seq![0x2BFFu32]) == (Token::Ident { value: seq![0x2BFFu32] })"
+      }
+    },
+    {
+      "id": "non-ascii-2ff0-widened",
+      "file": "src/tokenizer/spec.rs",
+      "find": "<= 0x2FEF",
+      "replace": "<= 0x2FF0",
+      "expect": "killed",
+      "reason": "U+2FF0 would be an ident code point",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_ascii_boundaries()",
+        "witness": "super::examples::first(seq![0x2FF0u32]) == (Token::Ident { value: seq![0x2FF0u32] })"
+      }
+    },
+    {
+      "id": "non-ascii-3000-widened",
+      "file": "src/tokenizer/spec.rs",
+      "find": "|| 0x3001 <= c",
+      "replace": "|| 0x3000 <= c",
+      "expect": "killed",
+      "reason": "U+3000, the ideographic space, would be an ident code point",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_ascii_boundaries()",
+        "witness": "super::examples::first(seq![0x3000u32]) == (Token::Ident { value: seq![0x3000u32] })"
+      }
+    },
+    {
+      "id": "non-ascii-d800-widened",
+      "file": "src/tokenizer/spec.rs",
+      "find": "<= 0xD7FF",
+      "replace": "<= 0xD800",
+      "expect": "killed",
+      "reason": "U+D800 would be an ident code point",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_ascii_boundaries()",
+        "witness": "super::examples::first(seq![0xD800u32]) == (Token::Ident { value: seq![0xD800u32] })"
+      }
+    },
+    {
+      "id": "non-ascii-f8ff-widened",
+      "file": "src/tokenizer/spec.rs",
+      "find": "|| 0xF900 <= c",
+      "replace": "|| 0xF8FF <= c",
+      "expect": "killed",
+      "reason": "U+F8FF would be an ident code point",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_ascii_boundaries()",
+        "witness": "super::examples::first(seq![0xF8FFu32]) == (Token::Ident { value: seq![0xF8FFu32] })"
+      }
+    },
+    {
+      "id": "non-ascii-fdd0-widened",
+      "file": "src/tokenizer/spec.rs",
+      "find": "<= 0xFDCF",
+      "replace": "<= 0xFDD0",
+      "expect": "killed",
+      "reason": "U+FDD0 would be an ident code point",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_ascii_boundaries()",
+        "witness": "super::examples::first(seq![0xFDD0u32]) == (Token::Ident { value: seq![0xFDD0u32] })"
+      }
+    },
+    {
+      "id": "non-ascii-fdef-widened",
+      "file": "src/tokenizer/spec.rs",
+      "find": "|| 0xFDF0 <= c",
+      "replace": "|| 0xFDEF <= c",
+      "expect": "killed",
+      "reason": "U+FDEF would be an ident code point",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_ascii_boundaries()",
+        "witness": "super::examples::first(seq![0xFDEFu32]) == (Token::Ident { value: seq![0xFDEFu32] })"
+      }
+    },
+    {
+      "id": "non-ascii-fffe-widened",
+      "file": "src/tokenizer/spec.rs",
+      "find": "<= 0xFFFD",
+      "replace": "<= 0xFFFE",
+      "expect": "killed",
+      "reason": "U+FFFE would be an ident code point",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_ascii_boundaries()",
+        "witness": "super::examples::first(seq![0xFFFEu32]) == (Token::Ident { value: seq![0xFFFEu32] })"
+      }
+    },
+    {
+      "id": "non-ascii-ffff-widened",
+      "file": "src/tokenizer/spec.rs",
+      "find": "0x1_0000 <= c",
+      "replace": "0xFFFF <= c",
+      "expect": "killed",
+      "reason": "U+FFFF would be an ident code point",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_ascii_boundaries()",
+        "witness": "super::examples::first(seq![0xFFFFu32]) == (Token::Ident { value: seq![0xFFFFu32] })"
+      }
+    },
+    {
+      "id": "non-ascii-10ffff-narrowed",
+      "file": "src/tokenizer/spec.rs",
+      "find": "<= 0x10_FFFF",
+      "replace": "<= 0x10_FFFE",
+      "expect": "killed",
+      "reason": "U+10FFFF would not be an ident code point",
+      "module": "tokenizer::examples",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_non_ascii_boundaries()",
+        "witness": "super::examples::first(seq![0x10_FFFFu32]) == (Token::Delim { value: 0x10_FFFFu32 })"
+      }
     }
   ]
 }

@@ -17,6 +17,18 @@
 //! the whole sheets and without the rule index (`cascade_unindexed`), and the tables must
 //! be equal.
 //!
+//! **What this evidences, and what it does not.** The documents are parser test inputs, not
+//! pages: nearly all have no author CSS (about 40 of the 1,761 contain a `<style>` element
+//! and none a `style` attribute, mostly empty or one rule). So the fixtures record the user
+//! agent sheets' and the presentational hints' effect on every element shape the HTML parser
+//! can produce (including malformed nesting), and that the cascade does not panic or
+//! disagree with its unindexed and uncut variants on them. They are not evidence that
+//! author cascade rules (specificity, origin, importance, media, inheritance of author
+//! values) are right: `src/cascade/tests.rs` parses real documents for that. The fixtures
+//! are the cascade's own output once reviewed, not an independent engine's, so they pin
+//! behaviour against change; they do not show it is correct. The number of cases is asserted
+//! below, and a fixture file with no `.dat` file behind it fails the test.
+//!
 //! Not cascaded: the `#document-fragment` cases (the cascade takes a document) and the
 //! `scripted_*.dat` cases, which the generated table only counts.
 //!
@@ -329,6 +341,36 @@ fn golden_computed_values() {
                 path.display()
             )),
             Err(e) => differ.push(format!("{}: {e}", path.display())),
+        }
+    }
+    if !cfg!(miri) {
+        // The suite's size: a change of the vendored data or of the generated table must
+        // show up here (and the fixtures regenerated, reviewing the diff).
+        assert_eq!(
+            (cascaded, fragments, SCRIPTED_NOT_RUN),
+            (1761, 206, 6),
+            "document, fragment and scripted cases"
+        );
+        // No stale fixture: every `.txt` is a `.dat` file of the suite that has a document.
+        if !bless {
+            let mut want: Vec<String> = compared
+                .iter()
+                .filter(|(_, t)| !t.is_empty())
+                .map(|(f, _)| f.replace(".dat", ".txt"))
+                .collect();
+            want.sort();
+            let mut found: Vec<String> = std::fs::read_dir(&dir)
+                .map(|d| {
+                    d.filter_map(Result::ok)
+                        .map(|e| e.file_name().to_string_lossy().into_owned())
+                        .collect()
+                })
+                .unwrap_or_default();
+            found.sort();
+            assert_eq!(
+                found, want,
+                "fixture files and suite files differ (stale fixtures?)"
+            );
         }
     }
     println!(

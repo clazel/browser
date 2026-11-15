@@ -11,7 +11,15 @@
 //! `parser/examples.rs` has that, evaluated on the spec the parser is proven equal to.
 //!
 //! Dropped constructs are `["error", …]` entries in the suite and nothing at all in the
-//! text, so those entries are left out of what a result is compared with.
+//! text, so those entries are left out of what a result is compared with, but only where
+//! `DROPPED` lists the case, with how many and the step that drops them: a case that
+//! gains or loses one fails. A suite error for a whole input (`one_rule`,
+//! `one_declaration`, `one_component_value`) is matched to our error by what the suite
+//! calls it, checked by the pinned text's own steps (`error_matches`).
+//!
+//! Each expected failure also pins what the parser gives (`EXPECTED_FAILURES`'s last
+//! field), written by hand from the cited step of the pinned text, so that a case that
+//! fails the suite for one reason cannot start to fail for another.
 //!
 //! `stylesheet_bytes.json` goes from bytes to rules: §3.2 decodes each case, and the rules are
 //! checked here. `conformance_input.rs` checks the encoding it chose.
@@ -122,6 +130,25 @@ fn tagged(tag: &str, value: &[u32]) -> Value {
 
 fn error(kind: &str) -> Value {
     Value::List(vec![text("error"), text(kind)])
+}
+
+/// A result as compact JSON-like text, to pin what the parser gives. A number is its
+/// value (`0` for either zero) and `_` stands for a field that is not compared.
+fn render(value: &Value) -> String {
+    match value {
+        Value::AnyText => "_".to_owned(),
+        Value::Text(s) => format!("{s:?}"),
+        Value::Number(n) if *n == 0.0 => "0".to_owned(),
+        Value::Number(n) => n.to_string(),
+        Value::Bool(b) => b.to_string(),
+        Value::Null => "null".to_owned(),
+        Value::List(list) => render_list(list),
+    }
+}
+
+fn render_list(list: &[Value]) -> String {
+    let inner: Vec<String> = list.iter().map(render).collect();
+    format!("[{}]", inner.join(","))
 }
 
 /// The number as the suite writes it: representation, value and type. The suite's
@@ -375,95 +402,193 @@ fn same_values(actual: &[Value], expected: &Json) -> bool {
         && actual.iter().zip(e.iter()).all(|(a, e)| same(a, e)))
 }
 
-/// Cases that differ from the pinned text, as (file, index, why). `css-parsing-tests` was
+/// Cases that differ from the pinned text, as (file, index, why, what the parser gives, as
+/// `render` shows it). `css-parsing-tests` was
 /// written for the 2013 draft, and records one parser's reading.
-const EXPECTED_FAILURES: &[(&str, usize, &str)] = &[
+const EXPECTED_FAILURES: &[(&str, usize, &str, &str)] = &[
     (
         "rule_list.json",
         11,
         "the 2013 text's rule lists kept <!-- and --> in preludes when not at the top level; \
          the pinned text has no such list, and \"parse a stylesheet's contents\" skips them",
+        r#"[["qualified rule",[],[]]]"#,
     ),
     (
         "one_declaration.json",
         11,
         "step 4 of \"consume a declaration\" discards whitespace after the colon, and step 7 \
          removes it at the end; the 2013 text kept both",
+        r#"["declaration","foo",[],false]"#,
     ),
     (
         "one_declaration.json",
         12,
         "step 5 stops at the semicolon, which leaves the stream not empty, so \"parse a \
          declaration\" returns a syntax error; the 2013 text took it into the value",
+        r#"["error","invalid"]"#,
     ),
     (
         "one_declaration.json",
         14,
         "as above: step 5 stops at the first semicolon",
+        r#"["error","invalid"]"#,
     ),
     (
         "one_declaration.json",
         15,
         "whitespace trimmed by steps 4 and 7, as above",
+        r#"["declaration","foo",[["number",_,9000,"integer"]],true]"#,
     ),
     (
         "one_declaration.json",
         16,
         "whitespace trimmed by steps 4 and 7, as above",
+        r#"["declaration","foo",[["number",_,9000,"integer"]],true]"#,
     ),
     (
         "one_declaration.json",
         17,
         "whitespace trimmed by step 4, as above",
+        r#"["declaration","foo",[["number",_,9000,"integer"]," ","!",["ident","İmportant"]],false]"#,
     ),
     (
         "one_declaration.json",
         18,
         "whitespace trimmed by step 4, as above",
+        r#"["declaration","foo",[["number",_,9000,"integer"]," ","!",["ident","important"],"!"],false]"#,
     ),
     (
         "one_declaration.json",
         19,
         "whitespace trimmed by step 4, as above",
+        r#"["declaration","foo",[["number",_,9000,"integer"]," ",["ident","important"]],false]"#,
     ),
     (
         "one_declaration.json",
         21,
         "step 8: a {}-block with any other value is not a declaration",
+        r#"["error","invalid"]"#,
     ),
     (
         "declaration_list.json",
         6,
         "\"parse a list of declarations\" discards at-rules; the 2013 list returned them",
+        r#"[["declaration","a",[["ident","b"]],false]]"#,
     ),
     (
         "declaration_list.json",
         7,
         "as above: at-rules are discarded",
+        r#"[["declaration","a",[["ident","b"]],false]]"#,
     ),
     (
         "declaration_list.json",
         8,
         "a list of declarations has no qualified rules in the pinned text: the first item is \
          bad remnants up to the semicolon, and the at-rule after it is discarded",
+        "[]",
     ),
     (
         "component_value_list.json",
         6,
         "U+0080 and U+0081 are not non-ASCII ident code points in the pinned text, which \
          lists ranges from U+00B7; the suite's draft took every non-ASCII code point",
+        r#"[["ident","-"]," ",["ident","red0"]," ",["ident","-red"]," ",["ident","--red"]," ",["ident","--red blue"]," ",["dimension",_,0,"integer","red"]," ",["dimension",_,0,"integer","red"]," ",["ident","��red"]," ",["ident","_Red"]," ",".",["ident","red"]," ",["ident","rêd"]," ",["ident","rêd"]," ","\u{7f}","\u{80}","\u{81}"]"#,
     ),
     (
         "component_value_list.json",
         38,
         "the pinned text has no match tokens, so \"~=\" is two delim tokens",
+        r#"["~","=","|","=","^","=","$","=","*","=","|","|","<!--",["ident","----"],">"," ","|","|"," ","~","="]"#,
     ),
     (
         "component_value_list.json",
         39,
         "the pinned text has no match tokens, so \"^=\" is two delim tokens",
+        r#"[["ident","a"],":",["function","not",["[]",["ident","href"],"^","=",["ident","http:"]],","," ",["[]",["ident","href"]," ","^","="," ",["string","https:"]," "]]," ",["{}"," ",["ident","color"],":"," ",["function","rgba",["percentage",_,0,"integer"],","," ",["percentage",_,100,"integer"],","," ",["percentage",_,50,"integer"]],";"," "]]"#,
     ),
 ];
+
+/// Cases whose expected list has `["error", "invalid"]` entries, which stand for a
+/// construct the pinned text drops without a trace, as (file, index, how many, the step
+/// that drops them). A case with a different number fails, and so does one not listed.
+const DROPPED: &[(&str, usize, usize, &str)] = &[
+    (
+        "stylesheet.json",
+        1,
+        1,
+        "§5.5.1 anything else: \"consume a qualified rule\" reaches EOF in the prelude `foo`: \"Return nothing\"",
+    ),
+    ("stylesheet.json", 2, 1, "as above, for `foo 4`"),
+    (
+        "stylesheet.json",
+        5,
+        1,
+        "`@charset 4 {}` is dropped by `is_charset`, which is §8.3 of the 2013 text, not the pinned text",
+    ),
+    (
+        "stylesheet.json",
+        16,
+        1,
+        "`{}` is a rule with an empty prelude (§5.5.3 `<{-token>`), and `a` is as `foo` above",
+    ),
+    ("rule_list.json", 1, 1, "as `stylesheet.json` 1"),
+    ("rule_list.json", 2, 1, "as `stylesheet.json` 2"),
+    (
+        "rule_list.json",
+        4,
+        1,
+        "`@charset;` is dropped by `is_charset`, as `stylesheet.json` 5",
+    ),
+    (
+        "rule_list.json",
+        13,
+        1,
+        "§5.5.1 `<CDC-token>`: \"Discard a token\", so the `-->` after `div {}` is nothing",
+    ),
+    ("rule_list.json", 14, 1, "as `stylesheet.json` 16"),
+    (
+        "declaration_list.json",
+        3,
+        1,
+        "§5.4.5 then §5.5.6 step 3: after the ident `z` the next token is `;`, not a colon, so \"consume the remnants of a bad declaration\" discards through the `;`",
+    ),
+    (
+        "declaration_list.json",
+        5,
+        1,
+        "§5.5.6 step 3: after the ident `c` the next token is the delim `+`, not a colon: the remnants of `c+:d` are discarded",
+    ),
+];
+
+/// The files whose cases are lists of results, and so can have dropped entries.
+const LIST_FILES: &[&str] = &["stylesheet.json", "rule_list.json", "declaration_list.json"];
+
+/// Our error and the suite's `["error", kind]` agree if the kind is what the text's steps
+/// say of `input`. The text has one syntax error for all of them: `empty` is "If input is
+/// empty, return a syntax error" after discarding whitespace, `extra-input` is the error of
+/// the last step, after a first item was read, and `invalid` is the step before that,
+/// where there was no first item. `first_item` says whether the input starts with one.
+fn error_matches(
+    expected: &Json,
+    actual: &Value,
+    input: &str,
+    first_item: impl Fn(&str) -> bool,
+) -> bool {
+    let Json::List([Json::Str("error"), Json::Str(kind)]) = expected else {
+        return false;
+    };
+    if !is_error_value(actual) {
+        return false;
+    }
+    let blank = component_values(input).iter().all(|v| *v == text(" "));
+    match *kind {
+        "empty" => blank,
+        "extra-input" => !blank && first_item(input),
+        "invalid" => !blank && !first_item(input),
+        _ => false,
+    }
+}
 
 fn report(suite: &str, pass: usize, xfail: usize, fail: usize, total: usize) {
     println!(
@@ -479,20 +604,47 @@ fn run(
     show: impl Fn(&str) -> String,
 ) {
     let (mut pass, mut xfail, mut fail, mut total) = (0usize, 0usize, 0usize, 0usize);
+    let mut dropped_seen = 0usize;
     for case in syntax::cases().iter().filter(|c| c.file == file) {
         total = total.saturating_add(1);
         let Json::Str(input) = case.input else {
             fail = fail.saturating_add(1);
             continue;
         };
-        let expected_failure = EXPECTED_FAILURES
+        if LIST_FILES.contains(&file)
+            && let Json::List(entries) = &case.expected
+        {
+            let dropped = entries.iter().filter(|e| is_error(e)).count();
+            let want = DROPPED
+                .iter()
+                .find(|(f, i, _, _)| *f == file && *i == case.index)
+                .map_or(0, |(_, _, n, _)| *n);
+            dropped_seen = dropped_seen.saturating_add(dropped);
+            if dropped != want {
+                println!(
+                    "FAILED {file} {}: {dropped} error entries, DROPPED lists {want}",
+                    case.index
+                );
+                fail = fail.saturating_add(1);
+                continue;
+            }
+        }
+        let pinned = EXPECTED_FAILURES
             .iter()
-            .any(|(f, i, why)| *f == file && *i == case.index && !why.is_empty());
+            .find(|(f, i, why, _)| *f == file && *i == case.index && !why.is_empty());
         if check(input, &case.expected) {
-            assert!(!expected_failure, "{file} {} now passes", case.index);
+            assert!(pinned.is_none(), "{file} {} now passes", case.index);
             pass = pass.saturating_add(1);
-        } else if expected_failure {
-            xfail = xfail.saturating_add(1);
+        } else if let Some((_, _, _, ours)) = pinned {
+            let shown = show(input);
+            if shown == *ours {
+                xfail = xfail.saturating_add(1);
+            } else {
+                println!("FAILED {file} {}: {input:?}", case.index);
+                println!("  actual   {shown}");
+                println!("  pinned   {ours}");
+                fail = fail.saturating_add(1);
+            }
         } else {
             println!("FAILED {file} {}: {input:?}", case.index);
             println!("  actual   {}", show(input));
@@ -500,6 +652,15 @@ fn run(
             fail = fail.saturating_add(1);
         }
     }
+    let listed: usize = DROPPED
+        .iter()
+        .filter(|(f, _, _, _)| *f == file)
+        .map(|(_, _, n, _)| *n)
+        .sum();
+    assert_eq!(
+        dropped_seen, listed,
+        "{file}: DROPPED and the suite disagree"
+    );
     report(suite, pass, xfail, fail, total);
     assert_eq!(fail, 0, "{suite}");
 }
@@ -514,7 +675,7 @@ fn stylesheets() {
         "stylesheet.json",
         "css-parsing-tests stylesheet",
         |input, expected| same_list(&stylesheet(input), expected),
-        |input| format!("{:?}", stylesheet(input)),
+        |input| render_list(&stylesheet(input)),
     );
 }
 
@@ -524,7 +685,7 @@ fn rule_lists() {
         "rule_list.json",
         "css-parsing-tests rule_list",
         |input, expected| same_list(&stylesheet(input), expected),
-        |input| format!("{:?}", stylesheet(input)),
+        |input| render_list(&stylesheet(input)),
     );
 }
 
@@ -543,9 +704,11 @@ fn one_rules() {
         "css-parsing-tests one_rule",
         |input, expected| {
             same(&one_rule(input), expected)
-                || (is_error(expected) && is_error_value(&one_rule(input)))
+                || error_matches(expected, &one_rule(input), input, |input| {
+                    !stylesheet(input).is_empty()
+                })
         },
-        |input| format!("{:?}", one_rule(input)),
+        |input| render(&one_rule(input)),
     );
 }
 
@@ -571,9 +734,11 @@ fn one_declarations() {
         "css-parsing-tests one_declaration",
         |input, expected| {
             same(&one_declaration(input), expected)
-                || (is_error(expected) && is_error_value(&one_declaration(input)))
+                || error_matches(expected, &one_declaration(input), input, |input| {
+                    !declaration_list(input).is_empty()
+                })
         },
-        |input| format!("{:?}", one_declaration(input)),
+        |input| render(&one_declaration(input)),
     );
 }
 
@@ -593,7 +758,7 @@ fn declaration_lists() {
         "declaration_list.json",
         "css-parsing-tests declaration_list",
         |input, expected| same_list(&declaration_list(input), expected),
-        |input| format!("{:?}", declaration_list(input)),
+        |input| render_list(&declaration_list(input)),
     );
 }
 
@@ -611,7 +776,7 @@ fn component_value_lists() {
         "component_value_list.json",
         "css-parsing-tests component_value_list, parsed",
         |input, expected| same_values(&component_values(input), expected),
-        |input| format!("{:?}", component_values(input)),
+        |input| render_list(&component_values(input)),
     );
 }
 
@@ -622,9 +787,15 @@ fn one_component_values() {
         "css-parsing-tests one_component_value, parsed",
         |input, expected| {
             same(&one_value(input), expected)
-                || (is_error(expected) && is_error_value(&one_value(input)))
+                || error_matches(expected, &one_value(input), input, |input| {
+                    component_values(input)
+                        .iter()
+                        .filter(|v| **v != text(" "))
+                        .count()
+                        > 1
+                })
         },
-        |input| format!("{:?}", one_value(input)),
+        |input| render(&one_value(input)),
     );
 }
 
@@ -703,9 +874,9 @@ fn run_wpt(page: &str, suite: &str, actual: impl Fn(&str) -> Option<String>) {
         total = total.saturating_add(1);
         let input = units(case.input);
         let expected = case.expected.map(units);
-        let expected_failure = WPT_EXPECTED_FAILURES
+        let pinned = WPT_EXPECTED_FAILURES
             .iter()
-            .any(|(f, i, why)| *f == page && *i == input && !why.is_empty());
+            .find(|(f, i, why, _)| *f == page && *i == input && !why.is_empty());
         let got = actual(&input);
         let matches = match (&got, &expected) {
             (Some(g), Some(e)) => g.eq_ignore_ascii_case(e),
@@ -713,9 +884,11 @@ fn run_wpt(page: &str, suite: &str, actual: impl Fn(&str) -> Option<String>) {
             _ => false,
         };
         if matches {
-            assert!(!expected_failure, "{page} {input:?} now passes");
+            assert!(pinned.is_none(), "{page} {input:?} now passes");
             pass = pass.saturating_add(1);
-        } else if expected_failure {
+        } else if let Some((_, _, _, ours)) = pinned
+            && got.as_deref() == *ours
+        {
             xfail = xfail.saturating_add(1);
         } else {
             println!(
@@ -731,14 +904,43 @@ fn run_wpt(page: &str, suite: &str, actual: impl Fn(&str) -> Option<String>) {
     assert_eq!(fail, 0, "{suite}");
 }
 
-/// Cases of WPT that differ from the pinned text, as (page, input, why).
-const WPT_EXPECTED_FAILURES: &[(&str, &str, &str)] = &[
-    ("urange-parsing.html", "u/**/+/**/a/**/?", COMMENT_IN_RANGE),
-    ("urange-parsing.html", "u/**/+0a/**/?", COMMENT_IN_RANGE),
-    ("urange-parsing.html", "u/**/+0/**/?", COMMENT_IN_RANGE),
-    ("urange-parsing.html", "u/**/+0/**/-0a", COMMENT_IN_RANGE),
-    ("urange-parsing.html", "u/**/+0/**/-1", COMMENT_IN_RANGE),
-    ("urange-parsing.html", "u/**/+/**/?", COMMENT_IN_RANGE),
+/// Cases of WPT that differ from the pinned text, as (page, input, why, what the parser
+/// gives). For a `unicode-range` value with a comment between the tokens of the range, the
+/// value is not one `<unicode-range-token>`: "would start a unicode-range" looks
+/// at the code points after `u`, which are `/**/`, so the value is the tokens `u`, `+`, and
+/// so on, and it is no range (`None`).
+const WPT_EXPECTED_FAILURES: &[(&str, &str, &str, Option<&str>)] = &[
+    (
+        "urange-parsing.html",
+        "u/**/+/**/a/**/?",
+        COMMENT_IN_RANGE,
+        None,
+    ),
+    (
+        "urange-parsing.html",
+        "u/**/+0a/**/?",
+        COMMENT_IN_RANGE,
+        None,
+    ),
+    (
+        "urange-parsing.html",
+        "u/**/+0/**/?",
+        COMMENT_IN_RANGE,
+        None,
+    ),
+    (
+        "urange-parsing.html",
+        "u/**/+0/**/-0a",
+        COMMENT_IN_RANGE,
+        None,
+    ),
+    (
+        "urange-parsing.html",
+        "u/**/+0/**/-1",
+        COMMENT_IN_RANGE,
+        None,
+    ),
+    ("urange-parsing.html", "u/**/+/**/?", COMMENT_IN_RANGE, None),
 ];
 
 /// Why a range with a comment in it is not one.

@@ -16,8 +16,14 @@
 //!   resolution) and [`breaks`]. No expected differences.
 //! - **with CSS Text 3's tailorings**: the same lines through
 //!   [`Props::css`], the resolution `text::wrap` uses. A line that then
-//!   differs is an expected difference if it holds a character that a
-//!   tailoring changes, named by the first that applies:
+//!   differs is an expected difference only if every break opportunity on
+//!   which it differs from the file is adjacent to a character that a
+//!   tailoring changes (the break before it, the break after it, and the
+//!   breaks inside the run of combining marks that follows it, which LB9
+//!   attaches to it), named by the first tailoring that explains all of
+//!   them. The number of such lines and their split between the two
+//!   tailorings are pinned ([`PINNED_SA`], [`PINNED_CONTROL`]): a line
+//!   that no longer differs, or moves between them, fails.
 //!   - `SA as ID`: an SA character that is not Mn or Mc. CSS Text 3 §5.5
 //!     requires a soft wrap opportunity between the letters of a script
 //!     needing lexical analysis that the UA cannot do; LB1's default makes
@@ -25,6 +31,12 @@
 //!   - `control as So`: a control character (Cc) of class CM. CSS Text 3
 //!     §4 treats it "as any other character of the Other Symbols (So)
 //!     general category", which we resolve to AL; LB1 keeps it CM.
+//!
+//! A third check runs `word-break: break-all` ([`Props::css`] with
+//! `break_all`) over the file against CSS Text 3 §5.2 (see [`break_all`]).
+//! It is a one-directional property, not a full oracle: a full oracle would
+//! have to re-derive which rules still hold between ideographs, which is
+//! the implementation again.
 //!
 //! Under Miri only [`MIRI_SAMPLES`] lines run, taken at evenly spaced byte
 //! offsets of the file (the first whole line after each offset), and the
@@ -51,6 +63,9 @@ struct Case {
     line: String,
     text: Vec<char>,
     expected: Vec<bool>,
+    /// The rule number the file's comment gives for each gap: `rules[k]` is
+    /// the rule of the gap after character `k` ("28.0" for `× [28.0]`).
+    rules: Vec<String>,
 }
 
 /// The lines to run, each with where it is: every line natively; under
@@ -89,7 +104,18 @@ fn lines_to_run() -> Vec<(String, &'static str)> {
 fn cases(lines: &[(String, &str)]) -> Result<Vec<Case>, String> {
     let mut out = Vec::new();
     for (line, l) in lines {
-        let data = l.split('#').next().unwrap_or("").trim();
+        let mut parts = l.splitn(2, '#');
+        let data = parts.next().unwrap_or("").trim();
+        // The comment: `× [2.0] NAME (...) × [28.0] NAME (...) ÷ [3.0]`; the
+        // bracketed numbers in order are the rules of the gaps, the first
+        // being the gap before the first character.
+        let gap_rules: Vec<String> = parts
+            .next()
+            .unwrap_or("")
+            .split('[')
+            .skip(1)
+            .filter_map(|r| r.split(']').next().map(str::to_owned))
+            .collect();
         if data.is_empty() {
             continue;
         }
@@ -111,54 +137,149 @@ fn cases(lines: &[(String, &str)]) -> Result<Vec<Case>, String> {
                 other => return Err(format!("{line}: expected ÷ or ×, got {other:?}")),
             }
         }
+        let rules: Vec<String> = gap_rules.into_iter().skip(1).collect();
+        if rules.len() != text.len() {
+            return Err(format!(
+                "{line}: {} rules for {} characters",
+                rules.len(),
+                text.len()
+            ));
+        }
         out.push(Case {
             line: line.clone(),
             text,
             expected,
+            rules,
         });
     }
     Ok(out)
 }
 
-/// The breaks our rules give `case` with `props`, as the file writes them,
-/// and a description of the first difference, if any.
-fn run(case: &Case, props: impl Fn(char) -> Props) -> Option<String> {
+/// The break positions (after character `k`) on which our rules with
+/// `props` differ from `case`, and a description of the first difference;
+/// `None` if there is none.
+fn run(case: &Case, props: impl Fn(char) -> Props) -> Option<(Vec<usize>, String)> {
     let p: Vec<Props> = case.text.iter().map(|&c| props(c)).collect();
     let got = breaks_with_rules(&p);
+    let mut positions = Vec::new();
+    let mut first = None;
     for (k, ((b, rule), want)) in got.iter().zip(&case.expected).enumerate() {
         let is_break = *b != Break::Prohibited;
         if is_break != *want {
-            let cps: Vec<String> = case
-                .text
-                .iter()
-                .map(|c| format!("{:04X}", u32::from(*c)))
-                .collect();
-            return Some(format!(
-                "{}: [{}] after character {k}: expected {}, got {b:?} by {rule:?}",
-                case.line,
-                cps.join(" "),
-                if *want { "÷" } else { "×" },
-            ));
+            positions.push(k);
+            if first.is_none() {
+                let cps: Vec<String> = case
+                    .text
+                    .iter()
+                    .map(|c| format!("{:04X}", u32::from(*c)))
+                    .collect();
+                first = Some(format!(
+                    "{}: [{}] after character {k}: expected {}, got {b:?} by {rule:?}",
+                    case.line,
+                    cps.join(" "),
+                    if *want { "÷" } else { "×" },
+                ));
+            }
         }
     }
-    (got.len() != case.expected.len()).then(|| format!("{}: wrong length", case.line))
+    if got.len() != case.expected.len() {
+        positions.push(usize::MAX);
+        first.get_or_insert_with(|| format!("{}: wrong length", case.line));
+    }
+    first.map(|m| (positions, m))
 }
 
-/// The tailoring that explains a difference under [`Props::css`], if any.
-fn tailoring(case: &Case) -> Option<&'static str> {
-    let sa = case
-        .text
+/// The indices of the characters of `case` that `tailoring` changes.
+fn tailored(case: &Case, tailoring: &str) -> Vec<usize> {
+    case.text
         .iter()
-        .any(|&c| line_break(c) == Lb::SA && !matches!(general_category(c), Some(Gc::Mn | Gc::Mc)));
-    if sa {
-        return Some("SA as ID");
-    }
-    let cc = case
-        .text
-        .iter()
-        .any(|&c| line_break(c) == Lb::CM && general_category(c) == Some(Gc::Cc));
-    cc.then_some("control as So")
+        .enumerate()
+        .filter(|&(_, &c)| match tailoring {
+            "SA as ID" => {
+                line_break(c) == Lb::SA && !matches!(general_category(c), Some(Gc::Mn | Gc::Mc))
+            }
+            _ => line_break(c) == Lb::CM && general_category(c) == Some(Gc::Cc),
+        })
+        .map(|(i, _)| i)
+        .collect()
 }
+
+/// The tailoring that explains a difference under [`Props::css`], if any:
+/// the first whose changed characters have every differing break
+/// opportunity (`positions`) next to one. A break after character `k` is
+/// next to a changed character `j` if `j - 1 <= k <= j + m`, `m` being the
+/// length of the run of combining marks and ZWJ after `j` (LB9 attaches
+/// them to it, so changing `j`'s class changes how the run breaks).
+fn tailoring(case: &Case, positions: &[usize]) -> Option<&'static str> {
+    ["SA as ID", "control as So"].into_iter().find(|t| {
+        let js = tailored(case, t);
+        !js.is_empty()
+            && positions.iter().all(|&k| {
+                js.iter().any(|&j| {
+                    let m = case
+                        .text
+                        .iter()
+                        .skip(j.saturating_add(1))
+                        .take_while(|&&c| matches!(line_break(c), Lb::CM | Lb::ZWJ))
+                        .count();
+                    k.saturating_add(1) >= j && k <= j.saturating_add(m)
+                })
+            })
+    })
+}
+
+/// CSS Text 3 §5.2, `word-break: break-all`: "Breaking is allowed within
+/// 'words'", and the typographic letter units of the classes AL, HL and NU
+/// "are instead treated as ID". So wherever the file forbids a break
+/// between two such characters only by a rule that is about letters
+/// following letters (LB23 AL/HL and NU, LB25 NU and NU, LB28 AL/HL and
+/// AL/HL), `break-all` must allow it: two ideographs may be separated
+/// (LB31). Returns the number of such gaps checked and those where
+/// `break-all` still forbids the break, and the number of lines in which
+/// `break-all` differs at all from the plain tailored rules (to show the
+/// check is not blind).
+fn break_all(all: &[Case]) -> (usize, Vec<String>, usize) {
+    let letter = |c: char| matches!(Props::css(c, false).class, Lb::AL | Lb::HL | Lb::NU);
+    let mut checked = 0usize;
+    let mut bad = Vec::new();
+    let mut changed = 0usize;
+    for case in all {
+        let p: Vec<Props> = case.text.iter().map(|&c| Props::css(c, true)).collect();
+        let got = breaks_with_rules(&p);
+        for (k, (b, _)) in got.iter().enumerate() {
+            // The gap after character `k`, before character `k + 1`.
+            let (Some(&a), Some(&n), Some(rule)) = (
+                case.text.get(k),
+                case.text.get(k.saturating_add(1)),
+                case.rules.get(k),
+            ) else {
+                continue;
+            };
+            let major = rule.split('.').next().unwrap_or("");
+            let by_letter_rule = matches!(major, "23" | "25" | "28");
+            let file_forbids = case.expected.get(k) == Some(&false);
+            if file_forbids && by_letter_rule && letter(a) && letter(n) {
+                checked = checked.saturating_add(1);
+                if *b == Break::Prohibited {
+                    bad.push(format!("{} after character {k} ({rule})", case.line));
+                }
+            }
+        }
+        let q: Vec<Props> = case.text.iter().map(|&c| Props::css(c, false)).collect();
+        let plain = breaks_with_rules(&q);
+        if got.iter().map(|x| x.0).ne(plain.iter().map(|x| x.0)) {
+            changed = changed.saturating_add(1);
+        }
+    }
+    (checked, bad, changed)
+}
+
+/// Lines of the file that differ from it under [`Props::css`] because of
+/// SA characters other than Mn and Mc (measured on Unicode 18.0.0's file;
+/// every differing break is next to such a character).
+const PINNED_SA: u64 = 75;
+/// And because of class CM control characters.
+const PINNED_CONTROL: u64 = 62;
 
 #[test]
 fn line_break_test() {
@@ -184,14 +305,14 @@ fn line_break_test() {
     for case in &all {
         match run(case, Props::of) {
             None => default.0 = default.0.saturating_add(1),
-            Some(m) => {
+            Some((_, m)) => {
                 default.1 = default.1.saturating_add(1);
                 default.2.push(m);
             }
         }
         match run(case, |c| Props::css(c, false)) {
             None => css.0 = css.0.saturating_add(1),
-            Some(m) => match tailoring(case) {
+            Some((positions, m)) => match tailoring(case, &positions) {
                 Some(t) => {
                     let n = css_xfail.entry(t).or_default();
                     *n = n.saturating_add(1);
@@ -221,4 +342,35 @@ fn line_break_test() {
     }
     assert_eq!(default.1, 0, "lines failing the default rules");
     assert_eq!(css.1, 0, "unexpected differences with CSS's tailorings");
+    let (checked, bad, changed) = break_all(&all);
+    println!(
+        "break-all: {checked} letter-letter gaps checked, {} still prohibited, \
+         {changed} lines differ from the plain tailored rules",
+        bad.len()
+    );
+    assert!(
+        bad.is_empty(),
+        "break-all prohibits a break between two letters (CSS Text 3 §5.2): {bad:?}"
+    );
+    assert!(
+        checked > 0,
+        "no letter-letter gap checked: the check is blind"
+    );
+    assert!(changed > 0, "break-all changed no line: the check is blind");
+    if !cfg!(miri) {
+        assert_eq!(
+            (
+                css_xfail.get("SA as ID").copied(),
+                css_xfail.get("control as So").copied()
+            ),
+            (Some(PINNED_SA), Some(PINNED_CONTROL)),
+            "the split of expected differences between the tailorings"
+        );
+        assert_eq!(
+            xfail,
+            PINNED_SA.saturating_add(PINNED_CONTROL),
+            "expected differences in total"
+        );
+        assert_eq!(run_count, 19346, "lines run");
+    }
 }

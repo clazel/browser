@@ -1651,7 +1651,8 @@ pub proof fn lemma_ctc_paths(doc: Document, t: NodeId)
 
 /// HTML §4.12.3 template contents keep the arena well formed: a new
 /// parentless, childless fragment whose host is `t`, and `t`'s template
-/// contents is it.
+/// contents is it. [`theorem_create_template_contents_frame`] says what is
+/// kept.
 pub proof fn theorem_create_template_contents_wf(doc: Document, t: NodeId)
     requires
         super::contract::create_template_contents_requires(doc, t),
@@ -1668,6 +1669,44 @@ pub proof fn theorem_create_template_contents_wf(doc: Document, t: NodeId)
         }),
         create_template_contents(doc, t).0.nodes[t as int].kind->Element_template_contents == Some(doc.nodes.len() as NodeId),
         forall|i: int| 0 <= i < doc.nodes.len() && i != t ==> #[trigger] create_template_contents(doc, t).0.nodes[i] == doc.nodes[i],
+{
+    let paths = wf_witness(doc);
+    lemma_wf_witness_is(doc);
+    let d = create_template_contents(doc, t).0;
+    let q = paths.push(seq![doc.nodes.len() as NodeId]);
+    lemma_wf_split(doc, paths);
+    lemma_ctc_kinds(doc, t);
+    lemma_ctc_links(doc, t);
+    lemma_ctc_paths(doc, t);
+    let n = doc.nodes.len();
+    assert forall|i: int| 0 <= i < n && i != t implies #[trigger] d.nodes[i] == doc.nodes[i] by {}
+    lemma_wf_split(d, q);
+}
+
+/// HTML §4.12.3 template contents change nothing else of `t`: its namespace,
+/// prefix, local name, attribute list and form owner, and its parent,
+/// children and wrapper, are kept.
+// A theorem of its own, so that proofs that only need the well-formedness
+// statement (this crate's and `clazel-treebuilder`'s) do not carry these
+// facts in their solver context.
+pub proof fn theorem_create_template_contents_frame(doc: Document, t: NodeId)
+    requires
+        super::contract::create_template_contents_requires(doc, t),
+        can_create(doc, 1),
+    ensures
+        ({
+            let old = doc.nodes[t as int];
+            let new = create_template_contents(doc, t).0.nodes[t as int];
+            &&& new.kind is Element
+            &&& new.kind->Element_namespace == old.kind->Element_namespace
+            &&& new.kind->Element_prefix == old.kind->Element_prefix
+            &&& new.kind->Element_local_name == old.kind->Element_local_name
+            &&& new.kind->Element_attributes == old.kind->Element_attributes
+            &&& new.kind->Element_form_owner == old.kind->Element_form_owner
+            &&& new.parent == old.parent
+            &&& new.children == old.children
+            &&& new.wrapper == old.wrapper
+        }),
 {
     let paths = wf_witness(doc);
     lemma_wf_witness_is(doc);
@@ -1787,6 +1826,7 @@ pub proof fn theorem_insert_before_wf(doc: Document, parent: NodeId, node: NodeI
 
 /// DOM §4.2.3 "remove" keeps the arena well formed: `node` has no parent
 /// and its old parent's children no longer include it, one fewer.
+/// [`theorem_remove_keeps_order`] says the remaining siblings keep their order.
 pub proof fn theorem_remove_wf(doc: Document, node: NodeId)
     requires
         super::contract::remove_requires(doc, node),
@@ -1797,6 +1837,36 @@ pub proof fn theorem_remove_wf(doc: Document, node: NodeId)
             let p = doc.nodes[node as int].parent->Some_0;
             &&& !children(remove(doc, node), p).contains(node)
             &&& children(remove(doc, node), p).len() == children(doc, p).len() - 1
+        }),
+{
+    let paths = lemma_wf_witness(doc);
+    lemma_remove_wf_with(doc, paths, node);
+    lemma_remove_nodes(doc, paths, node);
+    let p = doc.nodes[node as int].parent->Some_0;
+    let kids = doc.nodes[p as int].children;
+    assert(kids.no_duplicates());
+    lemma_seq_remove(kids, index_of(kids, node));
+}
+
+/// DOM §4.2.3 "remove" keeps the remaining siblings in their order: the old
+/// parent's children are its old ones with exactly the entry at `node`'s
+/// index taken out (those before it keep their places, those after it move
+/// down one).
+// A theorem of its own, so that proofs that only need the well-formedness
+// statement (this crate's and `clazel-treebuilder`'s) do not carry these
+// facts in their solver context.
+pub proof fn theorem_remove_keeps_order(doc: Document, node: NodeId)
+    requires
+        super::contract::remove_requires(doc, node),
+    ensures
+        ({
+            let p = doc.nodes[node as int].parent->Some_0;
+            &&& 0 <= index_of(children(doc, p), node) < children(doc, p).len()
+            &&& children(remove(doc, node), p) == children(doc, p).remove(index_of(children(doc, p), node))
+            &&& forall|k: int| 0 <= k < index_of(children(doc, p), node) ==> #[trigger] children(remove(doc, node), p)[k] == children(doc, p)[k]
+            &&& forall|k: int|
+                index_of(children(doc, p), node) <= k < children(remove(doc, node), p).len() ==> #[trigger] children(remove(doc, node), p)[k]
+                    == children(doc, p)[k + 1]
         }),
 {
     let paths = lemma_wf_witness(doc);
@@ -1952,6 +2022,7 @@ pub proof fn theorem_append_data_wf(doc: Document, n: NodeId, data: Seq<u32>)
 
 /// DOM §4.9 "append an attribute" keeps the arena well formed, and the
 /// element's attribute list is its old one followed by `attr`.
+/// [`theorem_append_attribute_frame`] says what is kept.
 pub proof fn theorem_append_attribute_wf(doc: Document, e: NodeId, attr: Attr)
     requires
         super::contract::append_attribute_requires(doc, e),
@@ -1966,8 +2037,40 @@ pub proof fn theorem_append_attribute_wf(doc: Document, e: NodeId, attr: Attr)
     lemma_set_kind_wf(doc, paths, e, k);
 }
 
+/// DOM §4.9 "append an attribute" changes nothing else: every other field
+/// of `e` (namespace, prefix, local name, template contents, form owner;
+/// parent, children, wrapper) is kept, and every other node and the arena's
+/// length are unchanged.
+// A theorem of its own, so that proofs that only need the well-formedness
+// statement (this crate's and `clazel-treebuilder`'s) do not carry these
+// facts in their solver context.
+pub proof fn theorem_append_attribute_frame(doc: Document, e: NodeId, attr: Attr)
+    requires
+        super::contract::append_attribute_requires(doc, e),
+    ensures
+        ({
+            let old = doc.nodes[e as int];
+            let new = append_attribute(doc, e, attr).nodes[e as int];
+            &&& new.kind->Element_namespace == old.kind->Element_namespace
+            &&& new.kind->Element_prefix == old.kind->Element_prefix
+            &&& new.kind->Element_local_name == old.kind->Element_local_name
+            &&& new.kind->Element_template_contents == old.kind->Element_template_contents
+            &&& new.kind->Element_form_owner == old.kind->Element_form_owner
+            &&& new.parent == old.parent
+            &&& new.children == old.children
+            &&& new.wrapper == old.wrapper
+        }),
+        append_attribute(doc, e, attr).nodes.len() == doc.nodes.len(),
+        forall|i: int| 0 <= i < doc.nodes.len() && i != e ==> #[trigger] append_attribute(doc, e, attr).nodes[i] == doc.nodes[i],
+{
+    let paths = lemma_wf_witness(doc);
+    let k = append_attribute(doc, e, attr).nodes[e as int].kind;
+    assert(append_attribute(doc, e, attr) == set_kind(doc, e, k));
+    lemma_set_kind_wf(doc, paths, e, k);
+}
+
 /// Setting the document's mode keeps the arena well formed, and the mode
-/// is `mode`.
+/// is `mode`. [`theorem_set_mode_frame`] says what is kept.
 pub proof fn theorem_set_mode_wf(doc: Document, mode: DocumentMode)
     requires
         wf(doc),
@@ -1982,13 +2085,41 @@ pub proof fn theorem_set_mode_wf(doc: Document, mode: DocumentMode)
     lemma_set_kind_wf(doc, paths, 0, k);
 }
 
+/// Setting the document's mode changes nothing else: the document's URL and
+/// base URL (each in its own place, so a swap would show), its parent,
+/// children and wrapper are kept, and every other node and the arena's
+/// length are unchanged.
+// A theorem of its own, so that proofs that only need the well-formedness
+// statement (this crate's and `clazel-treebuilder`'s) do not carry these
+// facts in their solver context.
+pub proof fn theorem_set_mode_frame(doc: Document, mode: DocumentMode)
+    requires
+        wf(doc),
+    ensures
+        set_mode(doc, mode).nodes[0].kind->Document_url == doc.nodes[0].kind->Document_url,
+        set_mode(doc, mode).nodes[0].kind->Document_base_url == doc.nodes[0].kind->Document_base_url,
+        set_mode(doc, mode).nodes[0].parent == doc.nodes[0].parent,
+        set_mode(doc, mode).nodes[0].children == doc.nodes[0].children,
+        set_mode(doc, mode).nodes[0].wrapper == doc.nodes[0].wrapper,
+        set_mode(doc, mode).nodes.len() == doc.nodes.len(),
+        forall|i: int| 0 < i < doc.nodes.len() ==> #[trigger] set_mode(doc, mode).nodes[i] == doc.nodes[i],
+{
+    let paths = lemma_wf_witness(doc);
+    let k = set_mode(doc, mode).nodes[0].kind;
+    assert(set_mode(doc, mode) == set_kind(doc, 0, k));
+    lemma_set_kind_wf(doc, paths, 0, k);
+}
+
 /// The node limit is exactly [`max_nodes`]: the arena may grow by `k`
 /// nodes if and only if it then still holds at most 4,000,000 (the bound
-/// [`wf_with`] states), so creation is refused only where a new node
-/// would break well-formedness.
+/// [`wf_with`] states). Hence creation is refused only where it must be:
+/// where the refusal holds, no arena `k` nodes longer is well formed
+/// (whatever those nodes are), and where it does not, [`theorem_create_node_wf`]
+/// shows the new arena well formed.
 pub proof fn lemma_limit_exact(doc: Document, k: nat)
     ensures
         can_create(doc, k) <==> doc.nodes.len() + k <= 4_000_000,
+        !can_create(doc, k) ==> forall|d: Document| #![trigger wf(d)] d.nodes.len() == doc.nodes.len() + k ==> !wf(d),
 {
 }
 

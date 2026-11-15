@@ -372,7 +372,12 @@ source.
   reads the *computed* `height`, so in quirks mode a last child's bottom
   margin still collapses through a `body` that §3.7 stretched; the
   html5lib case `<p>One<p>Two` gives an `html` box of 608px in a 600px
-  viewport.
+  viewport. **Checked against Chrome: it gives 600 for `html` and 576 for
+  `body`** (it subtracts the collapsed bottom margin, 8 + 16, so the page
+  does not scroll), where we give 608 and 584: a suspected bug, pinned by
+  `flow::tests::known_bug_quirks_body_fill_ignores_the_collapsed_bottom_margin`
+  until fixed (the golden fixture `tests/golden/flow/tests1.txt` still holds
+  the 608).
 - **The plan's section numbers**: CSS 2.1's (marked †) were checked against
   the Recommendation; the Quirks Mode Standard's against the pinned text
   (they are the plan's). CSS Text 3 §7.1 is cited with †.
@@ -674,7 +679,6 @@ are `clazel-font`'s, with that crate's harnesses; the passes here take the
 pair lookups as arbitrary answers); `Shaper::glyphs`, which iterates a `&str`
 and calls the face and has no arithmetic of its own; and runs longer than
 the bounds above. Those are covered by the unit and differential tests.
-CI has not run these harnesses yet.
 
 `tests/conformance_shaping.rs` compares the shaper with `rustybuzz` 0.20.1
 (HarfBuzz's algorithm in Rust). `rustybuzz` runs with the `kern` feature on and
@@ -684,7 +688,20 @@ texts are Latin, Greek and Cyrillic sentences (including combining marks),
 every ordered pair of characters from an alphabet per script, and every
 triple from twelve Latin characters that kern: 22,830 texts per face. For
 each glyph the test compares, in font units, the glyph id, the cluster and the
-advance, and the offsets of every glyph that is not a mark.
+advance, and the offsets of every glyph that is not a mark. Each expected
+difference excuses only the kind of difference it explains: reasons about
+positioning (`GDEF mark classes`, `kern table split`, `marks in kern pairs`,
+the face-wide ones except `AAT tables`) need identical glyph ids and
+clusters, and `GDEF mark classes` also identical non-mark offsets and a zero
+advance from HarfBuzz on every differing glyph, each a class 3 mark; reasons
+that change glyphs (`canonical composition`, `unmapped character`) excuse
+differences only in the window of the characters they concern, and anything
+outside it must be positioning that another reason explains. The vendored
+suite's input is fixed, so its expected differences are pinned per case (file,
+face, text, reason) with its face and case totals, and it fails on an
+unexpected pass; the system suite depends on the machine and prints that it
+does, and a machine without fonts compares nothing (set
+`CLAZEL_REQUIRE_SYSTEM_FONTS=1` to make that fail).
 
 | Suite | Cases | Agree | Expected differences | Failures |
 |-------|-------|-------|----------------------|----------|
@@ -692,10 +709,11 @@ advance, and the offsets of every glyph that is not a mark.
 | system fonts (this Mac: 406 files, 666 faces, every 11th case) | 1,382,253 | 1,361,817 | 20,436 | 0 |
 
 The vendored expected differences are 2 `canonical composition` and 1
-`unmapped character`. On the system fonts: 6,873 `unmapped character`, 6,800
-`AAT tables`, 6,665 `kern table split`, 49 `GDEF mark classes`, 31
-`canonical composition`, 15 `non-pair lookups under kern`, 3 `marks in kern
-pairs`. The top of the test file explains each one. Under Miri the vendored
+`unmapped character`. On the system fonts (counts of the tightened test, one
+run on this Mac; they vary with the fonts installed): 6,817 `unmapped
+character`, 6,843 `AAT tables`, 6,666 `kern table split`, 33 `GDEF mark
+classes`, 31 `canonical composition`, 19 `non-pair lookups under kern`, 14
+`marks in kern pairs`, 13 `GPOS without kern for the script`. The top of the test file explains each one. Under Miri the vendored
 suite runs every 1,000th case: 115 cases, all agreeing, in 46 s on Miri's
 clock. The system suite opens files, so it is ignored under Miri. Natively
 the vendored suite takes 4 s and the system suite 65 s.
@@ -713,7 +731,16 @@ the rules:
 
 The 137 expected differences are 75 `SA as ID` and 62 `control as So`, the
 two tailorings of LB1 CSS asks for ("Decisions taken for 5.12"); the top of
-the test explains each. Natively the test takes 0.2 s.
+the test explains each. The two counts are pinned, and a line is an expected
+difference only if every break it gets wrong is next to a character the
+tailoring changed (the breaks before and after it, and inside the run of
+combining marks after it). `word-break: break-all` (`Props::css` with
+`break_all`) is checked over the file by a one-directional property from CSS
+Text 3 §5.2: wherever the file forbids a break between two AL, HL or NU
+characters only by a rule about letters after letters (LB23, LB25, LB28),
+`break-all` must allow it (1,307 gaps); there is no full oracle, because
+stating which rules still hold between ideographs would restate the
+implementation. Natively the test takes 0.3 s.
 
 Unit tests (`src/text/tests.rs`): Phase I per step (spaces, tabs, segment
 breaks, carriage returns, bidi controls, across inlines, each `white-space`
@@ -769,7 +796,7 @@ Times are wall clock including cargo's start; memory is the larger of the
 | `uax14_step_any` | step, every length | UAX #14 from any state, any character, any right context: LB2 at sot, LB4, LB7, LB9, mandatory breaks only after BK, CR, LF, NL; invariant kept | 8.5 s | 0.39 GB |
 | `collapse_step_any` | step, every length | Phase I: at most one unit per character, only a pending space retracted, never a collapsible space right after another (bidi aside); invariant kept | 1.6 s | 0.19 GB |
 | `wrap_at_any` | step, every length | CSS's opportunity: forced exactly where UAX #14 is mandatory or at the end; nothing soft or emergency where neither unit's `white-space` wraps | 1.9 s | 0.20 GB |
-| `measure_add_any` | step, every length | measuring a line: saturating, leading spaces and forced breaks take no width | 1.4 s | 0.19 GB |
+| `measure_add_any` | step, every length | measuring a line, from CSS Text 3 §4.1.2: a leading collapsible space and a forced break leave it as it was; any other unit moves the pen by its advance (saturating); a character counts for the width that must fit and a collapsible space after content does not | 1.4 s | 0.19 GB |
 | `fit_step_any` | step, every length | choosing lines: a line ends after at least one unit and at most at the unit added; a line that goes on keeps the invariant | 2.0 s | 0.20 GB |
 | `tab_advance_any` | any values | tab stops: never negative, at most two tab sizes, 0 for a size ≤ 0 | 1.5 s | 0.20 GB |
 | `uax14_driver_matches_reference_2` | driver, bounded | `breaks_with_rules` equals `reference.rs`'s reading on any 2 characters' properties | 40.1 s | 1.10 GB |
@@ -803,7 +830,7 @@ conformance test covers the tables); that each step computes exactly the
 rules beyond the asserted properties (the equivalence tests and the bounded
 driver harness compare it with the reference reading); the Phase I and
 `break_lines` drivers as whole loops (above); and reading a `&str` into
-units. CI has not run these harnesses yet.
+units.
 
 Miri: every test this item adds, measured one test per process with
 `cargo +nightly-2026-08-21 miri test -p clazel-layout … --exact -Z
@@ -890,7 +917,7 @@ symbolic execution, mostly in the drop glue of the arena's boxes.
 boxes holding strings; reading the DOM and the computed style; the list
 counters (`marker::ordinals`, a pass in tree order over a map) and the marker
 strings; and Phase I, whose step item 5.12 proves. The unit and golden tests
-run all of them. CI has not run these harnesses yet.
+run all of them.
 
 Miri: every test this item adds, one test per process with `cargo
 +nightly-2026-08-21 miri test -p clazel-layout … --exact -Z unstable-options
@@ -931,6 +958,11 @@ inline boxes' edges; markers; and a tree 100,000 blocks deep (300 under
 Miri). (A 36th, for 5.14's table placeholder, was removed with it in item
 5.15.)
 
+The golden fixtures (here and for the boxes) are snapshots this code made
+of itself, regression pins and not evidence of correctness; both tests also
+assert the number of documents they build and fail on a fixture file that no
+document produces. The correctness evidence is the hand-derived unit tests.
+
 Golden test (`tests/golden_flow.rs`): the 1,761 html5lib document cases
 item 5.13's golden test builds, and two pages of our own
 (`tests/golden/flow/pages/`: an HN-shaped table page in quirks mode, and a
@@ -962,12 +994,12 @@ and `time -l`'s peak.
 | `solve_block_any` | any input | §10.3.3 never panics or overflows; the width is never negative | 5 s | 0.28 GB |
 | `solve_block_sum` | any input within 2^22 px | the equality holds; a given width and `margin-left` are kept; two `auto` margins are equal to 1/64 px | 20 s | 0.28 GB |
 | `align_any` | any input within 2^22 px | align descendants keeps the width and the margins' sum, and moves only a forced box | 5 s | 0.27 GB |
-| `width_min_max_any` | any input | §10.4's steps 2 and 3 | 5 s | 0.27 GB |
-| `shrink_to_fit_any` | any input | §10.3.5's formula, never negative for non-negative sizes | 5 s | 0.27 GB |
+| `width_min_max_any` | any input | §10.4 from its prose: the used width is never below `min-width`, not above `max-width` unless `min-width` is above it, unchanged when within the bounds, and the rules applied to it give it again | 5 s | 0.27 GB |
+| `shrink_to_fit_any` | any input | §10.3.5 by what its formula gives: within the two preferred widths, the available width when that lies between them, the minimum with less room and the preferred width with more, never narrower with more room, never negative for non-negative sizes | 5 s | 0.27 GB |
 | `heights_any` | any input | §10.7 (`min-height` wins, never negative), the fill quirks, the percentage basis | 5 s | 0.27 GB |
 | `half_leading_any` | any input (equation within 2^22 px) | §10.8.1: the halves add up to the line height, the upper one rounded down | 10 s | 0.27 GB |
 | `align_offset_any` | any input | §16.2: the content stays in the line box when it fits, start-aligned when it does not | 6 s | 0.27 GB |
-| `role_any` | any class | what each box is to the walk | 5 s | 0.27 GB |
+| `role_any` | any class | the walk's role against §9.2's classification (block-level is flow, atomic inline is atomic, other inline-level is inline); the other roles are the placeholder's choice, checked only for totality | 5 s | 0.27 GB |
 | `halves_any` | any value | a length's two halves add up to it | 5 s | 0.26 GB |
 | `times_any` | any value | a number times a length (`line-height: <number>`) never overflows | 5 s | 0.27 GB |
 
@@ -989,8 +1021,7 @@ removed.
 walk over the frame stack, `inline.rs`'s preparation, line building and
 vertical alignment loop, `intrinsic.rs`'s pass), whose state is the arena,
 the frames and the fragment vectors; reading style and fonts; item 5.12's
-line choice (proved there). The unit and golden tests run all of them. CI
-has not run these harnesses yet.
+line choice (proved there). The unit and golden tests run all of them.
 
 Miri: every test this item adds, one test per process with `cargo
 +nightly-2026-08-21 miri test -p clazel-layout … --exact -Z unstable-options
@@ -1011,6 +1042,17 @@ lock. Times are on Miri's clock; all 37 passed.
 **Performance not bounded**: a line's inline boxes are found by walking up
 from its units, so a paragraph nested *n* inline boxes deep over *L* lines
 costs about *n* × *L*; item 5.26's hostile pages will measure it.
+
+**Depth, measured** (`flow::tests::deep_shapes_lay_out_without_recursion_and_unchanged`,
+trees built by hand): layout alone took time linear in the number of boxes,
+within the noise of a shared machine, for nested inlines in one inline
+formatting context, nested inline blocks, split inlines and nested tables,
+up to 200,000 levels (debug build, 0.8 s to 2.8 s). Parsing and the cascade
+of the same documents as HTML did not: from 500 to 4,000 levels the parser
+took about 4 times as long per doubling for nested `span`s, and the cascade
+about 4 times for nested `span`/`div` and `table` (a 2,000-level table
+document took 16 s), which is why the test does not parse. Those two are
+`clazel-treebuilder`'s and `clazel-style`'s.
 
 **WPT**: the `css/CSS2/` reftests the item names (`normal-flow`,
 `margin-padding-clear`, `box-display`, `linebox`, `visudet`, `visuren`) wait

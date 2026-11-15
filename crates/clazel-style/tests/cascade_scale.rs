@@ -2,11 +2,15 @@
 //! elements"): a page of `E` `div`s, each holding a `span`, styled by `R` rules
 //! `.cN span { color: … }`, the `div`s' classes cycling through `c0` to `c(R-1)`.
 //!
-//! A measurement, not a check: run by hand in release, one shape per run, as
+//! `cascade_scale` is a measurement, not a check: run by hand in release, one shape per run, as
 //! `CLAZEL_SCALE=RxE cargo test --release -p clazel-style --test cascade_scale -- \
 //! --ignored --nocapture`. It prints the time to parse the page, to collect its style
 //! sources and to cascade it. With `CLAZEL_UNINDEXED=1` it cascades without the rule index
 //! (`cascade_unindexed`, every rule tried against every element), as before the index.
+//!
+//! `index_candidates_do_not_grow_with_the_rule_count` is the check, and always runs: it counts
+//! the rules the index offers each element (not time) and requires one per `span`, whatever
+//! the number of rules.
 
 use std::fmt::Write as _;
 use std::time::Instant;
@@ -81,4 +85,78 @@ fn cascade_scale() {
          collect={collected:?} cascade={cascaded:?}",
         arena.len()
     );
+}
+
+/// A deterministic guard on the index's complexity claim (`cascade::index`'s module
+/// documentation): the rules an element is matched against are found by keys, so the matches
+/// tried grow with the elements, not with rules times elements. It counts candidates, not
+/// time. For the page of `page(R, 2R)`, the rule `.cN span` is filed under the subject key
+/// `span` and the ancestor key `.cN`; the `span` of the `i`th `div` has the ancestors
+/// `div.c(i mod R)`, `body` and `html`, so its one candidate is rule `i mod R`, and a `div`
+/// (subject key `div`, `.cN` and the class) has none. So the total over all elements is
+/// exactly the number of `span`s, `2R`, for every `R`; without the index it would be
+/// `R` per element.
+#[test]
+fn index_candidates_do_not_grow_with_the_rule_count() {
+    use clazel_style::cascade::index::{Ancestors, Key, RuleIndex, element_keys};
+    use clazel_style::cascade::rules::Selectors;
+
+    let candidates_for = |rules: usize| -> (usize, usize, usize) {
+        let divs = rules.saturating_mul(2);
+        let arena = parse(&page(rules, divs));
+        let entries: Vec<(usize, Option<Key>, Option<Key>)> = (0..rules)
+            .flat_map(|i| {
+                let text: Vec<u32> = format!(".c{i} span").chars().map(u32::from).collect();
+                let selectors = Selectors::parse(&text);
+                selectors
+                    .map(|s| s.index_keys())
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(move |(subject, ancestor)| (i, subject, ancestor))
+            })
+            .collect();
+        let index = RuleIndex::new(entries);
+        let mut total = 0usize;
+        let mut elements = 0usize;
+        let mut spans = 0usize;
+        for n in 0..arena.len() {
+            let clazel_dom::exec::ExecKind::Element { local_name, .. } = arena.kind(n) else {
+                continue;
+            };
+            elements = elements.saturating_add(1);
+            let mut ancestors: Ancestors<Key> = Ancestors::default();
+            let mut up = arena.parent(n);
+            while let Some(p) = up {
+                if matches!(arena.kind(p), clazel_dom::exec::ExecKind::Element { .. }) {
+                    ancestors.push(&element_keys(arena.kind(p)));
+                }
+                up = arena.parent(p);
+            }
+            let found = index.candidates(&element_keys(arena.kind(n)), &ancestors);
+            let is_span = local_name.iter().copied().eq("span".chars().map(u32::from));
+            if is_span {
+                spans = spans.saturating_add(1);
+            } else {
+                assert!(
+                    found.is_empty(),
+                    "a non-span element has no candidate: {found:?}"
+                );
+            }
+            total = total.saturating_add(found.len());
+        }
+        (total, spans, elements)
+    };
+    // Under Miri the largest page takes most of half an hour: small pages only.
+    let sizes: &[usize] = if cfg!(miri) {
+        &[12, 24]
+    } else {
+        &[50, 200, 800]
+    };
+    for &rules in sizes {
+        let (total, spans, elements) = candidates_for(rules);
+        assert_eq!(spans, rules.saturating_mul(2));
+        assert_eq!(total, spans, "{rules} rules: one candidate per span");
+        // The unindexed work would be rules x elements matches.
+        assert!(total.saturating_mul(10) < elements.saturating_mul(rules));
+    }
 }

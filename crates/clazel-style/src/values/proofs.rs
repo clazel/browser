@@ -286,6 +286,37 @@ fn hsl_args_any_5() {
     });
 }
 
+/// Hex notation ([`from_hex`]) and the quirky ident ([`quirky_ident`]) on any string of up to
+/// 8 code points (the longest hex colour): no panic, and a result only for 3, 4, 6 or 8 hex
+/// digits.
+#[kani::proof]
+#[kani::unwind(10)]
+fn hex_any_8() {
+    let data: [u32; 8] = kani::any();
+    let s = string(&data);
+    if from_hex(s).is_some() {
+        assert!(matches!(s.len(), 3 | 4 | 6 | 8));
+    }
+    if quirky_ident(s).is_some() {
+        assert!(matches!(s.len(), 3 | 6));
+    }
+}
+
+/// The quirky number ([`quirky_number`]) on any number part and unit of up to 7 code points
+/// each (one past the 6 it accepts), with any value and sign flag: a result only if the two
+/// together are at most 7 code points (a leading `+` is not counted).
+#[kani::proof]
+#[kani::unwind(9)]
+fn quirky_number_any_7() {
+    let part: [u32; 7] = kani::any();
+    let unit: [u32; 7] = kani::any();
+    let (p, u) = (string(&part), string(&unit));
+    let r = quirky_number(p, kani::any(), kani::any(), u);
+    if r.is_some() {
+        assert!(p.len() + u.len() <= 7);
+    }
+}
+
 // The numeric conversions.
 
 /// A token's value, from any number part and exponent part of up to [`DIGITS`] code

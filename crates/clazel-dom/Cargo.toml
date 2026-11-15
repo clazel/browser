@@ -42,6 +42,10 @@ theorems = [
     "theorem_set_mode_wf",
     "theorem_remove_keeps_record",
     "theorem_ids_stable",
+    "theorem_create_template_contents_frame",
+    "theorem_remove_keeps_order",
+    "theorem_append_attribute_frame",
+    "theorem_set_mode_frame",
 ]
 
 [package.metadata.verus]

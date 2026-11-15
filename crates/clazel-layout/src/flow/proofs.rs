@@ -251,30 +251,67 @@ fn align_any() {
     }
 }
 
-/// §10.4's steps 2 and 3.
+/// §10.4, stated from its prose and not from the function's cases. The
+/// function returns the width the rules are applied again with (`None`:
+/// the tentative width stands), so the used width is `again.unwrap_or(t)`.
+/// "If the tentative used width is greater than 'max-width', the rules
+/// above are applied again, but this time using the value of 'max-width'
+/// as the computed value for 'width'. If the resulting width is smaller
+/// than 'min-width', the rules above are applied again, but this time
+/// using the value of 'min-width'": so the used width is never below
+/// `min`; is not above `max` unless `min` is above it (`min-width` wins);
+/// is the tentative width itself when that is within the bounds; and
+/// satisfies the bounds already, so applying the rules to it changes
+/// nothing.
 #[kani::proof]
 fn width_min_max_any() {
     let (t, min, max): (i32, i32, Option<i32>) = (kani::any(), kani::any(), kani::any());
-    let again = width_min_max(t, min, max);
-    let after_max = match max {
-        Some(m) if t > m => m,
-        _ => t,
-    };
-    if after_max < min {
-        assert!(again == Some(min));
-    } else if after_max != t {
-        assert!(again == Some(after_max));
-    } else {
-        assert!(again.is_none());
+    let used = width_min_max(t, min, max).unwrap_or(t);
+    assert!(used >= min);
+    if let Some(m) = max {
+        if m >= min {
+            assert!(used <= m);
+        } else {
+            assert!(used == min);
+        }
+        if t >= min && t <= m {
+            assert!(width_min_max(t, min, max).is_none());
+        }
+    } else if t >= min {
+        assert!(width_min_max(t, min, max).is_none());
     }
+    // Idempotent: the rules applied to the used width give that width
+    // (when `min` is above `max` they say "apply `min`" again, which is it).
+    assert!(width_min_max(used, min, max).unwrap_or(used) == used);
 }
 
-/// §10.3.5's formula.
+/// §10.3.5: "min(max(preferred minimum width, available width), preferred
+/// width)", stated by what that gives (with the preferred minimum width not
+/// above the preferred width, which intrinsic sizes guarantee): the width
+/// lies within the two preferred widths; it is the available width when
+/// that lies between them; it is the minimum when there is less room and
+/// the preferred width when there is more; and more room never makes it
+/// narrower.
 #[kani::proof]
 fn shrink_to_fit_any() {
-    let (lo, hi, avail): (i32, i32, i32) = (kani::any(), kani::any(), kani::any());
+    let (lo, hi, avail, more): (i32, i32, i32, i32) =
+        (kani::any(), kani::any(), kani::any(), kani::any());
     let w = shrink_to_fit(lo, hi, avail);
-    assert!(w == lo.max(avail).min(hi));
+    if lo <= hi {
+        assert!(lo <= w && w <= hi);
+        if lo <= avail && avail <= hi {
+            assert!(w == avail);
+        }
+        if avail < lo {
+            assert!(w == lo);
+        }
+        if avail > hi {
+            assert!(w == hi);
+        }
+        if more >= avail {
+            assert!(shrink_to_fit(lo, hi, more) >= w);
+        }
+    }
     if lo >= 0 && hi >= 0 {
         assert!(w >= 0);
     }
@@ -349,11 +386,34 @@ fn align_offset_any() {
     }
 }
 
-/// The walk's roles, for any class.
+/// The walk's roles, for any class, against the classification of CSS 2.1
+/// §9.2 where that gives one: a block-level box takes part in a block
+/// formatting context ("block-level boxes participate in a block formatting
+/// context"), an atomic inline-level box ("replaced inline-level elements,
+/// inline-block elements, and inline-table elements") is laid out whole on a
+/// line, and any other inline-level box (an inline box, a text run) is
+/// split across lines. (The table box inside an inline table's wrapper is
+/// flagged atomic by `Class::is_atomic_inline` but is laid out in the
+/// wrapper's flow, §17.4: only the wrapper is whole on the line, so it is
+/// left out.) The roles of the root, markers, columns and the
+/// table-internal boxes are not in §9.2: for those, and for every other
+/// class, the harness also pins the exact role the walk gives (a cell is
+/// laid out by §17's table layout, rows and row groups as its tracks).
 #[kani::proof]
 fn role_any() {
     let c: Class = kani::any();
     let r = role(c);
+    // §9.2's classification, where it gives one.
+    if c.is_block_level() {
+        assert!(r == Role::Flow);
+    }
+    if c.is_atomic_inline() && !matches!(c, Class::Table { .. }) {
+        assert!(r == Role::Atomic);
+    }
+    if c.is_inline_level() && !c.is_atomic_inline() {
+        assert!(r == Role::Inline);
+    }
+    // Every class's exact role, the ones §9.2 is silent on included.
     match c {
         Class::Root => assert!(r == Role::Root),
         Class::Marker => assert!(r == Role::Marker),

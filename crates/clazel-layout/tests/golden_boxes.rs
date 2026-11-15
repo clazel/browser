@@ -24,6 +24,13 @@
 //! document) and the `scripted_*.dat` cases, which the generated table only
 //! counts.
 //!
+//! The fixtures are snapshots this code generated from itself (blessed
+//! with `CLAZEL_BLESS=1` and reviewed once): regression pins that say "the
+//! box tree did not change", not evidence that it is right. Conformance
+//! evidence for box construction is the hand-derived unit tests
+//! (`src/boxes/tests.rs`). The test also asserts the number of document
+//! cases built ([`BUILT`]) and fails on a fixture file no case produces.
+//!
 //! To regenerate the fixtures after a deliberate change, run
 //! `CLAZEL_BLESS=1 cargo test -p clazel-layout --test golden_boxes` and
 //! review the diff before committing it.
@@ -42,6 +49,10 @@ use clazel_treebuilder::exec::types::EncFnsExec;
 
 include!("../../clazel-treebuilder/tests/generated/wpt_tree_construction.rs");
 
+/// The document cases of the vendored suite that are built (measured; it
+/// changes only when the vendored html5lib tests do).
+const BUILT: usize = 1761;
+
 struct NoEncodings;
 
 impl EncFnsExec for NoEncodings {
@@ -59,6 +70,24 @@ fn parse(html: &str) -> Arena {
     parse_real(&NoEncodings, &input, Vec::new(), false, false)
         .0
         .arena
+}
+
+/// The fixture files in `dir` (`.txt`) that no document of this run
+/// produces: stale fixtures, left behind when a case or page went away.
+fn stale_fixtures(
+    dir: &std::path::Path,
+    produced: &std::collections::BTreeSet<String>,
+) -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return vec![format!("{}: cannot list the fixtures", dir.display())];
+    };
+    let mut stale: Vec<String> = entries
+        .flatten()
+        .filter_map(|e| e.file_name().into_string().ok())
+        .filter(|n| n.ends_with(".txt") && !produced.contains(n))
+        .collect();
+    stale.sort();
+    stale
 }
 
 /// Counts of the boxes the golden documents produce, by what made them.
@@ -151,4 +180,20 @@ fn golden_box_trees() {
         counts.boxes, counts.anonymous, counts.fragments, counts.text_runs
     );
     assert!(differ.is_empty(), "golden fixtures: {differ:#?}");
+    if !cfg!(miri) && !bless {
+        assert_eq!(built, BUILT, "document cases built");
+        assert_eq!(
+            built.saturating_add(fragments),
+            CASES.len(),
+            "every case is built or counted as a fragment case"
+        );
+        let produced: std::collections::BTreeSet<String> = compared
+            .iter()
+            .filter(|(_, t)| !t.is_empty())
+            .map(|(f, _)| f.replace(".dat", ".txt"))
+            .collect();
+        assert!(!produced.is_empty(), "no fixture produced");
+        let stale = stale_fixtures(&dir, &produced);
+        assert!(stale.is_empty(), "stale fixture files: {stale:?}");
+    }
 }

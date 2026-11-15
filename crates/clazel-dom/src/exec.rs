@@ -1,8 +1,10 @@
 //! The executable arena (Phase 4 item 4.8): a `Vec` of nodes indexed by
-//! id, whose view is the spec's [`Document`]. Every method's `requires` and
-//! `ensures` are the predicates of [`super::contract`], so each is proven
-//! equal to its spec function, and [`super::lemmas`] proves those keep
-//! [`wf`].
+//! id, whose view is the spec's [`Document`]. Every mutating method's
+//! `requires` and `ensures` are the predicates of [`super::contract`] (and
+//! the spec's `insert_requires` and `reparent_children_requires`), so each is
+//! proven equal to its spec function, and [`super::lemmas`] proves those keep
+//! [`wf`]. Each reader's `ensures` says it returns the spec reader of the
+//! same name.
 //!
 //! Performance (a hostile page may build millions of nodes): a node's
 //! children are edited in place (the node is swapped out of the arena with
@@ -725,7 +727,7 @@ impl Arena {
         &self.node(n).kind
     }
 
-    /// DOM §4.2 "parent" ([`readers_ensures`]).
+    /// DOM §4.2 "parent".
     pub fn parent(&self, n: usize) -> (r: Option<usize>)
         requires
             valid(self@, n),
@@ -758,7 +760,7 @@ impl Arena {
         self.node(n).wrapper
     }
 
-    /// DOM §4.2 "last child" ([`readers_ensures`]).
+    /// DOM §4.2 "last child".
     pub fn last_child(&self, n: usize) -> (r: Option<usize>)
         requires
             valid(self@, n),
@@ -778,7 +780,7 @@ impl Arena {
         !self.node(n).children.is_empty()
     }
 
-    /// DOM §4.2 "previous sibling" ([`readers_ensures`]).
+    /// DOM §4.2 "previous sibling".
     pub fn previous_sibling(&self, n: usize) -> (r: Option<usize>)
         requires
             wf(self@),

@@ -64,8 +64,9 @@
 //!   fills, clips and glyph draws (the rest to masks); a frame that would
 //!   need more stops there, with its clip balanced.
 //! - **The socket's framing** is `clazel_gpu::channel`'s, the GPU process's
-//!   own (item 5.23): a 4-byte little-endian length, then one encoded list.
-//!   5.20 first defined a big-endian one of its own; there is now one.
+//!   own (item 5.23): a 4-byte little-endian length, the width and height of
+//!   the viewport the list was laid out for, then one encoded list. 5.20 first
+//!   defined a big-endian one of its own; there is now one.
 //! - **The list socket is not wired yet**: the host must create a socket
 //!   pair and hand the renderer its end, which needs a new `clazel-sys` call
 //!   to clear close-on-exec and to adopt the descriptor (item 5.18's plan;

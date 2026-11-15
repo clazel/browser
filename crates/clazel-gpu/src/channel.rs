@@ -6,10 +6,21 @@
 //!
 //! # Modelling choices
 //!
-//! - **A list is framed by its length**: 4 bytes, little-endian, then the list's
-//!   bytes as `clazel_displaylist` encodes them, at most [`LIST_MAX`]. The IPC
-//!   frame (`clazel_ipc`'s `MAX_FRAME`, 1 MiB) is too small for a list with masks
-//!   (the validator allows 64 MiB of live coverage), and a list is not CBOR.
+//! - **A list is framed by its length**: 4 bytes, little-endian, then that many
+//!   bytes: the width and the height of the viewport the renderer laid the list
+//!   out for (4 bytes each, little-endian; [`Laid`]), then the list's bytes as
+//!   `clazel_displaylist` encodes them, at most [`LIST_MAX`]. The IPC frame
+//!   (`clazel_ipc`'s `MAX_FRAME`, 1 MiB) is too small for a list with masks (the
+//!   validator allows 64 MiB of live coverage), and a list is not CBOR.
+//! - **Why a list names its viewport.** The kernel tells the renderer
+//!   (`Viewport`) and the GPU process (`GpuViewport`) of a resize in one step,
+//!   on two sockets, and the GPU process reads its two inputs on two threads, so
+//!   the renderer's new list can reach it before the `GpuViewport` that caused
+//!   it. Measured (`clazel`'s `tests/browse_gpu.rs`, Linux, debug build, 5 runs
+//!   in 104): the list was then drawn at the old size and no frame at the new
+//!   size followed. The size a list names lets the GPU process wait for that
+//!   `GpuViewport` ([`crate::process`]); it still draws only at the size the
+//!   kernel gave.
 //! - **How buffers pass on macOS, until the Mach-port route exists.** The plan
 //!   moves an IOSurface from the GPU process to the host with a Mach port
 //!   (5.21, 5.21a), which needs new `clazel-sys` calls and a prototype nobody
@@ -76,30 +87,59 @@ fn le(b: &[u8], at: usize) -> u32 {
     u32::from_le_bytes(w)
 }
 
-/// Write one list.
-pub fn write_list<W: Write>(w: &mut W, list: &[u8]) -> io::Result<()> {
+/// The viewport a list was laid out for, in device pixels, as the renderer's
+/// `Viewport` gave it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Laid {
+    /// Width.
+    pub width: u32,
+    /// Height.
+    pub height: u32,
+}
+
+/// The bytes of a list's frame after its length that are not the list: [`Laid`].
+const LAID_BYTES: usize = 8;
+
+/// Write one list, laid out for `laid`.
+pub fn write_list<W: Write>(w: &mut W, laid: Laid, list: &[u8]) -> io::Result<()> {
     if list.len() > LIST_MAX {
         return Err(invalid("a list over LIST_MAX"));
     }
-    let n = u32::try_from(list.len()).map_err(|_| invalid("a list over LIST_MAX"))?;
+    let n = list
+        .len()
+        .checked_add(LAID_BYTES)
+        .and_then(|n| u32::try_from(n).ok())
+        .ok_or_else(|| invalid("a list over LIST_MAX"))?;
     w.write_all(&n.to_le_bytes())?;
+    w.write_all(&laid.width.to_le_bytes())?;
+    w.write_all(&laid.height.to_le_bytes())?;
     w.write_all(list)?;
     w.flush()
 }
 
-/// Read one list; `None` if the stream ended between lists.
-pub fn read_list<R: Read>(r: &mut R) -> io::Result<Option<Vec<u8>>> {
+/// Read one list and the viewport it was laid out for; `None` if the stream
+/// ended between lists.
+pub fn read_list<R: Read>(r: &mut R) -> io::Result<Option<(Laid, Vec<u8>)>> {
     let mut head = [0u8; 4];
     if !read_or_end(r, &mut head)? {
         return Ok(None);
     }
     let n = usize::try_from(u32::from_le_bytes(head)).map_err(|_| invalid("length"))?;
-    if n > LIST_MAX {
+    let len = n
+        .checked_sub(LAID_BYTES)
+        .ok_or_else(|| invalid("a list frame too short for its viewport"))?;
+    if len > LIST_MAX {
         return Err(invalid("a list over LIST_MAX"));
     }
-    let mut list = vec![0u8; n];
+    let mut laid = [0u8; LAID_BYTES];
+    r.read_exact(&mut laid)?;
+    let mut list = vec![0u8; len];
     r.read_exact(&mut list)?;
-    Ok(Some(list))
+    let laid = Laid {
+        width: le(&laid, 0),
+        height: le(&laid, 4),
+    };
+    Ok(Some((laid, list)))
 }
 
 /// The bytes of a `width` by `height` frame, if the slot and sides are allowed.
@@ -159,28 +199,46 @@ pub fn read_surface<R: Read>(r: &mut R) -> io::Result<Option<SurfaceFrame>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        LIST_MAX, SurfaceFrame, frame_bytes, read_list, read_surface, write_list, write_surface,
+        LIST_MAX, Laid, SurfaceFrame, frame_bytes, read_list, read_surface, write_list,
+        write_surface,
     };
 
     #[test]
-    fn lists_round_trip_and_end_cleanly() {
+    fn lists_round_trip_with_their_viewports_and_end_cleanly() {
+        let a = Laid {
+            width: 200,
+            height: 100,
+        };
+        let b = Laid {
+            width: 70_000,
+            height: 1,
+        };
         let mut wire = Vec::new();
-        assert!(write_list(&mut wire, b"abc").is_ok());
-        assert!(write_list(&mut wire, b"").is_ok());
+        assert!(write_list(&mut wire, a, b"abc").is_ok());
+        assert!(write_list(&mut wire, b, b"").is_ok());
+        // The length counts the viewport's 8 bytes; then the width and the height.
+        let head = [11u8, 0, 0, 0, 200, 0, 0, 0, 100, 0, 0, 0];
+        assert_eq!(wire.get(..12), Some(&head[..]));
         let mut r = &wire[..];
-        assert_eq!(read_list(&mut r).ok().flatten(), Some(b"abc".to_vec()));
-        assert_eq!(read_list(&mut r).ok().flatten(), Some(Vec::new()));
+        assert_eq!(read_list(&mut r).ok().flatten(), Some((a, b"abc".to_vec())));
+        assert_eq!(read_list(&mut r).ok().flatten(), Some((b, Vec::new())));
         assert!(matches!(read_list(&mut r), Ok(None)));
     }
 
     #[test]
-    fn a_cut_or_oversized_list_is_an_error() {
-        let mut r = &[3u8, 0, 0, 0, b'a'][..];
+    fn a_cut_short_or_oversized_list_is_an_error() {
+        let mut r = &[11u8, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, b'a'][..];
         assert!(read_list(&mut r).is_err());
         let mut r = &[7u8, 0][..];
         assert!(read_list(&mut r).is_err());
-        let over = u32::try_from(LIST_MAX).unwrap_or(0).saturating_add(1);
-        let mut r = &over.to_le_bytes()[..];
+        // A length too short to hold the viewport.
+        let mut r = &[7u8, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0][..];
+        assert!(read_list(&mut r).is_err());
+        let over = u32::try_from(LIST_MAX)
+            .unwrap_or(0)
+            .saturating_add(9)
+            .to_le_bytes();
+        let mut r = &over[..];
         assert!(read_list(&mut r).is_err());
     }
 

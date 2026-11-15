@@ -55,8 +55,12 @@ not the tier. The conformance evidence is the crate's own
   `reparent_children` moves all children in order. `remove` changes only
   the node's parent and its parent's children, and no operation shrinks the
   arena or changes an existing node's kind except its own target
-  (`theorem_remove_keeps_record`, `theorem_ids_stable`). The thirteen
-  theorems are listed in `Cargo.toml`.
+  (`theorem_remove_keeps_record`, `theorem_ids_stable`). What template
+  contents, "append an attribute" and setting the mode leave alone, and
+  that "remove" keeps the siblings' order, are theorems of their own
+  (`theorem_*_frame`, `theorem_remove_keeps_order`), so that proofs needing
+  only well-formedness do not carry them. The seventeen theorems are listed
+  in `Cargo.toml`.
 - **Proven (`src/exec.rs`):** the executable arena equals the spec, for
   every operation and reader (the contracts are `src/contract.rs`). It is
   safe Rust with no recursion; a node's children are edited in place, and
@@ -66,27 +70,46 @@ not the tier. The conformance evidence is the crate's own
   `independent_equivalence.rs` proves them equal to the spec on the parser's
   calls. DOM §4.2.3 has no second source, so this is a same-text
   transcription: it catches slips, not a shared misreading.
-- **Mutations:** five deliberately broken specs (a parent pointer not set,
-  a child inserted at the wrong index, `remove` leaving the child listed,
-  `reparent_children` reversing the order, the limit off by one), each
-  rejected by a certificate Verus checks (`mutations.json`).
+- **Mutations:** fourteen deliberately broken specs (a parent pointer not
+  set, a child inserted at the wrong index, `remove` leaving the child
+  listed or rotating the siblings, `reparent_children` reversing the order,
+  the limit off by one, `set_mode` swapping the URLs, `append_attribute`
+  prepending, template contents clearing the form owner, `adopt` not
+  detaching, `previous_sibling` and `last_child` wrong, `append_data`
+  prepending, fragments unable to hold children), each rejected by a
+  certificate Verus checks (`mutations.json`). Not covered, because a
+  certificate cannot evaluate `wf` (an existential): dropped clauses of
+  `wf_with`, and of `insert_requires` and `reparent_children_requires`
+  (both start with `wf(doc)`).
 - **Conformance (`tests/conformance_dom.rs`)**, two suites, each reported
   by a `clazel-conformance:` line (counts from the last local run):
-  - *html5lib tree-construction trees (WPT)*, 1,967 of 1,967 cases: every
-    expected tree of the vendored suite (the table generated for
-    `clazel-treebuilder`, shared by `include!`, not copied) is read back
-    into an arena using only the arena's own operations (create, template
-    contents, append, append attribute), re-checked clause by clause for the
-    executable statement of `wf` through the readers, printed again by a
-    walk over `children` and `kind`, and compared byte for byte with the
-    original text. No expected failures.
+  - *html5lib tree shapes (WPT)*, 1,967 of 1,967 cases: **not a
+    tree-construction test** (no HTML is parsed). Every expected tree of the
+    vendored suite (the table generated for `clazel-treebuilder`, shared by
+    `include!`, not copied) is read by the test's own reader of the suite's
+    text format into an arena using only the arena's own operations (create,
+    template contents, append, append attribute), re-checked clause by
+    clause for the executable statement of `wf` through the readers,
+    printed again by a walk over `children` and `kind` and compared byte for
+    byte with the original text; that first step is close to a round trip.
+    What gives the suite teeth is that the same tree is then built four more
+    ways (a control copy with `append`; inserting the children last to first
+    with `insert_before`; building under a scratch parent and moving with
+    `reparent_children`; appending and then removing and re-inserting every
+    child at its place), and the original has every node removed and
+    re-inserted in place: each must print the same text, pass the `wf`
+    check, and have the same node fields and attribute order. No expected
+    failures.
   - *`markup5ever_rcdom` 0.39.0 differential*, 3,000 of 3,000 random
     operation sequences of 40 operations (a seeded `SplitMix64`, no `rand`):
-    create, append, insert-before, remove, moving a subtree (22,254 moves,
-    18,664 to another parent, including into template contents),
+    create, append, insert-before, remove, moving a subtree (22,165 moves,
+    18,492 to another parent, including into template contents),
     move-all-children, text appends, attributes and mode changes, applied to
-    the arena and to an `RcDom`, with whole trees (the document and every
-    detached subtree) compared after every operation, together with the
+    the arena and to an `RcDom` (elements in the HTML, SVG, MathML or null
+    namespace with a prefix or none, attributes with namespaces and
+    prefixes, doctypes with system ids), with whole trees (the document and
+    every detached subtree; attributes in list order, prefixes and null
+    namespaces shown) compared after every operation, together with the
     invariants the arena proves. The oracle is driven by detaching a node
     first (DOM "adopt"), because `RcDom`'s `append_before_sibling` computes
     its index before detaching (see the test's module doc).
