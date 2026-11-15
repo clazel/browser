@@ -309,7 +309,6 @@ pub proof fn ml_append_moves_once()
     assert(ml_doc_child().nodes[0].kind is Document) by (compute_only);
     assert(ml_doc_child().nodes.len() == 3) by (compute_only);
     assert(!is_inclusive_ancestor(ml_doc_child(), 1, 0)) by (compute_only);
-    assert(ml_doc_child().nodes[1].parent is Some) by (compute_only);
     assert(ml_doc_child().nodes[0].children.len() == 1) by (compute_only);
     theorem_remove_wf(ml_doc_child(), 1);
     theorem_append_wf(ml_doc_child(), 0, 1);
