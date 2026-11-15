@@ -707,7 +707,7 @@ fn names(rows: &[&Row]) -> String {
 /// The detail image: every crate in the process and component that runs it,
 /// then notes on the counts a headline cannot explain.
 fn detail(rows: &[Row]) -> String {
-    let (w, p) = (904.0, 20.0);
+    let p = 20.0;
     let mut b = String::new();
     b.push_str(&format!(
         "<text x=\"{p}\" y=\"30\" font-size=\"18\" class=\"b\">Verification status by component</text>\n\
@@ -724,10 +724,12 @@ fn detail(rows: &[Row]) -> String {
         in_place(rows, Place::Primitive),
         in_place(rows, Place::Os),
     );
-    let host_x = p;
-    let host_w = PAD * 2.0 + f(cols) * TILE_W + f(cols.saturating_sub(1)) * GAP;
-    let rend_w = PAD * 2.0 + TILE_W;
-    let rend_x = w - p - rend_w;
+    let head = 52.0;
+    let main_x = p;
+    let main_w = PAD * 2.0 + f(cols) * TILE_W + f(cols.saturating_sub(1)) * GAP;
+    let side_w = PAD * 2.0 + TILE_W;
+    let side_x = main_x + main_w + 16.0;
+    let w = side_x + side_w + p;
     let top = 64.0;
 
     // Host process: the kernel, the network, the shells.
@@ -750,16 +752,26 @@ fn detail(rows: &[Row]) -> String {
             &shells,
         ),
     ] {
-        inner.push_str(&section(host_x + PAD, y, head, text));
+        inner.push_str(&section(main_x + PAD, y, head, text));
         y += 16.0;
-        inner.push_str(&grid(host_x + PAD, y, cols, crates));
+        inner.push_str(&grid(main_x + PAD, y, cols, crates));
         y += grid_h(crates.len(), cols) + 14.0;
     }
-    let host_h = (y - 14.0 + PAD - top).max(52.0 + grid_h(renderer.len(), 1) + PAD);
+    let host_h = y - 14.0 + PAD - top;
+
+    // The renderer under the host, as wide as it; the primitives both link,
+    // then the OS boundary, in one column down the side. Whichever side is
+    // shorter has its last panel drawn down to the other's foot.
+    let ipc_gap = 30.0;
+    let rend_y = top + host_h + ipc_gap;
+    let prim_h = head + grid_h(prims.len(), 1) + PAD;
+    let os_y = top + prim_h + 16.0;
+    let foot = (rend_y + head + grid_h(renderer.len(), cols) + PAD)
+        .max(os_y + head + grid_h(os.len(), 1) + PAD);
     b.push_str(&panel(
-        host_x,
+        main_x,
         top,
-        host_w,
+        main_w,
         host_h,
         "Host process",
         "the kernel and the network; the only process with I/O",
@@ -767,51 +779,48 @@ fn detail(rows: &[Row]) -> String {
     ));
     b.push_str(&inner);
     b.push_str(&panel(
-        rend_x,
-        top,
-        rend_w,
-        host_h,
+        main_x,
+        rend_y,
+        main_w,
+        foot - rend_y,
         "Renderer process",
         "one per tab, sandboxed",
         true,
     ));
-    b.push_str(&grid(rend_x + PAD, top + 52.0, 1, &renderer));
+    b.push_str(&grid(main_x + PAD, rend_y + head, cols, &renderer));
 
     // IPC between the two processes.
-    let ay = top + host_h / 2.0;
+    let ax = main_x + main_w / 2.0;
     b.push_str(&format!(
         "<defs><marker id=\"arrow\" viewBox=\"0 0 10 10\" refX=\"5\" refY=\"5\" markerWidth=\"6\" markerHeight=\"6\" orient=\"auto-start-reverse\"><path d=\"M0 0L10 5L0 10z\" fill=\"var(--fg)\"/></marker></defs>\n\
-         <line x1=\"{}\" x2=\"{}\" y1=\"{ay}\" y2=\"{ay}\" stroke=\"var(--fg)\" stroke-width=\"1.5\" marker-start=\"url(#arrow)\" marker-end=\"url(#arrow)\"/>\n\
-         <text x=\"{}\" y=\"{}\" font-size=\"10\" class=\"mut\" text-anchor=\"middle\">IPC</text>\n",
-        host_x + host_w + 2.0,
-        rend_x - 2.0,
-        (host_x + host_w + rend_x) / 2.0,
-        ay - 6.0
+         <line x1=\"{ax}\" x2=\"{ax}\" y1=\"{}\" y2=\"{}\" stroke=\"var(--fg)\" stroke-width=\"1.5\" marker-start=\"url(#arrow)\" marker-end=\"url(#arrow)\"/>\n\
+         <text x=\"{}\" y=\"{}\" font-size=\"10\" class=\"mut\">IPC</text>\n",
+        top + host_h + 4.0,
+        rend_y - 4.0,
+        ax + 10.0,
+        top + host_h + ipc_gap / 2.0 + 3.5
     ));
 
-    // Primitives under the host, the OS boundary under the renderer.
-    let low = top + host_h + 16.0;
-    let low_h = (52.0 + grid_h(prims.len(), cols)).max(52.0 + grid_h(os.len(), 1)) + PAD;
     b.push_str(&panel(
-        host_x,
-        low,
-        host_w,
-        low_h,
+        side_x,
+        top,
+        side_w,
+        prim_h,
         "Shared primitives",
-        "linked into both processes",
+        "in both processes",
         false,
     ));
-    b.push_str(&grid(host_x + PAD, low + 52.0, cols, &prims));
+    b.push_str(&grid(side_x + PAD, top + head, 1, &prims));
     b.push_str(&panel(
-        rend_x,
-        low,
-        rend_w,
-        low_h,
+        side_x,
+        os_y,
+        side_w,
+        foot - os_y,
         "OS boundary",
         "the only unsafe code",
         false,
     ));
-    b.push_str(&grid(rend_x + PAD, low + 52.0, 1, &os));
+    b.push_str(&grid(side_x + PAD, os_y + head, 1, &os));
 
     // Notes: what the scoreboard's mutation and axiom counts leave out.
     let t = totals(rows);
@@ -880,7 +889,7 @@ fn detail(rows: &[Row]) -> String {
     .into_iter()
     .filter(|(_, lines)| !lines.is_empty())
     .collect();
-    let mut y = low + low_h + 16.0;
+    let mut y = foot + 16.0;
     if !notes.is_empty() {
         let h = 14.0
             + notes
