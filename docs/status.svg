@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="880" height="186" viewBox="0 0 880 186" role="img" aria-labelledby="title">
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="206" viewBox="0 0 880 206" role="img" aria-labelledby="title">
 <title id="title">Verification status</title>
 <style>
 :root{--bg:#ffffff;--fg:#1f2328;--mut:#59636e;--line:#d1d9e0;--panel:#f6f8fa;
@@ -10,7 +10,7 @@
 text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;fill:var(--fg)}
 .m{font-family:ui-monospace,SFMono-Regular,'SF Mono',Consolas,'Liberation Mono',monospace}.mut{fill:var(--mut)}.b{font-weight:600}
 </style>
-<rect width="880" height="186" rx="8" fill="var(--bg)" stroke="var(--line)"/>
+<rect width="880" height="206" rx="8" fill="var(--bg)" stroke="var(--line)"/>
 <text x="24" y="50" font-size="24" class="b">22<tspan font-size="14" class="mut">/40</tspan></text>
 <text x="24" y="68" font-size="10.5" class="mut">crates proven correct</text>
 <text x="182" y="50" font-size="24" class="b">12k<tspan font-size="14" class="mut"></tspan></text>
@@ -19,11 +19,11 @@ text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,san
 <text x="340" y="68" font-size="10.5" class="mut">broken specs caught</text>
 <text x="24" y="114" font-size="24" class="b">3.76M<tspan font-size="14" class="mut"></tspan></text>
 <text x="24" y="132" font-size="10.5" class="mut">conformance cases, 143 suites</text>
-<text x="182" y="114" font-size="24" class="b">138<tspan font-size="14" class="mut"></tspan></text>
+<text x="182" y="114" font-size="24" class="b">343<tspan font-size="14" class="mut"></tspan></text>
 <text x="182" y="132" font-size="10.5" class="mut">unsafe blocks, all in clazel-sys</text>
 <text x="340" y="114" font-size="24" class="b">21<tspan font-size="14" class="mut"></tspan></text>
 <text x="340" y="132" font-size="10.5" class="mut">axioms, each justified</text>
-<line x1="500" x2="500" y1="20" y2="166" stroke="var(--line)"/>
+<line x1="500" x2="500" y1="20" y2="186" stroke="var(--line)"/>
 <text x="516" y="34" font-size="11" class="mut">Kernel</text>
 <rect x="600" y="22" width="16" height="16" rx="4" fill="var(--t2)"/>
 <rect x="620" y="22" width="16" height="16" rx="4" fill="var(--t2)"/>
@@ -52,30 +52,30 @@ text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,san
 <rect x="720" y="72" width="16" height="16" rx="4" fill="none" stroke="var(--gap)" stroke-width="1.5" stroke-dasharray="3 2"/><rect x="724" y="76" width="8" height="8" rx="2" fill="var(--t0)"/>
 <rect x="740" y="72" width="16" height="16" rx="4" fill="none" stroke="var(--gap)" stroke-width="1.5" stroke-dasharray="3 2"/><rect x="744" y="76" width="8" height="8" rx="2" fill="var(--t0)"/>
 <rect x="760" y="72" width="16" height="16" rx="4" fill="var(--t0)"/>
-<rect x="780" y="72" width="16" height="16" rx="4" fill="var(--t0)"/>
-<rect x="800" y="72" width="16" height="16" rx="4" fill="var(--t0)"/>
-<rect x="820" y="72" width="16" height="16" rx="4" fill="var(--t0)"/>
+<rect x="600" y="92" width="16" height="16" rx="4" fill="var(--t0)"/>
+<rect x="620" y="92" width="16" height="16" rx="4" fill="var(--t0)"/>
+<rect x="640" y="92" width="16" height="16" rx="4" fill="var(--t0)"/>
 <text x="786" y="84" font-size="10.5" class="mut">3/12 correct</text>
-<text x="516" y="109" font-size="11" class="mut">Primitives</text>
-<rect x="600" y="97" width="16" height="16" rx="4" fill="var(--t2)"/>
-<rect x="620" y="97" width="16" height="16" rx="4" fill="var(--t2)"/>
-<rect x="640" y="97" width="16" height="16" rx="4" fill="var(--t2)"/>
-<rect x="660" y="97" width="16" height="16" rx="4" fill="var(--t2)"/>
-<rect x="680" y="97" width="16" height="16" rx="4" fill="var(--t2)"/>
-<rect x="700" y="97" width="16" height="16" rx="4" fill="var(--t2)"/>
-<rect x="720" y="97" width="16" height="16" rx="4" fill="var(--t2)"/>
-<rect x="740" y="97" width="16" height="16" rx="4" fill="none" stroke="var(--gap)" stroke-width="1.5" stroke-dasharray="3 2"/><rect x="744" y="101" width="8" height="8" rx="2" fill="var(--t0)"/>
-<text x="786" y="109" font-size="10.5" class="mut">7/8 correct</text>
-<text x="516" y="134" font-size="11" class="mut">Shells and OS</text>
-<rect x="600" y="122" width="16" height="16" rx="4" fill="var(--t1)"/>
-<rect x="620" y="122" width="16" height="16" rx="4" fill="var(--t0)"/>
-<rect x="640" y="122" width="16" height="16" rx="4" fill="var(--t0)"/>
-<rect x="660" y="122" width="16" height="16" rx="4" fill="var(--t0)"/>
-<rect x="680" y="122" width="16" height="16" rx="4" fill="var(--t0)"/>
-<rect x="700" y="122" width="16" height="16" rx="4" fill="var(--t0)"/>
-<text x="786" y="134" font-size="10.5" class="mut">0/6 correct</text>
-<rect x="516" y="151" width="10" height="10" rx="2" fill="var(--t2)"/><text x="530" y="160" font-size="10.5" class="mut">Proven correct</text>
-<rect x="613.6" y="151" width="10" height="10" rx="2" fill="var(--t1)"/><text x="627.6" y="160" font-size="10.5" class="mut">Panic-free</text>
-<rect x="689.6" y="151" width="10" height="10" rx="2" fill="var(--t0)"/><text x="703.6" y="160" font-size="10.5" class="mut">Memory safe</text>
-<rect x="771" y="151" width="10" height="10" rx="2" fill="none" stroke="var(--gap)" stroke-dasharray="2 1.5"/><text x="785" y="160" font-size="10.5" class="mut">below target</text>
+<text x="516" y="129" font-size="11" class="mut">Primitives</text>
+<rect x="600" y="117" width="16" height="16" rx="4" fill="var(--t2)"/>
+<rect x="620" y="117" width="16" height="16" rx="4" fill="var(--t2)"/>
+<rect x="640" y="117" width="16" height="16" rx="4" fill="var(--t2)"/>
+<rect x="660" y="117" width="16" height="16" rx="4" fill="var(--t2)"/>
+<rect x="680" y="117" width="16" height="16" rx="4" fill="var(--t2)"/>
+<rect x="700" y="117" width="16" height="16" rx="4" fill="var(--t2)"/>
+<rect x="720" y="117" width="16" height="16" rx="4" fill="var(--t2)"/>
+<rect x="740" y="117" width="16" height="16" rx="4" fill="none" stroke="var(--gap)" stroke-width="1.5" stroke-dasharray="3 2"/><rect x="744" y="121" width="8" height="8" rx="2" fill="var(--t0)"/>
+<text x="786" y="129" font-size="10.5" class="mut">7/8 correct</text>
+<text x="516" y="154" font-size="11" class="mut">Shells and OS</text>
+<rect x="600" y="142" width="16" height="16" rx="4" fill="var(--t1)"/>
+<rect x="620" y="142" width="16" height="16" rx="4" fill="var(--t0)"/>
+<rect x="640" y="142" width="16" height="16" rx="4" fill="var(--t0)"/>
+<rect x="660" y="142" width="16" height="16" rx="4" fill="var(--t0)"/>
+<rect x="680" y="142" width="16" height="16" rx="4" fill="var(--t0)"/>
+<rect x="700" y="142" width="16" height="16" rx="4" fill="var(--t0)"/>
+<text x="786" y="154" font-size="10.5" class="mut">0/6 correct</text>
+<rect x="516" y="171" width="10" height="10" rx="2" fill="var(--t2)"/><text x="530" y="180" font-size="10.5" class="mut">Proven correct</text>
+<rect x="613.6" y="171" width="10" height="10" rx="2" fill="var(--t1)"/><text x="627.6" y="180" font-size="10.5" class="mut">Panic-free</text>
+<rect x="689.6" y="171" width="10" height="10" rx="2" fill="var(--t0)"/><text x="703.6" y="180" font-size="10.5" class="mut">Memory safe</text>
+<rect x="771" y="171" width="10" height="10" rx="2" fill="none" stroke="var(--gap)" stroke-dasharray="2 1.5"/><text x="785" y="180" font-size="10.5" class="mut">below target</text>
 </svg>
