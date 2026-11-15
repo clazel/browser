@@ -15,6 +15,12 @@
 //!
 //! **Linux** ([`start_vulkan`]):
 //!
+//! 0. the environment must hold [`LINUX_ENVIRONMENT`], which the host sets
+//!    when it starts the process (`clazel-renderer`'s `launch::spawn_gpu`): it
+//!    turns off Mesa's on-disk shader cache, whose worker thread otherwise
+//!    opens, locks and writes cache files at any time, the filter below
+//!    included. A process started without it is refused here, every time,
+//!    rather than killed by its filter some of the time;
 //! 1. `no_new_privs`, then the namespaces (`namespaces::GPU`: user, mount,
 //!    network, IPC), while the process still has one thread, which a user
 //!    namespace needs;
@@ -81,6 +87,32 @@ impl fmt::Display for Failure {
 }
 
 impl std::error::Error for Failure {}
+
+/// What the host adds to the Linux GPU process's environment, and what
+/// [`start_vulkan`] checks is there before it makes the backend.
+///
+/// `MESA_SHADER_CACHE_DISABLE=true` turns off Mesa's on-disk shader cache
+/// (`util/disk_cache.c`, read when the driver makes its device). With the cache
+/// on, lavapipe hands each compiled shader to a worker thread (named `disk$0`)
+/// that writes it under `~/.cache/mesa_shader_cache` later, with `openat`,
+/// `flock` and more. With a cold cache, as on every CI runner, those writes can
+/// still be queued when the seccomp filter is installed, and the first one kills
+/// the process. **Observed** on lavapipe (Mesa 25.2.8) in an aarch64 container,
+/// over `clazel`'s `tests/browse_gpu.rs` with the cache emptied before each run:
+/// 3 runs in 10 failed, each with the kernel's audit line naming `disk$0`'s
+/// `openat` (twice) or `flock` (once) as the call refused. The filter is not
+/// widened for it: a cache that writes files is what the sandbox exists to
+/// forbid, and reading compiled machine code back from a file any program of
+/// the user can write is a way in. The warm-up frame compiles every shader
+/// before the filter, so nothing needs the cache after it.
+pub const LINUX_ENVIRONMENT: &[(&str, &str)] = &[("MESA_SHADER_CACHE_DISABLE", "true")];
+
+/// Whether `get` (the environment, by name) holds [`LINUX_ENVIRONMENT`].
+pub fn has_environment(get: impl Fn(&str) -> Option<std::ffi::OsString>) -> bool {
+    LINUX_ENVIRONMENT
+        .iter()
+        .all(|(name, value)| get(name).is_some_and(|v| v == *value))
+}
 
 /// Steps 1 and 2 on macOS: the Metal backend, made before this process entered
 /// the GPU process's Seatbelt profile, which it now has. On `Err` the process may
@@ -176,7 +208,7 @@ pub fn warm_up<B: crate::backend::Backend>(backend: &mut B) -> Result<(), Failur
     }
 }
 
-/// Steps 1 to 5 on Linux: the Vulkan backend (`software` chooses the device,
+/// Steps 0 to 5 on Linux: the Vulkan backend (`software` chooses the device,
 /// `crate::vulkan`), in a process that is now in the GPU process's namespaces,
 /// Landlock domain and seccomp filter. On `Err` the process may or may not be
 /// sandboxed and must exit.
@@ -185,6 +217,12 @@ pub fn start_vulkan(software: bool) -> Result<crate::vulkan::VulkanBackend, Fail
     use clazel_sandbox::namespaces::Namespace;
     use clazel_sys::linux::{self, Namespaces};
 
+    if !has_environment(|name| std::env::var_os(name)) {
+        return Err(Failure::Layer(
+            "environment",
+            format!("the host did not set {LINUX_ENVIRONMENT:?}"),
+        ));
+    }
     let layer = |name: &'static str, r: Result<(), clazel_sys::Errno>| {
         r.map_err(|e| Failure::Layer(name, e.to_string()))
     };
@@ -284,8 +322,30 @@ fn seccomp(software: bool) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Failure, warm_up, warm_up_frame};
+    use super::{Failure, LINUX_ENVIRONMENT, has_environment, warm_up, warm_up_frame};
     use crate::soft::SoftBackend;
+    use std::ffi::OsString;
+
+    /// The cache is off only when the variable says so exactly.
+    #[test]
+    fn the_environment_must_turn_the_shader_cache_off() {
+        assert_eq!(
+            LINUX_ENVIRONMENT,
+            &[("MESA_SHADER_CACHE_DISABLE", "true")][..]
+        );
+        let with = |value: Option<&str>| {
+            has_environment(|name| {
+                (name == "MESA_SHADER_CACHE_DISABLE")
+                    .then_some(value)
+                    .flatten()
+                    .map(OsString::from)
+            })
+        };
+        assert!(with(Some("true")));
+        assert!(!with(None));
+        assert!(!with(Some("false")));
+        assert!(!with(Some("")));
+    }
 
     /// The software reference draws the warm-up frame to the pixels it names, so
     /// a GPU that does not is the one that is wrong.

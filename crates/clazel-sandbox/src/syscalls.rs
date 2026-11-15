@@ -253,6 +253,12 @@ pub fn is_allowed(arch: Arch, nr: u32) -> bool {
 /// not allowed. **Not measured**: x86-64, another Mesa or C library, a process
 /// running for long or under memory pressure.
 ///
+/// That measurement had Mesa's on-disk shader cache on and warm. With it cold
+/// (CI's case) its worker thread was later seen killed by this list for
+/// `openat` and `flock`, writing cache files after the filter. Those are not
+/// added: the GPU process now runs with the cache off
+/// (`clazel_gpu::sandbox::LINUX_ENVIRONMENT`, which says how that was observed).
+///
 /// Modelling choices:
 /// - **Warm up, then enter.** The GPU process loads the Vulkan loader and driver,
 ///   makes its device and its fixed pipeline, and draws one frame of its own

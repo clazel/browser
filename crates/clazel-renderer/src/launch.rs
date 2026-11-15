@@ -188,6 +188,9 @@ mod pairing {
         let list_fd = pass(&list_gpu)?;
         let surface_fd = pass(&surface_gpu)?;
         command.args(["--list-fd", &list_fd, "--surface-fd", &surface_fd]);
+        // Mesa's shader cache off, which the GPU process checks before its
+        // sandbox (`clazel_gpu::sandbox::LINUX_ENVIRONMENT` says why).
+        command.envs(clazel_gpu::sandbox::LINUX_ENVIRONMENT.iter().copied());
         let started = spawn_held(command);
         drop((list_gpu, surface_gpu));
         let (link, frames) = started?;

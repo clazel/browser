@@ -373,14 +373,28 @@ fn put_image_sends_a_tile_of_the_image() {
 
 #[test]
 fn tiles_cover_the_image_once_and_fit_the_request() {
-    for (w, h, max) in [
-        (1024u32, 768u32, 262_140usize),
+    const FULL: &[(u32, u32, usize)] = &[
+        (1024, 768, 262_140),
         (1024, 768, 16_384),
         (8192, 3, 16_384),
         (1, 1, 28),
         (5, 7, 24 + 4 * 3),
         (300, 2, 262_140),
-    ] {
+    ];
+    // Under Miri, images small enough to check pixel by pixel in seconds, with
+    // the same shapes: several whole rows a request with a shorter last one
+    // (48 rows, 5 a request), and rows too long for one request split into
+    // columns with a narrower last one (64 = 20 + 20 + 20 + 4). The full sizes
+    // took 1119 s of Miri's time on CI, over its 300 s limit; the normal test
+    // run checks them.
+    const MIRI: &[(u32, u32, usize)] = &[
+        (64, 48, 24 + 4 * 64 * 5),
+        (64, 3, 24 + 4 * 20),
+        (1, 1, 28),
+        (5, 7, 24 + 4 * 3),
+        (300, 2, 262_140),
+    ];
+    for &(w, h, max) in if cfg!(miri) { MIRI } else { FULL } {
         let ts = tiles(w, h, max);
         let area = usize::try_from(u64::from(w).saturating_mul(u64::from(h))).unwrap_or(0);
         let mut seen = vec![0u8; area];
