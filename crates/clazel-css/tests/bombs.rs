@@ -99,11 +99,23 @@ fn sixty_four_mib_of_curly_brackets() {
     let sheet = vec![0x7Bu32; mib.saturating_mul(1024 * 1024)];
     let start = Instant::now();
     let parsed = parse_stylesheet_contents(&sheet);
+    let spent = start.elapsed();
     println!(
         "{:?}: {} rows, {} items, {} declarations",
-        start.elapsed(),
+        spent,
         parsed.output.rows.len(),
         parsed.output.items.len(),
         parsed.output.declarations.len()
     );
+    // Each `{` opens a qualified rule inside the one before (§5.5.3 `<{-token>`), to EOF:
+    // there can be no more rows or items than code points, and with no ident there is no
+    // declaration. The time is linear with a constant far above what was measured (about
+    // 0.3 microseconds a code point in a debug build at 4 MiB), so only a worse-than-linear
+    // blow-up, which is what this run is for, trips it.
+    assert!(parsed.output.rows.len() <= sheet.len());
+    assert!(parsed.output.items.len() <= sheet.len());
+    assert!(parsed.output.declarations.is_empty());
+    let allowed =
+        Duration::from_micros(u64::try_from(sheet.len()).unwrap_or(u64::MAX)).saturating_mul(3);
+    assert!(spent < allowed, "{spent:?} for {} code points", sheet.len());
 }
