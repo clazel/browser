@@ -466,6 +466,112 @@ mod tests {
         assert!(can("svg|a"));
     }
 
+    /// What `sheet` loses in reading: the selector texts of rules `Selectors::parse` refuses,
+    /// the number of declarations, and the (property, count) of the declarations dropped as
+    /// outside the subset (unknown property or a value its grammar refuses).
+    fn losses(sheet: &StyleSheet) -> (Vec<String>, usize, Vec<(String, usize)>) {
+        use std::collections::BTreeMap;
+        let text = |v: &[u32]| -> String { v.iter().filter_map(|&c| char::from_u32(c)).collect() };
+        let mut refused = Vec::new();
+        let mut total = 0usize;
+        let mut dropped: BTreeMap<String, usize> = BTreeMap::new();
+        for r in &sheet.rules {
+            if super::super::rules::Selectors::parse(&r.selectors).is_none() {
+                refused.push(text(&r.selectors));
+            }
+            total = total.saturating_add(r.declarations.len());
+            for d in &r.declarations {
+                let read = super::super::rules::read_declarations(std::slice::from_ref(d), false);
+                if read.is_empty() {
+                    let c = dropped.entry(text(&d.name)).or_default();
+                    *c = c.saturating_add(1);
+                }
+            }
+        }
+        (refused, total, dropped.into_iter().collect())
+    }
+
+    /// What the user agent sheets lose in being read (every entry is pinned, so a change of
+    /// the sheets, of the parsers or of the subset shows up here): per sheet, the rules whose
+    /// selector `Selectors::parse` refuses (pseudo-elements and pseudo-classes outside the
+    /// subset: dialogs, popovers, `:autofill`, `::file-selector-button`), the number of
+    /// declarations, and the declarations dropped as outside the subset, by property.
+    #[test]
+    fn losses_are_pinned() {
+        let Sheets {
+            ua,
+            ua_quirks,
+            hints,
+        } = sheets();
+        let own = |v: &[(&str, usize)]| -> Vec<(String, usize)> {
+            v.iter().map(|&(n, c)| (n.to_owned(), c)).collect()
+        };
+        let (refused, total, dropped) = losses(ua);
+        assert_eq!(
+            refused,
+            [
+                "dialog:modal ",
+                "dialog::backdrop ",
+                "[popover]:not(:popover-open):not(dialog[open]) ",
+                "dialog:popover-open ",
+                ":popover-open::backdrop ",
+                ":autofill ",
+                "button,\n::file-selector-button,\ninput:is([type=color i], [type=reset i], [type=button i], [type=submit i]) ",
+            ]
+        );
+        assert_eq!(total, 154);
+        assert_eq!(
+            dropped,
+            own(&[
+                ("align-content", 2),
+                ("appearance", 2),
+                ("background-color", 2),
+                ("box-sizing", 2),
+                ("color", 2),
+                ("contain", 1),
+                ("contain-intrinsic-size", 1),
+                ("content", 2),
+                ("content-visibility", 1),
+                ("counter-reset", 1),
+                ("display", 3),
+                ("display-outside", 2),
+                ("field-sizing", 1),
+                ("height", 2),
+                ("inset", 2),
+                ("inset-block", 1),
+                ("inset-inline-end", 1),
+                ("inset-inline-start", 1),
+                ("letter-spacing", 1),
+                ("max-height", 1),
+                ("max-width", 1),
+                ("object-fit", 1),
+                ("outline", 1),
+                ("overflow-clip-margin", 2),
+                ("position", 4),
+                ("text-shadow", 1),
+                ("text-transform", 1),
+                ("width", 2),
+                ("word-spacing", 1),
+            ])
+        );
+        let (refused, total, dropped) = losses(ua_quirks);
+        assert_eq!((refused.len(), total), (0, 14));
+        assert_eq!(
+            dropped,
+            own(&[
+                ("box-sizing", 1),
+                ("font-variant", 1),
+                ("list-style-position", 3)
+            ])
+        );
+        let (refused, total, dropped) = losses(hints);
+        assert_eq!((refused.len(), total), (0, 67));
+        assert_eq!(
+            dropped,
+            own(&[("caption-side", 1), ("clear", 3), ("float", 4)])
+        );
+    }
+
     #[test]
     fn sheets_parse() {
         let Sheets {
@@ -473,9 +579,9 @@ mod tests {
             ua_quirks: quirks,
             hints,
         } = sheets();
-        assert!(ua.rules.len() > 60, "{}", ua.rules.len());
+        assert_eq!(ua.rules.len(), 101);
         assert_eq!(quirks.rules.len(), 8);
-        assert!(hints.rules.len() > 30, "{}", hints.rules.len());
+        assert_eq!(hints.rules.len(), 55);
         assert!(ua.rules.iter().all(|r| {
             let s: String = r
                 .selectors

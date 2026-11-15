@@ -260,7 +260,12 @@ mappings.
 ## Verification
 
 Tier 0 now, target tier 1 (phase-5.md 5.0(a)): the tier is raised only after CI's full
-verification of the harnesses is green.
+verification of the harnesses is green. No harness reaches the entry points: `values::parse`
+and `parse_items`, `Values::from_rows`, the named-colour path of `parse_color`, the media
+query parser, or `cascade` (each is under "Not done" below). The harnesses cover the
+steps, value types and conversions these are built from. `xtask` requires only a non-zero
+harness count for tier 1 (`xtask/src/workspace.rs`), not that any particular entry point
+is covered; that is outside this crate.
 
 - **Kani harnesses** (`src/values/proofs.rs`): each runs one operation on every input
   within its bound, checking for panics, overflow, reads outside a slice and loops that
@@ -301,13 +306,17 @@ verification of the harnesses is green.
   (`tests/data/`, both at WPT commit `4ad507b2`):
   - the `-valid` and `-invalid` parsing pages of the subset's properties: 912 cases, run
     as `parsing-testcommon.js` runs them (set, read back, set again): **702 pass, 210
-    expected failures** (each listed with its reason, all syntax outside the subset), none
-    fail. Nine pages call the helpers from loops or wrappers and are not run, and 64 calls
+    expected failures** (each listed with its reason, all syntax outside the subset; a case
+    excused by a class of syntax must fail by the value being dropped, and the two
+    `vertical-align: 0` and `0px` cases that read `0px` are pinned singly), none fail. Nine pages call the helpers from loops or wrappers and are not run, and 64 calls
     of other helpers (`test_shorthand_value` and the like) are not run; the table lists
     both.
   - `quirks/unitless-length` and `quirks/hashless-hex-color`: every case on every property
-    of the subset, in quirks, limited-quirks and no-quirks mode: **10,714 pass, 183
-    expected failures** (`calc()`), none fail. The pages compare computed values; until
+    of the subset, with the parser's quirks flag on and off (the parser takes one flag, so
+    the pages' limited-quirks and no-quirks runs are the one "off" computation, counted once;
+    `limited_quirks_mode_is_off` in `src/cascade/tests.rs` checks that a limited-quirks
+    document reaches the flag as off): **7,147 pass, 122 expected failures** (`calc()`, each
+    failing by the value being dropped), none fail, 7,269 in all, asserted. The pages compare computed values; until
     5.7 the test compares the serialized specified values, which is the same check where
     the reference is written as the value the quirk gives. Properties outside the subset
     (`top`, `left`, `clip`, `letter-spacing`, `word-spacing`, `outline-*`, …) and the SVG
@@ -328,18 +337,31 @@ verification of the harnesses is green.
   condition evaluator on any list of four ops, even with features reduced to unknown
   names (over 8 GB in 69 s); a query of up to three ops (over 8 GB in 118 s); a list of up
   to three one-op queries (over 8 GB at 686 s); the parser on any four tokens (unfinished
-  after 12 minutes); the tokens adapter, which calls `clazel-css`'s tokenizer; the
+  after 12 minutes), and on any two tokens over three code points (tried again: 3 GB and
+  unfinished after 10 minutes, stopped, harness removed); the tokens adapter, which calls `clazel-css`'s tokenizer; the
   serializer; and the sheet walk and document collection. Each was stopped at the local
   8 GB cap and removed rather than sent to a 16 GB CI runner untested.
 - **Conformance** (`tests/conformance_mediaqueries.rs`), over WPT `css/mediaqueries/` at
   commit `4ad507b2` (`tests/data/wpt-mediaqueries/SOURCE.md`):
-  - `test_media_queries.html`, read call by call: **159 pass, 55 expected failures**, none
-    fail, of 214 calls read; 159 calls are not run (in loops, conditions or functions, or
+  - `test_media_queries.html`, read call by call: **110 pass, 104 expected**, none
+    fail, of 214 calls read (55 of the expected ones fail, as pinned per case; 49 name a
+    media feature outside the subset and pass only because the unknown feature evaluates
+    false, so they are not counted as passes of the supported subset); 159 calls are not run (in loops, conditions or functions, or
     with computed strings) and are listed by line with the reason.
+  - The loops of that page (lines 139 to 192 and 213 to 266), which the converter cannot
+    read, written out by hand for `width` and `height` (`wpt_test_media_queries_loops`: 272
+    known/unknown calls and 88 value calls on the 117 by 76 iframe, **360 pass**, none
+    fail). The page writes the second loop's queries with `${value}` in ordinary quotes, so
+    it sends the literal text; the test runs the number substituted, as meant. The
+    `device-width` and `device-height` iterations are outside the subset and not written out.
   - `match-media-parsing.html`: **21 pass**, none fail; the 13 calls inside
     `test_resolution_parsing()` are not run.
-  - 22 reftests, one unit per `@media` rule: **47 pass, 10 expected failures**, none fail.
-  - Every expected failure is a query on a media feature outside the subset (`color`,
+  - "`@media` block activation (green/red proxy)": nothing is rendered; the 22 reftest pages'
+    `@media` blocks are scanned for the words green and red, and `active_media` must agree.
+    One unit per rule: **39 pass, 18 expected** (10 fail as pinned, 8 pass only because an
+    unknown feature is false), none fail.
+  - Each expected failure is listed by `file:line` in the test (a listed case that passes,
+    or is not run, fails the test; the totals are asserted) and is a query on a media feature outside the subset (`color`,
     `monochrome`, `aspect-ratio`, `device-*`, `color-index`, `scan`, `grid`,
     `overflow-*`, `update`, `hover`, `pointer` and their `any-` forms) or the `ch` unit,
     each listed with its reason when the test runs.
