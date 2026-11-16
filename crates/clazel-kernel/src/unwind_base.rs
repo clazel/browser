@@ -513,24 +513,24 @@ pub proof fn lemma_carry_out_frame(urls: UrlFns, s: State, tab: nat, partition: 
 }
 
 /// `navigate_tab` and `begin_navigation` leave the jar, storage and time alone.
-pub proof fn lemma_navigation_frame(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, url: Seq<u32>, script: Document)
+pub proof fn lemma_navigation_frame(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, url: Seq<u32>, req: clazel_fetch::request::spec::Req, script: Document)
     ensures
         navigate_tab(urls, s, tab, url, script).0.jar == s.jar,
         navigate_tab(urls, s, tab, url, script).0.storage == s.storage,
         navigate_tab(urls, s, tab, url, script).0.now == s.now,
-        begin_navigation(rules, urls, fetch, s, tab, url).0.jar == s.jar,
-        begin_navigation(rules, urls, fetch, s, tab, url).0.storage == s.storage,
-        begin_navigation(rules, urls, fetch, s, tab, url).0.now == s.now,
-        begin_navigation(rules, urls, fetch, s, tab, url).0.next_id == s.next_id,
+        begin_navigation(rules, urls, fetch, s, tab, url, req).0.jar == s.jar,
+        begin_navigation(rules, urls, fetch, s, tab, url, req).0.storage == s.storage,
+        begin_navigation(rules, urls, fetch, s, tab, url, req).0.now == s.now,
+        begin_navigation(rules, urls, fetch, s, tab, url, req).0.next_id == s.next_id,
         navigate_tab(urls, s, tab, url, script).0.gpu == s.gpu,
-        begin_navigation(rules, urls, fetch, s, tab, url).0.gpu == s.gpu,
+        begin_navigation(rules, urls, fetch, s, tab, url, req).0.gpu == s.gpu,
 {
     if let Some(i) = find_by_tab(s.renderers, tab, 0) {
         if lock_of_url(urls, url, s.next_id) is Some {
             let (s0, closes) = close_tab_conns(s, tab);
             let old = s0.renderers[i];
             if let Some(parsed) = (fetch.parse)(url) {
-                let (fs, actions) = clazel_fetch::transducer::spec::start(parsed);
+                let (fs, actions) = clazel_fetch::transducer::spec::start_req(parsed, req);
                 let nav = Navigation { url, fetch: fs, partition: crate::domain::domain_of_renderer(rules, old) };
                 let s1 = State { renderers: s0.renderers.update(i, Renderer { pending: Some(nav), ..old }), ..s0 };
                 lemma_carry_out_frame(urls, s1, tab, nav.partition, None, actions);
@@ -596,7 +596,7 @@ pub proof fn lemma_open_tab_frame(rules: Seq<clazel_psl::spec::Rule>, urls: UrlF
         if script is None {
             let rn = Renderer { committed: false, id, tab: id, url, lock, pending: None };
             let s1 = State { renderers: s.renderers.push(rn), next_id: id + 1, ..s };
-            lemma_navigation_frame(rules, urls, fetch, s1, id, url, script_document(seq![]));
+            lemma_navigation_frame(rules, urls, fetch, s1, id, url, clazel_fetch::request::spec::get_req(), script_document(seq![]));
         }
     }
 }
@@ -614,10 +614,18 @@ pub proof fn lemma_step_gpu_frame(rules: Seq<clazel_psl::spec::Rule>, urls: UrlF
                 if let Some(m) = accepted_message(s.renderers[i], bytes) {
                     let r = s.renderers[i];
                     crate::lock::lemma_storage_call_frame(s, r, m);
-                    if let clazel_ipc::message::spec::Message::Navigate { url } = m {
+                    if let clazel_ipc::message::spec::Message::Submit { url, method, content_type, body } = m {
+        if let Some(req) = submit_request(r, method, content_type, body) {
                         if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
                             if let Some(resolved) = (urls.resolve)(r.url, relative) {
-                                lemma_navigation_frame(rules, urls, fetch, s, r.tab, resolved, script_document(seq![]));
+                                lemma_navigation_frame(rules, urls, fetch, s, r.tab, resolved, req, script_document(seq![]));
+                            }
+                        }
+                    }
+    } else if let clazel_ipc::message::spec::Message::Navigate { url } = m {
+                        if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+                            if let Some(resolved) = (urls.resolve)(r.url, relative) {
+                                lemma_navigation_frame(rules, urls, fetch, s, r.tab, resolved, clazel_fetch::request::spec::get_req(), script_document(seq![]));
                             }
                         }
                     }
@@ -631,7 +639,7 @@ pub proof fn lemma_step_gpu_frame(rules: Seq<clazel_psl::spec::Rule>, urls: UrlF
             lemma_open_tab_frame(rules, urls, fetch, s, url, script);
         },
         Event::NavigateTab { tab, url } => {
-            lemma_navigation_frame(rules, urls, fetch, s, tab, url, script_document(seq![]));
+            lemma_navigation_frame(rules, urls, fetch, s, tab, url, clazel_fetch::request::spec::get_req(), script_document(seq![]));
         },
         Event::Net { conn, input } => {
             lemma_net_frame(rules, urls, fetch, s, conn, input);
@@ -686,11 +694,22 @@ pub proof fn lemma_jar_no_public_suffix_step(rules: Seq<clazel_psl::spec::Rule>,
                                 lemma_store_no_public_suffix(rules, s.jar, cookie_string, url, document_context(r.lock), s.now, h);
                             }
                         },
-                        clazel_ipc::message::spec::Message::Navigate { url } => {
+                        clazel_ipc::message::spec::Message::Submit { url, method, content_type, body } => {
+            if let Some(req) = submit_request(r, method, content_type, body) {
                             if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
                                 if let Some(resolved) = (urls.resolve)(r.url, relative) {
                                     if lock_of_url(urls, resolved, s.next_id) is Some {
-                                        lemma_navigation_frame(rules, urls, fetch, s, r.tab, resolved, script_document(seq![]));
+                                        lemma_navigation_frame(rules, urls, fetch, s, r.tab, resolved, req, script_document(seq![]));
+                                    }
+                                }
+                            }
+                        }
+        },
+        clazel_ipc::message::spec::Message::Navigate { url } => {
+                            if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+                                if let Some(resolved) = (urls.resolve)(r.url, relative) {
+                                    if lock_of_url(urls, resolved, s.next_id) is Some {
+                                        lemma_navigation_frame(rules, urls, fetch, s, r.tab, resolved, clazel_fetch::request::spec::get_req(), script_document(seq![]));
                                     }
                                 }
                             }
@@ -701,7 +720,7 @@ pub proof fn lemma_jar_no_public_suffix_step(rules: Seq<clazel_psl::spec::Rule>,
             }
         },
         Event::NavigateTab { tab, url } => {
-            lemma_navigation_frame(rules, urls, fetch, s, tab, url, script_document(seq![]));
+            lemma_navigation_frame(rules, urls, fetch, s, tab, url, clazel_fetch::request::spec::get_req(), script_document(seq![]));
         },
         Event::SubNet { renderer, serial, hop, input } => {
             crate::subfetch_rel::lemma_sub_net_wf(rules, urls, fetch, s, renderer, serial, hop, input);

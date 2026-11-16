@@ -694,11 +694,11 @@ pub proof fn lemma_fail_pending(urls: UrlFns, s: State, tab: nat, i: int, code: 
 // `begin_navigation`.
 // ---------------------------------------------------------------------
 
-/// `start` gives a `Connect` or a `Fail`: it never commits, and sends nothing.
-pub proof fn lemma_start_shape(url: clazel_url::url::spec::Url)
+/// `start_req` gives a `Connect` or a `Fail`: it never commits, and sends nothing.
+pub proof fn lemma_start_shape(url: clazel_url::url::spec::Url, req: clazel_fetch::request::spec::Req)
     ensures
         ({
-            let a = clazel_fetch::transducer::spec::start(url).1;
+            let a = clazel_fetch::transducer::spec::start_req(url, req).1;
             (a.len() == 1 && a[0] is Connect) || (a.len() == 1 && a[0] is Fail)
         }),
 {
@@ -708,12 +708,12 @@ pub proof fn lemma_start_shape(url: clazel_url::url::spec::Url)
 /// well-formed renderer table): it closes the tab's connections, opens at most
 /// one for the tab, and replies to the tab's renderer on a failure; it spawns
 /// and kills nothing and sends nothing.
-pub proof fn lemma_begin_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, url: Seq<u32>)
+pub proof fn lemma_begin_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, url: Seq<u32>, req: clazel_fetch::request::spec::Req)
     requires
         crate::invariant::renderers_wf(urls, s.renderers, s.next_id),
     ensures
         ({
-            let (s1, out) = begin_navigation(rules, urls, fetch, s, tab, url);
+            let (s1, out) = begin_navigation(rules, urls, fetch, s, tab, url, req);
             &&& s.next_conn <= s1.next_conn
             &&& forall|j: int|
                 0 <= j < s1.conns.len() ==> s.conns.contains(#[trigger] s1.conns[j]) || (s.next_conn <= s1.conns[j].id < s1.next_conn && s1.conns[j].tab == tab)
@@ -749,7 +749,7 @@ pub proof fn lemma_begin_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
             match (fetch.parse)(url) {
                 None => {
                     let (s1, out) = fail_navigation(s0, i, old, error_bad_url());
-                    assert(begin_navigation(rules, urls, fetch, s, tab, url) == (s1, closes + out));
+                    assert(begin_navigation(rules, urls, fetch, s, tab, url, req) == (s1, closes + out));
                     let all = closes + out;
                     assert forall|j: int| 0 <= j < s1.conns.len() implies s.conns.contains(#[trigger] s1.conns[j]) || (s.next_conn <= s1.conns[j].id < s1.next_conn && s1.conns[j].tab == tab) by {
                         assert(s1.conns == s0.conns);
@@ -777,13 +777,13 @@ pub proof fn lemma_begin_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
                     }
                 },
                 Some(parsed) => {
-                    let (fs, actions) = clazel_fetch::transducer::spec::start(parsed);
-                    lemma_start_shape(parsed);
+                    let (fs, actions) = clazel_fetch::transducer::spec::start_req(parsed, req);
+                    lemma_start_shape(parsed, req);
                     let nav = Navigation { url, fetch: fs, partition: crate::domain::domain_of_renderer(rules, old) };
                     let s1 = State { renderers: s0.renderers.update(i, Renderer { pending: Some(nav), ..old }), ..s0 };
                     let (s2, out) = carry_out(urls, s1, tab, nav.partition, None, actions);
                     let all = closes + out;
-                    assert(begin_navigation(rules, urls, fetch, s, tab, url) == (s2, all));
+                    assert(begin_navigation(rules, urls, fetch, s, tab, url, req) == (s2, all));
                     assert(actions.drop_first() =~= Seq::<NetAction>::empty());
                     if actions[0] is Fail {
                         lemma_abort_conns(s1, tab, error_fetch());
@@ -1266,10 +1266,26 @@ pub proof fn lemma_handle_message_conns(rules: Seq<clazel_psl::spec::Rule>, urls
                 s,
                 r,
                 m,
-            )) == begin_navigation(rules, urls, fetch, s, r.tab, resolved))
+            )) == begin_navigation(rules, urls, fetch, s, r.tab, resolved, clazel_fetch::request::spec::get_req()))
         }),
 {
     match m {
+        clazel_ipc::message::spec::Message::Submit { url, method, content_type, body } => {
+            if let Some(req) = submit_request(r, method, content_type, body) {
+            match clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+                None => {},
+                Some(relative) => match (urls.resolve)(r.url, relative) {
+                    None => {},
+                    Some(resolved) => {
+                        if lock_of_url(urls, resolved, s.next_id) is None {
+                        } else {
+                            assert(handle_message(rules, urls, fetch, s, r, m) == begin_navigation(rules, urls, fetch, s, r.tab, resolved, req));
+                        }
+                    },
+                },
+            }
+        }
+        },
         clazel_ipc::message::spec::Message::Navigate { url } => {
             match clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
                 None => {},
@@ -1278,7 +1294,7 @@ pub proof fn lemma_handle_message_conns(rules: Seq<clazel_psl::spec::Rule>, urls
                     Some(resolved) => {
                         if lock_of_url(urls, resolved, s.next_id) is None {
                         } else {
-                            assert(handle_message(rules, urls, fetch, s, r, m) == begin_navigation(rules, urls, fetch, s, r.tab, resolved));
+                            assert(handle_message(rules, urls, fetch, s, r, m) == begin_navigation(rules, urls, fetch, s, r.tab, resolved, clazel_fetch::request::spec::get_req()));
                         }
                     },
                 },
@@ -1331,7 +1347,17 @@ pub proof fn lemma_local_conns(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns,
         None => {},
         Some(m) => {
             lemma_handle_message_conns(rules, urls, fetch, s, r, m);
-            if let clazel_ipc::message::spec::Message::Navigate { url } = m {
+            if let clazel_ipc::message::spec::Message::Submit { url, method, content_type, body } = m {
+        if let Some(req) = submit_request(r, method, content_type, body) {
+                if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+                    if let Some(resolved) = (urls.resolve)(r.url, relative) {
+                        if lock_of_url(urls, resolved, s.next_id) is Some {
+                            assert(false);
+                        }
+                    }
+                }
+            }
+    } else if let clazel_ipc::message::spec::Message::Navigate { url } = m {
                 if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
                     if let Some(resolved) = (urls.resolve)(r.url, relative) {
                         if lock_of_url(urls, resolved, s.next_id) is Some {
@@ -1435,23 +1461,23 @@ pub proof fn lemma_own_close(s: State, s1: State, out: Seq<Output>, pre: Seq<Out
 }
 
 /// `begin_navigation` is about its tab.
-pub proof fn lemma_own_begin(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, url: Seq<u32>)
+pub proof fn lemma_own_begin(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, url: Seq<u32>, req: clazel_fetch::request::spec::Req)
     requires
         crate::invariant::kernel_wf(rules, urls, s),
     ensures
         ({
-            let (s1, out) = begin_navigation(rules, urls, fetch, s, tab, url);
+            let (s1, out) = begin_navigation(rules, urls, fetch, s, tab, url, req);
             own_common(s, s1) && own_some(s, s1, out, tab)
         }),
 {
-    lemma_begin_outputs(rules, urls, fetch, s, tab, url);
-    lemma_begin_wf_helper(rules, urls, fetch, s, tab, url);
-    let (s1, out) = begin_navigation(rules, urls, fetch, s, tab, url);
+    lemma_begin_outputs(rules, urls, fetch, s, tab, url, req);
+    lemma_begin_wf_helper(rules, urls, fetch, s, tab, url, req);
+    let (s1, out) = begin_navigation(rules, urls, fetch, s, tab, url, req);
     assert(crate::invariant::kernel_wf(rules, urls, s1));
     crate::invariant::lemma_find_by_tab(s.renderers, tab, 0);
     assert forall|j: int| 0 <= j < s.conns.len() && (#[trigger] s.conns[j]).tab != tab implies s1.conns.contains(s.conns[j]) by {
         assert(s.conns.contains(s.conns[j]));
-        lemma_begin_keeps(rules, urls, fetch, s, tab, url, s.conns[j]);
+        lemma_begin_keeps(rules, urls, fetch, s, tab, url, req, s.conns[j]);
     }
     assert forall|j: int| 0 <= j < s1.conns.len() && (#[trigger] s1.conns[j]).id >= s.next_conn implies s1.conns[j].tab == tab && exists|i: int|
         0 <= i < s1.renderers.len() && s1.renderers[i].tab == tab && (s1.renderers[i].pending matches Some(nav) && nav.partition == s1.conns[j].partition) by {
@@ -1478,23 +1504,23 @@ pub proof fn lemma_own_begin(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
 }
 
 /// `begin_navigation` keeps the well-formedness (and the connections of other tabs).
-pub proof fn lemma_begin_wf_helper(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, url: Seq<u32>)
+pub proof fn lemma_begin_wf_helper(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, url: Seq<u32>, req: clazel_fetch::request::spec::Req)
     requires
         crate::invariant::kernel_wf(rules, urls, s),
     ensures
-        crate::invariant::kernel_wf(rules, urls, begin_navigation(rules, urls, fetch, s, tab, url).0),
+        crate::invariant::kernel_wf(rules, urls, begin_navigation(rules, urls, fetch, s, tab, url, req).0),
 {
-    crate::net_wf::lemma_begin_navigation_wf(rules, urls, fetch, s, tab, url);
+    crate::net_wf::lemma_begin_navigation_wf(rules, urls, fetch, s, tab, url, req);
 }
 
 /// The connections of other tabs survive `begin_navigation`.
-pub proof fn lemma_begin_keeps(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, url: Seq<u32>, c: Connection)
+pub proof fn lemma_begin_keeps(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, url: Seq<u32>, req: clazel_fetch::request::spec::Req, c: Connection)
     requires
         crate::invariant::kernel_wf(rules, urls, s),
         s.conns.contains(c),
         c.tab != tab,
     ensures
-        begin_navigation(rules, urls, fetch, s, tab, url).0.conns.contains(c),
+        begin_navigation(rules, urls, fetch, s, tab, url, req).0.conns.contains(c),
 {
     crate::invariant::lemma_find_by_tab(s.renderers, tab, 0);
     if let Some(i) = find_by_tab(s.renderers, tab, 0) {
@@ -1512,7 +1538,7 @@ pub proof fn lemma_begin_keeps(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns,
             match (fetch.parse)(url) {
                 None => {},
                 Some(parsed) => {
-                    let (fs, actions) = clazel_fetch::transducer::spec::start(parsed);
+                    let (fs, actions) = clazel_fetch::transducer::spec::start_req(parsed, req);
                     let nav = Navigation { url, fetch: fs, partition: crate::domain::domain_of_renderer(rules, old) };
                     let s1 = State { renderers: s0.renderers.update(i, Renderer { pending: Some(nav), ..old }), ..s0 };
                     lemma_carry_out_keeps(urls, s1, tab, nav.partition, None, actions, c);
@@ -1672,11 +1698,21 @@ pub proof fn lemma_own_all_from_renderer(rules: Seq<clazel_psl::spec::Rule>, url
                 if own_none(s, s1, out) {
                     lemma_own_all_unchanged(s, s1, out, t);
                 } else {
-                    if let clazel_ipc::message::spec::Message::Navigate { url } = m {
+                    if let clazel_ipc::message::spec::Message::Submit { url, method, content_type, body } = m {
+        if let Some(req) = submit_request(r, method, content_type, body) {
                         if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
                             if let Some(resolved) = (urls.resolve)(r.url, relative) {
                                 if lock_of_url(urls, resolved, s.next_id) is Some {
-                                    lemma_own_begin(rules, urls, fetch, s, r.tab, resolved);
+                                    lemma_own_begin(rules, urls, fetch, s, r.tab, resolved, req);
+                                }
+                            }
+                        }
+                    }
+    } else if let clazel_ipc::message::spec::Message::Navigate { url } = m {
+                        if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+                            if let Some(resolved) = (urls.resolve)(r.url, relative) {
+                                if lock_of_url(urls, resolved, s.next_id) is Some {
+                                    lemma_own_begin(rules, urls, fetch, s, r.tab, resolved, clazel_fetch::request::spec::get_req());
                                 }
                             }
                         }
@@ -1795,8 +1831,8 @@ pub proof fn lemma_own_all_open_tab(rules: Seq<clazel_psl::spec::Rule>, urls: Ur
                 let rn = Renderer { committed: false, id, tab: id, url, lock, pending: None };
                 let sp = State { renderers: s.renderers.push(rn), next_id: id + 1, ..s };
                 crate::invariant::lemma_open_tab_push_wf(rules, urls, s, url, lock, false);
-                lemma_own_begin(rules, urls, fetch, sp, id, url);
-                let ob = begin_navigation(rules, urls, fetch, sp, id, url).1;
+                lemma_own_begin(rules, urls, fetch, sp, id, url, clazel_fetch::request::spec::get_req());
+                let ob = begin_navigation(rules, urls, fetch, sp, id, url, clazel_fetch::request::spec::get_req()).1;
                 assert(out == seq![Output::Spawn { id, policy: Policy::Gpu }, Output::Spawn { id, policy: Policy::Renderer }] + ob);
                 assert forall|k: int| 0 <= k < out.len() implies match #[trigger] out[k] {
                     Output::Connect { conn: x, .. } => s.next_conn <= x < s1.next_conn,
@@ -1839,7 +1875,7 @@ pub proof fn theorem_connection_ownership(rules: Seq<clazel_psl::spec::Rule>, ur
             lemma_own_all_exited(rules, urls, fetch, s, id);
         },
         Event::NavigateTab { tab, url } => {
-            lemma_own_begin(rules, urls, fetch, s, tab, url);
+            lemma_own_begin(rules, urls, fetch, s, tab, url, clazel_fetch::request::spec::get_req());
         },
         Event::Net { conn, input } => {
             lemma_own_all_net(rules, urls, fetch, s, conn, input);

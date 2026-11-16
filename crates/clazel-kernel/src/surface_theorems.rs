@@ -47,13 +47,13 @@ proof fn lemma_closes_no_surface(conns: Seq<Connection>, tab: nat)
 
 /// `begin_navigation` (which never commits: the transducer's `start` only
 /// connects or fails) has none.
-proof fn lemma_begin_no_surface(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, url: Seq<u32>)
+proof fn lemma_begin_no_surface(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, url: Seq<u32>, req: clazel_fetch::request::spec::Req)
     requires
         crate::invariant::renderers_wf(urls, s.renderers, s.next_id),
     ensures
-        no_surface(begin_navigation(rules, urls, fetch, s, tab, url).1),
+        no_surface(begin_navigation(rules, urls, fetch, s, tab, url, req).1),
 {
-    crate::net_theorems::lemma_begin_outputs(rules, urls, fetch, s, tab, url);
+    crate::net_theorems::lemma_begin_outputs(rules, urls, fetch, s, tab, url, req);
 }
 
 /// A `localStorage` call has none.
@@ -89,11 +89,22 @@ proof fn lemma_from_renderer_no_surface(rules: Seq<clazel_psl::spec::Rule>, urls
                 lemma_no_surface_concat(seq![Output::Kill { id }], closes_of_tab(s.conns, r.tab));
             },
             Some(m) => match m {
-                clazel_ipc::message::spec::Message::Navigate { url } => {
+                clazel_ipc::message::spec::Message::Submit { url, method, content_type, body } => {
+            if let Some(req) = submit_request(r, method, content_type, body) {
                     if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
                         if let Some(resolved) = (urls.resolve)(r.url, relative) {
                             if lock_of_url(urls, resolved, s.next_id) is Some {
-                                lemma_begin_no_surface(rules, urls, fetch, s, r.tab, resolved);
+                                lemma_begin_no_surface(rules, urls, fetch, s, r.tab, resolved, req);
+                            }
+                        }
+                    }
+                }
+        },
+        clazel_ipc::message::spec::Message::Navigate { url } => {
+                    if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+                        if let Some(resolved) = (urls.resolve)(r.url, relative) {
+                            if lock_of_url(urls, resolved, s.next_id) is Some {
+                                lemma_begin_no_surface(rules, urls, fetch, s, r.tab, resolved, clazel_fetch::request::spec::get_req());
                             }
                         }
                     }
@@ -166,8 +177,8 @@ proof fn lemma_no_paint_open_tab(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
                     let rn = Renderer { committed: false, id, tab: id, url, lock, pending: None };
                     let sp = State { renderers: s.renderers.push(rn), next_id: id + 1, ..s };
                     crate::invariant::lemma_open_tab_push_wf(rules, urls, s, url, lock, false);
-                    lemma_begin_no_surface(rules, urls, fetch, sp, id, url);
-                    let ob = begin_navigation(rules, urls, fetch, sp, id, url).1;
+                    lemma_begin_no_surface(rules, urls, fetch, sp, id, url, clazel_fetch::request::spec::get_req());
+                    let ob = begin_navigation(rules, urls, fetch, sp, id, url, clazel_fetch::request::spec::get_req()).1;
                     assert forall|k: int| 0 <= k < out.len() implies !((#[trigger] out[k]) is Paint) by {
                         if k >= 2 {
                             assert(out[k] == ob[k - 2]);
@@ -191,7 +202,7 @@ proof fn lemma_no_paint_navigate(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
     crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
     match e {
         Event::NavigateTab { tab, url } => {
-            lemma_begin_no_surface(rules, urls, fetch, s, tab, url);
+            lemma_begin_no_surface(rules, urls, fetch, s, tab, url, clazel_fetch::request::spec::get_req());
         },
         _ => {},
     }
@@ -614,8 +625,8 @@ proof fn lemma_channel_open_tab(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns
             let rn = Renderer { committed: false, id, tab: id, url, lock, pending: None };
             let sp = State { renderers: s.renderers.push(rn), next_id: id + 1, ..s };
             crate::invariant::lemma_open_tab_push_wf(rules, urls, s, url, lock, false);
-            lemma_begin_no_surface(rules, urls, fetch, sp, id, url);
-            let ob = begin_navigation(rules, urls, fetch, sp, id, url).1;
+            lemma_begin_no_surface(rules, urls, fetch, sp, id, url, clazel_fetch::request::spec::get_req());
+            let ob = begin_navigation(rules, urls, fetch, sp, id, url, clazel_fetch::request::spec::get_req()).1;
             assert(out == seq![Output::Spawn { id, policy: Policy::Gpu }, Output::Spawn { id, policy: Policy::Renderer }] + ob);
             assert forall|k: int| 0 <= k < out.len() && k >= 2 implies !((#[trigger] out[k]) is Spawn || out[k] is ToGpu) by {
                 assert(out[k] == ob[k - 2]);
@@ -688,7 +699,7 @@ pub proof fn theorem_channel_only_own_tab(rules: Seq<clazel_psl::spec::Rule>, ur
             lemma_channel_open_tab(rules, urls, fetch, s, url, script);
         },
         Event::NavigateTab { tab, url } => {
-            lemma_begin_no_surface(rules, urls, fetch, s, tab, url);
+            lemma_begin_no_surface(rules, urls, fetch, s, tab, url, clazel_fetch::request::spec::get_req());
         },
         Event::Net { conn, input } => {
             lemma_channel_net(rules, urls, fetch, s, conn, input);

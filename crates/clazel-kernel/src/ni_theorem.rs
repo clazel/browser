@@ -37,7 +37,7 @@ pub proof fn lemma_navigate_declassify(rules: Seq<clazel_psl::spec::Rule>, urls:
         crate::unwind_base::lemma_find_contained(urls, s1, r);
         if lock_of_url(urls, resolved, s1.next_id) is Some {
             crate::domain::lemma_declassified_is_navigate_tab(rules, urls, fetch, s1, e, dn);
-            crate::net_rel::lemma_begin_consistency(rules, urls, fetch, d, s1, s2, r.tab, resolved);
+            crate::net_rel::lemma_begin_consistency(rules, urls, fetch, d, s1, s2, r.tab, resolved, clazel_fetch::request::spec::get_req());
             crate::unwind_base::lemma_outputs_for_same_rb(rules, urls, d, s1, s2, s1b, s2b, o1, o2);
         } else {
             // The kernel answers the sender with an error; the NavigateTab is ignored.
@@ -121,7 +121,7 @@ pub proof fn lemma_kept_step(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
             crate::unwinding::lemma_open_tab_consistency(rules, urls, fetch, d, s1, s2, url, script);
         },
         Event::NavigateTab { tab, url } => {
-            crate::net_rel::lemma_begin_consistency(rules, urls, fetch, d, s1, s2, tab, url);
+            crate::net_rel::lemma_begin_consistency(rules, urls, fetch, d, s1, s2, tab, url, clazel_fetch::request::spec::get_req());
         },
         Event::Net { conn, input } => {
             crate::net_rel::lemma_net_consistency(rules, urls, fetch, d, s1, s2, conn, input);

@@ -18,14 +18,14 @@ pub open spec fn no_show(out: Seq<Output>) -> bool {
 }
 
 /// The outputs of `begin_navigation` show nothing.
-proof fn lemma_begin_no_show(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, url: Seq<u32>)
+proof fn lemma_begin_no_show(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, url: Seq<u32>, req: clazel_fetch::request::spec::Req)
     requires
         crate::invariant::renderers_wf(urls, s.renderers, s.next_id),
     ensures
-        no_show(begin_navigation(rules, urls, fetch, s, tab, url).1),
+        no_show(begin_navigation(rules, urls, fetch, s, tab, url, req).1),
 {
-    crate::net_theorems::lemma_begin_outputs(rules, urls, fetch, s, tab, url);
-    let out = begin_navigation(rules, urls, fetch, s, tab, url).1;
+    crate::net_theorems::lemma_begin_outputs(rules, urls, fetch, s, tab, url, req);
+    let out = begin_navigation(rules, urls, fetch, s, tab, url, req).1;
     assert forall|k: int| 0 <= k < out.len() implies !((#[trigger] out[k]) is Show) by {
         match out[k] {
             Output::Show { .. } => {},
@@ -76,11 +76,22 @@ proof fn lemma_handle_no_show(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, 
 {
     let out = handle_message(rules, urls, fetch, s, r, m).1;
     match m {
+        clazel_ipc::message::spec::Message::Submit { url, method, content_type, body } => {
+            if let Some(req) = submit_request(r, method, content_type, body) {
+            if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+                if let Some(resolved) = (urls.resolve)(r.url, relative) {
+                    if lock_of_url(urls, resolved, s.next_id) is Some {
+                        lemma_begin_no_show(rules, urls, fetch, s, r.tab, resolved, req);
+                    }
+                }
+            }
+        }
+        },
         clazel_ipc::message::spec::Message::Navigate { url } => {
             if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
                 if let Some(resolved) = (urls.resolve)(r.url, relative) {
                     if lock_of_url(urls, resolved, s.next_id) is Some {
-                        lemma_begin_no_show(rules, urls, fetch, s, r.tab, resolved);
+                        lemma_begin_no_show(rules, urls, fetch, s, r.tab, resolved, clazel_fetch::request::spec::get_req());
                     }
                 }
             }
@@ -139,13 +150,13 @@ proof fn lemma_other_events_no_show(rules: Seq<clazel_psl::spec::Rule>, urls: Ur
                     let rn = Renderer { committed: false, id, tab: id, url, lock, pending: None };
                     let sp = State { renderers: s.renderers.push(rn), next_id: id + 1, ..s };
                     crate::invariant::lemma_open_tab_push_wf(rules, urls, s, url, lock, false);
-                    lemma_begin_no_show(rules, urls, fetch, sp, id, url);
-                    lemma_cons_no_show(Output::Spawn { id, policy: Policy::Renderer }, begin_navigation(rules, urls, fetch, sp, id, url).1);
+                    lemma_begin_no_show(rules, urls, fetch, sp, id, url, clazel_fetch::request::spec::get_req());
+                    lemma_cons_no_show(Output::Spawn { id, policy: Policy::Renderer }, begin_navigation(rules, urls, fetch, sp, id, url, clazel_fetch::request::spec::get_req()).1);
                 }
             }
         },
         Event::NavigateTab { tab, url } => {
-            lemma_begin_no_show(rules, urls, fetch, s, tab, url);
+            lemma_begin_no_show(rules, urls, fetch, s, tab, url, clazel_fetch::request::spec::get_req());
         },
         Event::Net { conn, input } => {
             crate::net_theorems::theorem_net_only_to_tab(rules, urls, fetch, s, conn, input);

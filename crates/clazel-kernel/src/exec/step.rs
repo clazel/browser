@@ -1231,7 +1231,7 @@ pub fn begin_navigation_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F
         s.next_id < 0xFFFF_FFFF_FFFF_FFFFu64,
         s.next_conn as nat + conn_headroom() <= 0xFFFF_FFFF_FFFF_FFFFnat,
     ensures
-        result_view(out) == begin_navigation(crate::contract::psl(), urls.urls(), fetch.fetch(), s@, tab as nat, url@),
+        result_view(out) == begin_navigation(crate::contract::psl(), urls.urls(), fetch.fetch(), s@, tab as nat, url@, clazel_fetch::request::spec::get_req()),
         renderers_ok::<F>(out.0.renderers@),
         super::subfetch::subfetches_ok::<F>(out.0.subfetches@),
         keeps_storage_jar_now(s, out.0),

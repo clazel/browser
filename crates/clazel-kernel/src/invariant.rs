@@ -738,12 +738,12 @@ pub proof fn lemma_step_preserves_wf(rules: Seq<clazel_psl::spec::Rule>, urls: U
                 if script is None {
                     let rn = Renderer { committed: false, id, tab: id, url, lock, pending: None };
                     let s1 = State { renderers: s.renderers.push(rn), next_id: id + 1, ..s };
-                    crate::net_wf::lemma_begin_navigation_wf(rules, urls, fetch, s1, id, url);
+                    crate::net_wf::lemma_begin_navigation_wf(rules, urls, fetch, s1, id, url, clazel_fetch::request::spec::get_req());
                 }
             }
         },
         Event::NavigateTab { tab, url } => {
-            crate::net_wf::lemma_begin_navigation_wf(rules, urls, fetch, s, tab, url);
+            crate::net_wf::lemma_begin_navigation_wf(rules, urls, fetch, s, tab, url, clazel_fetch::request::spec::get_req());
         },
         // Item 5.18: a GPU process's frame keeps the state or kills its
         // renderer (as a renderer's disallowed frame does); a resize and an
@@ -802,11 +802,22 @@ pub proof fn lemma_step_preserves_wf(rules: Seq<clazel_psl::spec::Rule>, urls: U
                                 lemma_storage_call_wf(s, r, m);
                             }
                         },
-                        clazel_ipc::message::spec::Message::Navigate { url } => {
+                        clazel_ipc::message::spec::Message::Submit { url, method, content_type, body } => {
+            if let Some(req) = submit_request(r, method, content_type, body) {
                             if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
                                 if let Some(resolved) = (urls.resolve)(r.url, relative) {
                                     if lock_of_url(urls, resolved, s.next_id) is Some {
-                                        crate::net_wf::lemma_begin_navigation_wf(rules, urls, fetch, s, r.tab, resolved);
+                                        crate::net_wf::lemma_begin_navigation_wf(rules, urls, fetch, s, r.tab, resolved, req);
+                                    }
+                                }
+                            }
+                        }
+        },
+        clazel_ipc::message::spec::Message::Navigate { url } => {
+                            if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+                                if let Some(resolved) = (urls.resolve)(r.url, relative) {
+                                    if lock_of_url(urls, resolved, s.next_id) is Some {
+                                        crate::net_wf::lemma_begin_navigation_wf(rules, urls, fetch, s, r.tab, resolved, clazel_fetch::request::spec::get_req());
                                     }
                                 }
                             }

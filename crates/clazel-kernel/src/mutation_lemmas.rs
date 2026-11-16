@@ -400,7 +400,7 @@ pub proof fn ml_begin_closes(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
         lock_of_url(urls, url, s.next_id) is Some,
         closes_of_tab(s.conns, tab).len() > 0,
     ensures
-        begin_navigation(rules, urls, fetch, s, tab, url).1[0] == closes_of_tab(s.conns, tab)[0],
+        begin_navigation(rules, urls, fetch, s, tab, url, clazel_fetch::request::spec::get_req()).1[0] == closes_of_tab(s.conns, tab)[0],
 {
 }
 

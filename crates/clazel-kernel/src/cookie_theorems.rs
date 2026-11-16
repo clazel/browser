@@ -134,6 +134,8 @@ pub proof fn theorem_cookie_confidentiality(rules: Seq<clazel_psl::spec::Rule>, 
 // ---------------------------------------------------------------------
 
 /// **`theorem_cookie_integrity`.**
+#[verifier::spinoff_prover]
+#[verifier::rlimit(100)]
 pub proof fn theorem_cookie_integrity(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
     requires
         reachable(rules, urls, fetch, s),
@@ -148,11 +150,21 @@ pub proof fn theorem_cookie_integrity(rules: Seq<clazel_psl::spec::Rule>, urls: 
                 let r = s.renderers[i];
                 if let Some(m) = accepted_message(r, bytes) {
                     crate::lock::lemma_storage_call_frame(s, r, m);
-                    if let clazel_ipc::message::spec::Message::Navigate { url } = m {
+                    if let clazel_ipc::message::spec::Message::Submit { url, method, content_type, body } = m {
+        if let Some(req) = submit_request(r, method, content_type, body) {
                         if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
                             if let Some(resolved) = (urls.resolve)(r.url, relative) {
                                 if lock_of_url(urls, resolved, s.next_id) is Some {
-                                    crate::unwind_base::lemma_navigation_frame(rules, urls, fetch, s, r.tab, resolved, script_document(seq![]));
+                                    crate::unwind_base::lemma_navigation_frame(rules, urls, fetch, s, r.tab, resolved, req, script_document(seq![]));
+                                }
+                            }
+                        }
+                    }
+    } else if let clazel_ipc::message::spec::Message::Navigate { url } = m {
+                        if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+                            if let Some(resolved) = (urls.resolve)(r.url, relative) {
+                                if lock_of_url(urls, resolved, s.next_id) is Some {
+                                    crate::unwind_base::lemma_navigation_frame(rules, urls, fetch, s, r.tab, resolved, clazel_fetch::request::spec::get_req(), script_document(seq![]));
                                 }
                             }
                         }
@@ -161,7 +173,7 @@ pub proof fn theorem_cookie_integrity(rules: Seq<clazel_psl::spec::Rule>, urls: 
             }
         },
         Event::NavigateTab { tab, url } => {
-            crate::unwind_base::lemma_navigation_frame(rules, urls, fetch, s, tab, url, script_document(seq![]));
+            crate::unwind_base::lemma_navigation_frame(rules, urls, fetch, s, tab, url, clazel_fetch::request::spec::get_req(), script_document(seq![]));
         },
         Event::Net { conn, input } => {
             crate::unwind_base::lemma_net_frame(rules, urls, fetch, s, conn, input);

@@ -309,7 +309,7 @@ pub proof fn lemma_co_begin(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fe
             let old = s.renderers[i];
             let nav = Navigation { url, fetch: clazel_fetch::transducer::spec::start(parsed).0, partition: crate::domain::domain_of_renderer(rules, old) };
             let u = State { renderers: s.renderers.update(i, Renderer { pending: Some(nav), ..old }), ..s };
-            begin_navigation(rules, urls, fetch, s, tab, url) == carry_out(urls, u, tab, nav.partition, None, clazel_fetch::transducer::spec::start(parsed).1)
+            begin_navigation(rules, urls, fetch, s, tab, url, clazel_fetch::request::spec::get_req()) == carry_out(urls, u, tab, nav.partition, None, clazel_fetch::transducer::spec::start(parsed).1)
         }),
 {
     reveal(Seq::filter);
@@ -478,7 +478,7 @@ pub proof fn lemma_ce_e1(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
     assert(u.conns =~= Seq::<Connection>::empty());
     assert(u.conns.push(ce_c0()) =~= seq![ce_c0()]);
     assert(u.renderers =~= seq![Renderer { pending: Some(ce_nav0()), ..ce_r0() }]);
-    assert(step(rules, urls, fetch, s1, ce_ev1()) == begin_navigation(rules, urls, fetch, s1, 0, Seq::<u32>::empty()));
+    assert(step(rules, urls, fetch, s1, ce_ev1()) == begin_navigation(rules, urls, fetch, s1, 0, Seq::<u32>::empty(), clazel_fetch::request::spec::get_req()));
 }
 
 /// The empty frame does not decode.

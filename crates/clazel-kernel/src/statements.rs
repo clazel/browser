@@ -423,7 +423,8 @@ pub open spec fn navigation_event(e: Event) -> bool {
         Event::OpenTab { .. } => true,
         Event::NavigateTab { .. } => true,
         Event::Net { .. } => true,
-        Event::FromRenderer { bytes, .. } => decode_renderer_frame(bytes) matches Some(clazel_ipc::message::spec::Message::Navigate { .. }),
+        Event::FromRenderer { bytes, .. } => decode_renderer_frame(bytes) matches Some(clazel_ipc::message::spec::Message::Navigate { .. })
+            || decode_renderer_frame(bytes) matches Some(clazel_ipc::message::spec::Message::Submit { .. }),
         _ => false,
     }
 }
