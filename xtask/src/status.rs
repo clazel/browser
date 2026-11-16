@@ -64,6 +64,10 @@ const PLACES: &[(&str, Place)] = &[
     ("clazel-html", Place::Renderer),
     ("clazel-treebuilder", Place::Renderer),
     ("clazel-dom", Place::Renderer),
+    // Phase 7's script-facing crates (item 7.1 creates them empty).
+    ("clazel-web", Place::Renderer),
+    ("clazel-webidl", Place::Renderer),
+    ("clazel-js-regexp", Place::Renderer),
     ("clazel-text", Place::Renderer),
     ("clazel-css", Place::Renderer),
     ("clazel-selectors", Place::Renderer),
