@@ -377,22 +377,29 @@ code.
   - ACL2 `x86isa` (acl2/acl2 at 33b05575, BSD-3-Clause, 2.6 MB);
   - the Sail x86 model translated from it (rems-project/sail-x86-from-acl2
     at 0c6c023d, 0.8 MB);
-  - a Sail x86 model written from the Intel manuals (shina-lab/sail-x86 at
-    1829cb6e, MIT, 0.6 MB);
   - Intel's SDM volume 2, version 093, **pinned by URL and SHA-256 only**:
     Intel's terms forbid redistribution;
+  - the Arm Architecture Reference Manual for A-profile (DDI 0487), issue
+    M.d (Arm's early-access label), **pinned by URL, size (129 MB) and
+    SHA-256 only**: Arm's terms forbid copying it;
   - the Sail Armv9.4-A model (rems-project/sail-arm at 5416ef6b,
     BSD-3-Clause-Clear, 3.9 MB);
   - Arm's machine-readable specification (BSD-3-Clause, so it may be
     redistributed), release 2026-09: the licence and README are vendored, and
     `Instructions.json` (116 MB, over the size budget) is pinned by
     SHA-256.
-- **Not independent, as the pins show:** the Sail x86 model that this item
-  names is a mechanical translation of the ACL2 model, and the Sail Arm model
-  is a translation of Arm's own ASL, the same text as the machine-readable
-  specification. So J.3's and J.4's "second source" is not independent unless
-  a person accepts `shina-lab/sail-x86` for x86-64, and for A64 no second
-  formal source was found. See the two READMEs.
+- **The two formal models are not independent, as the pins show:** the Sail
+  x86 model this item names is a mechanical translation of the ACL2 model,
+  and the Sail Arm model is a translation of Arm's own ASL, the same text as
+  the machine-readable specification. **Decision (2026-11-16), by the user:**
+  the second transcription comes from the vendor's manual, not from another
+  formal model (see the notes under J.3 and J.4). The Sail x86 translation is
+  kept only as a check on our reading of ACL2, and **it is not independent of
+  ACL2**. See the two crate READMEs.
+- **Considered and rejected:** `shina-lab/sail-x86`, a Sail x86 model written
+  from the Intel manuals, as the second x86-64 source. It has a single
+  author, no review, and leaves floating-point arithmetic external
+  (`extern`, supplied by its emulator). It is not pinned or vendored.
 - **Reference disassemblers:** `iced-x86` 1.22.0 (with `lazy_static`) and
   `yaxpeax-arm` 0.5.0 (with `yaxpeax-arch`, `bitvec` and four small
   packages), each a `test` row in DEPENDENCIES.md, dev-dependencies of the new
@@ -446,6 +453,18 @@ code.
   subset.
 - Hardware differential tests on the Linux and Windows runners.
 
+*Later note (2026-11-16):* the sources, decided by the user.
+- The **primary spec** is transcribed from the ACL2 `x86isa` model.
+- The **independent transcription** is made from Intel's SDM, its prose and
+  pseudocode (volume 2, pinned in J.2), not from another formal model.
+- A **different session** writes the independent transcription, and it does
+  not read the primary transcription.
+- The **hardware differential tests** are the further check against both.
+- The Sail x86 translation (`sail-x86-from-acl2`) is kept only as a check on
+  our reading of ACL2. It is a machine translation of ACL2, so **it is not
+  independent of it** and does not count as a second source. The crate header
+  says so.
+
 ### J.4 `clazel-a64` (L)
 
 As J.3. The subset is integer ALU, compare and conditional select, loads and
@@ -453,6 +472,17 @@ stores with register base and scaled register or immediate offset, `b`,
 `b.cond`, `cbz`/`cbnz`, `ret` in the epilogue only, and scalar double FP. It
 has fixed 4-byte words and no prefixes. Hardware tests run on the macOS
 runner.
+
+*Later note (2026-11-16):* the sources, decided by the user.
+- The **primary spec** is transcribed from the Sail Arm model and Arm's ASL,
+  which are one source: the Sail model is a translation of the ASL, which
+  Arm's machine-readable specification also carries.
+- The **independent transcription** is made from the Arm Architecture
+  Reference Manual's prose (DDI 0487, pinned in J.2), not from another formal
+  model.
+- A **different session** writes the independent transcription, and it does
+  not read the primary transcription.
+- The **hardware differential tests** are the further check against both.
 
 ### J.5 `clazel-lir`: syntax, typing, semantics (M)
 
@@ -571,8 +601,9 @@ validator is at tier 2.
 - **x86-64's semantics is large, and its two public formal models may share
   ancestry.** This is the assumption the safety claim rests on. Mitigations:
   - keep the subset small, with canonical encodings only;
-  - check the independence of the two sources in J.2, and record it in the
-    crate header if they are not independent;
+  - the two formal models are not independent (J.2), so the second
+    transcription comes from Intel's SDM, written by a different session
+    (J.3's note);
   - hardware differential tests on two OSes;
   - a decoder differential over every accepted encoding.
 - **The code process is new trusted code with a powerful handle.** It is

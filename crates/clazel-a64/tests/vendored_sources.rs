@@ -11,6 +11,28 @@ mod sail_arm {
 mod arm_mrs {
     include!("generated/arm_mrs.rs");
 }
+mod arm_arm {
+    include!("generated/arm_arm.rs");
+}
+
+#[test]
+fn the_arm_arm_is_pinned_and_not_vendored() {
+    assert_eq!(arm_arm::PINS.len(), 1);
+    for p in arm_arm::PINS {
+        assert_eq!(p.sha256.len(), 64, "{}", p.file);
+        assert!(p.size > 0, "{}", p.file);
+        assert!(
+            !Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests")
+                .join("data")
+                .join("arm-arm")
+                .join(p.file)
+                .exists(),
+            "{}: Arm's PDF must not be vendored",
+            p.file
+        );
+    }
+}
 
 fn dir(suite: &str) -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

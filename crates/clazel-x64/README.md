@@ -10,16 +10,29 @@ pinned the sources the semantics will be written against, in `tests/data/`:
 |---|---|---|
 | `acl2-x86isa` | the ACL2 x86isa model (BSD-3-Clause), files of the J.3 subset | 2.6 MB, vendored |
 | `sail-x86-from-acl2` | the Sail model translated from it (BSD-3-Clause, BSD-2-Clause) | 0.8 MB, vendored |
-| `sail-x86-shina` | a Sail model written from the Intel manuals (MIT) | 0.6 MB, vendored |
-| `intel-sdm` | Intel SDM volume 2, version 093 | pinned by URL and SHA-256, not vendored (Intel's terms forbid redistribution) |
+| `intel-sdm` | Intel SDM volume 2, version 093 | pinned by URL, size and SHA-256, not vendored (Intel's terms forbid redistribution) |
 
 Each has a `SOURCE.md` with the upstream, the commit (or the SHA-256) and the
 licence. The tables in `tests/generated/` list every file's size and hash.
 
-## Are the two x86 models independent? No.
+## Where the transcriptions come from
 
-jit.md item J.2 requires this to be read before the ACL2 and Sail models count
-as two sources. The finding:
+Decided by the user on 2026-11-16 (jit.md, the note under J.3):
+
+- The **primary spec** is transcribed from the ACL2 x86isa model.
+- The **independent transcription** is made from the Intel SDM's prose and
+  pseudocode, by a **different session** that does not read the primary
+  transcription.
+- The **hardware differential tests** (exit criterion 3) are the further
+  check against both.
+- The Sail x86 translation is kept **only as a check on our reading of
+  ACL2**. It is **not independent of ACL2**, and the crate header must not
+  call it a second source.
+
+## The two x86 models are not independent
+
+jit.md item J.2 required this to be read before the ACL2 and Sail models
+count as two sources. The finding:
 
 - **The Sail model that J.2 names, `rems-project/sail-x86-from-acl2`, is a
   mechanical translation of the ACL2 x86isa model.** Its README says so in its
@@ -38,34 +51,13 @@ as two sources. The finding:
 - So an error in the ACL2 model's reading of the SDM is in the Sail model as
   well, and a differential test between them tests the translator (and
   Sail's typing of it), not the semantics. They share their authors' ancestry,
-  their reading of the manual and their test evidence. **They are one source
-  for the purpose of J.2.**
+  their reading of the manual and their test evidence. **They are one source.**
 - The translated model is also narrower: it has no SSE2 scalar double
-  instruction (the ACL2 books in `machine/instructions/fp/` were not translated),
-  so it could not check the `addsd`/`sqrtsd`/`ucomisd` part of the subset even
-  as a copy.
+  instruction (the ACL2 books in `machine/instructions/fp/` were not
+  translated), so it cannot even check the `addsd`/`sqrtsd`/`ucomisd` part of
+  the subset as a copy.
 
-A second source that is not a translation:
-
-- **`shina-lab/sail-x86`** (vendored as `sail-x86-shina`, MIT) is a Sail model
-  written from the Intel SDM and the AMD manual, and its README and files
-  mention neither ACL2 nor x86isa. It covers SSE2 scalar double. Its
-  authorship is one person (Rui Ueyama, with many commits carrying an AI
-  co-author line); it was created in 2026-03 and has no external review that
-  we found; its floating-point arithmetic is `extern`, supplied by its
-  emulator; it states hardware agreement from KVM runs on two hosts (its commit
-  messages give counts of passing cases). It is independent in lineage, and
-  its weight as evidence is a person's decision.
-- Other sources, not pinned: the K framework's x86-64 semantics (Dasgupta et
-  al., PLDI 2019, derived from Stoke's specifications, so a separate
-  lineage from ACL2) and Intel's XED tables (machine-readable encodings, not
-  semantics). A person may prefer one of them.
-- The strongest evidence the plan has is not a model at all: exit criterion 3's
-  hardware differential tests (running every template on real CPUs on two
-  OSes) and the decoder differential against `iced-x86`.
-
-What this means for item J.3 and for the "Risks" paragraph of jit.md: unless a
-person accepts `sail-x86-shina` (or another source) as the second, the
-"independent transcription from the second source" of J.3 is an independent
-transcription of the *same* ACL2 semantics (or of the SDM's pseudocode), and
-the crate header must say that, as jit.md's Risks section already requires.
+Another Sail x86 model, `shina-lab/sail-x86`, was considered as the second
+source and rejected: a single author, no review we could find, and its
+floating-point arithmetic left external. Other formal models (the K
+framework's x86-64 semantics, Intel's XED encoding tables) are not pinned.

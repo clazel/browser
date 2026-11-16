@@ -11,9 +11,6 @@ mod acl2_x86isa {
 mod sail_x86_from_acl2 {
     include!("generated/sail_x86_from_acl2.rs");
 }
-mod sail_x86_shina {
-    include!("generated/sail_x86_shina.rs");
-}
 mod intel_sdm {
     include!("generated/intel_sdm.rs");
 }
@@ -46,15 +43,6 @@ fn sail_x86_from_acl2_files_have_their_listed_sizes() {
         .map(|f| (f.path, f.size))
         .collect();
     check("sail-x86-from-acl2", &files);
-}
-
-#[test]
-fn sail_x86_shina_files_have_their_listed_sizes() {
-    let files: Vec<_> = sail_x86_shina::FILES
-        .iter()
-        .map(|f| (f.path, f.size))
-        .collect();
-    check("sail-x86-shina", &files);
 }
 
 #[test]

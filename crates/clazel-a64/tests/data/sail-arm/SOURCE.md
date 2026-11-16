@@ -26,7 +26,10 @@ and C snapshots, and the other versions (`arm-v8.5-a`, `arm-v9.3-a`).
 automatic ASL-to-Sail translation tool" and that the ASL came as a snapshot
 provided by Arm. So it is not independent of Arm's machine-readable
 specification (`arm-mrs`, Arm's 2026-09 release of the same ASL): see
-`crates/clazel-a64/README.md`.
+`crates/clazel-a64/README.md`. By the user's decision of 2026-11-16 (jit.md,
+the note under J.4) the primary spec is transcribed from this model and
+Arm's ASL, and the independent transcription from the Arm Architecture
+Reference Manual's prose (`arm-arm`).
 
 To update, copy the files from a newer commit, change the commit above, and
 run `cargo xtask testdata`. `xtask/src/testdata/isa.rs` writes

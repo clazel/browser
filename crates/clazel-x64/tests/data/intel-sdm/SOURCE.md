@@ -11,7 +11,10 @@ https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.h
 on 2026-11-16 (the link there, https://cdrdv2.intel.com/v1/dl/getContent/671110,
 redirects to the URL above). The encoding tables of jit.md item J.3 are
 Appendix A (the opcode maps) and the "Instruction Operand Encoding" tables of
-each instruction page; the operations are the pseudocode of each page.
+each instruction page; the operations are the pseudocode of each page. By the
+user's decision of 2026-11-16 (jit.md, the note under J.3) this is the source
+of the independent transcription, written by a different session from the
+primary one.
 
 The PDF is not in this repository, because Intel's terms of use
 (https://www.intel.com/content/www/us/en/legal/terms-of-use.html) say its

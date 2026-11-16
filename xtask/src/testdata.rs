@@ -207,10 +207,10 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
     // JIT item J.2: instruction-set sources (see isa.rs).
     ("acl2-x86isa", isa::convert_acl2_x86isa, &[]),
     ("sail-x86-from-acl2", isa::convert_sail_x86_from_acl2, &[]),
-    ("sail-x86-shina", isa::convert_sail_x86_shina, &[]),
     ("intel-sdm", isa::convert_intel_sdm, &[]),
     ("sail-arm", isa::convert_sail_arm, &[]),
     ("arm-mrs", isa::convert_arm_mrs, &[]),
+    ("arm-arm", isa::convert_arm_arm, &[]),
 ];
 
 /// Suites whose directory is a tree of upstream paths, not a flat list: the
@@ -223,7 +223,6 @@ const TREE_SUITES: &[&str] = &[
     "test262",
     "acl2-x86isa",
     "sail-x86-from-acl2",
-    "sail-x86-shina",
     "sail-arm",
     "arm-mrs",
 ];

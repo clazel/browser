@@ -13,9 +13,8 @@
 //! - `sail-x86-from-acl2` (`clazel-x64`): the Sail model that is a
 //!   mechanical translation of the one above (see the crate's README: it is
 //!   not independent of it).
-//! - `sail-x86-shina` (`clazel-x64`): a Sail model written from the Intel
-//!   manuals, the candidate second source.
-//! - `intel-sdm` (`clazel-x64`): Intel's SDM volume 2, pinned only.
+//! - `intel-sdm` (`clazel-x64`) and `arm-arm` (`clazel-a64`): the vendors'
+//!   manuals, pinned only (their terms do not allow redistribution).
 //! - `sail-arm` (`clazel-a64`): the Sail Arm model, the A64 base
 //!   instructions and the shared pseudocode they call.
 //! - `arm-mrs` (`clazel-a64`): Arm's machine-readable specification, the
@@ -30,8 +29,6 @@ use super::inventory::{inventory, listed_hashes, render};
 pub const ACL2_X86ISA_ROOTS: &[&str] = &["README", "portcullis", "utils", "machine"];
 /// The translated Sail model's roots.
 pub const SAIL_X86_FROM_ACL2_ROOTS: &[&str] = &["README.md", "LICENCE", "model"];
-/// The Intel-manual-based Sail model's roots.
-pub const SAIL_X86_SHINA_ROOTS: &[&str] = &["README.md", "docs", "model"];
 /// The Sail Arm model's roots.
 pub const SAIL_ARM_ROOTS: &[&str] = &["README.md", "src"];
 /// The files of Arm's package that are vendored.
@@ -66,16 +63,6 @@ pub fn convert_sail_x86_from_acl2(dir: &Path) -> Result<String, String> {
         "sail-x86-from-acl2",
         SAIL_X86_FROM_ACL2_ROOTS,
         "Sail x86 model translated from the ACL2 one (jit.md item J.2); not independent of it.",
-    )
-}
-
-/// `sail-x86-shina`.
-pub fn convert_sail_x86_shina(dir: &Path) -> Result<String, String> {
-    tree(
-        dir,
-        "sail-x86-shina",
-        SAIL_X86_SHINA_ROOTS,
-        "Sail x86 model written from the Intel manuals (jit.md item J.2), the candidate second source.",
     )
 }
 
@@ -183,6 +170,19 @@ pub fn convert_intel_sdm(dir: &Path) -> Result<String, String> {
     render_pins(
         "intel-sdm",
         "Intel SDM volume 2, pinned by URL and SHA-256 (Intel's terms do not allow redistribution).",
+        &pins,
+        true,
+    )
+}
+
+/// `arm-arm`: Arm Architecture Reference Manual for A-profile, nothing
+/// vendored, one pin (or, until a person fills it in, a placeholder: see the
+/// suite's `SOURCE.md`).
+pub fn convert_arm_arm(dir: &Path) -> Result<String, String> {
+    let pins = pins(dir)?;
+    render_pins(
+        "arm-arm",
+        "Arm Architecture Reference Manual for A-profile (DDI 0487), pinned by URL and SHA-256 (Arm's terms do not allow redistribution).",
         &pins,
         true,
     )

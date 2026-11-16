@@ -12,7 +12,9 @@ extended by Thomas Bauereiss (supervised by Alasdair Armstrong and Peter
 Sewell). **This model is therefore not an independent source from
 `acl2-x86isa`**: the functions keep the ACL2 names (`gpr_add_spec_1`,
 `jcc_cmovcc_setcc_spec`) and the structure of the ACL2 books line by line.
-The analysis is in `crates/clazel-x64/README.md`.
+The analysis is in `crates/clazel-x64/README.md`. By the user's decision of
+2026-11-16 (jit.md, the note under J.3) it is kept **only as a check on our
+reading of ACL2**; the independent transcription comes from Intel's SDM.
 
 Copied byte for byte, from the repository root, `README.md` and `LICENCE`; from
 `model/`, the files of the integer subset of jit.md item J.3: the prelude and
