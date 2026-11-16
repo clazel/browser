@@ -1144,7 +1144,8 @@ pub proof fn lemma_subs_b(
         p <= q <= end,
         ms.len() > 0 ==> p < q,
         match subclass_selectors(v, p, end, acc, np) {
-            Some((res, q2)) => q2 == q && res.len() == acc.len() + ms.len(),
+            Some((res, q2)) => q2 == q && res.len() == acc.len() + ms.len() && forall|j: int|
+                0 <= j < ms.len() ==> #[trigger] relx(res, acc.len() as int, ms, j),
             None => false,
         },
     decreases fuel,
@@ -1172,6 +1173,23 @@ pub proof fn lemma_subs_b(
                                 assert(next2 == next);
                                 lemma_subs_b(v, next, end, acc.push(value), np, (fuel - 1) as nat, ms1, q1, in_has);
                                 assert(ms =~= seq![m] + ms1);
+                                if let Some((res, q2)) = subclass_selectors(v, p, end, acc, np) {
+                                    let acc2 = acc.push(value);
+                                    lemma_subs_prefix(v, next, end, acc2, np);
+                                    assert(res.subrange(0, acc2.len() as int) == acc2);
+                                    assert(res.subrange(0, acc2.len() as int)[acc.len() as int] == res[acc.len() as int]);
+                                    assert(res[acc.len() as int] == value);
+                                    assert forall|j: int| 0 <= j < ms.len() implies #[trigger] relx(res, acc.len() as int, ms, j) by {
+                                        reveal(relx);
+                                        if j == 0 {
+                                            assert(rel_simple(res[acc.len() as int], ms[0]));
+                                        } else {
+                                            assert(relx(res, acc2.len() as int, ms1, j - 1));
+                                            assert(ms1[j - 1] == ms[j]);
+                                            assert(res[acc2.len() as int + (j - 1)] == res[acc.len() as int + j]);
+                                        }
+                                    }
+                                }
                             },
                             _ => {},
                         }
@@ -1405,7 +1423,8 @@ pub proof fn lemma_subs_b_res(
         p <= q <= end,
         ms.len() > 0 ==> p < q,
         match subs_res(v, p, end, acc, np) {
-            Some((res, q2)) => q2 == q && res.len() == acc.len() + ms.len(),
+            Some((res, q2)) => q2 == q && res.len() == acc.len() + ms.len() && forall|j: int|
+                0 <= j < ms.len() ==> #[trigger] relx(res, acc.len() as int, ms, j),
             None => false,
         },
 {
@@ -1521,13 +1540,18 @@ pub proof fn lemma_compound_b_found(
         boundary(v, q, end),
         p < q <= end,
         match comp_res(v, p, end, np) {
-            Some((res, q2)) => q2 == q && res.len() > 0,
+            Some((res, q2)) => q2 == q && res.len() == 1 + ms.len() && res[0] == value && forall|j: int|
+                0 <= j < ms.len() ==> #[trigger] relx(res, 1, ms, j),
             None => false,
         },
 {
     lemma_comp_unfold(v, p, end, np);
     lemma_subs_b_res(v, next, end, seq![value], np, i_fuel(next, end), ms, q, in_has);
     lemma_subs_facts_res(v, next, end, seq![value], np);
+    if let Some((res, _)) = subs_res(v, next, end, seq![value], np) {
+        assert(res.subrange(0, 1) == seq![value]);
+        assert(res.subrange(0, 1)[0] == res[0]);
+    }
 }
 
 /// A compound selector that does not begin with a type selector, as the transcription reads it.
@@ -1550,7 +1574,8 @@ pub proof fn lemma_compound_b_absent(
         boundary(v, q, end),
         p < q <= end,
         match comp_res(v, p, end, np) {
-            Some((res, q2)) => q2 == q && res.len() > 0,
+            Some((res, q2)) => q2 == q && res.len() == ms.len() && forall|j: int|
+                0 <= j < ms.len() ==> #[trigger] relx(res, 0, ms, j),
             None => false,
         },
 {
@@ -1558,7 +1583,8 @@ pub proof fn lemma_compound_b_absent(
     lemma_subs_b_res(v, p, end, Seq::<Simple>::empty(), np, i_fuel(p, end), ms, q, in_has);
 }
 
-/// A compound selector the transcription reads, the spec reads too, to the same place.
+/// A compound selector the transcription reads, the spec reads too, to the same place, with the
+/// transcription as its counterpart.
 pub proof fn lemma_compound_b(
     v: Seq<ComponentValue>,
     p: int,
@@ -1576,7 +1602,7 @@ pub proof fn lemma_compound_b(
         p < q <= end,
         boundary(v, q, end),
         match comp_res(v, p, end, np) {
-            Some((res, q2)) => q2 == q && res.len() > 0,
+            Some((res, q2)) => q2 == q && rel_compound(res, mc),
             None => false,
         },
 {
@@ -1589,6 +1615,18 @@ pub proof fn lemma_compound_b(
                     match type_selector(v, p, end) {
                         Step::Found { value, next } => {
                             lemma_compound_b_found(v, p, end, np, value, next, ms, q3, in_has);
+                            if let Some((res, q2)) = comp_res(v, p, end, np) {
+                                assert(comp_off(res) == 1);
+                                assert(mc == (ICompound { ty: Some(t), subs: ms }));
+                                assert(rel_type(res[0], t));
+                                assert forall|k: int| 0 <= k < mc.subs.len() implies rel_simple(
+                                    #[trigger] res[comp_off(res) + k],
+                                    mc.subs[k],
+                                ) by {
+                                    assert(relx(res, 1, ms, k));
+                                    reveal(relx);
+                                }
+                            }
                         },
                         _ => {},
                     }
@@ -1601,6 +1639,20 @@ pub proof fn lemma_compound_b(
                 Some((ms, q3)) => {
                     assert(ms.len() > 0);
                     lemma_compound_b_absent(v, p, end, np, ms, q3, in_has);
+                    if let Some((res, q2)) = comp_res(v, p, end, np) {
+                        lemma_subs_facts_res(v, p, end, Seq::<Simple>::empty(), np);
+                        reveal(subs_res);
+                        reveal(comp_res);
+                        assert(comp_off(res) == 0);
+                        assert(mc == (ICompound { ty: None, subs: ms }));
+                        assert forall|k: int| 0 <= k < mc.subs.len() implies rel_simple(
+                            #[trigger] res[comp_off(res) + k],
+                            mc.subs[k],
+                        ) by {
+                            assert(relx(res, 0, ms, k));
+                            reveal(relx);
+                        }
+                    }
                 },
                 None => {},
             }
@@ -1608,7 +1660,6 @@ pub proof fn lemma_compound_b(
         None => {},
     }
 }
-
 
 // ------------------------------------------------------------------------------------
 // Complex selectors
@@ -2057,6 +2108,7 @@ pub proof fn lemma_units_a_desc(
 }
 
 /// The spec's loop over units that has a transcription is read the same by the transcription.
+#[verifier::rlimit(40)]
 pub proof fn lemma_units_a(
     v: Seq<ComponentValue>,
     p: int,
@@ -2140,6 +2192,200 @@ pub proof fn lemma_units_a(
                     lemma_units_a(v, after, end, cs2, bs2, np, (fuel - 1) as nat, c, mus1, mbs1, in_has);
                     lemma_units_a_desc(v, p, end, np, fuel, mus, mbs, in_has, next, after, mus1, mbs1);
                 },
+            }
+        }
+    }
+}
+
+
+/// The transcription's loop over units, when it succeeded with one compound selector.
+pub proof fn lemma_i_units_case_one(
+    v: Seq<ComponentValue>,
+    p: int,
+    end: int,
+    in_has: bool,
+    fuel: nat,
+    mus: Seq<ICompound>,
+    mbs: Seq<IComb>,
+    mc: ICompound,
+    q: int,
+)
+    requires
+        0 <= p < end <= v.len(),
+        i_units(v, p, end, cx0(), in_has, fuel) == Some((mus, mbs)),
+        i_compound(v, p, end, cx0(), in_has) == Some((mc, q)),
+        q >= end || i_skip_ws(v, q, end) >= end,
+    ensures
+        mus =~= seq![mc],
+        mbs.len() == 0,
+        fuel > 0,
+{
+    reveal_with_fuel(i_units, 2);
+}
+
+/// The transcription's loop over units, when it succeeded after a combinator.
+pub proof fn lemma_i_units_case_comb(
+    v: Seq<ComponentValue>,
+    p: int,
+    end: int,
+    in_has: bool,
+    fuel: nat,
+    mus: Seq<ICompound>,
+    mbs: Seq<IComb>,
+    mc: ICompound,
+    q: int,
+    r: int,
+)
+    requires
+        0 <= p < end <= v.len(),
+        i_units(v, p, end, cx0(), in_has, fuel) == Some((mus, mbs)),
+        i_compound(v, p, end, cx0(), in_has) == Some((mc, q)),
+        q < end,
+        r == i_skip_ws(v, q, end),
+        r < end,
+        i_comb_of(v[r]) is Some,
+    ensures
+        fuel > 0,
+        mus.len() >= 1,
+        mbs.len() >= 1,
+        mus[0] == mc,
+        mbs[0] == i_comb_of(v[r]).unwrap(),
+        i_skip_ws(v, r + 1, end) < end,
+        i_units(v, i_skip_ws(v, r + 1, end), end, cx0(), in_has, (fuel - 1) as nat) == Some(
+            (mus.drop_first(), mbs.drop_first()),
+        ),
+{
+    reveal_with_fuel(i_units, 2);
+    let r2 = i_skip_ws(v, r + 1, end);
+    if r2 < end {
+        if let Some((cs, bs)) = i_units(v, r2, end, cx0(), in_has, (fuel - 1) as nat) {
+            assert(mus =~= seq![mc] + cs);
+            assert(mbs =~= seq![i_comb_of(v[r]).unwrap()] + bs);
+            assert(mus.drop_first() =~= cs);
+            assert(mbs.drop_first() =~= bs);
+        }
+    }
+}
+
+/// The transcription's loop over units, when it succeeded after white space alone.
+pub proof fn lemma_i_units_case_desc(
+    v: Seq<ComponentValue>,
+    p: int,
+    end: int,
+    in_has: bool,
+    fuel: nat,
+    mus: Seq<ICompound>,
+    mbs: Seq<IComb>,
+    mc: ICompound,
+    q: int,
+    r: int,
+)
+    requires
+        0 <= p < end <= v.len(),
+        i_units(v, p, end, cx0(), in_has, fuel) == Some((mus, mbs)),
+        i_compound(v, p, end, cx0(), in_has) == Some((mc, q)),
+        q < end,
+        r == i_skip_ws(v, q, end),
+        r < end,
+        i_comb_of(v[r]) is None,
+    ensures
+        fuel > 0,
+        r > q,
+        mus.len() >= 1,
+        mbs.len() >= 1,
+        mus[0] == mc,
+        mbs[0] == IComb::Descendant,
+        i_units(v, r, end, cx0(), in_has, (fuel - 1) as nat) == Some((mus.drop_first(), mbs.drop_first())),
+{
+    reveal_with_fuel(i_units, 2);
+    if r > q {
+        if let Some((cs, bs)) = i_units(v, r, end, cx0(), in_has, (fuel - 1) as nat) {
+            assert(mus =~= seq![mc] + cs);
+            assert(mbs =~= seq![IComb::Descendant] + bs);
+            assert(mus.drop_first() =~= cs);
+            assert(mbs.drop_first() =~= bs);
+        }
+    }
+}
+
+/// What the transcription reads as a loop over units, the spec reads too.
+#[verifier::rlimit(40)]
+pub proof fn lemma_units_b(
+    v: Seq<ComponentValue>,
+    p: int,
+    end: int,
+    cs0: Seq<Seq<Simple>>,
+    bs0: Seq<Combinator>,
+    np: bool,
+    fuel: nat,
+    mus: Seq<ICompound>,
+    mbs: Seq<IComb>,
+    in_has: bool,
+)
+    requires
+        0 <= p < end <= v.len(),
+        no_fun(v, end),
+        i_units(v, p, end, cx0(), in_has, fuel) == Some((mus, mbs)),
+    ensures
+        match cloop_res(v, p, end, cs0, bs0, np) {
+            Some(c) => c.compounds.len() == cs0.len() + mus.len() && c.combinators.len() == bs0.len()
+                + mbs.len(),
+            None => false,
+        },
+    decreases fuel,
+{
+    lemma_cloop_unfold(v, p, end, cs0, bs0, np);
+    reveal_with_fuel(i_units, 2);
+    if let Some((mc, q)) = i_compound(v, p, end, cx0(), in_has) {
+        lemma_compound_b(v, p, end, np, mc, q, in_has);
+        if let Some((res, q2)) = comp_res(v, p, end, np) {
+            lemma_rel_no_pseudo(res, mc, res.len() as int);
+            assert(!has_pseudo_element(res));
+            let cs2 = cs0.push(res);
+            lemma_skip_same(v, q, end);
+            let after = skip_whitespace(v, q, end);
+            assert(after == i_skip_ws(v, q, end));
+            if q >= end || after >= end {
+                lemma_i_units_case_one(v, p, end, in_has, fuel, mus, mbs, mc, q);
+            } else {
+                lemma_skip_ws(v, q, end);
+                lemma_combinator_at(v, after, end);
+                if i_comb_of(v[after]) is Some {
+                    lemma_i_units_case_comb(v, p, end, in_has, fuel, mus, mbs, mc, q, after);
+                    let r2 = i_skip_ws(v, after + 1, end);
+                    lemma_skip_same(v, after + 1, end);
+                    match combinator_at(v, after, end) {
+                        Some(cb) => {
+                            lemma_units_b(
+                                v,
+                                r2,
+                                end,
+                                cs2,
+                                bs0.push(cb),
+                                np,
+                                (fuel - 1) as nat,
+                                mus.drop_first(),
+                                mbs.drop_first(),
+                                in_has,
+                            );
+                        },
+                        None => {},
+                    }
+                } else {
+                    lemma_i_units_case_desc(v, p, end, in_has, fuel, mus, mbs, mc, q, after);
+                    lemma_units_b(
+                        v,
+                        after,
+                        end,
+                        cs2,
+                        bs0.push(Combinator::Descendant),
+                        np,
+                        (fuel - 1) as nat,
+                        mus.drop_first(),
+                        mbs.drop_first(),
+                        in_has,
+                    );
+                }
             }
         }
     }
