@@ -691,9 +691,52 @@ pub proof fn lemma_pseudo_ident(name: Seq<u32>)
 // One subclass selector
 // ------------------------------------------------------------------------------------
 
-/// No item before `end` is a function.
+/// What the two parsers do with a functional pseudo-class's name and arguments, which the proofs
+/// about a list take for each function in it, and [`lemma_fun_prop`] proves of every one: where
+/// the spec reads one that has a transcription, the transcription reads that; and where the
+/// transcription reads one, the spec reads one too.
+pub open spec fn fun_stmt_a(name: Seq<u32>, value: Seq<ComponentValue>, ih: bool, m: ISimple) -> bool {
+    match functional_pseudo_class(name, value) {
+        Some(s) => rel_simple(s, m) ==> i_pseudo_function(name, value, cx0(), ih) == Some(m),
+        None => true,
+    }
+}
+
+/// The second half of [`fun_stmt_a`]'s property.
+pub open spec fn fun_stmt_b(name: Seq<u32>, value: Seq<ComponentValue>, ih: bool) -> bool {
+    i_pseudo_function(name, value, cx0(), ih) is Some ==> functional_pseudo_class(name, value) is Some
+}
+
+/// Both halves, for every context. (Opaque, so that the proofs about lists do not unfold it.)
+#[verifier::opaque]
+pub open spec fn fun_prop(name: Seq<u32>, value: Seq<ComponentValue>) -> bool {
+    (forall|ih: bool, m: ISimple| #[trigger] fun_stmt_a(name, value, ih, m)) && (forall|ih: bool|
+        #[trigger] fun_stmt_b(name, value, ih))
+}
+
+/// Every function before `end` has the property.
 pub open spec fn no_fun(v: Seq<ComponentValue>, end: int) -> bool {
-    forall|k: int| 0 <= k < end ==> !(#[trigger] v[k] is Function)
+    forall|k: int|
+        0 <= k < end ==> (#[trigger] v[k] is Function ==> fun_prop(
+            v[k]->Function_name,
+            v[k]->Function_value,
+        ))
+}
+
+/// A spec simple selector that is neither a pseudo-element nor a type or universal selector.
+pub open spec fn sok(s: Simple) -> bool {
+    !(s is PseudoElement) && !is_type_or_universal(s)
+}
+
+/// The spec's functional pseudo-classes are `:is()`, `:where()`, `:not()` or `:nth-*()`.
+pub proof fn lemma_fpc_kind(name: Seq<u32>, value: Seq<ComponentValue>)
+    ensures
+        match functional_pseudo_class(name, value) {
+            Some(s) => sok(s),
+            None => true,
+        },
+{
+    reveal_with_fuel(functional_pseudo_class, 2);
 }
 
 /// The position `q` is where a compound selector can end: at the end, white space or a
@@ -715,7 +758,7 @@ pub proof fn lemma_sub_one_pre(v: Seq<ComponentValue>, p: int, end: int)
 {
 }
 
-/// `<subclass-selector>`, with no function: what the transcription reads, the spec reads.
+/// `<subclass-selector>`: what the transcription reads, the spec reads, to the same place.
 pub proof fn lemma_sub_one_b(v: Seq<ComponentValue>, p: int, end: int, in_has: bool)
     requires
         0 <= p < end <= v.len(),
@@ -723,7 +766,7 @@ pub proof fn lemma_sub_one_b(v: Seq<ComponentValue>, p: int, end: int, in_has: b
     ensures
         match i_sub_one(v, p, end, cx0(), in_has) {
             Some((m, q)) => match subclass_selector(v, p, end) {
-                Step::Found { value, next } => next == q && rel_simple(value, m),
+                Step::Found { value, next } => next == q && sok(value),
                 _ => false,
             },
             None => true,
@@ -731,17 +774,20 @@ pub proof fn lemma_sub_one_b(v: Seq<ComponentValue>, p: int, end: int, in_has: b
 {
     lemma_ident_at(v, p + 1, end);
     lemma_colon_at(v, p + 1, end);
-    assert(!(v[p] is Function));
     match v[p] {
         ComponentValue::SimpleBlock { associated_token: Token::OpenSquare, value } => {
             lemma_attribute_selector(value);
         },
         ComponentValue::Token { token: Token::Colon } => {
             if p + 1 < end {
-                assert(!(v[p + 1] is Function));
                 match v[p + 1] {
                     ComponentValue::Token { token: Token::Ident { value } } => {
                         lemma_pseudo_ident(value);
+                    },
+                    ComponentValue::Function { name, value } => {
+                        reveal(fun_prop);
+                        assert(fun_stmt_b(name, value, in_has));
+                        lemma_fpc_kind(name, value);
                     },
                     _ => {},
                 }
@@ -751,8 +797,8 @@ pub proof fn lemma_sub_one_b(v: Seq<ComponentValue>, p: int, end: int, in_has: b
     }
 }
 
-/// `<subclass-selector>`, with no function: what the spec reads and the transcription has a
-/// counterpart for, the transcription reads.
+/// `<subclass-selector>`: what the spec reads and the transcription has a counterpart for, the
+/// transcription reads.
 pub proof fn lemma_sub_one_a(v: Seq<ComponentValue>, p: int, end: int, in_has: bool, m: ISimple)
     requires
         0 <= p < end <= v.len(),
@@ -771,17 +817,19 @@ pub proof fn lemma_sub_one_a(v: Seq<ComponentValue>, p: int, end: int, in_has: b
 {
     lemma_ident_at(v, p + 1, end);
     lemma_colon_at(v, p + 1, end);
-    assert(!(v[p] is Function));
     match v[p] {
         ComponentValue::SimpleBlock { associated_token: Token::OpenSquare, value } => {
             lemma_attribute_selector(value);
         },
         ComponentValue::Token { token: Token::Colon } => {
             if p + 1 < end {
-                assert(!(v[p + 1] is Function));
                 match v[p + 1] {
                     ComponentValue::Token { token: Token::Ident { value } } => {
                         lemma_pseudo_ident(value);
+                    },
+                    ComponentValue::Function { name, value } => {
+                        reveal(fun_prop);
+                        assert(fun_stmt_a(name, value, in_has, m));
                     },
                     _ => {},
                 }
@@ -812,15 +860,6 @@ pub proof fn lemma_sub_one_pos(v: Seq<ComponentValue>, p: int, end: int, in_has:
             None => true,
         },
 {
-    assert(!(v[p] is Function));
-    match v[p] {
-        ComponentValue::Token { token: Token::Colon } => {
-            if p + 1 < end {
-                assert(!(v[p + 1] is Function));
-            }
-        },
-        _ => {},
-    }
 }
 
 /// `<pseudo-class-selector>*` after a pseudo-element only adds to what was read.
@@ -1091,7 +1130,7 @@ pub proof fn lemma_sub_step_b(v: Seq<ComponentValue>, p: int, end: int, in_has: 
     ensures
         match i_sub_one(v, p, end, cx0(), in_has) {
             Some((m, q)) => match sub_step(v, p, end) {
-                Step::Found { value, next } => next == q && rel_simple(value, m),
+                Step::Found { value, next } => next == q && sok(value),
                 _ => false,
             },
             None => true,
@@ -1145,7 +1184,7 @@ pub proof fn lemma_subs_b(
         ms.len() > 0 ==> p < q,
         match subclass_selectors(v, p, end, acc, np) {
             Some((res, q2)) => q2 == q && res.len() == acc.len() + ms.len() && forall|j: int|
-                0 <= j < ms.len() ==> #[trigger] relx(res, acc.len() as int, ms, j),
+                0 <= j < ms.len() ==> sok(#[trigger] res[acc.len() + j]),
             None => false,
         },
     decreases fuel,
@@ -1179,12 +1218,10 @@ pub proof fn lemma_subs_b(
                                     assert(res.subrange(0, acc2.len() as int) == acc2);
                                     assert(res.subrange(0, acc2.len() as int)[acc.len() as int] == res[acc.len() as int]);
                                     assert(res[acc.len() as int] == value);
-                                    assert forall|j: int| 0 <= j < ms.len() implies #[trigger] relx(res, acc.len() as int, ms, j) by {
-                                        reveal(relx);
+                                    assert forall|j: int| 0 <= j < ms.len() implies sok(#[trigger] res[acc.len() + j]) by {
                                         if j == 0 {
-                                            assert(rel_simple(res[acc.len() as int], ms[0]));
+                                            assert(sok(res[acc.len() as int]));
                                         } else {
-                                            assert(relx(res, acc2.len() as int, ms1, j - 1));
                                             assert(ms1[j - 1] == ms[j]);
                                             assert(res[acc2.len() as int + (j - 1)] == res[acc.len() as int + j]);
                                         }
@@ -1424,7 +1461,7 @@ pub proof fn lemma_subs_b_res(
         ms.len() > 0 ==> p < q,
         match subs_res(v, p, end, acc, np) {
             Some((res, q2)) => q2 == q && res.len() == acc.len() + ms.len() && forall|j: int|
-                0 <= j < ms.len() ==> #[trigger] relx(res, acc.len() as int, ms, j),
+                0 <= j < ms.len() ==> sok(#[trigger] res[acc.len() + j]),
             None => false,
         },
 {
@@ -1541,7 +1578,7 @@ pub proof fn lemma_compound_b_found(
         p < q <= end,
         match comp_res(v, p, end, np) {
             Some((res, q2)) => q2 == q && res.len() == 1 + ms.len() && res[0] == value && forall|j: int|
-                0 <= j < ms.len() ==> #[trigger] relx(res, 1, ms, j),
+                0 <= j < ms.len() ==> sok(#[trigger] res[1 + j]),
             None => false,
         },
 {
@@ -1575,7 +1612,7 @@ pub proof fn lemma_compound_b_absent(
         p < q <= end,
         match comp_res(v, p, end, np) {
             Some((res, q2)) => q2 == q && res.len() == ms.len() && forall|j: int|
-                0 <= j < ms.len() ==> #[trigger] relx(res, 0, ms, j),
+                0 <= j < ms.len() ==> sok(#[trigger] res[0 + j]),
             None => false,
         },
 {
@@ -1583,8 +1620,8 @@ pub proof fn lemma_compound_b_absent(
     lemma_subs_b_res(v, p, end, Seq::<Simple>::empty(), np, i_fuel(p, end), ms, q, in_has);
 }
 
-/// A compound selector the transcription reads, the spec reads too, to the same place, with the
-/// transcription as its counterpart.
+/// A compound selector the transcription reads, the spec reads too, to the same place, and what
+/// it read has no pseudo-element.
 pub proof fn lemma_compound_b(
     v: Seq<ComponentValue>,
     p: int,
@@ -1602,7 +1639,8 @@ pub proof fn lemma_compound_b(
         p < q <= end,
         boundary(v, q, end),
         match comp_res(v, p, end, np) {
-            Some((res, q2)) => q2 == q && rel_compound(res, mc),
+            Some((res, q2)) => q2 == q && res.len() > 0 && forall|k: int|
+                0 <= k < res.len() ==> !(#[trigger] res[k] is PseudoElement),
             None => false,
         },
 {
@@ -1616,15 +1654,10 @@ pub proof fn lemma_compound_b(
                         Step::Found { value, next } => {
                             lemma_compound_b_found(v, p, end, np, value, next, ms, q3, in_has);
                             if let Some((res, q2)) = comp_res(v, p, end, np) {
-                                assert(comp_off(res) == 1);
-                                assert(mc == (ICompound { ty: Some(t), subs: ms }));
-                                assert(rel_type(res[0], t));
-                                assert forall|k: int| 0 <= k < mc.subs.len() implies rel_simple(
-                                    #[trigger] res[comp_off(res) + k],
-                                    mc.subs[k],
-                                ) by {
-                                    assert(relx(res, 1, ms, k));
-                                    reveal(relx);
+                                assert forall|k: int| 0 <= k < res.len() implies !(#[trigger] res[k] is PseudoElement) by {
+                                    if k >= 1 {
+                                        assert(sok(res[1 + (k - 1)]));
+                                    }
                                 }
                             }
                         },
@@ -1640,17 +1673,8 @@ pub proof fn lemma_compound_b(
                     assert(ms.len() > 0);
                     lemma_compound_b_absent(v, p, end, np, ms, q3, in_has);
                     if let Some((res, q2)) = comp_res(v, p, end, np) {
-                        lemma_subs_facts_res(v, p, end, Seq::<Simple>::empty(), np);
-                        reveal(subs_res);
-                        reveal(comp_res);
-                        assert(comp_off(res) == 0);
-                        assert(mc == (ICompound { ty: None, subs: ms }));
-                        assert forall|k: int| 0 <= k < mc.subs.len() implies rel_simple(
-                            #[trigger] res[comp_off(res) + k],
-                            mc.subs[k],
-                        ) by {
-                            assert(relx(res, 0, ms, k));
-                            reveal(relx);
+                        assert forall|k: int| 0 <= k < res.len() implies !(#[trigger] res[k] is PseudoElement) by {
+                            assert(sok(res[0 + k]));
                         }
                     }
                 },
@@ -1658,6 +1682,20 @@ pub proof fn lemma_compound_b(
             }
         },
         None => {},
+    }
+}
+
+/// No pseudo-element among the simple selectors of a compound selector.
+pub proof fn lemma_no_pe(c: Seq<Simple>, k: int)
+    requires
+        0 <= k <= c.len(),
+        forall|j: int| 0 <= j < c.len() ==> !(#[trigger] c[j] is PseudoElement),
+    ensures
+        !pseudo_element_within(c, k),
+    decreases k,
+{
+    if k > 0 {
+        lemma_no_pe(c, k - 1);
     }
 }
 
@@ -2339,7 +2377,7 @@ pub proof fn lemma_units_b(
     if let Some((mc, q)) = i_compound(v, p, end, cx0(), in_has) {
         lemma_compound_b(v, p, end, np, mc, q, in_has);
         if let Some((res, q2)) = comp_res(v, p, end, np) {
-            lemma_rel_no_pseudo(res, mc, res.len() as int);
+            lemma_no_pe(res, res.len() as int);
             assert(!has_pseudo_element(res));
             let cs2 = cs0.push(res);
             lemma_skip_same(v, q, end);
