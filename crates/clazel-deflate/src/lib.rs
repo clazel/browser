@@ -19,6 +19,7 @@
 
 pub mod adler;
 pub mod adler_proofs;
+pub mod certs;
 pub mod contract;
 pub mod examples;
 pub mod huffman;

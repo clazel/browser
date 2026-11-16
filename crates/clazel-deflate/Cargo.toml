@@ -25,6 +25,10 @@ miniz_oxide = { version = "=0.9.1", default-features = false, features = ["with-
 [package.metadata.clazel]
 tier = 0
 target-tier = 2
+# Theorems that must exist as `proof fn`s (`cargo xtask check`). Only
+# `theorem_output_bounded` exists: the others the plan names are statements in
+# src/contract.rs, not yet proven (README.md).
+theorems = ["theorem_output_bounded"]
 
 [package.metadata.verus]
 verify = true

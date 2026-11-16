@@ -955,3 +955,23 @@ fn bad_window() {
         (0, 0, Status::BadWindow)
     );
 }
+
+/// The fixed codes of RFC 1951 §3.2.6 are complete, so `Inflater` may ignore
+/// the result of building them: Kraft's sum is exactly 1 for both.
+#[test]
+fn fixed_codes_are_complete() {
+    use clazel_deflate::huffman::Table;
+    let lens: Vec<u8> = (0..288usize)
+        .map(|s| match s {
+            0..=143 => 8,
+            144..=255 => 9,
+            256..=279 => 7,
+            _ => 8,
+        })
+        .collect();
+    let mut t = Table::new();
+    assert!(t.build(&lens, false));
+    assert!(t.build(&[5u8; 32], false));
+    // And one fewer symbol is no longer complete.
+    assert!(!t.build(&[5u8; 31], false));
+}
