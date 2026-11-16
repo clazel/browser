@@ -1,0 +1,25 @@
+[package]
+name = "clazel-gif"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "A GIF decoder (Phase 6 item 6.7): GIF89a blocks, colour tables, variable-code-size LZW, interlacing, the Graphic Control Extension, every frame composited with its disposal method. A resumable step function over caller-owned buffers, implementing clazel-image-shape's Decoder."
+
+[dependencies]
+# The decoder interface (item 6.3), our own crate with no dependencies, so no
+# third-party code is shipped (CLAUDE.md rule 8).
+clazel-image-shape = { path = "../clazel-image-shape" }
+
+# Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
+# shipped code today; `target-tier` is the plan's reading of item 6.7: bytes of
+# a page-chosen file drive every index and counter, so Tier 1 (Kani harnesses
+# in src/proofs.rs: the step function over any state with the invariant and
+# any chunk up to a stated length, and LZW over any table state). The tier
+# stays 0 until CI's full verification has run those harnesses green.
+[package.metadata.clazel]
+tier = 0
+target-tier = 1
+
+[lints]
+workspace = true
