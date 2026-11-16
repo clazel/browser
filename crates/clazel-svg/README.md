@@ -138,7 +138,7 @@ the checker gave up):
   written for the test reads and whose `viewBox` transform is SVG 2 8.2
   transcribed again in `f32`: 8 sizes of `y18` and 9 of `triangle`. A pixel
   that is solid in both must agree **exactly** (0 mismatches); the
-  anti-aliased ones differ by at most 43 of 255 (mean at most 0.94).
+  anti-aliased ones differ by at most 43 of 255 (mean at most 0.93).
   Against the same picture drawn 16 times larger and averaged down, ours is
   within 6 and tiny-skia within 41: the difference is tiny-skia's
   quantisation, and the tolerance (48, mean 1.0) says so in the test. This is
@@ -147,8 +147,8 @@ the checker gave up):
   files and the corpus.
 - Every chunk size 1 to 316 gives the same pixels and the same `consumed`;
   bytes after the root are not consumed; a prefix is never a frame.
-- A corpus of refusals: 11 accepted documents, 60 unsupported, 35
-  malformed, 6 size errors, each with the right kind, and **the pixel
+- A corpus of refusals: 11 accepted documents and several dozen unsupported and
+  malformed ones and 6 size errors, each with the right kind, and **the pixel
   buffer untouched** on every error, also when an earlier path was fine.
 - 25,422 byte mutants (replace, delete, insert at every byte of both files)
   at three chunk sizes: never a panic, `inv` holds after every step, and
