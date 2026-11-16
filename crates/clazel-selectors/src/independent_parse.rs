@@ -1609,4 +1609,540 @@ pub proof fn lemma_compound_b(
     }
 }
 
+
+// ------------------------------------------------------------------------------------
+// Complex selectors
+// ------------------------------------------------------------------------------------
+
+/// The spec's loop over the units of a complex selector, opaque for the proofs about it.
+#[verifier::opaque]
+pub open spec fn cloop_res(
+    v: Seq<ComponentValue>,
+    i: int,
+    hi: int,
+    cs: Seq<Seq<Simple>>,
+    bs: Seq<Combinator>,
+    np: bool,
+) -> Option<Complex> {
+    complex_selector_loop(v, i, hi, cs, bs, np)
+}
+
+/// The spec's loop, one step unfolded, in terms of [`comp_res`].
+pub proof fn lemma_cloop_unfold(
+    v: Seq<ComponentValue>,
+    i: int,
+    hi: int,
+    cs: Seq<Seq<Simple>>,
+    bs: Seq<Combinator>,
+    np: bool,
+)
+    ensures
+        cloop_res(v, i, hi, cs, bs, np) == match comp_res(v, i, hi, np) {
+            None => None,
+            Some((compound, next)) => if next <= i || next > hi {
+                None
+            } else {
+                let cs2 = cs.push(compound);
+                let after = skip_whitespace(v, next, hi);
+                if after >= hi {
+                    Some(Complex { compounds: cs2, combinators: bs })
+                } else if has_pseudo_element(compound) {
+                    None
+                } else {
+                    match combinator_at(v, after, hi) {
+                        Some(c) => {
+                            let start = skip_whitespace(v, after + 1, hi);
+                            if start >= hi {
+                                None
+                            } else {
+                                cloop_res(v, start, hi, cs2, bs.push(c), np)
+                            }
+                        },
+                        None => if after > next {
+                            cloop_res(v, after, hi, cs2, bs.push(Combinator::Descendant), np)
+                        } else {
+                            None
+                        },
+                    }
+                }
+            },
+        },
+{
+    reveal_with_fuel(complex_selector_loop, 2);
+    reveal(cloop_res);
+    reveal(comp_res);
+}
+
+/// The loop's result extends what was read before.
+pub proof fn lemma_cloop_prefix(
+    v: Seq<ComponentValue>,
+    i: int,
+    hi: int,
+    cs: Seq<Seq<Simple>>,
+    bs: Seq<Combinator>,
+    np: bool,
+)
+    requires
+        0 <= i,
+        hi <= v.len(),
+    ensures
+        match cloop_res(v, i, hi, cs, bs, np) {
+            Some(c) => c.compounds.len() >= cs.len() && c.compounds.subrange(0, cs.len() as int) == cs
+                && c.combinators.len() >= bs.len() && c.combinators.subrange(0, bs.len() as int) == bs,
+            None => true,
+        },
+    decreases hi - i,
+{
+    lemma_cloop_unfold(v, i, hi, cs, bs, np);
+    if let Some((compound, next)) = comp_res(v, i, hi, np) {
+        if !(next <= i || next > hi) {
+            let cs2 = cs.push(compound);
+            lemma_skip_same(v, next, hi);
+            let after = skip_whitespace(v, next, hi);
+            if after < hi && !has_pseudo_element(compound) {
+                lemma_combinator_at(v, after, hi);
+                match combinator_at(v, after, hi) {
+                    Some(c) => {
+                        lemma_skip_same(v, after + 1, hi);
+                        let start = skip_whitespace(v, after + 1, hi);
+                        if start < hi {
+                            let bs2 = bs.push(c);
+                            lemma_cloop_prefix(v, start, hi, cs2, bs2, np);
+                            if let Some(r) = cloop_res(v, start, hi, cs2, bs2, np) {
+                                assert(r.compounds.subrange(0, cs.len() as int) =~= cs);
+                                assert(r.combinators.subrange(0, bs.len() as int) =~= bs);
+                            }
+                        }
+                    },
+                    None => {
+                        if after > next {
+                            let bs2 = bs.push(Combinator::Descendant);
+                            lemma_cloop_prefix(v, after, hi, cs2, bs2, np);
+                            if let Some(r) = cloop_res(v, after, hi, cs2, bs2, np) {
+                                assert(r.compounds.subrange(0, cs.len() as int) =~= cs);
+                                assert(r.combinators.subrange(0, bs.len() as int) =~= bs);
+                            }
+                        }
+                    },
+                }
+            }
+        }
+    }
+}
+
+
+/// The `j`-th transcribed compound selector is the counterpart of the `k + j`-th spec one.
+#[verifier::opaque]
+pub open spec fn relc(cs: Seq<Seq<Simple>>, k: int, ms: Seq<ICompound>, j: int) -> bool {
+    rel_compound(cs[k + j], ms[j])
+}
+
+/// The `j`-th transcribed combinator is the counterpart of the `k + j`-th spec one.
+#[verifier::opaque]
+pub open spec fn relb(bs: Seq<Combinator>, k: int, ms: Seq<IComb>, j: int) -> bool {
+    rel_comb(bs[k + j], ms[j])
+}
+
+/// A compound selector with a transcription has no pseudo-element.
+pub proof fn lemma_rel_no_pseudo(c: Seq<Simple>, m: ICompound, k: int)
+    requires
+        rel_compound(c, m),
+        0 <= k <= c.len(),
+    ensures
+        !pseudo_element_within(c, k),
+    decreases k,
+{
+    if k > 0 {
+        lemma_rel_no_pseudo(c, m, k - 1);
+        let off = comp_off(c);
+        if k - 1 >= off {
+            assert(rel_simple(c[off + (k - 1 - off)], m.subs[k - 1 - off]));
+        } else {
+            assert(is_type_or_universal(c[0]));
+        }
+    }
+}
+
+/// The transcription's loop over units, when the first compound selector is the only one.
+pub proof fn lemma_i_units_one(v: Seq<ComponentValue>, p: int, end: int, in_has: bool, fuel: nat, mc: ICompound, q: int)
+    requires
+        0 <= p < end <= v.len(),
+        fuel > 0,
+        i_compound(v, p, end, cx0(), in_has) == Some((mc, q)),
+        q >= end || i_skip_ws(v, q, end) >= end,
+    ensures
+        i_units(v, p, end, cx0(), in_has, fuel) == Some((seq![mc], Seq::<IComb>::empty())),
+{
+    reveal_with_fuel(i_units, 2);
+}
+
+/// The transcription's loop over units, after a combinator.
+pub proof fn lemma_i_units_comb(
+    v: Seq<ComponentValue>,
+    p: int,
+    end: int,
+    in_has: bool,
+    fuel: nat,
+    mc: ICompound,
+    q: int,
+    r: int,
+    comb: IComb,
+    r2: int,
+    mus1: Seq<ICompound>,
+    mbs1: Seq<IComb>,
+)
+    requires
+        0 <= p < end <= v.len(),
+        fuel > 0,
+        i_compound(v, p, end, cx0(), in_has) == Some((mc, q)),
+        q < end,
+        r == i_skip_ws(v, q, end),
+        r < end,
+        i_comb_of(v[r]) == Some(comb),
+        r2 == i_skip_ws(v, r + 1, end),
+        r2 < end,
+        i_units(v, r2, end, cx0(), in_has, (fuel - 1) as nat) == Some((mus1, mbs1)),
+    ensures
+        i_units(v, p, end, cx0(), in_has, fuel) == Some((seq![mc] + mus1, seq![comb] + mbs1)),
+{
+    reveal_with_fuel(i_units, 2);
+}
+
+/// The transcription's loop over units, after white space alone.
+pub proof fn lemma_i_units_desc(
+    v: Seq<ComponentValue>,
+    p: int,
+    end: int,
+    in_has: bool,
+    fuel: nat,
+    mc: ICompound,
+    q: int,
+    r: int,
+    mus1: Seq<ICompound>,
+    mbs1: Seq<IComb>,
+)
+    requires
+        0 <= p < end <= v.len(),
+        fuel > 0,
+        i_compound(v, p, end, cx0(), in_has) == Some((mc, q)),
+        q < end,
+        r == i_skip_ws(v, q, end),
+        r < end,
+        i_comb_of(v[r]) is None,
+        r > q,
+        i_units(v, r, end, cx0(), in_has, (fuel - 1) as nat) == Some((mus1, mbs1)),
+    ensures
+        i_units(v, p, end, cx0(), in_has, fuel) == Some((seq![mc] + mus1, seq![IComb::Descendant] + mbs1)),
+{
+    reveal_with_fuel(i_units, 2);
+}
+
+
+/// A combinator's counterpart is determined.
+pub proof fn lemma_rel_comb_unique(c: Combinator, m1: IComb, m2: IComb)
+    requires
+        rel_comb(c, m1),
+        rel_comb(c, m2),
+    ensures
+        m1 == m2,
+{
+}
+
+/// The first compound selector of the spec's loop, and what follows it.
+pub proof fn lemma_units_first(
+    v: Seq<ComponentValue>,
+    p: int,
+    end: int,
+    cs0: Seq<Seq<Simple>>,
+    bs0: Seq<Combinator>,
+    np: bool,
+    c: Complex,
+    mus: Seq<ICompound>,
+    in_has: bool,
+)
+    requires
+        0 <= p < end <= v.len(),
+        no_fun(v, end),
+        cloop_res(v, p, end, cs0, bs0, np) == Some(c),
+        c.compounds.len() == cs0.len() + mus.len(),
+        mus.len() >= 1,
+        forall|j: int| 0 <= j < mus.len() ==> #[trigger] relc(c.compounds, cs0.len() as int, mus, j),
+    ensures
+        match comp_res(v, p, end, np) {
+            Some((compound, next)) => {
+                &&& p < next <= end
+                &&& c.compounds.len() > cs0.len()
+                &&& c.compounds[cs0.len() as int] == compound
+                &&& rel_compound(compound, mus[0])
+                &&& i_compound(v, p, end, cx0(), in_has) == Some((mus[0], next))
+                &&& !has_pseudo_element(compound)
+            },
+            None => false,
+        },
+{
+    lemma_cloop_unfold(v, p, end, cs0, bs0, np);
+    lemma_cloop_prefix(v, p, end, cs0, bs0, np);
+    let k = cs0.len() as int;
+    if let Some((compound, next)) = comp_res(v, p, end, np) {
+        if p < next <= end {
+            lemma_skip_same(v, next, end);
+            let after = skip_whitespace(v, next, end);
+            let cs2 = cs0.push(compound);
+            if after >= end {
+                // `c` is the loop's last step.
+            } else {
+                lemma_combinator_at(v, after, end);
+                match combinator_at(v, after, end) {
+                    Some(cb) => {
+                        lemma_skip_same(v, after + 1, end);
+                        let start = skip_whitespace(v, after + 1, end);
+                        if start < end {
+                            lemma_cloop_prefix(v, start, end, cs2, bs0.push(cb), np);
+                        }
+                    },
+                    None => {
+                        lemma_cloop_prefix(v, after, end, cs2, bs0.push(Combinator::Descendant), np);
+                    },
+                }
+            }
+            assert(c.compounds.subrange(0, cs2.len() as int) == cs2);
+            assert(c.compounds.subrange(0, cs2.len() as int)[k] == c.compounds[k]);
+            assert(cs2[k] == compound);
+            assert(relc(c.compounds, k, mus, 0));
+            reveal(relc);
+            assert(rel_compound(compound, mus[0]));
+            lemma_rel_no_pseudo(compound, mus[0], compound.len() as int);
+            // The compound selector ends at a boundary.
+            assert(boundary(v, next, end)) by {
+                if after < end {
+                    match combinator_at(v, after, end) {
+                        Some(cb) => {
+                            assert(next == after || next < after);
+                        },
+                        None => {},
+                    }
+                }
+            }
+            lemma_compound_a(v, p, end, np, compound, mus[0], next, in_has);
+        }
+    }
+}
+
+/// [`relc`] one item along.
+pub proof fn lemma_relc_shift(cs: Seq<Seq<Simple>>, k: int, mus: Seq<ICompound>, j: int)
+    requires
+        0 <= j,
+        j + 1 < mus.len(),
+    ensures
+        relc(cs, k + 1, mus.drop_first(), j) == relc(cs, k, mus, j + 1),
+{
+    reveal(relc);
+    assert(mus.drop_first()[j] == mus[j + 1]);
+}
+
+/// [`relb`] one item along.
+pub proof fn lemma_relb_shift(bs: Seq<Combinator>, k: int, mbs: Seq<IComb>, j: int)
+    requires
+        0 <= j,
+        j + 1 < mbs.len(),
+    ensures
+        relb(bs, k + 1, mbs.drop_first(), j) == relb(bs, k, mbs, j + 1),
+{
+    reveal(relb);
+    assert(mbs.drop_first()[j] == mbs[j + 1]);
+}
+
+/// The head of a [`relc`].
+pub proof fn lemma_relc_head(cs: Seq<Seq<Simple>>, k: int, mus: Seq<ICompound>)
+    requires
+        mus.len() >= 1,
+        relc(cs, k, mus, 0),
+    ensures
+        rel_compound(cs[k], mus[0]),
+{
+    reveal(relc);
+}
+
+/// The head of a [`relb`].
+pub proof fn lemma_relb_head(bs: Seq<Combinator>, k: int, mbs: Seq<IComb>)
+    requires
+        mbs.len() >= 1,
+        relb(bs, k, mbs, 0),
+    ensures
+        rel_comb(bs[k], mbs[0]),
+{
+    reveal(relb);
+}
+
+/// The spec's loop over units, with the combinator after the first compound selector, and the
+/// rest of the loop read by the transcription.
+pub proof fn lemma_units_a_comb(
+    v: Seq<ComponentValue>,
+    p: int,
+    end: int,
+    np: bool,
+    fuel: nat,
+    mus: Seq<ICompound>,
+    mbs: Seq<IComb>,
+    in_has: bool,
+    next: int,
+    after: int,
+    start: int,
+    cb: Combinator,
+    mus1: Seq<ICompound>,
+    mbs1: Seq<IComb>,
+)
+    requires
+        0 <= p < next <= end <= v.len(),
+        fuel > 0,
+        mus.len() >= 1,
+        mbs.len() >= 1,
+        mus1 == mus.drop_first(),
+        mbs1 == mbs.drop_first(),
+        i_compound(v, p, end, cx0(), in_has) == Some((mus[0], next)),
+        after == i_skip_ws(v, next, end),
+        after < end,
+        combinator_at(v, after, end) == Some(cb),
+        start == i_skip_ws(v, after + 1, end),
+        start < end,
+        rel_comb(cb, mbs[0]),
+        i_units(v, start, end, cx0(), in_has, (fuel - 1) as nat) == Some((mus1, mbs1)),
+    ensures
+        i_units(v, p, end, cx0(), in_has, fuel) == Some((mus, mbs)),
+{
+    lemma_combinator_at(v, after, end);
+    let comb = i_comb_of(v[after]).unwrap();
+    lemma_rel_comb_unique(cb, comb, mbs[0]);
+    lemma_i_units_comb(v, p, end, in_has, fuel, mus[0], next, after, comb, start, mus1, mbs1);
+    assert(mus =~= seq![mus[0]] + mus1);
+    assert(mbs =~= seq![comb] + mbs1);
+}
+
+/// The same after white space alone.
+pub proof fn lemma_units_a_desc(
+    v: Seq<ComponentValue>,
+    p: int,
+    end: int,
+    np: bool,
+    fuel: nat,
+    mus: Seq<ICompound>,
+    mbs: Seq<IComb>,
+    in_has: bool,
+    next: int,
+    after: int,
+    mus1: Seq<ICompound>,
+    mbs1: Seq<IComb>,
+)
+    requires
+        0 <= p < next <= end <= v.len(),
+        fuel > 0,
+        mus.len() >= 1,
+        mbs.len() >= 1,
+        mus1 == mus.drop_first(),
+        mbs1 == mbs.drop_first(),
+        i_compound(v, p, end, cx0(), in_has) == Some((mus[0], next)),
+        after == i_skip_ws(v, next, end),
+        after < end,
+        after > next,
+        combinator_at(v, after, end) is None,
+        rel_comb(Combinator::Descendant, mbs[0]),
+        i_units(v, after, end, cx0(), in_has, (fuel - 1) as nat) == Some((mus1, mbs1)),
+    ensures
+        i_units(v, p, end, cx0(), in_has, fuel) == Some((mus, mbs)),
+{
+    lemma_combinator_at(v, after, end);
+    lemma_i_units_desc(v, p, end, in_has, fuel, mus[0], next, after, mus1, mbs1);
+    assert(mus =~= seq![mus[0]] + mus1);
+    assert(mbs =~= seq![IComb::Descendant] + mbs1);
+}
+
+/// The spec's loop over units that has a transcription is read the same by the transcription.
+pub proof fn lemma_units_a(
+    v: Seq<ComponentValue>,
+    p: int,
+    end: int,
+    cs0: Seq<Seq<Simple>>,
+    bs0: Seq<Combinator>,
+    np: bool,
+    fuel: nat,
+    c: Complex,
+    mus: Seq<ICompound>,
+    mbs: Seq<IComb>,
+    in_has: bool,
+)
+    requires
+        0 <= p < end <= v.len(),
+        no_fun(v, end),
+        fuel >= end - p + 1,
+        cloop_res(v, p, end, cs0, bs0, np) == Some(c),
+        c.compounds.len() == cs0.len() + mus.len(),
+        c.combinators.len() == bs0.len() + mbs.len(),
+        mus.len() >= 1,
+        mbs.len() + 1 == mus.len(),
+        forall|j: int| 0 <= j < mus.len() ==> #[trigger] relc(c.compounds, cs0.len() as int, mus, j),
+        forall|j: int| 0 <= j < mbs.len() ==> #[trigger] relb(c.combinators, bs0.len() as int, mbs, j),
+    ensures
+        i_units(v, p, end, cx0(), in_has, fuel) == Some((mus, mbs)),
+    decreases end - p,
+{
+    lemma_units_first(v, p, end, cs0, bs0, np, c, mus, in_has);
+    lemma_cloop_unfold(v, p, end, cs0, bs0, np);
+    let k = cs0.len() as int;
+    let kb = bs0.len() as int;
+    if let Some((compound, next)) = comp_res(v, p, end, np) {
+        let cs2 = cs0.push(compound);
+        lemma_skip_same(v, next, end);
+        let after = skip_whitespace(v, next, end);
+        if after >= end {
+            assert(c == (Complex { compounds: cs2, combinators: bs0 }));
+            assert(mus =~= seq![mus[0]]);
+            assert(mbs =~= Seq::<IComb>::empty());
+            lemma_skip_ws(v, next, end);
+            lemma_i_units_one(v, p, end, in_has, fuel, mus[0], next);
+        } else {
+            lemma_combinator_at(v, after, end);
+            lemma_skip_ws(v, next, end);
+            match combinator_at(v, after, end) {
+                Some(cb) => {
+                    lemma_skip_same(v, after + 1, end);
+                    let start = skip_whitespace(v, after + 1, end);
+                    lemma_skip_ws(v, after + 1, end);
+                    let bs2 = bs0.push(cb);
+                    lemma_cloop_prefix(v, start, end, cs2, bs2, np);
+                    assert(c.combinators.subrange(0, bs2.len() as int)[kb] == c.combinators[kb]);
+                    assert(c.combinators[kb] == cb);
+                    lemma_relb_head(c.combinators, kb, mbs);
+                    let mus1 = mus.drop_first();
+                    let mbs1 = mbs.drop_first();
+                    assert forall|j: int| 0 <= j < mus1.len() implies #[trigger] relc(c.compounds, cs2.len() as int, mus1, j) by {
+                        lemma_relc_shift(c.compounds, k, mus, j);
+                    }
+                    assert forall|j: int| 0 <= j < mbs1.len() implies #[trigger] relb(c.combinators, bs2.len() as int, mbs1, j) by {
+                        lemma_relb_shift(c.combinators, kb, mbs, j);
+                    }
+                    lemma_units_a(v, start, end, cs2, bs2, np, (fuel - 1) as nat, c, mus1, mbs1, in_has);
+                    lemma_units_a_comb(v, p, end, np, fuel, mus, mbs, in_has, next, after, start, cb, mus1, mbs1);
+                },
+                None => {
+                    let bs2 = bs0.push(Combinator::Descendant);
+                    lemma_cloop_prefix(v, after, end, cs2, bs2, np);
+                    assert(c.combinators.subrange(0, bs2.len() as int)[kb] == c.combinators[kb]);
+                    assert(c.combinators[kb] == Combinator::Descendant);
+                    lemma_relb_head(c.combinators, kb, mbs);
+                    let mus1 = mus.drop_first();
+                    let mbs1 = mbs.drop_first();
+                    assert forall|j: int| 0 <= j < mus1.len() implies #[trigger] relc(c.compounds, cs2.len() as int, mus1, j) by {
+                        lemma_relc_shift(c.compounds, k, mus, j);
+                    }
+                    assert forall|j: int| 0 <= j < mbs1.len() implies #[trigger] relb(c.combinators, bs2.len() as int, mbs1, j) by {
+                        lemma_relb_shift(c.combinators, kb, mbs, j);
+                    }
+                    lemma_units_a(v, after, end, cs2, bs2, np, (fuel - 1) as nat, c, mus1, mbs1, in_has);
+                    lemma_units_a_desc(v, p, end, np, fuel, mus, mbs, in_has, next, after, mus1, mbs1);
+                },
+            }
+        }
+    }
+}
+
 } // verus!
