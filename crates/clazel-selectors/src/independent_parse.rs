@@ -2839,6 +2839,278 @@ pub proof fn lemma_clist_b(
     }
 }
 
+// ------------------------------------------------------------------------------------
+// Forgiving lists
+// ------------------------------------------------------------------------------------
+
+/// The spec's loop of "parse as a forgiving selector list", opaque for the proofs about it.
+#[verifier::opaque]
+pub open spec fn flist_res(v: Seq<ComponentValue>, i: int, hi: int, acc: Seq<Complex>) -> Seq<Complex> {
+    forgiving_list_loop(v, i, hi, acc)
+}
+
+/// The spec's forgiving loop, one step unfolded.
+pub proof fn lemma_flist_unfold(v: Seq<ComponentValue>, i: int, hi: int, acc: Seq<Complex>)
+    ensures
+        flist_res(v, i, hi, acc) == ({
+            let comma = next_comma(v, i, hi);
+            if i < 0 || i >= hi || comma < i || comma > hi {
+                acc
+            } else {
+                let kept = match csel_res(v, i, comma, true) {
+                    Some(selector) => acc.push(selector),
+                    None => acc,
+                };
+                if comma >= hi {
+                    kept
+                } else {
+                    flist_res(v, comma + 1, hi, kept)
+                }
+            }
+        }),
+{
+    reveal_with_fuel(forgiving_list_loop, 2);
+    reveal(flist_res);
+    reveal(csel_res);
+}
+
+/// The forgiving loop extends what was kept before.
+pub proof fn lemma_flist_prefix(v: Seq<ComponentValue>, i: int, hi: int, acc: Seq<Complex>)
+    requires
+        0 <= i <= hi <= v.len(),
+    ensures
+        flist_res(v, i, hi, acc).len() >= acc.len(),
+        flist_res(v, i, hi, acc).subrange(0, acc.len() as int) == acc,
+    decreases hi - i,
+{
+    lemma_flist_unfold(v, i, hi, acc);
+    lemma_comma_same(v, i, hi);
+    lemma_comma(v, i, hi);
+    let comma = next_comma(v, i, hi);
+    if !(i >= hi) && comma >= i && comma <= hi {
+        let kept = match csel_res(v, i, comma, true) {
+            Some(selector) => acc.push(selector),
+            None => acc,
+        };
+        assert(kept.len() >= acc.len() && kept.subrange(0, acc.len() as int) =~= acc);
+        if comma < hi {
+            lemma_flist_prefix(v, comma + 1, hi, kept);
+            let r = flist_res(v, comma + 1, hi, kept);
+            assert(r.subrange(0, acc.len() as int) =~= acc);
+        }
+    }
+}
+
+/// With nothing between its ends but white space, a range has no comma.
+pub proof fn lemma_comma_white(v: Seq<ComponentValue>, p: int, end: int)
+    requires
+        0 <= p <= end <= v.len(),
+        i_skip_ws(v, p, end) >= end,
+    ensures
+        i_comma(v, p, end) == end,
+    decreases end - p,
+{
+    if p < end {
+        assert(i_is_ws(v[p]));
+        lemma_comma_white(v, p + 1, end);
+    }
+}
+
+/// An empty range has no complex selector.
+pub proof fn lemma_complex_empty(v: Seq<ComponentValue>, p: int, exempt: bool, in_has: bool)
+    requires
+        0 <= p <= v.len(),
+    ensures
+        i_complex(v, p, p, cx0(), false, exempt, in_has) is None,
+{
+}
+
+/// A range that is all white space has no complex selector.
+pub proof fn lemma_complex_white(v: Seq<ComponentValue>, p: int, end: int, exempt: bool, in_has: bool)
+    requires
+        0 <= p <= end <= v.len(),
+        i_skip_ws(v, p, end) >= end,
+    ensures
+        i_complex(v, p, end, cx0(), false, exempt, in_has) is None,
+{
+    lemma_skip_ws(v, p, end);
+    assert(i_skip_ws(v, p, end) == end);
+}
+
+/// The transcription's forgiving list, when the part before the comma is the last.
+pub proof fn lemma_i_clist_f_last(v: Seq<ComponentValue>, p: int, end: int, exempt: bool, in_has: bool, one: Option<IComplex>)
+    requires
+        0 <= p <= end <= v.len(),
+        i_comma(v, p, end) >= end,
+        i_complex(v, p, i_comma(v, p, end), cx0(), false, exempt, in_has) == one,
+    ensures
+        i_clist(v, p, end, cx0(), true, false, exempt, in_has) == match one {
+            Some(c) => Some(seq![c]),
+            None => Some(Seq::<IComplex>::empty()),
+        },
+{
+    reveal_with_fuel(i_clist, 2);
+}
+
+/// The transcription's forgiving list, when there is more after the comma.
+pub proof fn lemma_i_clist_f_step(
+    v: Seq<ComponentValue>,
+    p: int,
+    end: int,
+    exempt: bool,
+    in_has: bool,
+    one: Option<IComplex>,
+    rest: Seq<IComplex>,
+)
+    requires
+        0 <= p <= end <= v.len(),
+        i_comma(v, p, end) < end,
+        i_complex(v, p, i_comma(v, p, end), cx0(), false, exempt, in_has) == one,
+        i_clist(v, i_comma(v, p, end) + 1, end, cx0(), true, false, exempt, in_has) == Some(rest),
+    ensures
+        i_clist(v, p, end, cx0(), true, false, exempt, in_has) == match one {
+            Some(c) => Some(seq![c] + rest),
+            None => Some(rest),
+        },
+{
+    reveal_with_fuel(i_clist, 2);
+}
+
+/// The transcription's forgiving list is never a failure.
+pub proof fn lemma_i_clist_f_some(v: Seq<ComponentValue>, p: int, end: int, exempt: bool, in_has: bool)
+    requires
+        0 <= p <= end <= v.len(),
+    ensures
+        i_clist(v, p, end, cx0(), true, false, exempt, in_has) is Some,
+    decreases end - p,
+{
+    reveal_with_fuel(i_clist, 2);
+    lemma_comma(v, p, end);
+    let q = i_comma(v, p, end);
+    if q < end {
+        lemma_i_clist_f_some(v, q + 1, end, exempt, in_has);
+    }
+}
+
+/// A forgiving list the spec reads that has a transcription, the transcription reads.
+#[verifier::rlimit(60)]
+pub proof fn lemma_flist_a(
+    v: Seq<ComponentValue>,
+    i: int,
+    hi: int,
+    acc: Seq<Complex>,
+    exempt: bool,
+    in_has: bool,
+    l: Seq<Complex>,
+    ml: Seq<IComplex>,
+)
+    requires
+        0 <= i <= hi <= v.len(),
+        no_fun(v, hi),
+        flist_res(v, i, hi, acc) == l,
+        l.len() == acc.len() + ml.len(),
+        forall|j: int| 0 <= j < ml.len() ==> #[trigger] relcx(l, acc.len() as int, ml, j),
+    ensures
+        i_clist(v, i, hi, cx0(), true, false, exempt, in_has) == Some(ml),
+    decreases hi - i,
+{
+    lemma_flist_unfold(v, i, hi, acc);
+    lemma_comma_same(v, i, hi);
+    lemma_comma(v, i, hi);
+    let q = i_comma(v, i, hi);
+    let k = acc.len() as int;
+    if i >= hi {
+        assert(l == acc);
+        assert(ml =~= Seq::<IComplex>::empty());
+        lemma_complex_empty(v, i, exempt, in_has);
+        lemma_i_clist_f_last(v, i, hi, exempt, in_has, None);
+    } else {
+        assert(next_comma(v, i, hi) == q);
+        assert(no_fun(v, q));
+        // The mine-side part, and what the spec kept of it.
+        match csel_res(v, i, q, true) {
+            Some(sel) => {
+                let kept = acc.push(sel);
+                if q >= hi {
+                    assert(l == kept);
+                    assert(ml.len() == 1);
+                    assert(relcx(l, k, ml, 0));
+                    reveal(relcx);
+                    assert(rel_complex(sel, ml[0]));
+                    lemma_complex_a_res(v, i, q, true, exempt, in_has, sel, ml[0]);
+                    lemma_i_clist_f_last(v, i, hi, exempt, in_has, Some(ml[0]));
+                    assert(ml =~= seq![ml[0]]);
+                } else {
+                    lemma_flist_prefix(v, q + 1, hi, kept);
+                    assert(l.subrange(0, kept.len() as int) == kept);
+                    assert(l.subrange(0, kept.len() as int)[k] == l[k]);
+                    assert(l[k] == sel);
+                    assert(ml.len() >= 1);
+                    assert(relcx(l, k, ml, 0));
+                    reveal(relcx);
+                    assert(rel_complex(sel, ml[0]));
+                    lemma_complex_a_res(v, i, q, true, exempt, in_has, sel, ml[0]);
+                    let ml1 = ml.drop_first();
+                    assert forall|j: int| 0 <= j < ml1.len() implies #[trigger] relcx(l, kept.len() as int, ml1, j) by {
+                        assert(ml1[j] == ml[j + 1]);
+                        assert(relcx(l, k, ml, j + 1));
+                        assert(l[k + (j + 1)] == l[kept.len() as int + j]);
+                    }
+                    lemma_flist_a(v, q + 1, hi, kept, exempt, in_has, l, ml1);
+                    lemma_i_clist_f_step(v, i, hi, exempt, in_has, Some(ml[0]), ml1);
+                    assert(ml =~= seq![ml[0]] + ml1);
+                }
+            },
+            None => {
+                // The spec drops it; so does the transcription, since it never reads what the spec rejects.
+                if let Some(m0) = i_complex(v, i, q, cx0(), false, exempt, in_has) {
+                    lemma_complex_b_res(v, i, q, true, exempt, in_has, m0);
+                }
+                assert(i_complex(v, i, q, cx0(), false, exempt, in_has) is None);
+                if q >= hi {
+                    assert(l == acc);
+                    assert(ml =~= Seq::<IComplex>::empty());
+                    lemma_i_clist_f_last(v, i, hi, exempt, in_has, None);
+                } else {
+                    lemma_flist_a(v, q + 1, hi, acc, exempt, in_has, l, ml);
+                    lemma_i_clist_f_step(v, i, hi, exempt, in_has, None, ml);
+                }
+            },
+        }
+    }
+}
+
+/// "Parse as a forgiving selector list" of a value with a transcription is read the same.
+pub proof fn lemma_forg_a(v: Seq<ComponentValue>, in_has: bool, arg: Seq<Complex>, ml: Seq<IComplex>)
+    requires
+        no_fun(v, v.len() as int),
+        parse_as_a_forgiving_selector_list(v) == arg,
+        rel_list(arg, ml),
+    ensures
+        i_clist(v, 0, v.len() as int, cx0(), true, false, true, in_has) == Some(ml),
+{
+    let len = v.len() as int;
+    reveal_with_fuel(parse_as_a_forgiving_selector_list, 2);
+    lemma_skip_same(v, 0, len);
+    if only_whitespace(v, 0, len) {
+        assert(arg == Seq::<Complex>::empty());
+        assert(ml =~= Seq::<IComplex>::empty());
+        lemma_skip_ws(v, 0, len);
+        lemma_comma_white(v, 0, len);
+        lemma_complex_white(v, 0, len, true, in_has);
+        lemma_i_clist_f_last(v, 0, len, true, in_has, None);
+    } else {
+        assert(flist_res(v, 0, len, Seq::empty()) == arg) by {
+            reveal(flist_res);
+        }
+        assert forall|j: int| 0 <= j < ml.len() implies #[trigger] relcx(arg, 0, ml, j) by {
+            reveal(relcx);
+            assert(rel_complex(arg[j], ml[j]));
+        }
+        lemma_flist_a(v, 0, len, Seq::empty(), true, in_has, arg, ml);
+    }
+}
+
 /// **Parsing, without functional pseudo-classes, spec to transcription.** If the spec parses a list
 /// of component values with no function in it to a selector list that has a transcription, the
 /// transcription parses the same list to that transcription.
