@@ -548,8 +548,13 @@ fn against_tiny_skia() -> R {
     if cfg!(miri) {
         // tiny-skia's SIMD paths are not worth Miri's minutes; the
         // decoder's own tests below run under Miri.
+        println!(
+            "clazel-conformance: suite=\"SVG against tiny-skia: HN's two files at 17 sizes\" pass=0 xfail=0 fail=0 total=0"
+        );
         return Ok(());
     }
+    let (mut pass, mut fail, mut total) = (0u32, 0u32, 0u32);
+    let mut notes: Vec<String> = vec![];
     type Case<'a> = (&'a str, &'a [u8], [f32; 4], &'a [[u8; 4]], &'a [(u32, u32)]);
     let cases: [Case; 2] = [
         (
@@ -604,15 +609,34 @@ fn against_tiny_skia() -> R {
             eprintln!(
                 "    against the 16x average: ours max {ours_err}, tiny-skia max {theirs_err}"
             );
-            assert!(
-                ours_err <= TOLERANCE_TRUTH,
-                "{name} {w}x{h}: ours {ours_err}"
-            );
-            assert_eq!(d.interior_mismatches, 0, "{name} {w}x{h}");
-            assert!(d.max <= TOLERANCE_EDGE, "{name} {w}x{h}: max {}", d.max);
-            assert!(d.mean <= TOLERANCE_MEAN, "{name} {w}x{h}: mean {}", d.mean);
+            total = total.saturating_add(1);
+            if ours_err <= TOLERANCE_TRUTH
+                && d.interior_mismatches == 0
+                && d.max <= TOLERANCE_EDGE
+                && d.mean <= TOLERANCE_MEAN
+            {
+                pass = pass.saturating_add(1);
+            } else {
+                fail = fail.saturating_add(1);
+                notes.push(format!(
+                    "{name} {w}x{h}: max {} mean {:.3} interior {} ours-vs-truth {ours_err}",
+                    d.max, d.mean, d.interior_mismatches
+                ));
+            }
         }
     }
+    println!(
+        "clazel-conformance: suite=\"SVG against tiny-skia: HN's two files at 17 sizes\" pass={pass} xfail=0 fail={fail} total={total}"
+    );
+    assert!(
+        notes.is_empty(),
+        "{}",
+        notes.join(
+            "
+"
+        )
+    );
+    assert_eq!(total, 17);
     Ok(())
 }
 
@@ -621,6 +645,7 @@ fn against_tiny_skia() -> R {
 #[test]
 fn every_chunk_size_gives_the_same_image() -> R {
     let stride = if cfg!(miri) { 37 } else { 1 };
+    let mut units = 0u32;
     for doc in [Y18, TRIANGLE] {
         let whole = render(doc, None)?;
         for chunk in (1..=doc.len().saturating_add(1)).step_by(stride) {
@@ -633,8 +658,12 @@ fn every_chunk_size_gives_the_same_image() -> R {
                 })),
                 "chunk {chunk}"
             );
+            units = units.saturating_add(1);
         }
     }
+    println!(
+        "clazel-conformance: suite=\"SVG chunking: every chunk size gives the same image\" pass={units} xfail=0 fail=0 total={units}"
+    );
     Ok(())
 }
 
@@ -984,6 +1013,9 @@ fn mutated_files_never_panic() -> R {
     }
     eprintln!("{run} mutants, {images} still images");
     assert!(run > 0);
+    println!(
+        "clazel-conformance: suite=\"SVG mutations: no panic, the invariant kept\" pass={run} xfail=0 fail=0 total={run}"
+    );
     Ok(())
 }
 
