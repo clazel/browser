@@ -70,13 +70,19 @@
 //!    (digits only: no unit, no fraction, no percentage). Section 8.12
 //!    derives the size from the `viewBox` when they are absent, but only an
 //!    aspect ratio then, and a [`Config`](clazel_image_shape::Config) needs
-//!    a size. Both files state them.
+//!    a size. Both files state them (`y18.svg` 18 by 18, `triangle.svg` 32 by 32).
 //! 5. **Clipping is to the viewport** (the box the image is drawn in),
 //!    which section 3.11 gives for the root element: its `overflow` is
-//!    `visible` and the host replaced box clips. For both files, and for
-//!    any size of the same aspect ratio, that is the `viewBox` too; with
-//!    `meet` at another aspect ratio, content outside the `viewBox` but
-//!    inside the box is drawn (as browsers draw it).
+//!    `visible` and the host replaced box clips. The plan said "clipped to
+//!    the viewBox"; for `y18.svg` that is the same (its `viewBox` is the
+//!    whole image), but **`triangle.svg` says `width="32" height="32"` with
+//!    `viewBox="0 0 32 16"`**, so `meet` leaves a 32 by 8 bar above and below
+//!    the `viewBox`, and its path (y from -2 to 27 in user space) is drawn
+//!    into them: clipped to the `viewBox`, the arrow at `background-size:
+//!    10px` (10 by 10 for this file's 1:1 size) would be cut to a strip 5 px
+//!    high. Content outside the `viewBox` but inside the box is drawn: this
+//!    is section 3.11 read for an image, and what the differential test's
+//!    reference does; it was not compared with a browser here.
 //! 6. **An error anywhere refuses the whole image.** Section 9.5.4 says a
 //!    `path` is rendered "up to (but not including) the path command
 //!    containing the first error"; this decoder refuses the image
@@ -91,7 +97,7 @@
 //!    pixel (`map.rs`), which must stay within 2^30 (2^22 pixels).
 //! 8. **Limits**: the document at most 8,192 bytes (`limits.rs`), a path at
 //!    most 256 edges (closing edges counted), a tag at most 4 attributes (the four that `svg` can have).
-//!    HN's files are 315 and 131 bytes with 13 and 3 edges.
+//!    HN's files are 315 and 131 bytes, their paths have 4, 9 and 3 edges.
 //! 9. **The document ends at the root's end tag**: `step` says `FrameDone`
 //!    there and the bytes after it are not read, not even checked to be
 //!    white space and comments (XML's `Misc*`). An unclosed root is

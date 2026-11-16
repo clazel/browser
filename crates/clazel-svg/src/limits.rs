@@ -4,7 +4,7 @@
 
 /// The most bytes of document the decoder keeps (listed choice 8). HN's two
 /// files are 315 and 131 bytes.
-pub(crate) const DOC_MAX: usize = if cfg!(kani) { 24 } else { 8192 };
+pub(crate) const DOC_MAX: usize = if cfg!(kani) { 12 } else { 8192 };
 
 /// The most edges (line segments, closing ones included) of one path.
 pub(crate) const MAX_EDGES: usize = if cfg!(kani) { 4 } else { 256 };

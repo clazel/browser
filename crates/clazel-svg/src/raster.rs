@@ -63,7 +63,7 @@ fn add_f(acc: &mut [u8], x: i64, sign: i64) -> Option<()> {
 }
 
 /// Adds the stretch `[a, b)` (1/256 pixel, clipped to the row).
-fn add_span(acc: &mut [u8], width_units: i64, a: i64, b: i64) -> Option<()> {
+pub(crate) fn add_span(acc: &mut [u8], width_units: i64, a: i64, b: i64) -> Option<()> {
     let a = a.clamp(0, width_units);
     let b = b.clamp(0, width_units);
     if b > a {
@@ -75,7 +75,7 @@ fn add_span(acc: &mut [u8], width_units: i64, a: i64, b: i64) -> Option<()> {
 
 /// The `x` (1/256 pixel) where `e` crosses the scanline `ys`, if it does,
 /// with its direction: +1 if the edge goes down (y increases), -1 if up.
-fn crossing(e: &Edge, ys: i64) -> Option<(i64, i64)> {
+pub(crate) fn crossing(e: &Edge, ys: i64) -> Option<(i64, i64)> {
     let (x0, y0) = (i64::from(e.x0), i64::from(e.y0));
     let (x1, y1) = (i64::from(e.x1), i64::from(e.y1));
     let (dir, lo, hi) = match y0.cmp(&y1) {
@@ -91,6 +91,19 @@ fn crossing(e: &Edge, ys: i64) -> Option<(i64, i64)> {
     let num = ys.checked_sub(y0)?.checked_mul(x1.checked_sub(x0)?)?;
     let x = x0.checked_add(num.checked_div(y1.checked_sub(y0)?)?)?;
     Some((x, dir))
+}
+
+/// One channel of source-over: `(s a 255 + d da (255 - a)) / oa255`, rounded
+/// half up, where `oa255 = a 255 + da (255 - a)` (the result alpha times
+/// 255): a weighted mean of `s` and `d`, so between them.
+pub(crate) fn blend(s: u8, d: u8, a: u32, da: u32, oa255: u32) -> u8 {
+    let inv = 255u32.saturating_sub(a);
+    let n = u32::from(s)
+        .saturating_mul(a)
+        .saturating_mul(255)
+        .saturating_add(u32::from(d).saturating_mul(da).saturating_mul(inv));
+    let n = n.saturating_add(oa255 / 2);
+    u8::try_from(n.checked_div(oa255).unwrap_or(0)).unwrap_or(255)
 }
 
 /// Source-over of an opaque colour with coverage `a` (alpha 0 to 255) onto
@@ -112,15 +125,12 @@ pub(crate) fn composite(dst: [u8; 4], rgb: [u8; 3], a: u8) -> [u8; 4] {
     // out_a * 255, at least a * 255 > 0.
     let oa255 = a.saturating_mul(255).saturating_add(da.saturating_mul(inv));
     let oa = u8::try_from(oa255.saturating_add(127).checked_div(255).unwrap_or(0)).unwrap_or(255);
-    let channel = |s: u8, d: u8| -> u8 {
-        let n = u32::from(s)
-            .saturating_mul(a)
-            .saturating_mul(255)
-            .saturating_add(u32::from(d).saturating_mul(da).saturating_mul(inv));
-        let n = n.saturating_add(oa255 / 2);
-        u8::try_from(n.checked_div(oa255).unwrap_or(0)).unwrap_or(255)
-    };
-    [channel(sr, dr), channel(sg, dg), channel(sb, db), oa]
+    [
+        blend(sr, dr, a, da, oa255),
+        blend(sg, dg, a, da, oa255),
+        blend(sb, db, a, da, oa255),
+        oa,
+    ]
 }
 
 /// One sample scanline `ys` (1/256 pixel): the stretches of it inside the

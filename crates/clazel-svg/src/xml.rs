@@ -85,6 +85,13 @@ pub(crate) enum Item<'a> {
     End(&'a [u8]),
 }
 
+enum Match {
+    Yes,
+    No,
+    /// The document ends inside the pattern.
+    Short,
+}
+
 /// A cursor over the document.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Reader<'a> {
@@ -118,16 +125,26 @@ impl<'a> Reader<'a> {
         self.pos != start
     }
 
+    /// Compares `pat` with the document from `p`, byte by byte (a loop of
+    /// its own, not `starts_with`: the model checker unwinds it).
+    fn match_at(&self, p: usize, pat: &[u8]) -> Match {
+        for (k, &want) in pat.iter().enumerate() {
+            match self.doc.get(p.saturating_add(k)) {
+                None => return Match::Short,
+                Some(&b) if b == want => {}
+                Some(_) => return Match::No,
+            }
+        }
+        Match::Yes
+    }
+
     /// Whether the rest of the document starts with `pat`: `Eof` if what
     /// is left is a proper prefix of it (more bytes could make it so).
     fn at(&self, pat: &[u8]) -> Read<bool> {
-        let rest = self.doc.get(self.pos..).unwrap_or(&[]);
-        if rest.starts_with(pat) {
-            Ok(true)
-        } else if pat.starts_with(rest) {
-            Err(Stop::Eof)
-        } else {
-            Ok(false)
+        match self.match_at(self.pos, pat) {
+            Match::Yes => Ok(true),
+            Match::No => Ok(false),
+            Match::Short => Err(Stop::Eof),
         }
     }
 
@@ -135,16 +152,17 @@ impl<'a> Reader<'a> {
     fn skip_past(&mut self, pat: &[u8]) -> Read<()> {
         let mut p = self.pos;
         loop {
-            let rest = self.doc.get(p..).unwrap_or(&[]);
-            if rest.starts_with(pat) {
-                self.pos = p.saturating_add(pat.len());
-                return Ok(());
+            match self.match_at(p, pat) {
+                Match::Yes => {
+                    self.pos = p.saturating_add(pat.len());
+                    return Ok(());
+                }
+                Match::Short => {
+                    self.pos = self.doc.len();
+                    return Err(Stop::Eof);
+                }
+                Match::No => p = p.saturating_add(1),
             }
-            if rest.is_empty() {
-                self.pos = self.doc.len();
-                return Err(Stop::Eof);
-            }
-            p = p.saturating_add(1);
         }
     }
 
@@ -183,11 +201,11 @@ impl<'a> Reader<'a> {
     /// `next_markup`'s.
     pub(crate) fn prolog(&mut self) -> Read<()> {
         const BOM: [u8; 3] = [0xEF, 0xBB, 0xBF];
-        let rest = self.doc.get(self.pos..).unwrap_or(&[]);
-        if rest.starts_with(&BOM) {
-            self.pos = self.pos.saturating_add(3);
-        } else if BOM.starts_with(rest) && !rest.is_empty() {
-            return Err(Stop::Eof);
+        match self.match_at(self.pos, &BOM) {
+            Match::Yes => self.pos = self.pos.saturating_add(3),
+            // A document that ends inside the mark (but is not empty).
+            Match::Short if self.pos < self.doc.len() => return Err(Stop::Eof),
+            _ => {}
         }
         if self.at(b"<?xml")? {
             self.pos = self.pos.saturating_add(5);
