@@ -319,6 +319,7 @@
       "replace": "    if false {\n",
       "expect": "killed",
       "reason": "Step 7 removes it.",
+      "module": "parser::examples",
       "certificate": {
         "file": "src/parser/lemmas.rs",
         "lemma": "super::examples::lemma_example_original_text()",
