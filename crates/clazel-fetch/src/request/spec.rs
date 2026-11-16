@@ -268,4 +268,312 @@ pub open spec fn is_interim(status: nat) -> bool {
     100 <= status && status <= 199 && status != 101
 }
 
+
+// ===========================================================================
+// Item 6.16: a request with a method and a body.
+// ===========================================================================
+//
+// Sources (6.16; Fetch at the commit `transducer::spec` pins; the step
+// numbers below are those of the text as read from that commit, marked †
+// in phase-6.md until a person checks them):
+// - Fetch §4.6 "HTTP-network-or-cache fetch": steps 6 to 9, "Let
+//   contentLengthHeaderValue be null. If httpRequest's body is null and
+//   httpRequest's method is `POST` or `PUT`, then set
+//   contentLengthHeaderValue to `0`. If contentLength is non-null, then set
+//   contentLengthHeaderValue, serialized and isomorphic encoded. If
+//   contentLengthHeaderValue is non-null, then append (`Content-Length`,
+//   contentLengthHeaderValue) to httpRequest's header list."; step 13,
+//   "Append a request `Origin` header for httpRequest"; step 22.1, the
+//   `Cookie` header;
+// - Fetch "append a request `Origin` header": "1. Assert: request's origin
+//   is not "client". 2. Let serializedOrigin be the result of byte-
+//   serializing a request origin with request. 3. If request's response
+//   tainting is "cors" or request's mode is "websocket" or "webtransport",
+//   then append (`Origin`, serializedOrigin) to request's header list. 4.
+//   Otherwise, if request's method is neither `GET` nor `HEAD`, then: 1. If
+//   request's mode is not "cors", then switch on request's referrer
+//   policy: "no-referrer": set serializedOrigin to `null`.
+//   "no-referrer-when-downgrade", "strict-origin" or
+//   "strict-origin-when-cross-origin": if request's origin is a tuple
+//   origin, its scheme is "https", and request's current URL's scheme is
+//   not "https", then set serializedOrigin to `null`. "same-origin": ...
+//   2. Append (`Origin`, serializedOrigin) to request's header list.";
+// - Fetch "serializing a request origin" step 2: "If request's redirect-
+//   taint is not "same-origin", then return "null"."; step 3: "Return
+//   request's origin, serialized.";
+// - RFC 9110 §9.2.1 safe methods ("GET, HEAD, OPTIONS, and TRACE"); §8.6
+//   `Content-Length`; §8.3 `Content-Type`; RFC 9112 §6.2 (a request's body
+//   length is its `Content-Length`).
+//
+// Modelling choices of this part (6.16):
+// - A **request** here is a method, a body (null, or a content type and
+//   the octets), and the origin of the document that made it (the
+//   "initiator": Fetch's "request's origin", also what RFC 6265bis §5.2
+//   reads as the site for cookies of a request with a client; `None` is a
+//   navigation with no client, which is every request before 6.16).
+//   [`Req`] is the part of Fetch's request that is not the URL.
+// - Only `GET` and `POST` are fetched ([`is_navigation_method`]): a form
+//   submission is one of them (HTML "submit as entity body" and "mutate
+//   action URL"). `HEAD` never arises, so the `HEAD` of Fetch's rewriting
+//   rule is kept in the rule and never reached. A `GET` has no body (Fetch:
+//   a request with method `GET` and a body is a TypeError at construction):
+//   [`req_ok`].
+// - The body is a byte sequence with a content type, both from the caller
+//   (the kernel gets them from the renderer's `Submit`, bounded there).
+//   Fetch's body "source" is always bytes, so Fetch's step 11 of HTTP-
+//   redirect fetch ("If internalResponse's status is not 303, request's
+//   body is non-null, and request's body's source is null, then return a
+//   network error") never fires.
+// - The header list is the fixed fields of [`request_for`], then, in this
+//   order, `Content-Type` (the body's), `Content-Length` (steps 6 to 9),
+//   `Origin` (step 13), then `Cookie` last (step 22.1). Fetch's
+//   "request-body-header names" are deleted when the body is removed
+//   (HTTP-redirect fetch 12.2); here those fields are *derived* from the
+//   body, so a request without a body has none of them: the same thing.
+// - `Origin` follows the algorithm above with the default referrer policy
+//   ("strict-origin-when-cross-origin"; the initiator's own policy is not
+//   carried until a phase that has referrers) and mode navigate: no
+//   `Origin` on `GET`; on any other method the byte-serialized request
+//   origin, `null` if the origin is opaque, if there is no initiator, if
+//   the request's redirect-taint is not "same-origin" ([`Req::origin_tainted`],
+//   which the transducer sets when a redirect leaves the origin of the URL
+//   before it) or if the initiator is an `https` origin and the current
+//   URL's scheme is not `https`.
+// - A body is sent on the wire after the empty line, exactly
+//   `Content-Length` octets (RFC 9112 §6.2). Octets are never altered.
+
+/// "POST".
+pub open spec fn lit_post() -> Seq<u8> {
+    seq![0x50u8, 0x4F, 0x53, 0x54]
+}
+
+/// "HEAD".
+pub open spec fn lit_head() -> Seq<u8> {
+    seq![0x48u8, 0x45, 0x41, 0x44]
+}
+
+/// "OPTIONS".
+pub open spec fn lit_options() -> Seq<u8> {
+    seq![0x4Fu8, 0x50, 0x54, 0x49, 0x4F, 0x4E, 0x53]
+}
+
+/// "TRACE".
+pub open spec fn lit_trace() -> Seq<u8> {
+    seq![0x54u8, 0x52, 0x41, 0x43, 0x45]
+}
+
+/// "Content-Type".
+pub open spec fn lit_content_type() -> Seq<u8> {
+    seq![0x43u8, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x54, 0x79, 0x70, 0x65]
+}
+
+/// "Content-Length".
+pub open spec fn lit_content_length() -> Seq<u8> {
+    seq![0x43u8, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68]
+}
+
+/// "Origin".
+pub open spec fn lit_origin() -> Seq<u8> {
+    seq![0x4Fu8, 0x72, 0x69, 0x67, 0x69, 0x6E]
+}
+
+/// "null" (a serialized opaque origin).
+pub open spec fn lit_null() -> Seq<u8> {
+    seq![0x6Eu8, 0x75, 0x6C, 0x6C]
+}
+
+/// A request body: its `Content-Type` field value and its octets.
+pub struct Payload {
+    /// the `Content-Type` field value
+    pub content_type: Seq<u8>,
+    /// the octets
+    pub bytes: Seq<u8>,
+}
+
+/// The part of Fetch's request that is not its URL (see the modelling
+/// choices of this part).
+pub struct Req {
+    /// the method
+    pub method: Seq<u8>,
+    /// the body, or null
+    pub body: Option<Payload>,
+    /// the origin of the document that made the request (Fetch's
+    /// "request's origin"), or none: a navigation with no client
+    pub initiator: Option<clazel_origin::spec::Origin>,
+    /// Fetch's redirect-taint is not "same-origin": some redirect led to a
+    /// URL whose origin is not that of the URL before it
+    pub origin_tainted: bool,
+}
+
+/// The request every fetch before 6.16 is: `GET`, no body, no client.
+pub open spec fn get_req() -> Req {
+    Req { method: lit_get(), body: None, initiator: None, origin_tainted: false }
+}
+
+/// A navigation with `GET`, no body and no client (the class before 6.16;
+/// `origin_tainted` is not looked at: no `Origin` is sent on `GET`).
+pub open spec fn is_plain_get(req: Req) -> bool {
+    req.method == lit_get() && req.body is None && req.initiator is None
+}
+
+/// The methods a navigation uses here: `GET` and `POST`.
+pub open spec fn is_navigation_method(m: Seq<u8>) -> bool {
+    m == lit_get() || m == lit_post()
+}
+
+/// RFC 9110 §9.2.1: "the request methods GET, HEAD, OPTIONS, and TRACE
+/// are defined to be safe".
+pub open spec fn is_safe_method(m: Seq<u8>) -> bool {
+    m == lit_get() || m == lit_head() || m == lit_options() || m == lit_trace()
+}
+
+/// The most octets a request body may have (16 MiB, the bound `clazel-ipc`'s
+/// `Submit` carries): a request with a longer body is not built.
+pub open spec fn max_request_body() -> nat {
+    0x100_0000
+}
+
+/// A request this client builds: a navigation method, no body on `GET`, and
+/// a body of at most [`max_request_body`] octets.
+pub open spec fn req_ok(req: Req) -> bool {
+    is_navigation_method(req.method) && (req.method == lit_get() ==> req.body is None)
+        && (match req.body {
+        Some(p) => p.bytes.len() <= max_request_body(),
+        None => true,
+    })
+}
+
+/// The decimal digits of `n`, as octets (Fetch: "serialized and isomorphic
+/// encoded"; URL's "serialize an integer").
+pub open spec fn decimal_octets(n: nat) -> Seq<u8> {
+    clazel_url::host::spec::serialize_integer(n).map_values(|c: u32| c as u8)
+}
+
+/// The octets of the body, none if it is null.
+pub open spec fn body_bytes(req: Req) -> Seq<u8> {
+    match req.body {
+        Some(p) => p.bytes,
+        None => Seq::<u8>::empty(),
+    }
+}
+
+/// Fetch §4.6 steps 6 to 9 (and the `Content-Type` the body's extraction
+/// set): the field lines the body adds. A body adds `Content-Type` and
+/// `Content-Length`; a `POST` without a body adds `Content-Length: 0`;
+/// anything else adds none.
+pub open spec fn body_field_lines(req: Req) -> Seq<clazel_http::field::spec::FieldLine> {
+    match req.body {
+        Some(p) => seq![
+            clazel_http::field::spec::FieldLine { name: lit_content_type(), value: p.content_type },
+            clazel_http::field::spec::FieldLine { name: lit_content_length(), value: decimal_octets(p.bytes.len()) },
+        ],
+        None => if req.method == lit_post() {
+            seq![clazel_http::field::spec::FieldLine { name: lit_content_length(), value: decimal_octets(0) }]
+        } else {
+            seq![]
+        },
+    }
+}
+
+/// "append a request `Origin` header" step 4.1 and "serializing a request
+/// origin" (see the modelling choices): the value `Origin` would have for a
+/// request for `url`, or `None` if it is not ASCII.
+pub open spec fn origin_value(url: clazel_url::url::spec::Url, req: Req) -> Option<Seq<u8>> {
+    match req.initiator {
+        None => Some(lit_null()),
+        Some(o) => if req.origin_tainted {
+            Some(lit_null())
+        } else {
+            match o {
+                clazel_origin::spec::Origin::Tuple { scheme, .. } => if scheme == clazel_url::url::spec::https_str() && url.scheme != clazel_url::url::spec::https_str() {
+                    Some(lit_null())
+                } else {
+                    ascii_octets(clazel_origin::spec::serialization_of_origin(o))
+                },
+                clazel_origin::spec::Origin::Opaque(_) => Some(lit_null()),
+            }
+        },
+    }
+}
+
+/// "append a request `Origin` header" for a request for `url`: none for
+/// `GET` or `HEAD` (step 4), else one `Origin` field line (step 4.2), or
+/// `None` if the value is not ASCII.
+pub open spec fn origin_field_lines(url: clazel_url::url::spec::Url, req: Req) -> Option<Seq<clazel_http::field::spec::FieldLine>> {
+    if req.method == lit_get() || req.method == lit_head() {
+        Some(seq![])
+    } else {
+        match origin_value(url, req) {
+            Some(v) => Some(seq![clazel_http::field::spec::FieldLine { name: lit_origin(), value: v }]),
+            None => None,
+        }
+    }
+}
+
+/// The request for `url` with the method, body and `Origin` of `req`:
+/// [`request_for`]'s fields, then [`body_field_lines`] and
+/// [`origin_field_lines`]; `None` if this client does not fetch it.
+pub open spec fn request_for_req(url: clazel_url::url::spec::Url, req: Req) -> Option<clazel_http::message::spec::Request> {
+    match (request_for(url), origin_field_lines(url, req)) {
+        (Some(r), Some(of)) => if req_ok(req) {
+            Some(clazel_http::message::spec::Request { method: req.method, target: r.target, fields: r.fields + body_field_lines(req) + of })
+        } else {
+            None
+        },
+        _ => None,
+    }
+}
+
+/// [`request_for_req`] carrying the cookie-string `cookie` (Fetch §4.6
+/// step 22.1: the last field).
+pub open spec fn request_for_req_cookie(url: clazel_url::url::spec::Url, req: Req, cookie: Seq<u8>) -> Option<clazel_http::message::spec::Request> {
+    match request_for_req(url, req) {
+        Some(r) => Some(clazel_http::message::spec::Request { method: r.method, target: r.target, fields: r.fields + cookie_field_lines(cookie) }),
+        None => None,
+    }
+}
+
+/// The bytes sent: the serialized head (RFC 9112 §2.1, §3) when it is
+/// valid, then the body's octets (§6.2).
+pub open spec fn request_bytes_req_cookie(url: clazel_url::url::spec::Url, req: Req, cookie: Seq<u8>) -> Option<Seq<u8>> {
+    match request_for_req_cookie(url, req, cookie) {
+        Some(r) => if clazel_http::message::spec::is_valid_request(r) {
+            Some(clazel_http::message::spec::serialize_request(r) + body_bytes(req))
+        } else {
+            None
+        },
+        None => None,
+    }
+}
+
+/// The bytes sent with no cookies: [`request_bytes_req_cookie`] with the
+/// empty cookie-string.
+pub open spec fn request_bytes_req(url: clazel_url::url::spec::Url, req: Req) -> Option<Seq<u8>> {
+    request_bytes_req_cookie(url, req, Seq::<u8>::empty())
+}
+
+/// HTTP-redirect fetch step 12: "If one of the following is true:
+/// internalResponse's status is 301 or 302 and request's method is `POST`;
+/// internalResponse's status is 303 and request's method is not `GET` or
+/// `HEAD`; then: 12.1 Set request's method to `GET` and request's body to
+/// null. 12.2 For each headerName of request-body-header name, delete
+/// headerName from request's header list." (RFC 9110 §15.4.2, §15.4.3,
+/// §15.4.4: 301 and 302 may change `POST` to `GET`, 303 does; §15.4.8 and
+/// §15.4.9: 307 and 308 "MUST NOT change the request method".) The deleted
+/// header names are derived from the body (see the modelling choices). The
+/// redirect-taint is updated by the caller.
+pub open spec fn rewrite_for_redirect(status: nat, req: Req) -> Req {
+    if (status == 301 || status == 302) && req.method == lit_post() || status == 303 && req.method != lit_get() && req.method != lit_head() {
+        Req { method: lit_get(), body: None, ..req }
+    } else {
+        req
+    }
+}
+
+/// The cookie request context's "safe method" bit for `req` (RFC 6265bis
+/// §5.2's "method is safe", RFC 9110 §9.2.1).
+pub open spec fn method_is_safe(req: Req) -> bool {
+    is_safe_method(req.method)
+}
+
 } // verus!
