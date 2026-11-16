@@ -14,7 +14,7 @@ phase 8 stays: the proofs (Verus, Kani) and `scripts/verify.sh` are not run on
 Windows.
 
 **Non-goals for now:** extensions, DRM, WebGL/WebGPU. (JIT compilation was a
-non-goal until 2026-11-16; it is now Phase 9, proposed.)
+non-goal until 2026-11-16; it is now part of Phase 7.)
 
 Each phase ends in something you can run.
 
@@ -88,11 +88,20 @@ PNG, JPEG, GIF and WebP decoders (Tier 1, written in the style of WUFFS), plus
 form submission.
 
 ## Phase 7: JavaScript
-Interpreter only, no JIT. The GC uses an index-based arena so the heap stays
-in safe Rust. DOM bindings. The bytecode semantics is a Verus spec, and the
-value, frame and inline-cache layouts follow Phase 9 item 9.1, so the JIT
-can share them.
-*Exit:* common sites work, more slowly than in a JIT-based browser.
+A baseline JIT is the main path, on Windows x86-64, Linux x86-64 and macOS
+arm64 from the start (decided 2026-11-16). A thin interpreter loop over the
+same op handlers runs cold code, serves as the JIT-off mode and is the
+reference for testing. Every code blob passes a tier 2 validator for its
+instruction set before it can run, which proves the code stays in its
+memory regions and jumps only inside itself. Each op's code is proven to
+refine the bytecode semantics, a Verus spec. The GC uses an index-based
+arena so the heap stays in safe Rust. DOM bindings. The machine-code half
+(instruction-set specs, IR, back ends, validators) is built so that a later
+WebAssembly front end reuses it.
+JIT plan: [phases/jit.md](phases/jit.md). The rest of the phase is not
+planned in detail yet.
+*Exit:* common sites work; Test262 gives the same results with the JIT on
+and off on all three platforms.
 
 ## Phase 8: Windows port, compatibility grind
 Windows proofs (the AppContainer backend, base CI job and Phase 5's window exist, see Platforms). WPT score tracking, CSS breadth,
@@ -103,14 +112,3 @@ GBK, Big5, ISO-2022-JP, Shift_JIS, EUC-JP, EUC-KR), slipped from Phase 4
 item 4.4 as its item 4.0 allows; until then a page in one of them is not
 rendered and says "encoding `<name>` is not supported"
 ([phases/phase-4.md](phases/phase-4.md#44-legacy-multi-byte-encodings-l-may-slip-to-phase-8-per-40)).
-
-## Phase 9: a proven JIT, JavaScript first
-A baseline JIT for A64. Every code blob passes a tier 2 validator before it
-can run, which proves the code stays in its memory regions and jumps only
-inside itself. Each op's code is proven to refine the interpreter's
-semantics. The machine-code half (instruction-set spec, IR, back end,
-validator) is built so that a later WebAssembly front end reuses it.
-*Exit:* Test262 gives the same results with the JIT forced on, on macOS
-arm64 and Linux aarch64.
-Detailed plan: [phases/phase-9.md](phases/phase-9.md).
-**Status: proposed (2026-11-16); decisions in item 9.0 open.**
