@@ -20,7 +20,7 @@
 //! - [`independent`]: a second transcription of parsing, matching and specificity, from the
 //!   standard alone. [`independent_equivalence`] (specificity), [`independent_match`] (with
 //!   [`independent_attr`]) and [`independent_parse`] prove it equal to [`spec`] on the
-//!   selectors the two share; parsing only for lists with no function in them.
+//!   selectors the two share.
 //!
 //! The crate also holds the vendored test data of item 5.1, under `tests/data/`.
 //!

@@ -56,12 +56,13 @@
 //! - **Matching** ([`super::independent_match::theorem_match_equivalent`]): the same elements
 //!   match, including `:is()`, `:where()`, `:not()`, the child-indexed pseudo-classes, the four
 //!   combinators, attribute selectors and the HTML case rules.
-//! - **Parsing** ([`super::independent_parse`]): in both directions, for lists of component
-//!   values **with no function in them**, that is, without `:is()`, `:where()`, `:not()` and the
-//!   `:nth-` family. How those take their arguments (the forgiving list, `:not()`'s strict one,
-//!   `An+B`) is **not proven equal**; the spec's reading of it is checked by the WPT parsing suite
-//!   and the transcription's by nothing yet. So the equivalence of parsing is incomplete, and this
-//!   crate stays at tier 0.
+//! - **Parsing** ([`super::independent_parse`]): in both directions, for every list of
+//!   component values: if the spec parses it to a selector list that has a transcription, the
+//!   transcription parses it to that; if the transcription parses it, the spec does. That
+//!   includes the arguments of `:is()`, `:where()` (the forgiving list, where both drop what the
+//!   spec rejects), `:not()` (the strict list) and the `:nth-` family (`An+B`, which both take
+//!   from `clazel-css`). What each of the two accepts that the other does not support is
+//!   outside the theorems, as said above.
 //!
 //! ## Modelling choices
 //!

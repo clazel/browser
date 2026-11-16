@@ -13,9 +13,14 @@
 //! - **transcription to spec**: if the transcription parses an input, so does the spec.
 //!
 //! Together: wherever the spec's result is made of selectors both support, the two agree; and the
-//! transcription accepts nothing the spec rejects. The first half is false without a premise
-//! about the input's end: a compound selector stops at white space, a combinator or the end,
-//! and the spec's compound parser can also stop at a stray token that its caller then rejects.
+//! transcription accepts nothing the spec rejects. The lemmas carry a premise about where a
+//! compound selector ends (at white space, a combinator or the end: the spec's compound parser
+//! can also stop at a stray token that its caller then rejects), which the callers establish.
+//!
+//! Functional pseudo-classes make the lemmas recursive over how deeply the list is nested: each
+//! lemma takes, for every function in its list, the property [`fun_prop`] (what the two do with
+//! that function's name and arguments), and [`lemma_fun_prop`] proves it of every function by
+//! induction on the arguments, using the same lemmas on them.
 
 #[cfg(verus_only)]
 use super::independent::*;
@@ -3111,17 +3116,273 @@ pub proof fn lemma_forg_a(v: Seq<ComponentValue>, in_has: bool, arg: Seq<Complex
     }
 }
 
-/// **Parsing, without functional pseudo-classes, spec to transcription.** If the spec parses a list
-/// of component values with no function in it to a selector list that has a transcription, the
-/// transcription parses the same list to that transcription.
+// ------------------------------------------------------------------------------------
+// Functional pseudo-classes
+// ------------------------------------------------------------------------------------
+
+/// The clamp is the same.
+pub proof fn lemma_clamp_same(n: int)
+    ensures
+        i_clamp(n) == clamp(n),
+{
+}
+
+/// The names of the functional pseudo-classes, as the spec and the transcription compare them.
+pub proof fn lemma_fn_names(name: Seq<u32>)
+    ensures
+        ascii_case_insensitive_match(name, str_is()) == i_ci_eq(name, seq![0x69u32, 0x73]),
+        ascii_case_insensitive_match(name, str_where()) == i_ci_eq(name, seq![0x77u32, 0x68, 0x65, 0x72, 0x65]),
+        ascii_case_insensitive_match(name, str_not()) == i_ci_eq(name, seq![0x6Eu32, 0x6F, 0x74]),
+        ascii_case_insensitive_match(name, str_nth_child()) == i_ci_eq(
+            name,
+            seq![0x6Eu32, 0x74, 0x68, 0x2D, 0x63, 0x68, 0x69, 0x6C, 0x64],
+        ),
+        ascii_case_insensitive_match(name, str_nth_last_child()) == i_ci_eq(
+            name,
+            seq![0x6Eu32, 0x74, 0x68, 0x2D, 0x6C, 0x61, 0x73, 0x74, 0x2D, 0x63, 0x68, 0x69, 0x6C, 0x64],
+        ),
+        ascii_case_insensitive_match(name, str_nth_of_type()) == i_ci_eq(
+            name,
+            seq![0x6Eu32, 0x74, 0x68, 0x2D, 0x6F, 0x66, 0x2D, 0x74, 0x79, 0x70, 0x65],
+        ),
+        ascii_case_insensitive_match(name, str_nth_last_of_type()) == i_ci_eq(
+            name,
+            seq![
+                0x6Eu32, 0x74, 0x68, 0x2D, 0x6C, 0x61, 0x73, 0x74, 0x2D, 0x6F, 0x66, 0x2D, 0x74, 0x79,
+                0x70, 0x65,
+            ],
+        ),
+        // `has` is none of the `nth-` names (the transcription tests it before them).
+        i_ci_eq(name, seq![0x68u32, 0x61, 0x73]) ==> !i_ci_eq(
+            name,
+            seq![0x6Eu32, 0x74, 0x68, 0x2D, 0x63, 0x68, 0x69, 0x6C, 0x64],
+        ) && !i_ci_eq(
+            name,
+            seq![0x6Eu32, 0x74, 0x68, 0x2D, 0x6C, 0x61, 0x73, 0x74, 0x2D, 0x63, 0x68, 0x69, 0x6C, 0x64],
+        ) && !i_ci_eq(name, seq![0x6Eu32, 0x74, 0x68, 0x2D, 0x6F, 0x66, 0x2D, 0x74, 0x79, 0x70, 0x65])
+            && !i_ci_eq(
+            name,
+            seq![
+                0x6Eu32, 0x74, 0x68, 0x2D, 0x6C, 0x61, 0x73, 0x74, 0x2D, 0x6F, 0x66, 0x2D, 0x74, 0x79,
+                0x70, 0x65,
+            ],
+        ),
+{
+    lemma_ci_match_lower(name, str_is());
+    lemma_ci_match_lower(name, str_where());
+    lemma_ci_match_lower(name, str_not());
+    lemma_ci_match_lower(name, str_nth_child());
+    lemma_ci_match_lower(name, str_nth_last_child());
+    lemma_ci_match_lower(name, str_nth_of_type());
+    lemma_ci_match_lower(name, str_nth_last_of_type());
+    let has = seq![0x68u32, 0x61, 0x73];
+    let n1 = seq![0x6Eu32, 0x74, 0x68, 0x2D, 0x63, 0x68, 0x69, 0x6C, 0x64];
+    let n2 = seq![0x6Eu32, 0x74, 0x68, 0x2D, 0x6C, 0x61, 0x73, 0x74, 0x2D, 0x63, 0x68, 0x69, 0x6C, 0x64];
+    let n3 = seq![0x6Eu32, 0x74, 0x68, 0x2D, 0x6F, 0x66, 0x2D, 0x74, 0x79, 0x70, 0x65];
+    let n4 = seq![
+        0x6Eu32, 0x74, 0x68, 0x2D, 0x6C, 0x61, 0x73, 0x74, 0x2D, 0x6F, 0x66, 0x2D, 0x74, 0x79, 0x70, 0x65,
+    ];
+    assert(all_lc(has));
+    assert(all_lc(n1) && all_lc(n2) && all_lc(n3) && all_lc(n4));
+    if i_ci_eq(name, has) {
+        if i_ci_eq(name, n1) {
+            lemma_ci_unique(name, has, n1);
+        }
+        if i_ci_eq(name, n2) {
+            lemma_ci_unique(name, has, n2);
+        }
+        if i_ci_eq(name, n3) {
+            lemma_ci_unique(name, has, n3);
+        }
+        if i_ci_eq(name, n4) {
+            lemma_ci_unique(name, has, n4);
+        }
+    }
+}
+
+/// `:not()`'s argument, as the spec reads it, is a loop over a list.
+pub proof fn lemma_not_list(value: Seq<ComponentValue>, arg: Seq<Complex>)
+    requires
+        complex_list(value, 0, value.len() as int, true) == Some(arg),
+    ensures
+        clist_res(value, 0, value.len() as int, Seq::empty(), true) == Some(arg),
+{
+    reveal_with_fuel(complex_list, 2);
+    reveal(clist_res);
+}
+
+/// `:is()`.
+#[verifier::rlimit(80)]
+pub proof fn lemma_fp_a_is(name: Seq<u32>, value: Seq<ComponentValue>, ih: bool, m: ISimple)
+    requires
+        no_fun(value, value.len() as int),
+        ascii_case_insensitive_match(name, str_is()),
+    ensures
+        fun_stmt_a(name, value, ih, m),
+{
+    reveal_with_fuel(functional_pseudo_class, 2);
+    reveal_with_fuel(i_pseudo_function, 2);
+    lemma_fn_names(name);
+    let arg = parse_as_a_forgiving_selector_list(value);
+    if let ISimple::Is(l) = m {
+        if rel_simple(Simple::Is { arg }, m) {
+            lemma_forg_a(value, ih, arg, l);
+        }
+    }
+}
+
+/// `:where()`.
+#[verifier::rlimit(80)]
+pub proof fn lemma_fp_a_where(name: Seq<u32>, value: Seq<ComponentValue>, ih: bool, m: ISimple)
+    requires
+        no_fun(value, value.len() as int),
+        !ascii_case_insensitive_match(name, str_is()),
+        ascii_case_insensitive_match(name, str_where()),
+    ensures
+        fun_stmt_a(name, value, ih, m),
+{
+    reveal_with_fuel(functional_pseudo_class, 2);
+    reveal_with_fuel(i_pseudo_function, 2);
+    lemma_fn_names(name);
+    let arg = parse_as_a_forgiving_selector_list(value);
+    if let ISimple::Where(l) = m {
+        if rel_simple(Simple::Where { arg }, m) {
+            lemma_forg_a(value, ih, arg, l);
+        }
+    }
+}
+
+/// `:not()`.
+pub proof fn lemma_fp_a_not(name: Seq<u32>, value: Seq<ComponentValue>, ih: bool, m: ISimple)
+    requires
+        no_fun(value, value.len() as int),
+        !ascii_case_insensitive_match(name, str_is()),
+        !ascii_case_insensitive_match(name, str_where()),
+        ascii_case_insensitive_match(name, str_not()),
+    ensures
+        fun_stmt_a(name, value, ih, m),
+{
+    reveal_with_fuel(functional_pseudo_class, 2);
+    reveal_with_fuel(i_pseudo_function, 2);
+    lemma_fn_names(name);
+    let len = value.len() as int;
+    if let Some(arg) = complex_list(value, 0, len, true) {
+        if let ISimple::Not(l) = m {
+            if rel_simple(Simple::Not { arg }, m) {
+                lemma_not_list(value, arg);
+                assert forall|j: int| 0 <= j < l.len() implies #[trigger] relcx(arg, 0, l, j) by {
+                    reveal(relcx);
+                    assert(rel_complex(arg[j], l[j]));
+                }
+                lemma_clist_a(value, 0, len, Seq::empty(), true, true, ih, arg, l);
+            }
+        }
+    }
+}
+
+/// `:nth-*()`.
+pub proof fn lemma_fp_a_nth(name: Seq<u32>, value: Seq<ComponentValue>, ih: bool, m: ISimple)
+    requires
+        !ascii_case_insensitive_match(name, str_is()),
+        !ascii_case_insensitive_match(name, str_where()),
+        !ascii_case_insensitive_match(name, str_not()),
+    ensures
+        fun_stmt_a(name, value, ih, m),
+{
+    reveal_with_fuel(functional_pseudo_class, 2);
+    reveal_with_fuel(i_pseudo_function, 2);
+    reveal_with_fuel(i_nth_child, 2);
+    lemma_fn_names(name);
+    if let Some((a, b)) = a_n_plus_b(value) {
+        lemma_clamp_same(a);
+        lemma_clamp_same(b);
+    }
+}
+
+/// The transcription's functional pseudo-class, for each name, in terms of what it calls.
+pub proof fn lemma_fp_a(name: Seq<u32>, value: Seq<ComponentValue>, ih: bool, m: ISimple)
+    requires
+        no_fun(value, value.len() as int),
+    ensures
+        fun_stmt_a(name, value, ih, m),
+{
+    lemma_fn_names(name);
+    if ascii_case_insensitive_match(name, str_is()) {
+        lemma_fp_a_is(name, value, ih, m);
+    } else if ascii_case_insensitive_match(name, str_where()) {
+        lemma_fp_a_where(name, value, ih, m);
+    } else if ascii_case_insensitive_match(name, str_not()) {
+        lemma_fp_a_not(name, value, ih, m);
+    } else {
+        lemma_fp_a_nth(name, value, ih, m);
+    }
+}
+
+/// The reverse: what the transcription reads, the spec reads.
+pub proof fn lemma_fp_b(name: Seq<u32>, value: Seq<ComponentValue>, ih: bool)
+    requires
+        no_fun(value, value.len() as int),
+    ensures
+        fun_stmt_b(name, value, ih),
+{
+    lemma_fn_names(name);
+    reveal_with_fuel(functional_pseudo_class, 2);
+    reveal_with_fuel(i_pseudo_function, 2);
+    reveal_with_fuel(i_nth_child, 2);
+    let len = value.len() as int;
+    if !ascii_case_insensitive_match(name, str_is()) && !ascii_case_insensitive_match(name, str_where())
+        && ascii_case_insensitive_match(name, str_not()) {
+        if let Some(l) = i_clist(value, 0, len, cx0(), false, false, true, ih) {
+            lemma_clist_b(value, 0, len, Seq::empty(), true, true, ih, l);
+            reveal(clist_res);
+            reveal_with_fuel(complex_list, 2);
+        }
+    }
+}
+
+/// Every function in a list that has the property has it for what it contains: by induction on
+/// how deeply the list is nested.
+pub proof fn lemma_fun_prop(name: Seq<u32>, value: Seq<ComponentValue>)
+    ensures
+        fun_prop(name, value),
+    decreases value, 1nat,
+{
+    lemma_fun_ok(value);
+    reveal(fun_prop);
+    assert forall|ih: bool, m: ISimple| #[trigger] fun_stmt_a(name, value, ih, m) by {
+        lemma_fp_a(name, value, ih, m);
+    }
+    assert forall|ih: bool| #[trigger] fun_stmt_b(name, value, ih) by {
+        lemma_fp_b(name, value, ih);
+    }
+}
+
+/// Every function in a list has the property.
+pub proof fn lemma_fun_ok(v: Seq<ComponentValue>)
+    ensures
+        no_fun(v, v.len() as int),
+    decreases v, 0nat,
+{
+    assert forall|k: int| 0 <= k < v.len() implies (#[trigger] v[k] is Function ==> fun_prop(
+        v[k]->Function_name,
+        v[k]->Function_value,
+    )) by {
+        if v[k] is Function {
+            lemma_fun_prop(v[k]->Function_name, v[k]->Function_value);
+        }
+    }
+}
+
+/// **Parsing, spec to transcription.** If the spec parses a list of component values to a
+/// selector list that has a transcription, the transcription parses the same list to it.
 pub proof fn theorem_parse_spec_to_transcription(v: Seq<ComponentValue>, l: Seq<Complex>, m: Seq<IComplex>)
     requires
-        no_fun(v, v.len() as int),
         selector_list(v) == Some(l),
         rel_list(l, m),
     ensures
         i_parse_selector_list(v, cx0()) == Some(m),
 {
+    lemma_fun_ok(v);
     assert(complex_list_loop(v, 0, v.len() as int, Seq::empty(), false) == Some(l)) by {
         reveal_with_fuel(complex_list_loop, 2);
     }
@@ -3135,15 +3396,15 @@ pub proof fn theorem_parse_spec_to_transcription(v: Seq<ComponentValue>, l: Seq<
     lemma_clist_a(v, 0, v.len() as int, Seq::empty(), false, false, false, l, m);
 }
 
-/// **Parsing, without functional pseudo-classes, transcription to spec.** If the transcription
-/// parses a list of component values with no function in it, the spec parses it too.
+/// **Parsing, transcription to spec.** If the transcription parses a list of component values,
+/// the spec parses it too.
 pub proof fn theorem_parse_transcription_to_spec(v: Seq<ComponentValue>, m: Seq<IComplex>)
     requires
-        no_fun(v, v.len() as int),
         i_parse_selector_list(v, cx0()) == Some(m),
     ensures
         selector_list(v) is Some,
 {
+    lemma_fun_ok(v);
     lemma_clist_b(v, 0, v.len() as int, Seq::empty(), false, false, false, m);
     reveal(clist_res);
     reveal_with_fuel(complex_list_loop, 2);

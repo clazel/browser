@@ -90,9 +90,8 @@ proven equal to the spec in part:
   from the first attribute of that name, the transcription from any).
 - `theorem_parse_spec_to_transcription` and `theorem_parse_transcription_to_spec`
   (`src/independent_parse.rs`): the two parse a list of component values alike, and each
-  accepts what the other does, **for lists with no function in them**. `:is()`, `:where()`,
-  `:not()` and the `:nth-` family, whose arguments are parsed by a forgiving list, a strict
-  list and `An+B`, are not covered: the equivalence of parsing is incomplete.
+  accepts what the other does, including the arguments of `:is()`, `:where()` (forgiving
+  list), `:not()` (strict list) and the `:nth-` family (`An+B`).
 
 "Support" differs: the spec has `:link`, `:visited`, `:any-link`, the user action
 pseudo-classes and pseudo-elements, which the transcription takes as invalid, so they are
@@ -102,7 +101,6 @@ of one text, so they can share a misreading: the weight of evidence for the spec
 suite above, which the transcription has not been run against.
 
 Tier 0 for now. A tier also needs the parser and serializer proven equal to the spec (the
-exec parser and serializer are checked for panics, overflow and termination only), the
-equivalence of parsing finished for functional pseudo-classes, and the differential against
-Servo's `selectors`. The target is tier 2, since this crate parses selectors that a page
-chose.
+exec parser and serializer are checked for panics, overflow and termination only), and the
+differential against Servo's `selectors`. The target is tier 2, since this crate parses
+selectors that a page chose.

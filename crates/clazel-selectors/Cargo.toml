@@ -29,8 +29,7 @@ theorems = [
     "theorem_specificity_monotone",
     "theorem_where_zero",
     "theorem_is_most_specific",
-    # The independent transcription's equivalence to the spec (src/independent_*.rs). Parsing is
-    # proven only for lists without a function in them (see independent.rs's header).
+    # The independent transcription's equivalence to the spec (src/independent_*.rs).
     "theorem_specificity_equivalent",
     "theorem_match_equivalent",
     "theorem_parse_spec_to_transcription",
