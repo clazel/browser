@@ -6,9 +6,9 @@ maintainer on 2026-11-16:
 - the JIT targets Windows and x86-64 from the start, alongside macOS arm64.
 
 Item J.0's decisions were taken by the maintainer on 2026-11-16, every
-recommendation as written. The rest of Phase 7 (parser,
-bytecode compiler, GC, builtins, DOM bindings) is not planned in detail
-yet. Item J.1 lists what that plan must fix in place for this one to work.
+recommendation as written. The rest of Phase 7 is planned in
+[phase-7.md](phase-7.md), whose "Shapes fixed here for the JIT" section
+fixes what item J.1 lists.
 
 **Goal:** JavaScript runs as machine code the browser generated, on x86-64
 and on A64 (64-bit Arm).
@@ -487,7 +487,7 @@ runner.
 
 ## Order of work
 
-J.0 → J.1 (folded into Phase 7's plan) → J.2 → J.3 and J.4 in parallel →
+J.0 → J.1 (phase-7.md, 7.4 and 7.5) → J.2 → J.3 and J.4 in parallel →
 J.5 → J.6 (x86-64 first: its validator is the harder one and its runners
 are CI's main ones) → J.7 and J.8 → J.9 → J.10 → J.11 → J.12.
 

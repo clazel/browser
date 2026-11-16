@@ -98,8 +98,10 @@ refine the bytecode semantics, a Verus spec. The GC uses an index-based
 arena so the heap stays in safe Rust. DOM bindings. The machine-code half
 (instruction-set specs, IR, back ends, validators) is built so that a later
 WebAssembly front end reuses it.
-JIT plan: [phases/jit.md](phases/jit.md). The rest of the phase is not
-planned in detail yet.
+Detailed plan: [phases/phase-7.md](phases/phase-7.md); the JIT in
+[phases/jit.md](phases/jit.md).
+**Status: planned (2026-11-16); decisions in item 7.0 open, the JIT's (J.0)
+taken; no item started.**
 *Exit:* common sites work; Test262 gives the same results with the JIT on
 and off on all three platforms.
 
