@@ -193,7 +193,7 @@ pub open spec fn rel_compound(c: Seq<Simple>, m: ICompound) -> bool
     decreases c, 1nat,
 {
     let off = comp_off(c);
-    (match m.ty {
+    c.len() > 0 && (match m.ty {
         Some(t) => off == 1 && rel_type(c[0], t),
         None => off == 0,
     }) && m.subs.len() == c.len() - off && forall|k: int|

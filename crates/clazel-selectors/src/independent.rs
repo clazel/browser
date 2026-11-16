@@ -1522,7 +1522,7 @@ pub open spec fn i_cnt(
 pub open spec fn i_m_list(doc: Document, scope: Option<NodeId>, l: Seq<IComplex>, e: NodeId) -> bool
     decreases l, 5nat, 0int,
 {
-    exists|k: int| 0 <= k < l.len() && #[trigger] i_m_complex(doc, scope, l[k], None, e)
+    exists|k: int| 0 <= k < l.len() && i_m_complex(doc, scope, #[trigger] l[k], None, e)
 }
 
 /// §19.3: a complex selector (a relative one, against `anchor`) matches `e`: "process it
@@ -1568,7 +1568,7 @@ pub open spec fn i_m_at(
         // compound selector and rightmost combinator against any one of these elements returns
         // success, then return success."
         exists|p: NodeId|
-            i_related(doc, c.combs[k - 1], p, e) && #[trigger] i_m_at(doc, scope, c, anchor, k - 1, p)
+            #[trigger] i_related(doc, c.combs[k - 1], p, e) && i_m_at(doc, scope, c, anchor, k - 1, p)
     }
 }
 
@@ -1600,7 +1600,8 @@ pub open spec fn i_m_simple(doc: Document, scope: Option<NodeId>, s: ISimple, e:
         // "It represents an element if any of the relative selectors would match at least one
         // element when anchored against this element."
         ISimple::Has(l) => exists|k: int, x: NodeId|
-            0 <= k < l.len() && i_is_el(doc, x) && #[trigger] i_m_complex(doc, scope, l[k], Some(e), x),
+            #![trigger l[k], i_is_el(doc, x)]
+            0 <= k < l.len() && i_is_el(doc, x) && i_m_complex(doc, scope, l[k], Some(e), x),
         ISimple::Root => i_is_root(doc, e),
         ISimple::Empty => i_is_empty(doc, e),
         ISimple::Scope => i_is_scope(doc, scope, e),
