@@ -686,4 +686,500 @@ pub proof fn lemma_pseudo_ident(name: Seq<u32>)
     lemma_names_lc();
 }
 
+
+// ------------------------------------------------------------------------------------
+// One subclass selector
+// ------------------------------------------------------------------------------------
+
+/// No item before `end` is a function.
+pub open spec fn no_fun(v: Seq<ComponentValue>, end: int) -> bool {
+    forall|k: int| 0 <= k < end ==> !(#[trigger] v[k] is Function)
+}
+
+/// The position `q` is where a compound selector can end: at the end, white space or a
+/// combinator.
+pub open spec fn boundary(v: Seq<ComponentValue>, q: int, end: int) -> bool {
+    q >= end || i_is_ws(v[q]) || i_comb_of(v[q]) is Some
+}
+
+/// The spec's step at a position where it finds a selector begins with something the
+/// transcription's loop does not stop at.
+pub proof fn lemma_sub_one_pre(v: Seq<ComponentValue>, p: int, end: int)
+    requires
+        0 <= p < end <= v.len(),
+    ensures
+        match subclass_selector(v, p, end) {
+            Step::Found { .. } => !i_is_ws(v[p]) && i_comb_of(v[p]) is None,
+            _ => true,
+        },
+{
+}
+
+/// `<subclass-selector>`, with no function: what the transcription reads, the spec reads.
+pub proof fn lemma_sub_one_b(v: Seq<ComponentValue>, p: int, end: int, in_has: bool)
+    requires
+        0 <= p < end <= v.len(),
+        no_fun(v, end),
+    ensures
+        match i_sub_one(v, p, end, cx0(), in_has) {
+            Some((m, q)) => match subclass_selector(v, p, end) {
+                Step::Found { value, next } => next == q && rel_simple(value, m),
+                _ => false,
+            },
+            None => true,
+        },
+{
+    lemma_ident_at(v, p + 1, end);
+    lemma_colon_at(v, p + 1, end);
+    assert(!(v[p] is Function));
+    match v[p] {
+        ComponentValue::SimpleBlock { associated_token: Token::OpenSquare, value } => {
+            lemma_attribute_selector(value);
+        },
+        ComponentValue::Token { token: Token::Colon } => {
+            if p + 1 < end {
+                assert(!(v[p + 1] is Function));
+                match v[p + 1] {
+                    ComponentValue::Token { token: Token::Ident { value } } => {
+                        lemma_pseudo_ident(value);
+                    },
+                    _ => {},
+                }
+            }
+        },
+        _ => {},
+    }
+}
+
+/// `<subclass-selector>`, with no function: what the spec reads and the transcription has a
+/// counterpart for, the transcription reads.
+pub proof fn lemma_sub_one_a(v: Seq<ComponentValue>, p: int, end: int, in_has: bool, m: ISimple)
+    requires
+        0 <= p < end <= v.len(),
+        no_fun(v, end),
+    ensures
+        match subclass_selector(v, p, end) {
+            Step::Found { value, next } => rel_simple(value, m) ==> i_sub_one(
+                v,
+                p,
+                end,
+                cx0(),
+                in_has,
+            ) == Some((m, next)),
+            _ => true,
+        },
+{
+    lemma_ident_at(v, p + 1, end);
+    lemma_colon_at(v, p + 1, end);
+    assert(!(v[p] is Function));
+    match v[p] {
+        ComponentValue::SimpleBlock { associated_token: Token::OpenSquare, value } => {
+            lemma_attribute_selector(value);
+        },
+        ComponentValue::Token { token: Token::Colon } => {
+            if p + 1 < end {
+                assert(!(v[p + 1] is Function));
+                match v[p + 1] {
+                    ComponentValue::Token { token: Token::Ident { value } } => {
+                        lemma_pseudo_ident(value);
+                    },
+                    _ => {},
+                }
+            }
+        },
+        _ => {},
+    }
+}
+
+
+// ------------------------------------------------------------------------------------
+// Runs of subclass selectors
+// ------------------------------------------------------------------------------------
+
+/// Simple selectors and their transcriptions, one for one.
+pub open spec fn rel_simples(ss: Seq<Simple>, ms: Seq<ISimple>) -> bool {
+    ss.len() == ms.len() && forall|k: int| 0 <= k < ss.len() ==> rel_simple(#[trigger] ss[k], ms[k])
+}
+
+/// Where the transcription's subclass selector ends.
+pub proof fn lemma_sub_one_pos(v: Seq<ComponentValue>, p: int, end: int, in_has: bool)
+    requires
+        0 <= p < end <= v.len(),
+        no_fun(v, end),
+    ensures
+        match i_sub_one(v, p, end, cx0(), in_has) {
+            Some((_, q)) => p < q <= end,
+            None => true,
+        },
+{
+    assert(!(v[p] is Function));
+    match v[p] {
+        ComponentValue::Token { token: Token::Colon } => {
+            if p + 1 < end {
+                assert(!(v[p + 1] is Function));
+            }
+        },
+        _ => {},
+    }
+}
+
+/// `<pseudo-class-selector>*` after a pseudo-element only adds to what was read.
+pub proof fn lemma_user_actions_prefix(v: Seq<ComponentValue>, i: int, hi: int, acc: Seq<Simple>)
+    ensures
+        match user_actions(v, i, hi, acc) {
+            Some((r, _)) => r.len() >= acc.len() && r.subrange(0, acc.len() as int) == acc,
+            None => true,
+        },
+    decreases hi - i,
+{
+    match user_action(v, i, hi) {
+        Step::Found { value, next } => {
+            if next > i && next <= hi {
+                lemma_user_actions_prefix(v, next, hi, acc.push(Simple::PseudoClass { class: value }));
+                if let Some((r, _)) = user_actions(v, next, hi, acc.push(Simple::PseudoClass { class: value })) {
+                    assert(r.subrange(0, acc.len() as int) =~= acc);
+                }
+            }
+        },
+        _ => {},
+    }
+}
+
+/// What the spec's `<pseudo-compound-selector>` can add: nothing, or a pseudo-element, which the
+/// transcription has no counterpart for.
+pub proof fn lemma_pseudo_compound(v: Seq<ComponentValue>, i: int, hi: int, acc: Seq<Simple>, np: bool)
+    ensures
+        match pseudo_compound(v, i, hi, acc, np) {
+            Some((r, q)) => r.len() >= acc.len() && r.subrange(0, acc.len() as int) == acc && ((r == acc
+                && q == i) || (r.len() > acc.len() && r[acc.len() as int] is PseudoElement)),
+            None => true,
+        },
+{
+    match pseudo_element(v, i, hi) {
+        Step::Found { value, next } => {
+            if !np {
+                let acc1 = acc.push(Simple::PseudoElement { element: value });
+                lemma_user_actions_prefix(v, next, hi, acc1);
+                if let Some((r, _)) = user_actions(v, next, hi, acc1) {
+                    assert(r.subrange(0, acc1.len() as int) == acc1);
+                    assert(r[acc.len() as int] == acc1[acc.len() as int]);
+                    assert(r.subrange(0, acc.len() as int) =~= acc);
+                }
+            }
+        },
+        _ => {},
+    }
+}
+
+/// A run of subclass selectors extends what was read before.
+pub proof fn lemma_subs_prefix(v: Seq<ComponentValue>, i: int, hi: int, acc: Seq<Simple>, np: bool)
+    ensures
+        match subclass_selectors(v, i, hi, acc, np) {
+            Some((r, _)) => r.len() >= acc.len() && r.subrange(0, acc.len() as int) == acc,
+            None => true,
+        },
+    decreases hi - i,
+{
+    reveal_with_fuel(subclass_selectors, 2);
+    match subclass_selector(v, i, hi) {
+        Step::Found { value, next } => {
+            if i < next && next <= hi {
+                let acc2 = acc.push(value);
+                lemma_subs_prefix(v, next, hi, acc2, np);
+                if let Some((r, _)) = subclass_selectors(v, next, hi, acc2, np) {
+                    assert(r.subrange(0, acc.len() as int) =~= acc);
+                }
+            }
+        },
+        Step::Absent => {
+            lemma_pseudo_compound(v, i, hi, acc, np);
+        },
+        _ => {},
+    }
+}
+
+/// The transcription's run of subclass selectors stops at a boundary.
+pub proof fn lemma_i_subs_stop(v: Seq<ComponentValue>, p: int, end: int, in_has: bool, fuel: nat)
+    requires
+        0 <= p,
+        fuel > 0,
+        boundary(v, p, end),
+    ensures
+        i_subs(v, p, end, cx0(), in_has, fuel) == Some((Seq::<ISimple>::empty(), p)),
+{
+    reveal_with_fuel(i_subs, 2);
+}
+
+/// The transcription's run of subclass selectors reads one and goes on.
+pub proof fn lemma_i_subs_step(v: Seq<ComponentValue>, p: int, end: int, in_has: bool, fuel: nat, m: ISimple, next: int, ms1: Seq<ISimple>, q: int)
+    requires
+        0 <= p < end,
+        fuel > 0,
+        !boundary(v, p, end),
+        i_sub_one(v, p, end, cx0(), in_has) == Some((m, next)),
+        i_subs(v, next, end, cx0(), in_has, (fuel - 1) as nat) == Some((ms1, q)),
+    ensures
+        i_subs(v, p, end, cx0(), in_has, fuel) == Some((seq![m] + ms1, q)),
+{
+    reveal_with_fuel(i_subs, 2);
+}
+
+/// The `j`-th transcribed simple selector is the counterpart of the `k + j`-th spec one. (Opaque, so
+/// that the solver does not unfold every instance of the relation.)
+#[verifier::opaque]
+pub open spec fn relx(res: Seq<Simple>, k: int, ms: Seq<ISimple>, j: int) -> bool {
+    rel_simple(res[k + j], ms[j])
+}
+
+/// The spec's step at a position, opaque so that the proofs about runs do not unfold it.
+#[verifier::opaque]
+pub open spec fn sub_step(v: Seq<ComponentValue>, i: int, hi: int) -> Step<Simple> {
+    subclass_selector(v, i, hi)
+}
+
+/// The spec's run of subclass selectors, one step unfolded, in terms of [`sub_step`].
+pub proof fn lemma_subs_unfold(v: Seq<ComponentValue>, i: int, hi: int, acc: Seq<Simple>, np: bool)
+    ensures
+        subclass_selectors(v, i, hi, acc, np) == match sub_step(v, i, hi) {
+            Step::Invalid => None,
+            Step::Found { value, next } => if i < next && next <= hi {
+                subclass_selectors(v, next, hi, acc.push(value), np)
+            } else {
+                None
+            },
+            Step::Absent => pseudo_compound(v, i, hi, acc, np),
+        },
+{
+    reveal_with_fuel(subclass_selectors, 2);
+    reveal(sub_step);
+}
+
+/// A step that finds a selector is at something the transcription's run does not stop at.
+pub proof fn lemma_sub_step_pre(v: Seq<ComponentValue>, p: int, end: int)
+    requires
+        0 <= p < end <= v.len(),
+    ensures
+        match sub_step(v, p, end) {
+            Step::Found { .. } => !i_is_ws(v[p]) && i_comb_of(v[p]) is None,
+            _ => true,
+        },
+{
+    reveal(sub_step);
+    lemma_sub_one_pre(v, p, end);
+}
+
+/// The transcription reads what the spec's step finds, where it has a counterpart.
+pub proof fn lemma_sub_step_a(v: Seq<ComponentValue>, p: int, end: int, in_has: bool, m: ISimple)
+    requires
+        0 <= p < end <= v.len(),
+        no_fun(v, end),
+    ensures
+        match sub_step(v, p, end) {
+            Step::Found { value, next } => rel_simple(value, m) ==> i_sub_one(
+                v,
+                p,
+                end,
+                cx0(),
+                in_has,
+            ) == Some((m, next)),
+            _ => true,
+        },
+{
+    reveal(sub_step);
+    lemma_sub_one_a(v, p, end, in_has, m);
+}
+
+/// Nothing is found at the end.
+pub proof fn lemma_sub_step_end(v: Seq<ComponentValue>, p: int, end: int)
+    requires
+        p >= end,
+        end <= v.len(),
+    ensures
+        sub_step(v, p, end) is Absent,
+{
+    reveal(sub_step);
+}
+
+/// The spec's run of subclass selectors that ends at a boundary, and has a transcription, is
+/// read the same by the transcription.
+pub proof fn lemma_subs_a(
+    v: Seq<ComponentValue>,
+    p: int,
+    end: int,
+    acc: Seq<Simple>,
+    np: bool,
+    fuel: nat,
+    res: Seq<Simple>,
+    ms: Seq<ISimple>,
+    q: int,
+    in_has: bool,
+)
+    requires
+        0 <= p <= end <= v.len(),
+        no_fun(v, end),
+        fuel >= end - p + 1,
+        subclass_selectors(v, p, end, acc, np) == Some((res, q)),
+        res.len() == acc.len() + ms.len(),
+        forall|j: int| 0 <= j < ms.len() ==> #[trigger] relx(res, acc.len() as int, ms, j),
+        boundary(v, q, end),
+    ensures
+        i_subs(v, p, end, cx0(), in_has, fuel) == Some((ms, q)),
+    decreases end - p,
+{
+    lemma_subs_unfold(v, p, end, acc, np);
+    let k = acc.len() as int;
+    if p >= end {
+        lemma_sub_step_end(v, p, end);
+        lemma_pseudo_compound(v, p, end, acc, np);
+        lemma_colon_at(v, p, end);
+        assert(pseudo_element(v, p, end) is Absent);
+        assert(ms.len() == 0);
+        assert(ms =~= Seq::<ISimple>::empty());
+        assert(q == p);
+        lemma_i_subs_stop(v, p, end, in_has, fuel);
+    } else {
+        lemma_sub_step_pre(v, p, end);
+        match sub_step(v, p, end) {
+            Step::Found { value, next } => {
+                assert(p < next && next <= end);
+                let acc2 = acc.push(value);
+                lemma_subs_prefix(v, next, end, acc2, np);
+                assert(res.subrange(0, acc2.len() as int) == acc2);
+                assert(acc2[k] == value);
+                assert(res.subrange(0, acc2.len() as int)[k] == res[k]);
+                assert(res[k] == value);
+                assert(ms.len() > 0);
+                assert(relx(res, k, ms, 0));
+                reveal(relx);
+                assert(rel_simple(value, ms[0]));
+                lemma_sub_step_a(v, p, end, in_has, ms[0]);
+                let ms1 = ms.drop_first();
+                assert forall|j: int| 0 <= j < ms1.len() implies #[trigger] relx(res, acc2.len() as int, ms1, j) by {
+                    assert(ms1[j] == ms[j + 1]);
+                    assert(relx(res, k, ms, j + 1));
+                    assert(res[k + (j + 1)] == res[acc2.len() + j]);
+                }
+                lemma_subs_a(v, next, end, acc2, np, (fuel - 1) as nat, res, ms1, q, in_has);
+                lemma_i_subs_step(v, p, end, in_has, fuel, ms[0], next, ms1, q);
+                assert(ms =~= seq![ms[0]] + ms1);
+            },
+            Step::Invalid => {},
+            Step::Absent => {
+                lemma_pseudo_compound(v, p, end, acc, np);
+                assert(res.len() == acc.len()) by {
+                    if res.len() > acc.len() {
+                        assert(relx(res, k, ms, 0));
+                        reveal(relx);
+                        assert(rel_simple(res[k + 0], ms[0]));
+                    }
+                }
+                assert(q == p);
+                assert(ms =~= Seq::<ISimple>::empty());
+                lemma_colon_at(v, p, end);
+                lemma_i_subs_stop(v, p, end, in_has, fuel);
+            },
+        }
+    }
+}
+
+
+/// What the transcription's subclass selector reads is what the spec's step finds.
+pub proof fn lemma_sub_step_b(v: Seq<ComponentValue>, p: int, end: int, in_has: bool)
+    requires
+        0 <= p < end <= v.len(),
+        no_fun(v, end),
+    ensures
+        match i_sub_one(v, p, end, cx0(), in_has) {
+            Some((m, q)) => match sub_step(v, p, end) {
+                Step::Found { value, next } => next == q && rel_simple(value, m),
+                _ => false,
+            },
+            None => true,
+        },
+{
+    reveal(sub_step);
+    lemma_sub_one_b(v, p, end, in_has);
+}
+
+/// The spec's step is absent where the transcription's run stops.
+pub proof fn lemma_sub_step_stop(v: Seq<ComponentValue>, p: int, end: int)
+    requires
+        0 <= p < end <= v.len(),
+        i_is_ws(v[p]) || i_comb_of(v[p]) is Some,
+    ensures
+        sub_step(v, p, end) is Absent,
+{
+    reveal(sub_step);
+}
+
+/// Where the spec's step is absent and the position is a boundary, nothing more is added.
+pub proof fn lemma_pseudo_compound_boundary(v: Seq<ComponentValue>, p: int, end: int, acc: Seq<Simple>, np: bool)
+    requires
+        0 <= p <= end <= v.len(),
+        boundary(v, p, end),
+    ensures
+        pseudo_compound(v, p, end, acc, np) == Some((acc, p)),
+{
+    lemma_colon_at(v, p, end);
+}
+
+/// What the transcription reads as a run of subclass selectors, the spec reads too.
+pub proof fn lemma_subs_b(
+    v: Seq<ComponentValue>,
+    p: int,
+    end: int,
+    acc: Seq<Simple>,
+    np: bool,
+    fuel: nat,
+    ms: Seq<ISimple>,
+    q: int,
+    in_has: bool,
+)
+    requires
+        0 <= p <= end <= v.len(),
+        no_fun(v, end),
+        i_subs(v, p, end, cx0(), in_has, fuel) == Some((ms, q)),
+    ensures
+        boundary(v, q, end),
+        match subclass_selectors(v, p, end, acc, np) {
+            Some((res, q2)) => q2 == q && res.len() == acc.len() + ms.len(),
+            None => false,
+        },
+    decreases fuel,
+{
+    reveal_with_fuel(i_subs, 2);
+    lemma_subs_unfold(v, p, end, acc, np);
+    if p >= end || i_is_ws(v[p]) || i_comb_of(v[p]) is Some {
+        if p >= end {
+            lemma_sub_step_end(v, p, end);
+        } else {
+            lemma_sub_step_stop(v, p, end);
+        }
+        assert(boundary(v, p, end));
+        lemma_pseudo_compound_boundary(v, p, end, acc, np);
+        assert(ms =~= Seq::<ISimple>::empty());
+    } else {
+        lemma_sub_one_pos(v, p, end, in_has);
+        lemma_sub_step_b(v, p, end, in_has);
+        match i_sub_one(v, p, end, cx0(), in_has) {
+            Some((m, next)) => {
+                match i_subs(v, next, end, cx0(), in_has, (fuel - 1) as nat) {
+                    Some((ms1, q1)) => {
+                        match sub_step(v, p, end) {
+                            Step::Found { value, next: next2 } => {
+                                assert(next2 == next);
+                                lemma_subs_b(v, next, end, acc.push(value), np, (fuel - 1) as nat, ms1, q1, in_has);
+                                assert(ms =~= seq![m] + ms1);
+                            },
+                            _ => {},
+                        }
+                    },
+                    None => {},
+                }
+            },
+            None => {},
+        }
+    }
+}
+
 } // verus!
