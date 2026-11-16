@@ -1,0 +1,21 @@
+[package]
+name = "clazel-x64"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "The x86-64 instruction-set subset the JIT emits (docs/phases/jit.md item J.3): semantics, encoder and decoder. Empty until then; it holds the vendored instruction-set sources."
+
+# No dependencies yet: jit.md item J.2 only vendors this crate's test data and
+# inputs. The specification and implementation arrive with the item named in
+# src/lib.rs.
+
+# Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
+# shipped code today (nothing: the crate is empty); `target-tier` is what
+# jit.md's "Crates" table sets. The contracts come first (rule 3).
+[package.metadata.clazel]
+tier = 0
+target-tier = 2
+
+[lints]
+workspace = true

@@ -189,6 +189,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "clazel-a64"
+version = "0.0.0"
+
+[[package]]
 name = "clazel-base64"
 version = "0.0.0"
 dependencies = [
@@ -608,6 +612,10 @@ dependencies = [
  "vstd",
  "webpki-root-certs",
 ]
+
+[[package]]
+name = "clazel-x64"
+version = "0.0.0"
 
 [[package]]
 name = "codespan-reporting"
