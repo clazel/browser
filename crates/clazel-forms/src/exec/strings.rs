@@ -107,6 +107,41 @@ pub fn eq_ascii(s: &[u32], k: &[u8]) -> (r: bool)
     true
 }
 
+/// Equality of two strings.
+pub fn eq_slices(a: &[u32], b: &[u32]) -> (r: bool)
+    ensures
+        r == (a@ == b@),
+{
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut i: usize = 0;
+    while i < a.len()
+        invariant
+            i <= a.len(),
+            a.len() == b.len(),
+            forall|j: int| 0 <= j < i ==> (#[trigger] a@[j]) == b@[j],
+        decreases a.len() - i,
+    {
+        match (a.get(i), b.get(i)) {
+            (Some(x), Some(y)) => {
+                if *x != *y {
+                    return false;
+                }
+            },
+            _ => {
+                return false;
+            },
+        }
+        // Never saturates: i < a.len().
+        i = i.saturating_add(1);
+    }
+    proof {
+        assert(a@ =~= b@);
+    }
+    true
+}
+
 /// [`strip_newlines`].
 pub fn strip_newlines_exec(s: &[u32]) -> (r: Vec<u32>)
     ensures
@@ -444,7 +479,7 @@ proof fn lemma_digits_value_ge(s: Seq<u32>, acc: nat)
 
 /// [`character_width`]'s attribute reading: [`width_of`], cut off at
 /// `usize::MAX`.
-pub fn character_width(a: Option<&[u32]>) -> (r: usize)
+pub fn character_width_exec(a: Option<&[u32]>) -> (r: usize)
     ensures
         character_width_ensures(opt_slice_view(a), r),
 {

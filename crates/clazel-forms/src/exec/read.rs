@@ -104,6 +104,19 @@ pub fn find_attr_exec<'a>(list: &'a [ExecAttr], name: &[u8]) -> (r: Option<&'a V
     None
 }
 
+/// [`is_element`].
+pub fn is_element_exec(arena: &Arena, n: usize) -> (r: bool)
+    requires
+        dom::valid(arena@, n),
+    ensures
+        r == is_element(arena@, n),
+{
+    match arena.kind(n) {
+        ExecKind::Element { .. } => true,
+        _ => false,
+    }
+}
+
 /// Element `n` is an element of the HTML namespace with local name `name`.
 pub fn is_html_exec(arena: &Arena, n: usize, name: &[u8]) -> (r: bool)
     requires
