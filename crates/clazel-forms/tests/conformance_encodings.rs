@@ -346,7 +346,11 @@ fn random_string(rng: &mut Rng) -> String {
 #[test]
 fn differential_against_form_urlencoded() {
     let mut rng = Rng(0x9E37_79B9_7F4A_7C15);
-    let total = 5000usize;
+    // Miri (an interpreter) took 1854 s for all 5000 cases, about 0.37 s
+    // each; 120 run in about 45 s, which finds undefined behaviour in the
+    // same code paths. The full 5000 run in the normal test job
+    // (docs/VERIFICATION.md, Miri).
+    let total = if cfg!(miri) { 120 } else { 5000usize };
     let mut pass = 0usize;
     let mut failed = Vec::new();
     for _ in 0..total {
