@@ -300,8 +300,10 @@ pub open spec fn wire_cookies_statement(rules: Seq<clazel_psl::spec::Rule>, urls
                     Output::Send { conn: x, bytes } => x == conn && (exists|a: int| 0 <= a < actions.len() && actions[a] == clazel_fetch::transducer::spec::Action::Send(bytes))
                         && clazel_fetch::transducer::contract::is_wire_request(
                         nav.fetch.url,
+                        nav.fetch.req,
                         clazel_fetch::transducer::contract::carried(
                             nav.fetch.url,
+                            nav.fetch.req,
                             clazel_cookie::storage::spec::retrieve_cookie_string(
                                 rules,
                                 s.jar,
@@ -810,8 +812,10 @@ pub open spec fn subfetch_credentials_statement(rules: Seq<clazel_psl::spec::Rul
                     &&& out[k]->SubSend_renderer == renderer && out[k]->SubSend_serial == serial && out[k]->SubSend_hop == hop
                     &&& clazel_fetch::transducer::contract::is_wire_request(
                         f.fetch.url,
+                        f.fetch.req,
                         clazel_fetch::transducer::contract::carried(
                             f.fetch.url,
+                            f.fetch.req,
                             clazel_cookie::storage::spec::retrieve_cookie_string(
                                 rules,
                                 jar,

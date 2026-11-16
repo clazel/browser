@@ -1253,7 +1253,7 @@ pub fn begin_navigation_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F
                         let (fs, actions) = clazel_fetch::transducer::step::start(&parsed);
                         proof {
                             F::nav_ok_idle(&fs);
-                            clazel_fetch::transducer::theorems::lemma_begin_budget(parsed@, 0, false);
+                            clazel_fetch::transducer::theorems::lemma_begin_budget(parsed@, 0, false, clazel_fetch::request::spec::get_req());
                         }
                         let partition = match s0.renderers.get(i) {
                             Some(r) => domain_of_lock_exec(&r.lock),

@@ -164,7 +164,7 @@ pub open spec fn ml_url0() -> clazel_url::url::spec::Url {
 pub open spec fn ml_nav(c: u32) -> Navigation {
     Navigation {
         url: seq![c],
-        fetch: clazel_fetch::transducer::spec::State { url: ml_url0(), redirects: 0, phase: clazel_fetch::transducer::spec::Phase::Connecting, tainted: false },
+        fetch: clazel_fetch::transducer::spec::State { url: ml_url0(), redirects: 0, phase: clazel_fetch::transducer::spec::Phase::Connecting, req: clazel_fetch::request::spec::get_req(), tainted: false },
         partition: crate::domain::Domain::Opaque(0),
     }
 }

@@ -233,6 +233,8 @@ pub proof fn lemma_d_navigate(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, 
 }
 
 /// A frame that does not decode kills the sender: for a renderer of `d`.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(60)]
 pub proof fn lemma_d_kill(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s1: State, s2: State, id: nat, bytes: Seq<u8>)
     requires
         crate::noninterference::rel(rules, urls, d, s1, s2),
