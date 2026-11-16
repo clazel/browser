@@ -666,10 +666,23 @@ pub open spec fn is_ascii_tab_or_newline(c: u32) -> bool {
     c == 0x09 || c == 0x0A || c == 0x0D
 }
 
+/// `s` contains an ASCII tab or newline.
+pub open spec fn has_tab_newline(s: Seq<u32>) -> bool
+    decreases s.len(),
+{
+    s.len() > 0 && (is_ascii_tab_or_newline(s[0]) || has_tab_newline(s.drop_first()))
+}
+
+/// `s` contains a U+003C (<).
+pub open spec fn has_lt(s: Seq<u32>) -> bool
+    decreases s.len(),
+{
+    s.len() > 0 && (s[0] == 0x3C || has_lt(s.drop_first()))
+}
+
 /// `s` contains an ASCII tab or newline and a U+003C (<).
 pub open spec fn has_tab_newline_and_lt(s: Seq<u32>) -> bool {
-    (exists|k: int| 0 <= k < s.len() && is_ascii_tab_or_newline(#[trigger] s[k])) && (exists|k: int|
-        0 <= k < s.len() && #[trigger] s[k] == 0x3C)
+    has_tab_newline(s) && has_lt(s)
 }
 
 /// HTML "get an element's target", given the `form` element, the optional
