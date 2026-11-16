@@ -14,6 +14,16 @@ that need no parser, `tests/conformance_syntax.rs` runs the parser's and lists e
 expected failure with its reason, and `tests/bombs.rs` runs sheets written to hurt the
 parser.
 
-Tier 0 for now: a tier also needs an independent transcription and full conformance,
-which are still to come. The target is tier 2, since this crate will parse style
-sheets that a page chose.
+`src/independent.rs` is a second transcription of the tokenizer (with "filter code
+points") and the parser, written from the pinned text of CSS Syntax 3 without reading
+the spec, and proven equal to it: the tokenizer, every algorithm of §5.4 and every entry
+point of §5.3 that takes a string, over every stream of code points. Its header says what
+was read before the definitions were committed, and what it does not cover (the input byte
+stream, the An+B microsyntax and serialization are not transcribed there, and the text is
+the same one the spec transcribes, not CSS 2.1 as item 5.4 had proposed).
+
+Tier 2, the target for a crate that parses style sheets a page chose: the conformance
+suites above, the certified mutations and the independent transcription are all there.
+What it does not claim is in the notes above and in the header of `src/independent.rs`;
+the five theorems of `src/parser/contract.rs` that are stated and not proven are not part
+of the tier.

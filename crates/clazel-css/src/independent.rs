@@ -2,12 +2,104 @@
 //! alone: CSS Syntax Module Level 3, Editor's Draft, `css-syntax-3/Overview.bs`
 //! of `w3c/csswg-drafts` at commit `c410ee5e4d2afe6d8b2e8ce53723b8d1eb3b5b67`
 //! (2026-10-20), the commit the crate's `spec.rs` files cite. The text was read
-//! from that commit's raw file, not from this crate.
+//! from that commit's raw file, not from this crate. It is the same text the spec
+//! transcribes, not a different one (phase-5.md item 5.4 proposed CSS 2.1 §4.1.1,
+//! §4.2 and Appendix G as the second text, "proven equal where the two texts decide
+//! the same"; the brief for this file asked for the pinned standard itself, and this
+//! file does that). So a misreading of the standard that both transcriptions share
+//! is not found by this file; what it finds is a misreading by one of them.
 //!
-//! This file holds the tokenizer (§4, and §3.3 "filter code points"); the
-//! parser (§5 and §9) is in [`parse`]. The equivalence with the spec is in the
-//! last section of each of the two files, which was written after the
-//! definitions had been committed (see the header of that section).
+//! This file holds the tokenizer (§4, and §3.3 "filter code points"); the parser
+//! (§5) is in [`parse`]. The equivalence with the spec is in the `equiv_*` modules,
+//! which were written after the definitions had been committed (`aa0567aa`).
+//!
+//! ## How the definitions were written
+//!
+//! The definitions (this file and [`parse`], from the top to their end) were written
+//! from the standard's text alone, in a session that had not read `spec.rs` (of
+//! `input`, `tokenizer` or `parser`), `contract.rs`, `lemmas.rs`, `termination.rs`,
+//! `exec*.rs`, `examples.rs`, `rows.rs`, `mutations.json`, this crate's `README.md`
+//! or its `tests/`. That session read this crate's `Cargo.toml`, `lib.rs` and the
+//! one-paragraph headers of its `mod.rs` files; the headers of
+//! `clazel-displaylist`'s, `clazel-der`'s and `clazel-treebuilder`'s `independent.rs`
+//! for their shape; `docs/SPEC-STYLE.md`, `docs/VERIFICATION.md`, the paragraph of
+//! `docs/phases/phase-5.md` that plans this file (item 5.4) with the status row
+//! beside it, `docs/STATUS.md`'s row for this crate, and the headings of
+//! `docs/ERRATA.md` (the entry "CSS Syntax §5.5.5" was found by them: it says the
+//! standard's "consume a block's contents" never appends its last declarations; the
+//! definitions here specify the evident intent too, see [`parse`]). It saw three
+//! leaks of the spec, none of them an algorithm: a `grep` for the commit pin printed
+//! the pin and the section anchors from the doc comments of the `spec.rs` files;
+//! Verus's warnings from a build printed, as part of a lint about enum fields, the
+//! declarations (doc comments kept, variant bodies elided) of the spec's `Rule` and
+//! `Token` enums; and a tail of that output showed a fragment of a warning. That
+//! showed that the spec's `Rule` has a `child_rules` field that is `None` for a
+//! statement at-rule and that its `Token` has a variant `Eof`; nothing in the
+//! definitions depends on either. From then on Verus's output was filtered so that
+//! only errors that point into `independent*` files printed. One attempt to print a
+//! file of the forbidden list (`input/lemmas.rs`) was refused by the tool's
+//! permission layer and returned nothing.
+//!
+//! Those definitions were committed on their own (`aa0567aa`). Since that commit they
+//! have changed in no definition: apart from this header and the list of `mod` lines
+//! below, [`parse`] and this file are as committed. Only then were
+//! `tokenizer/spec.rs`, `parser/spec.rs` (to the An+B part), `tokenizer/termination.rs`
+//! and `parser/termination.rs` read, to write the `equiv_*` modules, which necessarily
+//! name the spec's items. The equivalence proofs found no place where the two
+//! transcriptions disagree: no definition on either side had to change.
+//!
+//! ## What the equivalence says
+//!
+//! For every stream of code points `s` with no value above U+10FFFF (the
+//! precondition the spec itself states), after mapping the spec's results by
+//! [`equiv_base::ints`], [`equiv_tokenizer::tok_of`], [`equiv_map`] and
+//! [`equiv_tokenizer::inum_of`]:
+//!
+//! - [`equiv_tokenizer::theorem_filter_equals`]: "filter code points" agrees, for
+//!   any string of code points, and [`equiv_tokenizer::lemma_filter_valid`] shows its
+//!   output is a stream of code points;
+//! - [`equiv_tokenizer::theorem_tokenize_equals`]: "tokenize" agrees, token by token,
+//!   with the spec's final `<EOF-token>` removed, with and without |unicode ranges
+//!   allowed|; each algorithm of §4.3 in between has its own theorem
+//!   ([`equiv_tokenizer::theorem_token_equal`], `theorem_number_equal`,
+//!   `theorem_escaped_equal`, `theorem_name_equal`, `theorem_string_equal`,
+//!   `theorem_url_equal`, `theorem_ident_like_equal`, `theorem_unicode_range_equal`,
+//!   `theorem_comments_equal`, ...), and [`equiv_tokenizer::lemma_spans_loop_equal`]
+//!   says the positions the spec gives each token are the ones [`Lex`] has;
+//! - [`equiv_parser::lemma_component_value_equal`], `lemma_simple_block_loop_equal`,
+//!   `lemma_function_loop_equal`, `lemma_list_loop_equal`, `lemma_remnants_equal`,
+//!   `lemma_declaration_equal`, `lemma_at_rule_loop_equal`,
+//!   `lemma_qualified_rule_loop_equal`, `lemma_block_equal`,
+//!   `lemma_contents_loop_equal`, `lemma_stylesheet_loop_equal`,
+//!   `lemma_declarations_loop_equal` and `lemma_comma_loop_equal`: each algorithm of
+//!   §5.4, at every position of a stream the tokenizer made, returns the mapped result
+//!   at the same index;
+//! - the entry points, on a string, in [`equiv_parser`]:
+//!   `theorem_parse_stylesheet_contents_equals`, `theorem_parse_stylesheet_equals`,
+//!   `theorem_parse_list_of_declarations_equals`, `theorem_parse_rule_equals`,
+//!   `theorem_parse_declaration_equals`, `theorem_parse_component_value_equals`,
+//!   `theorem_parse_list_of_component_values_equals` and
+//!   `theorem_parse_comma_separated_list_equals`.
+//!
+//! What it does not say:
+//!
+//! - It compares the independent transcription's numbers with the spec's through
+//!   [`equiv_tokenizer::inum_of`], which reads a sign, a mantissa, a fraction length
+//!   and an exponent off the spec's strings (its own `unsigned`, `point_of` and
+//!   `digits_value`), not through the spec's `number_value`. So a number is equal
+//!   when those four agree (they determine the value); leading zeros and the
+//!   percentage's type flag, which the spec keeps and the standard drops, are not
+//!   compared.
+//! - The input byte stream (§3.2), the An+B microsyntax (§6), serialization (§9), the
+//!   grammar hooks of §5.3.1 and entry points on token or component-value lists are
+//!   not transcribed here, so nothing is proven about them by this file.
+//! - "Valid in the current context" is true on both sides (a modelling choice both
+//!   transcriptions make), and "original source text" is the filtered string on both.
+//! - The theorems hold for streams with the shape [`equiv_stream::shaped`] gives,
+//!   which [`equiv_parser::lemma_token_stream_shaped`] proves of every stream the
+//!   tokenizer makes (including the inner one of a unicode-range value).
+//! - Two transcriptions of one text by two sessions of one model can share a
+//!   misreading; this shows only that they say the same.
 //!
 //! ## Modelling choices
 //!
