@@ -170,7 +170,8 @@ SameSite cookies, proven in 3.6, limit.
 | `clazel-jpeg` | 0 (1) | ITU-T T.81 (baseline and progressive Huffman, Annexes F and G); JFIF 1.02; EXIF orientation tag only | markers, Huffman decoding, dequantization, IDCT, upsampling, YCbCr and Adobe CMYK/YCCK to RGB |
 | `clazel-gif` | 0 (1) | GIF89a Specification (CompuServe, 1990) | blocks, LZW, interlacing, the Graphic Control Extension, frames and disposal per 6.0(d) |
 | `clazel-webp` | 0 (1) | RFC 9649 (WebP container and lossless); RFC 6386 (VP8) | RIFF container, VP8L lossless, VP8 key frames, `ALPH`, `ANIM`/`ANMF` per 6.0(d) |
-| `clazel-image` | 0 (0) | HTML §4.8.4† (img), §4.8.4.3† (srcset), MIME Sniffing §6.1 | format dispatch from the sniffed type, the per-document image list, the decoded pixel budget, premultiplication, frame timing |
+| `clazel-image-shape` | 0 (1) | ours (WUFFS-style interface; 6.0(j) limits) | the `Decoder` trait, RGBA8 buffers, the size limits, premultiplication, the Kani step-harness template (6.3) |
+| `clazel-image` | 0 (0) | HTML §4.8.4† (img), §4.8.4.3† (srcset), MIME Sniffing §6.1 | format dispatch from the sniffed type, the per-document image list, the decoded pixel budget, frame timing |
 | `clazel-forms` | 0 (2 for `data/`, 0 for `edit/`; 6.0(b)) | HTML §4.10.21† (form submission), §4.10.17.3† (form owner), §4.10.5† (input types in scope); URL §5† (urlencoded) | form owner and the form data set, the three encodings, text field editing state |
 | `clazel-displaylist` | 2 (exists) | ours | the image items (6.10) |
 | `clazel-gpu` | 0 (exists) | as Phase 5 | image textures and the sampled quad pipeline (6.12) |
@@ -516,7 +517,9 @@ streams.
 
 ### 6.3 Image buffers and the decoder shape (S)
 
-`clazel-image`, module `shape`. One interface every decoder implements, in
+`clazel-image-shape` (a crate of its own, target tier 1; the plan first put
+it as module `shape` of `clazel-image`, see "Where it lives" below). One
+interface every decoder implements, in
 WUFFS style: `decode_config` (format, width, height, frame count if known)
 from the first bytes; `decode_frame` into a caller-owned RGBA8 buffer the
 caller sized from the config, with a caller-owned work buffer whose size the
@@ -524,7 +527,19 @@ decoder states as a function of the config; each call takes a chunk and
 returns `NeedMore`, `FrameDone` or an error. No decoder allocates after its
 config is read. Every decoder exposes `step(state, chunk, buffers)` and the
 invariant `inv(state, buffers)` its Kani harness uses. The harness template
-lives here and each decoder instantiates it.
+(`decoder_step_harness!`) lives here and each decoder instantiates it. The
+crate also holds the 6.0(j) limits (`MAX_SIDE` 2^14, `MAX_PIXELS` 2^26) with
+a checked size function and straight-to-premultiplied RGBA8, each with Kani
+harnesses.
+
+**Where it lives.** A `shape` module inside `clazel-image` (tier 0) would
+make a cycle (`clazel-image` dispatches to the decoders, which implement the
+shape) and would put tier 0 code under tier 1 decoders, whose claim covers
+the workspace crates they depend on. So the shape is its own crate with no
+dependencies; `clazel-image` stays the policy glue and depends on it and on
+the decoders. Premultiplication moved here from `clazel-image`'s contents for
+the same reason (the renderer and the decoders both need it, and it is
+arithmetic on page-controlled bytes).
 
 ### 6.4 PNG (L)
 
@@ -876,7 +891,8 @@ another item's proof or tier to proceed, only its interface.
 |------|-------|
 | 6.0 Decisions | taken (2026-11-16): decoders at tier 1 by the maintainer; (a) to (j) as recommended, by a Claude session on the maintainer's delegation |
 | 6.1 Inventory and test data | built (2026-11-16); docs and data, no crate, nothing proven. `scripts/phase6-inventory.mjs` ran (not in CI) over HN front, item, login and reply pages and one Wikipedia article: HN's logo and vote arrows are SVG, so 6.11a was added; the only raster is `s.gif`. WPT forms, img element and `urlencoded-parser` vendored at `4ad507b2`; no table is generated yet and nothing reads them. Not done: no news site other than HN measured; format suites (PngSuite, libjpeg-turbo, Wuffs, DEFLATE) left to their items, licences recorded in 6.1; libwebp-test-data has no licence and the ITU-T T.83 streams are a gap; no dev-dependencies added |
-| 6.2 to 6.21 and 6.11a | not started |
+| 6.3 Image buffers and the decoder shape | built (2026-11-16) as the new crate `clazel-image-shape` (tier 0, target 1; no dependencies; separate from `clazel-image` to avoid a cycle and tier 0 code under tier 1 decoders). The `Decoder` trait (`decode_config`, `work_len`, `start`, `step`, `inv`), `Buffers`, `Config`, the 6.0(j) limits with a checked `rgba_len`, `premultiply`, the `decoder_step_harness!` Kani template and a toy raw-format decoder instantiating it. Proven: 6 Kani harnesses run in WSL, 6 pass (size function over every `u32` pair; premultiplication over every channel and alpha, in place over 3 pixels and a partial one; the template on the toy at images up to 2 by 2 and chunks up to 8 bytes; a mutated toy step fails it). Tested: 14 unit tests (toy at every chunk size, limits, exact rounding). Not done: no real decoder yet; `FrameDone` carries no frame timing (GIF, APNG and WebP add it per 6.0(d)); the template is untried from another crate; full `cargo xtask verify` and CI not run, so the tier stays 0 |
+| 6.2 and 6.4 to 6.21 and 6.11a | not started |
 
 **Phase 6: planned (2026-11-16); decisions in 6.0 taken the same day.
 Phase 5, which it builds on, is on `main`.**
