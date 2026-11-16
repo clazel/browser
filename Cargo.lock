@@ -360,6 +360,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "clazel-js-lexer"
+version = "0.0.0"
+
+[[package]]
 name = "clazel-js-regexp"
 version = "0.0.0"
 

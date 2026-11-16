@@ -71,6 +71,7 @@ const PLACES: &[(&str, Place)] = &[
     ("clazel-text", Place::Renderer),
     ("clazel-css", Place::Renderer),
     ("clazel-selectors", Place::Renderer),
+    ("clazel-js-lexer", Place::Renderer),
     ("clazel-style", Place::Renderer),
     ("clazel-font", Place::Renderer),
     ("clazel-layout", Place::Renderer),
