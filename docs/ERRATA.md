@@ -929,3 +929,25 @@ it evidently means. Each entry records what we specified instead.
   columns it spans (`span_contribution` in
   `crates/clazel-layout/src/table/measure.rs`).
 - **Reported upstream:** not yet.
+
+## ECMA-262 Number::multiply drops the sign of a zero product with `+0`
+
+- **Spec:** ECMA-262, ES2026 (`tc39/ecma262` commit
+  `0248456c758431e4bb8e5d26333ff1865123c9cd`), §6.1.6.1.4 Number::multiply,
+  <https://tc39.es/ecma262/#sec-numeric-types-number-multiply>
+- **Text:** steps 4 and 5 handle only an operand that is `-0`
+  ("If x is -0, then ... If y is -0, then ..."); step 6 is "Return
+  𝔽(ℝ(x) × ℝ(y))", and §6.1.6.1's "the Number value for x" gives `-0` only
+  when x < 0 (its rule "replace +0 with -0 if and only if x < 0").
+- **Problem:** for `x = +0` and `y = -5`, steps 1 to 5 do not apply and
+  ℝ(x) × ℝ(y) = 0, so step 6 returns `+0`. IEEE 754, and every engine, give
+  `-0` (`0 * -5` is `-0`); the same holds for a negative finite `x` and
+  `y = +0`. The sign rule of the older text ("the sign of the result is
+  positive if both operands have the same sign, negative if the operands have
+  different signs") is what is meant. The rest of the whole `spec.html` was
+  searched for another place that supplies the sign of a zero product, and
+  none does.
+- **We specify:** a zero result has the sign of the exclusive or of the
+  operand signs, as an added step 5a (`number_multiply` in
+  `crates/clazel-js-vm/src/spec.rs`).
+- **Reported upstream:** not yet.
