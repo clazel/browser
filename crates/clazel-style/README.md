@@ -259,8 +259,11 @@ mappings.
 
 ## Verification
 
-Tier 0 now, target tier 1 (phase-5.md 5.0(a)): the tier is raised only after CI's full
-verification of the harnesses is green. No harness reaches the entry points: `values::parse`
+Tier 1, target tier 1 (phase-5.md 5.0(a)): the harnesses below pass, and the claim stands
+only once CI's full verification of the pull request that raised it is green. The tier is a
+claim about the steps, value types and conversions the harnesses cover, each on every input
+within its stated bound; it is not a claim about the whole of the crate's entry points. No
+harness reaches the entry points: `values::parse`
 and `parse_items`, `Values::from_rows`, the named-colour path of `parse_color`, the media
 query parser, or `cascade` (each is under "Not done" below). The harnesses cover the
 steps, value types and conversions these are built from. `xtask` requires only a non-zero
