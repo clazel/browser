@@ -21,6 +21,10 @@ clazel-url = { path = "../clazel-url" }
 # (ours: Phase 4), used by tests/*.rs only.
 [dev-dependencies]
 clazel-treebuilder = { path = "../clazel-treebuilder", version = "=0.0.0" }
+# Test-only reference engine for the differential test in
+# tests/conformance_encodings.rs (class `test` in docs/DEPENDENCIES.md; never
+# shipped).
+form_urlencoded = "=1.2.2"
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
 # shipped code today; `target-tier` is what the policy requires (phase-6.md
