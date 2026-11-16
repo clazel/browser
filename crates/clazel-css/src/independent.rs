@@ -42,6 +42,8 @@
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
+pub mod equiv_base;
+pub mod equiv_tokenizer;
 pub mod parse;
 
 verus! {
