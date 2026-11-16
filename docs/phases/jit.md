@@ -5,8 +5,8 @@ maintainer on 2026-11-16:
 - JavaScript runs mainly through a JIT, with no interpreter-only stage;
 - the JIT targets Windows and x86-64 from the start, alongside macOS arm64.
 
-Still open: item J.0's decisions, one of which, J.0(a), changes CLAUDE.md
-rule 1, which only the maintainer can decide. The rest of Phase 7 (parser,
+Item J.0's decisions were taken by the maintainer on 2026-11-16, every
+recommendation as written. The rest of Phase 7 (parser,
 bytecode compiler, GC, builtins, DOM bindings) is not planned in detail
 yet. Item J.1 lists what that plan must fix in place for this one to work.
 
@@ -251,7 +251,31 @@ in `xtask/src/status.rs`.
 
 ## Work items
 
-### J.0 Decisions for the maintainer (S): open
+### J.0 Decisions for the maintainer (S): decided
+
+**Decision (2026-11-16), by the maintainer: every recommendation below is
+taken.** That is:
+- (a) **E1:** one `enter` function in `clazel-sys`, taking a `Validated`
+  value only `clazel-codecheck` can build. CLAUDE.md rule 1 and
+  `xtask/src/sys.rs` gain the code-entry category in the same pull request
+  as J.7, the first code that uses it, not before. That `clazel-sys` change
+  is audited by another session.
+- (b) **C2:** the renderer never makes memory executable on Windows or
+  Linux. On Windows a code process maps validated code into the renderer,
+  which keeps Arbitrary Code Guard. On Linux the code region is mapped RX
+  before the seccomp filter goes on. macOS uses `MAP_JIT` in the renderer.
+- (c) **G1:** the JIT is on by default once both validators are at tier 2.
+- (d) x86-64 v1 (SSE2) only.
+
+**Added with (b) and the measurements, 2026-11-16, by the maintainer:**
+- **Batching is a design requirement**, not a later optimization. A round
+  trip to the code process (estimated 10 to 50 µs, unmeasured) costs far
+  more than validating a small function (estimated under 1 µs). So the
+  renderer sends compiled functions in batches, and it keeps running the
+  interpreter loop while a batch is checked and mapped; it never blocks on
+  one. J.11 measures the round trip.
+- **The validator is measured from the first commit that runs it** (J.6).
+
 
 **(a) The `unsafe` rule for entering generated code** (CLAUDE.md rule 1 and
 `xtask/src/sys.rs` rule 8). Today every call through a function pointer is
@@ -386,6 +410,13 @@ runner.
 - Independent transcription: a second validator per instruction set, written
   as a dataflow analysis, proven to accept only what the first accepts.
 - Hostile corpus and mutation fuzzer (exit criterion 6).
+- **Benchmark:** validate a few MB of back-end output (before J.9, of the
+  encoders' template output), per instruction set. Report ns per instruction
+  and MB/s in the crate's README. The estimate this plan was written
+  against is 5 to 20 ns per instruction, roughly a disassembler's speed:
+  one linear pass, a table lookup to decode, and per-register state for
+  the bounds checks. A result far above it is a design problem, so it goes
+  back to J.0 rather than being tuned around.
 
 ### J.7 `clazel-sys`: code regions, cross-process mapping, enter (M, after J.0(a), (b))
 
@@ -439,7 +470,11 @@ runner.
 
 - Bound the code bytes per renderer. When the cache is full, evict and fall
   back to the interpreter loop.
-- Measure the IPC cost of C2 per compiled function on Windows and Linux.
+- Measure the IPC cost of C2 per batch and per compiled function, on
+  Windows and Linux, and the break-even point: how many runs before a
+  function's compile, validation and mapping cost is repaid. The estimate
+  is 30 to 150 runs per function at the baseline tier, which is where the
+  tiering threshold N starts.
 - Hostile pages: huge functions, deep recursion, inline-cache churn, a flood
   of compilations. None may crash a renderer or exceed its bounds.
 
