@@ -207,16 +207,80 @@ format, how much memory, which frame to show).
 
 ## What the exit page needs
 
-Not yet measured; 6.1 measures it with 5.1's script. From memory†, to be
-confirmed: HN's images are `s.gif` (the spacers, a 1×1 GIF, repeated 115
-times on an item page), the logo (`y18.svg`† or `y18.gif`†) and the vote
-arrows (`triangle.svg`†, possibly as a CSS background). If the logo and
-arrows are SVG, the exit needs either 6.0(c)'s S2 or a stated gap; 6.1
-settles this before 6.0(c) is decided. HN's forms are `login` and
-`comment` (`method="post"`, `application/x-www-form-urlencoded`,
-`input type="text"`, `password`, `hidden`, `submit`, and a `textarea`), and
-voting is a plain link (`vote?id=…&how=up&auth=…`), which is a `GET`
-navigation Phase 5 already follows.
+Measured on 2026-11-16 by 6.1's `scripts/phase6-inventory.mjs` (5.1's script
+was never written: `scripts/` holds none, so 6.1 wrote this one), plain `GET`s
+with no login, counts only. Nothing of the pages is stored (their copyright is
+Y Combinator's and its users'; Wikipedia's text and images are theirs).
+
+**Hacker News.** The numbers are for the day; the shapes are what matters.
+
+- **Front page** (34,013 bytes): two `img`: `s.gif` (`width="0" height="10"`,
+  sniffed GIF) and the logo `y18.svg` (`18` by `18`, sniffed **SVG**). One
+  style sheet, `news.css` (7,456 bytes), with two `url()` uses, both
+  `triangle.svg`, one in `background`, one in `background-image` (the vote
+  arrows; there is no `img` for them). The sheet has two `-gradient(` uses (a
+  `linear-gradient(transparent, transparent)` layered with the arrow) and two
+  `background-size`, no `background-repeat` or `background-position`. No
+  `srcset`, `picture`, inline `<svg>`, `object`, `embed`, `canvas`, `video` or
+  `audio`, no `style` attribute holding `url(`.
+- **One item page** (106,286 bytes, 76 `img`: 75 `s.gif` spacers and the
+  logo): spacer sizes `40x1` (31), `80x1` (20), `0x1` (16), `120x1` (7); the
+  same single sheet and the same two `url()` uses. Images by sniffed
+  signature over every distinct URL on both pages: **GIF 1 (`s.gif`), SVG 2
+  (`y18.svg`, `triangle.svg`), PNG 0, JPEG 0, WebP 0.** URL extensions and
+  signatures agree.
+- **SVG files** (the exit's only vector images): `y18.svg`, 315 bytes: elements
+  `svg`, `path` (2); attributes `xmlns`, `width`, `height`, `viewBox`, `d`,
+  `fill`. `triangle.svg`, 131 bytes: the same elements and attributes (one
+  `path`). The `d` data uses only `m`, `h`, `v`, `z` and implicit `lineto`
+  after `m`, all relative, with decimal numbers; `fill` is `#rgb` or `#rrggbb`.
+  `triangle.svg`'s path reaches outside its `viewBox` (to be clipped), and it
+  is drawn as a CSS background scaled by `background-size`.
+- **Forms.** Front page: one, the search box, `method="get"`
+  `action="//hn.algolia.com/"` (a JavaScript site, so it does not work, as
+  the goal says), one `input type=text`. Item page: that one and `comment`:
+  `method="post"` `action="comment"`, no `enctype` (so
+  `application/x-www-form-urlencoded`), controls `input[hidden]` x3,
+  `textarea` x1, `input[submit]` x1. Login page (1,125 bytes, no sheet, no
+  image): two forms, both `method="post"` with **no `action`** (the form's own
+  URL), the first `input[text]`, `input[password]`, `input[submit]`, the
+  second (create account) `input[hidden]`, `input[text]`, `input[password]`,
+  `input[submit]`. The reply page, fetched logged out, is the login page again
+  (1,168 bytes, the same two forms): the reply form itself is the item page's
+  `comment` form, which a logged-in session sees, and is not reachable
+  without logging in. Control types in all: `hidden`, `text`, `password`,
+  `submit`, `textarea`; none of `checkbox`, `radio`, `select`, `button`,
+  `file` or `image` (attributes beyond the types were not counted). Voting is
+  a link (`vote?id=...&how=up&auth=...`), a plain `GET` Phase 5 already
+  follows.
+
+**Settled: HN's logo and vote arrows are SVG** (`y18.svg`, `triangle.svg`,
+the latter as a CSS background). 6.0(c)'s rule therefore applies: **S2 for
+exactly the elements and attributes those two files use becomes a new item,
+6.11a**, and `s.gif` (GIF, with 6.7) is the only raster image the exit page
+loads. Without 6.11a the exit page would show no logo and no vote arrows.
+
+**One Wikipedia article** (Hacker News, 144,605 bytes), the second shape the
+decoders meet: 9 `img` (5 URL-extension `svg`, 3 `png`, 1 without extension,
+a tracking beacon whose sniffed signature is none of ours); sniffed over the
+13 distinct URLs (`img` and CSS): **SVG 9, PNG 3, other 1**; the PNGs are
+server-rendered rasters of SVG sources. Attributes on `img`: `width` and
+`height` on 8, `alt` on 8, `loading="lazy"` on 5, `decoding="async"` on 3,
+`srcset` (density `2x`) on 2, inside 2 `picture`s with 2 `source`. Four CSS
+`background` uses of SVG. Its SVG files use far more than HN's:
+`linearGradient`, `radialGradient`, `stop`, `defs`, `g`, `clipPath`, `circle`,
+`style` attributes, `transform`, editor metadata (`sodipodi:*`, `inkscape:*`,
+`rdf:*`) and 155 `stop`s in the largest. That is what 6.0(c)'s S2 deliberately
+does not cover: those SVGs show as broken images (their `alt`), and the README
+says so. Forms: two search forms, `method` absent (so `GET`), `input[search]`,
+`input[hidden]`, `button`.
+
+**What this means for the plan.** No JPEG, WebP or PNG appears on HN's pages.
+The decoders are built for the four formats the roadmap names and for the
+web beyond HN (Wikipedia shows PNG and `srcset` densities), and their
+evidence is the vendored suites. 6.6 (progressive JPEG) and 6.9 (VP8), the
+two largest items, do not gate the exit: **they may be cut or deferred
+without losing it**, and the order of work says so.
 
 ## Looking ahead: what Phases 7 and 8 do with this
 
@@ -244,7 +308,8 @@ goals"): every recommendation below is taken.** That is: (a) **B**,
 `clazel-deflate` at tier 2; (b) **B**, the form data set and its encodings
 at tier 2, editing at tier 0; (c) **F1, U2**, and **S1** unless 6.1's
 inventory shows the exit page's images are SVG, in which case 6.1 records
-it and S2 for exactly the elements HN's files use becomes a new item;
+it and S2 for exactly the elements HN's files use becomes a new item
+(**6.1 found them SVG: see 6.11a**);
 (d) **A**, first frame only for the exit, with 6.19 (animation) last;
 (e) **B**, one `FetchSub` family with a destination, retiring `FetchStyle`
 and the `Style*` replies; (f) **B**, a new `TextInput` message; (g) **A**,
@@ -376,21 +441,56 @@ one decode per URL per document (HTML's "list of available images"†), which
 HN's 115 identical spacers need. `loading=lazy` is honoured with the same
 one-viewport margin. **Recommendation: these numbers.**
 
-### 6.1 Inventory and test data (M)
+### 6.1 Inventory and test data (M) — built (2026-11-16)
 
-Run 5.1's script over HN's front page, an item page, the login page and a
-reply page, plus a Wikipedia article and a news site, counting image
-formats (by sniffed type), sizes, `srcset` use, background images, SVG use,
-form methods, enctypes and control types. The answer settles 6.0(c)'s SVG
-question. Vendor at pinned commits, with licences: PngSuite; libjpeg-turbo's
-`testimages`; ITU-T T.83's† conformance streams if their licence allows,
-else a stated gap; Wuffs' `test/data`; libwebp's test vectors
-(`libwebp-test-data`†); zlib's and Wuffs' DEFLATE streams; WPT
-`html/semantics/forms/`, `html/semantics/embedded-content/the-img-element/`
-and `url/urlencoded-parser`. Dev-dependencies as `test` rows in
-DEPENDENCIES.md: `miniz_oxide`, `png`, `gif`, `image-webp`, `zune-jpeg`; and
-reference outputs from libjpeg-turbo and libwebp generated by a script under
-`scripts/` at pinned versions and committed, so CI runs no C.
+**Inventory: done.** `scripts/phase6-inventory.mjs` (Node, run locally,
+never in CI; stores nothing) measured HN's front page, an item page, the login
+page and the reply page (which, logged out, is the login page), and one
+Wikipedia article. The result is in "What the exit page needs" above. It
+settled 6.0(c): **HN's images are SVG, so 6.11a exists.** A news site beyond
+HN was not measured (this run named HN and Wikipedia only); the script takes
+URLs as arguments if a later item wants more shapes.
+
+**Vendored now**, shared by 6.13, 6.14, 6.10 and 6.11, at WPT commit
+`4ad507b28db0a636f528def9161d109fe11b93a3` (the commit `clazel-css` and
+`clazel-encoding` already use), in `crates/clazel/tests/wpt-phase6/`
+(no crate of this phase exists yet to hold it; the item that converts it may
+move it) with `LICENSE.md` (BSD-3-Clause), `SOURCE.md` and `MANIFEST.sha256`:
+`html/semantics/forms/` (`form-submission-0`, `the-form-element`,
+`the-input-element`, `the-button-element`, `the-select-element`,
+`the-textarea-element`, `the-option-element`, `the-optgroup-element`,
+`resetting-a-form`, `attributes-common-to-form-controls`,
+`form-control-infrastructure`; `form-submission-target`, `constraints`,
+`textfieldselection`, `the-label-element` and the rest are left out as
+needing nested browsing contexts, validation UI or script),
+`html/semantics/embedded-content/the-img-element/` and
+`url/urlencoded-parser.any.js`. These are browser tests and most pages need
+script, so no table is generated yet and nothing reads them; the item that
+uses them writes the converter in `xtask/src/testdata/` and picks the
+script-free cases. Four upstream files holding CR or CRLF (`multiline-placeholder-cr.html` and `-crlf.html` in `the-input-element` and `the-textarea-element`) are left out so the
+repository's `eol=lf` rule cannot change them. Resources the pages name from
+outside these directories (`/common/`, `/images/`, `/resources/`) are not
+vendored; an item that needs one adds it with its commit recorded.
+
+**Not vendored now; each is vendored by the item that uses it, at a pinned
+commit, with its licence file beside it.** Licences checked on 2026-11-16
+against the upstreams:
+
+| Data | Upstream | Licence | Item |
+|------|----------|---------|------|
+| PngSuite | http://www.schaik.com/pngsuite/ (the 2011 archive; pin its SHA-256) | its own permissive notice: "Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted" (Willem van Schaik); keep the notice beside it | 6.4 |
+| libjpeg-turbo `testimages/` | github.com/libjpeg-turbo/libjpeg-turbo, tag `3.2.1` or later | mixed, stated in `testimages/LICENSE.txt`: `testorig*` and `testimg*` under the IJG licence, the rest Modified BSD, two ICC profiles MIT (Little CMS), one ICC profile with free use if unaltered; all redistributable, each file's licence recorded | 6.5, 6.6 |
+| ITU-T T.83 conformance streams | ITU-T | **a gap**: not read at source, and the terms of the recommendation's attached streams do not clearly allow redistribution; 6.5 states the gap unless it finds a redistributable copy. libjpeg-turbo's and Wuffs' files stand in | 6.5, 6.6 |
+| Wuffs `test/data` (PNG, GIF, JPEG, WebP, DEFLATE, zlib, gzip, `artificial-*` corner cases) | github.com/google/wuffs, `test/data/`, pin a commit (`main` was `b36a81d3352604fee1fee3661f39909706b1b966` on 2026-11-16) | MIT or Apache-2.0, our choice (`LICENSE-MIT`, `LICENSE-APACHE`); its README says some files derive from third-party images, so each directory used is read for notices | 6.2, 6.4, 6.5, 6.7, 6.8 |
+| libwebp test vectors | chromium.googlesource.com/webm/libwebp-test-data | **licence not stated**: the repository has no `LICENSE` or `README` (155 entries, all data), so it cannot be vendored as it stands; Wuffs' `*.lossless.webp` and `*.lossy.webp` stand in, and the maintainer may ask the owners for a licence | 6.8, 6.9 |
+| DEFLATE and zlib streams | Wuffs' `test/data` and its `artificial-deflate`; zlib (github.com/madler/zlib, zlib licence) only where a file is data, not code | MIT/Apache-2.0; zlib licence | 6.2 |
+
+Dev-dependencies (`miniz_oxide`, `png`, `gif`, `image-webp`, `zune-jpeg`)
+were **not** added here: this item adds no crate and no `test` rows to
+`docs/DEPENDENCIES.md`. Each is added by the item that runs that reference
+decoder, with its transitive rows. Reference outputs from libjpeg-turbo and
+libwebp, generated by a script under `scripts/` at pinned versions and
+committed so CI runs no C, are made by 6.5 and 6.9, not here.
 
 ### 6.2 DEFLATE and zlib (L)
 
@@ -538,6 +638,39 @@ shows its `alt` text inside an inline box, as HTML §15.4.2† suggests. With
 tiled image draws clipped to the background painting area. Paint emits 6.10's
 draw items. Tests: WPT `css/CSS2/` replaced-element reftests and
 `css/css-backgrounds/` reftests for the subset, through 5.25.
+
+### 6.11a Static SVG images: exactly what HN's files use (S to M)
+
+Added by 6.1's inventory (6.0(c): S2 for exactly the elements HN's files
+use). `clazel-svg`, a new crate, target tier 1, `tier = 0` to start. SVG 2
+(W3C) is the standard for the pieces it covers, section numbers† pinned when
+the spec is written; the path grammar is SVG 2 §9.3†.
+**Scope is exactly the two files measured (`y18.svg`, `triangle.svg`) and no
+more:** elements `svg` and `path`; attributes `xmlns`, `width`, `height`,
+`viewBox`, `d` and `fill`; path commands `M`/`m`, `L`/`l`, `H`/`h`, `V`/`v`,
+`Z`/`z` (including the implicit `lineto` after `moveto`), numbers as decimal
+fractions; `fill` as `#rgb` or `#rrggbb`; the default non-zero fill rule; the
+default `preserveAspectRatio` (`xMidYMid meet`), clipped to the viewBox. A
+tiny XML tokenizer of our own for just these (start tags, attributes with
+quoted values, the XML declaration and comments skipped). Anything else (any
+other element, attribute, command or colour syntax, `style`, entities,
+`DOCTYPE`, namespace prefixes) makes the image a broken image showing its
+`alt` (6.0(c) S1's behaviour), never a partial draw. **Out, and Wikipedia's
+SVGs need them:** gradients, `g`, `circle`, `rect`, `clipPath`, `defs`,
+`transform`, `style`, strokes, curves, metadata. Phase 8 does SVG in full.
+
+It rasterises to an RGBA8 buffer at the requested size (anti-aliased scanline
+coverage, integer arithmetic) behind 6.3's `shape` interface, so 6.10's image
+items and 6.12's upload carry it unchanged. MIME Sniffing has no SVG
+signature, so the declared type (`image/svg+xml`, which 6.17's ORB must
+allow) selects this decoder: `clazel-image` dispatches on the declared type
+for SVG only, a listed departure from "dispatch on the sniffed type".
+Tier 1 proves no panic, no overflow and no out-of-bounds in the tokenizer,
+path parser and rasteriser. Tests: both files rasterised and compared with a
+reference renderer's output at the sizes HN uses (18x18; 32x16 as a
+`background-size`-scaled background), tolerance stated in the harness; a
+corpus of malformed XML and path data. Depends on 6.3; needed by 6.18 and the
+exit.
 
 ### 6.12 The GPU process: images (M)
 
@@ -719,10 +852,15 @@ if 6.0 takes them).
           └─> 6.13 form data ─> 6.14 encodings, submission ────────┤
 6.10 image items ─> 6.12 GPU images ───────────────────────────────┤
 6.11 layout: natural sizes, backgrounds ────────────────────────────┤
+6.3 shape ─> 6.11a static SVG (HN's logo and arrows) ───────────────┤
 6.15 controls (after 6.0(f)'s message) ─────────────────────────────┤
 6.16 bodies in fetch + kernel ──────────────────────────────────────┤
 6.17 image fetches, ORB (after 6.0(e)'s message) ───────────────────┴─> 6.18 pipeline ─> 6.19 animation ─> 6.20 demo ─> 6.21
 ```
+
+6.11a, needed by the exit because HN's logo and vote arrows are SVG (6.1),
+starts once 6.3 fixes the shape. 6.6 (progressive JPEG) and 6.9 (VP8) are not
+on HN's pages (6.1), so they may be cut or deferred without losing the exit.
 
 Every item can start once 6.0 is decided: Phase 5's pipeline, window and
 kernel are on `main`. The decoders start once 6.3 fixes the shape (PNG also
@@ -737,7 +875,8 @@ another item's proof or tier to proceed, only its interface.
 | Item | State |
 |------|-------|
 | 6.0 Decisions | taken (2026-11-16): decoders at tier 1 by the maintainer; (a) to (j) as recommended, by a Claude session on the maintainer's delegation |
-| 6.1 to 6.21 | not started |
+| 6.1 Inventory and test data | built (2026-11-16); docs and data, no crate, nothing proven. `scripts/phase6-inventory.mjs` ran (not in CI) over HN front, item, login and reply pages and one Wikipedia article: HN's logo and vote arrows are SVG, so 6.11a was added; the only raster is `s.gif`. WPT forms, img element and `urlencoded-parser` vendored at `4ad507b2`; no table is generated yet and nothing reads them. Not done: no news site other than HN measured; format suites (PngSuite, libjpeg-turbo, Wuffs, DEFLATE) left to their items, licences recorded in 6.1; libwebp-test-data has no licence and the ITU-T T.83 streams are a gap; no dev-dependencies added |
+| 6.2 to 6.21 and 6.11a | not started |
 
 **Phase 6: planned (2026-11-16); decisions in 6.0 taken the same day.
 Phase 5, which it builds on, is on `main`.**
@@ -754,7 +893,7 @@ Phase 5, which it builds on, is on `main`.**
   suite file's trace in tests.
 - **VP8 and progressive JPEG are large.** Each is an L item with many
   modes; a slip here delays the exit only if HN serves those formats, which
-  6.1 measures.
+  6.1 measured: HN serves GIF and SVG only (see "What the exit page needs").
 - **Four tier 2 crates change** (`clazel-displaylist`, `clazel-ipc`,
   `clazel-fetch`, `clazel-kernel`), two of them twice (6.0(e) and (f) retire
   and add messages). Phase 5's open tier raises touch some of the same
