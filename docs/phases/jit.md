@@ -375,6 +375,8 @@ code.
   `xtask` converter (`xtask/src/testdata/isa.rs`). The crate READMEs record
   what the pins show:
   - ACL2 `x86isa` (acl2/acl2 at 33b05575, BSD-3-Clause, 2.6 MB);
+  - Russinoff's RTL library at the same commit (`books/rtl/rel11`, 0.3 MB),
+    which the x86isa floating-point books are defined with;
   - the Sail x86 model translated from it (rems-project/sail-x86-from-acl2
     at 0c6c023d, 0.8 MB);
   - Intel's SDM volume 2, version 093, **pinned by URL and SHA-256 only**:

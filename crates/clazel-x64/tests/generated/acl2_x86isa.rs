@@ -4,7 +4,7 @@
 // Source, commit and license: tests/data/acl2-x86isa/SOURCE.md.
 //
 // ACL2 x86isa model files for the subset of jit.md item J.3.
-// 63 files, 2498309 bytes. Nothing here is parsed yet; see the converter's
+// 64 files, 2518719 bytes. Nothing here is parsed yet; see the converter's
 // header for why. Paths are relative to tests/data/acl2-x86isa/.
 
 /// One vendored file.
@@ -43,6 +43,7 @@ pub const FILES: &[File] = &[
     File { path: "machine/instructions/fp/cmp-spec.lisp", size: 12052, sha256: "0d54f6ec2fec0c03c9571f53cedc62b93926e461193a7f44b18b2e62a31893da" },
     File { path: "machine/instructions/fp/convert.lisp", size: 18745, sha256: "869f6ed9a170bd0b4690dcc2766888aabd18e1908901fd03b2a00a637e714cef" },
     File { path: "machine/instructions/fp/cvt-spec.lisp", size: 22086, sha256: "64e02b07965a80fcd786df9a95087fba93c4d7e617755f2e0eb263d067f720bb" },
+    File { path: "machine/instructions/fp/logical.lisp", size: 20410, sha256: "01ff6c7a41457cf9676da0969667c28349f30ab5ae224e22ef99aaef2c20dd47" },
     File { path: "machine/instructions/fp/mxcsr.lisp", size: 5562, sha256: "7aee2ad7b72525572bfcebd3ec892af0650a312b784c490ad394a4e2e6b26597" },
     File { path: "machine/instructions/fp/sqrt-spec.lisp", size: 5998, sha256: "3c82aa74064b48cc4d235e11fbaa3b6a391cf4491041f0ff8f93be8383db5282" },
     File { path: "machine/instructions/fp/top.lisp", size: 3663, sha256: "1d35633b80b9d1bdb88bac6f747c388dfab0ed1c5adc5e307a2f965b209734d6" },

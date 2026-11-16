@@ -10,6 +10,8 @@
 //!
 //! - `acl2-x86isa` (`clazel-x64`): the ACL2 x86isa model, the files the
 //!   subset of item J.3 reads.
+//! - `acl2-rtl` (`clazel-x64`): Russinoff's RTL library at the same ACL2
+//!   commit, which the x86isa floating-point books are defined with.
 //! - `sail-x86-from-acl2` (`clazel-x64`): the Sail model that is a
 //!   mechanical translation of the one above (see the crate's README: it is
 //!   not independent of it).
@@ -27,6 +29,8 @@ use super::inventory::{inventory, listed_hashes, render};
 
 /// The ACL2 checkout's `books/projects/x86isa` paths vendored.
 pub const ACL2_X86ISA_ROOTS: &[&str] = &["README", "portcullis", "utils", "machine"];
+/// The ACL2 checkout's `books/rtl/rel11` paths vendored.
+pub const ACL2_RTL_ROOTS: &[&str] = &["package.lsp", "portcullis.lisp", "lib"];
 /// The translated Sail model's roots.
 pub const SAIL_X86_FROM_ACL2_ROOTS: &[&str] = &["README.md", "LICENCE", "model"];
 /// The Sail Arm model's roots.
@@ -53,6 +57,16 @@ pub fn convert_acl2_x86isa(dir: &Path) -> Result<String, String> {
         "acl2-x86isa",
         ACL2_X86ISA_ROOTS,
         "ACL2 x86isa model files for the subset of jit.md item J.3.",
+    )
+}
+
+/// `acl2-rtl`.
+pub fn convert_acl2_rtl(dir: &Path) -> Result<String, String> {
+    tree(
+        dir,
+        "acl2-rtl",
+        ACL2_RTL_ROOTS,
+        "Russinoff's RTL library, the floating-point definitions acl2-x86isa's SSE books call.",
     )
 }
 
