@@ -17,6 +17,9 @@
 //!   for panics, overflow and termination only, not yet proven equal to the spec; the
 //!   parser's output passes [`exec_check`], which is proven, before it is returned.
 //!
+//! - [`independent`]: a second transcription of parsing, matching and specificity, from the
+//!   standard alone, and (once proven) its equivalence to [`spec`].
+//!
 //! The crate also holds the vendored test data of item 5.1, under `tests/data/`.
 //!
 //! Tier: see `[package.metadata.clazel]` in `Cargo.toml` and `docs/VERIFICATION.md`.
@@ -33,5 +36,6 @@ pub mod exec_serialize;
 pub mod exec_specificity;
 pub mod exec_strings;
 pub mod exec_types;
+pub mod independent;
 pub mod lemmas;
 pub mod spec;
