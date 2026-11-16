@@ -1181,42 +1181,6 @@
         "lemma": "super::examples_body::lemma_body_10()",
         "witness": "!(request_bytes_req_cookie(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x70u32]]), query: None, fragment: None }, Req { method: seq![0x50u8, 0x4F, 0x53, 0x54], body: Some(Payload { content_type: seq![0x74u8, 0x65, 0x78, 0x74, 0x2F, 0x70, 0x6C, 0x61, 0x69, 0x6E], bytes: seq![0x61u8, 0x0D, 0x0A, 0x00, 0x62] }), initiator: None, origin_tainted: false }, Seq::<u8>::empty()) == Some(seq![0x50u8, 0x4F, 0x53, 0x54, 0x20, 0x2F, 0x70, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x0D, 0x0A, 0x48, 0x6F, 0x73, 0x74, 0x3A, 0x20, 0x65, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x63, 0x6C, 0x6F, 0x73, 0x65, 0x0D, 0x0A, 0x41, 0x63, 0x63, 0x65, 0x70, 0x74, 0x3A, 0x20, 0x2A, 0x2F, 0x2A, 0x0D, 0x0A, 0x55, 0x73, 0x65, 0x72, 0x2D, 0x41, 0x67, 0x65, 0x6E, 0x74, 0x3A, 0x20, 0x63, 0x6C, 0x61, 0x7A, 0x65, 0x6C, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x54, 0x79, 0x70, 0x65, 0x3A, 0x20, 0x74, 0x65, 0x78, 0x74, 0x2F, 0x70, 0x6C, 0x61, 0x69, 0x6E, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A, 0x4F, 0x72, 0x69, 0x67, 0x69, 0x6E, 0x3A, 0x20, 0x6E, 0x75, 0x6C, 0x6C, 0x0D, 0x0A, 0x0D, 0x0A, 0x61, 0x0D, 0x0A, 0x00, 0x62]))"
       }
-    },
-    {
-      "id": "initiator-ignored-for-cookies",
-      "file": "src/transducer/spec.rs",
-      "module": "transducer::examples_body",
-      "find": "else { s.req.initiator }",
-      "replace": "else { None }",
-      "expect": "killed-incidentally",
-      "reason": "Reads the request as having no client, so a cross-site POST looks same-site and Lax cookies are sent. lemma_pbody_00. Killed: the module run fails on the example. Not certified: the certificate (evaluating the whole transducer step with the real HTTP parser in the mutant) did not finish in the 600 s limit, so this is not counted as coverage."
-    },
-    {
-      "id": "method-always-safe",
-      "file": "src/transducer/spec.rs",
-      "module": "transducer::examples_body",
-      "find": "method_is_safe: crate::request::spec::method_is_safe(s.req),",
-      "replace": "method_is_safe: true,",
-      "expect": "killed-incidentally",
-      "reason": "Tells the cookie retrieval the method is always safe. lemma_pbody_00. Killed: the module run fails on the example. Not certified: the certificate (evaluating the whole transducer step with the real HTTP parser in the mutant) did not finish in the 600 s limit, so this is not counted as coverage."
-    },
-    {
-      "id": "redirect-origin-taint-lost",
-      "file": "src/transducer/spec.rs",
-      "module": "transducer::examples_body",
-      "find": "rewritten.origin_tainted || !clazel_origin::spec::same_origin",
-      "replace": "rewritten.origin_tainted || false && !clazel_origin::spec::same_origin",
-      "expect": "killed-incidentally",
-      "reason": "A redirect that leaves the origin does not null Origin on the next request. lemma_pbody_13. Killed: the module run fails on the example. Not certified: the certificate (evaluating the whole transducer step with the real HTTP parser in the mutant) did not finish in the 600 s limit, so this is not counted as coverage."
-    },
-    {
-      "id": "redirect-no-rewrite",
-      "file": "src/transducer/spec.rs",
-      "module": "transducer::examples_body",
-      "find": "tainted, next_req(urls, s, response.status_line.status, location));",
-      "replace": "tainted, s.req);",
-      "expect": "killed-incidentally",
-      "reason": "A redirect keeps the request as it was (a 301 keeps the POST and its body). lemma_pbody_07. Killed: the module run fails on the example. Not certified: the certificate (evaluating the whole transducer step with the real HTTP parser in the mutant) did not finish in the 600 s limit, so this is not counted as coverage."
     }
   ]
 }

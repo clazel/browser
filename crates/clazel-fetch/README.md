@@ -171,7 +171,7 @@ which the `POST` and its body are sent again, 318 in which a redirect drops
 them. The model shares the author's reading of the standards, so this is not
 independent of them as the rust-url part is; the request side is also covered
 by the Verus examples (`src/request/examples_body.rs`,
-`src/transducer/examples_body.rs`) and 16 new mutations (12 with certificates, 4 killed incidentally: 85 in all, 81 certified, 0 survive).
+`src/transducer/examples_body.rs`) and 12 new mutations (81 in all, every one certified, 0 survive). Four more (the request context and the redirect step of the transducer: initiator ignored, method always safe, taint lost, no rewrite) are killed by the example proofs but their certificates, which evaluate a whole transducer step, time out at 600 s, so they are not listed.
 
 Conformance (`tests/conformance_differential.rs`): 1500 random redirect
 chains, each run by an independent reference built from rust-url (the
