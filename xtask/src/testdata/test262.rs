@@ -43,6 +43,8 @@ use std::collections::BTreeSet;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
+use sha2::{Digest, Sha256};
+
 /// The top-level entries vendored for this suite (besides LICENSE.md and
 /// SOURCE.md): directories are read recursively.
 pub const FILES: &[&str] = &["features.txt", "harness", "test"];
@@ -270,15 +272,20 @@ fn parse_meta(front: &str) -> Result<Meta, String> {
     Ok(meta)
 }
 
-/// Every `.js` under `dir`, as (path relative to `root` with `/`, file),
+/// Every file (or, with `only_js`, every `.js`) under `dir`, as (path relative to `root` with `/`, file),
 /// sorted by path.
-fn walk(root: &Path, dir: &Path, out: &mut Vec<(String, PathBuf)>) -> Result<(), String> {
+fn walk(
+    root: &Path,
+    dir: &Path,
+    only_js: bool,
+    out: &mut Vec<(String, PathBuf)>,
+) -> Result<(), String> {
     let entries = std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     for entry in entries {
         let path = entry.map_err(|e| format!("{}: {e}", dir.display()))?.path();
         if path.is_dir() {
-            walk(root, &path, out)?;
-        } else if path.extension().is_some_and(|e| e == "js") {
+            walk(root, &path, only_js, out)?;
+        } else if !only_js || path.extension().is_some_and(|e| e == "js") {
             let rel = path
                 .strip_prefix(root)
                 .map_err(|e| e.to_string())?
@@ -290,6 +297,29 @@ fn walk(root: &Path, dir: &Path, out: &mut Vec<(String, PathBuf)>) -> Result<(),
         }
     }
     Ok(())
+}
+
+/// SHA-256, in lower-case hex, of the sorted lines `<file hash>  <path>` for
+/// every file of `harness/`, `test/` and `features.txt`.
+fn tree_hash(dir: &Path) -> Result<String, String> {
+    let mut files = Vec::new();
+    walk(dir, &dir.join("harness"), false, &mut files)?;
+    walk(dir, &dir.join("test"), false, &mut files)?;
+    files.push(("features.txt".to_owned(), dir.join("features.txt")));
+    files.sort();
+    let mut lines = String::new();
+    for (rel, path) in &files {
+        let bytes = std::fs::read(path).map_err(|e| format!("{rel}: {e}"))?;
+        let hex: String = Sha256::digest(&bytes)
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        writeln!(lines, "{hex}  {rel}").map_err(|e| e.to_string())?;
+    }
+    Ok(Sha256::digest(lines.as_bytes())
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect())
 }
 
 /// The tags of `features.txt`: every non-comment line's first word.
@@ -315,7 +345,7 @@ pub fn convert(dir: &Path) -> Result<String, String> {
             .map_err(|e| format!("{}: {e}", features_path.display()))?,
     );
     let mut files = Vec::new();
-    walk(dir, &dir.join("test"), &mut files)?;
+    walk(dir, &dir.join("test"), true, &mut files)?;
     files.sort();
 
     let mut out = String::from(
@@ -392,6 +422,15 @@ pub fn convert(dir: &Path) -> Result<String, String> {
         .map_err(|e| e.to_string())?;
     }
     writeln!(out, "];").map_err(|e| e.to_string())?;
+    writeln!(
+        out,
+        "\n/// SHA-256 over every vendored file (harness/, test/, features.txt): the\n\
+         /// lines `<sha256 of the file>  <path>`, sorted by path. It makes an edit to a\n\
+         /// file that is not a test (a harness file, a fixture) stale here too.\n\
+         const TREE_SHA256: &str = \"{}\";",
+        tree_hash(dir)?
+    )
+    .map_err(|e| e.to_string())?;
     writeln!(
         out,
         "\n// {tests} tests, {expected_failures} expected failures (a test with several reasons counts once; the counts below count each reason):"

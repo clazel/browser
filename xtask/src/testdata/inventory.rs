@@ -122,9 +122,7 @@ fn walk(dir: &Path, prefix: &str, out: &mut Vec<Entry>) -> Result<(), String> {
         } else {
             format!("{prefix}/{name}")
         };
-        let kind = entry
-            .file_type()
-            .map_err(|e| format!("{path}: {e}"))?;
+        let kind = entry.file_type().map_err(|e| format!("{path}: {e}"))?;
         if kind.is_dir() {
             walk(&entry.path(), &path, out)?;
         } else if kind.is_file() {
@@ -138,7 +136,9 @@ fn walk(dir: &Path, prefix: &str, out: &mut Vec<Entry>) -> Result<(), String> {
                 path,
             });
         } else {
-            return Err(format!("{path}: a link or special file; vendor regular files only"));
+            return Err(format!(
+                "{path}: a link or special file; vendor regular files only"
+            ));
         }
     }
     Ok(())
@@ -170,7 +170,9 @@ fn inventory(dir: &Path, roots: &[&str]) -> Result<Vec<Entry>, String> {
     }
     for r in roots {
         if !files.iter().any(|f| under(&f.path, r)) {
-            return Err(format!("{r}: listed in xtask/src/testdata/inventory.rs but not vendored"));
+            return Err(format!(
+                "{r}: listed in xtask/src/testdata/inventory.rs but not vendored"
+            ));
         }
     }
     if !files.iter().any(|f| f.path == "LICENSE.md") {
@@ -280,8 +282,8 @@ fn listed_hashes(source: &str) -> Vec<(String, String)> {
 ///   the ones `clazel-idna` vendors, so the two crates agree on the version.
 pub fn convert_ucd(dir: &Path) -> Result<String, String> {
     let files = inventory(dir, UCD_FILES)?;
-    let source = std::fs::read_to_string(dir.join("SOURCE.md"))
-        .map_err(|e| format!("SOURCE.md: {e}"))?;
+    let source =
+        std::fs::read_to_string(dir.join("SOURCE.md")).map_err(|e| format!("SOURCE.md: {e}"))?;
     let listed = listed_hashes(&source);
     for f in files.iter().filter(|f| f.path != "LICENSE.md") {
         match listed.iter().find(|(n, _)| *n == f.path) {
@@ -303,7 +305,10 @@ pub fn convert_ucd(dir: &Path) -> Result<String, String> {
             }
         }
     }
-    if let Some((n, _)) = listed.iter().find(|(n, _)| !files.iter().any(|f| f.path == *n)) {
+    if let Some((n, _)) = listed
+        .iter()
+        .find(|(n, _)| !files.iter().any(|f| f.path == *n))
+    {
         return Err(format!("SOURCE.md: lists {n}, which is not vendored"));
     }
     for name in SHARED_WITH_IDNA {
@@ -341,7 +346,8 @@ mod tests {
 
     #[test]
     fn walk_lists_files_and_skips_source() {
-        let dir = std::env::temp_dir().join(format!("clazel-inventory-test-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("clazel-inventory-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         assert!(std::fs::create_dir_all(dir.join("a")).is_ok());
         assert!(std::fs::write(dir.join("SOURCE.md"), b"x").is_ok());

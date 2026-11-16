@@ -209,7 +209,7 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
 /// converter walks it and lists what it finds (its inventory is then the
 /// record of which files exist), and the directory is checked for
 /// `SOURCE.md` and `LICENSE.md` only.
-const TREE_SUITES: &[&str] = &["wpt-web", "todomvc"];
+const TREE_SUITES: &[&str] = &["wpt-web", "todomvc", "test262"];
 
 /// A converter for a binary artefact written beside a suite's Rust table.
 type ConvertBytes = fn(&Path) -> Result<Vec<u8>, String>;
