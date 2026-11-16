@@ -1,7 +1,8 @@
 # Phase 7: JavaScript, detailed plan
 
-**Status: proposed (2026-11-16). Nothing is built. The decisions in item 7.0
-are open.** The JIT half of this phase is planned in [jit.md](jit.md), whose
+**Status: planned (2026-11-16). Nothing is built. The decisions in item 7.0
+were taken on 2026-11-16, by a Claude session on the maintainer's
+delegation.** The JIT half of this phase is planned in [jit.md](jit.md), whose
 decisions (J.0) were taken on 2026-11-16. This file plans the rest and fixes
 the shapes jit.md's item J.1 asks of it.
 
@@ -25,7 +26,8 @@ parser on the path at its target tier:
 - **Hacker News** with `hn.js`: comments collapse and expand;
 - **TodoMVC**, in its vanilla, React and Vue versions: add, complete,
   filter and delete items;
-- **a Wikipedia article.**
+- **a Wikipedia-shaped page**, a fixture written for this repository that
+  uses the APIs a Wikipedia article's scripts use (7.0, "also decided").
 
 Test262 and the listed WPT directories give the results 7.1 records, with
 every failure listed by name and reason, and give the same results with the
@@ -54,8 +56,7 @@ number here carries the mark, because the edition is pinned only in 7.1.
 Phase 7 is done when all of these hold on Windows x86-64, Linux x86-64 and
 macOS arm64. Verus, Kani and Miri run on Linux, as CI does.
 
-1. **Tiers**, as 7.0(a) decides them and `cargo xtask check` accepts.
-   - Recommended:
+1. **Tiers**, as 7.0(a) decided them and `cargo xtask check` accepts:
      - `clazel-js-lexer` and `clazel-json` at **tier 2**;
      - `clazel-js-syntax`, `clazel-js-regexp` and `clazel-js-number` at
        **tier 1**;
@@ -236,7 +237,61 @@ Phase 5's window and input.
 Ordered by dependency. Sizes as in earlier plans: S under a day, M a few
 days, L a week or more.
 
-### 7.0 Decisions for the maintainer (S): open
+### 7.0 Decisions for the maintainer (S): decided
+
+**Decision (2026-11-16), by a Claude session on the maintainer's delegation,
+weighed against ROADMAP.md's goals:**
+- a security-critical core that is formally verified;
+- a codebase that is memory safe throughout;
+- trust placed in machine checks, not reviewers;
+- a phase that ends in something that runs.
+
+Every recommendation below is taken, for these reasons:
+
+- **(a) C:** tier 2 for the lexer and JSON, tier 1 for the parser, RegExp
+  and numbers.
+  - The parser runs in the sandboxed renderer, not in the core the kernel's
+    theorems protect, and memory safety holds there whatever its tier.
+  - Tier 1 proves what an attacker could use (panics, overflow, unbounded
+    resources). Tier 2 for the full grammar would double the phase without
+    changing what crosses a process boundary.
+  - Phase 5's 5.0(a) drew the same line for CSS.
+  - VERIFICATION.md's "Tier 2 required" gains "the JS lexer and JSON".
+- **(b) The scope as written.**
+  - `SharedArrayBuffer` stays out for a security reason, not only for
+    cost: with no cross-origin isolation it is a Spectre timer.
+  - `Intl` and time zones stay out until our own readers of the CLDR and
+    tzdb data exist (rule 8 applies to data the browser parses, even
+    vendored data, when it ships).
+- **(c) S1.** It keeps `theorem_cookie_noninterference` exactly as proven,
+  so no new trust enters the kernel, the verified core. Credentialed CORS
+  waits until its declassification can be proven.
+- **(d) O2.** Cross-site frames belong in the kernel's proven design
+  (5.24), not in a renderer. Building in-process frames first would put a
+  second site's content in a renderer, against one site per renderer,
+  which is also the plan's only Spectre defence. Until 5.24 is built, a
+  frame is an empty box.
+- **(e) W1.** The renderer stays single-threaded, and the seccomp list stays
+  without `clone`. Workers as processes (W2) are Phase 8.
+- **(f) G1 at tier 1.** The arena keeps memory safety whatever the
+  collector does. The generation counter turns any collector bug into a
+  defined error, never a silent alias. A non-moving heap keeps jit.md's
+  region bases stable within an entry.
+- **(g) The host's offer to end a renderer** after 10 seconds without an
+  event-loop turn. The kernel decides that the tab shows the notice, and
+  the host only asks the user. No new mechanism enters the renderer.
+
+**Also decided, with the above:**
+- **The Wikipedia fixture is written for this repository**, as Phase 5's
+  HN-shaped fixture was, not copied. Article text is CC BY-SA, and a
+  copy would mix that licence into the MIT repository. The fixture
+  reproduces the structure and the APIs Wikipedia's scripts use (a
+  collapsible table of contents, `mw`-style module loading through
+  dynamic `import()`, `localStorage` preferences). The live site is run
+  locally, and its result reported.
+- **TodoMVC's implementations are vendored** (MIT, with their licence
+  file), each at a pinned commit.
+
 
 **(a) Tiers.** VERIFICATION.md requires at least tier 1 for "JS lexer and
 parser", and tier 0 for the interpreter.
@@ -256,7 +311,7 @@ parser", and tier 0 for the interpreter.
     tier 1 covers. Its correctness evidence is Test262's roughly 20,000
     syntax tests, many of them negative, plus differentials.
 
-**Recommendation: C**, with the parser's `target-tier` left at 1 and tier 2
+**Recommendation (taken): C**, with the parser's `target-tier` left at 1 and tier 2
 for it a Phase 8 decision. VERIFICATION.md's "Tier 2 required" gains "the JS
 lexer and JSON" if C or A is taken.
 
@@ -369,11 +424,9 @@ testdata`:
   commits.
 - **The Unicode Character Database files** RegExp needs, at the version
   `clazel-idna` already uses.
-- **TodoMVC's vanilla, React and Vue implementations** (MIT), and a
-  Wikipedia article's HTML, CSS and scripts with their licence (CC BY-SA
-  for the text). Whether the Wikipedia fixture belongs in the repository is
-  the maintainer's call; the alternative is a fixture written for this
-  repository that uses the same APIs.
+- **TodoMVC's vanilla, React and Vue implementations** (MIT), with their
+  licence. The Wikipedia-shaped fixture is written here, not vendored
+  (7.0).
 - **Independent engines for differentials** (test dependencies only):
   - Boa (Rust, crate) for the parser and built-ins;
   - QuickJS's or engine262's output, recorded as data files where a crate
@@ -698,8 +751,9 @@ The fixtures run in CI from an in-process server, on all three platforms:
   label updates.
 - **TodoMVC** in three frameworks: add three items, complete one, filter
   "Active", delete one. The DOM is checked after each step.
-- **The Wikipedia article:** its scripts run without uncaught exceptions,
-  and the table of contents collapses.
+- **The Wikipedia-shaped page:** its scripts run without uncaught
+  exceptions, the table of contents collapses, and the collapsed state
+  survives a reload through `localStorage`.
 
 Each step is checked by the DOM and by 5.25's screenshot comparison. Live
 runs against the real sites are local only, and reported.

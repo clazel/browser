@@ -100,8 +100,8 @@ arena so the heap stays in safe Rust. DOM bindings. The machine-code half
 WebAssembly front end reuses it.
 Detailed plan: [phases/phase-7.md](phases/phase-7.md); the JIT in
 [phases/jit.md](phases/jit.md).
-**Status: planned (2026-11-16); decisions in item 7.0 open, the JIT's (J.0)
-taken; no item started.**
+**Status: planned (2026-11-16); decisions in items 7.0 and J.0 taken; no
+item started.**
 *Exit:* common sites work; Test262 gives the same results with the JIT on
 and off on all three platforms.
 
