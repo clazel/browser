@@ -121,9 +121,17 @@ use vstd::prelude::*;
 
 verus! {
 
-/// `2^n` (vstd's, so its lemmas apply).
-pub open spec fn pow2(n: nat) -> nat {
-    vstd::arithmetic::power2::pow2(n)
+/// `2^n`. The values up to 2^15 (the longest code is 15 bits, and a byte has 8)
+/// are written out, so that evaluating them takes no recursion.
+pub open spec fn pow2(n: nat) -> nat
+    decreases n,
+{
+    if n == 0 { 1 } else if n == 1 { 2 } else if n == 2 { 4 } else if n == 3 { 8 }
+    else if n == 4 { 16 } else if n == 5 { 32 } else if n == 6 { 64 } else if n == 7 { 128 }
+    else if n == 8 { 256 } else if n == 9 { 512 } else if n == 10 { 1024 }
+    else if n == 11 { 2048 } else if n == 12 { 4096 } else if n == 13 { 8192 }
+    else if n == 14 { 16384 } else if n == 15 { 32768 }
+    else { 2 * pow2((n - 1) as nat) }
 }
 
 // ---------------------------------------------------------------------------
@@ -343,9 +351,22 @@ pub open spec fn kraft(lens: Seq<nat>, k: nat) -> nat
     }
 }
 
+/// Every one of the first `n` lengths is at most `m`.
+pub open spec fn lens_le(lens: Seq<nat>, m: nat, n: nat) -> bool
+    recommends
+        n <= lens.len(),
+    decreases n,
+{
+    if n == 0 {
+        true
+    } else {
+        lens[(n - 1) as int] <= m && lens_le(lens, m, (n - 1) as nat)
+    }
+}
+
 /// Every length is at most `MAX_BITS`.
 pub open spec fn lengths_ok(lens: Seq<nat>) -> bool {
-    forall|i: int| 0 <= i < lens.len() ==> #[trigger] lens[i] <= max_bits()
+    lens_le(lens, max_bits(), lens.len())
 }
 
 /// The number of symbols that have a code.

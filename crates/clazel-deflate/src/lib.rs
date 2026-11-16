@@ -18,10 +18,13 @@
 //!   worked examples, evaluated.
 
 pub mod adler;
+pub mod adler_proofs;
 pub mod contract;
 pub mod examples;
 pub mod huffman;
 pub mod lemmas;
+pub mod lemmas_bounded;
+pub mod lemmas_usable;
 pub mod oneshot;
 pub mod spec;
 pub mod stream;

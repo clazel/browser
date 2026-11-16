@@ -82,3 +82,32 @@ pub open spec fn output_bounded_ensures(limit: nat, result: Result<(Seq<u8>, nat
 }
 
 } // verus!
+
+verus! {
+
+/// One byte of Adler-32 (RFC 1950 §8.2): `s1` gains the byte, `s2` gains the
+/// new `s1`, both modulo 65521.
+pub open spec fn adler_step(s: (nat, nat), b: u8) -> (nat, nat) {
+    let t1 = (s.0 + b as nat) % 65521;
+    (t1, (s.1 + t1) % 65521)
+}
+
+/// The sums after `data`, starting from `s` (the checksum is a fold from
+/// `(1, 0)`; `lemmas::lemma_sums_fold` shows it is [`adler_sums`]). The
+/// resumable decoder carries `s` across calls.
+pub open spec fn adler_fold(s: (nat, nat), data: Seq<u8>) -> (nat, nat)
+    decreases data.len(),
+{
+    if data.len() == 0 {
+        s
+    } else {
+        adler_fold(adler_step(s, data[0]), data.skip(1))
+    }
+}
+
+/// Contract for `adler::update`: the sums after `data` from `(s1, s2)`.
+pub open spec fn adler_update_ensures(s1: u32, s2: u32, data: Seq<u8>, r: (u32, u32)) -> bool {
+    (r.0 as nat, r.1 as nat) == adler_fold((s1 as nat, s2 as nat), data)
+}
+
+} // verus!
