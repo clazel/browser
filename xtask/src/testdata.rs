@@ -42,6 +42,7 @@ mod wpt_url_percent;
 mod wpt_url_setters;
 mod wpt_urltestdata;
 mod wpt_webstorage;
+mod wuffs_deflate;
 mod wycheproof_ecdsa;
 mod wycheproof_rsa;
 mod x509_limbo;
@@ -190,6 +191,16 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         wycheproof_rsa::FILES,
     ),
     ("x509-limbo", x509_limbo::convert, x509_limbo::FILES),
+    (
+        "wuffs-deflate",
+        wuffs_deflate::convert,
+        wuffs_deflate::FILES_MAIN,
+    ),
+    (
+        "wuffs-deflate-artificial",
+        wuffs_deflate::convert,
+        wuffs_deflate::FILES_ARTIFICIAL,
+    ),
 ];
 
 /// A converter for a binary artefact written beside a suite's Rust table.

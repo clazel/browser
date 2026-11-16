@@ -264,6 +264,8 @@ Changing a row is a reviewable act. Adding one means saying why below.
 | unicode-xid | 0.2.6 | tooling | Required by `naga` (GLSL to SPIR-V for `clazel-gpu`'s shaders, in `xtask` only). |
 | zerocopy | 0.8.63 | tooling | Required by `naga` (GLSL to SPIR-V for `clazel-gpu`'s shaders, in `xtask` only). |
 | zerocopy-derive | 0.8.63 | tooling | The `zerocopy` derives (proc-macro), required by `naga` (GLSL to SPIR-V for `clazel-gpu`'s shaders, in `xtask` only). |
+| miniz_oxide | 0.9.1 | test | A Rust port of miniz (the DEFLATE and zlib implementation behind `flate2`, and `png`'s decoder): the reference engine in `clazel-deflate`'s differential tests (`tests/conformance_deflate.rs`), which compare its output on the vendored streams and on mutated ones. Used without default features, with `with-alloc`, so its one dependency is `adler2`. |
+| adler2 | 2.0.1 | test | The Adler-32 checksum (a port of the algorithm RFC 1950 gives), required by `miniz_oxide`. No dependencies. |
 <!-- END ALLOWLIST -->
 
 The only `shipped` package is `libc`, and only `clazel-sys` depends on it

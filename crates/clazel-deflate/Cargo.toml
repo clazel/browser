@@ -14,6 +14,14 @@ vstd = "=0.0.0-2026-10-04-0306"
 # item 6.0(a)): DEFLATE and zlib decoding is Tier 2. The tier stays 0 until
 # CI's full verification is green on a pull request that also carries every
 # part of Tier 2 (CLAUDE.md rule 7); README.md says which parts exist.
+# The reference decoder of the differential tests (tests/conformance_deflate.rs),
+# never compiled into the browser: `miniz_oxide` (a Rust port of miniz, the
+# decoder behind the `flate2` crate), written by others (docs/DEPENDENCIES.md,
+# class `test`). Without its default features it has the one dependency
+# `adler2`; `with-alloc` is the one feature the tests need.
+[dev-dependencies]
+miniz_oxide = { version = "=0.9.1", default-features = false, features = ["with-alloc"] }
+
 [package.metadata.clazel]
 tier = 0
 target-tier = 2
