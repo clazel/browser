@@ -433,12 +433,17 @@ pub open spec fn max_request_body() -> nat {
     0x100_0000
 }
 
+/// A body of `n` octets is within [`max_request_body`].
+pub open spec fn body_len_ok(n: nat) -> bool {
+    n <= max_request_body()
+}
+
 /// A request this client builds: a navigation method, no body on `GET`, and
 /// a body of at most [`max_request_body`] octets.
 pub open spec fn req_ok(req: Req) -> bool {
     is_navigation_method(req.method) && (req.method == lit_get() ==> req.body is None)
         && (match req.body {
-        Some(p) => p.bytes.len() <= max_request_body(),
+        Some(p) => body_len_ok(p.bytes.len()),
         None => true,
     })
 }

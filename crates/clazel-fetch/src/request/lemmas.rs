@@ -67,4 +67,18 @@ pub proof fn lemma_post_is_unsafe(req: Req)
     }
 }
 
+
+/// A request in the class before 6.16 is not changed by a redirect's
+/// rewriting (a `GET` stays a `GET`, whatever the status).
+pub proof fn lemma_rewrite_plain_get(status: nat, req: Req)
+    requires
+        is_plain_get(req),
+    ensures
+        rewrite_for_redirect(status, req) == req,
+{
+    assert(lit_get() != lit_post()) by {
+        assert(lit_get()[0] != lit_post()[0]);
+    }
+}
+
 } // verus!
