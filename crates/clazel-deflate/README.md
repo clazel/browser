@@ -73,8 +73,10 @@ Verus `0.2026.10.04.426d8b0`, run in WSL: **37 verified, 0 errors** (`cargo veru
   mutation of the decoding steps (the block loop, the dynamic header): the
   mutations cover the tables, the usable-code rule, and the checks that a
   short stream can witness. Tier 2 needs both.
-- No Kani harnesses, no Miri run measured for the new tests beyond the strides
-  in the test file.
+- No Kani harnesses. Miri: `cargo xtask verify --part miri clazel-deflate` was
+  started and stopped after about 15 minutes; `bomb_stops_at_the_limit` took
+  208 s of the 300 s allowed, so the Miri strides (in the test file) are not
+  measured and probably need cutting.
 - `fixed` blocks assume the fixed codes are complete (they are: Kraft's sum is
   1); the decoder's `build` result for them is ignored and a test checks it.
 - Not a fast decoder: one table lookup per symbol and a byte at a time through
