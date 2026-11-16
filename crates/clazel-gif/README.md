@@ -129,8 +129,8 @@ invariant checked on every step. Deterministic byte mutations of every file
 never panic (9,653 mutants). 62 GIFs made by hand cover disposal,
 transparency, local tables, clipping, extensions, interlacing at every
 height from 1 to 40 and a real LZW encoder through every minimum code size.
-Under Miri the suites run on the files of at most 16 KiB, chunk sizes 1 and
-4096, and 4 mutations each.
+Under Miri the suites run on the files of at most 2 KiB (21 of 31), chunk sizes 1 and
+64, 3 mutations each, every fourth interlaced height and no LZW case, in 291 s (no test over 90 s).
 
 ## Not done
 

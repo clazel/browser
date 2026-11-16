@@ -31,11 +31,14 @@
 //!   pages, and small streams for each block, disposal and interlace rule,
 //!   in `src` tests and here.
 //!
-//! Under Miri (about 100 times slower, and unable to open files, though
-//! these are embedded): the differential and chunking suites run on files
-//! of at most 16 KiB with chunk sizes 1 and 4096, and the mutation suite on
-//! those files with 4 mutations each (a stride of every 3rd file of the
-//! rest of the list); the whole takes about a minute.
+//! Under Miri (about 100 times slower; the files are embedded, so it can
+//! read them) every suite is cut to a stride: only the files of at most
+//! 2 KiB (21 of the 31), chunk sizes 1 and 64, 3 mutants per file, and of
+//! the hand-made cases only every fourth interlaced height and none of the
+//! 14 LZW ones (18,000 pixels each). Measured on Miri's clock (nightly
+//! 2026-08-21, one test at a time): chunking 89 s, differential 60 s and
+//! 4 s, hand-made 53 s, mutations 58 s, the rest under 25 s: 291 s in all,
+//! no test near the 300 s limit.
 
 mod main_files {
     include!("generated/wuffs_gif.rs");
@@ -305,7 +308,7 @@ fn xfail_reason(file: &str) -> Option<&'static str> {
 }
 
 /// The small files, for Miri.
-const MIRI_MAX_BYTES: usize = 16 * 1024;
+const MIRI_MAX_BYTES: usize = 2 * 1024;
 
 fn all_files() -> Vec<(&'static str, &'static [u8])> {
     let mut v: Vec<(&str, &[u8])> = Vec::new();
@@ -457,7 +460,7 @@ fn differential_wuffs_gif_artificial() {
 #[test]
 fn chunking_changes_nothing() {
     let sizes: &[usize] = if cfg!(miri) {
-        &[1, 4096]
+        &[1, 64]
     } else {
         &[1, 2, 3, 7, 64, 4096]
     };
@@ -572,7 +575,7 @@ fn mutated_files_never_panic() {
     for (n, (file, bytes)) in files.iter().enumerate() {
         // About two million bytes of mutants per file, at least 8 of them.
         let count = if cfg!(miri) {
-            4
+            3
         } else {
             (2_000_000usize / bytes.len().max(1)).clamp(8, 400)
         };
@@ -1075,6 +1078,10 @@ fn hand_cases() -> Vec<Hand> {
     // same stream decodes to the expected rows here, and a twin stored in
     // order decodes there); wider ones it reads.
     for h in 1..=40u16 {
+        // Under Miri every fourth height (1, 5, 9, ...).
+        if cfg!(miri) && h % 4 != 1 {
+            continue;
+        }
         let indices: Vec<u8> = (0..h).flat_map(|r| [(r % 4) as u8; 8]).collect();
         let expected: Vec<[u8; 4]> = (0..h)
             .flat_map(|r| [px(pal.get(usize::from(r % 4)).copied().unwrap_or(BLACK)); 8])
@@ -1097,6 +1104,10 @@ fn hand_cases() -> Vec<Hand> {
     // LZW: random data through every minimum code size, with a clear when
     // the table is full and with the deferred clear.
     for min in 2..=8u8 {
+        // The LZW cases are 18,000 pixels each: not under Miri.
+        if cfg!(miri) {
+            break;
+        }
         for (label, full) in [("clear", Full::Clear), ("deferred", Full::Deferred)] {
             let colours: Vec<Rgb> = (0..(1usize << min))
                 .map(|i| {
@@ -1144,14 +1155,8 @@ fn hand_cases() -> Vec<Hand> {
 
 #[test]
 fn gifs_by_hand() {
-    // Under Miri only the first cases (the LZW ones of 18,000 pixels are
-    // too slow there).
     let all = hand_cases();
-    let cases: Vec<&Hand> = if cfg!(miri) {
-        all.iter().filter(|c| !c.name.starts_with("LZW")).collect()
-    } else {
-        all.iter().collect()
-    };
+    let cases: Vec<&Hand> = all.iter().collect();
     let (mut pass, mut fail) = (0usize, 0usize);
     for case in &cases {
         let outcome = (|| -> Result<(), String> {
