@@ -5,13 +5,17 @@
 //!
 //! *Graphics Interchange Format, Version 89a*, CompuServe Incorporated,
 //! 31 July 1990 (the "GIF89a specification"), read from the W3C's copy,
-//! <https://www.w3.org/Graphics/GIF/spec-gif89a.txt>. Section numbers
-//! below are that document's (17 Header, 18 Logical Screen Descriptor, 19
-//! Global Color Table, 20 Image Descriptor, 21 Local Color Table, 22 Table
-//! Based Image Data, 23 Graphic Control Extension, 24 Comment Extension,
-//! 25 Plain Text Extension, 26 Application Extension, 27 Trailer, and
-//! Appendix E Interlaced Images, Appendix F Variable-Length-Code LZW
-//! Compression). The standard is silent or loose where browsers are not;
+//! <https://www.w3.org/Graphics/GIF/spec-gif89a.txt> (2,476 lines, fetched
+//! 2026-11-16, SHA-256
+//! `c0e48c12e3e91b1e78090caffb1d1ffe8e7d0face4350da675044a9a4be02aa3`; the
+//! document is frozen, there is no later revision). Section numbers
+//! below are that document's (15 Data Sub-blocks, 16 Block Terminator,
+//! 17 Header, 18 Logical Screen Descriptor, 19 Global Color Table, 20 Image
+//! Descriptor, 21 Local Color Table, 22 Table Based Image Data, 23 Graphic
+//! Control Extension, 24 Comment Extension, 25 Plain Text Extension, 26
+//! Application Extension, 27 Trailer, and Appendix B GIF Grammar, E
+//! Interlaced Images, F Variable-Length-Code LZW Compression). The
+//! standard is silent or loose where browsers are not;
 //! each such place is a listed choice below, and the same ones are
 //! commented where they take effect.
 //!

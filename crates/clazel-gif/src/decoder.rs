@@ -8,7 +8,7 @@ use clazel_image_shape::{
     Buffers, Config, ConfigStatus, Decoder, Error, Format, FrameCount, Status, Step,
 };
 
-use crate::lzw::{Fed, Lzw};
+use crate::lzw::{Fed, Lzw, TABLE_BITS};
 use crate::sink::Sink;
 use crate::work::{FIXED, PALETTE, Parts};
 
@@ -128,7 +128,7 @@ enum Phase {
 
 /// What one byte did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Event {
+pub(crate) enum Event {
     Continue,
     Frame,
     Trailer,
@@ -160,7 +160,7 @@ pub struct Gif {
     /// The canvas was saved for the current frame's disposal.
     saved: bool,
     sink: Sink,
-    lzw: Lzw,
+    lzw: Lzw<TABLE_BITS>,
     /// Frames completed.
     frames: u32,
 }
@@ -310,8 +310,23 @@ impl Gif {
         };
     }
 
-    /// One byte of the stream.
-    fn byte(&mut self, b: u8, parts: &mut Parts<'_>) -> Result<Event, &'static str> {
+    /// One byte of the stream. Image data goes to `data_byte` (LZW and the
+    /// sink, proven apart in `proofs.rs`), everything else to `control_byte`
+    /// (the model checker gets each on its own: together they are too big).
+    pub(crate) fn byte(&mut self, b: u8, parts: &mut Parts<'_>) -> Result<Event, &'static str> {
+        if self.phase == Phase::Data {
+            self.data_byte(b, parts)
+        } else {
+            self.control_byte(b, parts)
+        }
+    }
+
+    /// One byte of the stream in any phase but `Phase::Data`.
+    pub(crate) fn control_byte(
+        &mut self,
+        b: u8,
+        parts: &mut Parts<'_>,
+    ) -> Result<Event, &'static str> {
         match self.phase {
             // GIF89a section 17: "Header" ("GIF" and the version).
             Phase::Header => {
@@ -354,7 +369,7 @@ impl Gif {
                     self.phase = Phase::Block;
                 }
             }
-            // GIF89a section 12 "Data Sub-blocks" and the block grammar of
+            // GIF89a section 15 "Data Sub-blocks" and the block grammar of
             // Appendix B: an image (`,`), an extension (`!`) or the trailer.
             Phase::Block => match b {
                 0x2C => self.phase = Phase::Descriptor,
@@ -370,7 +385,7 @@ impl Gif {
                 // GIF89a section 23 labels the Graphic Control Extension
                 // 0xF9. Every other extension (plain text 0x01, comment
                 // 0xFE, application 0xFF, unknown) is skipped by its
-                // sub-block sizes (sections 12 and 24 to 26).
+                // sub-block sizes (sections 15 and 24 to 26).
                 self.phase = if b == 0xF9 {
                     Phase::GceSize
                 } else {
@@ -442,7 +457,8 @@ impl Gif {
             // GIF89a section 22 "Table Based Image Data": the LZW minimum
             // code size, then data sub-blocks.
             Phase::MinCode => {
-                self.lzw = Lzw::new(b).ok_or("an LZW minimum code size outside 2 to 8")?;
+                self.lzw =
+                    Lzw::<TABLE_BITS>::new(b).ok_or("an LZW minimum code size outside 2 to 8")?;
                 self.phase = if self.sink.remaining == 0 {
                     Phase::TailSize
                 } else {
@@ -459,7 +475,8 @@ impl Gif {
                 self.count = u16::from(b);
                 self.phase = Phase::Data;
             }
-            Phase::Data => return self.data_byte(b, parts),
+            // Not reached: `byte` sends image data to `data_byte`.
+            Phase::Data => return Err("image data in the control path"),
             Phase::TailSize => {
                 if b == 0 {
                     return Ok(self.finish_frame());
@@ -479,8 +496,12 @@ impl Gif {
         Ok(Event::Continue)
     }
 
-    /// One byte of image data.
-    fn data_byte(&mut self, b: u8, parts: &mut Parts<'_>) -> Result<Event, &'static str> {
+    /// One byte of image data (in `Phase::Data`).
+    pub(crate) fn data_byte(
+        &mut self,
+        b: u8,
+        parts: &mut Parts<'_>,
+    ) -> Result<Event, &'static str> {
         self.count = self.count.saturating_sub(1);
         let (table, len) = if self.use_local {
             (&*parts.local, self.local_len)
@@ -511,7 +532,13 @@ impl Gif {
     }
 
     /// The invariant of the whole state, without the buffers.
-    fn state_inv(&self) -> bool {
+    /// Whether the decoder is in image data (for the harnesses).
+    #[cfg(kani)]
+    pub(crate) fn is_data(&self) -> bool {
+        self.phase == Phase::Data
+    }
+
+    pub(crate) fn state_inv(&self) -> bool {
         let need = match self.phase {
             Phase::Header => 6,
             Phase::Screen => 7,
@@ -607,7 +634,7 @@ impl Decoder for Gif {
             has_frame: false,
             saved: false,
             sink: Sink::idle(w, h),
-            lzw: Lzw::idle(),
+            lzw: Lzw::<TABLE_BITS>::idle(),
             frames: 0,
         })
     }
@@ -657,37 +684,19 @@ impl Decoder for Gif {
     }
 }
 
-/// Any state of a decoder of a canvas at most 2 by 2, every field
-/// symbolic: the harness assumes `inv` on top.
+/// Any state of a decoder of a 2 by 2 canvas whose phase is one of
+/// `phases`, every other field symbolic: the harness assumes `inv` on top.
 #[cfg(kani)]
-pub(crate) fn any_gif() -> Option<Gif> {
-    let width: u32 = kani::any();
-    let height: u32 = kani::any();
-    kani::assume(width <= 2 && height <= 2);
-    let config = Config::new(Format::Gif, width, height, FrameCount::Unknown).ok()?;
+fn any_gif_in(phases: &[Phase]) -> Option<Gif> {
+    // A canvas of exactly 2 by 2: the template compares the bytes of its
+    // arrays past the buffers, and a work array of 1.6 kB with a symbolic
+    // length is more than the model checker unwinds. (Other canvases are
+    // the sink harness's.)
+    let config = Config::new(Format::Gif, 2, 2, FrameCount::Unknown).ok()?;
     let mut gif = Gif::start(&config).ok()?;
-    let which: u8 = kani::any();
-    gif.phase = match which % 19 {
-        0 => Phase::Header,
-        1 => Phase::Screen,
-        2 => Phase::GlobalColours,
-        3 => Phase::Block,
-        4 => Phase::Extension,
-        5 => Phase::GceSize,
-        6 => Phase::GceBody,
-        7 => Phase::GceEnd,
-        8 => Phase::SkipSize,
-        9 => Phase::SkipData,
-        10 => Phase::Descriptor,
-        11 => Phase::LocalColours,
-        12 => Phase::MinCode,
-        13 => Phase::DataSize,
-        14 => Phase::Data,
-        15 => Phase::TailSize,
-        16 => Phase::TailData,
-        17 => Phase::Ended,
-        _ => Phase::Spent,
-    };
+    let which: usize = kani::any();
+    kani::assume(which < phases.len());
+    gif.phase = *phases.get(which)?;
     gif.hold = kani::any();
     gif.have = kani::any();
     gif.count = kani::any();
@@ -736,4 +745,30 @@ pub(crate) fn any_gif() -> Option<Gif> {
     };
     gif.frames = kani::any();
     Some(gif)
+}
+
+/// Every phase.
+#[cfg(kani)]
+pub(crate) fn any_gif() -> Option<Gif> {
+    any_gif_in(&[
+        Phase::Header,
+        Phase::Screen,
+        Phase::GlobalColours,
+        Phase::Block,
+        Phase::Extension,
+        Phase::GceSize,
+        Phase::GceBody,
+        Phase::GceEnd,
+        Phase::SkipSize,
+        Phase::SkipData,
+        Phase::Descriptor,
+        Phase::LocalColours,
+        Phase::MinCode,
+        Phase::DataSize,
+        Phase::Data,
+        Phase::TailSize,
+        Phase::TailData,
+        Phase::Ended,
+        Phase::Spent,
+    ])
 }

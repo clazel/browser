@@ -1,6 +1,6 @@
 //! GIF's variable-code-size LZW decoder, one input byte at a time.
 //!
-//! GIF89a, Appendix F ("Image Data and Compression"): the image data is a
+//! GIF89a, Appendix F ("Variable-Length-Code LZW Compression"): the image data is a
 //! sequence of codes of 1 more bit than the *minimum code size* (2 to 8 in
 //! practice), packed least significant bit first. The codes
 //! `0 .. 2^min` are the colour indexes (the roots of the table), `2^min` is
@@ -11,14 +11,16 @@
 //!
 //! # Listed choices
 //!
-//! - **Full table, deferred clear.** GIF89a Appendix F says the encoder
-//!   should emit a clear code when the table is full, and it does not say
-//!   what a decoder does if it does not ("the decoder ... should ... clear
-//!   the table"-style wording is about the clear code itself). Browsers keep
-//!   decoding with the table as it is, 4096 entries and 12-bit codes, adding
-//!   nothing, until a clear code comes (the "deferred clear" of Wuffs, libgif
-//!   and `weezl`). So do we: when `next` has reached the table's size an
-//!   entry is not added, and the code size stays at its maximum.
+//! - **Full table, deferred clear.** Appendix F, "COMPRESSION", item 4, says
+//!   the output codes go "up to 12 bits per code. This defines a maximum code
+//!   value of 4095 (0xFFF)", and item 1 that the clear code "can appear at any
+//!   point in the image data stream"; the text does not say what a decoder
+//!   does when the table holds all 4096 codes and no clear code comes (it
+//!   never says an encoder must send one then). Browsers keep decoding with
+//!   the table as it is, 12-bit codes, adding nothing, until a clear code
+//!   comes (the "deferred clear" of Wuffs, libgif and `weezl`), and encoders
+//!   in the wild rely on it. So do we: when `next` has reached the table's
+//!   size an entry is not added, and the code size stays at its maximum.
 //! - **The first code after a clear** must be a root (`< 2^min`); any other
 //!   is an error (the table is empty, so no other code has a meaning).
 //! - **A code above the next free one** is an error. The next free code
@@ -39,20 +41,17 @@
 //! its output, colour indexes, goes to a sink, so no output buffer is needed
 //! here. The three arrays live in the caller's work buffer ([`Tables`]).
 
-/// Bits of the largest code (GIF89a: 12).
+/// Bits of the largest code (GIF89a: 12), the decoder's `BITS`.
 ///
-/// Under Kani the harnesses of `step` run with a 4-bit table (16 entries),
-/// because a symbolic 4096-entry table and the chain walk's 4096 iterations
-/// do not fit the model checker; the code is the same code with another
-/// constant (README, "What Kani covers").
-pub(crate) const TABLE_BITS: u8 = if cfg!(kani) { 4 } else { 12 };
+/// The decoder is generic over this number (`Lzw<BITS>`), and the decoder of
+/// the browser uses 12. Under Kani the harness of `step` uses 3 and those of
+/// LZW itself 4, because a symbolic 4096-entry table and the chain walk's
+/// 4096 iterations do not fit the model checker; it is the same code with
+/// another constant (README, "What Kani covers").
+pub(crate) const TABLE_BITS: u8 = if cfg!(kani) { 3 } else { 12 };
 
-/// Entries of the table: `2^TABLE_BITS`.
-pub(crate) const TABLE_LEN: usize = if cfg!(kani) { 16 } else { 4096 };
-
-/// The largest minimum code size accepted (8, or less under Kani where the
-/// table is smaller, so that the roots, clear and end fit with room).
-pub(crate) const MAX_MIN: u8 = if cfg!(kani) { 3 } else { 8 };
+/// Entries of the decoder's table: `2^TABLE_BITS`.
+pub(crate) const TABLE_LEN: usize = if cfg!(kani) { 8 } else { 4096 };
 
 /// The smallest minimum code size accepted.
 pub(crate) const MIN_MIN: u8 = 2;
@@ -103,7 +102,7 @@ impl Tables<'_> {
 
 /// The LZW decoder's scalar state. The arrays are in [`Tables`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Lzw {
+pub(crate) struct Lzw<const BITS: u8> {
     /// The minimum code size, `MIN_MIN..=MAX_MIN`.
     pub(crate) min_size: u8,
     /// Bits of the code being read, `min_size + 1 ..= TABLE_BITS`.
@@ -120,11 +119,19 @@ pub(crate) struct Lzw {
     pub(crate) nacc: u8,
 }
 
-impl Lzw {
+impl<const BITS: u8> Lzw<BITS> {
+    /// Entries of the table: `2^BITS`.
+    const LEN: usize = 1usize << BITS;
+
+    /// The largest minimum code size accepted: 8 (what 256 colours need), or
+    /// less if the table is smaller, so that the roots, clear and end code
+    /// fit with room.
+    const MAX_MIN: u8 = if BITS > 9 { 8 } else { BITS - 1 };
+
     /// A decoder at the start of image data with this minimum code size,
-    /// `None` outside `MIN_MIN..=MAX_MIN`.
-    pub(crate) fn new(min_size: u8) -> Option<Lzw> {
-        if !(MIN_MIN..=MAX_MIN).contains(&min_size) {
+    /// `None` outside `MIN_MIN..=Self::MAX_MIN`.
+    pub(crate) fn new(min_size: u8) -> Option<Lzw<BITS>> {
+        if !(MIN_MIN..=Self::MAX_MIN).contains(&min_size) {
             return None;
         }
         let mut lzw = Lzw {
@@ -142,7 +149,7 @@ impl Lzw {
 
     /// A placeholder state for a decoder that is not in image data (it
     /// satisfies [`Lzw::inv`]).
-    pub(crate) fn idle() -> Lzw {
+    pub(crate) fn idle() -> Lzw<BITS> {
         Lzw {
             min_size: MIN_MIN,
             code_size: MIN_MIN.saturating_add(1),
@@ -181,7 +188,17 @@ impl Lzw {
     /// codes, sizes and shifts are what the algorithm expects. It says
     /// nothing of the arrays' contents (none of them is trusted).
     pub(crate) fn inv(&self) -> bool {
-        if !(MIN_MIN..=MAX_MIN).contains(&self.min_size) {
+        self.inv_table()
+            && self.nacc < self.code_size
+            && u64::from(self.acc) < u64::from(Self::pow2(self.nacc))
+    }
+
+    /// The part of [`Lzw::inv`] about the table: sizes and codes, not the
+    /// bit buffer. One code (`Lzw::code`) keeps this one only, because a
+    /// clear code lowers `code_size` below the bits waiting in the buffer,
+    /// which `feed` then drains with the new size before it returns.
+    pub(crate) fn inv_table(&self) -> bool {
+        if !(MIN_MIN..=Self::MAX_MIN).contains(&self.min_size) {
             return false;
         }
         let clear = self.clear();
@@ -189,17 +206,15 @@ impl Lzw {
         let size = Self::pow2(self.code_size);
         let next = u32::from(self.next);
         self.code_size > self.min_size
-            && self.code_size <= TABLE_BITS
-            // Entries are `end + 1 ..= TABLE_LEN`, and the code size always
+            && self.code_size <= BITS
+            // Entries are `end + 1 ..= Self::LEN`, and the code size always
             // has room for the next free code (growing when it fills).
             && self.next > end
-            && usize::from(self.next) <= TABLE_LEN
+            && usize::from(self.next) <= Self::LEN
             && next <= size
-            && (self.code_size == TABLE_BITS || next < size)
+            && (self.code_size == BITS || next < size)
             && (self.prev == NONE
                 || (self.prev < self.next && self.prev != clear && self.prev != end))
-            && self.nacc < self.code_size
-            && u64::from(self.acc) < u64::from(Self::pow2(self.nacc))
     }
 
     /// Uses one byte of image data, giving each colour index to `sink`,
@@ -221,7 +236,17 @@ impl Lzw {
             .ok_or("bit buffer overflow")?;
         self.acc |= shifted;
         self.nacc = self.nacc.checked_add(8).ok_or("bit buffer overflow")?;
-        while self.nacc >= self.code_size {
+        // At most 3 codes come out of one byte: the buffer held fewer bits than
+        // a code (`nacc < code_size`, so at most `code_size - 1`) and a byte
+        // adds 8, which is `code_size + 7` bits at most; the first code takes
+        // `code_size` of them, and the 7 left are 2 codes of 3 bits (the least
+        // a code has, after a clear code lowers the size) at most. A loop of
+        // a constant bound, which the model checker unwinds exactly; if a
+        // fourth code were ever pending it is an error, not a hang.
+        for _ in 0..3 {
+            if self.nacc < self.code_size {
+                return Ok(Fed::More);
+            }
             let mask = Self::pow2(self.code_size).saturating_sub(1);
             let code = u16::try_from(self.acc & mask).map_err(|_| "code too wide")?;
             self.acc = self
@@ -237,11 +262,15 @@ impl Lzw {
                 done => return Ok(done),
             }
         }
-        Ok(Fed::More)
+        if self.nacc < self.code_size {
+            Ok(Fed::More)
+        } else {
+            Err("more codes in a byte than there can be")
+        }
     }
 
     /// One code.
-    fn code(
+    pub(crate) fn code(
         &mut self,
         code: u16,
         tables: &mut Tables<'_>,
@@ -270,7 +299,7 @@ impl Lzw {
         // The string of `code`, spelt last byte first on the stack.
         let len = if code < self.next {
             Self::spell(code, clear, tables, 0)?
-        } else if code == self.next && usize::from(code) < TABLE_LEN {
+        } else if code == self.next && usize::from(code) < Self::LEN {
             // "K w K": the previous string followed by its own first byte.
             *tables.stack.get_mut(0).ok_or("stack too short")? = self.first;
             Self::spell(self.prev, clear, tables, 1)?
@@ -285,9 +314,12 @@ impl Lzw {
         self.prev = code;
         self.first = first;
         // The string, first byte first.
-        let mut i = len;
-        while i > 0 {
-            i = i.checked_sub(1).ok_or("index underflow")?;
+        // (A loop of a constant bound, `len` being at most Self::LEN, which the
+        // model checker unwinds exactly.)
+        for k in 0..Self::LEN {
+            let Some(i) = len.checked_sub(k).and_then(|v| v.checked_sub(1)) else {
+                break;
+            };
             let b = *tables.stack.get(i).ok_or("stack too short")?;
             if !sink(b) {
                 return Ok(Fed::Full);
@@ -298,7 +330,7 @@ impl Lzw {
 
     /// Writes the string of `code` to `tables.stack` from `start`, last
     /// byte first; the index after the last byte written. At most
-    /// `TABLE_LEN` prefixes are followed, so garbage chains end in an error.
+    /// `Self::LEN` prefixes are followed, so garbage chains end in an error.
     fn spell(
         code: u16,
         clear: u16,
@@ -307,7 +339,7 @@ impl Lzw {
     ) -> Result<usize, &'static str> {
         let mut c = code;
         let mut n = start;
-        for _ in 0..TABLE_LEN {
+        for _ in 0..Self::LEN {
             if c < clear {
                 *tables.stack.get_mut(n).ok_or("stack too short")? =
                     u8::try_from(c).map_err(|_| "root beyond a byte")?;
@@ -333,7 +365,7 @@ impl Lzw {
         tables: &mut Tables<'_>,
     ) -> Result<(), &'static str> {
         let at = usize::from(self.next);
-        if at >= TABLE_LEN {
+        if at >= Self::LEN {
             return Ok(());
         }
         tables
@@ -341,7 +373,7 @@ impl Lzw {
             .ok_or("code outside the table")?;
         *tables.suffix.get_mut(at).ok_or("code outside the table")? = suffix;
         self.next = self.next.checked_add(1).ok_or("code overflow")?;
-        if u32::from(self.next) == Self::pow2(self.code_size) && self.code_size < TABLE_BITS {
+        if u32::from(self.next) == Self::pow2(self.code_size) && self.code_size < BITS {
             self.code_size = self.code_size.checked_add(1).ok_or("code size overflow")?;
         }
         Ok(())

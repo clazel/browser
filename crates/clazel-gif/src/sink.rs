@@ -155,7 +155,12 @@ impl Sink {
     pub(crate) fn next_interlaced_row(&mut self) {
         let step = STEP.get(usize::from(self.pass)).copied().unwrap_or(8);
         self.y = self.y.saturating_add(step);
-        while self.y >= self.height {
+        // At most one move to the next pass per pass: a loop of a constant
+        // bound, which the model checker unwinds exactly.
+        for _ in 0..START.len() {
+            if self.y < self.height {
+                return;
+            }
             let next = self.pass.saturating_add(1);
             match START.get(usize::from(next)) {
                 Some(&start) => {
