@@ -138,21 +138,21 @@
 //!   2's `File` branch and multipart's `File` branches are out; entry
 //!   values are strings.
 
-#[cfg(verus_only)]
-use crate::spec::*;
 pub use crate::spec::Entry;
 #[cfg(verus_only)]
-use clazel_encoding::labels::spec::get_an_encoding;
+use crate::spec::*;
 pub use clazel_encoding::labels::spec::Encoding;
 #[cfg(verus_only)]
-use clazel_encoding::single_byte::spec::{encoder_handler, is_single_byte};
+use clazel_encoding::labels::spec::get_an_encoding;
 pub use clazel_encoding::single_byte::spec::EncoderResult;
 #[cfg(verus_only)]
-use clazel_encoding::utf8::spec::{is_scalar_value, utf8_encode};
+use clazel_encoding::single_byte::spec::{encoder_handler, is_single_byte};
 pub use clazel_encoding::utf8::spec::ScalarItem;
 #[cfg(verus_only)]
-use clazel_percent::spec::{encode_output_byte, percent_encode_after_encoding_utf8};
+use clazel_encoding::utf8::spec::{is_scalar_value, utf8_encode};
 pub use clazel_percent::spec::PercentEncodeSet;
+#[cfg(verus_only)]
+use clazel_percent::spec::{encode_output_byte, percent_encode_after_encoding_utf8};
 pub use clazel_url::url::spec::Url;
 #[allow(unused_imports)]
 use vstd::prelude::*;
@@ -340,7 +340,7 @@ pub open spec fn percent_encode_after_encoding_sb(e: Encoding, input: Seq<u32>, 
             //     followed by the shortest sequence of ASCII digits
             //     representing potentialError in base ten, followed by
             //     "%3B", to output."
-            EncoderResult::Error(c) => ascii(b"%26%23"@) + decimal(c as nat) + ascii(b"%3B"@),
+            EncoderResult::Error(c) => seq![0x25u32, 0x32, 0x36, 0x25, 0x32, 0x33] + decimal(c as nat) + seq![0x25u32, 0x33, 0x42],
             EncoderResult::Finished => Seq::empty(),
         }) + percent_encode_after_encoding_sb(e, input.drop_first(), set)
     }
