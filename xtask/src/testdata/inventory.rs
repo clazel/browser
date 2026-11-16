@@ -345,6 +345,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "creates and walks a temporary directory")]
     fn walk_lists_files_and_skips_source() {
         let dir =
             std::env::temp_dir().join(format!("clazel-inventory-test-{}", std::process::id()));
