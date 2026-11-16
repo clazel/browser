@@ -17,7 +17,11 @@
 //! - [`lemmas`]: facts proven about the spec; [`examples`]: the RFC's own
 //!   worked examples, evaluated.
 
+pub mod adler;
 pub mod contract;
 pub mod examples;
+pub mod huffman;
 pub mod lemmas;
+pub mod oneshot;
 pub mod spec;
+pub mod stream;

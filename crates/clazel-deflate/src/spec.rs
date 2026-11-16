@@ -116,11 +116,15 @@
 //!   [`adler_sums`], the sums of §2.2's "ADLER32" paragraph, one byte at a
 //!   time.
 
-use vstd::arithmetic::power2::pow2;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
 verus! {
+
+/// `2^n` (vstd's, so its lemmas apply).
+pub open spec fn pow2(n: nat) -> nat {
+    vstd::arithmetic::power2::pow2(n)
+}
 
 // ---------------------------------------------------------------------------
 // Errors.
