@@ -369,6 +369,65 @@ code.
   `yaxpeax-arm`), each a `test` row in DEPENDENCIES.md.
 - Pin the benchmark set, and record the JIT-off numbers.
 
+**Status (2026-11-16): sources pinned, benchmark numbers not recorded.**
+- **Pinned:** each is a suite under `crates/clazel-x64/tests/data/` or
+  `crates/clazel-a64/tests/data/`, with a `SOURCE.md`, a licence and an
+  `xtask` converter (`xtask/src/testdata/isa.rs`). The crate READMEs record
+  what the pins show:
+  - ACL2 `x86isa` (acl2/acl2 at 33b05575, BSD-3-Clause, 2.6 MB);
+  - the Sail x86 model translated from it (rems-project/sail-x86-from-acl2
+    at 0c6c023d, 0.8 MB);
+  - a Sail x86 model written from the Intel manuals (shina-lab/sail-x86 at
+    1829cb6e, MIT, 0.6 MB);
+  - Intel's SDM volume 2, version 093, **pinned by URL and SHA-256 only**:
+    Intel's terms forbid redistribution;
+  - the Sail Armv9.4-A model (rems-project/sail-arm at 5416ef6b,
+    BSD-3-Clause-Clear, 3.9 MB);
+  - Arm's machine-readable specification (BSD-3-Clause, so it may be
+    redistributed), release 2026-09: the licence and README are vendored, and
+    `Instructions.json` (116 MB, over the size budget) is pinned by
+    SHA-256.
+- **Not independent, as the pins show:** the Sail x86 model that this item
+  names is a mechanical translation of the ACL2 model, and the Sail Arm model
+  is a translation of Arm's own ASL, the same text as the machine-readable
+  specification. So J.3's and J.4's "second source" is not independent unless
+  a person accepts `shina-lab/sail-x86` for x86-64, and for A64 no second
+  formal source was found. See the two READMEs.
+- **Reference disassemblers:** `iced-x86` 1.22.0 (with `lazy_static`) and
+  `yaxpeax-arm` 0.5.0 (with `yaxpeax-arch`, `bitvec` and four small
+  packages), each a `test` row in DEPENDENCIES.md, dev-dependencies of the new
+  crates only.
+- **Proposed benchmark set** (a proposal, for a person to accept): the
+  compute-bound programs of Octane 2.0, from `chromium/octane` (archived;
+  BSD-3-Clause for the harness, each benchmark file with its own licence
+  header) at commit 570ad1ccfe86e3eecba0636c8f932ac08edec517. They need no
+  DOM, and `run.js` is a shell harness. SHA-256 of each file at that commit:
+
+  | File | SHA-256 |
+  |---|---|
+  | `base.js` | `216612c2e7096a02b3e52b57e9cf9351bbaf180d60938d5c60b85fd756232733` |
+  | `run.js` | `b4b10b05e3ccefd6f49d57763ec67ef746c3e7c093ed0fdd602c7f126af5c12f` |
+  | `richards.js` | `1246a64a24b931158bf01c24640343259fa74b0226e73bad630bd1f686aa0fa7` |
+  | `deltablue.js` | `6c4784e82f3e8f5c18306d289653d08b17b38838f1bac16b38611d7318fa5a36` |
+  | `crypto.js` | `b01b6b3fe534327fdef05131162927bc5508f100a3208e185d0c5a4efb200a39` |
+  | `raytrace.js` | `64b8ff90969966dd69659100e28754976dfc3e9a4f8ee55b9232f974c66ed08c` |
+  | `earley-boyer.js` | `8dd28a505f7e705642f86816232b012fd3c770ec8afc9f719ce89ce772dab347` |
+  | `splay.js` | `f9a6a60d8f205908f5542ad1180abc1902dcdab3dcb4278017c5ce179ee123f7` |
+  | `navier-stokes.js` | `27926de809451c60b0c49a4185c08f97081310d0db166a30c1d202fb656556a2` |
+  | `box2d.js` | `83b10c280f004e7b156a9e04d09ce4109892ea92788f7c6c963f7fadf29c7bd4` |
+  | `regexp.js` | `a292d6047900c5296ea9e2628453832cc3bfe397e49fddade8aff7b5876c8263` |
+  | `LICENSE` | `cf853177951c6de1b17c029b66edf71f8b194cca1722339a7b5def4e8165aaaa` |
+
+  Left out: `code-load`, `pdfjs`, `typescript`, `mandreel`, `gbemu`, `zlib`
+  (large, or they need `eval`, typed arrays or the DOM). Octane is retired
+  and measures peak throughput, so it is a smoke measure for a baseline JIT,
+  not a claim about page loads; WebKit's JetStream (`WebKit/JetStream`) is
+  the live alternative and was not pinned (it is large and mixes in
+  WebAssembly).
+- **Not done:** the JIT-off numbers. No engine exists, so there is nothing
+  to measure. They are recorded when the interpreter runs these files, in
+  the benchmark suite's README, with the machine and the engine commit.
+
 ### J.3 `clazel-x64` (L)
 
 - The subset: 64- and 32-bit integer ALU ops, shifts, `imul`, `cmp`/`test`

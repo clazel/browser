@@ -19,3 +19,7 @@ target-tier = 2
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+yaxpeax-arm = { version = "=0.5.0", default-features = false, features = ["fmt"] }
+yaxpeax-arch = { version = "=0.3.3", default-features = false }

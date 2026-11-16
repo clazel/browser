@@ -19,3 +19,6 @@ target-tier = 2
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+iced-x86 = { version = "=1.22.0", default-features = false, features = ["std", "decoder", "encoder", "instr_info", "intel"] }
