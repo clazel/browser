@@ -12,7 +12,7 @@ The files are copied byte for byte, under the same paths as upstream (`test/lang
 `harness/...`, `features.txt`). `.gitattributes` stores them without line-ending conversion: some
 tests use CR, CRLF and the Unicode line separators on purpose.
 
-5,422 files, 8,696,526 bytes: 5,212 tests (and their fixtures), `harness/` and `features.txt`.
+5,422 files, 8,297,553 bytes (LICENSE.md and SOURCE.md not counted): 5,212 tests (and their fixtures), `harness/` and `features.txt`.
 
 What it is for: items 7.2 and 7.3 (the lexer and the parser) run the tests that parse or
 fail to parse; the negative ones carry the early errors. The tests of the rest of

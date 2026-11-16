@@ -5223,7 +5223,7 @@ const TEST262: &[Case] = &[
 /// SHA-256 over every vendored file (harness/, test/, features.txt): the
 /// lines `<sha256 of the file>  <path>`, sorted by path. It makes an edit to a
 /// file that is not a test (a harness file, a fixture) stale here too.
-const TREE_SHA256: &str = "d6fe4a98500e35fd26fd15a1b52e4122f4698eb4319ecc04fd888e083e7502d5";
+const TREE_SHA256: &str = "04bb9d8b52da7590a9126643edebd980e58c51c72f8a513c53d8de1a5ded67ef";
 
 // 5212 tests, 263 expected failures (a test with several reasons counts once; the counts below count each reason):
 //      263  newer than the pinned edition (ECMA-262 2026)
