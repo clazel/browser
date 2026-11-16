@@ -15,7 +15,6 @@
 //!   ordering key of `f64_key` must satisfy.
 //! - [`lemma_examples`]: the value of a few conversions, evaluated.
 
-
 #[allow(unused_imports)]
 use super::spec::*;
 

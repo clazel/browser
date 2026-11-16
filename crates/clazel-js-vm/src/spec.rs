@@ -144,7 +144,6 @@
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
-
 pub use crate::ops::*;
 
 verus! {
