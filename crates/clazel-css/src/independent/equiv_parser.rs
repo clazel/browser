@@ -7,21 +7,33 @@
 //! the same index. The recursive algorithms are proven together, by induction on
 //! how many tokens are left.
 
+#[cfg(verus_only)]
 use super::equiv_base::*;
+#[cfg(verus_only)]
 use super::equiv_bounds::*;
+#[cfg(verus_only)]
 use super::equiv_map::*;
+#[cfg(verus_only)]
 use super::equiv_stream::*;
+#[cfg(verus_only)]
 use super::equiv_tokenizer::*;
+#[cfg(verus_only)]
 use super::parse::*;
+#[cfg(verus_only)]
 use super::*;
+#[cfg(verus_only)]
 use crate::parser::spec as ps;
+#[cfg(verus_only)]
 use crate::tokenizer::spec as t;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
 verus! {
 
-broadcast use group_parser_base;
+broadcast use super::equiv_stream::lemma_next, super::equiv_stream::lemma_is, super::equiv_stream::lemma_is_empty,
+    super::equiv_stream::lemma_class_function, super::equiv_stream::lemma_class_at_keyword,
+    super::equiv_stream::lemma_class_ident, super::equiv_stream::lemma_class_open_bracket,
+    super::equiv_stream::lemma_discard;
 
 /// The image of a list with one more item.
 pub proof fn lemma_cvs_push(vs: Seq<ps::ComponentValue>, v: ps::ComponentValue)

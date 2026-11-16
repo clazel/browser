@@ -3,6 +3,7 @@
 //! them (a declaration's original text is a part of the stream), and the spec has
 //! no statement of them.
 
+#[cfg(verus_only)]
 use super::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;

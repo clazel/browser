@@ -7,13 +7,21 @@
 //! says that what the spec's algorithm returns, mapped by [`super::equiv_map`], is
 //! what the independent one returns, and that both are at the same index.
 
+#[cfg(verus_only)]
 use super::equiv_base::*;
+#[cfg(verus_only)]
 use super::equiv_bounds::*;
+#[cfg(verus_only)]
 use super::equiv_map::*;
+#[cfg(verus_only)]
 use super::equiv_tokenizer::*;
+#[cfg(verus_only)]
 use super::parse::*;
+#[cfg(verus_only)]
 use super::*;
+#[cfg(verus_only)]
 use crate::parser::spec as ps;
+#[cfg(verus_only)]
 use crate::tokenizer::spec as t;
 #[allow(unused_imports)]
 use vstd::prelude::*;
@@ -225,15 +233,5 @@ pub proof fn lemma_discard_whitespace(st: ps::TokenStream, p: nat)
     }
 }
 
-pub broadcast group group_parser_base {
-    lemma_next,
-    lemma_is,
-    lemma_is_empty,
-    lemma_class_function,
-    lemma_class_at_keyword,
-    lemma_class_ident,
-    lemma_class_open_bracket,
-    lemma_discard,
-}
 
 } // verus!

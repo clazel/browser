@@ -3,10 +3,15 @@
 //! are [`ints`], its tokens [`tok_of`], and its component values, declarations and
 //! rules are mapped by the functions here, each one a structural recursion.
 
+#[cfg(verus_only)]
 use super::equiv_base::*;
+#[cfg(verus_only)]
 use super::equiv_tokenizer::*;
+#[cfg(verus_only)]
 use super::parse::*;
+#[cfg(verus_only)]
 use super::*;
+#[cfg(verus_only)]
 use crate::parser::spec as ps;
 #[allow(unused_imports)]
 use vstd::prelude::*;

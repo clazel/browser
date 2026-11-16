@@ -2,7 +2,9 @@
 //! the facts about the classes of code points that the equivalence proofs
 //! broadcast. See [`super::equiv_tokenizer`].
 
+#[cfg(verus_only)]
 use super::*;
+#[cfg(verus_only)]
 use crate::tokenizer::spec as t;
 #[allow(unused_imports)]
 use vstd::prelude::*;
@@ -111,20 +113,5 @@ pub broadcast proof fn lemma_digit_value(c: u32)
 {
 }
 
-pub broadcast group group_base {
-    lemma_at,
-    lemma_class_digit,
-    lemma_class_hex,
-    lemma_class_ident_start,
-    lemma_class_ident,
-    lemma_class_non_printable,
-    lemma_class_newline,
-    lemma_class_whitespace,
-    lemma_class_valid_escape,
-    lemma_class_starts_ident,
-    lemma_class_starts_number,
-    lemma_class_starts_unicode_range,
-    lemma_digit_value,
-}
 
 } // verus!

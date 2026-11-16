@@ -12,15 +12,23 @@
 //! token. So every theorem says: the mapped result of the spec is the independent
 //! result. Positions are `int` in the spec and `nat` in the independent one.
 
+#[cfg(verus_only)]
 use super::equiv_base::*;
+#[cfg(verus_only)]
 use super::*;
+#[cfg(verus_only)]
 use crate::tokenizer::spec as t;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
 verus! {
 
-broadcast use group_base;
+broadcast use super::equiv_base::lemma_at, super::equiv_base::lemma_class_digit, super::equiv_base::lemma_class_hex,
+    super::equiv_base::lemma_class_ident_start, super::equiv_base::lemma_class_ident,
+    super::equiv_base::lemma_class_non_printable, super::equiv_base::lemma_class_newline,
+    super::equiv_base::lemma_class_whitespace, super::equiv_base::lemma_class_valid_escape,
+    super::equiv_base::lemma_class_starts_ident, super::equiv_base::lemma_class_starts_number,
+    super::equiv_base::lemma_class_starts_unicode_range, super::equiv_base::lemma_digit_value;
 
 // ---------------------------------------------------------------------
 // Numbers spelled in digits
