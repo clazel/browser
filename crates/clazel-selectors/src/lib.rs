@@ -40,5 +40,6 @@ pub mod independent;
 pub mod independent_attr;
 pub mod independent_equivalence;
 pub mod independent_match;
+pub mod independent_parse;
 pub mod lemmas;
 pub mod spec;

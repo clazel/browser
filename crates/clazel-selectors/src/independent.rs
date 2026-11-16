@@ -767,7 +767,7 @@ pub open spec fn i_complex(
         if !rel && lead_comb is Some {
             None
         } else {
-            match i_units(v, body, stop, cx, in_has, i_fuel(body, stop)) {
+            match i_units(v, body, end, cx, in_has, i_fuel(body, end)) {
                 None => None,
                 Some((units, combs)) => Some(
                     IComplex { lead, units: i_with_default_ns(units, cx, exempt), combs },
