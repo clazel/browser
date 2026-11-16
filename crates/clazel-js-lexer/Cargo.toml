@@ -1,0 +1,19 @@
+[package]
+name = "clazel-js-lexer"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "The JavaScript lexer for Clazel's Phase 7 browser (phase-7.md item 7.2): ECMA-262 section 12 source text to tokens, the goal symbol an input."
+
+# Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
+# shipped code today; `target-tier` is what the policy requires, since this
+# lexes scripts a page chose (phase-7.md 7.0(a)). Tier 0: this is only the
+# skeleton that holds the test data of item 7.1. The contracts come first
+# (rule 3), in item 7.2.
+[package.metadata.clazel]
+tier = 0
+target-tier = 2
+
+[lints]
+workspace = true
