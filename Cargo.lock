@@ -313,6 +313,7 @@ dependencies = [
  "clazel-percent",
  "clazel-treebuilder",
  "clazel-url",
+ "form_urlencoded",
  "vstd",
 ]
 

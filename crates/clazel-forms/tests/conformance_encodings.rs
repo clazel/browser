@@ -118,9 +118,7 @@ fn serialize(pairs: &[(Vec<u32>, Vec<u32>)], encoding: Encoding) -> String {
 }
 
 fn count_line(suite: &str, pass: usize, fail: usize, total: usize) {
-    println!(
-        "clazel-conformance: suite=\"{suite}\" pass={pass} xfail=0 fail={fail} total={total}"
-    );
+    println!("clazel-conformance: suite=\"{suite}\" pass={pass} xfail=0 fail={fail} total={total}");
 }
 
 #[test]
@@ -302,8 +300,35 @@ impl Rng {
 /// Random strings, weighted to the characters the format treats specially.
 fn random_string(rng: &mut Rng) -> String {
     const SPECIAL: &[char] = &[
-        ' ', '&', '=', '+', '%', '*', '-', '.', '_', '~', '!', '\'', '(', ')', '\r', '\n', '\0', '#', ';',
-        '/', '?', '\u{7F}', '\u{FFFD}', '\u{FEFF}', 'é', 'ə', '†', '💩', '\u{10FFFF}',
+        ' ',
+        '&',
+        '=',
+        '+',
+        '%',
+        '*',
+        '-',
+        '.',
+        '_',
+        '~',
+        '!',
+        '\'',
+        '(',
+        ')',
+        '\r',
+        '\n',
+        '\0',
+        '#',
+        ';',
+        '/',
+        '?',
+        '\u{7F}',
+        '\u{FFFD}',
+        '\u{FEFF}',
+        'é',
+        'ə',
+        '†',
+        '💩',
+        '\u{10FFFF}',
     ];
     let len = rng.below(12);
     (0..len)
@@ -329,10 +354,8 @@ fn differential_against_form_urlencoded() {
         let strings: Vec<(String, String)> = (0..n)
             .map(|_| (random_string(&mut rng), random_string(&mut rng)))
             .collect();
-        let tuples: Vec<(Vec<u32>, Vec<u32>)> = strings
-            .iter()
-            .map(|(a, b)| (u32s(a), u32s(b)))
-            .collect();
+        let tuples: Vec<(Vec<u32>, Vec<u32>)> =
+            strings.iter().map(|(a, b)| (u32s(a), u32s(b))).collect();
         let want = {
             let mut s = form_urlencoded::Serializer::new(String::new());
             for (a, b) in &strings {

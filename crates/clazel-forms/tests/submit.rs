@@ -21,7 +21,15 @@ fn run(html: &str, submitter: Option<&str>, encoding: Encoding, boundary: &[u8])
     let Some(base) = basic_url_parser(&u32s("http://example.com/dir/"), None) else {
         return "no base".to_owned();
     };
-    match submit_exec(&arena, &rows, (form, s), encoding, &u32s(page), &base, boundary) {
+    match submit_exec(
+        &arena,
+        &rows,
+        (form, s),
+        encoding,
+        &u32s(page),
+        &base,
+        boundary,
+    ) {
         ExecOutcome::Ignored => "ignored".to_owned(),
         ExecOutcome::Refused(r) => format!(
             "refused {}",
@@ -72,7 +80,9 @@ fn get_replaces_the_query_and_keeps_the_fragment() {
 #[test]
 fn post_urlencoded_is_the_default_and_keeps_the_action_query() {
     assert_eq!(
-        go("<form id=f method=POST action='go?k=v'><input name=q value='a b'><input name=r value=1></form>"),
+        go(
+            "<form id=f method=POST action='go?k=v'><input name=q value='a b'><input name=r value=1></form>"
+        ),
         "POST http://example.com/dir/go?k=v this [application/x-www-form-urlencoded] \"q=a+b&r=1\""
     );
 }
@@ -93,11 +103,15 @@ fn empty_action_is_the_document_url() {
 #[test]
 fn text_plain_and_multipart() {
     assert_eq!(
-        go("<form id=f method=post enctype=text/plain action=/x><input name=a value=b><input name=c value=d></form>"),
+        go(
+            "<form id=f method=post enctype=text/plain action=/x><input name=a value=b><input name=c value=d></form>"
+        ),
         "POST http://example.com/x this [text/plain] \"a=b\\r\\nc=d\\r\\n\""
     );
     assert_eq!(
-        go("<form id=f method=post enctype=MULTIPART/form-data action=/x><input name='a\"' value=b></form>"),
+        go(
+            "<form id=f method=post enctype=MULTIPART/form-data action=/x><input name='a\"' value=b></form>"
+        ),
         "POST http://example.com/x this [multipart/form-data; boundary=BND] \
          \"--BND\\r\\nContent-Disposition: form-data; name=\\\"a%22\\\"\\r\\n\\r\\nb\\r\\n--BND--\\r\\n\""
     );
@@ -148,7 +162,10 @@ fn targets() {
     assert_eq!(t("target=_PARENT", ""), "GET http://example.com/x?a=b this");
     assert_eq!(t("target=_top", ""), "GET http://example.com/x?a=b this");
     assert_eq!(t("target=_blank", ""), "GET http://example.com/x?a=b new");
-    assert_eq!(t("target=somewhere", ""), "GET http://example.com/x?a=b new");
+    assert_eq!(
+        t("target=somewhere", ""),
+        "GET http://example.com/x?a=b new"
+    );
     // A base target applies when the form has none; the form's wins.
     assert_eq!(
         t("", "<base target=_blank>"),
@@ -239,7 +256,12 @@ fn encodings() {
     );
     // The first label that is an encoding counts; "bogus" is skipped.
     assert_eq!(
-        run(&html(" bogus  iso-8859-1 utf-8"), None, Encoding::Utf8, b"B"),
+        run(
+            &html(" bogus  iso-8859-1 utf-8"),
+            None,
+            Encoding::Utf8,
+            b"B"
+        ),
         "GET http://example.com/x?a=%E9%26%23601%3B this"
     );
     // None found: UTF-8. UTF-16 is replaced by UTF-8 as an output encoding.
@@ -280,7 +302,8 @@ fn encodings() {
 
 #[test]
 fn the_charset_control_gets_the_encodings_name() {
-    let html = "<form id=f action=/x accept-charset=iso-8859-1><input type=hidden name=_charset_></form>";
+    let html =
+        "<form id=f action=/x accept-charset=iso-8859-1><input type=hidden name=_charset_></form>";
     assert_eq!(
         go(html),
         "GET http://example.com/x?_charset_=windows-1252 this"
@@ -292,7 +315,10 @@ fn the_boundary_must_be_well_formed() {
     let html = "<form id=f method=post enctype=multipart/form-data action=/x><input name=a value=b></form>";
     assert_eq!(run(html, None, Encoding::Utf8, b""), "refused boundary");
     assert_eq!(run(html, None, Encoding::Utf8, b"a b"), "refused boundary");
-    assert_eq!(run(html, None, Encoding::Utf8, &[b'a'; 71]), "refused boundary");
+    assert_eq!(
+        run(html, None, Encoding::Utf8, &[b'a'; 71]),
+        "refused boundary"
+    );
     assert!(run(html, None, Encoding::Utf8, &[b'a'; 70]).starts_with("POST "));
 }
 

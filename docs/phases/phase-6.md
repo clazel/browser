@@ -172,7 +172,7 @@ SameSite cookies, proven in 3.6, limit.
 | `clazel-webp` | 0 (1) | RFC 9649 (WebP container and lossless); RFC 6386 (VP8) | RIFF container, VP8L lossless, VP8 key frames, `ALPH`, `ANIM`/`ANMF` per 6.0(d) |
 | `clazel-image-shape` | 0 (1) | ours (WUFFS-style interface; 6.0(j) limits) | the `Decoder` trait, RGBA8 buffers, the size limits, premultiplication, the Kani step-harness template (6.3) |
 | `clazel-image` | 0 (0) | HTML §4.8.4† (img), §4.8.4.3† (srcset), MIME Sniffing §6.1 | format dispatch from the sniffed type, the per-document image list, the decoded pixel budget, frame timing |
-| `clazel-forms` | 0 (2 for `data/`, 0 for `edit/`; 6.0(b)) | HTML §4.10.21† (form submission), §4.10.17.3† (form owner), §4.10.5† (input types in scope); URL §5† (urlencoded) | form owner and the form data set, the three encodings, text field editing state |
+| `clazel-forms` | 0 (2 for `data/`, 0 for `edit/`; 6.0(b)) | HTML §4.10.22 (form submission), §4.10.18.3 (form owner), §4.10.5† (input types in scope); URL §5 (urlencoded) | form owner and the form data set, the three encodings, text field editing state |
 | `clazel-displaylist` | 2 (exists) | ours | the image items (6.10) |
 | `clazel-gpu` | 0 (exists) | as Phase 5 | image textures and the sampled quad pipeline (6.12) |
 | `clazel-layout` | 0 (exists) | CSS 2.1 §10.3.2†, §10.6.2† (replaced sizing); CSS Images 3† (`object-fit` out); CSS Backgrounds 3† per 6.0(c) | natural sizes, relayout when they arrive, control boxes, background images if taken |
@@ -719,13 +719,13 @@ building DOMs with the tree builder and comparing entry lists.
 
 ### 6.14 Forms: encodings and the submission algorithm (M)
 
-`clazel-forms`, `data/`, tier 2. URL §5.2† the
+`clazel-forms`, `data/`, tier 2. URL §5.2 the
 `application/x-www-form-urlencoded` serializer (on `clazel-percent`'s set,
 with the encoding's encoder from `clazel-encoding`; a page in a multi-byte
-legacy encoding cannot submit until Phase 8, listed); HTML §4.10.21.8†
+legacy encoding cannot submit until Phase 8, listed); HTML §4.10.22.8
 `multipart/form-data` (boundary from the kernel's randomness, passed in;
-file entries cannot exist since `type=file` is out) and §4.10.21.6†
-`text/plain`; HTML §4.10.21.3† "form submission algorithm" steps from the
+file entries cannot exist since `type=file` is out) and §4.10.22.9
+`text/plain`; HTML §4.10.22.3 "form submission algorithm" steps from the
 form's action, method (`get`, `post`; `dialog` out), enctype, target
 (`_self`, `_parent`, `_top` all mean this tab until nested browsing contexts;
 `_blank` and named targets open a new tab through the kernel's existing
@@ -748,7 +748,7 @@ text input, caret, Backspace, Delete, arrows, Home, End, selection by Shift
 and mouse drag, no clipboard until the host offers one, listed), `password`
 fields drawn as bullets, `textarea` with lines, `select` as a list drawn in
 the content area (a native popup would be outside the tab's surface), Enter
-in a text field submitting its form's default button (HTML §4.10.21.2†
+in a text field submitting its form's default button (HTML §4.10.22.2
 "implicit submission"), checkboxes and radio groups toggling, `maxlength`,
 `readonly`, `disabled`, `placeholder`. Constraint validation: `required`,
 `pattern` waits for a regular expression engine (Phase 7) and is ignored,
