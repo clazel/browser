@@ -37,6 +37,7 @@ pub mod exec_specificity;
 pub mod exec_strings;
 pub mod exec_types;
 pub mod independent;
+pub mod independent_attr;
 pub mod independent_equivalence;
 pub mod independent_match;
 pub mod lemmas;

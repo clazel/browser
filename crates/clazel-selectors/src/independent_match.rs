@@ -15,9 +15,11 @@ use super::independent_equivalence::*;
 #[allow(unused_imports)]
 use super::spec::*;
 #[cfg(verus_only)]
-use clazel_dom::lemmas::{lemma_index_of, lemma_index_of_unique, lemma_path, lemma_path_facts, lemma_wf_witness};
+use clazel_dom::lemmas::{
+    lemma_index_of, lemma_index_of_unique, lemma_path, lemma_path_facts, lemma_wf_witness,
+};
 #[cfg(verus_only)]
-use clazel_dom::spec::{index_of, is_descendant, parent, wf, wf_with, inclusive_ancestor_within};
+use clazel_dom::spec::{inclusive_ancestor_within, index_of, is_descendant, parent, wf, wf_with};
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
