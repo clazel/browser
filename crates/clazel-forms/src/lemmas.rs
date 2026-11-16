@@ -203,6 +203,92 @@ pub proof fn lemma_controls_members(doc: Document, form: NodeId, order: Seq<Node
     }
 }
 
+/// The entries of the options of a `select` all carry its name.
+pub proof fn lemma_option_entries_names(doc: Document, st: FormState, name: Seq<u32>, opts: Seq<NodeId>)
+    ensures
+        forall|k: int| 0 <= k < option_entries(doc, st, name, opts).len() ==> (#[trigger] option_entries(
+            doc,
+            st,
+            name,
+            opts,
+        )[k]).name == name,
+    decreases opts.len(),
+{
+    if opts.len() > 0 {
+        lemma_option_entries_names(doc, st, name, opts.drop_last());
+        let prev = option_entries(doc, st, name, opts.drop_last());
+        let all = option_entries(doc, st, name, opts);
+        assert forall|k: int| 0 <= k < all.len() implies (#[trigger] all[k]).name == name by {
+            if k < prev.len() {
+                assert(all[k] == prev[k]);
+            }
+        }
+    }
+}
+
+/// Every entry a field adds has a non-empty name: step 5.4 skips the fields
+/// without a name, an image button's names end in "x" or "y", and a
+/// `dirname` entry needs a non-empty `dirname`.
+pub proof fn lemma_field_entries_names(
+    doc: Document,
+    st: FormState,
+    submitter: Option<NodeId>,
+    encoding: Seq<u32>,
+    field: NodeId,
+)
+    ensures
+        forall|k: int| 0 <= k < field_entries(doc, st, submitter, encoding, field).len() ==> (#[trigger] field_entries(
+            doc,
+            st,
+            submitter,
+            encoding,
+            field,
+        )[k]).name.len() > 0,
+{
+    let all = field_entries(doc, st, submitter, encoding, field);
+    if let Some(name) = attr(doc, field, b"name"@) {
+        if name.len() > 0 {
+            lemma_option_entries_names(doc, st, name, list_of_options(doc, field));
+        }
+    }
+    assert forall|k: int| 0 <= k < all.len() implies (#[trigger] all[k]).name.len() > 0 by {
+    }
+}
+
+/// Every entry of the entry list has a non-empty name.
+pub proof fn lemma_entries_of_names(
+    doc: Document,
+    st: FormState,
+    submitter: Option<NodeId>,
+    encoding: Seq<u32>,
+    fields: Seq<NodeId>,
+)
+    ensures
+        forall|k: int| 0 <= k < entries_of(doc, st, submitter, encoding, fields).len() ==> (#[trigger] entries_of(
+            doc,
+            st,
+            submitter,
+            encoding,
+            fields,
+        )[k]).name.len() > 0,
+    decreases fields.len(),
+{
+    if fields.len() > 0 {
+        lemma_entries_of_names(doc, st, submitter, encoding, fields.drop_last());
+        lemma_field_entries_names(doc, st, submitter, encoding, fields.last());
+        let prev = entries_of(doc, st, submitter, encoding, fields.drop_last());
+        let last = field_entries(doc, st, submitter, encoding, fields.last());
+        let all = entries_of(doc, st, submitter, encoding, fields);
+        assert forall|k: int| 0 <= k < all.len() implies (#[trigger] all[k]).name.len() > 0 by {
+            if k < prev.len() {
+                assert(all[k] == prev[k]);
+            } else {
+                assert(all[k] == last[k - prev.len()]);
+            }
+        }
+    }
+}
+
 /// What the implementation computes once per form, to decide whether a
 /// control's `form` attribute names `form`: `form`'s ID, if `form` is a
 /// `form` element and the first element of `order` with that ID.
