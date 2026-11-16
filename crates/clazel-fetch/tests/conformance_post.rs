@@ -270,10 +270,15 @@ fn ours(c: &Case, now: u64) -> Option<Run> {
 #[test]
 fn differential_methods_bodies_and_redirects() {
     let runs: u64 = 6000;
+    // Under Miri (an interpreter) every 25th seed: the same code paths for
+    // undefined behaviour in about a minute; every seed runs in the normal
+    // test job (docs/VERIFICATION.md, Miri). The coverage floors below scale
+    // with the stride.
+    let stride: u64 = if cfg!(miri) { 25 } else { 1 };
     let (mut pass, mut failed, mut resent, mut dropped, mut with_body) =
         (0u64, 0u64, 0u64, 0u64, 0u64);
     let mut compared: u64 = 0;
-    for i in 0..runs {
+    for i in (0..runs).filter(|i| i % stride == 0) {
         let seed = i.wrapping_mul(0x9E37_79B9).wrapping_add(1);
         let c = case(seed);
         let Some(want) = reference(&c) else {
@@ -308,7 +313,12 @@ fn differential_methods_bodies_and_redirects() {
         "runs with a body: {with_body}, sent again after a redirect: {resent}, dropped by one: {dropped}"
     );
     assert_eq!(failed, 0);
-    assert!(compared > 1000 && with_body > 300 && resent > 20 && dropped > 20);
+    assert!(
+        compared > 1000 / stride
+            && with_body > 300 / stride
+            && resent > 20 / stride
+            && dropped > 20 / stride
+    );
 }
 
 /// A method this client does not send (`PUT`) and a `GET` with a body are
