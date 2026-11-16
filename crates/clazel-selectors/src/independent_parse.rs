@@ -1141,6 +1141,8 @@ pub proof fn lemma_subs_b(
         i_subs(v, p, end, cx0(), in_has, fuel) == Some((ms, q)),
     ensures
         boundary(v, q, end),
+        p <= q <= end,
+        ms.len() > 0 ==> p < q,
         match subclass_selectors(v, p, end, acc, np) {
             Some((res, q2)) => q2 == q && res.len() == acc.len() + ms.len(),
             None => false,
@@ -1179,6 +1181,431 @@ pub proof fn lemma_subs_b(
             },
             None => {},
         }
+    }
+}
+
+
+// ------------------------------------------------------------------------------------
+// Compound selectors
+// ------------------------------------------------------------------------------------
+
+/// What the spec's steps add to a compound selector is never a type or universal selector.
+pub proof fn lemma_user_actions_not_type(v: Seq<ComponentValue>, i: int, hi: int, acc: Seq<Simple>)
+    ensures
+        match user_actions(v, i, hi, acc) {
+            Some((r, _)) => forall|k: int| acc.len() <= k < r.len() ==> !is_type_or_universal(#[trigger] r[k]),
+            None => true,
+        },
+    decreases hi - i,
+{
+    match user_action(v, i, hi) {
+        Step::Found { value, next } => {
+            if next > i && next <= hi {
+                let acc1 = acc.push(Simple::PseudoClass { class: value });
+                lemma_user_actions_not_type(v, next, hi, acc1);
+                lemma_user_actions_prefix(v, next, hi, acc1);
+                if let Some((r, _)) = user_actions(v, next, hi, acc1) {
+                    assert forall|k: int| acc.len() <= k < r.len() implies !is_type_or_universal(#[trigger] r[k]) by {
+                        if k == acc.len() {
+                            assert(r.subrange(0, acc1.len() as int)[k] == acc1[k]);
+                        }
+                    }
+                }
+            }
+        },
+        _ => {},
+    }
+}
+
+/// The spec's step finds no type or universal selector.
+pub proof fn lemma_sub_step_not_type(v: Seq<ComponentValue>, p: int, end: int)
+    requires
+        0 <= p < end <= v.len(),
+    ensures
+        match sub_step(v, p, end) {
+            Step::Found { value, .. } => !is_type_or_universal(value),
+            _ => true,
+        },
+{
+    reveal(sub_step);
+}
+
+/// A run of subclass selectors adds no type or universal selector.
+pub proof fn lemma_subs_not_type(v: Seq<ComponentValue>, i: int, hi: int, acc: Seq<Simple>, np: bool)
+    requires
+        0 <= i <= hi <= v.len(),
+    ensures
+        match subclass_selectors(v, i, hi, acc, np) {
+            Some((r, _)) => forall|k: int| acc.len() <= k < r.len() ==> !is_type_or_universal(#[trigger] r[k]),
+            None => true,
+        },
+    decreases hi - i,
+{
+    lemma_subs_unfold(v, i, hi, acc, np);
+    if i < hi {
+        lemma_sub_step_not_type(v, i, hi);
+    }
+    match sub_step(v, i, hi) {
+        Step::Found { value, next } => {
+            if i < next && next <= hi {
+                let acc2 = acc.push(value);
+                lemma_subs_not_type(v, next, hi, acc2, np);
+                lemma_subs_prefix(v, next, hi, acc2, np);
+                if let Some((r, _)) = subclass_selectors(v, next, hi, acc2, np) {
+                    assert forall|k: int| acc.len() <= k < r.len() implies !is_type_or_universal(#[trigger] r[k]) by {
+                        if k == acc.len() {
+                            assert(r.subrange(0, acc2.len() as int)[k] == acc2[k]);
+                        }
+                    }
+                }
+            }
+        },
+        Step::Absent => {
+            lemma_pseudo_compound_not_type(v, i, hi, acc, np);
+        },
+        _ => {},
+    }
+}
+
+/// What the spec's `<pseudo-compound-selector>` adds is never a type or universal selector.
+pub proof fn lemma_pseudo_compound_not_type(v: Seq<ComponentValue>, i: int, hi: int, acc: Seq<Simple>, np: bool)
+    ensures
+        match pseudo_compound(v, i, hi, acc, np) {
+            Some((r, _)) => forall|k: int| acc.len() <= k < r.len() ==> !is_type_or_universal(#[trigger] r[k]),
+            None => true,
+        },
+{
+    match pseudo_element(v, i, hi) {
+        Step::Found { value, next } => {
+            if !np {
+                let acc1 = acc.push(Simple::PseudoElement { element: value });
+                lemma_user_actions_not_type(v, next, hi, acc1);
+                lemma_user_actions_prefix(v, next, hi, acc1);
+                if let Some((r, _)) = user_actions(v, next, hi, acc1) {
+                    assert forall|k: int| acc.len() <= k < r.len() implies !is_type_or_universal(#[trigger] r[k]) by {
+                        if k == acc.len() {
+                            assert(r.subrange(0, acc1.len() as int)[k] == acc1[k]);
+                        }
+                    }
+                }
+            }
+        },
+        _ => {},
+    }
+}
+
+
+/// Where the spec's type selector ends, and what it is.
+pub proof fn lemma_type_selector_pos(v: Seq<ComponentValue>, p: int, end: int)
+    requires
+        0 <= p,
+        end <= v.len(),
+    ensures
+        match type_selector(v, p, end) {
+            Step::Found { value, next } => p < next <= end && is_type_or_universal(value),
+            _ => true,
+        },
+{
+    lemma_ident_at(v, p, end);
+    lemma_ident_at(v, p + 1, end);
+    lemma_ident_at(v, p + 2, end);
+    lemma_delim_at(v, p, end, 0x2A);
+    lemma_delim_at(v, p + 1, end, 0x7C);
+    lemma_delim_at(v, p + 2, end, 0x2A);
+    lemma_delim_at(v, p, end, 0x7C);
+}
+
+/// A transcription's type selector is the one for a spec's, given they are related.
+pub proof fn lemma_rel_type_unique(s: Simple, t1: IType, t2: IType)
+    requires
+        rel_type(s, t1),
+        rel_type(s, t2),
+    ensures
+        t1 == t2,
+{
+}
+
+/// The spec's run of subclass selectors, opaque for the proofs about compound selectors.
+#[verifier::opaque]
+pub open spec fn subs_res(v: Seq<ComponentValue>, i: int, hi: int, acc: Seq<Simple>, np: bool) -> Option<
+    (Seq<Simple>, int),
+> {
+    subclass_selectors(v, i, hi, acc, np)
+}
+
+/// The spec's compound selector, opaque for the proofs about complex selectors.
+#[verifier::opaque]
+pub open spec fn comp_res(v: Seq<ComponentValue>, i: int, hi: int, np: bool) -> Option<(Seq<Simple>, int)> {
+    compound_selector(v, i, hi, np)
+}
+
+/// The spec's compound selector, one step unfolded, in terms of [`subs_res`].
+pub proof fn lemma_comp_unfold(v: Seq<ComponentValue>, i: int, hi: int, np: bool)
+    ensures
+        comp_res(v, i, hi, np) == match type_selector(v, i, hi) {
+            Step::Invalid => None,
+            Step::Absent => subs_res(v, i, hi, Seq::empty(), np),
+            Step::Found { value, next } => if i < next && next <= hi {
+                subs_res(v, next, hi, seq![value], np)
+            } else {
+                None
+            },
+        },
+{
+    reveal(comp_res);
+    reveal(subs_res);
+}
+
+/// [`lemma_subs_a`], in terms of [`subs_res`].
+pub proof fn lemma_subs_a_res(
+    v: Seq<ComponentValue>,
+    p: int,
+    end: int,
+    acc: Seq<Simple>,
+    np: bool,
+    fuel: nat,
+    res: Seq<Simple>,
+    ms: Seq<ISimple>,
+    q: int,
+    in_has: bool,
+)
+    requires
+        0 <= p <= end <= v.len(),
+        no_fun(v, end),
+        fuel >= end - p + 1,
+        subs_res(v, p, end, acc, np) == Some((res, q)),
+        res.len() == acc.len() + ms.len(),
+        forall|j: int| 0 <= j < ms.len() ==> #[trigger] relx(res, acc.len() as int, ms, j),
+        boundary(v, q, end),
+    ensures
+        i_subs(v, p, end, cx0(), in_has, fuel) == Some((ms, q)),
+{
+    reveal(subs_res);
+    lemma_subs_a(v, p, end, acc, np, fuel, res, ms, q, in_has);
+}
+
+/// [`lemma_subs_b`], in terms of [`subs_res`].
+pub proof fn lemma_subs_b_res(
+    v: Seq<ComponentValue>,
+    p: int,
+    end: int,
+    acc: Seq<Simple>,
+    np: bool,
+    fuel: nat,
+    ms: Seq<ISimple>,
+    q: int,
+    in_has: bool,
+)
+    requires
+        0 <= p <= end <= v.len(),
+        no_fun(v, end),
+        i_subs(v, p, end, cx0(), in_has, fuel) == Some((ms, q)),
+    ensures
+        boundary(v, q, end),
+        p <= q <= end,
+        ms.len() > 0 ==> p < q,
+        match subs_res(v, p, end, acc, np) {
+            Some((res, q2)) => q2 == q && res.len() == acc.len() + ms.len(),
+            None => false,
+        },
+{
+    reveal(subs_res);
+    lemma_subs_b(v, p, end, acc, np, fuel, ms, q, in_has);
+}
+
+/// [`lemma_subs_prefix`] and [`lemma_subs_not_type`], in terms of [`subs_res`].
+pub proof fn lemma_subs_facts_res(v: Seq<ComponentValue>, p: int, end: int, acc: Seq<Simple>, np: bool)
+    requires
+        0 <= p <= end <= v.len(),
+    ensures
+        match subs_res(v, p, end, acc, np) {
+            Some((r, _)) => r.len() >= acc.len() && r.subrange(0, acc.len() as int) == acc && forall|k: int|
+                acc.len() <= k < r.len() ==> !is_type_or_universal(#[trigger] r[k]),
+            None => true,
+        },
+{
+    reveal(subs_res);
+    lemma_subs_prefix(v, p, end, acc, np);
+    lemma_subs_not_type(v, p, end, acc, np);
+}
+
+/// A compound selector the spec reads, that ends at a boundary and has a transcription, the
+/// transcription reads.
+pub proof fn lemma_compound_a(
+    v: Seq<ComponentValue>,
+    p: int,
+    end: int,
+    np: bool,
+    res: Seq<Simple>,
+    mc: ICompound,
+    q: int,
+    in_has: bool,
+)
+    requires
+        0 <= p <= end <= v.len(),
+        no_fun(v, end),
+        comp_res(v, p, end, np) == Some((res, q)),
+        rel_compound(res, mc),
+        boundary(v, q, end),
+    ensures
+        i_compound(v, p, end, cx0(), in_has) == Some((mc, q)),
+{
+    lemma_comp_unfold(v, p, end, np);
+    lemma_type_selector(v, p, end);
+    lemma_type_selector_pos(v, p, end);
+    match type_selector(v, p, end) {
+        Step::Found { value, next } => {
+            let acc = seq![value];
+            assert(p < next <= end);
+            lemma_subs_facts_res(v, next, end, acc, np);
+            assert(res.subrange(0, 1) == acc);
+            assert(res.subrange(0, 1)[0] == res[0]);
+            assert(acc[0] == value);
+            assert(res[0] == value);
+            assert(comp_off(res) == 1);
+            match i_type_selector(v, p, end, cx0()) {
+                Some(Some((t, q1))) => {
+                    assert(q1 == next && rel_type(value, t));
+                    match mc.ty {
+                        Some(t2) => {
+                            assert(rel_type(res[0], t2));
+                            lemma_rel_type_unique(value, t, t2);
+                        },
+                        None => {},
+                    }
+                    assert forall|j: int| 0 <= j < mc.subs.len() implies #[trigger] relx(res, 1, mc.subs, j) by {
+                        reveal(relx);
+                        assert(rel_simple(res[comp_off(res) + j], mc.subs[j]));
+                    }
+                    lemma_subs_a_res(v, next, end, acc, np, i_fuel(next, end), res, mc.subs, q, in_has);
+                    assert(mc == (ICompound { ty: Some(t), subs: mc.subs }));
+                },
+                _ => {},
+            }
+        },
+        Step::Absent => {
+            let acc = Seq::<Simple>::empty();
+            lemma_subs_facts_res(v, p, end, acc, np);
+            assert(res.len() > 0);
+            assert(comp_off(res) == 0);
+            assert forall|j: int| 0 <= j < mc.subs.len() implies #[trigger] relx(res, 0, mc.subs, j) by {
+                reveal(relx);
+                assert(rel_simple(res[comp_off(res) + j], mc.subs[j]));
+            }
+            lemma_subs_a_res(v, p, end, acc, np, i_fuel(p, end), res, mc.subs, q, in_has);
+            assert(mc.ty is None);
+            assert(mc == (ICompound { ty: None, subs: mc.subs }));
+        },
+        Step::Invalid => {},
+    }
+}
+
+/// A compound selector that begins with a type selector, as the transcription reads it.
+pub proof fn lemma_compound_b_found(
+    v: Seq<ComponentValue>,
+    p: int,
+    end: int,
+    np: bool,
+    value: Simple,
+    next: int,
+    ms: Seq<ISimple>,
+    q: int,
+    in_has: bool,
+)
+    requires
+        0 <= p < next <= end <= v.len(),
+        no_fun(v, end),
+        type_selector(v, p, end) == (Step::Found { value, next }),
+        i_subs(v, next, end, cx0(), in_has, i_fuel(next, end)) == Some((ms, q)),
+    ensures
+        boundary(v, q, end),
+        p < q <= end,
+        match comp_res(v, p, end, np) {
+            Some((res, q2)) => q2 == q && res.len() > 0,
+            None => false,
+        },
+{
+    lemma_comp_unfold(v, p, end, np);
+    lemma_subs_b_res(v, next, end, seq![value], np, i_fuel(next, end), ms, q, in_has);
+    lemma_subs_facts_res(v, next, end, seq![value], np);
+}
+
+/// A compound selector that does not begin with a type selector, as the transcription reads it.
+pub proof fn lemma_compound_b_absent(
+    v: Seq<ComponentValue>,
+    p: int,
+    end: int,
+    np: bool,
+    ms: Seq<ISimple>,
+    q: int,
+    in_has: bool,
+)
+    requires
+        0 <= p <= end <= v.len(),
+        no_fun(v, end),
+        type_selector(v, p, end) is Absent,
+        ms.len() > 0,
+        i_subs(v, p, end, cx0(), in_has, i_fuel(p, end)) == Some((ms, q)),
+    ensures
+        boundary(v, q, end),
+        p < q <= end,
+        match comp_res(v, p, end, np) {
+            Some((res, q2)) => q2 == q && res.len() > 0,
+            None => false,
+        },
+{
+    lemma_comp_unfold(v, p, end, np);
+    lemma_subs_b_res(v, p, end, Seq::<Simple>::empty(), np, i_fuel(p, end), ms, q, in_has);
+}
+
+/// A compound selector the transcription reads, the spec reads too, to the same place.
+pub proof fn lemma_compound_b(
+    v: Seq<ComponentValue>,
+    p: int,
+    end: int,
+    np: bool,
+    mc: ICompound,
+    q: int,
+    in_has: bool,
+)
+    requires
+        0 <= p <= end <= v.len(),
+        no_fun(v, end),
+        i_compound(v, p, end, cx0(), in_has) == Some((mc, q)),
+    ensures
+        p < q <= end,
+        boundary(v, q, end),
+        match comp_res(v, p, end, np) {
+            Some((res, q2)) => q2 == q && res.len() > 0,
+            None => false,
+        },
+{
+    lemma_type_selector(v, p, end);
+    lemma_type_selector_pos(v, p, end);
+    match i_type_selector(v, p, end, cx0()) {
+        Some(Some((t, q1))) => {
+            match i_subs(v, q1, end, cx0(), in_has, i_fuel(q1, end)) {
+                Some((ms, q3)) => {
+                    match type_selector(v, p, end) {
+                        Step::Found { value, next } => {
+                            lemma_compound_b_found(v, p, end, np, value, next, ms, q3, in_has);
+                        },
+                        _ => {},
+                    }
+                },
+                None => {},
+            }
+        },
+        Some(None) => {
+            match i_subs(v, p, end, cx0(), in_has, i_fuel(p, end)) {
+                Some((ms, q3)) => {
+                    assert(ms.len() > 0);
+                    lemma_compound_b_absent(v, p, end, np, ms, q3, in_has);
+                },
+                None => {},
+            }
+        },
+        None => {},
     }
 }
 
