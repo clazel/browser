@@ -182,12 +182,332 @@ impl Gif {
         e
     }
 
+    fn hold_at(&self, i: usize) -> u8 {
+        self.hold.get(i).copied().unwrap_or(0)
+    }
+
+    fn u16_at(&self, i: usize) -> u16 {
+        u16::from_le_bytes([self.hold_at(i), self.hold_at(i.saturating_add(1))])
+    }
+
+    /// Stores `b` in `hold`; true when `need` bytes are there (and `have`
+    /// goes back to 0).
+    fn gather(&mut self, b: u8, need: u8) -> bool {
+        if let Some(slot) = self.hold.get_mut(usize::from(self.have)) {
+            *slot = b;
+        }
+        self.have = self.have.saturating_add(1);
+        if self.have >= need {
+            self.have = 0;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Copies colour table byte `b` to `table[count]`; true when `len`
+    /// bytes are there.
+    fn table_byte(count: &mut u16, len: u16, table: &mut [u8], b: u8) -> bool {
+        if let Some(slot) = table.get_mut(usize::from(*count)) {
+            *slot = b;
+        }
+        *count = count.saturating_add(1);
+        *count >= len
+    }
+
+    /// Size in bytes of a colour table whose packed field has `bits` in its
+    /// size bits: 3 * 2^(bits + 1) (GIF89a sections 18 and 19: "2^(N+1)
+    /// entries").
+    fn table_len(bits: u8) -> u16 {
+        3u16.checked_shl(u32::from(bits & 7).saturating_add(1))
+            .unwrap_or(0)
+    }
+
+    /// Sets the pixels of the current frame's rectangle, clipped to the
+    /// canvas, to transparent black.
+    fn clear_rect(&self, pixels: &mut [u8]) {
+        let f = &self.frame;
+        let cw = u32::from(self.sink.canvas_w);
+        let ch = u32::from(self.sink.canvas_h);
+        let x0 = u32::from(f.left).min(cw);
+        let x1 = u32::from(f.left).saturating_add(u32::from(f.width)).min(cw);
+        let y1 = u32::from(f.top).saturating_add(u32::from(f.height)).min(ch);
+        for y in u32::from(f.top)..y1 {
+            let row = y.checked_mul(cw);
+            let bytes = |x: u32| {
+                row.and_then(|r| r.checked_add(x))
+                    .and_then(|p| usize::try_from(p).ok())
+                    .and_then(|p| p.checked_mul(4))
+            };
+            if let (Some(s), Some(e)) = (bytes(x0), bytes(x1))
+                && let Some(span) = pixels.get_mut(s..e)
+            {
+                span.fill(0);
+            }
+        }
+    }
+
+    /// Applies the disposal method of the frame before the one being
+    /// started (GIF89a section 23: "the graphic is to be handled after
+    /// being displayed").
+    fn dispose(&mut self, parts: &mut Parts<'_>) {
+        if !self.has_frame {
+            return;
+        }
+        match self.frame.disposal {
+            Disposal::Background => self.clear_rect(parts.pixels),
+            Disposal::Previous => {
+                if self.saved && parts.pixels.len() == parts.saved.len() {
+                    parts.pixels.copy_from_slice(parts.saved);
+                }
+            }
+            Disposal::None | Disposal::Keep => {}
+        }
+        self.saved = false;
+    }
+
+    /// The image descriptor is complete: GIF89a section 20.
+    fn start_frame(&mut self, parts: &mut Parts<'_>) {
+        let packed = self.hold_at(8);
+        // The frame before this one is disposed of, then this one's
+        // disposal is prepared.
+        self.dispose(parts);
+        let control = self.pending;
+        self.pending = Control::NONE;
+        self.frame = FrameInfo {
+            left: self.u16_at(0),
+            top: self.u16_at(2),
+            width: self.u16_at(4),
+            height: self.u16_at(6),
+            interlaced: packed & 0x40 != 0,
+            delay_cs: control.delay_cs,
+            disposal: control.disposal,
+            transparent: control.transparent,
+        };
+        self.has_frame = true;
+        if self.frame.disposal == Disposal::Previous && parts.pixels.len() == parts.saved.len() {
+            parts.saved.copy_from_slice(parts.pixels);
+            self.saved = true;
+        }
+        let f = self.frame;
+        self.sink = Sink::frame(
+            (self.sink.canvas_w, self.sink.canvas_h),
+            (f.left, f.top, f.width, f.height),
+            f.interlaced,
+            f.transparent,
+        );
+        self.use_local = packed & 0x80 != 0;
+        self.local_len = if self.use_local {
+            Self::table_len(packed)
+        } else {
+            0
+        };
+        self.count = 0;
+        self.phase = if self.use_local {
+            Phase::LocalColours
+        } else {
+            Phase::MinCode
+        };
+    }
+
     /// One byte of the stream.
-    ///
-    /// STUB: the block grammar of GIF89a (see the phases above and the
-    /// commented implementation in the next commit) is not written yet.
-    fn byte(&mut self, _b: u8, _parts: &mut Parts<'_>) -> Result<Event, &'static str> {
-        Err("not implemented")
+    fn byte(&mut self, b: u8, parts: &mut Parts<'_>) -> Result<Event, &'static str> {
+        match self.phase {
+            // GIF89a section 17: "Header" ("GIF" and the version).
+            Phase::Header => {
+                if self.gather(b, 6) {
+                    let sig = self.hold.get(..6);
+                    if sig != Some(b"GIF89a") && sig != Some(b"GIF87a") {
+                        return Err("not a GIF header");
+                    }
+                    self.phase = Phase::Screen;
+                }
+            }
+            // GIF89a section 18: "Logical Screen Descriptor".
+            Phase::Screen => {
+                if self.gather(b, 7) {
+                    if u32::from(self.u16_at(0)) != self.config.width()
+                        || u32::from(self.u16_at(2)) != self.config.height()
+                    {
+                        return Err("the screen is not the size the config says");
+                    }
+                    // The canvas starts transparent black (listed choice:
+                    // the background colour index is not used).
+                    parts.pixels.fill(0);
+                    let packed = self.hold_at(4);
+                    self.global_len = if packed & 0x80 != 0 {
+                        Self::table_len(packed)
+                    } else {
+                        0
+                    };
+                    self.count = 0;
+                    self.phase = if self.global_len > 0 {
+                        Phase::GlobalColours
+                    } else {
+                        Phase::Block
+                    };
+                }
+            }
+            // GIF89a section 19: "Global Color Table".
+            Phase::GlobalColours => {
+                if Self::table_byte(&mut self.count, self.global_len, parts.global, b) {
+                    self.phase = Phase::Block;
+                }
+            }
+            // GIF89a section 12 "Data Sub-blocks" and the block grammar of
+            // Appendix B: an image (`,`), an extension (`!`) or the trailer.
+            Phase::Block => match b {
+                0x2C => self.phase = Phase::Descriptor,
+                0x21 => self.phase = Phase::Extension,
+                0x3B => {
+                    // GIF89a section 27: "Trailer".
+                    self.phase = Phase::Ended;
+                    return Ok(Event::Trailer);
+                }
+                _ => return Err("not a block introducer"),
+            },
+            Phase::Extension => {
+                // GIF89a section 23 labels the Graphic Control Extension
+                // 0xF9. Every other extension (plain text 0x01, comment
+                // 0xFE, application 0xFF, unknown) is skipped by its
+                // sub-block sizes (sections 12 and 24 to 26).
+                self.phase = if b == 0xF9 {
+                    Phase::GceSize
+                } else {
+                    Phase::SkipSize
+                };
+            }
+            Phase::GceSize => {
+                if b == 4 {
+                    self.phase = Phase::GceBody;
+                } else if b == 0 {
+                    self.phase = Phase::Block;
+                } else {
+                    // Not the 4 bytes section 23 requires: ignored like an
+                    // unknown extension (listed choice).
+                    self.count = u16::from(b);
+                    self.phase = Phase::SkipData;
+                }
+            }
+            // GIF89a section 23: packed fields (reserved 3 bits, disposal 3
+            // bits, user input flag, transparency flag), delay time in
+            // hundredths of a second (2 bytes), transparent colour index.
+            Phase::GceBody => {
+                if self.gather(b, 4) {
+                    let packed = self.hold_at(0);
+                    self.pending = Control {
+                        disposal: Disposal::from_bits((packed >> 2) & 7),
+                        delay_cs: self.u16_at(1),
+                        transparent: (packed & 1 != 0).then(|| self.hold_at(3)),
+                    };
+                    self.phase = Phase::GceEnd;
+                }
+            }
+            Phase::GceEnd => {
+                if b == 0 {
+                    self.phase = Phase::Block;
+                } else {
+                    // Section 23's block terminator is missing: what
+                    // follows is a sub-block of this extension.
+                    self.count = u16::from(b);
+                    self.phase = Phase::SkipData;
+                }
+            }
+            Phase::SkipSize => {
+                if b == 0 {
+                    self.phase = Phase::Block;
+                } else {
+                    self.count = u16::from(b);
+                    self.phase = Phase::SkipData;
+                }
+            }
+            Phase::SkipData => {
+                self.count = self.count.saturating_sub(1);
+                if self.count == 0 {
+                    self.phase = Phase::SkipSize;
+                }
+            }
+            // GIF89a section 20: "Image Descriptor".
+            Phase::Descriptor => {
+                if self.gather(b, 9) {
+                    self.start_frame(parts);
+                }
+            }
+            // GIF89a section 21: "Local Color Table".
+            Phase::LocalColours => {
+                if Self::table_byte(&mut self.count, self.local_len, parts.local, b) {
+                    self.phase = Phase::MinCode;
+                }
+            }
+            // GIF89a section 22 "Table Based Image Data": the LZW minimum
+            // code size, then data sub-blocks.
+            Phase::MinCode => {
+                self.lzw = Lzw::new(b).ok_or("an LZW minimum code size outside 2 to 8")?;
+                self.phase = if self.sink.remaining == 0 {
+                    Phase::TailSize
+                } else {
+                    Phase::DataSize
+                };
+            }
+            Phase::DataSize => {
+                if b == 0 {
+                    // The terminator: the frame is over, whole or not (a
+                    // frame with too little data keeps what was decoded,
+                    // listed choice).
+                    return Ok(self.finish_frame());
+                }
+                self.count = u16::from(b);
+                self.phase = Phase::Data;
+            }
+            Phase::Data => return self.data_byte(b, parts),
+            Phase::TailSize => {
+                if b == 0 {
+                    return Ok(self.finish_frame());
+                }
+                self.count = u16::from(b);
+                self.phase = Phase::TailData;
+            }
+            Phase::TailData => {
+                self.count = self.count.saturating_sub(1);
+                if self.count == 0 {
+                    self.phase = Phase::TailSize;
+                }
+            }
+            Phase::Ended => return Err("a byte after the trailer"),
+            Phase::Spent => return Err("a byte after an error"),
+        }
+        Ok(Event::Continue)
+    }
+
+    /// One byte of image data.
+    fn data_byte(&mut self, b: u8, parts: &mut Parts<'_>) -> Result<Event, &'static str> {
+        self.count = self.count.saturating_sub(1);
+        let (table, len) = if self.use_local {
+            (&*parts.local, self.local_len)
+        } else {
+            (&*parts.global, self.global_len)
+        };
+        let palette = table.get(..usize::from(len)).unwrap_or(&[]);
+        let pixels = &mut *parts.pixels;
+        let sink = &mut self.sink;
+        let fed = self.lzw.feed(b, &mut parts.tables, &mut |index| {
+            sink.put(index, palette, pixels)
+        })?;
+        self.phase = match (fed, self.count) {
+            (Fed::More, 0) => Phase::DataSize,
+            (Fed::More, _) => Phase::Data,
+            // The end code or a full frame: the rest of the data is
+            // ignored up to the terminator ("pixel-data-too-much" files).
+            (Fed::End | Fed::Full, 0) => Phase::TailSize,
+            (Fed::End | Fed::Full, _) => Phase::TailData,
+        };
+        Ok(Event::Continue)
+    }
+
+    fn finish_frame(&mut self) -> Event {
+        self.frames = self.frames.saturating_add(1);
+        self.phase = Phase::Block;
+        Event::Frame
     }
 
     /// The invariant of the whole state, without the buffers.

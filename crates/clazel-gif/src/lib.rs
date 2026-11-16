@@ -66,8 +66,8 @@
 //!    ratio are not read (an application extension is skipped like the
 //!    others): looping is policy for 6.19.
 //! 10. **Canvas size**: the logical screen's size is the image's (6.0(j)'s
-//!    limits apply, through `Config::new`); the screen descriptor in the
-//!    stream must agree with the config `decode_config` gave.
+//!     limits apply, through `Config::new`); the screen descriptor in the
+//!     stream must agree with the config `decode_config` gave.
 //!
 //! # Verification
 //!

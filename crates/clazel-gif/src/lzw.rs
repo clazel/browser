@@ -206,17 +206,144 @@ impl Lzw {
     /// which says whether it wants more (`false`: the frame is full).
     /// `Ok(Fed::More)` consumed the byte entirely.
     ///
-    /// Keeps [`Lzw::inv`] on `Ok(Fed::More)`, and does not panic or touch
+    /// Keeps [`Lzw::inv`] on every outcome, and does not panic or touch
     /// anything but `tables` and `self`, whatever `tables` holds.
-    ///
-    /// STUB: the statement above is what the harness `lzw_any` checks; the
-    /// implementation follows in a later commit.
     pub(crate) fn feed(
         &mut self,
-        _byte: u8,
-        _tables: &mut Tables<'_>,
-        _sink: &mut impl FnMut(u8) -> bool,
+        byte: u8,
+        tables: &mut Tables<'_>,
+        sink: &mut impl FnMut(u8) -> bool,
     ) -> Result<Fed, &'static str> {
-        Err("not implemented")
+        // GIF89a Appendix F: codes are packed from the least significant
+        // bit of each byte.
+        let shifted = u32::from(byte)
+            .checked_shl(u32::from(self.nacc))
+            .ok_or("bit buffer overflow")?;
+        self.acc |= shifted;
+        self.nacc = self.nacc.checked_add(8).ok_or("bit buffer overflow")?;
+        while self.nacc >= self.code_size {
+            let mask = Self::pow2(self.code_size).saturating_sub(1);
+            let code = u16::try_from(self.acc & mask).map_err(|_| "code too wide")?;
+            self.acc = self
+                .acc
+                .checked_shr(u32::from(self.code_size))
+                .ok_or("bit buffer overflow")?;
+            self.nacc = self
+                .nacc
+                .checked_sub(self.code_size)
+                .ok_or("bit buffer underflow")?;
+            match self.code(code, tables, sink)? {
+                Fed::More => {}
+                done => return Ok(done),
+            }
+        }
+        Ok(Fed::More)
+    }
+
+    /// One code.
+    fn code(
+        &mut self,
+        code: u16,
+        tables: &mut Tables<'_>,
+        sink: &mut impl FnMut(u8) -> bool,
+    ) -> Result<Fed, &'static str> {
+        let clear = self.clear();
+        // The clear code: empty the table.
+        if code == clear {
+            self.reset();
+            return Ok(Fed::More);
+        }
+        // The end-of-information code.
+        if code == self.end() {
+            return Ok(Fed::End);
+        }
+        // The first code after a clear is a root.
+        if self.prev == NONE {
+            let root = u8::try_from(code)
+                .ok()
+                .filter(|_| code < clear)
+                .ok_or("a code beyond the roots after a clear")?;
+            self.prev = code;
+            self.first = root;
+            return Ok(if sink(root) { Fed::More } else { Fed::Full });
+        }
+        // The string of `code`, spelt last byte first on the stack.
+        let len = if code < self.next {
+            Self::spell(code, clear, tables, 0)?
+        } else if code == self.next && usize::from(code) < TABLE_LEN {
+            // "K w K": the previous string followed by its own first byte.
+            *tables.stack.get_mut(0).ok_or("stack too short")? = self.first;
+            Self::spell(self.prev, clear, tables, 1)?
+        } else {
+            return Err("a code beyond the next free one");
+        };
+        let last = len.checked_sub(1).ok_or("empty string")?;
+        let first = *tables.stack.get(last).ok_or("stack too short")?;
+        // The table gains the previous string plus this one's first byte,
+        // unless it is full (deferred clear, listed above).
+        self.add(self.prev, first, tables)?;
+        self.prev = code;
+        self.first = first;
+        // The string, first byte first.
+        let mut i = len;
+        while i > 0 {
+            i = i.checked_sub(1).ok_or("index underflow")?;
+            let b = *tables.stack.get(i).ok_or("stack too short")?;
+            if !sink(b) {
+                return Ok(Fed::Full);
+            }
+        }
+        Ok(Fed::More)
+    }
+
+    /// Writes the string of `code` to `tables.stack` from `start`, last
+    /// byte first; the index after the last byte written. At most
+    /// `TABLE_LEN` prefixes are followed, so garbage chains end in an error.
+    fn spell(
+        code: u16,
+        clear: u16,
+        tables: &mut Tables<'_>,
+        start: usize,
+    ) -> Result<usize, &'static str> {
+        let mut c = code;
+        let mut n = start;
+        for _ in 0..TABLE_LEN {
+            if c < clear {
+                *tables.stack.get_mut(n).ok_or("stack too short")? =
+                    u8::try_from(c).map_err(|_| "root beyond a byte")?;
+                return n.checked_add(1).ok_or("stack overflow");
+            }
+            let suffix = *tables
+                .suffix
+                .get(usize::from(c))
+                .ok_or("code outside the table")?;
+            *tables.stack.get_mut(n).ok_or("stack too short")? = suffix;
+            n = n.checked_add(1).ok_or("stack overflow")?;
+            c = tables.prefix_of(c).ok_or("code outside the table")?;
+        }
+        Err("a prefix chain that does not end")
+    }
+
+    /// Adds the entry `prefix` plus `suffix` if the table has room, and
+    /// grows the code size when the table fills it.
+    fn add(
+        &mut self,
+        prefix: u16,
+        suffix: u8,
+        tables: &mut Tables<'_>,
+    ) -> Result<(), &'static str> {
+        let at = usize::from(self.next);
+        if at >= TABLE_LEN {
+            return Ok(());
+        }
+        tables
+            .set_prefix(at, prefix)
+            .ok_or("code outside the table")?;
+        *tables.suffix.get_mut(at).ok_or("code outside the table")? = suffix;
+        self.next = self.next.checked_add(1).ok_or("code overflow")?;
+        if u32::from(self.next) == Self::pow2(self.code_size) && self.code_size < TABLE_BITS {
+            self.code_size = self.code_size.checked_add(1).ok_or("code size overflow")?;
+        }
+        Ok(())
     }
 }

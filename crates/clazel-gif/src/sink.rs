@@ -93,13 +93,80 @@ impl Sink {
     /// unless the index is the transparent one, past the palette, or the
     /// pixel is outside the canvas (listed choices: such a pixel keeps what
     /// the canvas holds). Returns whether the frame wants more indexes.
-    ///
-    /// STUB: implementation in a later commit; `inv` is what the harness
-    /// `sink_put_any` states it keeps.
-    pub(crate) fn put(&mut self, _index: u8, _palette: &[u8], _pixels: &mut [u8]) -> bool {
-        false
+    pub(crate) fn put(&mut self, index: u8, palette: &[u8], pixels: &mut [u8]) -> bool {
+        if self.remaining == 0 {
+            return false;
+        }
+        if self.transparent != Some(index) {
+            self.paint(index, palette, pixels);
+        }
+        self.advance();
+        self.remaining > 0
     }
 
-    /// The row after the current one in storage order (STUB).
-    pub(crate) fn next_interlaced_row(&mut self) {}
+    /// Draws the pixel at the current position, if it is on the canvas and
+    /// the palette has the index.
+    fn paint(&self, index: u8, palette: &[u8], pixels: &mut [u8]) {
+        let cx = u32::from(self.left).saturating_add(u32::from(self.x));
+        let cy = u32::from(self.top).saturating_add(u32::from(self.y));
+        if cx >= u32::from(self.canvas_w) || cy >= u32::from(self.canvas_h) {
+            return;
+        }
+        let at = usize::from(index).checked_mul(3);
+        let rgb = at.and_then(|a| palette.get(a..a.checked_add(3)?));
+        let offset = cy
+            .checked_mul(u32::from(self.canvas_w))
+            .and_then(|v| v.checked_add(cx))
+            .and_then(|v| usize::try_from(v).ok())
+            .and_then(|v| v.checked_mul(4));
+        let dst = offset.and_then(|o| pixels.get_mut(o..o.checked_add(4)?));
+        if let (Some([r, g, b]), Some(dst)) = (rgb, dst) {
+            dst.copy_from_slice(&[*r, *g, *b, 255]);
+        }
+    }
+
+    /// Moves to the next index's position, and ends the frame when all of
+    /// them were taken.
+    fn advance(&mut self) {
+        self.remaining = self.remaining.saturating_sub(1);
+        self.x = self.x.saturating_add(1);
+        if self.x >= self.width {
+            self.x = 0;
+            if self.interlaced {
+                self.next_interlaced_row();
+            } else {
+                self.y = self.y.saturating_add(1);
+            }
+        }
+        if self.y >= self.height {
+            // Past the last row. `remaining` is `width * height` less one
+            // per pixel, so it is 0 here; if it is not, stop anyway.
+            self.remaining = 0;
+        }
+        if self.remaining == 0 {
+            self.x = 0;
+            self.y = 0;
+            self.pass = self.pass.min(3);
+        }
+    }
+
+    /// The row after the current one in storage order. Passes that have no
+    /// row in a short frame are skipped. Past pass 4, `y` is `height`.
+    pub(crate) fn next_interlaced_row(&mut self) {
+        let step = STEP.get(usize::from(self.pass)).copied().unwrap_or(8);
+        self.y = self.y.saturating_add(step);
+        while self.y >= self.height {
+            let next = self.pass.saturating_add(1);
+            match START.get(usize::from(next)) {
+                Some(&start) => {
+                    self.pass = next;
+                    self.y = start;
+                }
+                None => {
+                    self.y = self.height;
+                    return;
+                }
+            }
+        }
+    }
 }
