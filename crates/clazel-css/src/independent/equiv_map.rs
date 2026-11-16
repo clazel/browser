@@ -64,19 +64,29 @@ pub open spec fn rule_of(r: ps::Rule) -> IRule
             name: ints(name),
             prelude: cvs_of(prelude),
             block: match child_rules {
-                Some(items) => Some(Seq::new(items.len(), |i: int| if 0 <= i < items.len() { item_of(items[i]) } else { IItem::Decls(seq![]) })),
+                Some(items) => Some(items_of(items)),
                 None => None,
             },
         },
         ps::Rule::QualifiedRule { prelude, declarations, child_rules } => IRule::QualifiedRule {
             prelude: cvs_of(prelude),
             decls: decls_of(declarations),
-            children: Seq::new(child_rules.len(), |i: int| if 0 <= i < child_rules.len() { rule_of(child_rules[i]) } else { IRule::NestedDeclarations { decls: seq![] } }),
+            children: rules_of(child_rules),
         },
         ps::Rule::NestedDeclarationsRule { declarations } => IRule::NestedDeclarations {
             decls: decls_of(declarations),
         },
     }
+}
+
+/// A list of rules.
+pub open spec fn rules_of(rs: Seq<ps::Rule>) -> Seq<IRule>
+    decreases rs,
+{
+    Seq::new(
+        rs.len(),
+        |i: int| if 0 <= i < rs.len() { rule_of(rs[i]) } else { IRule::NestedDeclarations { decls: seq![] } },
+    )
 }
 
 /// An item of the list "consume a block's contents" returns.
@@ -86,6 +96,33 @@ pub open spec fn item_of(b: ps::BlockItem) -> IItem
     match b {
         ps::BlockItem::Rule { rule } => IItem::Rule(rule_of(rule)),
         ps::BlockItem::Declarations { declarations } => IItem::Decls(decls_of(declarations)),
+    }
+}
+
+/// The list "consume a block's contents" returns.
+pub open spec fn items_of(items: Seq<ps::BlockItem>) -> Seq<IItem>
+    decreases items,
+{
+    Seq::new(
+        items.len(),
+        |i: int| if 0 <= i < items.len() { item_of(items[i]) } else { IItem::Decls(seq![]) },
+    )
+}
+
+/// What "consume an at-rule" returns, if anything.
+pub open spec fn opt_rule_of(r: Option<ps::Rule>) -> Option<IRule> {
+    match r {
+        Some(x) => Some(rule_of(x)),
+        None => None,
+    }
+}
+
+/// What "consume a qualified rule" returns.
+pub open spec fn qres_of(r: ps::QualifiedRuleResult) -> IQRes {
+    match r {
+        ps::QualifiedRuleResult::Nothing => IQRes::Nothing,
+        ps::QualifiedRuleResult::InvalidRuleError => IQRes::InvalidRule,
+        ps::QualifiedRuleResult::Rule { rule } => IQRes::Rule(rule_of(rule)),
     }
 }
 
