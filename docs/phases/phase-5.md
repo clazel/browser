@@ -1689,7 +1689,7 @@ tests of 5.4, 5.5 and 5.7, not their proofs or tiers.
 | 5.15 Table layout | not started |
 | 5.16 Paint | not started |
 | 5.17 Glyph masks | not started |
-| 5.17a Display list codec and validator | built and proven, not on `main`: `clazel-displaylist` at tier 0, with the encoder, decoder and validator proven against the spec, the theorems proven, and 79 of 79 mutations killed with certificates. Tier 2 waits on `independent.rs` and CI |
+| 5.17a Display list codec and validator | built and proven, on `main`: `clazel-displaylist` at tier 2 on this branch, pending CI's green full verification: the encoder, decoder and validator proven against the spec, 79 of 79 mutations killed with certificates, `src/independent.rs` proven equal to the spec (`theorem_read_equals_decode`, `theorem_check_equals_validate`; a same-session second text, since the format is ours), and `tests/conformance_list.rs` |
 | 5.17b GPU process: drawing | not started |
 | 5.17c Software fallback, blocklist, crash policy | not started |
 | 5.18 IPC and kernel: surfaces, viewports, input | not started |
