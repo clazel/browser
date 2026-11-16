@@ -10,7 +10,11 @@
 //!
 //! - [`spec`]: a transcription of the lexical grammar, the goal symbol a
 //!   parameter, and the longest-input-element rule.
+//! - [`contract`]: what the executable lexer must be proven to satisfy.
+//! - [`api`]: the token types and the contract-only trait [`api::JsLexer`].
 
+pub mod api;
+pub mod contract;
 pub mod examples;
 pub mod lemmas;
 pub mod spec;
