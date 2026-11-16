@@ -3,7 +3,7 @@
 
 #[cfg(verus_only)]
 use crate::contract::*;
-#[allow(unused_imports)]
+#[cfg(verus_only)]
 use crate::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;

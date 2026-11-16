@@ -14,7 +14,7 @@ clazel-dom = { path = "../clazel-dom" }
 # The HTML parser that builds the DOMs the tests read entry lists from
 # (ours: Phase 4), used by tests/*.rs only.
 [dev-dependencies]
-clazel-treebuilder = { path = "../clazel-treebuilder" }
+clazel-treebuilder = { path = "../clazel-treebuilder", version = "=0.0.0" }
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
 # shipped code today; `target-tier` is what the policy requires (phase-6.md
