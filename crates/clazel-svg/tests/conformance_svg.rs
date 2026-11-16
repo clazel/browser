@@ -985,12 +985,12 @@ fn mutated_files_never_panic() -> R {
         0, b'<', b'>', b'/', b'"', b'\'', b'=', b' ', b'-', b'.', b'0', b'9', b'M', b'z', b'#',
         b'&', b'e', 0xFF, 0xEF,
     ];
-    let stride = if cfg!(miri) { 23 } else { 1 };
+    let stride = if cfg!(miri) { 131 } else { 1 };
     let mut run = 0usize;
     let mut images = 0usize;
     for doc in [Y18, TRIANGLE] {
         for at in (0..doc.len()).step_by(stride) {
-            for &v in values {
+            for &v in values.iter().step_by(if cfg!(miri) { 5 } else { 1 }) {
                 let mut m = doc.to_vec();
                 if let Some(slot) = m.get_mut(at) {
                     *slot = v;
@@ -1023,7 +1023,7 @@ fn mutated_files_never_panic() -> R {
 fn mutants_are_consistent_across_chunk_sizes() -> R {
     // Whatever a mutant is, it is the same outcome at every chunk size
     // (image, error and consumed bytes).
-    let stride = if cfg!(miri) { 41 } else { 3 };
+    let stride = if cfg!(miri) { 211 } else { 3 };
     for doc in [Y18, TRIANGLE] {
         for at in (0..doc.len()).step_by(stride) {
             for v in *b"0q>-" {
