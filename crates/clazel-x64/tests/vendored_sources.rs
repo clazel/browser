@@ -8,6 +8,9 @@ use std::path::Path;
 mod acl2_x86isa {
     include!("generated/acl2_x86isa.rs");
 }
+mod acl2_rtl {
+    include!("generated/acl2_rtl.rs");
+}
 mod sail_x86_from_acl2 {
     include!("generated/sail_x86_from_acl2.rs");
 }
@@ -34,6 +37,12 @@ fn acl2_x86isa_files_have_their_listed_sizes() {
         .map(|f| (f.path, f.size))
         .collect();
     check("acl2-x86isa", &files);
+}
+
+#[test]
+fn acl2_rtl_files_have_their_listed_sizes() {
+    let files: Vec<_> = acl2_rtl::FILES.iter().map(|f| (f.path, f.size)).collect();
+    check("acl2-rtl", &files);
 }
 
 #[test]

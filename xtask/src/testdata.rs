@@ -206,6 +206,7 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
     ("ucd-regexp", inventory::convert_ucd, inventory::UCD_FILES),
     // JIT item J.2: instruction-set sources (see isa.rs).
     ("acl2-x86isa", isa::convert_acl2_x86isa, &[]),
+    ("acl2-rtl", isa::convert_acl2_rtl, &[]),
     ("sail-x86-from-acl2", isa::convert_sail_x86_from_acl2, &[]),
     ("intel-sdm", isa::convert_intel_sdm, &[]),
     ("sail-arm", isa::convert_sail_arm, &[]),
@@ -222,6 +223,7 @@ const TREE_SUITES: &[&str] = &[
     "todomvc",
     "test262",
     "acl2-x86isa",
+    "acl2-rtl",
     "sail-x86-from-acl2",
     "sail-arm",
     "arm-mrs",

@@ -21,7 +21,10 @@ byte, with the paths relative to `books/projects/x86isa/` kept:
   `conditional` (`jcc`, `cmovcc`, `setcc`), `jump-and-loop` (`jmp`),
   `move`, `move-sse` (`movq`), `subroutine` (`ret`), `signextend`, `flags`;
 - `machine/instructions/fp/`: the SSE2 floating-point books (`addsd`,
-  `subsd`, `mulsd`, `divsd`, `sqrtsd`, `ucomisd` and the conversions).
+  `subsd`, `mulsd`, `divsd`, `sqrtsd`, `ucomisd` and the conversions), and
+  `logical.lisp`, which holds the `comisd`/`ucomisd` instruction
+  (`x86-comis?/ucomis?-Op/En-RM`). The arithmetic books call Russinoff's RTL
+  library, which is the suite `acl2-rtl`.
 
 Not vendored: the proofs (`proofs/`, 12.8 MB), the Linux and virtualization
 projects, the `.sys` caches, the x87, SSE integer, MMX, string, segmentation,

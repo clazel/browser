@@ -1,3 +1,4 @@
+| `acl2-rtl` | Russinoff's RTL library (BSD-3-Clause), the floating-point definitions the x86isa SSE books use | 0.3 MB, vendored |
 # clazel-x64
 
 Part of [Clazel](../../README.md). The x86-64 subset the JIT emits: its
