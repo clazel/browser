@@ -7,5 +7,6 @@
 pub mod build;
 pub mod contract;
 pub mod examples;
+pub mod examples_body;
 pub mod lemmas;
 pub mod spec;
