@@ -16,6 +16,7 @@ mod arm_arm {
 }
 
 #[test]
+#[cfg_attr(miri, ignore = "reads the vendored files")]
 fn the_arm_arm_is_pinned_and_not_vendored() {
     assert_eq!(arm_arm::PINS.len(), 1);
     for p in arm_arm::PINS {
@@ -52,18 +53,21 @@ fn check(suite: &str, files: &[(&str, u64)]) {
 }
 
 #[test]
+#[cfg_attr(miri, ignore = "reads the vendored files")]
 fn sail_arm_files_have_their_listed_sizes() {
     let files: Vec<_> = sail_arm::FILES.iter().map(|f| (f.path, f.size)).collect();
     check("sail-arm", &files);
 }
 
 #[test]
+#[cfg_attr(miri, ignore = "reads the vendored files")]
 fn arm_mrs_files_have_their_listed_sizes() {
     let files: Vec<_> = arm_mrs::FILES.iter().map(|f| (f.path, f.size)).collect();
     check("arm-mrs", &files);
 }
 
 #[test]
+#[cfg_attr(miri, ignore = "reads the vendored files")]
 fn instructions_json_is_pinned_and_not_vendored() {
     assert_eq!(arm_mrs::PINS.len(), 1);
     for p in arm_mrs::PINS {

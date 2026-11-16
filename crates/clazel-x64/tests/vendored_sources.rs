@@ -31,6 +31,7 @@ fn check(suite: &str, files: &[(&str, u64)]) {
 }
 
 #[test]
+#[cfg_attr(miri, ignore = "reads the vendored files")]
 fn acl2_x86isa_files_have_their_listed_sizes() {
     let files: Vec<_> = acl2_x86isa::FILES
         .iter()
@@ -40,12 +41,14 @@ fn acl2_x86isa_files_have_their_listed_sizes() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore = "reads the vendored files")]
 fn acl2_rtl_files_have_their_listed_sizes() {
     let files: Vec<_> = acl2_rtl::FILES.iter().map(|f| (f.path, f.size)).collect();
     check("acl2-rtl", &files);
 }
 
 #[test]
+#[cfg_attr(miri, ignore = "reads the vendored files")]
 fn sail_x86_from_acl2_files_have_their_listed_sizes() {
     let files: Vec<_> = sail_x86_from_acl2::FILES
         .iter()
@@ -55,6 +58,7 @@ fn sail_x86_from_acl2_files_have_their_listed_sizes() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore = "reads the vendored files")]
 fn the_sdm_is_pinned_and_not_vendored() {
     assert_eq!(intel_sdm::PINS.len(), 1);
     for p in intel_sdm::PINS {
