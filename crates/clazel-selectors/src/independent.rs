@@ -162,8 +162,19 @@ pub ghost struct IAttr {
     pub op: IAttrOp,
     /// The value to compare with (empty for `[att]`).
     pub value: Seq<u32>,
-    /// The `i` flag: ASCII case-insensitive. Without a flag, or with `s`, false.
-    pub ci: bool,
+    /// The case flag (§6.3).
+    pub flag: IFlag,
+}
+
+/// §6.3 the case flag of an attribute selector.
+pub ghost enum IFlag {
+    /// No flag: "By default case-sensitivity of attribute names and values in selectors
+    /// depends on the document language."
+    Default,
+    /// `i`: ASCII case-insensitive.
+    I,
+    /// `s`: case-sensitive, "regardless of document language rules".
+    S,
 }
 
 /// §3 combinators.
@@ -259,6 +270,9 @@ pub ghost struct ICtx {
     pub default_ns: Option<Namespace>,
     /// The prefixes declared.
     pub decls: Map<Seq<u32>, Namespace>,
+    /// Whether `:has()`, `:scope`, `:defined` and `:nth-child(An+B of S)` are supported. A
+    /// user agent that does not support them treats them as invalid (§3.6).
+    pub ext: bool,
 }
 
 // ------------------------------------------------------------------------------------
@@ -277,6 +291,18 @@ pub open spec fn i_lower(c: u32) -> u32 {
 /// §3.3 "ASCII case-insensitive" equality of two strings.
 pub open spec fn i_ci_eq(a: Seq<u32>, b: Seq<u32>) -> bool {
     a.len() == b.len() && forall|k: int| 0 <= k < a.len() ==> i_lower(#[trigger] a[k]) == i_lower(b[k])
+}
+
+/// CSS Values 4 §5.1: an integer outside the range a user agent supports "must be clamped": to
+/// the signed 32-bit range, here (a choice the standard leaves to the implementation).
+pub open spec fn i_clamp(n: int) -> int {
+    if n < -0x8000_0000 {
+        -0x8000_0000
+    } else if n > 0x7FFF_FFFF {
+        0x7FFF_FFFF
+    } else {
+        n
+    }
 }
 
 /// §3.3 white space: space, tab, line feed, carriage return, form feed.
@@ -568,7 +594,7 @@ pub open spec fn i_attribute_selector(b: Seq<ComponentValue>, cx: ICtx) -> Optio
         Some((ns, name, after_name)) => {
             let q = i_skip_ws(b, after_name, b.len() as int);
             if q == b.len() {
-                Some(IAttr { ns, name, op: IAttrOp::Exists, value: Seq::empty(), ci: false })
+                Some(IAttr { ns, name, op: IAttrOp::Exists, value: Seq::empty(), flag: IFlag::Default })
             } else {
                 match i_attr_matcher(b, q) {
                     None => None,
@@ -587,7 +613,7 @@ pub open spec fn i_attribute_selector(b: Seq<ComponentValue>, cx: ICtx) -> Optio
                                 Some(val) => {
                                     let s = i_skip_ws(b, r + 1, b.len() as int);
                                     if s == b.len() {
-                                        Some(IAttr { ns, name, op, value: val, ci: false })
+                                        Some(IAttr { ns, name, op, value: val, flag: IFlag::Default })
                                     } else {
                                         match i_ident(b[s]) {
                                             None => None,
@@ -595,9 +621,9 @@ pub open spec fn i_attribute_selector(b: Seq<ComponentValue>, cx: ICtx) -> Optio
                                                 if i_skip_ws(b, s + 1, b.len() as int) != b.len() {
                                                     None
                                                 } else if i_ci_eq(m, seq![0x69u32]) {
-                                                    Some(IAttr { ns, name, op, value: val, ci: true })
+                                                    Some(IAttr { ns, name, op, value: val, flag: IFlag::I })
                                                 } else if i_ci_eq(m, seq![0x73u32]) {
-                                                    Some(IAttr { ns, name, op, value: val, ci: false })
+                                                    Some(IAttr { ns, name, op, value: val, flag: IFlag::S })
                                                 } else {
                                                     None
                                                 }
@@ -628,14 +654,14 @@ pub open spec fn i_find_of(v: Seq<ComponentValue>, p: int, end: int) -> int
 
 /// `:name` for the pseudo-classes that take no arguments, §3.5 and §14 and §5.4: `None` is a
 /// pseudo-class this file has no support for (§3.6: invalid).
-pub open spec fn i_pseudo_ident(name: Seq<u32>) -> Option<ISimple> {
+pub open spec fn i_pseudo_ident(name: Seq<u32>, cx: ICtx) -> Option<ISimple> {
     if i_ci_eq(name, seq![0x72u32, 0x6F, 0x6F, 0x74]) {
         Some(ISimple::Root)
     } else if i_ci_eq(name, seq![0x65u32, 0x6D, 0x70, 0x74, 0x79]) {
         Some(ISimple::Empty)
-    } else if i_ci_eq(name, seq![0x73u32, 0x63, 0x6F, 0x70, 0x65]) {
+    } else if cx.ext && i_ci_eq(name, seq![0x73u32, 0x63, 0x6F, 0x70, 0x65]) {
         Some(ISimple::Scope)
-    } else if i_ci_eq(name, seq![0x64u32, 0x65, 0x66, 0x69, 0x6E, 0x65, 0x64]) {
+    } else if cx.ext && i_ci_eq(name, seq![0x64u32, 0x65, 0x66, 0x69, 0x6E, 0x65, 0x64]) {
         Some(ISimple::Defined)
     } else if i_ci_eq(name, seq![0x66u32, 0x69, 0x72, 0x73, 0x74, 0x2D, 0x63, 0x68, 0x69, 0x6C, 0x64]) {
         // "Same as :nth-child(1)."
@@ -921,7 +947,7 @@ pub open spec fn i_sub_one(v: Seq<ComponentValue>, p: int, end: int, cx: ICtx, i
             None
         } else {
             match v[p + 1] {
-                ComponentValue::Token { token: Token::Ident { value } } => match i_pseudo_ident(value) {
+                ComponentValue::Token { token: Token::Ident { value } } => match i_pseudo_ident(value, cx) {
                     Some(s) => Some((s, p + 2)),
                     None => None,
                 },
@@ -972,7 +998,7 @@ pub open spec fn i_pseudo_function(
         }
     } else if i_ci_eq(name, seq![0x68u32, 0x61, 0x73]) {
         // "':has()' cannot be nested."
-        if in_has {
+        if in_has || !cx.ext {
             None
         } else {
             match i_clist(args, 0, args.len() as int, cx, false, true, false, true) {
@@ -989,7 +1015,7 @@ pub open spec fn i_pseudo_function(
         i_nth_child(args, true, cx, in_has)
     } else if i_ci_eq(name, seq![0x6Eu32, 0x74, 0x68, 0x2D, 0x6F, 0x66, 0x2D, 0x74, 0x79, 0x70, 0x65]) {
         match a_n_plus_b(args) {
-            Some((a, b)) => Some(ISimple::NthType { a, b, last: false }),
+            Some((a, b)) => Some(ISimple::NthType { a: i_clamp(a), b: i_clamp(b), last: false }),
             None => None,
         }
     } else if i_ci_eq(
@@ -1000,7 +1026,7 @@ pub open spec fn i_pseudo_function(
         ],
     ) {
         match a_n_plus_b(args) {
-            Some((a, b)) => Some(ISimple::NthType { a, b, last: true }),
+            Some((a, b)) => Some(ISimple::NthType { a: i_clamp(a), b: i_clamp(b), last: true }),
             None => None,
         }
     } else {
@@ -1016,11 +1042,21 @@ pub open spec fn i_nth_child(args: Seq<ComponentValue>, last: bool, cx: ICtx, in
 >
     decreases args, 6nat, 0int,
 {
-    let k = i_find_of(args, 0, args.len() as int);
+    let k = if cx.ext {
+        i_find_of(args, 0, args.len() as int)
+    } else {
+        args.len() as int
+    };
     if k >= args.len() {
         match a_n_plus_b(args) {
             Some((a, b)) => Some(
-                ISimple::NthChild { a, b, last, has_of: false, of: Seq::empty() },
+                ISimple::NthChild {
+                    a: i_clamp(a),
+                    b: i_clamp(b),
+                    last,
+                    has_of: false,
+                    of: Seq::empty(),
+                },
             ),
             None => None,
         }
@@ -1028,7 +1064,9 @@ pub open spec fn i_nth_child(args: Seq<ComponentValue>, last: bool, cx: ICtx, in
         match a_n_plus_b(args.subrange(0, k)) {
             None => None,
             Some((a, b)) => match i_clist(args, k + 1, args.len() as int, cx, false, false, false, in_has) {
-                Some(l) => Some(ISimple::NthChild { a, b, last, has_of: true, of: l }),
+                Some(l) => Some(
+                    ISimple::NthChild { a: i_clamp(a), b: i_clamp(b), last, has_of: true, of: l },
+                ),
                 None => None,
             },
         }
@@ -1203,17 +1241,107 @@ pub open spec fn i_attr_ns_matches(n: INs, a: Option<Namespace>) -> bool {
     }
 }
 
+/// The element is an HTML element in an HTML document (every document is one here).
+pub open spec fn i_is_html(doc: Document, e: NodeId) -> bool {
+    i_ns(doc, e) == Some(Namespace::Html)
+}
+
+/// The lower-case form of an ASCII string.
+pub open spec fn i_lowercase(s: Seq<u32>) -> Seq<u32> {
+    Seq::new(s.len(), |k: int| i_lower(s[k]))
+}
+
+/// HTML §4.16.2: the attributes whose values, on an HTML element in an HTML document, selectors
+/// "must treat ... as ASCII case-insensitive".
+pub open spec fn i_html_ci_attribute(name: Seq<u32>) -> bool {
+    // accept accept-charset align alink axis bgcolor charset checked clear codetype color
+    // compact declare defer dir direction disabled enctype face frame hreflang http-equiv
+    // lang language link media method multiple nohref noresize noshade nowrap readonly rel rev
+    // rules scope scrolling selected shape target text type valign valuetype vlink
+    exists|k: int| 0 <= k < i_html_ci_names().len() && #[trigger] i_html_ci_names()[k] == name
+}
+
+/// HTML §4.16.2's list of attribute names, in the text's order.
+pub open spec fn i_html_ci_names() -> Seq<Seq<u32>> {
+    seq![
+        seq![0x61u32, 0x63, 0x63, 0x65, 0x70, 0x74],
+        seq![0x61u32, 0x63, 0x63, 0x65, 0x70, 0x74, 0x2D, 0x63, 0x68, 0x61, 0x72, 0x73, 0x65, 0x74],
+        seq![0x61u32, 0x6C, 0x69, 0x67, 0x6E],
+        seq![0x61u32, 0x6C, 0x69, 0x6E, 0x6B],
+        seq![0x61u32, 0x78, 0x69, 0x73],
+        seq![0x62u32, 0x67, 0x63, 0x6F, 0x6C, 0x6F, 0x72],
+        seq![0x63u32, 0x68, 0x61, 0x72, 0x73, 0x65, 0x74],
+        seq![0x63u32, 0x68, 0x65, 0x63, 0x6B, 0x65, 0x64],
+        seq![0x63u32, 0x6C, 0x65, 0x61, 0x72],
+        seq![0x63u32, 0x6F, 0x64, 0x65, 0x74, 0x79, 0x70, 0x65],
+        seq![0x63u32, 0x6F, 0x6C, 0x6F, 0x72],
+        seq![0x63u32, 0x6F, 0x6D, 0x70, 0x61, 0x63, 0x74],
+        seq![0x64u32, 0x65, 0x63, 0x6C, 0x61, 0x72, 0x65],
+        seq![0x64u32, 0x65, 0x66, 0x65, 0x72],
+        seq![0x64u32, 0x69, 0x72],
+        seq![0x64u32, 0x69, 0x72, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E],
+        seq![0x64u32, 0x69, 0x73, 0x61, 0x62, 0x6C, 0x65, 0x64],
+        seq![0x65u32, 0x6E, 0x63, 0x74, 0x79, 0x70, 0x65],
+        seq![0x66u32, 0x61, 0x63, 0x65],
+        seq![0x66u32, 0x72, 0x61, 0x6D, 0x65],
+        seq![0x68u32, 0x72, 0x65, 0x66, 0x6C, 0x61, 0x6E, 0x67],
+        seq![0x68u32, 0x74, 0x74, 0x70, 0x2D, 0x65, 0x71, 0x75, 0x69, 0x76],
+        seq![0x6Cu32, 0x61, 0x6E, 0x67],
+        seq![0x6Cu32, 0x61, 0x6E, 0x67, 0x75, 0x61, 0x67, 0x65],
+        seq![0x6Cu32, 0x69, 0x6E, 0x6B],
+        seq![0x6Du32, 0x65, 0x64, 0x69, 0x61],
+        seq![0x6Du32, 0x65, 0x74, 0x68, 0x6F, 0x64],
+        seq![0x6Du32, 0x75, 0x6C, 0x74, 0x69, 0x70, 0x6C, 0x65],
+        seq![0x6Eu32, 0x6F, 0x68, 0x72, 0x65, 0x66],
+        seq![0x6Eu32, 0x6F, 0x72, 0x65, 0x73, 0x69, 0x7A, 0x65],
+        seq![0x6Eu32, 0x6F, 0x73, 0x68, 0x61, 0x64, 0x65],
+        seq![0x6Eu32, 0x6F, 0x77, 0x72, 0x61, 0x70],
+        seq![0x72u32, 0x65, 0x61, 0x64, 0x6F, 0x6E, 0x6C, 0x79],
+        seq![0x72u32, 0x65, 0x6C],
+        seq![0x72u32, 0x65, 0x76],
+        seq![0x72u32, 0x75, 0x6C, 0x65, 0x73],
+        seq![0x73u32, 0x63, 0x6F, 0x70, 0x65],
+        seq![0x73u32, 0x63, 0x72, 0x6F, 0x6C, 0x6C, 0x69, 0x6E, 0x67],
+        seq![0x73u32, 0x65, 0x6C, 0x65, 0x63, 0x74, 0x65, 0x64],
+        seq![0x73u32, 0x68, 0x61, 0x70, 0x65],
+        seq![0x74u32, 0x61, 0x72, 0x67, 0x65, 0x74],
+        seq![0x74u32, 0x65, 0x78, 0x74],
+        seq![0x74u32, 0x79, 0x70, 0x65],
+        seq![0x76u32, 0x61, 0x6C, 0x69, 0x67, 0x6E],
+        seq![0x76u32, 0x61, 0x6C, 0x75, 0x65, 0x74, 0x79, 0x70, 0x65],
+        seq![0x76u32, 0x6C, 0x69, 0x6E, 0x6B],
+    ]
+}
+
+/// §6.3 and HTML §4.16.2: whether the attribute `a` of `e` is compared ASCII case-insensitively
+/// under the flag: `i`, yes; `s`, no; neither, only a name on the list, on an HTML element, with no
+/// namespace of its own.
+pub open spec fn i_attr_ci(doc: Document, e: NodeId, flag: IFlag, a: Attr) -> bool {
+    match flag {
+        IFlag::I => true,
+        IFlag::S => false,
+        IFlag::Default => i_is_html(doc, e) && a.namespace is None && i_html_ci_attribute(a.local_name),
+    }
+}
+
+/// HTML §4.16.2: the name part of an attribute selector meets an attribute's name: "the name part
+/// of the CSS attribute selector must first be converted to ASCII lowercase" for the attributes
+/// of HTML elements in HTML documents that have no namespace, and is compared as written otherwise.
+pub open spec fn i_attr_name_matches(doc: Document, e: NodeId, name: Seq<u32>, a: Attr) -> bool {
+    if i_is_html(doc, e) && a.namespace is None {
+        i_lowercase(name) == a.local_name
+    } else {
+        name == a.local_name
+    }
+}
+
 /// §6: the element has an attribute that the attribute selector matches.
 pub open spec fn i_attr_matches(doc: Document, e: NodeId, s: IAttr) -> bool {
     exists|k: int|
         0 <= k < i_attrs(doc, e).len() && {
             let a = #[trigger] i_attrs(doc, e)[k];
-            a.local_name == s.name && i_attr_ns_matches(s.ns, a.namespace) && i_value_matches(
-                s.op,
-                s.ci,
-                a.value,
-                s.value,
-            )
+            i_attr_name_matches(doc, e, s.name, a) && i_attr_ns_matches(s.ns, a.namespace)
+                && i_value_matches(s.op, i_attr_ci(doc, e, s.flag, a), a.value, s.value)
         }
 }
 
@@ -1250,7 +1378,15 @@ pub open spec fn i_type_matches(doc: Document, e: NodeId, t: IType) -> bool {
         INs::Is(x) => i_ns(doc, e) == Some(x),
     }) && (match t.name {
         IName::Star => true,
-        IName::Local(n) => i_local(doc, e) == n,
+        // HTML §4.16.2: "When comparing a CSS element type selector to the names of HTML elements in
+        // HTML documents, the CSS element type selector must first be converted to ASCII
+        // lowercase. The same selector when compared to other elements must be compared
+        // according to its original case."
+        IName::Local(n) => if i_is_html(doc, e) {
+            i_lowercase(n) == i_local(doc, e)
+        } else {
+            n == i_local(doc, e)
+        },
     })
 }
 
@@ -1490,9 +1626,19 @@ pub open spec fn i_sp_zero() -> ISpec {
     ISpec { a: 0, b: 0, c: 0 }
 }
 
-/// Specificities added component by component.
+/// §17: "implementations may have limitations on the size of A, B, or C. If so, values higher
+/// than the limit must be clamped to that limit, and not overflow." The limit here is 2^32 - 1.
+pub open spec fn i_sat(n: nat) -> nat {
+    if n > 0xFFFF_FFFF {
+        0xFFFF_FFFFnat
+    } else {
+        n
+    }
+}
+
+/// Specificities added component by component, each clamped to the limit.
 pub open spec fn i_sp_add(x: ISpec, y: ISpec) -> ISpec {
-    ISpec { a: x.a + y.a, b: x.b + y.b, c: x.c + y.c }
+    ISpec { a: i_sat(x.a + y.a), b: i_sat(x.b + y.b), c: i_sat(x.c + y.c) }
 }
 
 /// §17 "Specificities are compared by comparing the three components in order": `x` is at
