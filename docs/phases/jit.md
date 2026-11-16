@@ -320,6 +320,18 @@ change under it is audited by another session.
 today on Windows and Linux. The batching of compilations keeps the round
 trips off the hot path, and J.11 measures it.
 
+*Later note (2026-11-16):* C2 is the browser's choice, not the engine's.
+- Phase 7 makes the engine embeddable (phase-7.md, "The engine as a
+  library"), so `clazel-jit` asks a `CodeMapper` to make validated code
+  executable.
+- C2's code process and code writer are the browser's mapper.
+- An in-process mapper (C1's shape, in `clazel-sys`) is there for
+  embedders that have no such sandbox. It lands with J.7, under the same
+  audit.
+- Either way, nothing becomes executable before `clazel-codecheck`
+  accepts it.
+- `clazel-jit` itself names no process or IPC type.
+
 **(c) Which tier gates shipping.**
 - **G1:** the JIT is on by default once both validators are tier 2, with
   correctness proofs following op by op.

@@ -116,6 +116,16 @@ macOS arm64. Verus, Kani and Miri run on Linux, as CI does.
      and number parsers.
    - Its TCB gains what jit.md lists.
    - Every `clazel-sys` change has an audit row by another session.
+8. **The engine is a library** ("The engine as a library").
+   - `cargo xtask check` rejects any browser crate in an engine crate's
+     dependency closure.
+   - `clazel-webidl` and `clazel-web` use only `clazel-js`'s public API.
+   - `clazel-js-shell` runs Test262 through that API and gives the same
+     results as the browser's runner.
+   - Two `Runtime`s on two threads in one process run Test262 without
+     interfering.
+   - A `Terminator` stops an endless loop, in the interpreter and in JIT
+     code.
 
 ## What is proven, and what is assumed
 
@@ -176,6 +186,8 @@ macOS arm64. Verus, Kani and Miri run on Linux, as CI does.
 | `clazel-js-heap` | Renderer | 1 | Values (NaN-boxed), arena, shapes, strings, the collector |
 | `clazel-js-vm` | Renderer | 0 (spec at 2) | Bytecode, `spec fn step`, compiler, op handlers, interpreter loop |
 | `clazel-js-builtins` | Renderer | 0 | The global object's built-ins (§19† to §28†) |
+| `clazel-js` | Renderer | 0 | The engine's public embedding API: `Runtime`, realms, scripts and modules, native functions, host objects, `Host` hooks, limits, termination (see "The engine as a library") |
+| `clazel-js-shell` | Renderer (status only) | 0 | A second embedder: a command-line host that runs Test262 (its `$262` hooks) and scripts through `clazel-js` alone. Never shipped in the browser |
 | `clazel-webidl` | Renderer | 0 | Generated bindings, WebIDL conversions, `DOMException` |
 | `clazel-web` | Renderer | 0 | Window, Document and Node APIs, events, timers, event loop, fetch and XHR APIs, storage, history |
 | `clazel-dom` | Renderer | 2 | (existing) gains 7.13's operations |
@@ -185,6 +197,150 @@ macOS arm64. Verus, Kani and Miri run on Linux, as CI does.
 `clazel-json` is a Primitive because the kernel and tools may parse JSON
 too (import maps, later manifests). Each new crate joins `PLACES` in
 `xtask/src/status.rs`.
+
+The engine crates are `clazel-js-*`, `clazel-json`, `clazel-js` and jit.md's
+crates. "Renderer" is where the browser runs them, not what they depend on:
+none of them may depend on a browser crate (next section).
+
+## The engine as a library
+
+The engine is a component other programs can embed, not a part of the
+renderer. The browser is its first embedder, but not a privileged one. A
+command-line runtime, a server runtime in the style of Node, or another
+Rust program should be able to use the same crates. Each of them would
+supply its own host, its own event loop and its own APIs, in the way Deno
+and Bun bring their own runtimes.
+
+**The boundary.**
+- **Engine crates depend on no browser crate.** Their dependency closure
+  holds only other engine crates, Primitives (`clazel-idna`'s tables,
+  `clazel-json`), `clazel-sys` for the JIT, and `vstd`. It never holds
+  `clazel-dom`, `clazel-webidl`, `clazel-web`, `clazel-ipc`,
+  `clazel-kernel`, `clazel-renderer`, `clazel-url` or `clazel-fetch`.
+  `cargo xtask check` enforces this through an `ENGINE` list next to
+  `PLACES`, as jit.md already does for the instruction-set layer.
+- **`clazel-js` is the one crate an embedder names.** The other engine
+  crates are implementation details, re-exported only where the API needs
+  their types.
+- **The browser uses only `clazel-js`'s public API.** `clazel-webidl`'s
+  generated bindings and `clazel-web` reach the heap, the realm and the job
+  queue through the same calls any embedder has. That is what makes the
+  reuse real rather than claimed. A binding that needs something the API
+  lacks gets it added to the API, not a private path.
+- **A second embedder from the start.** `clazel-js-shell` runs Test262
+  through `clazel-js`, with its own `Host`. Test262's `$262` object
+  (`createRealm`, `evalScript`, `detachArrayBuffer`, `gc`, `agent`) is
+  exactly the set of host hooks an embedder needs, so the conformance
+  runner tests the API as well as the engine.
+
+**What the API holds** (7.8 builds it, with the interpreter loop):
+- **`Runtime`:** one ECMAScript agent, with its heap, limits and job queue.
+  - There is no global or thread-local state. A process can hold many
+    `Runtime`s.
+  - A `Runtime` is `Send` but not `Sync`, so an embedder can run one per
+    thread. The browser still runs one per renderer, single-threaded, as
+    7.0(e) decided.
+- **Realms:** create a realm, reach its global object, and add properties
+  to it. Each realm gets its own built-ins (`$262.createRealm`, and frames
+  later).
+- **Code:** evaluate a script, and load, link and evaluate a module. Source
+  text goes in as code points, with a name for stack traces.
+- **Native functions and host objects:** a Rust function becomes a JS
+  function. A host object carries typed internal slots that the embedder
+  owns, which is how `clazel-webidl` builds DOM wrappers.
+- **Handles:** values the embedder holds across calls are rooted handles,
+  so the collector (7.6) sees them. A handle is checked against the arena's
+  generation, so a stale one is an error, never an alias.
+- **Errors:** a thrown JS value comes back as a Rust `Result`. An engine
+  error (out of memory, terminated) is a distinct variant, not a JS value.
+
+**`Host`, a trait for everything ECMA-262 leaves to the host.**
+- Each host-defined operation becomes a method with a stated default:
+  - `HostEnqueuePromiseJob`, `HostEnqueueGenericJob` and
+    `HostEnqueueTimeoutJob`;
+  - `HostMakeJobCallback` and `HostCallJobCallback`;
+  - `HostLoadImportedModule`, with `HostGetImportMetaProperties` and
+    `HostFinalizeImportMeta`;
+  - `HostPromiseRejectionTracker`;
+  - `HostEnsureCanCompileStrings`;
+  - `HostHasSourceTextAvailable`;
+  - `HostEnsureCanAddPrivateElement`;
+  - `HostResizeArrayBuffer`.
+
+  Each method cites its ECMA-262 section (rule 5), and the set is checked
+  against the pinned edition's list of host hooks in 7.4.
+- **What the engine needs from the world:**
+  - the current time, for `Date.now()`;
+  - the local time zone offset, for `LocalTZA`;
+  - a source of randomness, for `Math.random`;
+  - the default locale.
+
+  These are `Host` methods too, so 7.0(b)'s fixed offset and `en-US`
+  fallback are the browser's answers, not the engine's. Another host can
+  answer with real time zones.
+- **The event loop is the host's.** The engine queues jobs and runs them
+  when asked (`Runtime::run_jobs`), and never decides when.
+  - HTML's event loop lives in `clazel-web`.
+  - A Node-style runtime would drive the same calls from its own loop.
+  - Module loading, `import()` and `import.meta` go through `Host`, so a
+    host can add CommonJS or its own resolver without engine changes.
+
+**Limits and stopping.**
+- **Every limit is the embedder's setting:** heap size, native call depth,
+  code bytes (7.19, J.11). The browser chooses its values, and nothing is
+  fixed in the engine.
+- **A `Runtime` can be stopped from another thread.**
+  - The embedder holds a `Terminator` handle that sets a flag.
+  - The interpreter checks the flag at loop back-edges and calls, and JIT
+    code checks it at the same points.
+  - Evaluation then ends with a `Terminated` error that JS cannot catch.
+
+  7.0(g) chose the host's kill over an interrupt check for the browser,
+  and the browser keeps that policy. An embedder in one process, though,
+  cannot kill its own engine. The check is cheap and the frame layout
+  already permits it (7.0(g)), so it is built here rather than in Phase 8.
+
+**Executable memory is the embedder's choice** (jit.md J.0(b)).
+- The JIT asks a `CodeMapper` to make validated code executable. The
+  browser's mapper is J.0(b)'s C2: a code process on Windows, the
+  launcher's writer on Linux, `MAP_JIT` on macOS.
+- An embedder without that sandbox can use an in-process mapper (C1),
+  which flips W^X on its own region. Every code path still goes through
+  the validator first.
+- An embedder can also turn the JIT off. The interpreter is complete
+  without it.
+- Rule 1 still holds: the mappers call `clazel-sys`, and embedders see
+  only safe functions.
+
+**What this does not promise.**
+- **Node itself is not a drop-in target.** Node is written against V8's
+  C++ API and N-API, and swapping its engine means a shim for V8's API. That
+  has been tried (node-chakracore) and was costly to keep up. The realistic
+  paths are a Node-compatible runtime on `clazel-js`, as Deno and Bun did
+  for their engines, or N-API on top of a C API.
+- **Phase 7 builds a Rust API only.** It stays unstable, without semver
+  promises, until Phase 8 has a second real user.
+- **A C API** (`clazel-js-capi`) is Phase 8. Writing it means an FFI
+  boundary outside `clazel-sys`, so it needs its own decision under rule 1.
+- **What a Node-style host would still need from the engine** is listed
+  for Phase 8. The browser's scope leaves it out, but the design must not
+  prevent it:
+  - `SharedArrayBuffer` and `Atomics` across `Runtime`s on threads;
+  - `Intl` from our own CLDR reader;
+  - WebAssembly;
+  - a debugger protocol;
+  - heap snapshots for fast start-up.
+
+  7.0(b) keeps `SharedArrayBuffer` out of the browser for a security
+  reason. For another host it would be a setting the browser leaves off.
+- **The sandbox's guarantees are the browser's.** An embedder that runs
+  untrusted code without a sandbox relies on the engine's own safety:
+  - no `unsafe` outside `clazel-sys`;
+  - the arena's generation checks;
+  - the validator's theorem for JIT code;
+  - its own limits.
+
+  The README says so.
 
 ## Dependencies on other phases
 
@@ -330,6 +486,8 @@ private fields, Proxy and Reflect, typed arrays, BigInt, `WeakRef` and
     offset for the renderer's life with no daylight-saving rules. A date
     on the other side of a daylight-saving change from now is off by an
     hour, and that is listed.
+  - Both fallbacks are the browser's answers to `Host`'s locale and time
+    zone methods ("The engine as a library"), not limits of the engine.
 
 **Recommendation:** this scope. `Intl` and real time zones are Phase 8: they
 need CLDR and tzdb data, read by our own parsers.
@@ -389,6 +547,9 @@ keeps the renderer single-threaded and the seccomp list without `clone`.
       (Phase 4's wrapper slot);
     - the job and task queues.
 
+  The engine knows only the value stack, rooted handles and its own job
+  queue. DOM wrappers and task queues are roots because `clazel-web` reports
+  them through `Host`'s tracing method, as any embedder's objects would be.
   A removed DOM node is freed when nothing marks it, as Phase 4 planned.
 - **G2: generational or incremental.** It has shorter pauses, but write
   barriers in every store, including the JIT's templates, and a larger
@@ -407,6 +568,11 @@ and G2 is a Phase 8 decision if the pause matters.
 - The alternative, an interrupt counter checked at loop back-edges in the
   interpreter and in JIT code, lets a page be stopped without losing the
   tab. It is a later addition that the shared frame layout permits.
+- *Later note (2026-11-16):* the interrupt check is now built in this phase,
+  as the engine's `Terminator` ("The engine as a library"), because an
+  embedder in one process has no kill to fall back on. The browser's policy
+  is unchanged: it still ends a stuck renderer on the user's word, and may
+  use the check later to keep the tab.
 
 ### 7.1 Inventory and test data (M)
 
@@ -540,6 +706,17 @@ As 7.0(f) decides.
   entries and loop back-edges for jit.md's tiering; and runs the JIT-off
   mode.
 - **Exceptions:** unwinding through frame headers, in the region.
+- **The termination check:** at back-edges and calls, against the
+  `Terminator`'s flag.
+- **`clazel-js`, the embedding API** ("The engine as a library"):
+  - `Runtime`, realms, script and module evaluation, native functions, host
+    objects, rooted handles and the `Host` trait.
+  - Its contract is written first, as a README and doc comments with
+    examples that compile, and reviewed before the bindings build on it.
+- **`clazel-js-shell`:**
+  - It is the Test262 runner's host, with `$262` built from public calls
+    only.
+  - From here on, every Test262 result 7.9 to 7.11 record runs through it.
 
 ### 7.9 Built-ins (L, several)
 
@@ -811,6 +988,13 @@ fixtures first.
 - **`Intl` and time zones,** from our own CLDR and tzdb readers.
 - **Credentialed CORS** with its declassification theorem (7.0(c) S2).
 - **Import maps; IndexedDB and the Cache API** on 3.10's store.
-- **An interrupt check** for stopping a script without ending the renderer.
+- **Using the `Terminator`** to stop a script without ending the renderer.
 - **The parser at tier 2,** if 7.0(a) left it at 1.
 - **WebAssembly** on jit.md's back ends.
+- **The engine for other embedders:**
+  - a stable `clazel-js` API with semver;
+  - a C API (`clazel-js-capi`), which needs a decision under rule 1;
+  - `SharedArrayBuffer` and `Atomics` across threads, as a host setting
+    that the browser leaves off;
+  - heap snapshots;
+  - a debugger protocol.
