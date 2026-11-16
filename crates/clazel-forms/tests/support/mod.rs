@@ -113,10 +113,3 @@ pub fn entries_of(html: &str, form: &str, submitter: Option<&str>) -> Vec<(Strin
     let s = submitter.and_then(|id| by_id(&arena, id));
     entry_list(&arena, &rows, f, s, "UTF-8", false).unwrap_or_default()
 }
-
-/// Entries as `(name, value)` pairs of `&str`, for comparison.
-pub fn pairs(v: &[(&str, &str)]) -> Vec<(String, String)> {
-    v.iter()
-        .map(|(a, b)| ((*a).to_owned(), (*b).to_owned()))
-        .collect()
-}

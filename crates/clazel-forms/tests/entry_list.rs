@@ -7,6 +7,13 @@ mod support;
 
 use support::*;
 
+/// Entries as `(name, value)` pairs of `&str`, for comparison.
+pub fn pairs(v: &[(&str, &str)]) -> Vec<(String, String)> {
+    v.iter()
+        .map(|(a, b)| ((*a).to_owned(), (*b).to_owned()))
+        .collect()
+}
+
 #[test]
 fn text_password_hidden_and_textarea_use_their_default_values() {
     let html = "<form id=f><input name=a value=1><input type=password name=b value=2>\
