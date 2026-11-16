@@ -22,6 +22,7 @@ mod html5lib_tree;
 mod http_state_dates;
 mod http_state_parser;
 mod inventory;
+mod isa;
 mod js;
 mod llhttp;
 mod nist_cavp_sigver;
@@ -203,13 +204,29 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         inventory::WEBREF_IDL_FILES,
     ),
     ("ucd-regexp", inventory::convert_ucd, inventory::UCD_FILES),
+    // JIT item J.2: instruction-set sources (see isa.rs).
+    ("acl2-x86isa", isa::convert_acl2_x86isa, &[]),
+    ("sail-x86-from-acl2", isa::convert_sail_x86_from_acl2, &[]),
+    ("sail-x86-shina", isa::convert_sail_x86_shina, &[]),
+    ("intel-sdm", isa::convert_intel_sdm, &[]),
+    ("sail-arm", isa::convert_sail_arm, &[]),
+    ("arm-mrs", isa::convert_arm_mrs, &[]),
 ];
 
 /// Suites whose directory is a tree of upstream paths, not a flat list: the
 /// converter walks it and lists what it finds (its inventory is then the
 /// record of which files exist), and the directory is checked for
 /// `SOURCE.md` and `LICENSE.md` only.
-const TREE_SUITES: &[&str] = &["wpt-web", "todomvc", "test262"];
+const TREE_SUITES: &[&str] = &[
+    "wpt-web",
+    "todomvc",
+    "test262",
+    "acl2-x86isa",
+    "sail-x86-from-acl2",
+    "sail-x86-shina",
+    "sail-arm",
+    "arm-mrs",
+];
 
 /// A converter for a binary artefact written beside a suite's Rust table.
 type ConvertBytes = fn(&Path) -> Result<Vec<u8>, String>;

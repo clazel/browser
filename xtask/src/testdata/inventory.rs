@@ -101,7 +101,7 @@ const IDNA_DATA: &str = "crates/clazel-idna/data/unicode-18.0.0";
 const SHARED_WITH_IDNA: &[&str] = &["UnicodeData.txt", "DerivedNormalizationProps.txt"];
 
 /// One vendored file.
-struct Entry {
+pub(super) struct Entry {
     path: String,
     size: usize,
     sha256: String,
@@ -155,7 +155,7 @@ fn under(path: &str, root: &str) -> bool {
 /// The inventory of `dir`, every file of which must lie under one of
 /// `roots` (the suite's own `LICENSE.md` is always allowed). Every root must
 /// hold at least one file.
-fn inventory(dir: &Path, roots: &[&str]) -> Result<Vec<Entry>, String> {
+pub(super) fn inventory(dir: &Path, roots: &[&str]) -> Result<Vec<Entry>, String> {
     let mut files = Vec::new();
     walk(dir, "", &mut files)?;
     files.sort_by(|a, b| a.path.cmp(&b.path));
@@ -182,7 +182,12 @@ fn inventory(dir: &Path, roots: &[&str]) -> Result<Vec<Entry>, String> {
 }
 
 /// The generated Rust file for `files`.
-fn render(suite: &str, converter: &str, what: &str, files: &[Entry]) -> Result<String, String> {
+pub(super) fn render(
+    suite: &str,
+    converter: &str,
+    what: &str,
+    files: &[Entry],
+) -> Result<String, String> {
     let mut out = String::new();
     let total: usize = files.iter().map(|f| f.size).sum();
     let w = |r: std::fmt::Result| r.map_err(|e| e.to_string());
@@ -257,7 +262,7 @@ pub fn convert_webref_idl(dir: &Path) -> Result<String, String> {
 }
 
 /// The `SHA-256: <hash> <file>` lines of a `SOURCE.md`, as (file, hash).
-fn listed_hashes(source: &str) -> Vec<(String, String)> {
+pub(super) fn listed_hashes(source: &str) -> Vec<(String, String)> {
     source
         .lines()
         .filter_map(|l| {
