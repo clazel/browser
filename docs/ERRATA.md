@@ -929,25 +929,3 @@ it evidently means. Each entry records what we specified instead.
   columns it spans (`span_contribution` in
   `crates/clazel-layout/src/table/measure.rs`).
 - **Reported upstream:** not yet.
-
-## ECMA-262 §12.9.4.3: no MV for `LegacyOctalEscapeSequence :: 0 [lookahead ∈ { 8, 9 }]`
-
-- **Spec:** ECMA-262, 2026 edition (`es2026`), commit
-  `0248456c758431e4bb8e5d26333ff1865123c9cd`,
-  <https://tc39.es/ecma262/#sec-string-literals-static-semantics-mv>
-- **Text:** §12.9.4.2 says "The SV of EscapeSequence :: LegacyOctalEscapeSequence
-  is the String value consisting of the code unit whose numeric value is the MV
-  of LegacyOctalEscapeSequence". §12.9.4.3 gives that MV only for
-  `ZeroToThree OctalDigit`, `FourToSeven OctalDigit` and `ZeroToThree
-  OctalDigit OctalDigit`.
-- **Problem:** `LegacyOctalEscapeSequence` has five alternatives. `NonZeroOctalDigit
-  [lookahead ∉ OctalDigit]` is a chain production (one nonterminal, no
-  terminal), so it takes its child's MV by the implicit definition of §5.2.3. But
-  `` `0` [lookahead ∈ { `8`, `9` }] `` (the escape `\0` in `"\08"`) has no
-  nonterminal, so it is not a chain production and no rule gives it an MV. Read
-  literally, the SV of `"\08"` is undefined.
-- **We specify:** the MV is 0, so `"\08"` is the code unit 0x0000 followed by
-  `8`, which is what Test262's
-  `language/literals/string/legacy-octal-escape-sequence.js` asserts. See
-  `legacy_octal_escape_sequence_mv` in `crates/clazel-js-lexer/src/spec.rs`.
-- **Reported upstream:** not yet.

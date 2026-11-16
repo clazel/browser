@@ -1227,15 +1227,15 @@ pub open spec fn at_hex_digit(s: Src, j: int) -> bool {
     0 <= j < s.len() && is_hex_digit(s[j])
 }
 
-/// §12.9.4.3 the MV of a `LegacyOctalEscapeSequence`. The standard states it
-/// for alternatives 3, 4 and 5 only ("ZeroToThree OctalDigit", "FourToSeven
-/// OctalDigit", "ZeroToThree OctalDigit OctalDigit"). Alternative 2 is a
-/// chain production, so it has its `NonZeroOctalDigit`'s MV (the digit).
-/// Alternative 1 has no nonterminal, so the standard does not give it an
-/// MV; its evident intent is 0 (docs/ERRATA.md).
+/// The MV of a `LegacyOctalEscapeSequence`. §12.9.4.3 states it for
+/// alternatives 3, 4 and 5 ("ZeroToThree OctalDigit", "FourToSeven
+/// OctalDigit", "ZeroToThree OctalDigit OctalDigit"). Alternative 1 (`0`) is
+/// given by §12.9.3.2 "Static Semantics: MV": "The MV of ... LegacyOctalEscapeSequence
+/// :: `0` ... is 0." Alternative 2 is a chain production, so it has its
+/// `NonZeroOctalDigit`'s MV (the digit).
 pub open spec fn legacy_octal_escape_sequence_mv(s: Src, i: int, j: int) -> int {
     if j == i + 1 {
-        // 1. `0`: 0 (ERRATA.md). 2. NonZeroOctalDigit: the MV of the digit.
+        // 1. `0`: 0 (§12.9.3.2). 2. NonZeroOctalDigit: the MV of the digit.
         s[i] as int - '0' as int
     } else if j == i + 2 {
         // 3, 4. (8 times the MV of ZeroToThree/FourToSeven) plus the MV of
