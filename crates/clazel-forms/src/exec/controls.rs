@@ -9,16 +9,32 @@ use super::walk::*;
 use crate::contract::*;
 #[cfg(verus_only)]
 use crate::lemmas::*;
-#[cfg(verus_only)]
-use clazel_dom::lemmas::lemma_wf_witness;
 use crate::spec::*;
 use clazel_dom::exec::{Arena, ExecKind};
+#[cfg(verus_only)]
+use clazel_dom::lemmas::lemma_wf_witness;
 #[cfg(verus_only)]
 use clazel_dom::spec as dom;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
 verus! {
+
+/// `e` is an element whose ID is `id`.
+pub fn element_has_id(arena: &Arena, e: usize, id: &[u32]) -> (r: bool)
+    requires
+        dom::valid(arena@, e),
+    ensures
+        r == (is_element(arena@, e) && element_id(arena@, e) == Some(id@)),
+{
+    if !is_element_exec(arena, e) {
+        return false;
+    }
+    match element_id_exec(arena, e) {
+        Some(v) => eq_slices(v.as_slice(), id),
+        None => false,
+    }
+}
 
 /// The first element of `order` whose ID is `id`: [`first_with_id`].
 pub fn first_with_id_exec(arena: &Arena, order: &[usize], id: &[u32]) -> (r: Option<usize>)
@@ -44,12 +60,8 @@ pub fn first_with_id_exec(arena: &Arena, order: &[usize], id: &[u32]) -> (r: Opt
                 assert(order@.skip(i as int).drop_first() =~= order@.skip(i as int + 1));
                 assert(order@.skip(i as int)[0] == order@[i as int]);
             }
-            if is_element_exec(arena, e) {
-                if let Some(v) = element_id_exec(arena, e) {
-                    if eq_slices(v.as_slice(), id) {
-                        return Some(e);
-                    }
-                }
+            if element_has_id(arena, e, id) {
+                return Some(e);
             }
         }
         // Never saturates: i < order.len().
@@ -116,6 +128,34 @@ pub fn owner_is_exec(
     }
 }
 
+/// [`fid_value`]: `form`'s ID, if `form` is a `form` element and the first
+/// element of `order` with that ID.
+pub fn fid_exec<'a>(arena: &'a Arena, form: usize, order: &[usize]) -> (r: Option<&'a Vec<u32>>)
+    requires
+        dom::valid(arena@, form),
+        forall|k: int| 0 <= k < order@.len() ==> dom::valid(arena@, #[trigger] order@[k]),
+    ensures
+        ref_view(r) == fid_value(arena@, order@, form),
+{
+    if !is_html_exec(arena, form, b"form") {
+        return None;
+    }
+    proof {
+        assert(is_element(arena@, form));
+    }
+    match element_id_exec(arena, form) {
+        None => None,
+        Some(v) => match first_with_id_exec(arena, order, v.as_slice()) {
+            Some(x) => if x == form {
+                Some(v)
+            } else {
+                None
+            },
+            None => None,
+        },
+    }
+}
+
 /// [`controls`]: the submittable elements whose form owner is `form`, in
 /// tree order.
 pub fn controls_exec(arena: &Arena, form: usize) -> (r: Vec<usize>)
@@ -136,19 +176,7 @@ pub fn controls_exec(arena: &Arena, form: usize) -> (r: Vec<usize>)
         }
     }
     let connected_root = r0 == 0;
-    let mut fid: Option<&Vec<u32>> = None;
-    if is_html_exec(arena, form, b"form") {
-        proof {
-            assert(is_element(arena@, form));
-        }
-        if let Some(v) = element_id_exec(arena, form) {
-            if let Some(x) = first_with_id_exec(arena, order.as_slice(), v.as_slice()) {
-                if x == form {
-                    fid = Some(v);
-                }
-            }
-        }
-    }
+    let fid = fid_exec(arena, form, order.as_slice());
     let ghost ord = order@;
     let mut out: Vec<usize> = Vec::new();
     let mut i: usize = 0;
@@ -177,12 +205,10 @@ pub fn controls_exec(arena: &Arena, form: usize) -> (r: Vec<usize>)
                 assert(ord.subrange(0, i as int + 1).last() == ord[i as int]);
             }
             let ghost before = out@;
-            if is_submittable_exec(arena, e) {
-                if owner_is_exec(arena, form, e, connected_root, fid, Ghost(ord)) {
-                    out.push(e);
-                    proof {
-                        assert(out@ =~= before.push(e));
-                    }
+            if is_submittable_exec(arena, e) && owner_is_exec(arena, form, e, connected_root, fid, Ghost(ord)) {
+                out.push(e);
+                proof {
+                    assert(out@ =~= before.push(e));
                 }
             }
         }

@@ -15,11 +15,12 @@ pub fn lower_cp(c: u32) -> (r: u32)
     ensures
         r == ascii_lower_cp(c),
 {
-    if c >= 0x41 && c <= 0x5A {
-        // Never saturates: c <= 0x5A.
-        c.saturating_add(0x20)
-    } else {
-        c
+    match c {
+        0x41..=0x5A => {
+            // Never saturates: c <= 0x5A.
+            c.saturating_add(0x20)
+        },
+        _ => c,
     }
 }
 
@@ -327,7 +328,7 @@ pub fn strip_whitespace_exec(s: &[u32]) -> (r: Vec<u32>)
             trim_end(s@.skip(a as int)) == trim_end(s@.subrange(a as int, b as int)),
         decreases b - a,
     {
-        let last = b - 1;
+        let last = b.saturating_sub(1);
         match s.get(last) {
             Some(c) => {
                 let c = *c;
@@ -492,17 +493,14 @@ pub fn character_width_exec(a: Option<&[u32]>) -> (r: usize)
     let start = skip_whitespace(s);
     let mut i = start;
     let mut negative = false;
-    match s.get(i) {
-        Some(c) => {
-            if *c == 0x2D {
-                negative = true;
-                // Never saturates: i < s.len().
-                i = i.saturating_add(1);
-            } else if *c == 0x2B {
-                i = i.saturating_add(1);
-            }
-        },
-        None => {},
+    if let Some(c) = s.get(i) {
+        if *c == 0x2D {
+            negative = true;
+            // Never saturates: i < s.len().
+            i = i.saturating_add(1);
+        } else if *c == 0x2B {
+            i = i.saturating_add(1);
+        }
     }
     proof {
         let t = s@.skip(start as int);
@@ -563,7 +561,7 @@ pub fn character_width_exec(a: Option<&[u32]>) -> (r: usize)
         proof {
             acc_s = acc_s * 10 + d as nat;
         }
-        if acc > (usize::MAX - d) / 10 {
+        if acc > usize::MAX.saturating_sub(d) / 10 {
             big = true;
             proof {
                 assert(acc as nat * 10 + d as nat > usize::MAX as nat) by (nonlinear_arith)
@@ -580,7 +578,8 @@ pub fn character_width_exec(a: Option<&[u32]>) -> (r: usize)
                         d <= 9,
                 ;
             }
-            acc = acc * 10 + d;
+            // Neither saturates: the sum is at most usize::MAX.
+            acc = acc.saturating_mul(10).saturating_add(d);
         }
         // Never saturates: j < s.len().
         j = j.saturating_add(1);

@@ -9,6 +9,8 @@ use super::strings::*;
 use super::walk::*;
 #[cfg(verus_only)]
 use crate::contract::*;
+#[cfg(verus_only)]
+use crate::lemmas::*;
 use crate::spec::*;
 use clazel_dom::exec::Arena;
 #[cfg(verus_only)]
@@ -119,10 +121,7 @@ fn ty_checkbox(t: &InputType) -> (r: bool)
     ensures
         r == (*t is Checkbox),
 {
-    match t {
-        InputType::Checkbox => true,
-        _ => false,
-    }
+    matches!(t, InputType::Checkbox)
 }
 
 /// Whether `t` is the Radio Button state.
@@ -130,10 +129,7 @@ fn ty_radio(t: &InputType) -> (r: bool)
     ensures
         r == (*t is Radio),
 {
-    match t {
-        InputType::Radio => true,
-        _ => false,
-    }
+    matches!(t, InputType::Radio)
 }
 
 /// Whether `t` is the Image Button state.
@@ -141,10 +137,7 @@ fn ty_image(t: &InputType) -> (r: bool)
     ensures
         r == (*t is Image),
 {
-    match t {
-        InputType::Image => true,
-        _ => false,
-    }
+    matches!(t, InputType::Image)
 }
 
 /// Whether `t` is the File Upload state.
@@ -152,10 +145,7 @@ fn ty_file(t: &InputType) -> (r: bool)
     ensures
         r == (*t is File),
 {
-    match t {
-        InputType::File => true,
-        _ => false,
-    }
+    matches!(t, InputType::File)
 }
 
 /// Whether `t` is the Hidden state.
@@ -163,10 +153,7 @@ fn ty_hidden(t: &InputType) -> (r: bool)
     ensures
         r == (*t is Hidden),
 {
-    match t {
-        InputType::Hidden => true,
-        _ => false,
-    }
+    matches!(t, InputType::Hidden)
 }
 
 /// Appending an entry appends its view.
@@ -190,7 +177,7 @@ pub fn image_entries_exec(arena: &Arena, rows: &[ExecControl], field: usize) -> 
 {
     let named = attr_exec(arena, field, b"name");
     let nm: Vec<u32> = match named {
-        Some(v) => if v.len() > 0 {
+        Some(v) => if !v.is_empty() {
             concat1(v.as_slice(), 0x2E)
         } else {
             Vec::new()
@@ -370,11 +357,12 @@ pub fn dirname_entries_exec(arena: &Arena, field: usize) -> (r: Vec<ExecEntry>)
     proof {
         assert(entries_view(out@) =~= Seq::<Entry>::empty());
     }
-    if let Some(d) = attr_exec(arena, field, b"dirname") {
-        if d.len() > 0 && is_auto_directionality_exec(arena, field) {
+    match attr_exec(arena, field, b"dirname") {
+        Some(d) if !d.is_empty() && is_auto_directionality_exec(arena, field) => {
             let ltr: Vec<u32> = ascii_vec(b"ltr");
             push_entry(&mut out, mk_entry(d.as_slice(), ltr));
-        }
+        },
+        _ => {},
     }
     proof {
         assert(entries_view(out@) =~= dirname_spec(arena@, field));
@@ -428,7 +416,7 @@ pub fn field_entries_exec(
     match attr_exec(arena, field, b"name") {
         None => Vec::new(),
         Some(name) => {
-            if name.len() == 0 {
+            if name.is_empty() {
                 Vec::new()
             } else {
                 let mut out = main_entries_exec(arena, rows, encoding, field, name.as_slice());
@@ -443,6 +431,98 @@ pub fn field_entries_exec(
             }
         },
     }
+}
+
+/// The view of an optional entry list.
+pub open spec fn opt_entries_view(r: Option<Vec<ExecEntry>>) -> Option<Seq<Entry>> {
+    match r {
+        Some(v) => Some(entries_view(v@)),
+        None => None,
+    }
+}
+
+/// HTML "construct the entry list" for `form`, with the control state in
+/// `rows`, an optional `submitter`, the name of the encoding and the
+/// form's "constructing entry list" flag.
+pub fn construct_entry_list_exec(
+    arena: &Arena,
+    rows: &[ExecControl],
+    form: usize,
+    submitter: Option<usize>,
+    encoding: &[u32],
+    constructing: bool,
+) -> (r: Option<Vec<ExecEntry>>)
+    requires
+        construct_entry_list_requires(arena@, form, submitter),
+    ensures
+        construct_entry_list_ensures(
+            arena@,
+            state_view(rows@),
+            form,
+            submitter,
+            encoding@,
+            constructing,
+            opt_entries_view(r),
+        ),
+{
+    // 1. "If form's constructing entry list is true, then return null."
+    if constructing {
+        return None;
+    }
+    // 3. "Let controls be a list of all the submittable elements whose form
+    // owner is form, in tree order."
+    let ctrls = controls_exec(arena, form);
+    let ghost doc = arena@;
+    let ghost st = state_view(rows@);
+    let ghost ord = tree_order(doc, root(doc, form), doc.nodes.len());
+    let ghost cs = ctrls@;
+    // 5. "For each element field in controls, in tree order: …"
+    let mut out: Vec<ExecEntry> = Vec::new();
+    let mut i: usize = 0;
+    proof {
+        assert(entries_view(out@) =~= Seq::<Entry>::empty());
+        assert(cs.subrange(0, 0) =~= Seq::<usize>::empty());
+        assert(cs == controls_in(doc, form, ord));
+        assert forall|k: int| 0 <= k < cs.len() implies is_submittable(doc, #[trigger] cs[k]) by {
+            assert(cs.contains(cs[k]));
+            lemma_controls_members(doc, form, ord, cs[k]);
+        }
+    }
+    while i < ctrls.len()
+        invariant
+            i <= ctrls.len(),
+            doc == arena@,
+            st == state_view(rows@),
+            ctrls@ == cs,
+            cs == controls(doc, form),
+            dom::wf(doc),
+            construct_entry_list_requires(doc, form, submitter),
+            forall|k: int| 0 <= k < cs.len() ==> is_submittable(doc, #[trigger] cs[k]),
+            entries_view(out@) == entries_of(doc, st, submitter, encoding@, cs.subrange(0, i as int)),
+        decreases ctrls.len() - i,
+    {
+        if let Some(f) = ctrls.get(i) {
+            let f = *f;
+            proof {
+                assert(cs.subrange(0, i as int + 1).drop_last() =~= cs.subrange(0, i as int));
+                assert(cs.subrange(0, i as int + 1).last() == cs[i as int]);
+                assert(is_submittable(doc, f));
+            }
+            let mut extra = field_entries_exec(arena, rows, submitter, encoding, f);
+            let ghost a = out@;
+            let ghost b = extra@;
+            out.append(&mut extra);
+            proof {
+                assert(entries_view(out@) =~= entries_view(a) + entries_view(b));
+            }
+        }
+        // Never saturates: i < ctrls.len().
+        i = i.saturating_add(1);
+    }
+    proof {
+        assert(cs.subrange(0, cs.len() as int) =~= cs);
+    }
+    Some(out)
 }
 
 } // verus!

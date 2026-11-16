@@ -185,6 +185,24 @@ pub proof fn lemma_in_order(doc: Document, form: NodeId, e: NodeId)
     }
 }
 
+/// Every control of a form is a submittable element (so a node).
+pub proof fn lemma_controls_members(doc: Document, form: NodeId, order: Seq<NodeId>, c: NodeId)
+    requires
+        controls_in(doc, form, order).contains(c),
+    ensures
+        is_submittable(doc, c),
+    decreases order.len(),
+{
+    if order.len() > 0 {
+        if controls_in(doc, form, order.drop_last()).contains(c) {
+            lemma_controls_members(doc, form, order.drop_last(), c);
+        } else {
+            assert(is_control_of(doc, form, order.last()));
+            assert(c == order.last());
+        }
+    }
+}
+
 /// What the implementation computes once per form, to decide whether a
 /// control's `form` attribute names `form`: `form`'s ID, if `form` is a
 /// `form` element and the first element of `order` with that ID.

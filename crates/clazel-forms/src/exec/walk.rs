@@ -5,6 +5,7 @@
 use super::read::*;
 #[cfg(verus_only)]
 use crate::contract::*;
+#[cfg(verus_only)]
 use crate::spec::*;
 use clazel_dom::exec::Arena;
 #[cfg(verus_only)]

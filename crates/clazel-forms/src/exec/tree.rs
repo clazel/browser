@@ -2,9 +2,11 @@
 //! tree cannot overflow the call stack. The stack machine's state is
 //! proven to be the spec's [`tree_order`] still to come.
 
+#[cfg(verus_only)]
 use super::read::*;
 #[cfg(verus_only)]
 use crate::contract::*;
+#[cfg(verus_only)]
 use crate::spec::*;
 use clazel_dom::exec::Arena;
 #[cfg(verus_only)]
@@ -62,7 +64,7 @@ pub fn tree_order_exec(arena: &Arena, root: usize) -> (r: Vec<usize>)
         assert(stack_order(arena@, Seq::empty(), Seq::empty()) =~= Seq::<NodeId>::empty());
         assert(out@ + stack_order(arena@, sn@, sf@) =~= total);
     }
-    while sn.len() > 0
+    while !sn.is_empty()
         invariant
             dom::wf(arena@),
             n == arena@.nodes.len(),

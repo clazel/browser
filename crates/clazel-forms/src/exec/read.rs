@@ -5,15 +5,15 @@
 
 use super::strings::*;
 #[cfg(verus_only)]
+use crate::contract::*;
+use crate::spec::*;
+#[cfg(verus_only)]
 use clazel_dom::exec::attrs_view;
 use clazel_dom::exec::{Arena, ExecAttr, ExecKind};
 #[cfg(verus_only)]
 use clazel_dom::lemmas::lemma_wf_witness;
 #[cfg(verus_only)]
 use clazel_dom::spec as dom;
-#[cfg(verus_only)]
-use crate::contract::*;
-use crate::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
@@ -83,10 +83,7 @@ pub fn find_attr_exec<'a>(list: &'a [ExecAttr], name: &[u8]) -> (r: Option<&'a V
                     assert(av.skip(i as int)[0] == av[i as int]);
                     assert(av[i as int] == list@[i as int]@);
                 }
-                let is_null = match a.namespace {
-                    None => true,
-                    Some(_) => false,
-                };
+                let is_null = a.namespace.is_none();
                 if is_null && eq_ascii(a.local_name.as_slice(), name) {
                     return Some(&a.value);
                 }
@@ -111,10 +108,7 @@ pub fn is_element_exec(arena: &Arena, n: usize) -> (r: bool)
     ensures
         r == is_element(arena@, n),
 {
-    match arena.kind(n) {
-        ExecKind::Element { .. } => true,
-        _ => false,
-    }
+    matches!(arena.kind(n), ExecKind::Element { .. })
 }
 
 /// Element `n` is an element of the HTML namespace with local name `name`.
@@ -125,10 +119,7 @@ pub fn is_html_exec(arena: &Arena, n: usize, name: &[u8]) -> (r: bool)
         r == is_html(arena@, n, name@),
 {
     match arena.kind(n) {
-        ExecKind::Element { namespace, local_name, .. } => match namespace {
-            Some(Namespace::Html) => eq_ascii(local_name.as_slice(), name),
-            _ => false,
-        },
+        ExecKind::Element { namespace: Some(Namespace::Html), local_name, .. } => eq_ascii(local_name.as_slice(), name),
         _ => false,
     }
 }
@@ -165,7 +156,7 @@ pub fn element_id_exec(arena: &Arena, n: usize) -> (r: Option<&Vec<u32>>)
 {
     match attr_exec(arena, n, b"id") {
         Some(v) => {
-            if v.len() > 0 {
+            if !v.is_empty() {
                 Some(v)
             } else {
                 None
@@ -252,10 +243,7 @@ pub fn is_button_exec(arena: &Arena, n: usize) -> (r: bool)
     if !is_html_exec(arena, n, b"input") {
         return false;
     }
-    match input_type_exec(arena, n) {
-        InputType::Submit | InputType::Image | InputType::Reset | InputType::Button => true,
-        _ => false,
-    }
+    matches!(input_type_exec(arena, n), InputType::Submit | InputType::Image | InputType::Reset | InputType::Button)
 }
 
 /// [`is_auto_directionality`].
@@ -271,11 +259,19 @@ pub fn is_auto_directionality_exec(arena: &Arena, n: usize) -> (r: bool)
     if !is_html_exec(arena, n, b"input") {
         return false;
     }
-    match input_type_exec(arena, n) {
-        InputType::Hidden | InputType::Text | InputType::Search | InputType::Tel | InputType::Url
-        | InputType::Email | InputType::Password | InputType::Submit | InputType::Reset | InputType::Button => true,
-        _ => false,
-    }
+    matches!(
+        input_type_exec(arena, n),
+        InputType::Hidden
+            | InputType::Text
+            | InputType::Search
+            | InputType::Tel
+            | InputType::Url
+            | InputType::Email
+            | InputType::Password
+            | InputType::Submit
+            | InputType::Reset
+            | InputType::Button
+    )
 }
 
 } // verus!

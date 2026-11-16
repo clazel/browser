@@ -7,6 +7,7 @@ use super::read::*;
 use crate::contract::*;
 #[cfg(verus_only)]
 use crate::lemmas::*;
+#[cfg(verus_only)]
 use crate::spec::*;
 use clazel_dom::exec::Arena;
 #[cfg(verus_only)]
@@ -195,6 +196,17 @@ proof fn lemma_stack_walk_push(
     assert(sg.push(g).last() == g);
 }
 
+/// [`stops`].
+pub fn stops_exec(arena: &Arena, c: usize, in_group: bool) -> (r: bool)
+    requires
+        dom::valid(arena@, c),
+    ensures
+        r == stops(arena@, c, in_group),
+{
+    is_html_exec(arena, c, b"select") || is_html_exec(arena, c, b"hr") || is_html_exec(arena, c, b"option")
+        || is_html_exec(arena, c, b"datalist") || (in_group && is_html_exec(arena, c, b"optgroup"))
+}
+
 /// Push the children of `c`, last first, with fuel `f` and flag `ig`.
 pub fn push_children(
     arena: &Arena,
@@ -310,7 +322,7 @@ pub fn walk_options(arena: &Arena, sel: usize) -> (r: Vec<usize>)
         assert(total + Seq::<NodeId>::empty() =~= total);
         assert(out@ + stack_walk(arena@, sn@, sf@, sg@) =~= total);
     }
-    while sn.len() > 0
+    while !sn.is_empty()
         invariant
             dom::wf(arena@),
             n == arena@.nodes.len(),
@@ -346,11 +358,7 @@ pub fn walk_options(arena: &Arena, sel: usize) -> (r: Vec<usize>)
         let ghost rest_sg = sg@;
         let ghost before = out@;
         out.push(c);
-        let stopped = is_html_exec(arena, c, b"select") || is_html_exec(arena, c, b"hr") || is_html_exec(
-            arena,
-            c,
-            b"option",
-        ) || is_html_exec(arena, c, b"datalist") || (ig && is_html_exec(arena, c, b"optgroup"));
+        let stopped = stops_exec(arena, c, ig);
         proof {
             assert(out@ =~= before.push(c));
             assert(stack_walk(arena@, old_sn, old_sf, old_sg) == walk_one(arena@, c, ig, f as nat) + stack_walk(

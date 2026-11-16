@@ -315,11 +315,8 @@ pub fn child_text_exec(arena: &Arena, n: usize) -> (r: Vec<u32>)
                 assert(kids@.skip(i as int)[0] == kids@[i as int]);
             }
             let ghost before = out@;
-            match arena.kind(c) {
-                ExecKind::Text { data } => {
-                    append(&mut out, data.as_slice());
-                },
-                _ => {},
+            if let ExecKind::Text { data } = arena.kind(c) {
+                append(&mut out, data.as_slice());
             }
             proof {
                 let k = arena@.nodes[c as int].kind;
@@ -419,9 +416,9 @@ pub fn textarea_wrapping_exec(arena: &Arena, n: usize, nn: Vec<u32>) -> (r: Vec<
             Some(v) => character_width_exec(Some(v.as_slice())),
             None => character_width_exec(None),
         };
-        let l = nn.len();
+        let _l = nn.len();
         proof {
-            assert(nn@.len() == l as nat);
+            assert(nn@.len() == _l as nat);
             lemma_wrap_cols(nn@, character_width(arena@, n), cols);
         }
         wrap_hard(nn.as_slice(), cols)
