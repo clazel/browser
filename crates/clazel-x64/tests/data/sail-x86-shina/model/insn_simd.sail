@@ -1,0 +1,698 @@
+// x86-64 — Shared SIMD Helpers
+//
+// Generic packed element-wise operations and vector-width helper functions
+// shared across legacy SSE, VEX, and EVEX instruction files.
+
+// =========================================================================
+// Broadcast: replicate an element to fill a vector.
+// =========================================================================
+
+val broadcast : forall 'vl 'eb, 'vl in {128, 256, 512} & 'eb in {8, 16, 32, 64}.
+  (implicit('vl), bits('eb)) -> bits('vl)
+function broadcast(vl, v) = {
+  var r : bits('vl) = zeros();
+  foreach (i from 0 to ('vl / 'eb - 1)) {
+    let lo = i * 'eb;
+    r[(lo + 'eb - 1)..lo] = v
+  };
+  r
+}
+
+// =========================================================================
+// Generic packed element-wise operations
+// =========================================================================
+
+// Generic packed unary operation (element-wise, one source).
+enum PackedUnaryOp = {
+  PU_Abs, PU_Popcnt, PU_Lzcnt, PU_FSqrt, PU_FRsqrt, PU_FRcp,
+  PU_CvtDQ2PS,  PU_CvtPS2DQ,  PU_CvtTPS2DQ,
+  PU_CvtPS2UDQ, PU_CvtTPS2UDQ,
+  PU_CvtUDQ2PS,
+  PU_CvtPD2QQ,  PU_CvtTPD2QQ,
+  PU_CvtPD2UQQ, PU_CvtTPD2UQQ,
+  PU_CvtQQ2PD,  PU_CvtUQQ2PD,
+  PU_CvtPH2W,  PU_CvtPH2UW,  PU_CvtTPH2W, PU_CvtTPH2UW,
+  PU_CvtW2PH,  PU_CvtUW2PH,
+  PU_FPGetexp, PU_FPRcp14, PU_FPRsqrt14, PU_FPRcp28, PU_FPRsqrt28, PU_FPExp2
+}
+
+val packed_unary_elem : forall 'eb, 'eb in {8, 16, 32, 64}.
+  (PackedUnaryOp, bits('eb)) -> bits('eb)
+function packed_unary_elem(op, a) = match op {
+  PU_Abs       => abs(a),
+  PU_Popcnt    => to_bits(popcount(a)),
+  PU_Lzcnt     => to_bits(clz(a)),
+  PU_FSqrt     => fp_sqrt(a),
+  PU_FRsqrt    => fp_rsqrt(a),
+  PU_FRcp      => fp_rcp(a),
+  PU_CvtDQ2PS   => { assert('eb == 32); __int32_to_f32(a) },
+  PU_CvtPS2DQ   => { assert('eb == 32); __f32_to_int32(a) },
+  PU_CvtTPS2DQ  => { assert('eb == 32); __f32_to_int32_trunc(a) },
+  PU_CvtPS2UDQ  => { assert('eb == 32); __f32_to_uint32(a) },
+  PU_CvtTPS2UDQ => { assert('eb == 32); __f32_to_uint32_trunc(a) },
+  PU_CvtUDQ2PS  => { assert('eb == 32); __uint32_to_f32(a) },
+  PU_CvtPD2QQ   => { assert('eb == 64); __f64_to_int64(a) },
+  PU_CvtTPD2QQ  => { assert('eb == 64); __f64_to_int64_trunc(a) },
+  PU_CvtPD2UQQ  => { assert('eb == 64); __f64_to_uint64(a) },
+  PU_CvtTPD2UQQ => { assert('eb == 64); __f64_to_uint64_trunc(a) },
+  PU_CvtQQ2PD   => { assert('eb == 64); __int64_to_f64(a) },
+  PU_CvtUQQ2PD  => { assert('eb == 64); __uint64_to_f64(a) },
+  PU_CvtPH2W   => { assert('eb == 16); __f16_to_int16(a) },
+  PU_CvtPH2UW  => { assert('eb == 16); __f16_to_uint16(a) },
+  PU_CvtTPH2W  => { assert('eb == 16); __f16_to_int16_trunc(a) },
+  PU_CvtTPH2UW => { assert('eb == 16); __f16_to_uint16_trunc(a) },
+  PU_CvtW2PH   => { assert('eb == 16); __int16_to_f16(a) },
+  PU_CvtUW2PH  => { assert('eb == 16); __uint16_to_f16(a) },
+  PU_FPGetexp  => fp_getexp(a),
+  PU_FPRcp14   => fp_rcp14(a),
+  PU_FPRsqrt14 => fp_rsqrt14(a),
+  PU_FPRcp28   => fp_rcp28(a),
+  PU_FPRsqrt28 => fp_rsqrt28(a),
+  PU_FPExp2    => fp_exp2(a),
+}
+
+val packed_unop : forall 'vl 'eb, 'vl in {64, 128, 256, 512} & 'eb in {8, 16, 32, 64}.
+  (PackedUnaryOp, int('eb), bits('vl)) -> bits('vl)
+function packed_unop(op, eb, a) = {
+  var r : bits('vl) = zeros();
+  foreach (i from 0 to ('vl / 'eb - 1)) {
+    let lo = i * 'eb;
+    r[(lo + 'eb - 1)..lo] = packed_unary_elem(op, velem('eb, a, i))
+  };
+  r
+}
+
+// Generic packed binary operation (element-wise, two sources).
+enum PackedBinOp = {
+  PB_Add, PB_Sub,
+  PB_SatAddS, PB_SatSubS, PB_SatAddU, PB_SatSubU,
+  PB_MinU, PB_MaxU, PB_MinS, PB_MaxS,
+  PB_Avg,
+  PB_Srl, PB_Sra, PB_Sll,
+  PB_MulLow, PB_MulHighS, PB_MulHighU, PB_MulHRS,
+  PB_Ror, PB_Rol,
+  PB_CmpEq, PB_CmpGt,
+  PB_PSign,
+  PB_FAdd, PB_FSub, PB_FMul, PB_FDiv, PB_FMin, PB_FMax,
+  PB_FPScalef,
+  PB_Psadbw, PB_Pmaddubsw, PB_Pmaddwd, PB_Pmuludq, PB_Pmuldq, PB_Pshufb,
+  PB_HorizAddW, PB_HorizAddD, PB_HorizSatAddW,
+  PB_HorizSubW, PB_HorizSubD, PB_HorizSatSubW,
+  PB_HorizFAddS, PB_HorizFAddD, PB_HorizFSubS, PB_HorizFSubD,
+  PB_FAddSubS, PB_FAddSubD,
+  PB_And, PB_Or, PB_Xor, PB_Andn,
+}
+
+// PMADDWD per-pair: signed * signed + signed * signed
+val pmaddwd_pair : (word, word, word, word) -> dword
+function pmaddwd_pair(a, b, c, d) =
+  to_bits_truncate(signed(a) * signed(b) + signed(c) * signed(d))
+
+// Forward declaration — defined after packed_elem_op.
+val packed_horiz : forall 'ew, 'ew in {16, 32, 64}.
+  (PackedBinOp, int('ew), bits(128)) -> bits(64)
+
+// Per-element dispatch: applies the operation to one pair of elements.
+// Most ops work at eb in {8,16,32,64}; lane ops (PB_Pshufb etc.) work at eb=128.
+val packed_elem_op : forall 'eb, 'eb in {8, 16, 32, 64, 128}.
+  (PackedBinOp, bits('eb), bits('eb)) -> bits('eb)
+function packed_elem_op(op, a, b) = match op {
+  PB_Add      => a + b,
+  PB_Sub      => a - b,
+  PB_SatAddS  => { assert('eb <= 64); sat_add_s(a, b) },
+  PB_SatSubS  => { assert('eb <= 64); sat_sub_s(a, b) },
+  PB_SatAddU  => { assert('eb <= 64); sat_add_u(a, b) },
+  PB_SatSubU  => { assert('eb <= 64); sat_sub_u(a, b) },
+  PB_MinU     => { assert('eb <= 64); min_u(a, b) },
+  PB_MaxU     => { assert('eb <= 64); max_u(a, b) },
+  PB_MinS     => { assert('eb <= 64); min_s(a, b) },
+  PB_MaxS     => { assert('eb <= 64); max_s(a, b) },
+  PB_Avg      => { assert('eb <= 64); avg(a, b) },
+  // Per-element shift counts (VPSRLV*, VPSRAV*, VPSLLV*; SDM Vol.2C): a
+  // count of at least the element width leaves 0, or for the arithmetic
+  // shift every bit equal to the sign bit.  Shifting by the raw lane value
+  // would build an intermediate as wide as the count.
+  PB_Srl      => if unsigned(b) >= 'eb then zeros() else a >> unsigned(b),
+  PB_Sra      => if unsigned(b) >= 'eb then (if a['eb - 1] == bitone then ones() else zeros())
+                 else a >>> unsigned(b),
+  PB_Sll      => if unsigned(b) >= 'eb then zeros() else a << unsigned(b),
+  PB_MulLow   => to_bits_truncate(signed(a) * signed(b)),
+  PB_MulHighS => get_slice_int('eb, signed(a) * signed(b), 'eb),
+  PB_MulHighU => get_slice_int('eb, unsigned(a) * unsigned(b), 'eb),
+  PB_MulHRS   => { assert('eb <= 64); mulhrs(a, b) },
+  PB_Ror      => { assert('eb <= 64); rotr(a, unsigned(b) % 'eb) },
+  PB_Rol      => { assert('eb <= 64); rotl(a, unsigned(b) % 'eb) },
+  PB_CmpEq    => { assert('eb <= 64); cmp_eq(a, b) },
+  PB_CmpGt    => { assert('eb <= 64); cmp_gt(a, b) },
+  PB_PSign    => { assert('eb <= 64); psign(a, b) },
+  PB_FAdd     => { assert('eb <= 64); fp_add(a, b) },
+  PB_FSub     => { assert('eb <= 64); fp_sub(a, b) },
+  PB_FMul     => { assert('eb <= 64); fp_mul(a, b) },
+  PB_FDiv     => { assert('eb <= 64); fp_div(a, b) },
+  PB_FMin     => { assert('eb <= 64); fp_min(a, b) },
+  PB_FMax     => { assert('eb <= 64); fp_max(a, b) },
+  PB_FPScalef => { assert('eb <= 64); fp_scalef(a, b) },
+  PB_And      => a & b,
+  PB_Or       => a | b,
+  PB_Xor      => a ^ b,
+  PB_Andn     => ~(a) & b,
+
+  // Ops with internal sub-element structure
+  PB_Pmaddubsw    => { assert('eb == 16);  pmaddubsw_pair(a[7..0], b[7..0], a[15..8], b[15..8]) },
+  PB_Pmaddwd      => { assert('eb == 32);  pmaddwd_pair(a[15..0], b[15..0], a[31..16], b[31..16]) },
+  PB_Pmuludq      => { assert('eb == 64);  to_bits(64, unsigned(a[31..0]) * unsigned(b[31..0])) },
+  PB_Pmuldq       => { assert('eb == 64);  to_bits_truncate(signed(a[31..0]) * signed(b[31..0])) },
+  PB_Psadbw       => { assert('eb == 64);  psadbw(a, b) },
+  PB_Pshufb       => { assert('eb == 128); pshufb(a, b) },
+  PB_HorizAddW    => { assert('eb == 128); packed_horiz(PB_Add, 16, b)     @ packed_horiz(PB_Add, 16, a) },
+  PB_HorizAddD    => { assert('eb == 128); packed_horiz(PB_Add, 32, b)     @ packed_horiz(PB_Add, 32, a) },
+  PB_HorizSatAddW => { assert('eb == 128); packed_horiz(PB_SatAddS, 16, b) @ packed_horiz(PB_SatAddS, 16, a) },
+  PB_HorizSubW    => { assert('eb == 128); packed_horiz(PB_Sub, 16, b)     @ packed_horiz(PB_Sub, 16, a) },
+  PB_HorizSubD    => { assert('eb == 128); packed_horiz(PB_Sub, 32, b)     @ packed_horiz(PB_Sub, 32, a) },
+  PB_HorizSatSubW => { assert('eb == 128); packed_horiz(PB_SatSubS, 16, b) @ packed_horiz(PB_SatSubS, 16, a) },
+  PB_HorizFAddS   => { assert('eb == 128); packed_horiz(PB_FAdd, 32, b) @ packed_horiz(PB_FAdd, 32, a) },
+  PB_HorizFAddD   => { assert('eb == 128); packed_horiz(PB_FAdd, 64, b) @ packed_horiz(PB_FAdd, 64, a) },
+  PB_HorizFSubS   => { assert('eb == 128); packed_horiz(PB_FSub, 32, b) @ packed_horiz(PB_FSub, 32, a) },
+  PB_HorizFSubD   => { assert('eb == 128); packed_horiz(PB_FSub, 64, b) @ packed_horiz(PB_FSub, 64, a) },
+  // ADDSUBPS: even dwords use SUB, odd dwords use ADD
+  PB_FAddSubS     => { assert('eb == 128); fp_add(a[127..96], b[127..96]) @ fp_sub(a[95..64], b[95..64]) @
+                                             fp_add(a[63..32], b[63..32]) @ fp_sub(a[31..0], b[31..0]) },
+  // ADDSUBPD: low qword uses SUB, high qword uses ADD
+  PB_FAddSubD     => { assert('eb == 128); fp_add(a[127..64], b[127..64]) @ fp_sub(a[63..0], b[63..0]) },
+}
+
+// Reduce adjacent ew-bit element pairs within a 128-bit vector, producing 64 bits.
+function packed_horiz(op, ew, src) = {
+  var r : bits(64) = zeros();
+  foreach (i from 0 to (64 / ew - 1)) {
+    let s = i * 2 * ew;
+    let d = i * ew;
+    r[(d + ew - 1)..d] = packed_elem_op(op, src[(s + ew - 1)..s], src[(s + 2 * ew - 1)..(s + ew)]);
+  };
+  r
+}
+
+// Apply a packed binary operation element-wise across a vector.
+val packed_binop : forall 'vl 'eb, 'vl in {64, 128, 256, 512} & 'eb in {8, 16, 32, 64, 128}.
+  (PackedBinOp, int('eb), bits('vl), bits('vl)) -> bits('vl)
+function packed_binop(op, eb, a, b) = {
+  var r : bits('vl) = zeros();
+  foreach (i from 0 to ('vl / 'eb - 1)) {
+    let lo = i * 'eb;
+    r[(lo + 'eb - 1)..lo] = packed_elem_op(op, velem('eb, a, i), velem('eb, b, i))
+  };
+  r
+}
+
+// Per-lane unary-with-immediate operations (PSHUFD, PSHUFHW, PSHUFLW).
+enum PackedLaneImmOp = { PLI_Pshufd, PLI_Pshufhw, PLI_Pshuflw }
+
+val packed_lane_imm_elem : (PackedLaneImmOp, bits(128), byte) -> bits(128)
+function packed_lane_imm_elem(op, src, imm) = match op {
+  PLI_Pshufd => {
+    var r : bits(128) = zeros();
+    foreach (i from 0 to 3) {
+      let sel : range(0, 3) = unsigned(imm[(i * 2 + 1)..(i * 2)]);
+      let lo = i * 32;
+      r[(lo + 31)..lo] = velem(32, src, sel)
+    };
+    r
+  },
+  PLI_Pshufhw => {
+    var r : bits(128) = zeros();
+    r[63..0] = src[63..0];
+    foreach (i from 0 to 3) {
+      let sel : range(0, 3) = unsigned(imm[(i * 2 + 1)..(i * 2)]);
+      let lo = i * 16 + 64;
+      r[(lo + 15)..lo] = velem(16, src, sel + 4)
+    };
+    r
+  },
+  PLI_Pshuflw => {
+    var r : bits(128) = zeros();
+    r[127..64] = src[127..64];
+    foreach (i from 0 to 3) {
+      let sel : range(0, 3) = unsigned(imm[(i * 2 + 1)..(i * 2)]);
+      let lo = i * 16;
+      r[(lo + 15)..lo] = velem(16, src, sel)
+    };
+    r
+  },
+}
+
+val packed_lane_imm_op : forall 'vl, 'vl in {128, 256, 512}.
+  (PackedLaneImmOp, bits('vl), byte) -> bits('vl)
+function packed_lane_imm_op(op, src, imm) = {
+  var r : bits('vl) = zeros();
+  foreach (i from 0 to ('vl / 128 - 1)) {
+    let lo = i * 128;
+    r[(lo + 127)..lo] = packed_lane_imm_elem(op, velem(128, src, i), imm)
+  };
+  r
+}
+
+// Uniform packed shift: apply a scalar shift count to all elements.
+enum PackedShiftOp = { PS_Srl, PS_Sra, PS_Sll }
+
+val packed_uniform_shift : forall 'vl 'eb, 'vl in {64, 128, 256, 512} & 'eb in {16, 32, 64, 128}.
+  (PackedShiftOp, int('eb), bits('vl), nat) -> bits('vl)
+function packed_uniform_shift(op, eb, src, count) = {
+  // A count greater than the element width leaves all 0s (PSRL*, PSLL*) or
+  // the sign bit in every position (PSRA*): SDM PSRLW/PSRLD/PSRLQ,
+  // PSLLW/PSLLD/PSLLQ, PSRAW/PSRAD/PSRAQ, Description.  Shifting by the
+  // width itself gives the same result, so clamp the count there; the
+  // 64-bit register count can otherwise exceed what the bitvector shift
+  // accepts.
+  let c : nat = if count > eb then eb else count;
+  var r : bits('vl) = zeros();
+  foreach (i from 0 to ('vl / 'eb - 1)) {
+    let lo = i * 'eb;
+    let e = velem('eb, src, i);
+    r[(lo + 'eb - 1)..lo] = match op {
+      PS_Srl => e >> c,
+      PS_Sra => e >>> c,
+      PS_Sll => e << c,
+    }
+  };
+  r
+}
+
+// Interleave elements from two sources (PUNPCKLBW/WD/DQ/QDQ, PUNPCKHBW/WD/DQ/QDQ).
+// Within each 128-bit lane, takes elements from the low (half=0) or high (half=64)
+// half of a and b, and interleaves them: r[2i]=a[half+i], r[2i+1]=b[half+i].
+val packed_unpack : forall 'vl 'eb, 'vl in {128, 256, 512} & 'eb in {8, 16, 32, 64}.
+  (int('eb), {0, 64}, bits('vl), bits('vl)) -> bits('vl)
+function packed_unpack(eb, half, a, b) = {
+  var r : bits('vl) = zeros();
+  let elems_per_half = 64 / eb;
+  foreach (j from 0 to ('vl / 128 - 1)) {
+    let lbase = j * 128;
+    foreach (i from 0 to (elems_per_half - 1)) {
+      let src_lo = lbase + half + i * eb;
+      let dst_lo = lbase + i * 2 * eb;
+      r[(dst_lo + eb - 1)..dst_lo] = a[(src_lo + eb - 1)..src_lo];
+      r[(dst_lo + 2 * eb - 1)..(dst_lo + eb)] = b[(src_lo + eb - 1)..src_lo];
+    }
+  };
+  r
+}
+
+// Generic packed narrowing unary operation (each element shrinks).
+// BF16 conversion: FP32 → BFloat16 (RNE, denormals flush to zero)
+val convert_fp32_to_bf16 : dword -> word
+function convert_fp32_to_bf16(x) = {
+  let exp : byte = x[30..23];
+  let mant : bits(23) = x[22..0];
+  let exp_zero : bit = is_zero(exp);
+  let exp_all  : bit = is_zero(~(exp));
+  let mant_nz  : bit = is_nonzero(mant);
+  let r_zero   : word = x[31] @ zeros(15);
+  let r_nan    : word = x[31..16] | 0x0040;
+  let r_inf    : word = x[31..16];
+  let r_normal : word = (x + 0x00007FFF + zero_extend(x[16]))[31..16];
+  let r1 : word = blend(r_normal, r_zero, exp_zero);
+  let r2 : word = blend(r1, r_inf, exp_all & ~(mant_nz));
+  blend(r2, r_nan, exp_all & mant_nz)
+}
+
+enum PackedNarrowOp = { PN_Trunc, PN_SatU, PN_SatS, PN_SatSU, PN_FP32toBF16 }
+
+val packed_narrow_elem : forall 'src 'dst, 'src in {16, 32, 64} & 'dst in {8, 16, 32} & 'src > 'dst.
+  (PackedNarrowOp, int('dst), bits('src)) -> bits('dst)
+function packed_narrow_elem(op, dst, a) = match op {
+  PN_Trunc => a[('dst - 1)..0],
+  PN_SatU  => sat_u(a),
+  PN_SatS  => sat_s(a),
+  PN_SatSU => sat_su(a),
+  PN_FP32toBF16 => { assert('src == 32 & 'dst == 16); convert_fp32_to_bf16(a) },
+}
+
+val packed_narrow_unop : forall 'vl 'src 'dst,
+  'vl in {128, 256, 512} & 'src in {16, 32, 64} & 'dst in {8, 16, 32} & 'src > 'dst.
+  (PackedNarrowOp, int('src), int('dst), bits('vl)) -> bits(div('vl * 'dst, 'src))
+function packed_narrow_unop(op, src_eb, dst_eb, a) = {
+  var r : bits(div('vl * 'dst, 'src)) = zeros();
+  foreach (i from 0 to ('vl / 'src - 1)) {
+    let slo = i * 'src;
+    let dlo = i * 'dst;
+    r[(dlo + 'dst - 1)..dlo] = packed_narrow_elem(op, dst_eb, a[(slo + 'src - 1)..slo])
+  };
+  r
+}
+
+// Two-source narrowing pack: within each 128-bit lane, narrow elements from a
+// into the lower half and from b into the upper half, applying saturation.
+// Covers PACKSSWB (PN_SatS, 16→8), PACKSSDW (PN_SatS, 32→16),
+// PACKUSWB (PN_SatSU, 16→8), PACKUSDW (PN_SatSU, 32→16).
+val packed_pack : forall 'vl 'src 'dst,
+  'vl in {128, 256, 512} & 'src in {16, 32} & 'dst in {8, 16} & 'src == 'dst * 2.
+  (PackedNarrowOp, int('src), int('dst), bits('vl), bits('vl)) -> bits('vl)
+function packed_pack(op, src, dst, a, b) = {
+  var r : bits('vl) = zeros();
+  let elems = 128 / src;
+  foreach (j from 0 to ('vl / 128 - 1)) {
+    let lbase = j * 128;
+    foreach (i from 0 to (elems - 1)) {
+      let slo = lbase + i * src;
+      let a_lo = lbase + i * dst;
+      let b_lo = lbase + 64 + i * dst;
+      r[(a_lo + dst - 1)..a_lo] = packed_narrow_elem(op, dst, a[(slo + src - 1)..slo]);
+      r[(b_lo + dst - 1)..b_lo] = packed_narrow_elem(op, dst, b[(slo + src - 1)..slo]);
+    }
+  };
+  r
+}
+
+// Generic packed widening unary operation (each element expands).
+enum PackedWidenOp = { PW_SignExtend, PW_ZeroExtend }
+
+val packed_widen_unop : forall 'vl 'n 'src 'dst,
+  'vl in {128, 256, 512} & 'src in {8, 16, 32} & 'dst in {16, 32, 64} & 'dst > 'src &
+  'n > 0 & 'n * 'dst == 'vl * 'src.
+  (implicit('vl), PackedWidenOp, int('src), int('dst), bits('n)) -> bits('vl)
+function packed_widen_unop(vl, op, src_eb, dst_eb, a) = {
+  var r : bits('vl) = zeros();
+  foreach (i from 0 to ('vl / 'dst - 1)) {
+    let slo = i * 'src;
+    let dlo = i * 'dst;
+    let elem = a[(slo + 'src - 1)..slo];
+    r[(dlo + 'dst - 1)..dlo] = match op {
+      PW_SignExtend => sign_extend(dst_eb, elem),
+      PW_ZeroExtend => zero_extend(dst_eb, elem),
+    }
+  };
+  r
+}
+
+// Generic packed ternary operation (element-wise, three sources).
+enum PackedTernaryOp = {
+  PT_FMAdd, PT_FMSub, PT_FNMAdd, PT_FNMSub,
+  PT_FunnelShl, PT_FunnelShr,
+  PT_DPBusd, PT_DPBusds, PT_DPWssd, PT_DPWssds,
+}
+
+val packed_ternary_elem : forall 'eb, 'eb in {8, 16, 32, 64}.
+  (PackedTernaryOp, bits('eb), bits('eb), bits('eb)) -> bits('eb)
+function packed_ternary_elem(op, a, b, c) = match op {
+  PT_FMAdd      => fp_fmadd(a, b, c),
+  PT_FMSub      => fp_fmsub(a, b, c),
+  PT_FNMAdd     => fp_fnmadd(a, b, c),
+  PT_FNMSub     => fp_fnmsub(a, b, c),
+  PT_FunnelShl  => velem('eb, (a @ b) << (unsigned(c) % 'eb), 1),
+  PT_FunnelShr  => velem('eb, (b @ a) >> (unsigned(c) % 'eb), 0),
+
+  PT_DPBusd => {
+    assert('eb == 32);
+    to_bits_truncate(32, signed(a)
+      + unsigned(b[7..0])   * signed(c[7..0])
+      + unsigned(b[15..8])  * signed(c[15..8])
+      + unsigned(b[23..16]) * signed(c[23..16])
+      + unsigned(b[31..24]) * signed(c[31..24]))
+  },
+  PT_DPBusds => {
+    assert('eb == 32);
+    sat_s(to_bits_truncate(33, signed(a)
+      + unsigned(b[7..0])   * signed(c[7..0])
+      + unsigned(b[15..8])  * signed(c[15..8])
+      + unsigned(b[23..16]) * signed(c[23..16])
+      + unsigned(b[31..24]) * signed(c[31..24])))
+  },
+  PT_DPWssd => {
+    assert('eb == 32);
+    to_bits_truncate(32, signed(a)
+      + signed(b[15..0])  * signed(c[15..0])
+      + signed(b[31..16]) * signed(c[31..16]))
+  },
+  PT_DPWssds => {
+    assert('eb == 32);
+    sat_s(to_bits_truncate(33, signed(a)
+      + signed(b[15..0])  * signed(c[15..0])
+      + signed(b[31..16]) * signed(c[31..16])))
+  },
+}
+
+val packed_ternop : forall 'vl 'eb, 'vl in {128, 256, 512} & 'eb in {8, 16, 32, 64}.
+  (PackedTernaryOp, int('eb), bits('vl), bits('vl), bits('vl)) -> bits('vl)
+function packed_ternop(op, eb, a, b, c) = {
+  var r : bits('vl) = zeros();
+  foreach (i from 0 to ('vl / 'eb - 1)) {
+    let lo = i * 'eb;
+    r[(lo + 'eb - 1)..lo] = packed_ternary_elem(op, velem('eb, a, i), velem('eb, b, i), velem('eb, c, i))
+  };
+  r
+}
+
+// =========================================================================
+// FP16 <-> FP32 packed conversion
+// =========================================================================
+
+val avx_vcvtph2ps : forall 'n, 'n in {64, 128, 256}. bits('n) -> bits('n * 2)
+function avx_vcvtph2ps(src) = {
+  var r : bits('n * 2) = zeros();
+  foreach (i from 0 to ('n / 16 - 1)) {
+    let lo = i * 32;
+    r[(lo + 31)..lo] = fp16_to_fp32(velem(16, src, i));
+  };
+  r
+}
+
+val avx_vcvtps2ph : forall 'n, 'n in {128, 256, 512}. (bits('n), bits(2)) -> bits(div('n, 2))
+function avx_vcvtps2ph(src, rc) = {
+  var r : bits(div('n, 2)) = zeros();
+  foreach (i from 0 to ('n / 32 - 1)) {
+    let lo = i * 16;
+    r[(lo + 15)..lo] = fp32_to_fp16(velem(32, src, i), rc);
+  };
+  r
+}
+
+// =========================================================================
+// GFNI vector operations
+// =========================================================================
+
+val avx_gf2p8mulb : forall 'vl, 'vl in {128, 256, 512}.
+  (bits('vl), bits('vl)) -> bits('vl)
+function avx_gf2p8mulb(src1, src2) = {
+  var r : bits('vl) = zeros();
+  foreach (i from 0 to ('vl / 8 - 1)) {
+    let lo = i * 8;
+    r[(lo + 7)..lo] = gf2p8_mul(velem(8, src1, i), velem(8, src2, i));
+  };
+  r
+}
+
+// Per-byte affine transform; each byte uses the 8x8 matrix from its 64-bit lane.
+val avx_gf2p8affineqb : forall 'vl, 'vl in {128, 256, 512}.
+  (bits('vl), bits('vl), byte) -> bits('vl)
+function avx_gf2p8affineqb(src1, src2, imm8) = {
+  var r : bits('vl) = zeros();
+  foreach (i from 0 to ('vl / 8 - 1)) {
+    let lo = i * 8;
+    r[(lo + 7)..lo] = gf2p8_affine(velem(8, src1, i), velem(64, src2, i / 8), imm8);
+  };
+  r
+}
+
+// Same but first applies GF(2^8) inverse on each src1 byte.
+val avx_gf2p8affineinvqb : forall 'vl, 'vl in {128, 256, 512}.
+  (bits('vl), bits('vl), byte) -> bits('vl)
+function avx_gf2p8affineinvqb(src1, src2, imm8) = {
+  var r : bits('vl) = zeros();
+  foreach (i from 0 to ('vl / 8 - 1)) {
+    let lo = i * 8;
+    r[(lo + 7)..lo] = gf2p8_affine(gf2p8_inv(velem(8, src1, i)), velem(64, src2, i / 8), imm8);
+  };
+  r
+}
+
+// =========================================================================
+// VP2INTERSECTD/Q: intersection of two element sets as position masks
+// =========================================================================
+
+// Bit i of the first mask is set when src1 element i occurs anywhere in
+// src2; bit j of the second when src2 element j occurs anywhere in src1.
+val vp2intersect : forall 'vl 'eb, 'vl in {128, 256, 512} & 'eb in {32, 64}.
+  (int('eb), bits('vl), bits('vl)) -> (qword, qword)
+function vp2intersect(eb, src1, src2) = {
+  var m1 : qword = zeros();
+  var m2 : qword = zeros();
+  foreach (i from 0 to ('vl / 'eb - 1)) {
+    foreach (j from 0 to ('vl / 'eb - 1)) {
+      if velem('eb, src1, i) == velem('eb, src2, j) then {
+        m1[i] = bitone;
+        m2[j] = bitone
+      }
+    }
+  };
+  (m1, m2)
+}
+
+// =========================================================================
+// AES rounds on every 128-bit lane (VEX.256 and EVEX forms, VAES)
+// =========================================================================
+
+enum AesRound = { AES_Enc, AES_EncLast, AES_Dec, AES_DecLast }
+
+// The four rounds occupy opcodes 0F38 DC-DF in every encoding.
+val aes_round_of_opcode : range(0, 255) -> AesRound
+function aes_round_of_opcode(op) = match op {
+  220 => AES_Enc,
+  221 => AES_EncLast,
+  222 => AES_Dec,
+  _   => AES_DecLast,
+}
+
+val aes_round : (AesRound, xmmword, xmmword) -> xmmword
+function aes_round(op, state, key) = match op {
+  AES_Enc     => aesenc(state, key),
+  AES_EncLast => aesenclast(state, key),
+  AES_Dec     => aesdec(state, key),
+  AES_DecLast => aesdeclast(state, key),
+}
+
+// One round per 128-bit lane, each lane with its own state and round key.
+val avx_aes_round : forall 'vl, 'vl in {128, 256, 512}.
+  (AesRound, bits('vl), bits('vl)) -> bits('vl)
+function avx_aes_round(op, state, key) = {
+  var r : bits('vl) = zeros();
+  foreach (lane from 0 to ('vl / 128 - 1)) {
+    let lo = lane * 128;
+    r[(lo + 127)..lo] = aes_round(op, velem(128, state, lane), velem(128, key, lane));
+  };
+  r
+}
+
+// =========================================================================
+// Cross-lane permute (1-source and 2-source)
+// =========================================================================
+
+// 1-source permute: for each element i, result[i] = src[idx[i] % n_elems].
+val packed_permute : forall 'vl 'eb, 'vl in {128, 256, 512} & 'eb in {8, 16, 32, 64}.
+  (int('eb), bits('vl), bits('vl)) -> bits('vl)
+function packed_permute(eb, src, idx) = {
+  var r : bits('vl) = zeros();
+  let n = 'vl / 'eb;
+  foreach (i from 0 to (n - 1)) {
+    let j = unsigned(velem('eb, idx, i)) % n;
+    let lo = i * 'eb;
+    r[(lo + 'eb - 1)..lo] = velem('eb, src, j)
+  };
+  r
+}
+
+// 2-source permute: for each element i, result[i] = concat(t1,t2)[idx[i] % (2*n_elems)].
+val packed_permute2 : forall 'vl 'eb, 'vl in {128, 256, 512} & 'eb in {8, 16, 32, 64}.
+  (int('eb), bits('vl), bits('vl), bits('vl)) -> bits('vl)
+function packed_permute2(eb, t1, t2, idx) = {
+  var r : bits('vl) = zeros();
+  let n = 'vl / 'eb;
+  foreach (i from 0 to (n - 1)) {
+    let j = unsigned(velem('eb, idx, i)) % (2 * n);
+    let k = j % n;
+    let sel : bit = bool_to_bit(j >= n);
+    let lo = i * 'eb;
+    r[(lo + 'eb - 1)..lo] = blend(velem('eb, t1, k), velem('eb, t2, k), sel)
+  };
+  r
+}
+
+// =========================================================================
+// Expand/compress: mask-driven scatter/gather within a vector
+// =========================================================================
+
+// Count set bits in mask below position 'upto'.
+val popcount_mask : forall 'n, 0 < 'n & 'n <= 64. (bits('n), int) -> int
+function popcount_mask(v, upto) = {
+  assert(upto >= 0);
+  let w : qword = zero_extend(v);
+  popcount(w & ((0x0000000000000001 << upto) - 1))
+}
+
+// Packed funnel shift with immediate count (VPSHLD/VPSHRD imm forms).
+val packed_funnel_shl_imm : forall 'vl 'eb, 'vl in {128, 256, 512} & 'eb in {16, 32, 64}.
+  (int('eb), bits('vl), bits('vl), nat) -> bits('vl)
+function packed_funnel_shl_imm(eb, src1, src2, cnt) = {
+  var r : bits('vl) = zeros();
+  foreach (i from 0 to ('vl / 'eb - 1)) {
+    let lo = i * 'eb;
+    let a = velem('eb, src1, i);
+    let b = velem('eb, src2, i);
+    r[(lo + 'eb - 1)..lo] = velem('eb, (a @ b) << (cnt % 'eb), 1)
+  };
+  r
+}
+
+val packed_funnel_shr_imm : forall 'vl 'eb, 'vl in {128, 256, 512} & 'eb in {16, 32, 64}.
+  (int('eb), bits('vl), bits('vl), nat) -> bits('vl)
+function packed_funnel_shr_imm(eb, src1, src2, cnt) = {
+  var r : bits('vl) = zeros();
+  foreach (i from 0 to ('vl / 'eb - 1)) {
+    let lo = i * 'eb;
+    let a = velem('eb, src1, i);
+    let b = velem('eb, src2, i);
+    r[(lo + 'eb - 1)..lo] = velem('eb, (b @ a) >> (cnt % 'eb), 0)
+  };
+  r
+}
+
+// Expand: for each dest element i, if mask[i] is set, copy from the next
+// contiguous source element (indexed by popcount of lower mask bits).
+val packed_expand : forall 'vl 'eb, 'vl in {128, 256, 512} & 'eb in {8, 16, 32, 64}.
+  (int('eb), bits('vl), qword) -> bits('vl)
+function packed_expand(eb, src, mask) = {
+  var result : bits('vl) = zeros();
+  let n = 'vl / 'eb;
+  foreach (i from 0 to (n - 1)) {
+    let j = popcount_mask(mask, i);
+    assert(j >= 0);
+    let lo = i * 'eb;
+    let src_elem : bits('eb) = get_slice_int('eb, unsigned(src), j * 'eb);
+    let lane_mask : bits('eb) = sign_extend(mask[i..i]);
+    result[(lo + 'eb - 1)..lo] = src_elem & lane_mask;
+  };
+  result
+}
+
+// Compress: for each source element i, if mask[i] is set, pack it into the
+// next contiguous dest position (indexed by popcount of lower mask bits).
+val packed_compress : forall 'vl 'eb, 'vl in {128, 256, 512} & 'eb in {8, 16, 32, 64}.
+  (int('eb), bits('vl), qword) -> bits('vl)
+function packed_compress(eb, src, mask) = {
+  var result : bits('vl) = zeros();
+  let n = 'vl / 'eb;
+  foreach (i from 0 to (n - 1)) {
+    let j = popcount_mask(mask, i);
+    assert(j >= 0);
+    let src_elem : bits('eb) = get_slice_int('eb, unsigned(src), i * 'eb);
+    let lane_mask : bits('eb) = sign_extend(mask[i..i]);
+    result = result | (zero_extend(src_elem & lane_mask) << (j * 'eb));
+  };
+  result
+}
+
+// Compress to memory: compress, then write only the populated bytes.
+val packed_compress_mem : forall 'vl 'eb, 'vl in {128, 256, 512} & 'eb in {8, 16, 32, 64}.
+  (int('eb), qword, bits('vl), qword) -> unit
+function packed_compress_mem(eb, addr, src, mask) = {
+  let result = packed_compress(eb, src, mask);
+  let nbits = popcount_mask(mask, 'vl / 'eb) * 'eb;
+  assert(nbits >= 0 & nbits <= 'vl);
+  if nbits > 0 then
+    write_mem_linear(addr, truncate(result, nbits));
+}
+
+// =========================================================================
+// FP compare → EFLAGS helper (UCOMISS/SD/SH, COMISS/SD/SH, FUCOMI, etc.)
+// Sets ZF/PF/CF from comparison result, clears OF/SF/AF.
+// =========================================================================
+
+val set_eflags_fp_compare : forall 'n, 'n in {16, 32, 64, 80}. (bits('n), bits('n)) -> unit
+function set_eflags_fp_compare(a, b) = {
+  match fp_compare(a, b) {
+    FP_UNORDERED => { ZF = 0b1; PF = 0b1; CF = 0b1 },
+    FP_GT        => { ZF = 0b0; PF = 0b0; CF = 0b0 },
+    FP_LT        => { ZF = 0b0; PF = 0b0; CF = 0b1 },
+    FP_EQ        => { ZF = 0b1; PF = 0b0; CF = 0b0 },
+  };
+  OF = 0b0; SF = 0b0; AF = 0b0
+}
