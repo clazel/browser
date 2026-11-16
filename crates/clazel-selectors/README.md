@@ -79,6 +79,30 @@ Tests, which are the only evidence that the shipped parser builds the right sele
   because the whole feature is, so they are counted as expected failures, not passes. It
   also checks matching and §17's specificity examples on small arenas.
 
-Tier 0 for now: a tier also needs the parser and serializer proven, an independent
-transcription, and the differential against Servo's `selectors`. The target is tier 2,
-since this crate parses selectors that a page chose.
+An independent transcription (`src/independent.rs`, written from Selectors 4 at the pinned
+commit before this crate's spec was opened; its header says what changed after, and why) is
+proven equal to the spec in part:
+
+- `theorem_specificity_equivalent` (`src/independent_equivalence.rs`): equal specificity, for
+  every selector list both support.
+- `theorem_match_equivalent` (`src/independent_match.rs`): the same elements match, in a
+  well-formed arena whose elements have no repeated attribute (the spec reads an ID or class
+  from the first attribute of that name, the transcription from any).
+- `theorem_parse_spec_to_transcription` and `theorem_parse_transcription_to_spec`
+  (`src/independent_parse.rs`): the two parse a list of component values alike, and each
+  accepts what the other does, **for lists with no function in them**. `:is()`, `:where()`,
+  `:not()` and the `:nth-` family, whose arguments are parsed by a forgiving list, a strict
+  list and `An+B`, are not covered: the equivalence of parsing is incomplete.
+
+"Support" differs: the spec has `:link`, `:visited`, `:any-link`, the user action
+pseudo-classes and pseudo-elements, which the transcription takes as invalid, so they are
+outside every theorem; the transcription has `:has()`, `:scope`, `:defined` and
+`:nth-child(An+B of S)`, which are off (`ICtx::ext`) in each theorem. Both are two AI readings
+of one text, so they can share a misreading: the weight of evidence for the spec is the WPT
+suite above, which the transcription has not been run against.
+
+Tier 0 for now. A tier also needs the parser and serializer proven equal to the spec (the
+exec parser and serializer are checked for panics, overflow and termination only), the
+equivalence of parsing finished for functional pseudo-classes, and the differential against
+Servo's `selectors`. The target is tier 2, since this crate parses selectors that a page
+chose.

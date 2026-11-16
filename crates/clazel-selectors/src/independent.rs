@@ -8,17 +8,60 @@
 //! "Grammar" and §19 "API Hooks" ("parse a selector", "match a selector against an
 //! element").
 //!
-//! This section of the file is the definitions only. They were written before this
-//! crate's `spec.rs`, `contract.rs`, `lemmas.rs`, `exec_*.rs`, `algorithm.rs`,
-//! `examples.rs`, `mutations.json`, `README.md` and `tests/` were opened.
-//! What was read first: this crate's `Cargo.toml` and `lib.rs`; the headers of
-//! `clazel-displaylist`'s, `clazel-dom`'s and `clazel-treebuilder`'s `independent.rs`; the
-//! pin line of the crate's sources; the standard at that commit; `clazel-dom`'s spec
-//! types and readers (the arena); and `clazel-css`'s `parser/spec.rs` for the shape of a
-//! component value, and for `a_n_plus_b`, which this file uses as it is (the An+B
-//! microsyntax is CSS Syntax §6, a different standard from Selectors, and not what this
-//! file is a second reading of). The commit subjects of this crate showed in `git log`,
-//! and its theorem names are in `Cargo.toml`.
+//! ## What was read before the definitions, and what changed after
+//!
+//! The first version of these definitions (commit `751278ad`) was written before this crate's
+//! `spec.rs`, `contract.rs`, `lemmas.rs`, `exec_*.rs`, `algorithm.rs`, `examples.rs`,
+//! `mutations.json`, `README.md` and `tests/` were opened. What was read first: this crate's
+//! `Cargo.toml` and `lib.rs`; the headers of `clazel-displaylist`'s, `clazel-dom`'s and
+//! `clazel-treebuilder`'s `independent.rs`; the pin line of the crate's sources; the standard at
+//! that commit; `clazel-dom`'s spec types and readers (the arena); and `clazel-css`'s
+//! `parser/spec.rs` for the shape of a component value, and for `a_n_plus_b`, which this file
+//! uses as it is (the An+B microsyntax is CSS Syntax §6, a different standard from Selectors, and
+//! not what this file is a second reading of). The crate's commit subjects showed in `git log`, and
+//! its theorem names are in `Cargo.toml`. Verus's output was filtered so that no line of the
+//! spec printed while those definitions were checked.
+//!
+//! Then `spec.rs` was read, to write the equivalence ([`super::independent_equivalence`] and the
+//! files it names). The definitions changed after that, in these ways, and only these (commits
+//! `9ccfcc7e` and the ones after it, which say so):
+//!
+//! - **Where the standard leaves a choice open and the spec made one**, the transcription made
+//!   the same, so that the two can be equal: HTML §4.16.2's case rules for element names,
+//!   attribute names and attribute values (the transcription had left the host language's rules
+//!   out; the list of attributes is transcribed from the HTML text, not copied); `A` and `B` of
+//!   `An+B` clamped to the signed 32-bit range (CSS Values 4 §5.1); each addition of specificities
+//!   saturating at 2^32 - 1 (§17 allows it). No definition was wrong against the standard.
+//! - **A switch, [`ICtx::ext`]**, for what the transcription supports and the spec does not:
+//!   `:has()`, `:scope`, `:defined` and `:nth-child(An+B of S)`. With it off the transcription
+//!   treats them as invalid (§3.6), as the spec does. It is on in no theorem.
+//! - **Equivalent rewrites** that made proofs possible: `i_complex` passes its whole range to
+//!   `i_units` rather than the range without trailing white space (`i_units` already ends at
+//!   white space), and the quantifiers of the matching functions are triggered on the terms the
+//!   proofs use. Neither changes what any function returns.
+//!
+//! The spec and this file did not disagree about the standard anywhere the proofs reach: no spec
+//! definition had to change either. That does not make either right (both were written by AI
+//! sessions reading the same text; the weight of evidence for the spec is the conformance suites).
+//!
+//! ## What the equivalence covers
+//!
+//! Over the selectors the spec and this file both support (the spec supports `:link`,
+//! `:visited`, `:any-link`, the user action pseudo-classes and pseudo-elements, which this file
+//! does not, so they are outside every theorem), in a well-formed arena whose elements have no two
+//! attributes of one name:
+//!
+//! - **Specificity** ([`super::independent_equivalence::theorem_specificity_equivalent`]): equal,
+//!   for every selector list with a counterpart.
+//! - **Matching** ([`super::independent_match::theorem_match_equivalent`]): the same elements
+//!   match, including `:is()`, `:where()`, `:not()`, the child-indexed pseudo-classes, the four
+//!   combinators, attribute selectors and the HTML case rules.
+//! - **Parsing** ([`super::independent_parse`]): in both directions, for lists of component
+//!   values **with no function in them**, that is, without `:is()`, `:where()`, `:not()` and the
+//!   `:nth-` family. How those take their arguments (the forgiving list, `:not()`'s strict one,
+//!   `An+B`) is **not proven equal**; the spec's reading of it is checked by the WPT parsing suite
+//!   and the transcription's by nothing yet. So the equivalence of parsing is incomplete, and this
+//!   crate stays at tier 0.
 //!
 //! ## Modelling choices
 //!

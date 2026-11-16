@@ -15,8 +15,9 @@ clazel-dom = { path = "../clazel-dom" }
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
 # shipped code today; `target-tier` is what the policy requires, since this
-# parses selectors a page chose. Tier 0 until the proofs, an independent
-# transcription and the suites are in, and CI's full verification is green.
+# parses selectors a page chose. Tier 0 until the parser and serializer are
+# proven equal to the spec, the independent transcription's equivalence covers
+# parsing in full, and the suites are in, and CI's full verification is green.
 [package.metadata.clazel]
 tier = 0
 target-tier = 2
@@ -28,6 +29,12 @@ theorems = [
     "theorem_specificity_monotone",
     "theorem_where_zero",
     "theorem_is_most_specific",
+    # The independent transcription's equivalence to the spec (src/independent_*.rs). Parsing is
+    # proven only for lists without a function in them (see independent.rs's header).
+    "theorem_specificity_equivalent",
+    "theorem_match_equivalent",
+    "theorem_parse_spec_to_transcription",
+    "theorem_parse_transcription_to_spec",
 ]
 
 [package.metadata.verus]

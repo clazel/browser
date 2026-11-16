@@ -18,7 +18,9 @@
 //!   parser's output passes [`exec_check`], which is proven, before it is returned.
 //!
 //! - [`independent`]: a second transcription of parsing, matching and specificity, from the
-//!   standard alone, and (once proven) its equivalence to [`spec`].
+//!   standard alone. [`independent_equivalence`] (specificity), [`independent_match`] (with
+//!   [`independent_attr`]) and [`independent_parse`] prove it equal to [`spec`] on the
+//!   selectors the two share; parsing only for lists with no function in them.
 //!
 //! The crate also holds the vendored test data of item 5.1, under `tests/data/`.
 //!
