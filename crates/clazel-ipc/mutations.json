@@ -110,7 +110,7 @@
       "find": "value >= 24",
       "replace": "value >= 23",
       "expect": "killed",
-      "reason": "Accepts 23 with a one-byte argument (18 17), which §4.2.1 forbids; lemma_reject_non_shortest_24_23 is false.",
+      "reason": "Accepts 23 with a one-byte argument (18 17), which \u00a74.2.1 forbids; lemma_reject_non_shortest_24_23 is false.",
       "certificate": {
         "file": "src/cbor/lemmas.rs",
         "lemma": "super::examples::lemma_reject_non_shortest_24_23()",
@@ -1272,6 +1272,58 @@
         "file": "src/message/codec.rs",
         "lemma": "lemma_max_style_chunk()",
         "witness": "max_style_chunk() != 1048559nat"
+      }
+    },
+    {
+      "id": "msg-submit-tag",
+      "file": "src/message/spec.rs",
+      "find": "Token::Array(5), Token::Uint(12), Token::Text(url)",
+      "replace": "Token::Array(5), Token::Uint(13), Token::Text(url)",
+      "expect": "killed",
+      "reason": "Submit is written with tag 13, which nothing reads: lemma_decode_encode_message is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "lemma_decode_encode_message(Message::Submit { url: seq![0x61u8], method: seq![0x50u8], content_type: seq![0x74u8], body: seq![0x62u8] })",
+        "witness": "message_ok(Message::Submit { url: seq![0x61u8], method: seq![0x50u8], content_type: seq![0x74u8], body: seq![0x62u8] }) && decode_message(encode_message(Message::Submit { url: seq![0x61u8], method: seq![0x50u8], content_type: seq![0x74u8], body: seq![0x62u8] })) != Some(Message::Submit { url: seq![0x61u8], method: seq![0x50u8], content_type: seq![0x74u8], body: seq![0x62u8] })"
+      }
+    },
+    {
+      "id": "msg-submit-parse-tag",
+      "file": "src/message/spec.rs",
+      "find": "} else if tag == 12 {",
+      "replace": "} else if tag == 17 {",
+      "expect": "killed",
+      "reason": "The parser reads Submit under tag 17: lemma_decode_encode_message is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "lemma_decode_encode_message(Message::Submit { url: seq![0x61u8], method: seq![0x50u8], content_type: seq![0x74u8], body: seq![0x62u8] })",
+        "witness": "message_ok(Message::Submit { url: seq![0x61u8], method: seq![0x50u8], content_type: seq![0x74u8], body: seq![0x62u8] }) && decode_message(encode_message(Message::Submit { url: seq![0x61u8], method: seq![0x50u8], content_type: seq![0x74u8], body: seq![0x62u8] })) != Some(Message::Submit { url: seq![0x61u8], method: seq![0x50u8], content_type: seq![0x74u8], body: seq![0x62u8] })"
+      }
+    },
+    {
+      "id": "msg-submit-body-lost",
+      "file": "src/message/spec.rs",
+      "find": "Token::Text(method), Token::Bytes(content_type), Token::Bytes(body)]",
+      "replace": "Token::Text(method), Token::Bytes(content_type), Token::Bytes(content_type)]",
+      "expect": "killed",
+      "reason": "A Submit carries its content type where its body belongs: the kernel would send the wrong octets. lemma_decode_encode_message is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "lemma_decode_encode_message(Message::Submit { url: seq![0x61u8], method: seq![0x50u8], content_type: seq![0x74u8], body: seq![0x62u8] })",
+        "witness": "message_ok(Message::Submit { url: seq![0x61u8], method: seq![0x50u8], content_type: seq![0x74u8], body: seq![0x62u8] }) && decode_message(encode_message(Message::Submit { url: seq![0x61u8], method: seq![0x50u8], content_type: seq![0x74u8], body: seq![0x62u8] })) != Some(Message::Submit { url: seq![0x61u8], method: seq![0x50u8], content_type: seq![0x74u8], body: seq![0x62u8] })"
+      }
+    },
+    {
+      "id": "dir-submit-not-renderer",
+      "file": "src/message/spec.rs",
+      "find": "        | Message::Submit { .. }\n",
+      "replace": "",
+      "expect": "killed",
+      "reason": "Submit is not counted as a renderer message: the kernel would refuse every form submission. lemma_example_submit is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "super::examples::lemma_example_submit()",
+        "witness": "decode_renderer_message(seq![0x85u8, 0x0C, 0x62, 0x2F, 0x70, 0x64, 0x50, 0x4F, 0x53, 0x54, 0x41, 0x74, 0x42, 0x61, 0x62]) != Some(Message::Submit { url: seq![0x2Fu8, 0x70], method: seq![0x50u8, 0x4F, 0x53, 0x54], content_type: seq![0x74u8], body: seq![0x61u8, 0x62] })"
       }
     }
   ]
