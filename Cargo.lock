@@ -305,6 +305,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "clazel-forms"
+version = "0.0.0"
+dependencies = [
+ "clazel-dom",
+ "vstd",
+]
+
+[[package]]
 name = "clazel-gif"
 version = "0.0.0"
 dependencies = [
