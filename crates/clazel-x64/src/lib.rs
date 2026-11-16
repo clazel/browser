@@ -1,8 +1,17 @@
 //! The x86-64 instruction-set subset the JIT emits (docs/phases/jit.md item J.3).
 //!
-//! Empty for now: item J.2 only creates the crate, so that the instruction-set
-//! sources (`tests/data/`) have a home. The spec (semantics as a `spec fn`)
-//! and its contracts come first (CLAUDE.md rule 3), then the encoder and
-//! decoder.
+//! This is the first half of item J.3: the primary spec, written before any
+//! encoder or decoder (CLAUDE.md rule 3).
 //!
-//! Tier: see `[package.metadata.clazel]` in `Cargo.toml` and `docs/VERIFICATION.md`.
+//! - [`spec`]: the **primary transcription**, from the ACL2 `x86isa` model
+//!   (`tests/data/acl2-x86isa`): the machine state, the semantics of every
+//!   instruction of the subset, and the canonical encoding.
+//!
+//! The independent transcription, from Intel's SDM, is written by another
+//! session that does not read [`spec`]; it is not here yet.
+//!
+//! Tier: see `[package.metadata.clazel]` in `Cargo.toml` and
+//! `docs/VERIFICATION.md`.
+
+pub mod examples;
+pub mod spec;

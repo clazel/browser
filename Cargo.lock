@@ -634,6 +634,7 @@ name = "clazel-x64"
 version = "0.0.0"
 dependencies = [
  "iced-x86",
+ "vstd",
 ]
 
 [[package]]
