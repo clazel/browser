@@ -525,7 +525,7 @@ fn averaged(doc: &[u8], w: u32, h: u32, k: u32) -> R<Vec<u8>> {
             let n = k.saturating_mul(k);
             let o = y.saturating_mul(wu).saturating_add(x).saturating_mul(4);
             for (j, v) in sum.iter().enumerate() {
-                let avg = v.saturating_add(n / 2) / n;
+                let avg = v.saturating_add(n / 2).checked_div(n).unwrap_or(0);
                 if let Some(slot) = out.get_mut(o.saturating_add(j)) {
                     *slot = u8::try_from(avg).unwrap_or(255);
                 }
