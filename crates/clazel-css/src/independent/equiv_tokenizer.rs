@@ -1209,4 +1209,84 @@ pub proof fn lemma_filter_loop_valid(input: Seq<u32>, pos: nat, output: Seq<u32>
     }
 }
 
+
+/// Where the independent tokenizer's non-`<EOF-token>` token ends is after where it
+/// started, and within the stream.
+pub proof fn lemma_token_progress(s: Seq<u32>, p: nat, unicode_ranges_allowed: bool)
+    requires
+        valid(s),
+        p <= s.len(),
+    ensures
+        ({
+            let q = i_consume_comments(ints(s), p);
+            let (tok, e) = i_consume_token(ints(s), q, unicode_ranges_allowed);
+            &&& p <= q <= s.len()
+            &&& tok != ITok::Eof ==> e > q && e <= s.len()
+        }),
+{
+    theorem_token_equal(s, p, unicode_ranges_allowed);
+    theorem_comments_equal(s, p);
+    lemma_comments_bound(ints(s), p);
+    lemma_comments_idempotent(s, p);
+    let q = i_consume_comments(ints(s), p);
+    let current = t::consume_comments(s, p as int);
+    crate::tokenizer::termination::lemma_token_advances(s, current, unicode_ranges_allowed);
+    assert(t::consume_a_token(s, current, unicode_ranges_allowed) == t::consume_a_token(s, p as int, unicode_ranges_allowed));
+    super::equiv_bounds::lemma_token_bound(ints(s), q, unicode_ranges_allowed);
+    assert(ints(s).len() == s.len());
+    assert(super::equiv_bounds::nonneg(ints(s)));
+}
+
+/// The tokens of a stream lie within it, in order, and none is the `<EOF-token>`.
+pub proof fn lemma_tokenize_wellformed(s: Seq<u32>, p: nat, unicode_ranges_allowed: bool)
+    requires
+        valid(s),
+        p <= s.len(),
+    ensures
+        ({
+            let lx = i_tokenize_from(ints(s), p, unicode_ranges_allowed);
+            &&& forall|j: int| 0 <= j < lx.len() ==> #[trigger] lx[j].start <= lx[j].end && lx[j].end <= s.len()
+            &&& forall|j: int| 0 <= j < lx.len() ==> p <= #[trigger] lx[j].start
+            &&& forall|j: int| 0 <= j && j + 1 < lx.len() ==> #[trigger] lx[j].end <= lx[j + 1].start
+            &&& forall|j: int| 0 <= j < lx.len() ==> #[trigger] lx[j].tok != ITok::Eof
+        }),
+    decreases s.len() - p,
+{
+    lemma_token_progress(s, p, unicode_ranges_allowed);
+    let q = i_consume_comments(ints(s), p);
+    let (tok, e) = i_consume_token(ints(s), q, unicode_ranges_allowed);
+    if q >= s.len() || tok == ITok::Eof {
+        assert(i_tokenize_from(ints(s), p, unicode_ranges_allowed) =~= Seq::<Lex>::empty());
+    } else {
+        assert(fwd(q, e) == e);
+        lemma_tokenize_wellformed(s, e, unicode_ranges_allowed);
+        let rest = i_tokenize_from(ints(s), e, unicode_ranges_allowed);
+        let lx = i_tokenize_from(ints(s), p, unicode_ranges_allowed);
+        assert(lx =~= seq![Lex { tok, start: q, end: e }] + rest);
+        assert forall|j: int| 0 <= j < lx.len() implies #[trigger] lx[j].start <= lx[j].end && lx[j].end <= s.len() by {
+            if j > 0 {
+                assert(lx[j] == rest[j - 1]);
+            }
+        }
+        assert forall|j: int| 0 <= j < lx.len() implies p <= #[trigger] lx[j].start by {
+            if j > 0 {
+                assert(lx[j] == rest[j - 1]);
+            }
+        }
+        assert forall|j: int| 0 <= j && j + 1 < lx.len() implies #[trigger] lx[j].end <= lx[j + 1].start by {
+            if j > 0 {
+                assert(lx[j] == rest[j - 1]);
+                assert(lx[j + 1] == rest[j]);
+            } else {
+                assert(lx[1] == rest[0]);
+            }
+        }
+        assert forall|j: int| 0 <= j < lx.len() implies #[trigger] lx[j].tok != ITok::Eof by {
+            if j > 0 {
+                assert(lx[j] == rest[j - 1]);
+            }
+        }
+    }
+}
+
 } // verus!
