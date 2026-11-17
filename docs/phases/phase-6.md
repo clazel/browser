@@ -737,7 +737,8 @@ another item's proof or tier to proceed, only its interface.
 | Item | State |
 |------|-------|
 | 6.0 Decisions | taken (2026-11-16): decoders at tier 1 by the maintainer; (a) to (j) as recommended, by a Claude session on the maintainer's delegation |
-| 6.1 to 6.21 | not started |
+| 6.10 Display list: image items | built and proven, not on `main`, not at tier 2 (`clazel-displaylist`'s `Cargo.toml` still says tier 0 until CI's full run on the pull request is green). Tags 7 to 9 (upload, draw, free image) in the spec, with contracts committed before the code; the encoder, decoder and validator proven (Verus: 131 verified, 0 errors); `theorem_validated_bounds` extended to image bytes and to every image draw's source inside its image; 130 of 130 mutations killed by a theorem with certificates (51 new); `independent.rs` extended and proven equal, but written by the same session as the spec, not blind; conformance tests extended (second decoder and validator, 110 hand-built cases, random and hostile bytes). `clazel-gpu` refuses image items until 6.12. Not done: CI's full verification; the 2^28 image budget and the 2^27 + 2^28 list limit are unmeasured; `clazel-gpu`'s `LIST_MAX` (256 MiB) is below the new list limit (384 MiB) and is for 6.12 to settle with the second-channel decision |
+| 6.1 to 6.9, 6.11 to 6.21 | not started |
 
 **Phase 6: planned (2026-11-16); decisions in 6.0 taken the same day.
 Phase 5, which it builds on, is on `main`.**
