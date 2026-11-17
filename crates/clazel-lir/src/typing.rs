@@ -1,7 +1,7 @@
 //! LIR's typing judgment and its soundness theorem (docs/phases/jit.md item
 //! J.5).
 //!
-//! The judgment is [`tc`]: given the layout, a context (the types of the
+//! The judgment is `tc`: given the layout, a context (the types of the
 //! locals and of the enclosing labels) and the types of the operand stack,
 //! it says whether an instruction is well-typed and what it leaves on the
 //! stack. It is Wasm core 2.0 §3.3 "Instructions" (validation), written as
@@ -21,8 +21,8 @@
 //! 3. **No function, table, global or reference instructions**; one body,
 //!    with label 0 as its return (see `spec`).
 //!
-//! The soundness theorem, `tc_sound`, is stated and proven in the commit
-//! after this one: a well-typed instruction, started in a state that
+//! The soundness theorem, `soundness::tc_sound`, is proven in
+//! [`crate::soundness`]: a well-typed instruction, started in a state that
 //! conforms to its input types, is never [`Outcome::Stuck`] (so every load
 //! and store is inside its region, every operand exists and has the right
 //! type), and whatever it does conforms to what the typing said.
@@ -40,7 +40,7 @@ verus! {
 
 /// `a` may be used where `b` is expected. `Idx(r, n)` is an `i64`, and it
 /// is an `Idx(r, m)` for any smaller `m`; otherwise only equal types match.
-pub open spec fn sub(a: Ty, b: Ty) -> bool {
+pub open spec fn ty_sub(a: Ty, b: Ty) -> bool {
     match (a, b) {
         (Ty::Idx(r, n), Ty::Idx(s, m)) => r == s && m <= n,
         (Ty::Idx(_, _), Ty::I64) => true,
@@ -50,7 +50,7 @@ pub open spec fn sub(a: Ty, b: Ty) -> bool {
 
 /// `sub` pointwise, on sequences of equal length.
 pub open spec fn stack_sub(a: Seq<Ty>, b: Seq<Ty>) -> bool {
-    a.len() == b.len() && forall|j: int| 0 <= j < a.len() ==> sub(#[trigger] a[j], b[j])
+    a.len() == b.len() && forall|j: int| 0 <= j < a.len() ==> ty_sub(#[trigger] a[j], b[j])
 }
 
 /// The top `tys.len()` types of `stk` are subtypes of `tys`.
@@ -151,7 +151,7 @@ pub enum Flow {
     Diverges,
 }
 
-/// The number of nodes of an instruction, the measure of [`tc`].
+/// The number of nodes of an instruction, the measure of `tc`.
 pub open spec fn isize(i: Instr) -> nat
     decreases i,
 {
@@ -193,7 +193,7 @@ pub open spec fn tc(lay: Layout, ctx: Ctx, i: Instr, stk: Seq<Ty>) -> Option<Flo
         },
         // Wasm core §3.3.5 `local.set x`: [t] -> [].
         Instr::LocalSet(x) => {
-            if x < ctx.locals.len() && n >= 1 && sub(stk.last(), ctx.locals[x as int]) {
+            if x < ctx.locals.len() && n >= 1 && ty_sub(stk.last(), ctx.locals[x as int]) {
                 Some(Flow::Falls(stk.drop_last()))
             } else {
                 None
@@ -201,7 +201,7 @@ pub open spec fn tc(lay: Layout, ctx: Ctx, i: Instr, stk: Seq<Ty>) -> Option<Flo
         },
         // Wasm core §3.3.5 `local.tee x`: [t] -> [t].
         Instr::LocalTee(x) => {
-            if x < ctx.locals.len() && n >= 1 && sub(stk.last(), ctx.locals[x as int]) {
+            if x < ctx.locals.len() && n >= 1 && ty_sub(stk.last(), ctx.locals[x as int]) {
                 Some(Flow::Falls(stk))
             } else {
                 None
@@ -225,7 +225,7 @@ pub open spec fn tc(lay: Layout, ctx: Ctx, i: Instr, stk: Seq<Ty>) -> Option<Flo
         },
         // Wasm core §3.3.1 `t.binop`, `t.relop`: [t t] -> [t] or [i32].
         Instr::Bin(op) => {
-            if n >= 2 && sub(stk[n - 2], bin_arg(op)) && sub(stk[n - 1], bin_arg(op)) {
+            if n >= 2 && ty_sub(stk[n - 2], bin_arg(op)) && ty_sub(stk[n - 1], bin_arg(op)) {
                 Some(Flow::Falls(below(stk, 2).push(bin_res(op))))
             } else {
                 None
@@ -233,7 +233,7 @@ pub open spec fn tc(lay: Layout, ctx: Ctx, i: Instr, stk: Seq<Ty>) -> Option<Flo
         },
         // Wasm core §3.3.1 `t.unop`, `t.testop`, `t2.cvtop`: [t1] -> [t2].
         Instr::Un(op) => {
-            if n >= 1 && sub(stk[n - 1], un_arg(op)) {
+            if n >= 1 && ty_sub(stk[n - 1], un_arg(op)) {
                 Some(Flow::Falls(below(stk, 1).push(un_res(op))))
             } else {
                 None
@@ -241,7 +241,7 @@ pub open spec fn tc(lay: Layout, ctx: Ctx, i: Instr, stk: Seq<Ty>) -> Option<Flo
         },
         // LIR's `bounds_check`: [i64] -> [Idx(region, size)].
         Instr::BoundsCheck { region, size, code } => {
-            if region < lay.len() && n >= 1 && sub(stk[n - 1], Ty::I64) {
+            if region < lay.len() && n >= 1 && ty_sub(stk[n - 1], Ty::I64) {
                 Some(Flow::Falls(below(stk, 1).push(Ty::Idx(region, size))))
             } else {
                 None
@@ -250,7 +250,7 @@ pub open spec fn tc(lay: Layout, ctx: Ctx, i: Instr, stk: Seq<Ty>) -> Option<Flo
         // Wasm core §3.3.6 `t.load`: [i32] -> [t], with the address an
         // `Idx` of the region for the size of `t`.
         Instr::Load { region, ty } => {
-            if ty_size(ty) > 0 && region < lay.len() && n >= 1 && sub(
+            if ty_size(ty) > 0 && region < lay.len() && n >= 1 && ty_sub(
                 stk[n - 1],
                 Ty::Idx(region, ty_size(ty)),
             ) {
@@ -261,10 +261,10 @@ pub open spec fn tc(lay: Layout, ctx: Ctx, i: Instr, stk: Seq<Ty>) -> Option<Flo
         },
         // Wasm core §3.3.6 `t.store`: [i32 t] -> [].
         Instr::Store { region, ty } => {
-            if ty_size(ty) > 0 && region < lay.len() && n >= 2 && sub(
+            if ty_size(ty) > 0 && region < lay.len() && n >= 2 && ty_sub(
                 stk[n - 2],
                 Ty::Idx(region, ty_size(ty)),
-            ) && sub(stk[n - 1], ty) {
+            ) && ty_sub(stk[n - 1], ty) {
                 Some(Flow::Falls(below(stk, 2)))
             } else {
                 None
@@ -276,7 +276,7 @@ pub open spec fn tc(lay: Layout, ctx: Ctx, i: Instr, stk: Seq<Ty>) -> Option<Flo
         // Wasm core §3.3.8 `if`: [t1* i32] -> [t2*], both arms typed as
         // blocks.
         Instr::If(bt, t, e) => {
-            if n >= 1 && sub(stk[n - 1], Ty::I32) {
+            if n >= 1 && ty_sub(stk[n - 1], Ty::I32) {
                 match (
                     tc_blk(lay, ctx, bt, *t, stk.drop_last(), false),
                     tc_blk(lay, ctx, bt, *e, stk.drop_last(), false),
@@ -299,7 +299,7 @@ pub open spec fn tc(lay: Layout, ctx: Ctx, i: Instr, stk: Seq<Ty>) -> Option<Flo
         },
         // Wasm core §3.3.8 `br_if l`: [t* i32] -> [t*].
         Instr::BrIf(l) => {
-            if n >= 1 && sub(stk[n - 1], Ty::I32) && l < ctx.labels.len() && top_sub(
+            if n >= 1 && ty_sub(stk[n - 1], Ty::I32) && l < ctx.labels.len() && top_sub(
                 stk.drop_last(),
                 ctx.labels[l as int],
             ) {
@@ -311,7 +311,7 @@ pub open spec fn tc(lay: Layout, ctx: Ctx, i: Instr, stk: Seq<Ty>) -> Option<Flo
         // Wasm core §3.3.8 `br_table l* l_N`: every label must take the
         // values on the stack.
         Instr::BrTable(ls, d) => {
-            if n >= 1 && sub(stk[n - 1], Ty::I32) && d < ctx.labels.len() && top_sub(
+            if n >= 1 && ty_sub(stk[n - 1], Ty::I32) && d < ctx.labels.len() && top_sub(
                 stk.drop_last(),
                 ctx.labels[d as int],
             ) && (forall|j: int|

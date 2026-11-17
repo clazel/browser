@@ -1,5 +1,5 @@
 //! LIR's semantics (docs/phases/jit.md item J.5): a big-step, fuelled
-//! interpreter written as a `spec fn`, [`eval`].
+//! interpreter written as a `spec fn`, `eval`.
 //!
 //! It transcribes the numeric, variable, parametric, memory and control
 //! instructions of the WebAssembly core specification, release 2.0
@@ -33,7 +33,7 @@
 //!    because Wasm's validation forbids a body from reaching below its
 //!    parameters.
 //! 3. **No function calls, no tables, no globals, no `memory.grow`.** There
-//!    is one function body, run by [`run`], whose label `0` (outermost) is
+//!    is one function body, run by `run`, whose label `0` (outermost) is
 //!    "return". Wasm's trap is the outcome `Exit` (jit.md: services and
 //!    traps are exits); an `exit` is also LIR's only way to stop other than
 //!    falling off the end or a return.
@@ -55,7 +55,7 @@
 //!    end's masking is a refinement of it, not an addition to it.
 //! 6. **`f64` arithmetic is uninterpreted.** `add`, `sub`, `mul`, `div`,
 //!    `sqrt` and the integer-to-float conversions are the uninterpreted
-//!    functions [`f64_add`] and so on, over bit patterns. IEEE 754 rounding
+//!    functions `f64_add` and so on, over bit patterns. IEEE 754 rounding
 //!    is not transcribed (the JS engine's `spec` does the same, and the
 //!    hardware semantics in `clazel-x64` and `clazel-a64` is what the back
 //!    ends are proven against). Wasm leaves the sign and payload of a NaN
