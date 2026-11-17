@@ -18,3 +18,5 @@ pub mod contract;
 pub mod examples;
 pub mod lemmas;
 pub mod spec;
+pub mod unicode;
+pub mod unicode_data;
