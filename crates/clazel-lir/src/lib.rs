@@ -115,6 +115,7 @@
 //! Tier: see `[package.metadata.clazel]` in `Cargo.toml` and
 //! `docs/VERIFICATION.md`.
 
+pub mod examples;
 pub mod soundness;
 pub mod spec;
 pub mod syntax;
