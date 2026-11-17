@@ -77,6 +77,28 @@ pub open spec fn item_is(src: ExecParsed, it: ExecItem, v: ComponentValue) -> bo
     }
 }
 
+/// The component value `it` is.
+pub open spec fn item_view(src: ExecParsed, it: ExecItem) -> ComponentValue {
+    match it {
+        ExecItem::Token { token } => ComponentValue::Token {
+            token: clazel_css::tokenizer::exec::view_token(token),
+        },
+        ExecItem::Function { name, lo, hi } => ComponentValue::Function {
+            name: name@,
+            value: rows_list(src, lo as int, hi as int),
+        },
+        ExecItem::Block { token, lo, hi } => ComponentValue::SimpleBlock {
+            associated_token: clazel_css::tokenizer::exec::view_token(token),
+            value: rows_list(src, lo as int, hi as int),
+        },
+    }
+}
+
+/// The list of component values `items` are.
+pub open spec fn view_items(src: ExecParsed, items: Seq<ExecItem>) -> Seq<ComponentValue> {
+    items.map_values(|it: ExecItem| item_view(src, it))
+}
+
 /// True if `items` are the list `list`.
 pub open spec fn items_are(src: ExecParsed, items: Seq<ExecItem>, list: Seq<ComponentValue>) -> bool {
     items.len() == list.len() && forall|j: int| 0 <= j < items.len() ==> #[trigger] item_is(src, items[j], list[j])
@@ -142,6 +164,7 @@ pub fn read_items(src: &ExecParsed, lo: usize, hi: usize) -> (r: Vec<ExecItem>)
         src_ok(*src),
     ensures
         items_are(*src, r@, rows_list(*src, lo as int, hi as int)),
+        view_items(*src, r@) == rows_list(*src, lo as int, hi as int),
 {
     let ghost text = src.text@;
     let ghost rows = src.output.rows@;
@@ -203,6 +226,15 @@ pub fn read_items(src: &ExecParsed, lo: usize, hi: usize) -> (r: Vec<ExecItem>)
             assert(out@.len() == whole.len() - 1 - j);
         }
         out.push(it);
+    }
+    proof {
+        assert(out@.len() == whole.len());
+        assert(view_items(*src, out@).len() == out@.len());
+        assert forall|i: int| 0 <= i < whole.len() implies view_items(*src, out@)[i] == whole[i] by {
+            assert(item_is(*src, out@[i], whole[i]));
+            assert(view_items(*src, out@)[i] == item_view(*src, out@[i]));
+        }
+        assert(view_items(*src, out@) =~= whole);
     }
     out
 }

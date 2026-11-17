@@ -32,6 +32,7 @@ pub mod contract;
 pub mod examples;
 pub mod exec_check;
 pub mod exec_element;
+pub mod exec_grow;
 pub mod exec_items;
 pub mod exec_match;
 pub mod exec_parse;
