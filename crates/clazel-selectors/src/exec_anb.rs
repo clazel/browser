@@ -339,7 +339,7 @@ fn at<'a>(items: &[&'a ExecItem], i: usize) -> (r: &'a ExecItem)
 }
 
 /// The token of an item that is one.
-fn token_of<'a>(it: &'a ExecItem) -> (r: Option<&'a ExecToken>)
+fn token_of(it: &ExecItem) -> (r: Option<&ExecToken>)
     ensures
         match r {
             Some(t) => *it == (ExecItem::Token { token: *t }),
@@ -462,7 +462,7 @@ fn digits_from(string: &[u32], start: usize) -> (r: bool)
         decreases string.len() - i,
     {
         let c = *item(string, i);
-        if !(0x30 <= c && c <= 0x39) {
+        if !(0x30..=0x39).contains(&c) {
             proof {
                 lemma_digit_fails(string@, start as int, i as int);
             }
@@ -579,10 +579,11 @@ fn a_of(src: &ExecParsed, items: &[&ExecItem], plus_adjacent: bool, dash: bool) 
         assert(item_ok(*items@[0]));
     }
     let dim = integer_dimension(src, first);
-    if let Some((value, unit)) = dim {
-        if matches_ignoring_case(unit, n) {
+    match dim {
+        Some((value, unit)) if matches_ignoring_case(unit, n) => {
             return Some((value, 1));
-        }
+        },
+        _ => {},
     }
     if keyword(src, first, n) {
         Some((1, 1))
@@ -625,13 +626,14 @@ fn single_clause_of(src: &ExecParsed, items: &[&ExecItem], plus_adjacent: bool) 
         assert(item_ok(*last));
     }
     let dim = integer_dimension(src, last);
-    if let Some((value, unit)) = dim {
-        if items.len() == 1 && n_dash_digits(unit, 0) {
+    match dim {
+        Some((value, unit)) if items.len() == 1 && n_dash_digits(unit, 0) => {
             proof {
                 lemma_all_digits(unit@, 2);
             }
             return Some((value, remainder(unit, 1)));
-        }
+        },
+        _ => {},
     }
     if let Some(ExecToken::Ident { value }) = token_of(last) {
         if (items.len() == 1 || plussed) && n_dash_digits(value, 0) {
@@ -686,13 +688,16 @@ fn clauses(src: &ExecParsed, items: &[&ExecItem], plus_adjacent: bool) -> (r: Op
     if count == 1 && keyword(src, at(items, 0), even.as_slice()) {
         return Some((2, 0));
     }
-    if count == 1 {
-        if let Some(number) = integer_of(src, at(items, 0)) {
-            proof {
-                assert(num_ok(view_number(*number)));
-            }
-            return Some((0, wide_value(number)));
+    let lone = if count == 1 {
+        integer_of(src, at(items, 0))
+    } else {
+        None
+    };
+    if let Some(number) = lone {
+        proof {
+            assert(num_ok(view_number(*number)));
         }
+        return Some((0, wide_value(number)));
     }
     let last = at(items, count.saturating_sub(1));
     proof {
@@ -708,7 +713,10 @@ fn clauses(src: &ExecParsed, items: &[&ExecItem], plus_adjacent: bool) -> (r: Op
                 Some((a, 0))
             } else if count == taken.saturating_add(1) {
                 match signed_of(src, last) {
-                    Some(b) => Some((a, b)),
+                    Some(b) => {
+                        let pair = (a, b);
+                        Some(pair)
+                    },
                     None => None,
                 }
             } else if count == taken.saturating_add(2) {
@@ -731,7 +739,10 @@ fn clauses(src: &ExecParsed, items: &[&ExecItem], plus_adjacent: bool) -> (r: Op
         },
         None => match a_of(src, items, plus_adjacent, true) {
             Some((a, taken)) if count == taken.saturating_add(1) => match signless_of(src, last) {
-                Some(b) => Some((a, negate(b))),
+                Some(b) => {
+                    let pair = (a, negate(b));
+                    Some(pair)
+                },
                 None => None,
             },
             _ => single_clause_of(src, items, plus_adjacent),

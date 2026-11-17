@@ -296,7 +296,10 @@ fn integer(v: i32) -> (r: ExecInteger)
         view_integer(r) == v as int,
 {
     if v < 0 {
-        let m: i64 = -(v as i64);
+        let m: i64 = match 0i64.checked_sub(v as i64) {
+            Some(m) => m,
+            None => vstd::pervasive::unreached(),
+        };
         ExecInteger { negative: true, magnitude: m as u64 }
     } else {
         ExecInteger { negative: false, magnitude: v as u64 }
@@ -476,11 +479,7 @@ fn omitted(x: &ExecSimple) -> (r: bool)
 {
     match x {
         ExecSimple::Universal { ns } => {
-            if matches!(*ns, NsPrefix::NoNamespace) {
-                false
-            } else {
-                true
-            }
+            !matches!(*ns, NsPrefix::NoNamespace)
         },
         _ => false,
     }

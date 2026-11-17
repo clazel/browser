@@ -385,12 +385,18 @@ fn attribute_name_at(src: &ExecParsed, v: &[ExecItem], i: usize) -> (r: Option<(
         }
     } else if is_delim(src, v, i, hi, 0x2A) && is_delim(src, v, i1, hi, 0x7C) {
         match ident(src, v, i2, hi) {
-            Some(name) => Some((NsPrefix::Any, copy(name), i3)),
+            Some(name) => {
+                let found = (NsPrefix::Any, copy(name), i3);
+                Some(found)
+            },
             None => None,
         }
     } else if is_delim(src, v, i, hi, 0x7C) {
         match ident(src, v, i1, hi) {
-            Some(name) => Some((NsPrefix::NoNamespace, copy(name), i2)),
+            Some(name) => {
+                let found = (NsPrefix::NoNamespace, copy(name), i2);
+                Some(found)
+            },
             None => None,
         }
     } else {
@@ -1023,7 +1029,10 @@ fn functional_pseudo_class_of(
             assert(!ascii_case_insensitive_match(name@, str_where()));
         }
         match list {
-            Some(list) => Some(ExecSimple::Not { list }),
+            Some(list) => {
+                let not = ExecSimple::Not { list };
+                Some(not)
+            },
             None => None,
         }
     } else {

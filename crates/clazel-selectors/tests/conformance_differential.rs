@@ -20,6 +20,12 @@
 //! no invalid item in a forgiving list) and for them nothing is excused. The matching of
 //! every generated selector that both engines accept is compared on every element of
 //! generated documents, with nothing excused.
+//!
+//! Skipped under Miri (`#[cfg_attr(miri, ignore)]`, as `clazel-cookie`'s differential test
+//! is): Servo's `servo_arc` 0.4.3 (`Arc::from_header_and_iter_alloc`, lib.rs:809) writes
+//! through a pointer whose tag comes from a zero-size retag, which Stacked Borrows reports as
+//! undefined behaviour. The fault is in the reference engine, a test-only dependency, not in
+//! this crate, which the other tests run under Miri.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -758,6 +764,7 @@ fn utf16(units: &[u16]) -> String {
 }
 
 #[test]
+#[cfg_attr(miri, ignore = "servo_arc fails Stacked Borrows")]
 fn wpt_parsing_against_servo() {
     let stride = if cfg!(miri) { 23 } else { 1 };
     let mut tally = Tally::default();
@@ -1062,6 +1069,7 @@ fn gen_doc(rng: &mut Rng, count: usize) -> (Doc, bool) {
 }
 
 #[test]
+#[cfg_attr(miri, ignore = "servo_arc fails Stacked Borrows")]
 fn generated_selectors_against_servo() {
     let (n_selectors, n_docs) = if cfg!(miri) { (60, 2) } else { (6000, 8) };
     let mut rng = Rng(0x9E37_79B9_7F4A_7C15, false);
