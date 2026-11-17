@@ -29,7 +29,7 @@ CMYK and YCCK), EXIF Orientation only.
 | `src/idct.rs` | dequantization and the integer IDCT |
 | `src/output.rs` | upsampling, YCbCr, CMYK, orientation (pure functions of one position) |
 | `src/exif.rs`, `src/markers.rs`, `src/header.rs` | Orientation, marker classes, `decode_config` |
-| `src/proofs.rs`, `src/decoder_proofs.rs` | the Kani harnesses |
+| `src/proofs.rs` | the Kani harnesses (and two in `src/idct.rs`) |
 
 The work buffer is the worst case for the config, four planes of
 `(w + 31) * (h + 31)` bytes, because `work_len` is a function of the config
@@ -64,10 +64,46 @@ that conversion is checked against itself only.
 
 ## Kani harnesses
 
-See `src/proofs.rs` and `src/decoder_proofs.rs` for the statements; results
-and bounds are in the table below.
+Statements are in `src/proofs.rs` and `src/idct.rs`.
 
-RESULTS_TABLE
+Run in WSL Ubuntu with Kani 0.68.0 (`cargo kani -p clazel-jpeg --harness NAME`), each harness on its own: **12 harnesses, 12 pass**.
+
+| Harness | Statement (every one: no panic, no overflow, no out-of-bounds index) | Bound | Time |
+|---------|-----------|-------|------|
+| `bit_reader_any` | bits come most significant first; a loaded byte gives exactly 8 | any state with the invariant | seconds |
+| `huffman_step_any` | F.16 decoding: any bits end in a symbol or an error within 16 bits; the code grows one bit per step | **any** table with `Table::inv` (not only those construction makes) | 9 s |
+| `block_machine_any` | one bit of a block in any stage keeps the block invariant | any block with the invariant, any pair of tables with the invariant, any predictor | 19 s |
+| `one_d_pass1_any`, `one_d_pass2_any` | the integer IDCT never overflows `i64`: pass 1 over inputs up to 2^31 (an `i16` times a `u16`) gives descaled outputs up to 2^37; pass 2 over inputs up to 2^37 does not overflow; **composed, `idct` returns `Some` for every block and every quantizer** (the composition is argued here, not a harness) | every input in those ranges | 15 s, 10 s |
+| `range_limit_any` | the post-IDCT clamp is the level shift and clamp on -512 to 511, with libjpeg-turbo's wrap-around of period 1024 beyond | every `i64` | 4 s |
+| `sample_any` | upsampling returns a sample at every position of the image | every geometry up to 16 by 16, every ratio 1 to 4 each way, any samples and padding | 12 s |
+| `sample_constant` | a constant plane stays constant | the same | 40 s |
+| `orient_any` | the orientation map stays inside the oriented image and refuses positions outside | every size up to 2^14 by 2^14, every orientation | 4 s |
+| `orient_bijection` | each orientation is a bijection onto the oriented image | every size up to 3 by 3 | 167 s |
+| `ycc_any` | YCbCr to RGB equals the closed form of libjpeg-turbo's tables | all 2^24 inputs | 12 s |
+| `cmyk_any` | CMYK to RGB is `round(c * k / 255)` and never above `c` or `k` | all 2^32 inputs | 5 s |
+
+### What Kani does not cover (not done)
+
+- **Huffman table construction (`Table::build`) has no harness**: the model
+  checker's memory grew without bound on it (it also took the shared WSL
+  machine down, three times). It is covered by unit tests, by 134 files whose
+  tables it built, and `huffman_step_any` takes any table, not only those it
+  builds.
+- **The marker state machine and the entropy pipeline have no harness**:
+  harnesses over the whole state (`control_byte`, `end_segment`,
+  `finish_frame`, `finish_scan_header`, the DQT and DHT byte functions, one bit
+  through block decoding, IDCT and store) were written and one of them ran
+  more than 25 minutes without finishing, so they were removed rather than
+  left unrun in the crate. The code is checked arithmetic and `get` only
+  (workspace lints), which the model checker would confirm; that is argued,
+  not proven. The step function is therefore not machine-checked, and nor is
+  the invariant `Jpeg::state_inv` being kept. `block_machine_any` (the block
+  decoder) and the leaf functions are.
+- **A single harness over all of `idct`** was tried and not finished; the two
+  harnesses above stand in for it.
+- The Kani numbers are for small bounds where stated; the code is the same
+  code at the real sizes (the 12 harnesses above bound only table size,
+  sampling geometry and image size for the pure functions).
 
 The tier stays 0 until CI's full verification has run these (CLAUDE.md
 rule 7).

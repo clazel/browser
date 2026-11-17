@@ -1212,7 +1212,3 @@ impl Decoder for Jpeg {
 
 /// The frame count of every JPEG.
 pub(crate) const FRAMES: FrameCount = FrameCount::Known(1);
-
-#[cfg(kani)]
-#[path = "decoder_proofs.rs"]
-mod proofs;

@@ -81,10 +81,13 @@
 //!
 //! # Verification
 //!
-//! Tier 1 target (`Cargo.toml`): the Kani harnesses of `proofs.rs`, listed
-//! with their bounds in the README. The invariant is `Jpeg::state_inv`
-//! (`decoder.rs`); every index is a checked `get` and every operation
-//! checked, so `inv` is about the ranges of counters, not memory.
+//! Tier 1 target (`Cargo.toml`): the Kani harnesses of `proofs.rs` and
+//! `idct.rs`, listed with their bounds in the README, cover the leaf
+//! functions and the block decoder; **the marker state machine and `step`
+//! itself have none yet** (README, "What Kani does not cover"). The invariant
+//! is `Jpeg::state_inv` (`decoder.rs`); every index is a checked `get` and
+//! every operation checked, so `inv` is about the ranges of counters, not
+//! memory.
 
 mod bits;
 mod block;

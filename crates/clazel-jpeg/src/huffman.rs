@@ -184,6 +184,21 @@ impl Table {
         }
     }
 
+    /// Any table satisfying the invariant (not necessarily one `build` can
+    /// make: the harnesses prove the decoding for all of these).
+    #[cfg(kani)]
+    pub(crate) fn any() -> Table {
+        let t = Table {
+            values: kani::any(),
+            total: kani::any(),
+            mincode: kani::any(),
+            maxcode: kani::any(),
+            valptr: kani::any(),
+        };
+        kani::assume(t.inv());
+        t
+    }
+
     /// The symbols, for the harnesses.
     #[cfg(kani)]
     pub(crate) fn symbols(&self) -> &[u8] {

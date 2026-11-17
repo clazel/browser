@@ -14,9 +14,9 @@
 //!
 //! libjpeg-turbo keeps its arithmetic in `long` (64 bits on LP64) and the
 //! between-pass workspace in `int`. Here everything is `i64`; for
-//! coefficients and quantizers in their ranges nothing overflows (a Kani
-//! harness proves it: [`idct`] returns `Some` for every block of `i16`
-//! coefficients and every `u16` quantizer, each product being at most
+//! coefficients and quantizers in their ranges nothing overflows (Kani
+//! pair of harnesses proves it, composed: [`idct`] returns `Some` for every block of `i16`
+//! coefficients and every `u16` quantizer, each dequantized value being at most
 //! 2^31 in magnitude).
 
 /// `CONST_BITS` of `jidctint.c`: the fixed-point constants have 13 bits of
@@ -152,7 +152,7 @@ pub(crate) fn range_limit(v: i64) -> u8 {
 /// natural, row-major order, vertical frequency first) and inverse
 /// transforms one block (A.3.3), giving the 64 samples row-major with the
 /// level shift of +128 applied (A.3.1) and clamped to 0..255. `None` only
-/// on arithmetic overflow, which the Kani harness `idct_any` shows cannot
+/// on arithmetic overflow, which the Kani harnesses `one_d_pass1_any` and `one_d_pass2_any` (composed) show cannot
 /// happen.
 pub(crate) fn idct(coef: &[i16; 64], quant: &[u16; 64]) -> Option<[u8; 64]> {
     // Pass 1: columns from the input, into the workspace, scaled up by
@@ -263,5 +263,45 @@ mod tests {
         );
         // Every row is the same.
         assert!(rows.iter().all(|r| *r == first));
+    }
+}
+
+/// The overflow argument of [`idct`] in two harnesses that compose: the first
+/// pass takes dequantized coefficients (at most 2^31 in magnitude: an `i16`
+/// times a `u16`) and its descaled outputs are at most 2^37; the second pass
+/// takes inputs of at most 2^37. Both never overflow, so [`idct`] never does.
+/// (A single harness over the whole of `idct` was tried and the
+/// model checker did not finish it.)
+#[cfg(kani)]
+mod proofs {
+    use super::*;
+
+    fn any_inputs(bound: i64) -> [Ck; 8] {
+        let mut x = [Ck(Some(0)); 8];
+        for slot in x.iter_mut() {
+            let v: i64 = kani::any();
+            kani::assume(-bound <= v && v <= bound);
+            *slot = Ck(Some(v));
+        }
+        x
+    }
+
+    #[kani::proof]
+    #[kani::unwind(10)]
+    fn one_d_pass1_any() {
+        let out = one_d(&any_inputs(1 << 31));
+        for v in out {
+            let d = v.descale(CONST_BITS - PASS1_BITS).0;
+            assert!(d.is_some_and(|d| -(1i64 << 37) <= d && d <= (1i64 << 37)));
+        }
+    }
+
+    #[kani::proof]
+    #[kani::unwind(10)]
+    fn one_d_pass2_any() {
+        let out = one_d(&any_inputs(1 << 37));
+        for v in out {
+            assert!(v.descale(CONST_BITS + PASS1_BITS + 3).0.is_some());
+        }
     }
 }
