@@ -10,7 +10,7 @@
 
 #[allow(unused_imports)]
 use super::spec::*;
-#[allow(unused_imports)]
+#[cfg(verus_only)]
 use super::termination::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
