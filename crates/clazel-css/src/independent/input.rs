@@ -18,12 +18,15 @@
 //!   longest run of bytes that are not 22, which is what the pattern means,
 //!   since 22 is not an `XX` byte.
 
+#[cfg(verus_only)]
 use super::*;
 
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
+#[cfg(verus_only)]
 use clazel_encoding::hooks::spec::decode;
+#[cfg(verus_only)]
 use clazel_encoding::labels::spec::{get_an_encoding, Encoding};
 
 verus! {

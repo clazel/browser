@@ -30,7 +30,9 @@
 //! - "the serialization of B" is the decimal integer, with a U+002D HYPHEN-MINUS
 //!   first when negative, as a string of code points.
 
+#[cfg(verus_only)]
 use super::parse::*;
+#[cfg(verus_only)]
 use super::*;
 
 #[allow(unused_imports)]
