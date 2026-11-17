@@ -13,9 +13,9 @@ use super::exec_types::item;
 use super::spec::*;
 use clazel_css::parser::exec_declaration::{lowercase, matches_ignoring_case};
 use clazel_css::parser::exec_parse::ExecParsed;
+use clazel_css::tokenizer::exec::{ExecNumber, ExecToken};
 #[cfg(verus_only)]
 use clazel_css::tokenizer::exec::{view_number, view_token};
-use clazel_css::tokenizer::exec::{ExecNumber, ExecToken};
 #[allow(unused_imports)]
 use vstd::prelude::*;
 

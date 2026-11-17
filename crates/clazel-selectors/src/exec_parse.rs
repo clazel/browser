@@ -23,16 +23,16 @@ use super::exec_grow::*;
 use super::exec_items::*;
 #[cfg(verus_only)]
 use super::exec_steps::*;
+use super::exec_types::*;
 #[cfg(verus_only)]
 use super::lemmas::theorem_parse_total;
-use super::exec_types::*;
 #[allow(unused_imports)]
 use super::spec::*;
 use clazel_css::parser::exec_declaration::matches_ignoring_case;
 use clazel_css::parser::exec_parse::ExecParsed;
+use clazel_css::tokenizer::exec::ExecToken;
 #[cfg(verus_only)]
 use clazel_css::tokenizer::exec::view_token;
-use clazel_css::tokenizer::exec::ExecToken;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 

@@ -7,11 +7,11 @@
 use super::spec::*;
 #[cfg(verus_only)]
 use clazel_css::tokenizer::spec::{
-    at, consume_a_number, consume_a_numeric_token, consume_a_string_token, consume_a_token,
-    consume_a_unicode_range_token, consume_a_url_token, consume_an_ident_like_token, consume_comments,
-    consume_digits, consume_string_loop, consume_url_loop, is_digit, is_newline, is_non_printable_code_point,
-    is_whitespace, number_step_2, number_step_4, remaining, would_start_a_number,
-    would_start_an_ident_sequence, EOF,
+    EOF, at, consume_a_number, consume_a_numeric_token, consume_a_string_token, consume_a_token,
+    consume_a_unicode_range_token, consume_a_url_token, consume_an_ident_like_token,
+    consume_comments, consume_digits, consume_string_loop, consume_url_loop, is_digit, is_newline,
+    is_non_printable_code_point, is_whitespace, number_step_2, number_step_4, remaining,
+    would_start_a_number, would_start_an_ident_sequence,
 };
 #[cfg(verus_only)]
 use clazel_css::tokenizer::termination::lemma_escape_advances;
