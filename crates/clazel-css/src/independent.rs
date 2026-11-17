@@ -144,6 +144,7 @@ pub mod equiv_map;
 pub mod equiv_parser;
 pub mod equiv_stream;
 pub mod equiv_tokenizer;
+pub mod equiv_tokens;
 pub mod parse;
 pub mod input;
 pub mod anb;
