@@ -312,7 +312,7 @@ pub open spec fn reader_is_the_stream(string: Seq<u32>, unicode_ranges_allowed: 
 /// `theorem_spans_in_order`: a stream made from a string has one span per token, in order
 /// and inside the string, so [`segment`]'s `subrange` is always of a real range. Proven in
 /// [`super::theorems`], for every string of `u32`s, with the tokenizer's
-/// [`lemma_token_within`](crate::tokenizer::lemmas::lemma_token_within).
+/// `tokenizer::lemmas::lemma_token_within`.
 pub open spec fn spans_in_order(string: Seq<u32>, unicode_ranges_allowed: bool) -> bool {
     let stream = token_stream(string, unicode_ranges_allowed);
     let spans = stream.source.unwrap().spans;
