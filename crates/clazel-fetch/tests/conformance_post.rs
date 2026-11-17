@@ -267,20 +267,51 @@ fn ours(c: &Case, now: u64) -> Option<Run> {
     None
 }
 
+/// The kind of run a case makes, read from its script alone (no URL is
+/// parsed): 0 a `GET`, 1 a `POST` without a body, 2 a `POST` with a body
+/// answered at once, 3 one whose body is sent again after a redirect, 4 one
+/// whose body a redirect drops. `None` when the script runs out while a
+/// redirect is pending.
+fn kind(c: &Case) -> Option<usize> {
+    let mut model = c.model.clone();
+    let mut hops = 0usize;
+    for (status, _) in &c.hops {
+        if !is_redirect(*status) {
+            return Some(match (&c.model.body, c.model.method, hops, model.method) {
+                (None, "GET", _, _) => 0,
+                (None, _, _, _) => 1,
+                (Some(_), _, 0, _) => 2,
+                (Some(_), _, _, "POST") => 3,
+                (Some(_), _, _, _) => 4,
+            });
+        }
+        model = rewrite(*status, &model);
+        hops = hops.saturating_add(1);
+    }
+    None
+}
+
 #[test]
 fn differential_methods_bodies_and_redirects() {
     let runs: u64 = 6000;
-    // Under Miri (an interpreter) every 25th seed: the same code paths for
-    // undefined behaviour in about a minute; every seed runs in the normal
-    // test job (docs/VERIFICATION.md, Miri). The coverage floors below scale
-    // with the stride.
-    let stride: u64 = if cfg!(miri) { 25 } else { 1 };
+    // Miri (an interpreter) took 1054 s for every 25th seed, about 13 s for
+    // each case compared, so under Miri only the first case of each kind
+    // (`kind`) is run: five cases, the same code paths for undefined
+    // behaviour in about a minute. Every seed runs in the normal test job
+    // (docs/VERIFICATION.md, Miri).
+    let mut kinds_seen = [false; 5];
     let (mut pass, mut failed, mut resent, mut dropped, mut with_body) =
         (0u64, 0u64, 0u64, 0u64, 0u64);
     let mut compared: u64 = 0;
-    for i in (0..runs).filter(|i| i % stride == 0) {
+    for i in 0..runs {
         let seed = i.wrapping_mul(0x9E37_79B9).wrapping_add(1);
         let c = case(seed);
+        if cfg!(miri) {
+            match kind(&c).and_then(|k| kinds_seen.get_mut(k)) {
+                Some(seen) if !*seen => *seen = true,
+                _ => continue,
+            }
+        }
         let Some(want) = reference(&c) else {
             continue;
         };
@@ -305,6 +336,9 @@ fn differential_methods_bodies_and_redirects() {
                 println!("FAIL seed {seed}: from {} {:?}", c.start, c.hops);
             }
         }
+        if cfg!(miri) && kinds_seen.iter().all(|s| *s) {
+            break;
+        }
     }
     println!(
         "clazel-conformance: suite=\"rust-url differential, POST bodies and redirect rewriting\" pass={pass} xfail=0 fail={failed} total={compared}"
@@ -313,12 +347,11 @@ fn differential_methods_bodies_and_redirects() {
         "runs with a body: {with_body}, sent again after a redirect: {resent}, dropped by one: {dropped}"
     );
     assert_eq!(failed, 0);
-    assert!(
-        compared > 1000 / stride
-            && with_body > 300 / stride
-            && resent > 20 / stride
-            && dropped > 20 / stride
-    );
+    if cfg!(miri) {
+        assert!(compared == 5 && with_body == 3 && resent == 1 && dropped == 1);
+    } else {
+        assert!(compared > 1000 && with_body > 300 && resent > 20 && dropped > 20);
+    }
 }
 
 /// A method this client does not send (`PUT`) and a `GET` with a body are
