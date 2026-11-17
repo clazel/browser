@@ -1,9 +1,13 @@
 //! CSSOM "serialize a group of selectors", for parsed selectors.
 //!
-//! Each function is the spec function of the same name in [`super::spec`]. Verus checks that
-//! it never panics, overflows or loops forever; that it returns what the spec does is **not
-//! yet proven** ([`super::contract::serialize_ensures`] is stated and unmet), and the WPT
-//! parsing cases are the evidence for now.
+//! Each function is the spec function of the same name in [`super::spec`], and is proven to
+//! append exactly what that function gives: `put_identifier`, `put_string` and
+//! `put_code_point` equal CSSOM's escaping, and `put_simple`, `put_compound`, `put_complex`
+//! and `put_list` the serialization of the view of what they are given. [`serialize`]
+//! ensures [`super::contract::serialize_ensures`] of the view of its argument, when the
+//! argument's ranges and its list are well-formed (`ranges_wf` and `list_wf`), which every
+//! result of `parse_selector` is (`exec_check`). The `<an+b>` part is `clazel-css`'s
+//! `write_a_n_plus_b`, proven equal to its spec there.
 
 use super::contract::*;
 use super::exec_match::{lemma_compound_wf_at, lemma_compounds_wf_at, lemma_list_wf_at};

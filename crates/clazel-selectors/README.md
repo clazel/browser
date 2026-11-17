@@ -31,11 +31,17 @@ What is proven, and what is not:
   43 s. `MAX_NESTING` is 32. `tests/matching_through_parser.rs` has this as an ignored
   test that fails (`nested_functions_cost_too_much_on_a_deep_document`).
 - **Specificity** (`src/exec_specificity.rs`) is proven equal to §17.
-- **Parsing** (`src/exec_parse.rs`) and **serialization** (`src/exec_serialize.rs`) are
-  checked by Verus for panics, overflow and termination only. They are **not yet proven
-  equal to the spec**; `src/contract.rs` states what they must meet. What matching needs
-  of a parse is checked by `src/exec_check.rs`, which is proven, before the parser
-  returns.
+- **Serialization** (`src/exec_serialize.rs`) is proven equal to CSSOM's, as the spec
+  transcribes it: `serialize` ensures `serialize_ensures` of the view of its argument, given
+  that the argument's ranges and its list are well-formed (`ranges_wf`, `list_wf`), which
+  every result of `parse_selector` is (`src/exec_check.rs`); identifier and string escaping
+  and the pieces down to the simple selector are proven too. The `<an+b>` text is
+  `clazel-css`'s proven `write_a_n_plus_b`.
+- **Parsing** (`src/exec_parse.rs`) is checked by Verus for panics, overflow and
+  termination only. It is **not yet proven equal to the spec**; `src/contract.rs` states
+  what it must meet (`parse_selector_ensures`), and the tests, the mutations of the spec and
+  the differentials below are the evidence. What matching needs of a parse is checked by
+  `src/exec_check.rs`, which is proven, before the parser returns.
 - Theorems about the spec, in `src/lemmas.rs`: `theorem_parse_total`,
   `theorem_match_total`, `theorem_specificity_monotone`, `theorem_where_zero` and
   `theorem_is_most_specific`. `theorem_parse_total` says that the spec's parse
@@ -79,6 +85,20 @@ Tests, which are the only evidence that the shipped parser builds the right sele
   because the whole feature is, so they are counted as expected failures, not passes. It
   also checks matching and §17's specificity examples on small arenas.
 
+- `tests/conformance_differential.rs` runs Servo's `selectors` 0.36.1 (the engine of Servo
+  and, in its Rust form, Firefox) on the same inputs: parsing, serialization and the
+  specificity of each selector of the WPT table (434 inputs: 410 agree, 24 differ for
+  listed reasons) and of 6000 generated selectors (half of them with no pseudo-element and
+  no mutation, for which nothing is excused: 3000 of 3000 agree), and the matching of every
+  generated selector both parse on every element of generated documents (about 1.1 million
+  checks, 49,000 of them matches, no difference). Servo is given a `selectors::Element` over
+  the `clazel-dom` arena, read through the arena's public readers, and the subset's
+  pseudo-classes and pseudo-elements; what that adapter decides is only what the Selectors
+  text leaves to the host. Four differences are listed in the test, each with a reason and a
+  predicate (Servo keeps the text of a dropped item of a forgiving list when it serializes;
+  it accepts a pseudo-class other than a user action one after a pseudo-element; `:host()`;
+  a stray `]` inside `:is()`), and the test fails on any other.
+
 An independent transcription (`src/independent.rs`, written from Selectors 4 at the pinned
 commit before this crate's spec was opened; its header says what changed after, and why) is
 proven equal to the spec in part:
@@ -100,7 +120,7 @@ outside every theorem; the transcription has `:has()`, `:scope`, `:defined` and
 of one text, so they can share a misreading: the weight of evidence for the spec is the WPT
 suite above, which the transcription has not been run against.
 
-Tier 0 for now. A tier also needs the parser and serializer proven equal to the spec (the
-exec parser and serializer are checked for panics, overflow and termination only), and the
-differential against Servo's `selectors`. The target is tier 2, since this crate parses
-selectors that a page chose.
+Tier 0 for now. A tier also needs the exec parser proven equal to the spec (it is checked for
+panics, overflow and termination only; the serializer is proven, and the differential against
+Servo's `selectors` is in), and CI's full verification. The target is tier 2, since this crate
+parses selectors that a page chose.

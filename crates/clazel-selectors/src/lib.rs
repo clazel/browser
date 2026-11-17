@@ -13,9 +13,10 @@
 //! - [`exec_match`]: matching, with [`exec_element`] and [`exec_strings`] for what it asks
 //!   of one element; [`exec_specificity`]: specificity. Both proven equal to the spec.
 //! - [`exec_parse`]: "parse a selector", over the component values [`exec_items`] reads
-//!   from `clazel-css`; [`exec_serialize`]: CSSOM serialization. Both are checked by Verus
-//!   for panics, overflow and termination only, not yet proven equal to the spec; the
-//!   parser's output passes [`exec_check`], which is proven, before it is returned.
+//!   from `clazel-css`: checked by Verus for panics, overflow and termination only, **not
+//!   yet proven equal to the spec**; its output passes [`exec_check`], which is proven,
+//!   before it is returned. [`exec_serialize`]: CSSOM serialization, proven equal to the
+//!   spec.
 //!
 //! - [`independent`]: a second transcription of parsing, matching and specificity, from the
 //!   standard alone. [`independent_equivalence`] (specificity), [`independent_match`] (with
