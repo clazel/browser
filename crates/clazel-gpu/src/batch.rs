@@ -116,6 +116,12 @@ impl Builder {
                 })
             }
             ExecItem::FreeMask { id } => atlas.free(*id),
+            // The image items (6.10) are in the display list's format and validator,
+            // but nothing draws them until the GPU process learns textures (6.12), so
+            // a list that holds one is refused, not drawn without it.
+            ExecItem::UploadImage { .. }
+            | ExecItem::DrawImage { .. }
+            | ExecItem::FreeImage { .. } => Err(Error::Refused),
         }
     }
 
