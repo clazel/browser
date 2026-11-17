@@ -280,4 +280,68 @@ pub proof fn lemma_all_good_at(values: Seq<ps::ComponentValue>, n: nat, i: int)
     }
 }
 
+/// The lists of "parse a comma-separated list of component values" are good lists.
+pub proof fn lemma_comma_good(st: ps::TokenStream, index: int, groups: Seq<Seq<ps::ComponentValue>>)
+    requires
+        stream_ok(st),
+        forall|i: int| 0 <= i < groups.len() ==> all_good(#[trigger] groups[i], groups[i].len()),
+    ensures
+        ({
+            let r = ps::comma_separated_list_loop(st, index, groups);
+            forall|i: int| 0 <= i < r.len() ==> all_good(#[trigger] r[i], r[i].len())
+        }),
+    decreases ps::items_left(st, index),
+{
+    if !ps::is_empty(st, index) {
+        let (list, next) = ps::consume_a_list_of_component_values(st, index, Some(t::Token::Comma), false);
+        lemma_list_good(st, index, Some(t::Token::Comma), false, Seq::empty());
+        let pushed = groups.push(list);
+        assert forall|i: int| 0 <= i < pushed.len() implies all_good(#[trigger] pushed[i], pushed[i].len()) by {
+            if i < groups.len() {
+                assert(pushed[i] == groups[i]);
+            } else {
+                assert(pushed[i] == list);
+            }
+        }
+        assert(index < st.tokens.len());
+        lemma_comma_good(st, ps::moved(index, ps::discard_a_token(st, next)), pushed);
+        assert(ps::comma_separated_list_loop(st, index, groups) == ps::comma_separated_list_loop(
+            st,
+            ps::moved(index, ps::discard_a_token(st, next)),
+            pushed,
+        ));
+    } else {
+        assert(ps::comma_separated_list_loop(st, index, groups) == groups);
+    }
+}
+
+/// The list "parse a list of component values" returns of a string is good.
+pub proof fn lemma_parse_list_good(string: Seq<u32>)
+    ensures
+        ({
+            let v = ps::parse_a_list_of_component_values(ps::Input::String { string });
+            all_good(v, v.len())
+        }),
+{
+    let (stream, index) = ps::normalize(ps::Input::String { string });
+    lemma_string_stream_ok(t::filter_code_points(string), false);
+    assert(stream == ps::token_stream(t::filter_code_points(string), false));
+    lemma_list_good(stream, 0, None, false, Seq::empty());
+}
+
+/// The lists "parse a comma-separated list of component values" returns of a string are
+/// good.
+pub proof fn lemma_parse_groups_good(string: Seq<u32>)
+    ensures
+        ({
+            let r = ps::parse_a_comma_separated_list_of_component_values(ps::Input::String { string });
+            forall|i: int| 0 <= i < r.len() ==> all_good(#[trigger] r[i], r[i].len())
+        }),
+{
+    let (stream, index) = ps::normalize(ps::Input::String { string });
+    lemma_string_stream_ok(t::filter_code_points(string), false);
+    assert(stream == ps::token_stream(t::filter_code_points(string), false));
+    lemma_comma_good(stream, 0, Seq::empty());
+}
+
 } // verus!
