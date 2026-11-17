@@ -141,6 +141,9 @@ pub mod equiv_parser;
 pub mod equiv_stream;
 pub mod equiv_tokenizer;
 pub mod parse;
+pub mod input;
+pub mod anb;
+pub mod hooks;
 
 verus! {
 
