@@ -1,12 +1,18 @@
 //! §21.1 "parse a selector": the executable parser.
 //!
-//! Each function is the spec function of the same name in [`super::spec`], step for step,
-//! over the [`ExecItem`]s of a list. Verus checks that it never panics, overflows or loops
-//! forever. That it returns what the spec does is **not yet proven**: the contract
-//! [`super::contract::parse_selector_ensures`] is stated and unmet, and the WPT parsing
-//! cases (`tests/conformance_selectors.rs`) are the evidence for now. What matching needs of
-//! its result, well-formed arrays and well-formed selectors, is checked by
-//! [`super::exec_check`], which is proven, before [`parse_selector`] returns it.
+//! Each function is the spec function of the same name in [`super::spec`], step for step, over
+//! the [`ExecItem`]s of a list, and ensures its relation to it: [`parse_selector`] ensures
+//! [`super::contract::parse_selector_ensures`], and the functions below it ensure what it
+//! needs of them. A production that builds selectors appends to the arrays of a [`Build`] and
+//! leaves what was built before as it was (`exec_grow`); a selector not yet in a list is
+//! viewed in the arrays as they are (`pv_seq`, `pv_compounds`, `pv_complex`), and a loop's
+//! invariant says that the spec's loop from the start equals the spec's loop from the
+//! position it is at, with what has been read so far. Nesting past
+//! [`super::contract::MAX_NESTING`] sets [`Build::too_deep`], and each relation holds unless
+//! it is set, which only a list nested more deeply than the limit can do.
+//!
+//! The one thing taken on trust is that a `Vec` of the arrays never holds `usize::MAX`
+//! elements (`axioms.rs`).
 
 #[cfg(verus_only)]
 use super::axioms::axiom_lengths;

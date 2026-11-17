@@ -13,9 +13,10 @@
 //! - [`exec_match`]: matching, with [`exec_element`] and [`exec_strings`] for what it asks
 //!   of one element; [`exec_specificity`]: specificity. Both proven equal to the spec.
 //! - [`exec_parse`]: "parse a selector", over the component values [`exec_items`] reads
-//!   from `clazel-css`: checked by Verus for panics, overflow and termination only, **not
-//!   yet proven equal to the spec**; its output passes [`exec_check`], which is proven,
-//!   before it is returned. [`exec_serialize`]: CSSOM serialization, proven equal to the
+//!   from `clazel-css`, proven to meet [`contract::parse_selector_ensures`] (with
+//!   [`exec_anb`] for `<an+b>`, [`exec_numbers`] for what the tokenizer makes of an integer,
+//!   [`exec_grow`] and [`exec_steps`] for the proof, and one axiom, [`axioms`]); its output is
+//!   [`exec_check::checked`]. [`exec_serialize`]: CSSOM serialization, proven equal to the
 //!   spec.
 //!
 //! - [`independent`]: a second transcription of parsing, matching and specificity, from the

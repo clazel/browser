@@ -23,11 +23,12 @@ precomputed-hash = "=0.1.1"
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
 # shipped code today; `target-tier` is what the policy requires, since this
-# parses selectors a page chose. Tier 0 until the parser and serializer are
-# proven equal to the spec, the independent transcription's equivalence covers
-# parsing in full, and the suites are in, and CI's full verification is green.
+# parses selectors a page chose. Tier 2: the parser, the serializer, matching and
+# specificity are proven equal to the spec, the independent transcription's
+# equivalence covers parsing in full, and the suites are in. CI's full verification
+# on the pull request is what makes it hold.
 [package.metadata.clazel]
-tier = 0
+tier = 2
 target-tier = 2
 # Item 5.5's theorems (src/lemmas.rs). `cargo xtask check` fails if one is not
 # defined as a `proof fn` in this crate.

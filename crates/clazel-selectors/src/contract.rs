@@ -1,15 +1,13 @@
-//! Contracts the executable code must be proven to meet, and the statements of the theorems
-//! about the spec. Only some are attached yet: `exec_match::matches` ensures
-//! [`match_ensures`], and the matching algorithm meets [`match_work_ensures`] by
+//! Contracts the executable code is proven to meet, and the statements of the theorems
+//! about the spec. `exec_parse::parse_selector` ensures [`parse_selector_ensures`] of the
+//! view of its result (and that the result is `exec_check::checked`); `exec_match::matches`
+//! ensures [`match_ensures`], and the matching algorithm meets [`match_work_ensures`] by
 //! `theorem_match_total`; `exec_serialize::serialize` ensures [`serialize_ensures`] of the
 //! view of its argument (given `ranges_wf` and `list_wf`, which every parse has).
-//! [`parse_selector_ensures`] and [`specificity_ensures`] are the planned contracts of
-//! `parse_selector` and the specificity functions and are **not yet attached to any of
-//! them**: `parse_selector` ensures only that its result passes `exec_check`, and the
-//! specificity functions ensure equality with the spec's `simple_specificity`,
+//! [`specificity_ensures`] is the planned contract of the specificity functions and is not
+//! attached to them: they ensure equality with the spec's `simple_specificity`,
 //! `compound_specificity` and `list_specificity` directly (the same fact for the (A, B, C)
-//! of one complex selector that [`specificity_ensures`] states). So for the parser, reading
-//! this and [`super::spec`] says what it must meet, not what is proven.
+//! of one complex selector that [`specificity_ensures`] states).
 
 #[cfg(verus_only)]
 use super::algorithm::*;
