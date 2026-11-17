@@ -201,6 +201,7 @@ pub proof fn lemma_example_walk()
         walk(sample(), 0, seq![Item::PushClip { x: 0, y: 0, width: 0, height: 0 }, Item::PopClip]) is Some,
         decode(seq![3u8, 6u8, 1, 0, 0, 0]) == Some(seq![Item::PopClip, Item::FreeMask { id: 1 }]),
         no_masks().table[0] is None,
+        no_masks().images[0] is None,
 {
     assert(walk(sample(), 0, Seq::empty()) is Some) by (compute_only);
     assert(walk(sample(), 1, Seq::empty()) is None) by (compute_only);
@@ -323,7 +324,7 @@ pub proof fn lemma_example_images()
         masks_after(sample(), upload_image(0, 16384, 1)) is Some,
         masks_after(sample(), upload_image(0, 1, 1))->Some_0.images[0] is Some,
         masks_after(sample(), upload_image(0, 1, 1))->Some_0.table == sample().table,
-        masks_after(full(), upload_image(0, 1, 1)) is None,
+        masks_after(sample(), upload_image(0, 7, 5))->Some_0.images[0] == Some(ImageSize { width: 7, height: 5 }),
         masks_after(full(), upload_image(0, 1, 1)) is None,
         masks_after(sample(), Item::FreeImage { id: 0 }) is None,
         masks_after(sample(), Item::FreeImage { id: 1 })->Some_0.images[1] is None,
@@ -350,6 +351,8 @@ pub proof fn lemma_example_images()
     assert(masks_after(sample(), upload_image(0, 16384, 1)) is Some) by (compute_only);
     assert(masks_after(sample(), upload_image(0, 1, 1))->Some_0.images[0] is Some) by (compute_only);
     assert(masks_after(sample(), upload_image(0, 1, 1))->Some_0.table == sample().table) by (compute_only);
+    assert(masks_after(sample(), upload_image(0, 7, 5))->Some_0.images[0] == Some(ImageSize { width: 7, height: 5 }))
+        by (compute_only);
     assert(masks_after(full(), upload_image(0, 1, 1)) is None) by (compute_only);
     assert(masks_after(sample(), Item::FreeImage { id: 0 }) is None) by (compute_only);
     assert(masks_after(sample(), Item::FreeImage { id: 1 })->Some_0.images[1] is None) by (compute_only);
