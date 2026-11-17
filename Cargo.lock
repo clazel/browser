@@ -204,6 +204,7 @@ dependencies = [
 name = "clazel-a64"
 version = "0.0.0"
 dependencies = [
+ "vstd",
  "yaxpeax-arch",
  "yaxpeax-arm",
 ]

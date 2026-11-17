@@ -4,7 +4,7 @@ Part of [Clazel](../../README.md). The A64 (64-bit Arm) subset the JIT emits:
 its semantics, encoder and decoder ([jit.md](../../docs/phases/jit.md) item
 J.4).
 
-Nothing is implemented yet (tier 0, target tier 2). Item J.2 vendored or
+The primary spec (`src/spec.rs`, from the Sail Arm model) is written; no encoder or decoder exists yet (tier 0, target tier 2). Item J.2 vendored or
 pinned the sources the semantics will be written against, in `tests/data/`:
 
 | Suite | What | Held as |
