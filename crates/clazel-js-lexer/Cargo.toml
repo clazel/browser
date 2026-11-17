@@ -12,8 +12,10 @@ vstd = "=0.0.0-2026-10-04-0306"
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
 # shipped code today; `target-tier` is what the policy requires, since this
 # lexes scripts a page chose (phase-7.md 7.0(a)). Tier 0: the spec and the
-# contracts are written (item 7.2, first half, CLAUDE.md rule 3) and check
-# with Verus, but no implementation exists, so nothing shipped is proven.
+# contracts are written (item 7.2, first half, CLAUDE.md rule 3), and the
+# implementation (src/exec.rs) is proven total, panic-free and to tile its
+# input, but not to agree with the spec: it does not meet src/contract.rs
+# yet, and there is no independent transcription or mutation set.
 [package.metadata.clazel]
 tier = 0
 target-tier = 2
