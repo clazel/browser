@@ -1,0 +1,43 @@
+{
+  "mutations": [
+    {
+      "id": "coalesce-mixes-with-or",
+      "file": "src/spec.rs",
+      "find": "NodeKind::LogicalORExpression => lvl(a, l) >= 1 && lvl(a, r) >= 2,",
+      "replace": "NodeKind::LogicalORExpression => lvl(a, l) >= 0 && lvl(a, r) >= 2,",
+      "expect": "killed",
+      "reason": "Lets the left operand of `||` be a CoalesceExpression, so `a ?? b || c` would parse, which §13.13 forbids: example_coalesce_does_not_mix_with_or is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_coalesce_does_not_mix_with_or()",
+        "witness": "binary_operands_ok(AstV { nodes: seq![node(NodeKind::IdentifierReference, Op::None, 0, 1, Seq::empty()), node(NodeKind::IdentifierReference, Op::None, 5, 6, Seq::empty()), node(NodeKind::CoalesceExpression, Op::Coalesce, 0, 6, seq![0int, 1int]), node(NodeKind::IdentifierReference, Op::None, 10, 11, Seq::empty())], root: 3 }, NodeKind::LogicalORExpression, Op::LogicalOr, 2, 3)"
+      }
+    },
+    {
+      "id": "exponent-base-allows-unary",
+      "file": "src/spec.rs",
+      "find": "NodeKind::ExponentiationExpression => lvl(a, l) >= 13 && lvl(a, r) >= 11,",
+      "replace": "NodeKind::ExponentiationExpression => lvl(a, l) >= 12 && lvl(a, r) >= 11,",
+      "expect": "killed",
+      "reason": "Lets a UnaryExpression be the base of `**`, so `-a ** b` would parse, which §13.6 forbids: example_unary_is_not_an_exponentiation_base is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_unary_is_not_an_exponentiation_base()",
+        "witness": "binary_operands_ok(AstV { nodes: seq![node(NodeKind::IdentifierReference, Op::None, 1, 2, Seq::empty()), node(NodeKind::UnaryExpression, Op::Minus, 0, 2, seq![0int]), node(NodeKind::IdentifierReference, Op::None, 6, 7, Seq::empty())], root: 2 }, NodeKind::ExponentiationExpression, Op::Exp, 1, 2)"
+      }
+    },
+    {
+      "id": "do-while-insertion-anywhere",
+      "file": "src/spec.rs",
+      "find": "(dw && ts.gaps[m] == Ins::DoWhile)",
+      "replace": "ts.gaps[m] == Ins::DoWhile",
+      "expect": "killed",
+      "reason": "Accepts the `do`-`while` insertion (§12.10.1 rule 1, third condition) as the `;` of any statement, not only after the `)` of a do-while: example_inserted_semicolon_consumes_no_token is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_inserted_semicolon_consumes_no_token()",
+        "witness": "semi(Stream { toks: Seq::empty(), gaps: seq![Ins::DoWhile] }, 0, 0, false)"
+      }
+    }
+  ]
+}

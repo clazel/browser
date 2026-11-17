@@ -1,0 +1,43 @@
+{
+  "mutations": [
+    {
+      "id": "rex-swaps-w-and-r",
+      "file": "src/spec.rs",
+      "find": "8 * bool_to_bit(w) + 4 * bool_to_bit(r)",
+      "replace": "4 * bool_to_bit(w) + 8 * bool_to_bit(r)",
+      "expect": "killed",
+      "reason": "Swaps REX.W and REX.R (Intel SDM vol. 2 §2.2.1, ACL2 x86isa): `add rax, rbx` would encode as 44 01 D8, a 32-bit add with an extended register, so example_add_rax_rbx is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_add_rax_rbx()",
+        "witness": "encode(Instr::AluRR { alu: AluOp::Add, sz: Size::W64, dst: 0, src: 3 })[0] == 0x44u8"
+      }
+    },
+    {
+      "id": "mov-imm32-register-not-reduced",
+      "file": "src/spec.rs",
+      "find": "(0xB8 + (dst as int) % 8) as u8,\n        ] + le_bytes(imm as int, 4),",
+      "replace": "(0xB8 + (dst as int)) as u8,\n        ] + le_bytes(imm as int, 4),",
+      "expect": "killed",
+      "reason": "Adds the whole register number to the B8+r opcode instead of its low three bits (the fourth is REX.B): `mov r8d, imm32` would be 41 C0 …, so example_mov_imm32_r8 is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_mov_imm32_r8()",
+        "witness": "encode(Instr::MovImm32 { dst: 8, imm_u32: 0x12345678 })[1] == 0xC0u8"
+      }
+    },
+    {
+      "id": "sib-swaps-index-and-base",
+      "file": "src/spec.rs",
+      "find": "(sib_scale(m) * 64 + (ix % 8) * 8 + (m.base as int) % 8) as u8",
+      "replace": "(sib_scale(m) * 64 + ((m.base as int) % 8) * 8 + ix % 8) as u8",
+      "expect": "killed",
+      "reason": "Swaps the SIB index and base fields: `mov rax, [rbx + rcx*4 + 0x10]` would address [rcx + rbx*4 + 0x10] (SIB 99), so example_mov_load is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_mov_load()",
+        "witness": "encode(Instr::MovLoad { sz: Size::W64, dst: 0, mem: Mem { base: 3, index: Some(Index { reg: 1, scale: 2 }), disp: 0x10 } })[3] == 0x99u8"
+      }
+    }
+  ]
+}

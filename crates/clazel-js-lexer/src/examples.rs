@@ -89,6 +89,7 @@ pub proof fn example_legacy_numeric_literals()
         numeric_literal_is_legacy(seq![0x30u32, 0x31, 0x30], 0, 3),
         numeric_literal(seq![0x30u32, 0x38], 0, 2),
         numeric_literal_is_legacy(seq![0x30u32, 0x38], 0, 2),
+        legacy_octal_integer_literal(seq![0x30u32, 0x31, 0x30], 0, 3),
 {
     let s = seq![0x30u32, 0x31, 0x30];
     assert(legacy_octal_integer_literal(s, 0, 2));
@@ -214,6 +215,28 @@ pub proof fn example_comments()
     assert(multi_line_comment_chars(t, 2, 3));
     assert(multi_line_comment(t, 0, 5));
     assert(is_line_terminator(t[2]));
+}
+
+/// §12.3: the four `LineTerminator` code points, <LF>, <CR>, <LS> and <PS>,
+/// and a code point that is not one (U+0085 NEL, which ES does not count).
+pub proof fn example_line_terminators()
+    ensures
+        is_line_terminator(0x000Au32),
+        is_line_terminator(0x000Du32),
+        is_line_terminator(0x2028u32),
+        is_line_terminator(0x2029u32),
+        !is_line_terminator(0x0085u32),
+{
+}
+
+/// §12.9.3.1 "The MV of HexDigit :: one of `a` `A` is 10", and so on: `b`
+/// and `B` are 11, `9` is 9.
+pub proof fn example_hex_digit_values()
+    ensures
+        hex_digit_value(0x62u32) == 11,
+        hex_digit_value(0x42u32) == 11,
+        hex_digit_value(0x39u32) == 9,
+{
 }
 
 /// §12.9.5: `/[/]\//gu` is a `RegularExpressionLiteral`: a `/` inside a
