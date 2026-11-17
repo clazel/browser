@@ -17,6 +17,9 @@ clazel-dom = { path = "../clazel-dom" }
 # (class `test` in docs/DEPENDENCIES.md: never shipped).
 [dev-dependencies]
 selectors = "=0.36.1"
+# The version `selectors` is written against: its ToCss and parser types.
+cssparser = "=0.36.0"
+precomputed-hash = "=0.1.1"
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
 # shipped code today; `target-tier` is what the policy requires, since this

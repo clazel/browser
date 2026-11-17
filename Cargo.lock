@@ -495,6 +495,8 @@ version = "0.0.0"
 dependencies = [
  "clazel-css",
  "clazel-dom",
+ "cssparser 0.36.0",
+ "precomputed-hash",
  "selectors",
  "vstd",
 ]
