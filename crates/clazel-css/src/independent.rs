@@ -137,6 +137,7 @@ use vstd::prelude::*;
 pub mod equiv_base;
 pub mod equiv_bounds;
 pub mod equiv_anb;
+pub mod equiv_good;
 pub mod equiv_input;
 pub mod equiv_map;
 pub mod equiv_parser;

@@ -9,6 +9,7 @@
 //! - [`examples`]: concrete sheets, evaluated on the spec.
 //! - [`lemmas`]: theorems proven about the spec.
 //! - [`termination`]: why the spec's loops always go forward.
+//! - [`theorems`]: proofs of the planned theorems of [`contract`] that [`lemmas`] does not prove.
 
 pub mod contract;
 pub mod examples;
@@ -22,3 +23,4 @@ pub mod lemmas;
 pub mod rows;
 pub mod spec;
 pub mod termination;
+pub mod theorems;
