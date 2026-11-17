@@ -7,9 +7,11 @@ The decoding of input bytes (§3.2), the tokenizer and the parser are here, each
 equal to its spec, with certified mutations: `src/parser/exec_parse.rs` has the parser's
 entry points, and item 5.3 of the plan says how it reads tokens and what it costs. Of the
 five theorems stated in `src/parser/contract.rs` that `src/parser/lemmas.rs` leaves out,
-`src/parser/theorems.rs` proves two (`output_preserved`, and `value_end` for the starts
-inside a stream, the only ones where its `subrange` means anything); `block_ends_agree`,
-`spans_in_order` and `parse_bounded` are not proven. The crate also holds the test
+`src/parser/theorems.rs` proves all: `output_preserved`; `value_end` for the starts inside
+a stream, the only ones where its `subrange` means anything; `spans_in_order`, for every
+string of `u32`; `block_ends_agree`, for every token stream (`src/parser/blocks.rs`); and
+`parse_bounded`, by charging each part of the output the code points it was read from
+(`src/parser/bounded.rs`). The crate also holds the test
 data of [item 5.1](../../docs/phases/phase-5.md), in `tests/data/`: `css-parsing-tests`
 and WPT's `css/css-syntax`, each with what it is and where it falls short in its
 `SOURCE.md`. `tests/conformance_tokens.rs` and `tests/conformance_input.rs` run the cases
@@ -31,5 +33,5 @@ transcribes, not CSS 2.1 as item 5.4 had proposed).
 Tier 2, the target for a crate that parses style sheets a page chose: the conformance
 suites above, the certified mutations and the independent transcription are all there.
 What it does not claim is in the notes above and in the header of `src/independent.rs`;
-the theorems of `src/parser/contract.rs` that are stated and not proven (`block_ends_agree`,
-`spans_in_order`, `parse_bounded`) are not part of the tier.
+every theorem stated in `src/parser/contract.rs` is proven, `value_end` for the starts inside
+a stream only.

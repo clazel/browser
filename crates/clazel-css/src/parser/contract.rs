@@ -7,8 +7,7 @@
 //! [`super::rows`] says what they build.
 //!
 //! Each statement below is a `spec fn`, because a `proof fn` with no proof is not allowed.
-//! [`super::lemmas`] and [`super::theorems`] prove the ones that say so; the others are not
-//! proven.
+//! [`super::lemmas`] and [`super::theorems`] prove them.
 
 #[allow(unused_imports)]
 use super::spec::*;
@@ -257,7 +256,8 @@ pub open spec fn blocks_balanced(input: TokenStream, index: int) -> bool {
 /// `theorem_parse_bounded`: the output's component values number at most the code points of
 /// the input and one, so everything that walks the output is linear in the sheet. The plan
 /// counted tokens; a unicode-range value is tokenized a second time, into other tokens,
-/// so what bounds both is the code points. Not proven.
+/// so what bounds both is the code points. Proven in [`super::theorems`], from
+/// [`super::bounded`].
 pub open spec fn parse_bounded(string: Seq<u32>) -> bool {
     let rules = parse_a_stylesheet(Input::String { string }, None).rules;
     rules_size(rules, rules.len()) <= filter_code_points(string).len() + 1

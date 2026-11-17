@@ -41,6 +41,25 @@ pub proof fn theorem_block_ends_agree(input: TokenStream, index: int)
     }
 }
 
+/// `theorem_parse_bounded`: the output's component values number at most the code points of
+/// the input, so at most those and one. See [`super::bounded`], which counts the code points
+/// each part of the output was read from, and the unicode-range values, read a second time,
+/// from the text they had in the first.
+pub proof fn theorem_parse_bounded(string: Seq<u32>)
+    ensures
+        parse_bounded(string),
+{
+    let filtered = filter_code_points(string);
+    let stream = token_stream(filtered, false);
+    super::bounded::lemma_stream_costed(filtered, false);
+    super::bounded::lemma_stylesheet_bound(stream, 0, Seq::empty());
+    let (rules, end) = stylesheets_contents_loop(stream, 0, Seq::empty());
+    super::bounded::lemma_pos_in_text(stream, end);
+    assert(rules_size(Seq::<Rule>::empty(), 0) == 0);
+    assert(super::bounded::pos(stream, 0) == 0);
+    assert(stream.source->Some_0.text == filtered);
+}
+
 // ------------------------------------------------------------------------------------
 // theorem_value_end
 // ------------------------------------------------------------------------------------

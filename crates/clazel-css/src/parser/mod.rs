@@ -8,6 +8,7 @@
 //!   [`rows`] is what they build.
 //! - [`examples`]: concrete sheets, evaluated on the spec.
 //! - [`lemmas`]: theorems proven about the spec.
+//! - [`bounded`]: the sizes of the output against the code points it was read from.
 //! - [`blocks`]: why "consume a block" and "consume a simple block" end together.
 //! - [`termination`]: why the spec's loops always go forward.
 //! - [`theorems`]: proofs of the planned theorems of [`contract`] that [`lemmas`] does not prove.

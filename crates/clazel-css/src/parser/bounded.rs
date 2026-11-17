@@ -39,6 +39,7 @@ pub open spec fn cost(st: TokenStream, a: int, b: int) -> int {
 
 /// A stream made from a string: a span for each item, in order and inside the text, each
 /// item a token, and each token but EOF ends after the one before it.
+#[verifier::opaque]
 pub open spec fn costed(st: TokenStream) -> bool {
     &&& st.source is Some
     &&& st.source->Some_0.spans.len() == st.tokens.len()
@@ -47,8 +48,8 @@ pub open spec fn costed(st: TokenStream) -> bool {
         0 <= i < st.tokens.len() ==> 0 <= #[trigger] st.source->Some_0.spans[i].start
             <= st.source->Some_0.spans[i].end <= st.source->Some_0.text.len()
     &&& forall|i: int|
-        0 <= i && i + 1 < st.tokens.len() ==> #[trigger] st.source->Some_0.spans[i].end
-            <= st.source->Some_0.spans[i + 1].start
+        0 <= i && i + 1 < st.tokens.len() ==> st.source->Some_0.spans[i].end
+            <= #[trigger] st.source->Some_0.spans[i + 1].start
     &&& forall|i: int|
         0 <= i < st.tokens.len() && !(is(#[trigger] st.tokens[i], Token::Eof)) ==> st.source->Some_0.spans[i].end
             > position_of(st.source->Some_0, i)
@@ -121,8 +122,33 @@ pub proof fn lemma_stream_costed(string: Seq<u32>, flag: bool)
     ensures
         costed(token_stream(string, flag)),
 {
+    reveal(costed);
     lemma_stream_spans(string, flag);
     lemma_stream_strict(string, flag);
+}
+
+/// The span of an item starts after the one before it ends.
+pub proof fn lemma_span_order(st: TokenStream, i: int)
+    requires
+        costed(st),
+        0 <= i,
+        i + 1 < st.tokens.len(),
+    ensures
+        st.source->Some_0.spans[i].end <= st.source->Some_0.spans[i + 1].start,
+{
+    reveal(costed);
+}
+
+/// A span starts inside the text, and ends after it starts.
+pub proof fn lemma_span_in_text(st: TokenStream, i: int)
+    requires
+        costed(st),
+        0 <= i < st.tokens.len(),
+    ensures
+        0 <= st.source->Some_0.spans[i].start <= st.source->Some_0.spans[i].end
+            <= st.source->Some_0.text.len(),
+{
+    reveal(costed);
 }
 
 /// The positions of a [`costed`] stream do not go back.
@@ -134,14 +160,15 @@ pub proof fn lemma_pos_mono(st: TokenStream, i: int, j: int)
         pos(st, i) <= pos(st, j),
     decreases j - i,
 {
+    reveal(costed);
     if i < j {
         let source = st.source->Some_0;
         assert(pos(st, i) <= pos(st, i + 1)) by {
             assert(pos(st, i + 1) == source.spans[i].end);
-            assert(0 <= source.spans[i].start <= source.spans[i].end);
+            lemma_span_in_text(st, i);
             if i > 0 {
                 assert(pos(st, i) == source.spans[i - 1].end);
-                assert(source.spans[i - 1].end <= source.spans[i].start);
+                lemma_span_order(st, i - 1);
             }
         }
         lemma_pos_mono(st, i + 1, j);
@@ -156,6 +183,7 @@ pub proof fn lemma_pos_in_text(st: TokenStream, j: int)
     ensures
         0 <= pos(st, j) <= st.source->Some_0.text.len(),
 {
+    reveal(costed);
     if j > 0 {
         assert(pos(st, j) == st.source->Some_0.spans[j - 1].end);
         assert(0 <= st.source->Some_0.spans[j - 1].start);
@@ -172,6 +200,7 @@ pub proof fn lemma_token_costs(st: TokenStream, i: int)
     ensures
         cost(st, i, i + 1) >= 1,
 {
+    reveal(costed);
     assert(pos(st, i + 1) == st.source->Some_0.spans[i].end);
 }
 
@@ -186,7 +215,9 @@ pub proof fn lemma_next_costs(st: TokenStream, i: int)
         cost(st, i, i + 1) >= 1,
         value_size(next_token(st, i)) == 1,
 {
+    reveal(costed);
     assert(i < st.tokens.len());
+    assert(st.tokens[i] is Token);
     lemma_token_costs(st, i);
 }
 
@@ -647,17 +678,17 @@ proof fn lemma_segment_len(input: TokenStream, start: int, end: int)
         segment(input, start, end) is Some,
         segment(input, start, end)->Some_0.len() <= cost(input, start, end),
 {
+    reveal(costed);
     let source = input.source->Some_0;
     if start < end {
         lemma_pos_mono(input, start + 1, end);
         assert(pos(input, start + 1) == source.spans[start].end);
         assert(pos(input, end) == source.spans[end - 1].end);
-        assert(0 <= source.spans[start].start <= source.spans[start].end);
-        assert(0 <= source.spans[end - 1].start <= source.spans[end - 1].end
-            <= source.text.len());
+        lemma_span_in_text(input, start);
+        lemma_span_in_text(input, end - 1);
         if start > 0 {
             assert(pos(input, start) == source.spans[start - 1].end);
-            assert(source.spans[start - 1].end <= source.spans[start].start);
+            lemma_span_order(input, start - 1);
         }
         assert(source.spans[start].start <= source.spans[end - 1].end);
     }
@@ -780,6 +811,476 @@ pub proof fn lemma_declaration_bound(input: TokenStream, index: int, nested: boo
             lemma_declaration_value_bound(input, start, nested, token_value(next_token(input, index)));
             lemma_pos_mono(input, index, start);
         }
+    }
+}
+
+// ------------------------------------------------------------------------------------
+// At-rules, qualified rules, blocks and the sheet
+// ------------------------------------------------------------------------------------
+
+/// The loop of "consume an at-rule" holds at most what it took, and its prelude.
+proof fn lemma_at_rule_loop_bound(
+    input: TokenStream,
+    index: int,
+    nested: bool,
+    name: Seq<u32>,
+    prelude: Seq<ComponentValue>,
+)
+    requires
+        costed(input),
+        0 <= index <= input.tokens.len(),
+    ensures
+        ({
+            let (rule, end) = at_rule_loop(input, index, nested, name, prelude);
+            index <= end <= input.tokens.len() && (rule is Some ==> rule_size(rule->Some_0)
+                <= values_size(prelude, prelude.len()) + cost(input, index, end))
+        }),
+    decreases items_left(input, index), 1nat,
+{
+    let item = next_token(input, index);
+    if is(item, Token::Semicolon) || is(item, Token::Eof) {
+        lemma_pos_mono(input, index, discard_a_token(input, index));
+        if !is_empty(input, index) {
+            assert(index < input.tokens.len());
+        }
+        assert(values_size(Seq::<ComponentValue>::empty(), 0) == 0);
+    } else if is(item, Token::CloseCurly) {
+        if !nested {
+            lemma_next_costs(input, index);
+            let (token, next) = consume_a_token(input, index);
+            lemma_values_size_push(prelude, token);
+            lemma_at_rule_loop_bound(input, next, nested, name, prelude.push(token));
+        }
+    } else if is(item, Token::OpenCurly) {
+        lemma_block_bound(input, index);
+    } else {
+        lemma_cv_bound(input, index);
+        let (value, next) = consume_a_component_value(input, index);
+        lemma_values_size_push(prelude, value);
+        lemma_at_rule_loop_bound(input, next, nested, name, prelude.push(value));
+    }
+}
+
+/// "Consume an at-rule" holds at most what it took.
+proof fn lemma_at_rule_bound(input: TokenStream, index: int, nested: bool)
+    requires
+        costed(input),
+        0 <= index <= input.tokens.len(),
+        is_at_keyword(next_token(input, index)),
+    ensures
+        ({
+            let (rule, end) = consume_an_at_rule(input, index, nested);
+            index < end <= input.tokens.len() && (rule is Some ==> rule_size(rule->Some_0)
+                <= cost(input, index, end))
+        }),
+    decreases items_left(input, index), 2nat,
+{
+    assert(index < input.tokens.len());
+    lemma_at_rule_advances(input, index, nested);
+    let (token, next) = consume_a_token(input, index);
+    lemma_at_rule_loop_bound(input, next, nested, token_value(token), Seq::empty());
+    lemma_pos_mono(input, index, next);
+    assert(values_size(Seq::<ComponentValue>::empty(), 0) == 0);
+}
+
+/// The loop of "consume a qualified rule" holds at most what it took, and its prelude.
+proof fn lemma_qualified_rule_loop_bound(
+    input: TokenStream,
+    index: int,
+    stop: Option<Token>,
+    nested: bool,
+    prelude: Seq<ComponentValue>,
+)
+    requires
+        costed(input),
+        0 <= index <= input.tokens.len(),
+    ensures
+        ({
+            let (result, end) = qualified_rule_loop(input, index, stop, nested, prelude);
+            index <= end <= input.tokens.len() && (result is Rule ==> rule_size(
+                result->Rule_rule,
+            ) <= values_size(prelude, prelude.len()) + cost(input, index, end))
+        }),
+    decreases items_left(input, index), 1nat,
+{
+    let item = next_token(input, index);
+    if is(item, Token::Eof) || is_stop(item, stop) {
+    } else if is(item, Token::CloseCurly) {
+        if !nested {
+            lemma_next_costs(input, index);
+            let (token, next) = consume_a_token(input, index);
+            lemma_values_size_push(prelude, token);
+            lemma_qualified_rule_loop_bound(input, next, stop, nested, prelude.push(token));
+        }
+    } else if is(item, Token::OpenCurly) {
+        assert(index < input.tokens.len());
+        lemma_block_bound(input, index);
+        lemma_remnants_within(input, index, true);
+        let (child, next) = consume_a_block(input, index);
+        lemma_qualified_rule_size(prelude, child);
+    } else {
+        lemma_cv_bound(input, index);
+        let (value, next) = consume_a_component_value(input, index);
+        lemma_values_size_push(prelude, value);
+        lemma_qualified_rule_loop_bound(input, next, stop, nested, prelude.push(value));
+    }
+}
+
+/// "Consume a block" holds at most what it took.
+proof fn lemma_block_bound(input: TokenStream, index: int)
+    requires
+        costed(input),
+        0 <= index <= input.tokens.len(),
+        is(next_token(input, index), Token::OpenCurly),
+    ensures
+        ({
+            let (items, end) = consume_a_block(input, index);
+            index < end <= input.tokens.len() && items_size(items, items.len()) <= cost(
+                input,
+                index,
+                end,
+            )
+        }),
+    decreases items_left(input, index), 0nat,
+{
+    assert(index < input.tokens.len());
+    assert(discard_a_token(input, index) == index + 1);
+    lemma_contents_bound(input, index + 1, Seq::empty(), Seq::empty());
+    let (items, next) = consume_a_blocks_contents(input, index + 1);
+    lemma_pos_mono(input, index, index + 1);
+    lemma_pos_mono(input, next, discard_a_token(input, next));
+    assert(items_size(Seq::<BlockItem>::empty(), 0) == 0);
+    assert(declarations_size(Seq::<Declaration>::empty(), 0) == 0);
+    if !is_empty(input, next) {
+        assert(next < input.tokens.len());
+    }
+}
+
+/// What [`lemma_contents_bound`] says of the loop of "consume a block's contents".
+pub open spec fn contents_post(
+    input: TokenStream,
+    index: int,
+    rules: Seq<BlockItem>,
+    decls: Seq<Declaration>,
+) -> bool {
+    let (items, end) = blocks_contents_loop(input, index, rules, decls);
+    index <= end <= input.tokens.len() && items_size(items, items.len()) <= items_size(
+        rules,
+        rules.len(),
+    ) + declarations_size(decls, decls.len()) + cost(input, index, end)
+}
+
+/// The loop of "consume a block's contents" holds at most what it took, and what it began
+/// with.
+proof fn lemma_contents_bound(
+    input: TokenStream,
+    index: int,
+    rules: Seq<BlockItem>,
+    decls: Seq<Declaration>,
+)
+    requires
+        costed(input),
+        0 <= index <= input.tokens.len(),
+    ensures
+        contents_post(input, index, rules, decls),
+    decreases items_left(input, index), 5nat,
+{
+    let item = next_token(input, index);
+    if is(item, Token::Whitespace) || is(item, Token::Semicolon) {
+        assert(index < input.tokens.len());
+        lemma_pos_mono(input, index, index + 1);
+        lemma_contents_bound(input, index + 1, rules, decls);
+    } else if is(item, Token::Eof) || is(item, Token::CloseCurly) {
+        lemma_with_declarations_size(rules, decls);
+    } else if is_at_keyword(item) {
+        lemma_contents_at_rule(input, index, rules, decls);
+    } else {
+        lemma_contents_declaration(input, index, rules, decls);
+    }
+}
+
+/// [`contents_post`] at an at-keyword.
+#[verifier::spinoff_prover]
+proof fn lemma_contents_at_rule(
+    input: TokenStream,
+    index: int,
+    rules: Seq<BlockItem>,
+    decls: Seq<Declaration>,
+)
+    requires
+        costed(input),
+        0 <= index <= input.tokens.len(),
+        is_at_keyword(next_token(input, index)),
+    ensures
+        contents_post(input, index, rules, decls),
+    decreases items_left(input, index), 3nat,
+{
+    let flushed = with_declarations(rules, decls);
+    lemma_with_declarations_size(rules, decls);
+    lemma_at_rule_advances(input, index, true);
+    assert(index < input.tokens.len());
+    lemma_at_rule_bound(input, index, true);
+    let (rule, next) = consume_an_at_rule(input, index, true);
+    assert(declarations_size(Seq::<Declaration>::empty(), 0) == 0);
+    lemma_pos_mono(input, index, next);
+    let item = next_token(input, index);
+    assert(!(is(item, Token::Whitespace)) && !(is(item, Token::Semicolon)) && !(is(item, Token::Eof))
+        && !(is(item, Token::CloseCurly)));
+    assert(moved(index, next) == next);
+    match rule {
+        Some(rule) => {
+            lemma_items_size_push(flushed, BlockItem::Rule { rule });
+            assert(item_size(BlockItem::Rule { rule }) == rule_size(rule));
+            lemma_contents_bound(
+                input,
+                next,
+                flushed.push(BlockItem::Rule { rule }),
+                Seq::empty(),
+            );
+            assert(blocks_contents_loop(input, index, rules, decls) == blocks_contents_loop(
+                input,
+                next,
+                flushed.push(BlockItem::Rule { rule }),
+                Seq::empty(),
+            ));
+        },
+        None => {
+            lemma_contents_bound(input, next, flushed, Seq::empty());
+            assert(blocks_contents_loop(input, index, rules, decls) == blocks_contents_loop(
+                input,
+                next,
+                flushed,
+                Seq::empty(),
+            ));
+        },
+    }
+}
+
+/// [`contents_post`] at anything that is not whitespace, `;`, `}`, the end or an at-keyword.
+#[verifier::spinoff_prover]
+proof fn lemma_contents_declaration(
+    input: TokenStream,
+    index: int,
+    rules: Seq<BlockItem>,
+    decls: Seq<Declaration>,
+)
+    requires
+        costed(input),
+        0 <= index <= input.tokens.len(),
+        !(is(next_token(input, index), Token::Whitespace)),
+        !(is(next_token(input, index), Token::Semicolon)),
+        !(is(next_token(input, index), Token::Eof)),
+        !(is(next_token(input, index), Token::CloseCurly)),
+        !is_at_keyword(next_token(input, index)),
+    ensures
+        contents_post(input, index, rules, decls),
+    decreases items_left(input, index), 4nat,
+{
+    assert(index < input.tokens.len());
+    lemma_declaration_forward(input, index, true);
+    lemma_declaration_bound(input, index, true);
+    let (declaration, next) = consume_a_declaration(input, index, true);
+    assert(declarations_size(Seq::<Declaration>::empty(), 0) == 0);
+    match declaration {
+        Some(decl) => {
+            lemma_declarations_size_push(decls, decl);
+            lemma_contents_bound(input, next, rules, decls.push(decl));
+        },
+        None => lemma_contents_qualified_rule(input, index, rules, decls),
+    }
+}
+
+/// [`contents_post`] at a qualified rule, as the item is not a declaration.
+#[verifier::spinoff_prover]
+proof fn lemma_contents_qualified_rule(
+    input: TokenStream,
+    index: int,
+    rules: Seq<BlockItem>,
+    decls: Seq<Declaration>,
+)
+    requires
+        costed(input),
+        0 <= index <= input.tokens.len(),
+        !(is(next_token(input, index), Token::Whitespace)),
+        !(is(next_token(input, index), Token::Semicolon)),
+        !(is(next_token(input, index), Token::Eof)),
+        !(is(next_token(input, index), Token::CloseCurly)),
+        !is_at_keyword(next_token(input, index)),
+        consume_a_declaration(input, index, true).0 is None,
+    ensures
+        contents_post(input, index, rules, decls),
+    decreases items_left(input, index), 3nat,
+{
+    assert(index < input.tokens.len());
+    lemma_qualified_rule_forward(input, index, Some(Token::Semicolon), true, Seq::empty());
+    lemma_qualified_rule_loop_bound(input, index, Some(Token::Semicolon), true, Seq::empty());
+    assert(values_size(Seq::<ComponentValue>::empty(), 0) == 0);
+    assert(declarations_size(Seq::<Declaration>::empty(), 0) == 0);
+    let (result, after_rule) = consume_a_qualified_rule(
+        input,
+        index,
+        Some(Token::Semicolon),
+        true,
+    );
+    lemma_pos_mono(input, index, after_rule);
+    lemma_with_declarations_size(rules, decls);
+    assert(moved(index, after_rule) == after_rule);
+    assert(consume_a_declaration(input, index, true).0 is None);
+    match result {
+        QualifiedRuleResult::Nothing => {
+            lemma_contents_bound(input, after_rule, rules, decls);
+            assert(blocks_contents_loop(input, index, rules, decls) == blocks_contents_loop(
+                input,
+                after_rule,
+                rules,
+                decls,
+            ));
+        },
+        QualifiedRuleResult::InvalidRuleError => {
+            lemma_contents_bound(
+                input,
+                after_rule,
+                with_declarations(rules, decls),
+                Seq::empty(),
+            );
+            assert(blocks_contents_loop(input, index, rules, decls) == blocks_contents_loop(
+                input,
+                after_rule,
+                with_declarations(rules, decls),
+                Seq::empty(),
+            ));
+        },
+        QualifiedRuleResult::Rule { rule } => {
+            lemma_items_size_push(with_declarations(rules, decls), BlockItem::Rule { rule });
+            assert(item_size(BlockItem::Rule { rule }) == rule_size(rule));
+            lemma_contents_bound(
+                input,
+                after_rule,
+                with_declarations(rules, decls).push(BlockItem::Rule { rule }),
+                Seq::empty(),
+            );
+            assert(blocks_contents_loop(input, index, rules, decls) == blocks_contents_loop(
+                input,
+                after_rule,
+                with_declarations(rules, decls).push(BlockItem::Rule { rule }),
+                Seq::empty(),
+            ));
+        },
+    }
+}
+
+/// What [`lemma_stylesheet_bound`] says of the loop of "consume a stylesheet's contents".
+pub open spec fn stylesheet_post(input: TokenStream, index: int, rules: Seq<Rule>) -> bool {
+    let (all, end) = stylesheets_contents_loop(input, index, rules);
+    index <= end <= input.tokens.len() && rules_size(all, all.len()) <= rules_size(
+        rules,
+        rules.len(),
+    ) + cost(input, index, end)
+}
+
+/// The loop of "consume a stylesheet's contents" holds at most what it took, and what it
+/// began with.
+pub proof fn lemma_stylesheet_bound(input: TokenStream, index: int, rules: Seq<Rule>)
+    requires
+        costed(input),
+        0 <= index <= input.tokens.len(),
+    ensures
+        stylesheet_post(input, index, rules),
+    decreases items_left(input, index), 4nat,
+{
+    let item = next_token(input, index);
+    if is(item, Token::Whitespace) || is(item, Token::Cdo) || is(item, Token::Cdc) {
+        assert(index < input.tokens.len());
+        lemma_pos_mono(input, index, index + 1);
+        lemma_stylesheet_bound(input, index + 1, rules);
+    } else if is(item, Token::Eof) {
+    } else if is_at_keyword(item) {
+        lemma_stylesheet_at_rule(input, index, rules);
+    } else {
+        lemma_stylesheet_qualified_rule(input, index, rules);
+    }
+}
+
+/// [`stylesheet_post`] at an at-keyword.
+#[verifier::spinoff_prover]
+proof fn lemma_stylesheet_at_rule(input: TokenStream, index: int, rules: Seq<Rule>)
+    requires
+        costed(input),
+        0 <= index <= input.tokens.len(),
+        is_at_keyword(next_token(input, index)),
+    ensures
+        stylesheet_post(input, index, rules),
+    decreases items_left(input, index), 3nat,
+{
+    assert(index < input.tokens.len());
+    lemma_at_rule_bound(input, index, false);
+    let (rule, next) = consume_an_at_rule(input, index, false);
+    lemma_pos_mono(input, index, next);
+    let item = next_token(input, index);
+    assert(!(is(item, Token::Whitespace)) && !(is(item, Token::Cdo)) && !(is(item, Token::Cdc))
+        && !(is(item, Token::Eof)));
+    assert(moved(index, next) == next);
+    match rule {
+        Some(rule) => {
+            lemma_rules_size_push(rules, rule);
+            lemma_stylesheet_bound(input, next, rules.push(rule));
+            assert(stylesheets_contents_loop(input, index, rules) == stylesheets_contents_loop(
+                input,
+                next,
+                rules.push(rule),
+            ));
+        },
+        None => {
+            lemma_stylesheet_bound(input, next, rules);
+            assert(stylesheets_contents_loop(input, index, rules) == stylesheets_contents_loop(
+                input,
+                next,
+                rules,
+            ));
+        },
+    }
+}
+
+/// [`stylesheet_post`] at a qualified rule.
+#[verifier::spinoff_prover]
+proof fn lemma_stylesheet_qualified_rule(input: TokenStream, index: int, rules: Seq<Rule>)
+    requires
+        costed(input),
+        0 <= index <= input.tokens.len(),
+        !(is(next_token(input, index), Token::Whitespace)),
+        !(is(next_token(input, index), Token::Cdo)),
+        !(is(next_token(input, index), Token::Cdc)),
+        !(is(next_token(input, index), Token::Eof)),
+        !is_at_keyword(next_token(input, index)),
+    ensures
+        stylesheet_post(input, index, rules),
+    decreases items_left(input, index), 3nat,
+{
+    assert(index < input.tokens.len());
+    theorem_stylesheet_moves(input, index);
+    lemma_qualified_rule_loop_bound(input, index, None, false, Seq::empty());
+    assert(values_size(Seq::<ComponentValue>::empty(), 0) == 0);
+    let (result, next) = consume_a_qualified_rule(input, index, None, false);
+    lemma_pos_mono(input, index, next);
+    assert(moved(index, next) == next);
+    match result {
+        QualifiedRuleResult::Rule { rule } => {
+            lemma_rules_size_push(rules, rule);
+            lemma_stylesheet_bound(input, next, rules.push(rule));
+            assert(stylesheets_contents_loop(input, index, rules) == stylesheets_contents_loop(
+                input,
+                next,
+                rules.push(rule),
+            ));
+        },
+        _ => {
+            lemma_stylesheet_bound(input, next, rules);
+            assert(stylesheets_contents_loop(input, index, rules) == stylesheets_contents_loop(
+                input,
+                next,
+                rules,
+            ));
+        },
     }
 }
 
