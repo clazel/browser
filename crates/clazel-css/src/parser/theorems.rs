@@ -30,6 +30,17 @@ pub proof fn theorem_output_preserved(string: Seq<u32>)
     lemma_all_good_preserved(values, values.len());
 }
 
+/// `theorem_block_ends_agree`: "consume a block" and "consume a simple block" end at the same
+/// index, for every token stream, whatever its items. See [`super::blocks`].
+pub proof fn theorem_block_ends_agree(input: TokenStream, index: int)
+    ensures
+        block_ends_agree(input, index),
+{
+    if is(next_token(input, index), Token::OpenCurly) {
+        super::blocks::lemma_block_agrees(input, index);
+    }
+}
+
 // ------------------------------------------------------------------------------------
 // theorem_value_end
 // ------------------------------------------------------------------------------------

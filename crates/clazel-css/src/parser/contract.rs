@@ -265,11 +265,12 @@ pub open spec fn parse_bounded(string: Seq<u32>) -> bool {
 
 /// `theorem_block_ends_agree`: "consume a block" and "consume a simple block" end at the
 /// same index, whatever the block holds, since everything inside a block's contents stops
-/// before an unmatched `}`. Nothing in the exec parser uses it yet: the plan (item 5.3 of
+/// before an unmatched `}`. Proven in [`super::theorems`], from [`super::blocks`], for every
+/// token stream. Nothing in the exec parser uses it yet: the plan (item 5.3 of
 /// `docs/phases/phase-5.md`) wants a table of closing positions, which this would justify,
 /// so that a declaration that is about to fail can step over a block without reading it,
 /// but no such table is built, and a block as the first value of a declaration that then
-/// fails stays quadratic (the plan lists this). Not proven.
+/// fails stays quadratic (the plan lists this).
 pub open spec fn block_ends_agree(input: TokenStream, index: int) -> bool {
     is(next_token(input, index), Token::OpenCurly) ==> consume_a_block(input, index).1
         == consume_a_simple_block(input, index).1

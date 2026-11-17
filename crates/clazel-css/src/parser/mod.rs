@@ -8,9 +8,11 @@
 //!   [`rows`] is what they build.
 //! - [`examples`]: concrete sheets, evaluated on the spec.
 //! - [`lemmas`]: theorems proven about the spec.
+//! - [`blocks`]: why "consume a block" and "consume a simple block" end together.
 //! - [`termination`]: why the spec's loops always go forward.
 //! - [`theorems`]: proofs of the planned theorems of [`contract`] that [`lemmas`] does not prove.
 
+pub mod blocks;
 pub mod contract;
 pub mod examples;
 pub mod exec;
