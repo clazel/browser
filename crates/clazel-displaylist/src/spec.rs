@@ -16,13 +16,27 @@
 //! | 4 | [`Item::UploadMask`] | id (4), columns (2), rows (2), coverage (columns × rows) |
 //! | 5 | [`Item::DrawMask`] | id (4), x (4), y (4), colour (4) |
 //! | 6 | [`Item::FreeMask`] | id (4) |
+//! | 7 | [`Item::UploadImage`] | id (4), width (2), height (2), pixels (width × height × 4) |
+//! | 8 | [`Item::DrawImage`] | id (4), x (4), y (4), width (4), height (4), source x (2), source y (2), source width (2), source height (2), filter (1) |
+//! | 9 | [`Item::FreeImage`] | id (4) |
+//!
+//! Tags 7 to 9 are phase-6.md item 6.10's, which names them in this order: "**upload
+//! image** (id, width, height, then width × height × 4 bytes of premultiplied RGBA8),
+//! **draw image** (id, destination x, y, width, height, as tag 1; source rectangle in
+//! the image's pixels; a filter flag, nearest or linear), **free image** (id)". The
+//! destination's four fields are tag 1's (signed, then unsigned, 32 bits). The source
+//! rectangle's four fields are unsigned, 16 bits, since an image's sides are at most
+//! [`MAX_IMAGE_SIDE`] = 2^14. The filter is one byte: 0 is nearest, 1 is linear, and
+//! any other byte is not an item, so that every item has one encoding. The pixels of
+//! an upload are rows from the top, four bytes a pixel in the order red, green, blue,
+//! alpha, premultiplied.
 //!
 //! Every byte string has one reading or none, and every list one encoding.
 //!
 //! # The rules
 //!
-//! [`validate`] walks a decoded list against the masks that earlier frames left
-//! uploaded, and gives the masks this frame leaves. A list that fails is refused
+//! [`validate`] walks a decoded list against the masks and images that earlier frames
+//! left uploaded, and gives the masks and images this frame leaves. A list that fails is refused
 //! whole, and the GPU process ends: only a compromised or buggy renderer sends one.
 //!
 //! # Modelling choices (ours, each listed)
@@ -42,8 +56,25 @@
 //!   [`MAX_ITEMS`], [`MAX_CLIP_DEPTH`], [`MAX_MASKS`], [`MAX_MASK_SIDE`] and
 //!   [`MAX_MASK_BYTES`]. Between them they bound the GPU process's memory and its work
 //!   per list.
-//! - **Phase 6's image item is not here.** It gets the next tag when it has a meaning;
-//!   until then that tag, like every other, fails to decode.
+//! - **Images are a second table, in the same state.** [`Masks`] holds the masks and
+//!   the images that live between lists (its name is kept so that 5.17a's statements
+//!   keep theirs). An image id is a separate space from a mask id: an image and a mask
+//!   may both be numbered 3. Images are numbered by the renderer below [`MAX_IMAGES`],
+//!   are not reused while live, and are never replaced.
+//! - **Image limits, stated (phase-6.md 6.10; provisional until 5.26 and 6.12 measure
+//!   them):** [`MAX_IMAGES`], [`MAX_IMAGE_SIDE`] and [`MAX_IMAGE_BYTES`], 2^28, "inside
+//!   6.0(j)'s budget, the GPU process's limit, not the renderer's". Each live image costs
+//!   width × height × 4 bytes.
+//! - **The list's byte limit grows by [`MAX_IMAGE_BYTES`] for uploads:**
+//!   [`MAX_LIST_BYTES`] is 2^27 + 2^28. That is room for one upload of the whole image
+//!   budget beside the 2^27 bytes of everything else. 6.10 allows "uploads move to a
+//!   second channel if 6.12's prototype shows copying through the socket is too slow";
+//!   that is decided there, and if it happens this limit shrinks again.
+//! - **A draw's source rectangle is checked against the image's size at that point**,
+//!   so it is a rule of the walk and not of the item: [`masks_after`] refuses a draw
+//!   whose source is not inside its image. An empty source rectangle is inside (it draws
+//!   nothing), as is an empty destination. The destination is not tied to the source's
+//!   size: a destination of another size from the source is how an image is scaled.
 //! - "Failure" is `None`.
 
 #[allow(unused_imports)]
@@ -51,8 +82,9 @@ use vstd::prelude::*;
 
 verus! {
 
-/// The longest list: 128 MiB, in the bytes.
-pub const MAX_LIST_BYTES: usize = 134_217_728;
+/// The longest list: 384 MiB, in the bytes. This is 2^27, which 5.17a gave it, and
+/// 2^28 more for image uploads ([`MAX_IMAGE_BYTES`]).
+pub const MAX_LIST_BYTES: usize = 402_653_184;
 
 /// The most items in one list.
 pub const MAX_ITEMS: usize = 1_048_576;
@@ -68,6 +100,15 @@ pub const MAX_MASK_SIDE: usize = 2048;
 
 /// The most coverage bytes alive at once: 64 MiB, what the atlas holds.
 pub const MAX_MASK_BYTES: usize = 67_108_864;
+
+/// How many images can be alive, so every image id is below this.
+pub const MAX_IMAGES: usize = 65_536;
+
+/// The longest side of an image, in pixels: 2^14.
+pub const MAX_IMAGE_SIDE: usize = 16_384;
+
+/// The most pixel bytes alive at once, four to a pixel: 2^28.
+pub const MAX_IMAGE_BYTES: usize = 268_435_456;
 
 /// The largest magnitude of a position, and the largest size: 2^23.
 pub const MAX_COORD: usize = 8_388_608;
@@ -128,6 +169,45 @@ pub ghost enum Item {
         /// The mask.
         id: u32,
     },
+    /// Keep an image under an id.
+    UploadImage {
+        /// The renderer's number for it, in the images' own space.
+        id: u32,
+        /// The width in pixels.
+        image_width: u16,
+        /// The height in pixels.
+        image_height: u16,
+        /// `width × height × 4` bytes of premultiplied RGBA8, in rows from the top.
+        pixels: Seq<u8>,
+    },
+    /// Draw part of an image into a rectangle, under the current clip.
+    DrawImage {
+        /// The image.
+        id: u32,
+        /// The destination's left edge, in device pixels.
+        x: i32,
+        /// The destination's top edge.
+        y: i32,
+        /// The destination's width.
+        width: u32,
+        /// The destination's height.
+        height: u32,
+        /// The source's left edge, in the image's pixels.
+        src_x: u16,
+        /// The source's top edge.
+        src_y: u16,
+        /// The source's width.
+        src_width: u16,
+        /// The source's height.
+        src_height: u16,
+        /// Linear filtering if true, nearest if false.
+        linear: bool,
+    },
+    /// Forget an image, releasing its pixels.
+    FreeImage {
+        /// The image.
+        id: u32,
+    },
 }
 
 /// The size of a live mask.
@@ -138,10 +218,20 @@ pub ghost struct MaskSize {
     pub height: nat,
 }
 
-/// The masks alive between lists, indexed by id.
+/// The size of a live image.
+pub ghost struct ImageSize {
+    /// The width in pixels.
+    pub width: nat,
+    /// The height in pixels.
+    pub height: nat,
+}
+
+/// The masks and images alive between lists, each indexed by its own id.
 pub ghost struct Masks {
-    /// One entry per possible id.
+    /// One entry per possible mask id.
     pub table: Seq<Option<MaskSize>>,
+    /// One entry per possible image id.
+    pub images: Seq<Option<ImageSize>>,
 }
 
 // ---------------------------------------------------------------- numbers
@@ -207,6 +297,7 @@ pub open spec fn field2(s: Seq<u8>, at: int) -> nat {
 pub open spec fn encodable(item: Item) -> bool {
     match item {
         Item::UploadMask { columns: width, rows: height, coverage, .. } => coverage.len() == width as nat * height as nat,
+        Item::UploadImage { image_width: width, image_height: height, pixels, .. } => pixels.len() == width as nat * height as nat * 4,
         _ => true,
     }
 }
@@ -237,6 +328,23 @@ pub open spec fn encode_item(item: Item) -> Seq<u8> {
             + le_bytes(bits_of(y), 4)
             + le_bytes(colour as nat, 4),
         Item::FreeMask { id } => seq![6u8] + le_bytes(id as nat, 4),
+        Item::UploadImage { id, image_width: width, image_height: height, pixels } => seq![7u8]
+            + le_bytes(id as nat, 4)
+            + le_bytes(width as nat, 2)
+            + le_bytes(height as nat, 2)
+            + pixels,
+        Item::DrawImage { id, x, y, width, height, src_x, src_y, src_width, src_height, linear } => seq![8u8]
+            + le_bytes(id as nat, 4)
+            + le_bytes(bits_of(x), 4)
+            + le_bytes(bits_of(y), 4)
+            + le_bytes(width as nat, 4)
+            + le_bytes(height as nat, 4)
+            + le_bytes(src_x as nat, 2)
+            + le_bytes(src_y as nat, 2)
+            + le_bytes(src_width as nat, 2)
+            + le_bytes(src_height as nat, 2)
+            + seq![if linear { 1u8 } else { 0u8 }],
+        Item::FreeImage { id } => seq![9u8] + le_bytes(id as nat, 4),
     }
 }
 
@@ -330,6 +438,58 @@ pub open spec fn decode_item(s: Seq<u8>) -> Option<(Item, nat)> {
         } else {
             Some((Item::FreeMask { id: field4(s, 1) as u32 }, 5))
         }
+    } else if s[0] == 7u8 {
+        // 6.10 "upload image (id, width, height, then width × height × 4 bytes ...)"
+        if s.len() < 9 {
+            None
+        } else {
+            let width = field2(s, 5);
+            let height = field2(s, 7);
+            let size = width * height * 4;
+            if s.len() < 9 + size {
+                None
+            } else {
+                Some((
+                    Item::UploadImage {
+                        id: field4(s, 1) as u32,
+                        image_width: width as u16,
+                        image_height: height as u16,
+                        pixels: s.subrange(9, 9 + size as int),
+                    },
+                    9 + size,
+                ))
+            }
+        }
+    } else if s[0] == 8u8 {
+        // 6.10 "draw image (id, destination x, y, width, height, as tag 1; source
+        // rectangle in the image's pixels; a filter flag, nearest or linear)"
+        if s.len() < 30 {
+            None
+        } else if s[29] != 0u8 && s[29] != 1u8 {
+            None
+        } else {
+            Some((
+                Item::DrawImage {
+                    id: field4(s, 1) as u32,
+                    x: i32_of(field4(s, 5)),
+                    y: i32_of(field4(s, 9)),
+                    width: field4(s, 13) as u32,
+                    height: field4(s, 17) as u32,
+                    src_x: field2(s, 21) as u16,
+                    src_y: field2(s, 23) as u16,
+                    src_width: field2(s, 25) as u16,
+                    src_height: field2(s, 27) as u16,
+                    linear: s[29] == 1u8,
+                },
+                30,
+            ))
+        }
+    } else if s[0] == 9u8 {
+        if s.len() < 5 {
+            None
+        } else {
+            Some((Item::FreeImage { id: field4(s, 1) as u32 }, 5))
+        }
     } else {
         None
     }
@@ -387,12 +547,18 @@ pub open spec fn size_ok(v: u32) -> bool {
 
 /// No masks.
 pub open spec fn no_masks() -> Masks {
-    Masks { table: Seq::new((MAX_MASKS as nat), |i: int| None) }
+    Masks {
+        table: Seq::new((MAX_MASKS as nat), |i: int| None),
+        images: Seq::new((MAX_IMAGES as nat), |i: int| None),
+    }
 }
 
-/// The table has its fixed length.
+/// Both tables have their fixed length, and what is live in each is within its budget.
 pub open spec fn masks_ok(masks: Masks) -> bool {
-    masks.table.len() == (MAX_MASKS as nat) && live_bytes(masks.table) <= (MAX_MASK_BYTES as nat)
+    &&& masks.table.len() == (MAX_MASKS as nat)
+    &&& live_bytes(masks.table) <= (MAX_MASK_BYTES as nat)
+    &&& masks.images.len() == (MAX_IMAGES as nat)
+    &&& live_image_bytes(masks.images) <= (MAX_IMAGE_BYTES as nat)
 }
 
 /// The coverage bytes of every live mask in a table.
@@ -410,14 +576,62 @@ pub open spec fn live_bytes(table: Seq<Option<MaskSize>>) -> nat
     }
 }
 
+/// The pixel bytes of every live image in a table, four to a pixel.
+pub open spec fn live_image_bytes(images: Seq<Option<ImageSize>>) -> nat
+    decreases images.len(),
+{
+    if images.len() == 0 {
+        0
+    } else {
+        let rest = live_image_bytes(images.subrange(1, images.len() as int));
+        match images[0] {
+            None => rest,
+            Some(size) => size.width * size.height * 4 + rest,
+        }
+    }
+}
+
 /// An id the table has an entry for.
 pub open spec fn id_ok(id: u32) -> bool {
     (id as nat) < (MAX_MASKS as nat)
 }
 
+/// An id the table of images has an entry for.
+pub open spec fn image_id_ok(id: u32) -> bool {
+    (id as nat) < (MAX_IMAGES as nat)
+}
+
 /// Whether `id` names a live mask.
 pub open spec fn is_live(masks: Masks, id: u32) -> bool {
     id_ok(id) && masks.table[id as int] is Some
+}
+
+/// Whether `id` names a live image.
+pub open spec fn is_image_live(masks: Masks, id: u32) -> bool {
+    image_id_ok(id) && masks.images[id as int] is Some
+}
+
+/// A source rectangle lies inside an image of this size: "a source rectangle inside it".
+pub open spec fn source_inside(size: ImageSize, src_x: u16, src_y: u16, src_width: u16, src_height: u16) -> bool {
+    src_x as nat + src_width as nat <= size.width && src_y as nat + src_height as nat <= size.height
+}
+
+/// Whether a draw's source rectangle lies inside the live image it names.
+pub open spec fn draw_source_ok(
+    masks: Masks,
+    id: u32,
+    src_x: u16,
+    src_y: u16,
+    src_width: u16,
+    src_height: u16,
+) -> bool {
+    is_image_live(masks, id) && source_inside(
+        masks.images[id as int]->Some_0,
+        src_x,
+        src_y,
+        src_width,
+        src_height,
+    )
 }
 
 /// The masks after one item, or `None` if the item breaks a rule. Clips are
@@ -441,7 +655,7 @@ pub open spec fn masks_after(masks: Masks, item: Item) -> Option<Masks> {
         Item::PopClip => Some(masks),
         Item::UploadMask { id, columns: width, rows: height, .. } => {
             let size = MaskSize { width: width as nat, height: height as nat };
-            let updated = Masks { table: masks.table.update(id as int, Some(size)) };
+            let updated = Masks { table: masks.table.update(id as int, Some(size)), images: masks.images };
             if !id_ok(id) || masks.table[id as int] is Some {
                 None
             } else if width == 0 || height == 0 {
@@ -463,7 +677,47 @@ pub open spec fn masks_after(masks: Masks, item: Item) -> Option<Masks> {
         },
         Item::FreeMask { id } => {
             if is_live(masks, id) {
-                Some(Masks { table: masks.table.update(id as int, None) })
+                Some(Masks { table: masks.table.update(id as int, None), images: masks.images })
+            } else {
+                None
+            }
+        },
+        // 6.10: "an upload's id is not live and its sides are 1 to 2^14; live image
+        // bytes stay at most a stated bound".
+        Item::UploadImage { id, image_width: width, image_height: height, .. } => {
+            let size = ImageSize { width: width as nat, height: height as nat };
+            let updated = Masks { table: masks.table, images: masks.images.update(id as int, Some(size)) };
+            if !image_id_ok(id) || masks.images[id as int] is Some {
+                None
+            } else if width == 0 || height == 0 {
+                None
+            } else if width as nat > (MAX_IMAGE_SIDE as nat) || height as nat > (MAX_IMAGE_SIDE as nat) {
+                None
+            } else if live_image_bytes(updated.images) > (MAX_IMAGE_BYTES as nat) {
+                None
+            } else {
+                Some(updated)
+            }
+        },
+        // 6.10: "a draw names a live image and a source rectangle inside it", and the
+        // destination is tag 1's rectangle, so it has tag 1's rules.
+        Item::DrawImage { id, x, y, width, height, src_x, src_y, src_width, src_height, .. } => {
+            if position_ok(x) && position_ok(y) && size_ok(width) && size_ok(height) && draw_source_ok(
+                masks,
+                id,
+                src_x,
+                src_y,
+                src_width,
+                src_height,
+            ) {
+                Some(masks)
+            } else {
+                None
+            }
+        },
+        Item::FreeImage { id } => {
+            if is_image_live(masks, id) {
+                Some(Masks { table: masks.table, images: masks.images.update(id as int, None) })
             } else {
                 None
             }
@@ -542,6 +796,17 @@ pub open spec fn in_range(item: Item) -> bool {
         },
         Item::DrawMask { id, x, y, .. } => id_ok(id) && position_ok(x) && position_ok(y),
         Item::FreeMask { id } => id_ok(id),
+        Item::UploadImage { id, image_width: width, image_height: height, .. } => {
+            image_id_ok(id)
+                && 0 < width as nat <= (MAX_IMAGE_SIDE as nat)
+                && 0 < height as nat <= (MAX_IMAGE_SIDE as nat)
+        },
+        // The source rectangle is not here: it is inside the image, whose size is state,
+        // so [`masks_after`] and `image_sources_inside` (contract.rs) say it.
+        Item::DrawImage { id, x, y, width, height, .. } => {
+            image_id_ok(id) && position_ok(x) && position_ok(y) && size_ok(width) && size_ok(height)
+        },
+        Item::FreeImage { id } => image_id_ok(id),
     }
 }
 
