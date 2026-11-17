@@ -27,7 +27,7 @@ use vstd::prelude::*;
 #[cfg(verus_only)]
 use clazel_encoding::hooks::spec::decode;
 #[cfg(verus_only)]
-use clazel_encoding::labels::spec::{get_an_encoding, Encoding};
+use clazel_encoding::labels::spec::{Encoding, get_an_encoding};
 
 verus! {
 

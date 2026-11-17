@@ -213,9 +213,10 @@
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
+pub mod anb;
+pub mod equiv_anb;
 pub mod equiv_base;
 pub mod equiv_bounds;
-pub mod equiv_anb;
 pub mod equiv_good;
 pub mod equiv_hooks;
 pub mod equiv_input;
@@ -224,10 +225,9 @@ pub mod equiv_parser;
 pub mod equiv_stream;
 pub mod equiv_tokenizer;
 pub mod equiv_tokens;
-pub mod parse;
-pub mod input;
-pub mod anb;
 pub mod hooks;
+pub mod input;
+pub mod parse;
 
 verus! {
 

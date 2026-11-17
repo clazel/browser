@@ -4,11 +4,11 @@
 //! bytes, label and environment encoding.
 
 #[cfg(verus_only)]
-use super::*;
+use super::equiv_base::ints;
 #[cfg(verus_only)]
 use super::input::*;
 #[cfg(verus_only)]
-use super::equiv_base::ints;
+use super::*;
 #[cfg(verus_only)]
 use crate::input::spec as s;
 #[allow(unused_imports)]
