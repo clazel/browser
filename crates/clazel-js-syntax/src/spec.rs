@@ -464,6 +464,1202 @@ pub open spec fn cx_fn(yield_: bool, await_: bool, return_: bool) -> Ctx {
 verus! {
 
 // ---------------------------------------------------------------------
+// Early errors (every "It is a Syntax Error if" rule of the clauses named)
+// ---------------------------------------------------------------------
+//
+// A rule says what a *valid* program is, not how to find out. They are
+// stated over the AST and the tokens, by the static semantics the standard
+// names (BoundNames, LexicallyDeclaredNames, VarDeclaredNames,
+// AssignmentTargetType, IsStrict, Contains, ...), written as spec fns that
+// keep the standard's names. The context that the standard's rules read off
+// the position of a production ("is contained in strict mode code", "is not
+// nested within an IterationStatement", "has a [Yield] parameter") is carried
+// down the tree in an `EarlyEnv`, as `d` carries the grammar parameters.
+
+/// The facts about the position of a node that early errors read.
+pub struct EarlyEnv {
+    /// `IsStrict` (§11.2.2): the node is in strict mode code.
+    pub strict: bool,
+    /// The goal symbol is `Module`.
+    pub module: bool,
+    /// The `[Yield]` parameter of the production the node is derived with.
+    pub yield_: bool,
+    /// The `[Await]` parameter.
+    pub await_: bool,
+    /// The labels of the enclosing `LabelledStatement`s, not crossing a function or
+    /// `static` initialization block boundary, and whether each labels an iteration
+    /// statement (§14.8.1, §14.9.1, ContainsDuplicateLabels).
+    pub labels: Seq<EarlyLabel>,
+    /// The node is nested in an `IterationStatement` (not crossing a function
+    /// boundary): `continue` is allowed.
+    pub in_loop: bool,
+    /// The node is nested in an `IterationStatement` or a `SwitchStatement`:
+    /// an unlabelled `break` is allowed.
+    pub in_breakable: bool,
+    /// `SuperProperty` is allowed: in a method, or a field initializer or static
+    /// block, or an arrow function in one (§13.3.7.1).
+    pub super_prop: bool,
+    /// `SuperCall` is allowed: in a derived class's constructor, or an arrow
+    /// function in one (§13.3.7.1).
+    pub super_call: bool,
+    /// `new.target` is allowed (§13.3.12.1): in a function other than an arrow
+    /// function, or a field initializer or static block, or an arrow function in one.
+    pub new_target: bool,
+    /// `arguments` is not allowed (§15.7.1 ContainsArguments): in a field
+    /// initializer or static block, or an arrow function in one.
+    pub no_arguments: bool,
+    /// A `YieldExpression` or `AwaitExpression` is not allowed: in the formal
+    /// parameters of a generator, async function or arrow function (§15.5.1 and
+    /// the other "Contains YieldExpression / AwaitExpression" rules).
+    pub no_yield_await: bool,
+    /// The `[Tagged]` parameter of a `TemplateLiteral` (§13.2.8).
+    pub tagged: bool,
+    /// The `#names` that class bodies containing the node declare
+    /// (AllPrivateIdentifiersValid, §15.7.1, §16.1.1).
+    pub privates: Seq<Seq<u32>>,
+    /// The nearest enclosing class has a `ClassHeritage`.
+    pub derived: bool,
+}
+
+/// A label in scope: its name, and whether it labels an iteration statement.
+pub struct EarlyLabel {
+    /// The name (its StringValue).
+    pub name: Seq<u32>,
+    /// The labelled statement is an `IterationStatement`, possibly through
+    /// other labels (ContainsUndefinedContinueTarget).
+    pub iteration: bool,
+}
+
+/// A name bound by a declaration, and whether the declaration is a
+/// `FunctionDeclaration` (not a generator or async function), which Annex B.3.2
+/// lets repeat in sloppy mode code.
+pub struct DeclName {
+    /// The name.
+    pub name: Seq<u32>,
+    /// A plain `FunctionDeclaration`.
+    pub plain_function: bool,
+}
+
+/// The first token of node `c`: the token whose start is the start of its span.
+pub open spec fn node_tok(a: AstV, ts: Stream, c: int) -> Tok {
+    ts.toks[choose|x: int| 0 <= x < tn(ts) && ts.toks[x].start == a.nodes[c].start]
+}
+
+/// The StringValue of an identifier node (§13.1.2, §12.7.1.2
+/// IdentifierCodePoints): the name of its token. For a string literal, its SV;
+/// for a `PrivateIdentifier`, the name after the `#`.
+pub open spec fn name_of(a: AstV, ts: Stream, c: int) -> Seq<u32> {
+    node_tok(a, ts, c).name
+}
+
+/// A string of the standard, as the code points StringValue returns.
+pub open spec fn sv(s: Seq<char>) -> Seq<u32> {
+    cps(s)
+}
+
+/// The names that §13.1.1 forbids as identifiers in strict mode code.
+pub open spec fn is_strict_reserved(n: Seq<u32>) -> bool {
+    n =~= sv("implements"@) || n =~= sv("interface"@) || n =~= sv("let"@) || n =~= sv("package"@)
+        || n =~= sv("private"@) || n =~= sv("protected"@) || n =~= sv("public"@) || n
+        =~= sv("static"@) || n =~= sv("yield"@)
+}
+
+// ---------------------------------------------------------------------
+// Names (§8.2.? BoundNames, §14.2.? LexicallyDeclaredNames, VarDeclaredNames)
+// ---------------------------------------------------------------------
+
+/// The names in `ns` has a name twice.
+pub open spec fn has_duplicate(ns: Seq<Seq<u32>>) -> bool {
+    exists|x: int, y: int| 0 <= x < y < ns.len() && #[trigger] ns[x] =~= #[trigger] ns[y]
+}
+
+/// Some name is in both.
+pub open spec fn intersects(xs: Seq<Seq<u32>>, ys: Seq<Seq<u32>>) -> bool {
+    exists|x: int, y: int| 0 <= x < xs.len() && 0 <= y < ys.len() && #[trigger] xs[x] =~= #[trigger] ys[y]
+}
+
+/// `ns` contains the name `n`.
+pub open spec fn has_name(ns: Seq<Seq<u32>>, n: Seq<u32>) -> bool {
+    exists|x: int| 0 <= x < ns.len() && #[trigger] ns[x] =~= n
+}
+
+/// BoundNames (§8.2.1) of the binding, parameter or pattern node `c`: the
+/// `BindingIdentifier`s in it, in order. A `BindingElement`'s initializer binds
+/// nothing.
+pub open spec fn bound_names(a: AstV, ts: Stream, c: int) -> Seq<Seq<u32>>
+    decreases c, 1int, 0int,
+{
+    if c < 0 || c >= a.nodes.len() {
+        Seq::empty()
+    } else {
+        let nd = a.nodes[c];
+        match nd.kind {
+            NodeKind::BindingIdentifier => seq![name_of(a, ts, c)],
+            // The binding of these is their first child, the last, or each child.
+            NodeKind::BindingElement | NodeKind::BindingRestElement | NodeKind::BindingRestProperty
+            | NodeKind::FunctionRestParameter | NodeKind::VariableDeclaration
+            | NodeKind::LexicalBinding | NodeKind::ForDeclaration => if nd.children.len() > 0
+                && 0 <= nd.children[0] < c {
+                bound_names(a, ts, nd.children[0])
+            } else {
+                Seq::empty()
+            },
+            NodeKind::BindingProperty => if nd.children.len() > 0 && 0 <= nd.children[nd.children.len()
+                - 1] < c {
+                bound_names(a, ts, nd.children[nd.children.len() - 1])
+            } else {
+                Seq::empty()
+            },
+            NodeKind::ObjectBindingPattern | NodeKind::ArrayBindingPattern | NodeKind::FormalParameters
+            | NodeKind::VariableStatement | NodeKind::LexicalDeclaration
+            | NodeKind::VariableDeclarationList => bound_names_list(a, ts, c, nd.children, 0),
+            _ => Seq::empty(),
+        }
+    }
+}
+
+/// The concatenation of the BoundNames of the children `ks[k..]` of node `n`.
+pub open spec fn bound_names_list(a: AstV, ts: Stream, n: int, ks: Seq<int>, k: int) -> Seq<Seq<u32>>
+    decreases n, 0int, ks.len() - k,
+{
+    if k < 0 || k >= ks.len() {
+        Seq::empty()
+    } else {
+        let here = if 0 <= ks[k] < n {
+            bound_names(a, ts, ks[k])
+        } else {
+            Seq::empty()
+        };
+        here + bound_names_list(a, ts, n, ks, k + 1)
+    }
+}
+
+/// LexicallyDeclaredNames (§8.2.? ) of one `StatementListItem` `c`, or, with `top`,
+/// TopLevelLexicallyDeclaredNames, where a function declaration is var-scoped. A
+/// `LexicalDeclaration` and a `ClassDeclaration` declare their bound names; a
+/// function declaration (inside a block, or a module) its name; a labelled function
+/// the name of the function; the import and export declarations of a module what
+/// they declare (§16.2.1.5).
+pub open spec fn lex_names_item(a: AstV, ts: Stream, c: int, top: bool) -> Seq<DeclName>
+    decreases c,
+{
+    if c < 0 || c >= a.nodes.len() {
+        Seq::empty()
+    } else {
+        let nd = a.nodes[c];
+        let k0 = kid(nd.children, 0);
+        let k1 = kid(nd.children, 1);
+        match nd.kind {
+            NodeKind::LexicalDeclaration => bound_names(a, ts, c).map_values(|n: Seq<u32>| DeclName {
+                name: n,
+                plain_function: false,
+            }),
+            NodeKind::ClassDeclaration => if kd(a, k0) == NodeKind::BindingIdentifier {
+                seq![DeclName { name: name_of(a, ts, k0), plain_function: false }]
+            } else {
+                Seq::empty()
+            },
+            NodeKind::FunctionDeclaration | NodeKind::GeneratorDeclaration
+            | NodeKind::AsyncFunctionDeclaration | NodeKind::AsyncGeneratorDeclaration => if !top
+                && kd(a, k0) == NodeKind::BindingIdentifier {
+                seq![DeclName { name: name_of(a, ts, k0), plain_function: nd.kind
+                    == NodeKind::FunctionDeclaration }]
+            } else {
+                Seq::empty()
+            },
+            // `LabelledItem : FunctionDeclaration` declares the function (§14.13.? ).
+            NodeKind::LabelledStatement => if !top && 0 <= k1 < c {
+                lex_names_item(a, ts, k1, top)
+            } else {
+                Seq::empty()
+            },
+            NodeKind::ImportDeclaration => if 0 <= k0 < c {
+                bound_names_import(a, ts, k0)
+            } else {
+                Seq::empty()
+            },
+            NodeKind::ExportDeclaration => if (nd.op == Op::ExportDecl || nd.op
+                == Op::ExportDefaultHoistable || nd.op == Op::ExportDefaultClass) && 0 <= k0 < c {
+                lex_names_item(a, ts, k0, false)
+            } else {
+                Seq::empty()
+            },
+            _ => Seq::empty(),
+        }
+    }
+}
+
+/// The names an `ImportClause` binds (§16.2.2.? BoundNames of ImportDeclaration).
+pub open spec fn bound_names_import(a: AstV, ts: Stream, c: int) -> Seq<DeclName> {
+    // The default binding, the namespace import, and each import specifier's binding.
+    let nd = a.nodes[c];
+    let k0 = kid(nd.children, 0);
+    let k1 = kid(nd.children, 1);
+    let def = if kd(a, k0) == NodeKind::BindingIdentifier {
+        seq![DeclName { name: name_of(a, ts, k0), plain_function: false }]
+    } else {
+        Seq::empty()
+    };
+    let rest = if kd(a, k1) == NodeKind::NameSpaceImport {
+        seq![DeclName {
+            name: name_of(a, ts, kid(kids(a, k1), 0)),
+            plain_function: false,
+        }]
+    } else if kd(a, k1) == NodeKind::NamedImports {
+        kids(a, k1).map_values(|s: int| DeclName {
+            name: name_of(a, ts, kid(kids(a, s), 1)),
+            plain_function: false,
+        })
+    } else {
+        Seq::empty()
+    };
+    def + rest
+}
+
+/// The LexicallyDeclaredNames (or top-level ones) of the items `ks[k..]`.
+pub open spec fn lex_names_list(a: AstV, ts: Stream, n: int, ks: Seq<int>, k: int, top: bool) -> Seq<DeclName>
+    decreases n, 1int, ks.len() - k,
+{
+    if k < 0 || k >= ks.len() {
+        Seq::empty()
+    } else {
+        let here = if 0 <= ks[k] < n {
+            lex_names_item(a, ts, ks[k], top)
+        } else {
+            Seq::empty()
+        };
+        here + lex_names_list(a, ts, n, ks, k + 1, top)
+    }
+}
+
+/// The plain names of a sequence of declared names.
+pub open spec fn plain_names(ds: Seq<DeclName>) -> Seq<Seq<u32>> {
+    ds.map_values(|d: DeclName| d.name)
+}
+
+/// §14.2.1 (and the other lists of lexical declarations): a name declared twice,
+/// "unless the host is a web browser ... and both of the following conditions are
+/// true: IsStrict(this production) is false, and the duplicate entries are only
+/// bound by FunctionDeclarations" (Annex B.3.2).
+pub open spec fn has_forbidden_duplicate(ds: Seq<DeclName>, strict: bool) -> bool {
+    exists|x: int, y: int|
+        0 <= x < y < ds.len() && #[trigger] decl_name(ds, x) =~= #[trigger] decl_name(ds, y)
+            && !(!strict && ds[x].plain_function && ds[y].plain_function)
+}
+
+/// The name of declaration `x` in `ds` (the trigger of a quantifier).
+pub open spec fn decl_name(ds: Seq<DeclName>, x: int) -> Seq<u32> {
+    ds[x].name
+}
+
+/// VarDeclaredNames (§8.2.? ) of one statement `c`, or, with `top`, of one
+/// `StatementListItem` at the top level of a function body, script or static block,
+/// where a function declaration is var-scoped (TopLevelVarDeclaredNames). `var`
+/// declarations are found in nested statements, but not in nested functions
+/// or classes; Annex B.3.5 adds `for (var a = 1 in x)`.
+pub open spec fn var_names_item(a: AstV, ts: Stream, c: int, top: bool) -> Seq<Seq<u32>>
+    decreases c, 1int, 0int,
+{
+    if c < 0 || c >= a.nodes.len() {
+        Seq::empty()
+    } else {
+        let nd = a.nodes[c];
+        let ks = nd.children;
+        let k0 = kid(ks, 0);
+        let k1 = kid(ks, 1);
+        let k2 = kid(ks, 2);
+        let k3 = kid(ks, 3);
+        match nd.kind {
+            NodeKind::VariableStatement | NodeKind::VariableDeclarationList => bound_names(a, ts, c),
+            NodeKind::BlockStatement => var_names_list(a, ts, c, ks, 0),
+            NodeKind::IfStatement => var_names_sub(a, ts, c, k1) + var_names_sub(a, ts, c, k2),
+            NodeKind::DoWhileStatement => var_names_sub(a, ts, c, k0),
+            NodeKind::WhileStatement => var_names_sub(a, ts, c, k1),
+            NodeKind::ForStatement => var_names_sub(a, ts, c, k0) + var_names_sub(a, ts, c, k3),
+            NodeKind::ForInStatement | NodeKind::ForOfStatement => (if 0 <= k0 < c && kd(a, k0)
+                == NodeKind::ForDeclaration && op_of(a, k0) == Op::Var {
+                bound_names(a, ts, k0)
+            } else {
+                Seq::empty()
+            }) + var_names_sub(a, ts, c, k2),
+            NodeKind::WithStatement => var_names_sub(a, ts, c, k1),
+            NodeKind::SwitchStatement => var_names_list(a, ts, c, ks, 1),
+            NodeKind::CaseClause => var_names_list(a, ts, c, ks, 1),
+            NodeKind::DefaultClause => var_names_list(a, ts, c, ks, 0),
+            NodeKind::LabelledStatement => var_names_sub_top(a, ts, c, k1, top),
+            NodeKind::TryStatement => var_names_sub(a, ts, c, k0) + var_names_sub(a, ts, c, k1)
+                + var_names_sub(a, ts, c, k2),
+            NodeKind::Catch => var_names_sub(a, ts, c, k1),
+            NodeKind::Finally => var_names_sub(a, ts, c, k0),
+            NodeKind::FunctionDeclaration | NodeKind::GeneratorDeclaration
+            | NodeKind::AsyncFunctionDeclaration | NodeKind::AsyncGeneratorDeclaration => if top
+                && kd(a, k0) == NodeKind::BindingIdentifier {
+                seq![name_of(a, ts, k0)]
+            } else {
+                Seq::empty()
+            },
+            NodeKind::ExportDeclaration => if nd.op == Op::ExportVar {
+                var_names_sub(a, ts, c, k0)
+            } else {
+                Seq::empty()
+            },
+            _ => Seq::empty(),
+        }
+    }
+}
+
+/// `var_names_item` of a child `s` of `c`, not at the top level of a body.
+pub open spec fn var_names_sub(a: AstV, ts: Stream, c: int, s: int) -> Seq<Seq<u32>>
+    decreases c, 0int, 0int,
+{
+    if 0 <= s < c {
+        var_names_item(a, ts, s, false)
+    } else {
+        Seq::empty()
+    }
+}
+
+/// `var_names_item` of a child `s` of `c`, passing `top` through: the item of
+/// a `LabelledStatement` at the top level of a body.
+pub open spec fn var_names_sub_top(a: AstV, ts: Stream, c: int, s: int, top: bool) -> Seq<Seq<u32>>
+    decreases c, 0int, 0int,
+{
+    if 0 <= s < c {
+        var_names_item(a, ts, s, top)
+    } else {
+        Seq::empty()
+    }
+}
+
+/// The VarDeclaredNames of the statements `ks[k..]` of node `n`, none at the top
+/// level (a block, a case clause).
+pub open spec fn var_names_list(a: AstV, ts: Stream, n: int, ks: Seq<int>, k: int) -> Seq<Seq<u32>>
+    decreases n, 0int, ks.len() - k,
+{
+    if k < 0 || k >= ks.len() {
+        Seq::empty()
+    } else {
+        var_names_sub(a, ts, n, ks[k]) + var_names_list(a, ts, n, ks, k + 1)
+    }
+}
+
+/// The TopLevelVarDeclaredNames of the items `ks[k..]` of node `n`, a function body
+/// or script (§8.2.? ): function declarations count.
+pub open spec fn top_var_names_list(a: AstV, ts: Stream, n: int, ks: Seq<int>, k: int) -> Seq<Seq<u32>>
+    decreases n, 0int, ks.len() - k,
+{
+    if k < 0 || k >= ks.len() {
+        Seq::empty()
+    } else {
+        var_names_sub_top(a, ts, n, ks[k], true) + top_var_names_list(a, ts, n, ks, k + 1)
+    }
+}
+
+} // verus!
+
+verus! {
+
+/// §8.6.4 AssignmentTargetType: whether a `LeftHandSideExpression` may be
+/// assigned to.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum TargetType {
+    /// `~simple~`.
+    Simple,
+    /// `~web-compat~`: a call, in sloppy mode code, under Annex B.3.9 (a
+    /// `ReferenceError` at run time, no early error).
+    WebCompat,
+    /// `~invalid~`.
+    Invalid,
+}
+
+/// §8.6.4 AssignmentTargetType of the expression node `c`, in strict mode code or
+/// not.
+pub open spec fn target_type(a: AstV, ts: Stream, c: int, strict: bool) -> TargetType
+    decreases c,
+{
+    if c < 0 || c >= a.nodes.len() {
+        TargetType::Invalid
+    } else {
+        let nd = a.nodes[c];
+        let k0 = kid(nd.children, 0);
+        match nd.kind {
+            // `IdentifierReference : Identifier`: `eval` and `arguments` are not
+            // assignable in strict mode code.
+            NodeKind::IdentifierReference => if strict && (name_of(a, ts, c) =~= sv("eval"@)
+                || name_of(a, ts, c) =~= sv("arguments"@)) {
+                TargetType::Invalid
+            } else {
+                TargetType::Simple
+            },
+            // `MemberExpression : MemberExpression [ Expression ]`, `. IdentifierName`,
+            // `. PrivateIdentifier`, `SuperProperty`, and the `CallExpression` forms.
+            NodeKind::MemberExpression | NodeKind::SuperProperty => TargetType::Simple,
+            // `PrimaryExpression : CoverParenthesizedExpressionAndArrowParameterList`
+            NodeKind::ParenthesizedExpression => if 0 <= k0 < c {
+                target_type(a, ts, k0, strict)
+            } else {
+                TargetType::Invalid
+            },
+            // `CallExpression : CoverCallExpressionAndAsyncArrowHead | CallExpression Arguments`
+            NodeKind::CallExpression => if !strict {
+                TargetType::WebCompat
+            } else {
+                TargetType::Invalid
+            },
+            _ => TargetType::Invalid,
+        }
+    }
+}
+
+/// `c` with the `ParenthesizedExpression`s around it removed (§13.5.1.1: "this rule
+/// is recursively applied").
+pub open spec fn strip_parens(a: AstV, c: int) -> int
+    decreases c,
+{
+    if 0 <= c < a.nodes.len() && a.nodes[c].kind == NodeKind::ParenthesizedExpression {
+        let k0 = kid(a.nodes[c].children, 0);
+        if 0 <= k0 < c {
+            strip_parens(a, k0)
+        } else {
+            c
+        }
+    } else {
+        c
+    }
+}
+
+/// An `IterationStatement` (§14.7), possibly under labels.
+pub open spec fn is_iteration_stmt(a: AstV, c: int) -> bool
+    decreases c,
+{
+    if 0 <= c < a.nodes.len() {
+        let k = a.nodes[c].kind;
+        k == NodeKind::DoWhileStatement || k == NodeKind::WhileStatement || k
+            == NodeKind::ForStatement || k == NodeKind::ForInStatement || k
+            == NodeKind::ForOfStatement || (k == NodeKind::LabelledStatement && {
+            let k1 = kid(a.nodes[c].children, 1);
+            0 <= k1 < c && is_iteration_stmt(a, k1)
+        })
+    } else {
+        false
+    }
+}
+
+/// §8.6.? IsLabelledFunction(`c`): a `LabelledStatement` whose item, through any
+/// labels, is a function declaration.
+pub open spec fn is_labelled_function(a: AstV, c: int) -> bool
+    decreases c,
+{
+    if 0 <= c < a.nodes.len() && a.nodes[c].kind == NodeKind::LabelledStatement {
+        let k1 = kid(a.nodes[c].children, 1);
+        kd(a, k1) == NodeKind::FunctionDeclaration || (0 <= k1 < c && is_labelled_function(a, k1))
+    } else {
+        false
+    }
+}
+
+/// §11.2.1 a `Directive Prologue` item: an `ExpressionStatement` that consists
+/// entirely of a `StringLiteral` token.
+pub open spec fn is_directive(a: AstV, c: int) -> bool {
+    kd(a, c) == NodeKind::ExpressionStatement && kd(a, kid(kids(a, c), 0)) == NodeKind::StringLiteral
+}
+
+/// §11.2.1 a `Use Strict Directive`: a directive whose `StringLiteral` is exactly
+/// `"use strict"` or `'use strict'`, with no escape or line continuation.
+pub open spec fn is_use_strict_directive(a: AstV, ts: Stream, c: int) -> bool {
+    is_directive(a, c) && ({
+        let t = node_tok(a, ts, kid(kids(a, c), 0));
+        t.text =~= cps("\"use strict\""@) || t.text =~= cps("'use strict'"@)
+    })
+}
+
+/// The items `ks` begin with a Directive Prologue that holds a Use Strict Directive:
+/// §11.2.1, FunctionBodyContainsUseStrict (§15.2.1).
+pub open spec fn has_use_strict(a: AstV, ts: Stream, ks: Seq<int>) -> bool {
+    exists|k: int|
+        0 <= k < ks.len() && is_use_strict_directive(a, ts, #[trigger] ks[k]) && (forall|m: int|
+            0 <= m <= k ==> is_directive(a, #[trigger] ks[m]))
+}
+
+/// §15.1.1 IsSimpleParameterList of a `FormalParameters` node: each parameter is
+/// a plain `BindingIdentifier` without an initializer.
+pub open spec fn is_simple_params(a: AstV, params: int) -> bool {
+    forall|k: int|
+        0 <= k < kids(a, params).len() ==> {
+            let p = #[trigger] kids(a, params)[k];
+            kd(a, p) == NodeKind::BindingElement && first_kid_kind(a, p) == NodeKind::BindingIdentifier
+                && kd(a, kid(kids(a, p), 1)) == NodeKind::Absent
+        }
+}
+
+/// Whether the key `c` of a class element or property, not computed, has the
+/// name `w` (§8.6.? PropName).
+pub open spec fn prop_name_is(a: AstV, ts: Stream, c: int, w: Seq<char>) -> bool {
+    (kd(a, c) == NodeKind::IdentifierName || kd(a, c) == NodeKind::StringLiteral) && name_of(a, ts, c)
+        =~= sv(w)
+}
+
+/// A `MethodDefinition` that is `constructor` by name (§15.7.3 ConstructorMethod,
+/// `PropName` is "constructor", not `static`).
+pub open spec fn is_constructor_named(a: AstV, ts: Stream, c: int) -> bool {
+    kd(a, c) == NodeKind::MethodDefinition && !flag_of(a, c) && prop_name_is(
+        a,
+        ts,
+        kid(kids(a, c), 0),
+        "constructor"@,
+    )
+}
+
+/// §14.2.1, §15.2.1, §16.1.1: the early errors of a list of statements: no name
+/// declared twice by the lexical declarations, and none that is also var-declared.
+/// `top` is for a function body, script or static block, where function declarations
+/// are var-scoped.
+pub open spec fn list_early(a: AstV, ts: Stream, n: int, ks: Seq<int>, strict: bool, top: bool) -> bool {
+    let lex = lex_names_list(a, ts, n, ks, 0, top);
+    let vars = if top {
+        top_var_names_list(a, ts, n, ks, 0)
+    } else {
+        var_names_list(a, ts, n, ks, 0)
+    };
+    !has_forbidden_duplicate(lex, strict) && !intersects(plain_names(lex), vars)
+}
+
+/// The lexical declarations of the statement lists of the clauses `ks[k..]` of a
+/// `CaseBlock` (§14.12.1 LexicallyDeclaredNames of CaseBlock).
+pub open spec fn clause_lex_names(a: AstV, ts: Stream, n: int, ks: Seq<int>, k: int) -> Seq<DeclName>
+    decreases n, 0int, ks.len() - k,
+{
+    if k < 1 || k >= ks.len() {
+        Seq::empty()
+    } else {
+        let c = ks[k];
+        let here = if 0 <= c < n {
+            lex_names_list(
+                a,
+                ts,
+                c,
+                kids(a, c),
+                if kd(a, c) == NodeKind::CaseClause {
+                    1
+                } else {
+                    0
+                },
+                false,
+            )
+        } else {
+            Seq::empty()
+        };
+        here + clause_lex_names(a, ts, n, ks, k + 1)
+    }
+}
+
+/// §15.1.1, §15.2.1, §15.3.1, ...: the early errors shared by the function-like
+/// productions. `params` is the `FormalParameters` node, `body_ks` the statements of
+/// the body (empty for an arrow function with an expression body), `unique` says the
+/// `UniqueFormalParameters` rules apply (methods, arrow functions: duplicates
+/// are always an error), `strict` is `IsStrict` of the function code.
+pub open spec fn function_early(
+    a: AstV,
+    ts: Stream,
+    params: int,
+    body_ks: Seq<int>,
+    unique: bool,
+    strict: bool,
+) -> bool {
+    let names = bound_names(a, ts, params);
+    // "FunctionBodyContainsUseStrict is true and IsSimpleParameterList is false"
+    (has_use_strict(a, ts, body_ks) ==> is_simple_params(a, params))
+        // "any element of BoundNames of FormalParameters also occurs in LexicallyDeclaredNames of FunctionBody"
+         && !intersects(names, plain_names(lex_names_list(a, ts, a.nodes.len() as int, body_ks, 0, true)))
+        // 15.1.1: "BoundNames contains any duplicate elements", when strict, non-simple, or unique
+         && ((strict || unique || !is_simple_params(a, params)) ==> !has_duplicate(names))
+}
+
+/// §15.7.1 the early errors of a `ClassBody`'s elements `ks`.
+pub open spec fn class_body_early(a: AstV, ts: Stream, ks: Seq<int>) -> bool {
+    // "the PrototypePropertyNameList of ClassElementList contains more than one occurrence of "constructor""
+    (!exists|x: int, y: int|
+        0 <= x < y < ks.len() && is_constructor_named(a, ts, #[trigger] ks[x]) && is_constructor_named(
+            a,
+            ts,
+            #[trigger] ks[y],
+        )) && (forall|x: int|
+        0 <= x < ks.len() ==> {
+            let c = #[trigger] ks[x];
+            let key = kid(kids(a, c), 0);
+            let is_static = flag_of(a, c);
+            // "PropName of MethodDefinition is "constructor" and SpecialMethod is true"
+            (is_constructor_named(a, ts, c) ==> op_of(a, c) == Op::Method)
+                // "the PropName of MethodDefinition is "prototype"" (static)
+                 && !(kd(a, c) == NodeKind::MethodDefinition && is_static && prop_name_is(
+                a,
+                ts,
+                key,
+                "prototype"@,
+            ))
+                // "the PropName of FieldDefinition is "constructor"" / "prototype" or "constructor" (static)
+                 && !(kd(a, c) == NodeKind::FieldDefinition && (prop_name_is(
+                a,
+                ts,
+                key,
+                "constructor"@,
+            ) || (is_static && prop_name_is(a, ts, key, "prototype"@))))
+                // "the StringValue of PrivateIdentifier is "#constructor""
+                 && !(kd(a, key) == NodeKind::PrivateIdentifier && name_of(a, ts, key)
+                =~= sv("constructor"@))
+        }) && (forall|x: int, y: int|
+        0 <= x < y < ks.len() ==> {
+            let cx_ = #[trigger] ks[x];
+            let cy = #[trigger] ks[y];
+            let kx = kid(kids(a, cx_), 0);
+            let ky = kid(kids(a, cy), 0);
+            // "PrivateBoundIdentifiers of ClassElementList contains any duplicate entries,
+            // unless the name is used once for a getter and once for a setter and in no
+            // other entries, and the getter and setter are either both static or both non-static"
+            (kd(a, kx) == NodeKind::PrivateIdentifier && kd(a, ky) == NodeKind::PrivateIdentifier
+                && name_of(a, ts, kx) =~= name_of(a, ts, ky)) ==> (kd(a, cx_)
+                == NodeKind::MethodDefinition && kd(a, cy) == NodeKind::MethodDefinition && (
+            (op_of(a, cx_) == Op::Getter && op_of(a, cy) == Op::Setter) || (op_of(a, cx_)
+                == Op::Setter && op_of(a, cy) == Op::Getter)) && flag_of(a, cx_) == flag_of(a, cy))
+        })
+}
+
+} // verus!
+
+verus! {
+
+/// The names of the labels in `ls`.
+pub open spec fn label_names(ls: Seq<EarlyLabel>) -> Seq<Seq<u32>> {
+    ls.map_values(|l: EarlyLabel| l.name)
+}
+
+/// The `#names` that the elements `ks` of a `ClassBody` declare (§15.7.8
+/// PrivateBoundIdentifiers).
+pub open spec fn class_private_names(a: AstV, ts: Stream, ks: Seq<int>) -> Seq<Seq<u32>> {
+    ks.filter(|c: int| kd(a, kid(kids(a, c), 0)) == NodeKind::PrivateIdentifier).map_values(
+        |c: int| name_of(a, ts, kid(kids(a, c), 0)),
+    )
+}
+
+/// §13.1.1 the early errors of an `IdentifierReference`, `BindingIdentifier` or
+/// `LabelIdentifier` `c`.
+pub open spec fn early_identifier_ok(a: AstV, ts: Stream, c: int, env: EarlyEnv) -> bool {
+    let nm = name_of(a, ts, c);
+    let is_yield = nm =~= sv("yield"@);
+    let is_await = nm =~= sv("await"@);
+    // `BindingIdentifier : Identifier`: strict mode `arguments` or `eval`.
+    !(kd(a, c) == NodeKind::BindingIdentifier && env.strict && (nm =~= sv("arguments"@) || nm
+        =~= sv("eval"@)))
+        // `Identifier : IdentifierName but not ReservedWord`: strict mode reserved words, and `yield`
+        // (`IdentifierReference : yield` and the others).
+         && !(env.strict && is_strict_reserved(nm))
+        // "the goal symbol of the syntactic grammar is Module and the StringValue is await"
+         && !(env.module && is_await)
+        // "this production has a [Yield] parameter and the StringValue of Identifier is yield", and [Await]
+         && !(env.yield_ && is_yield) && !(env.await_ && is_await)
+        // "the StringValue of IdentifierName is the StringValue of any ReservedWord except for yield or await"
+         && !(is_reserved_text(nm) && !is_yield && !is_await)
+        // §15.7.1 ContainsArguments: `arguments` in a field initializer or static block
+         && !(kd(a, c) == NodeKind::IdentifierReference && env.no_arguments && nm
+        =~= sv("arguments"@))
+}
+
+/// §13.5.1.1 the `delete` rule: in strict mode code, `delete` of an
+/// `IdentifierReference` or of a private member, through parentheses.
+pub open spec fn delete_error(a: AstV, ts: Stream, operand: int, strict: bool) -> bool {
+    let o = strip_parens(a, operand);
+    let last = kid(kids(a, o), kids(a, o).len() as int - 1);
+    strict && (kd(a, o) == NodeKind::IdentifierReference || (kd(a, o) == NodeKind::MemberExpression
+        && op_of(a, o) == Op::PrivateDot) || (kd(a, o) == NodeKind::OptionalExpression && kd(a, last)
+        == NodeKind::OptionalChain && op_of(a, last) == Op::ChainPrivateDot))
+}
+
+/// §13.2.5.1 `PropertyDefinitionList`: the child `c` is a
+/// `PropertyDefinition : PropertyName : AssignmentExpression` whose name is `__proto__`.
+pub open spec fn is_proto_entry(a: AstV, ts: Stream, c: int) -> bool {
+    kd(a, c) == NodeKind::PropertyDefinition && op_of(a, c) == Op::KeyValue && prop_name_is(
+        a,
+        ts,
+        kid(kids(a, c), 0),
+        "__proto__"@,
+    )
+}
+
+/// §13.15.5.1 `DestructuringAssignmentTarget` and the rule for `[[ ]]` elements: an
+/// assignment pattern, or a `LeftHandSideExpression` whose AssignmentTargetType is
+/// `~simple~`.
+pub open spec fn destructuring_target_ok(a: AstV, ts: Stream, c: int, strict: bool) -> bool {
+    is_assignment_pattern_kind(kd(a, c)) || target_type(a, ts, c, strict) == TargetType::Simple
+}
+
+/// A private name `nm` is declared by an enclosing class (§15.7.? AllPrivateIdentifiersValid).
+pub open spec fn private_declared(env: EarlyEnv, nm: Seq<u32>) -> bool {
+    has_name(env.privates, nm)
+}
+
+/// The early errors of node `n` itself, in the environment `env`: every "It is a
+/// Syntax Error if" rule of the clauses cited, for the production `n` is.
+pub open spec fn early_local(a: AstV, ts: Stream, n: int, env: EarlyEnv) -> bool {
+    let nd = a.nodes[n];
+    let ks = nd.children;
+    let k0 = kid(ks, 0);
+    let k1 = kid(ks, 1);
+    let k2 = kid(ks, 2);
+    let k3 = kid(ks, 3);
+    let tok = node_tok(a, ts, n);
+    match nd.kind {
+        // 13.1.1 Identifiers
+        NodeKind::IdentifierReference | NodeKind::BindingIdentifier | NodeKind::LabelIdentifier =>
+            early_identifier_ok(a, ts, n, env),
+        // 12.9.3.1: "IsStrict(this production) is true" for `LegacyOctalIntegerLiteral`
+        // and `NonOctalDecimalIntegerLiteral`; 12.9.4.1 the same for the legacy escape
+        // sequences in a `StringLiteral`.
+        NodeKind::NumericLiteral | NodeKind::StringLiteral => !(env.strict && tok.legacy),
+        // 13.2.7.1: "IsValidRegularExpressionLiteral(RegularExpressionLiteral) is false"
+        NodeKind::RegularExpressionLiteral => tok.regexp_valid,
+        // 13.2.8.1: "the [Tagged] parameter was not set and ... Contains NotEscapeSequence"
+        NodeKind::TemplateElement => env.tagged || !tok.invalid_escape,
+        // 13.2.5.1: duplicate `__proto__`, and "PrivateBoundIdentifiers of MethodDefinition is not empty"
+        NodeKind::ObjectLiteral => (!exists|x: int, y: int|
+            0 <= x < y < ks.len() && is_proto_entry(a, ts, #[trigger] ks[x]) && is_proto_entry(
+                a,
+                ts,
+                #[trigger] ks[y],
+            )) && (forall|x: int|
+            0 <= x < ks.len() ==> !(kd(a, #[trigger] ks[x]) == NodeKind::MethodDefinition
+                && kd(a, kid(kids(a, ks[x]), 0)) == NodeKind::PrivateIdentifier)),
+        // 13.2.5.1: "CoverInitializedName : IdentifierReference Initializer: It is a Syntax Error
+        // if any source text is matched by this production" (an assignment pattern is its own node).
+        NodeKind::CoverInitializedName => false,
+        // 13.3.7.1: `super.x` only where `SuperProperty` is allowed, and `super()` in a derived constructor.
+        NodeKind::SuperProperty => env.super_prop,
+        NodeKind::SuperCall => env.super_call,
+        // 13.3.12.1 `NewTarget`, `ImportMeta`
+        NodeKind::NewTarget => env.new_target,
+        NodeKind::ImportMeta => env.module,
+        // 13.3.? private names: `a.#x`, `a?.#x`, `#x in a` need `#x` declared by an enclosing class.
+        NodeKind::MemberExpression => op_of(a, n) != Op::PrivateDot || private_declared(env, name_of(
+            a,
+            ts,
+            k1,
+        )),
+        // 13.3.1.1: "OptionalChain : ?. TemplateLiteral: It is a Syntax Error if any source text is matched".
+        NodeKind::OptionalChain => nd.op != Op::ChainTemplate && (nd.op != Op::ChainPrivateDot
+            || private_declared(env, name_of(a, ts, k0))),
+        NodeKind::RelationalExpression => !(kd(a, k0) == NodeKind::PrivateIdentifier)
+            || private_declared(env, name_of(a, ts, k0)),
+        // 13.5.1.1 `delete`
+        NodeKind::UnaryExpression => !(nd.op == Op::Delete && delete_error(a, ts, k0, env.strict)),
+        // 13.4.1: "the AssignmentTargetType of LeftHandSideExpression is ~invalid~"
+        NodeKind::UpdateExpression => target_type(a, ts, k0, env.strict) != TargetType::Invalid,
+        // 13.15.1: `=` and the other operators need a target that is not ~invalid~; `&&=`, `||=` and
+        // `??=` need ~simple~. An `ObjectAssignmentPattern` or `ArrayAssignmentPattern` is a valid
+        // target of `=`.
+        NodeKind::AssignmentExpression => (nd.op == Op::Assign && is_assignment_pattern_kind(kd(a, k0)))
+            || (target_type(a, ts, k0, env.strict) != TargetType::Invalid && ((nd.op
+            == Op::LogicalAndAssign || nd.op == Op::LogicalOrAssign || nd.op == Op::CoalesceAssign)
+            ==> target_type(a, ts, k0, env.strict) == TargetType::Simple)),
+        // 13.15.5.1
+        NodeKind::AssignmentProperty => nd.op != Op::Shorthand || target_type(
+            a,
+            ts,
+            k0,
+            env.strict,
+        ) == TargetType::Simple,
+        NodeKind::AssignmentElement | NodeKind::AssignmentRestElement => destructuring_target_ok(
+            a,
+            ts,
+            k0,
+            env.strict,
+        ),
+        NodeKind::AssignmentRestProperty => !is_assignment_pattern_kind(kd(a, k0))
+            && destructuring_target_ok(a, ts, k0, env.strict),
+        // 15.5.1 and the like: `yield` and `await` expressions are not allowed in parameters.
+        NodeKind::YieldExpression | NodeKind::AwaitExpression => !env.no_yield_await,
+        // 14.2.1 Block
+        NodeKind::BlockStatement => list_early(a, ts, n, ks, env.strict, false),
+        // 14.3.1.1 LexicalDeclaration: no `let`, no duplicates, `const` has an initializer
+        NodeKind::LexicalDeclaration => {
+            let bn = bound_names(a, ts, n);
+            !has_name(bn, sv("let"@)) && !has_duplicate(bn) && (nd.op == Op::Const ==> forall|k: int|
+                0 <= k < ks.len() ==> kd(a, kid(kids(a, #[trigger] ks[k]), 1)) != NodeKind::Absent)
+        },
+        // 14.6.1, Annex B.3.3: `if` bodies are not labelled functions, and not functions in strict mode
+        NodeKind::IfStatement => !is_labelled_function(a, k1) && !is_labelled_function(a, k2)
+            && !(env.strict && (kd(a, k1) == NodeKind::FunctionDeclaration || kd(a, k2)
+            == NodeKind::FunctionDeclaration)),
+        // 14.7.2.1, 14.7.3.1
+        NodeKind::DoWhileStatement => !is_labelled_function(a, k0),
+        NodeKind::WhileStatement => !is_labelled_function(a, k1),
+        // 14.7.4.1: "any element of the BoundNames of LexicalDeclaration also occurs in the
+        // VarDeclaredNames of Statement"
+        NodeKind::ForStatement => !is_labelled_function(a, k3) && (kd(a, k0)
+            == NodeKind::LexicalDeclaration ==> !intersects(
+            bound_names(a, ts, k0),
+            var_names_sub(a, ts, n, k3),
+        )),
+        // 14.7.5.1 and Annex B.3.5
+        NodeKind::ForInStatement | NodeKind::ForOfStatement => {
+            let bn = bound_names(a, ts, k0);
+            !is_labelled_function(a, k2) && (if kd(a, k0) == NodeKind::ForDeclaration {
+                (op_of(a, k0) != Op::Var ==> (!has_name(bn, sv("let"@)) && !has_duplicate(bn)
+                    && !intersects(bn, var_names_sub(a, ts, n, k2)))) && (first_kid_kind(a, k0)
+                    == NodeKind::VariableDeclaration ==> (!env.strict && first_kid_kind(
+                    a,
+                    kid(kids(a, k0), 0),
+                ) == NodeKind::BindingIdentifier && kd(a, kid(kids(a, kid(kids(a, k0), 0)), 1))
+                    != NodeKind::Absent))
+            } else {
+                is_assignment_pattern_kind(kd(a, k0)) || target_type(a, ts, k0, env.strict)
+                    != TargetType::Invalid
+            })
+        },
+        // 14.8.1, 14.9.1: a `continue` is nested in an iteration statement, with that label; a `break`
+        // in an iteration or switch statement, or labelled.
+        NodeKind::ContinueStatement => if kd(a, k0) == NodeKind::LabelIdentifier {
+            exists|x: int|
+                0 <= x < env.labels.len() && env.labels[x].name =~= name_of(a, ts, k0)
+                    && env.labels[x].iteration
+        } else {
+            env.in_loop
+        },
+        NodeKind::BreakStatement => if kd(a, k0) == NodeKind::LabelIdentifier {
+            has_name(label_names(env.labels), name_of(a, ts, k0))
+        } else {
+            env.in_breakable
+        },
+        // 14.11.1: `with` in strict mode code, a labelled function as its body
+        NodeKind::WithStatement => !env.strict && !is_labelled_function(a, k1),
+        // 14.12.1 CaseBlock
+        NodeKind::SwitchStatement => {
+            let lex = clause_lex_names(a, ts, n, ks, 1);
+            !has_forbidden_duplicate(lex, env.strict) && !intersects(
+                plain_names(lex),
+                var_names_list(a, ts, n, ks, 1),
+            )
+        },
+        // 14.13.1, ContainsDuplicateLabels, Annex B.3.1: a label is not repeated in a nest of labels;
+        // `LabelledItem : FunctionDeclaration` is not allowed in strict mode code.
+        NodeKind::LabelledStatement => !has_name(label_names(env.labels), name_of(a, ts, k0))
+            && !(env.strict && kd(a, k1) == NodeKind::FunctionDeclaration),
+        // 14.15.1 Catch, Annex B.3.4
+        NodeKind::Catch => {
+            let bn = bound_names(a, ts, k0);
+            let bk = kids(a, k1);
+            let nb = a.nodes.len() as int;
+            !has_duplicate(bn) && !intersects(bn, plain_names(lex_names_list(a, ts, nb, bk, 0, false)))
+                && (kd(a, k0) != NodeKind::BindingIdentifier ==> !intersects(
+                bn,
+                var_names_list(a, ts, nb, bk, 0),
+            ))
+        },
+        // 15.2.1 and the like: the lists of statements of a function body, a static block
+        NodeKind::FunctionBody => list_early(a, ts, n, ks, env.strict, true),
+        // 15.2.1, 15.5.1, 15.6.1, 15.8.1: the function productions. `IsStrict` of the function
+        // code includes a Use Strict Directive in its own body.
+        NodeKind::FunctionDeclaration | NodeKind::FunctionExpression | NodeKind::GeneratorDeclaration
+        | NodeKind::GeneratorExpression | NodeKind::AsyncFunctionDeclaration
+        | NodeKind::AsyncFunctionExpression | NodeKind::AsyncGeneratorDeclaration
+        | NodeKind::AsyncGeneratorExpression => function_early(
+            a,
+            ts,
+            k1,
+            kids(a, k2),
+            false,
+            env.strict || has_use_strict(a, ts, kids(a, k2)),
+        ),
+        // 15.3.1, 15.9.1: arrow functions (`UniqueFormalParameters` rules); a body that is an
+        // expression has no directive and no declarations.
+        NodeKind::ArrowFunction | NodeKind::AsyncArrowFunction => {
+            let body_ks = if kd(a, k1) == NodeKind::FunctionBody {
+                kids(a, k1)
+            } else {
+                Seq::empty()
+            };
+            function_early(a, ts, k0, body_ks, true, env.strict || has_use_strict(a, ts, body_ks))
+        },
+        // 15.4.1, 15.5.1, 15.6.1, 15.8.1: methods (`UniqueFormalParameters`).
+        NodeKind::MethodDefinition => function_early(
+            a,
+            ts,
+            k1,
+            kids(a, k2),
+            true,
+            env.strict || has_use_strict(a, ts, kids(a, k2)),
+        ),
+        // 15.7.1 ClassBody
+        NodeKind::ClassBody => class_body_early(a, ts, ks),
+        // 16.1.1 Script, 16.2.1.1 Module: names, and for a module its exports (16.2.3.1)
+        NodeKind::Script => list_early(a, ts, n, ks, env.strict, true),
+        NodeKind::Module => list_early(a, ts, n, ks, true, false),
+        // 16.2.2.1: "WithClauseToAttributes of WithClause has two different entries with the same [[Key]]"
+        NodeKind::WithClause => !has_duplicate(
+            ks.map_values(|c: int| name_of(a, ts, kid(kids(a, c), 0))),
+        ),
+        // 16.2.3.1: "ReferencedBindings of NamedExports contains any StringLiteral", or a reserved word
+        NodeKind::ExportDeclaration => nd.op != Op::ExportNamed || forall|x: int|
+            0 <= x < kids(a, k0).len() ==> {
+                let loc = kid(kids(a, #[trigger] kids(a, k0)[x]), 0);
+                kd(a, loc) != NodeKind::StringLiteral && !is_reserved_text(name_of(a, ts, loc))
+                    && !is_strict_reserved(name_of(a, ts, loc))
+            },
+        _ => true,
+    }
+}
+
+} // verus!
+
+verus! {
+
+/// The environment of the code of a function-like construct: `strict`, `y`ield and
+/// `aw`ait as the kind says; no label, no loop; `sp`: `SuperProperty` allowed,
+/// `sc`: `SuperCall` allowed, `nt`: `new.target` allowed, `na`: `arguments`
+/// not allowed, `nya`: no yield or await expression (the parameters of
+/// a generator, async function or arrow function).
+pub open spec fn env_fn(
+    env: EarlyEnv,
+    strict: bool,
+    y: bool,
+    aw: bool,
+    sp: bool,
+    sc: bool,
+    nt: bool,
+    na: bool,
+    nya: bool,
+) -> EarlyEnv {
+    EarlyEnv {
+        strict: strict,
+        module: env.module,
+        yield_: y,
+        await_: aw,
+        labels: Seq::empty(),
+        in_loop: false,
+        in_breakable: false,
+        super_prop: sp,
+        super_call: sc,
+        new_target: nt,
+        no_arguments: na,
+        no_yield_await: nya,
+        tagged: false,
+        privates: env.privates,
+        derived: env.derived,
+    }
+}
+
+/// A generator or async generator function kind.
+pub open spec fn is_generator_kind(k: NodeKind) -> bool {
+    k == NodeKind::GeneratorDeclaration || k == NodeKind::GeneratorExpression || k
+        == NodeKind::AsyncGeneratorDeclaration || k == NodeKind::AsyncGeneratorExpression
+}
+
+/// An async function or async generator function kind.
+pub open spec fn is_async_kind(k: NodeKind) -> bool {
+    k == NodeKind::AsyncFunctionDeclaration || k == NodeKind::AsyncFunctionExpression || k
+        == NodeKind::AsyncGeneratorDeclaration || k == NodeKind::AsyncGeneratorExpression
+}
+
+/// A function expression kind (not a declaration).
+pub open spec fn is_function_expression_kind(k: NodeKind) -> bool {
+    k == NodeKind::FunctionExpression || k == NodeKind::GeneratorExpression || k
+        == NodeKind::AsyncFunctionExpression || k == NodeKind::AsyncGeneratorExpression
+}
+
+/// The environment in which child `k` of node `n` is checked, given `n`'s own.
+/// It mirrors how [`d`] passes the grammar parameters, and adds what early
+/// errors read of the position.
+pub open spec fn child_env(a: AstV, ts: Stream, n: int, k: int, env: EarlyEnv) -> EarlyEnv {
+    let nd = a.nodes[n];
+    let ks = nd.children;
+    let k0 = kid(ks, 0);
+    let k1 = kid(ks, 1);
+    let k2 = kid(ks, 2);
+    let c = kid(ks, k);
+    let kind = nd.kind;
+    let g = is_generator_kind(kind);
+    let aw = is_async_kind(kind);
+    // Strictness of a function's code: the enclosing code, or a Use Strict Directive of its body.
+    let fn_strict = env.strict || has_use_strict(a, ts, kids(a, k2));
+    let arrow_strict = env.strict || (kd(a, k1) == NodeKind::FunctionBody && has_use_strict(
+        a,
+        ts,
+        kids(a, k1),
+    ));
+    match kind {
+        NodeKind::FunctionDeclaration | NodeKind::FunctionExpression | NodeKind::GeneratorDeclaration
+        | NodeKind::GeneratorExpression | NodeKind::AsyncFunctionDeclaration
+        | NodeKind::AsyncFunctionExpression | NodeKind::AsyncGeneratorDeclaration
+        | NodeKind::AsyncGeneratorExpression => if k == 0 {
+            // The name: part of the function code for `IsStrict`; a declaration's name has the
+            // enclosing `[Yield]` and `[Await]`.
+            EarlyEnv {
+                strict: fn_strict,
+                yield_: if is_function_expression_kind(kind) {
+                    g
+                } else {
+                    env.yield_
+                },
+                await_: if is_function_expression_kind(kind) {
+                    aw
+                } else {
+                    env.await_
+                },
+                ..env
+            }
+        } else {
+            env_fn(env, fn_strict, g, aw, false, false, true, false, k == 1)
+        },
+        // 15.3 the parameters have the enclosing `[Yield]` and `[Await]`, the body neither.
+        NodeKind::ArrowFunction => if k == 0 {
+            env_fn(env, arrow_strict, env.yield_, env.await_, env.super_prop, env.super_call, env.new_target, env.no_arguments, true)
+        } else {
+            env_fn(env, arrow_strict, false, false, env.super_prop, env.super_call, env.new_target, env.no_arguments, false)
+        },
+        // 15.9: `[~Yield, +Await]`.
+        NodeKind::AsyncArrowFunction => if k == 0 {
+            env_fn(env, arrow_strict, if kd(a, k0) == NodeKind::BindingIdentifier {
+                env.yield_
+            } else {
+                false
+            }, true, env.super_prop, env.super_call, env.new_target, env.no_arguments, true)
+        } else {
+            env_fn(env, arrow_strict, false, true, env.super_prop, env.super_call, env.new_target, env.no_arguments, false)
+        },
+        // 15.4 and the like: the name has the enclosing parameters; the function's code is
+        // `SuperProperty`-capable, and `SuperCall`-capable in a derived class's constructor.
+        NodeKind::MethodDefinition => if k == 0 {
+            env
+        } else {
+            let mg = nd.op == Op::GeneratorMethod || nd.op == Op::AsyncGeneratorMethod;
+            let ma = nd.op == Op::AsyncMethod || nd.op == Op::AsyncGeneratorMethod;
+            env_fn(env, fn_strict, mg, ma, true, env.derived && is_constructor_named(a, ts, n)
+                && nd.op == Op::Method, true, false, k == 1)
+        },
+        // 15.7: a field initializer has the enclosing `[Yield]` and `[Await]`; `super.x` and `new.target`, not `arguments`.
+        NodeKind::FieldDefinition => if k == 1 {
+            env_fn(env, env.strict, env.yield_, env.await_, true, false, true, true, false)
+        } else {
+            env
+        },
+        // 15.7.? a static block: `[~Yield, +Await]`.
+        NodeKind::ClassStaticBlock => env_fn(env, env.strict, false, true, true, false, true, true, false),
+        // 15.7: every part of a class is strict mode code; the heritage is outside the class's own
+        // private names, and a body is `derived` when there is a heritage.
+        NodeKind::ClassDeclaration | NodeKind::ClassExpression => EarlyEnv {
+            strict: true,
+            derived: if k == 2 {
+                kd(a, k1) != NodeKind::Absent
+            } else {
+                env.derived
+            },
+            ..env
+        },
+        NodeKind::ClassBody => EarlyEnv {
+            privates: env.privates + class_private_names(a, ts, ks),
+            ..env
+        },
+        // 13.2.5: an object literal is not a class body; `super()` is not allowed in its methods.
+        NodeKind::ObjectLiteral => EarlyEnv { derived: false, ..env },
+        // 14.7: the body of a loop.
+        NodeKind::DoWhileStatement => if k == 0 {
+            EarlyEnv { in_loop: true, in_breakable: true, ..env }
+        } else {
+            env
+        },
+        NodeKind::WhileStatement => if k == 1 {
+            EarlyEnv { in_loop: true, in_breakable: true, ..env }
+        } else {
+            env
+        },
+        NodeKind::ForStatement => if k == 3 {
+            EarlyEnv { in_loop: true, in_breakable: true, ..env }
+        } else {
+            env
+        },
+        NodeKind::ForInStatement | NodeKind::ForOfStatement => if k == 2 {
+            EarlyEnv { in_loop: true, in_breakable: true, ..env }
+        } else {
+            env
+        },
+        // 14.12: the clauses of a switch.
+        NodeKind::SwitchStatement => if k >= 1 {
+            EarlyEnv { in_breakable: true, ..env }
+        } else {
+            env
+        },
+        // 14.13: the body of a labelled statement.
+        NodeKind::LabelledStatement => if k == 1 {
+            EarlyEnv {
+                labels: env.labels.push(
+                    EarlyLabel { name: name_of(a, ts, k0), iteration: is_iteration_stmt(a, k1) },
+                ),
+                ..env
+            }
+        } else {
+            env
+        },
+        // 13.3.11: the template of a tagged template is `[+Tagged]`; the tag is not.
+        NodeKind::TaggedTemplate => EarlyEnv { tagged: k == 1, ..env },
+        // 13.2.8: a substitution is not `[+Tagged]`, whatever the literal is.
+        NodeKind::TemplateLiteral => if kd(a, c) == NodeKind::TemplateElement {
+            env
+        } else {
+            EarlyEnv { tagged: false, ..env }
+        },
+        _ => EarlyEnv { tagged: false, ..env },
+    }
+}
+
+/// Node `n` and every node below it meet the early errors, in the environment `env`.
+pub open spec fn early(a: AstV, ts: Stream, n: int, env: EarlyEnv) -> bool
+    decreases n,
+{
+    0 <= n < a.nodes.len() && early_local(a, ts, n, env) && (forall|k: int|
+        0 <= k < a.nodes[n].children.len() ==> {
+            let c = #[trigger] a.nodes[n].children[k];
+            0 <= c < n && early(a, ts, c, child_env(a, ts, n, k, env))
+        })
+}
+
+/// The environment of the goal symbol: a `Script` is strict if its Directive
+/// Prologue has a Use Strict Directive; a `Module` always is (§11.2.2).
+pub open spec fn root_env(a: AstV, ts: Stream, g: SourceGoal) -> EarlyEnv {
+    EarlyEnv {
+        strict: g == SourceGoal::Module || has_use_strict(a, ts, kids(a, a.root)),
+        module: g == SourceGoal::Module,
+        yield_: false,
+        await_: g == SourceGoal::Module,
+        labels: Seq::empty(),
+        in_loop: false,
+        in_breakable: false,
+        super_prop: false,
+        super_call: false,
+        new_target: false,
+        no_arguments: false,
+        no_yield_await: false,
+        tagged: false,
+        privates: Seq::empty(),
+        derived: false,
+    }
+}
+
+/// The program `a`, derived from the token stream `ts`, has no early error.
+pub open spec fn early_errors_ok(a: AstV, ts: Stream, g: SourceGoal) -> bool {
+    early(a, ts, a.root, root_env(a, ts, g))
+}
+
+/// `a` is a parse of the source text `src` as `g`, and has no early error: the
+/// program is valid. This is the relation the parser's contract is stated by.
+pub open spec fn is_valid_parse<L: LexerSpec>(src: Src, g: SourceGoal, a: AstV) -> bool {
+    exists|ts: Stream|
+        tokens_of::<L>(src, ts, g) && derives_root(a, ts, g) && spans_wf(a, src.len() as int)
+            && early_errors_ok(a, ts, g)
+}
+
+} // verus!
+
+verus! {
+
+// ---------------------------------------------------------------------
 // The arena, read totally
 // ---------------------------------------------------------------------
 
