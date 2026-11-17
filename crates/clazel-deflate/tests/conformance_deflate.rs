@@ -232,7 +232,7 @@ impl Tally {
 /// prefixes, a few hundred bit flips (a coarser stride under Miri).
 fn stride_for(len: usize) -> usize {
     if cfg!(miri) {
-        (len / 20).max(7)
+        (len / 2).max(7)
     } else {
         (len / 100).max(1)
     }
@@ -260,7 +260,13 @@ fn mutants(input: &[u8], seed: u64, stride: usize) -> Vec<(String, Vec<u8>)> {
     }
     // Random byte changes, one to three of them.
     let mut rng = Rng::new(seed);
-    for k in 0..input.len().checked_div(stride).unwrap_or(0).clamp(8, 100) {
+    let (least, most) = if cfg!(miri) { (2, 2) } else { (8, 100) };
+    for k in 0..input
+        .len()
+        .checked_div(stride)
+        .unwrap_or(0)
+        .clamp(least, most)
+    {
         let mut m = input.to_vec();
         let n = 1usize.saturating_add(rng.below(3));
         for _ in 0..n {
@@ -299,7 +305,9 @@ fn differential_miniz() {
             artificial_file(&format!("{name}.deflate")).to_vec(),
         ));
     }
-    raw.extend(corpus_raw());
+    if !cfg!(miri) {
+        raw.extend(corpus_raw());
+    }
     // The hand-made streams that each hit one error (a stream the decoders
     // might treat differently is what this is for).
     for (name, format, stream, _) in error_streams() {
@@ -317,12 +325,22 @@ fn differential_miniz() {
             main_file("midsummer.txt.zlib").to_vec(),
         ),
     ];
-    zl.extend(corpus_zlib());
+    // Under Miri (an interpreter) each decode costs seconds (`MIRI`): no
+    // `miniz_oxide` corpus and no `midsummer.txt.zlib`, and only the first
+    // stream of each format is mutated.
+    if cfg!(miri) {
+        zl.retain(|(_, s)| s.len() <= 700);
+    } else {
+        zl.extend(corpus_zlib());
+    }
 
     let mut tally = Tally::default();
     for (i, (name, stream)) in raw.iter().enumerate() {
         // Unmutated: the streams themselves.
         tally.compare(name, stream, false);
+        if cfg!(miri) && i > 0 {
+            continue;
+        }
         let s = stride_for(stream.len());
         for (what, m) in mutants(stream, 1000 + i as u64, s) {
             tally.compare(&format!("{name} {what}"), &m, false);
@@ -330,6 +348,9 @@ fn differential_miniz() {
     }
     for (i, (name, stream)) in zl.iter().enumerate() {
         tally.compare(name, stream, true);
+        if cfg!(miri) && i > 0 {
+            continue;
+        }
         let s = stride_for(stream.len());
         for (what, m) in mutants(stream, 5000 + i as u64, s) {
             tally.compare(&format!("{name} {what}"), &m, true);
@@ -457,7 +478,12 @@ fn streams() -> Vec<Stream> {
             artificial_file(&format!("{name}.deflate.decompressed")).to_vec(),
         ));
     }
-    for (name, raw, data) in corpus_with_data() {
+    let corpus = if cfg!(miri) {
+        Vec::new()
+    } else {
+        corpus_with_data()
+    };
+    for (name, raw, data) in corpus {
         v.push((
             format!("miniz {name}"),
             Format::Raw,
@@ -485,8 +511,28 @@ fn streams() -> Vec<Stream> {
             data,
         ));
     }
+    if cfg!(miri) {
+        v.retain(|(name, ..)| MIRI.contains(&name.as_str()));
+    }
     v
 }
+
+/// The streams the tests use under Miri (an interpreter): one of each kind
+/// of block, raw and zlib. Natively a decode costs about 1.3 ms however
+/// short the stream (the spec model about 6.5 ms), and Miri runs this code
+/// some 1,600 times slower (208 s for a bomb test that takes 0.13 s), so
+/// every decode there costs seconds; the whole file did not finish in six
+/// hours with the small streams of the corpus. Under Miri each test makes
+/// a few dozen decodes; the normal test job uses every stream
+/// (docs/VERIFICATION.md, Miri).
+const MIRI: &[&str] = &[
+    "romeo.txt.deflate",
+    "romeo.txt.zlib",
+    "backref-crosses-blocks",
+    "made stored blocks",
+    "made fixed: overlapping matches",
+    "made dynamic: hand-made code",
+];
 
 /// Whole-input decoding gives the output the test data says, and uses every
 /// byte of the stream.
@@ -503,7 +549,7 @@ fn whole_decodes_everything() {
 #[test]
 fn chunking_is_irrelevant() {
     let chunks: &[usize] = if cfg!(miri) {
-        &[1, 7, 61, 1 << 20]
+        &[1, 61]
     } else {
         &[1, 2, 3, 5, 7, 8, 13, 64, 1000, 1 << 20]
     };
@@ -513,9 +559,6 @@ fn chunking_is_irrelevant() {
         &[1, 3, 100, 16384]
     };
     for (name, format, stream, _) in streams() {
-        if cfg!(miri) && stream.len() > 3000 {
-            continue;
-        }
         let want = whole(format, &stream, LIMIT);
         for &chunk in chunks {
             // One-byte chunks of the big streams are slow in a debug build.
@@ -523,7 +566,9 @@ fn chunking_is_irrelevant() {
                 continue;
             }
             for &room in rooms {
-                if room < 3 && stream.len() > 20000 {
+                // Under Miri: one byte in and out, and 61 in, 100 out.
+                if (room < 3 && stream.len() > 20000) || (cfg!(miri) && (chunk == 1) != (room == 1))
+                {
                     continue;
                 }
                 let (out, result) = drive(format, &stream, LIMIT, chunk, room);
@@ -547,7 +592,8 @@ fn chunking_is_irrelevant_on_mutants() {
         if stream.len() > 800 {
             continue;
         }
-        let count = if cfg!(miri) { 3 } else { 60 };
+        let count = if cfg!(miri) { 1 } else { 60 };
+        let chunks: &[usize] = if cfg!(miri) { &[1, 17] } else { &[1, 3, 17] };
         for k in 0..count {
             let mut m = stream.clone();
             for _ in 0..1 + rng.below(3) {
@@ -557,7 +603,7 @@ fn chunking_is_irrelevant_on_mutants() {
                 }
             }
             let want = whole(format, &m, LIMIT);
-            for chunk in [1, 3, 17] {
+            for &chunk in chunks {
                 let (out, result) = drive(format, &m, LIMIT, chunk, 5);
                 match (&want, &result) {
                     (Ok((w, used)), Ok(u)) => {
@@ -580,7 +626,7 @@ fn equals_the_spec_model() {
     let mut checked = 0usize;
     let mut rng = Rng::new(99);
     for (name, format, stream, want) in streams() {
-        if stream.len() > 40000 || (cfg!(miri) && stream.len() > 700) {
+        if stream.len() > 40000 {
             continue;
         }
         let got = whole(format, &stream, LIMIT);
@@ -588,14 +634,12 @@ fn equals_the_spec_model() {
         assert_eq!(got, model, "{name}");
         assert_eq!(got.as_ref().ok().map(|d| &d.0), Some(&want), "{name}");
         checked += 1;
-        if stream.len() > 800 {
+        // Under Miri the streams alone (`MIRI`); mutants of them go through
+        // the decoder in the tests above.
+        if stream.len() > 800 || cfg!(miri) {
             continue;
         }
-        let step = if cfg!(miri) {
-            7
-        } else {
-            (stream.len() / 100).max(1)
-        };
+        let step = (stream.len() / 100).max(1);
         for n in (0..stream.len()).step_by(step) {
             let p = stream.get(..n).unwrap_or(&[]);
             assert_eq!(
@@ -605,8 +649,7 @@ fn equals_the_spec_model() {
             );
             checked += 1;
         }
-        let count = if cfg!(miri) { 4 } else { 40 };
-        for k in 0..count {
+        for k in 0..40 {
             let mut m = stream.clone();
             for _ in 0..1 + rng.below(3) {
                 let i = rng.below(m.len());
@@ -635,8 +678,14 @@ fn output_limit_is_exact() {
         }
         let n = want.len() as u64;
         assert!(whole(format, &stream, n).is_ok(), "{name}");
+        // Under Miri only one byte short (`MIRI`).
+        let limits = if cfg!(miri) {
+            vec![n.saturating_sub(1)]
+        } else {
+            vec![n.saturating_sub(1), n / 2, 0]
+        };
         if n > 0 {
-            for limit in [n - 1, n / 2, 0] {
+            for limit in limits {
                 assert_eq!(
                     whole(format, &stream, limit).err(),
                     Some(Error::OutputLimit),
@@ -662,11 +711,12 @@ fn output_limit_is_exact() {
 /// 64 MiB of zeros compresses to about 64 KiB, and a limit of 1 MiB stops it.
 #[test]
 fn bomb_stops_at_the_limit() {
-    let size: usize = if cfg!(miri) { 1 << 16 } else { 1 << 26 };
+    // Miri took 208 s with 64 KiB and a 4 KiB limit; 16 KiB and 1 KiB.
+    let size: usize = if cfg!(miri) { 1 << 14 } else { 1 << 26 };
     let data = vec![0u8; size];
     let raw = miniz_oxide::deflate::compress_to_vec(&data, 6);
     assert!(raw.len().saturating_mul(100) < size, "{} bytes", raw.len());
-    let limit: u64 = if cfg!(miri) { 1 << 12 } else { 1 << 20 };
+    let limit: u64 = if cfg!(miri) { 1 << 10 } else { 1 << 20 };
     assert_eq!(inflate(&raw, limit).err(), Some(Error::OutputLimit));
     let (out, result) = drive(Format::Raw, &raw, limit, 4096, 4096);
     assert_eq!(result.err(), Some(Error::OutputLimit));
@@ -900,7 +950,9 @@ fn every_error() {
             Some(want),
             "{name} (model)"
         );
-        for chunk in [1, 2, 1000] {
+        // Under Miri one byte at a time only (`MIRI`).
+        let chunks: &[usize] = if cfg!(miri) { &[1] } else { &[1, 2, 1000] };
+        for &chunk in chunks {
             let (_, result) = drive(format, &stream, LIMIT, chunk, 16);
             assert_eq!(result.err(), Some(want), "{name} chunk {chunk}");
         }

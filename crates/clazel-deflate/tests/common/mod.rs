@@ -243,8 +243,10 @@ pub fn handmade() -> Vec<Made> {
     let mut all = Vec::new();
 
     // Every length 3 to 258 against every distance code's smallest and
-    // largest distance, in one fixed block after 32,768 literals.
-    {
+    // largest distance, in one fixed block after 32,768 literals. Not under
+    // Miri (an interpreter): 130 KiB of output is far too slow there, and
+    // the normal test job runs it (docs/VERIFICATION.md, Miri).
+    if !cfg!(miri) {
         let mut w = BitWriter::new();
         w.bits(1, 1);
         w.bits(1, 2);
@@ -285,7 +287,8 @@ pub fn handmade() -> Vec<Made> {
     }
 
     // Stored blocks: empty, 1 byte after a fixed block (so the header is not
-    // byte aligned), 65,535 bytes, and the last one empty.
+    // byte aligned), 65,535 bytes (300 under Miri, for speed), and the last
+    // one empty.
     {
         let mut w = BitWriter::new();
         let mut out = Vec::new();
@@ -304,11 +307,13 @@ pub fn handmade() -> Vec<Made> {
         w.raw(&[1, 0, 0xFE, 0xFF, b'z']);
         out.push(b'z');
         let mut rng = Rng::new(11);
-        let big: Vec<u8> = (0..65535).map(|_| rng.next() as u8).collect();
+        let len: u16 = if cfg!(miri) { 300 } else { 65535 };
+        let big: Vec<u8> = (0..len).map(|_| rng.next() as u8).collect();
+        let [lo, hi] = len.to_le_bytes();
         w.align();
         w.bits(0, 1);
         w.bits(0, 2);
-        w.raw(&[0xFF, 0xFF, 0, 0]);
+        w.raw(&[lo, hi, !lo, !hi]);
         w.raw(&big);
         out.extend_from_slice(&big);
         w.align();
@@ -419,12 +424,20 @@ pub fn sample(kind: usize, n: usize) -> Vec<u8> {
     v
 }
 
-/// What the corpus holds: `(name, data, level)`.
+/// What the corpus holds: `(name, data, level)`. Under Miri (an
+/// interpreter) only the 100-byte inputs at level 6, for speed; the
+/// normal test job compresses all of them (docs/VERIFICATION.md, Miri).
 fn corpus_inputs() -> Vec<(String, Vec<u8>, u8)> {
+    let sizes: &[usize] = if cfg!(miri) {
+        &[100]
+    } else {
+        &[0, 1, 100, 3000]
+    };
+    let levels: &[u8] = if cfg!(miri) { &[6] } else { &[0, 1, 6, 9] };
     let mut v = Vec::new();
     for kind in 0..5usize {
-        for &n in &[0usize, 1, 100, 3000] {
-            for &level in &[0u8, 1, 6, 9] {
+        for &n in sizes {
+            for &level in levels {
                 v.push((
                     format!("kind {kind} n {n} level {level}"),
                     sample(kind, n),
