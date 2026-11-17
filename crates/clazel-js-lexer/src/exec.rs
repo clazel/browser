@@ -23,18 +23,24 @@
 //! - **The value's shape:** [`value_shape_agrees`]: an element has the
 //!   kind of `Value` its kind has (a `StringLiteral` a `Value::String`, and
 //!   so on), and a regular expression's `body_end` is inside it.
+//! - **The derivation of the simple kinds:** [`kind_agrees_proven`]: a
+//!   `WhiteSpace`, `LineTerminator`, `HashbangComment`, `DivPunctuator` or
+//!   `RightBracePunctuator` element is derived by its kind in the goal
+//!   ([`element_matches`]).
 //! - **Single code points:** the classifiers (`is_ws`, `is_lt`, the digit
 //!   classes, `hex_val`) equal the spec's, and `push_utf16` is
 //!   UTF16EncodeCodePoint (§11.1.1).
 //!
-//! It is **not** proven that the results agree with [`super::spec`]: that
-//! the kind derives the range, that no longer element exists
-//! ([`longest_len`]), that the errors are [`lex_error`]'s, and that the
-//! values are the spec's relations. These are the rest of
-//! [`super::contract`], which the functions here do not yet claim, so they
-//! do not implement [`super::api::JsLexer`]. Their agreement with the spec
-//! is tested (`tests/`), not proven. [`lemma_contract_implies_proven`]
-//! shows that what is proven is implied by the full contract.
+//! It is **not** proven that the results agree with [`super::spec`]
+//! otherwise: that the kind derives the range for the other kinds
+//! (comments, names, punctuators, literals, templates, regular
+//! expressions), that no longer element exists ([`longest_len`]), that the
+//! errors are [`lex_error`]'s, that `newline_before` is [`skip_trivia`]'s,
+//! and that the values are the spec's relations. These are the rest of
+//! [`super::contract`], which the functions here do not claim, so they do
+//! not implement [`super::api::JsLexer`]. Their agreement with the spec is
+//! tested (`tests/`), not proven. [`lemma_contract_implies_proven`] shows
+//! that what is proven is implied by the full contract.
 //!
 //! Non-ASCII `ID_Start` and `ID_Continue` come from [`super::unicode`],
 //! which the spec leaves uninterpreted: nothing is claimed about them.
@@ -79,22 +85,53 @@ pub open spec fn value_shape_agrees(el: Element) -> bool {
     }
 }
 
-/// What [`next_input_element`] is proven to return: totality and span
-/// coverage. A weakening of [`super::contract::next_input_element_ensures`]
+/// For the kinds whose derivation is proven, the kind derives the
+/// element's range in the goal ([`element_matches`], one conjunct of
+/// [`super::contract::next_input_element_ensures`]): `WhiteSpace`,
+/// `LineTerminator`, `HashbangComment`, `DivPunctuator` and
+/// `RightBracePunctuator`. For the other kinds nothing is claimed here.
+pub open spec fn kind_agrees_proven(goal: Goal, html: bool, src: Seq<u32>, el: Element) -> bool {
+    (el.kind == ElementKind::WhiteSpace || el.kind == ElementKind::LineTerminator || el.kind
+        == ElementKind::HashbangComment || el.kind == ElementKind::DivPunctuator || el.kind
+        == ElementKind::RightBracePunctuator) ==> element_matches(
+        goal,
+        html,
+        el.kind,
+        src,
+        el.start as int,
+        el.end as int,
+    )
+}
+
+/// What [`next_input_element`] is proven to return: totality, span
+/// coverage, the value's shape, and the derivation of the simple kinds. A
+/// weakening of [`super::contract::next_input_element_ensures`]
 /// ([`lemma_contract_implies_proven`]).
-pub open spec fn next_input_element_proven(src: Seq<u32>, pos: usize, r: Result<Step, LexError>) -> bool {
+pub open spec fn next_input_element_proven(
+    src: Seq<u32>,
+    pos: usize,
+    goal: Goal,
+    html: bool,
+    r: Result<Step, LexError>,
+) -> bool {
     match r {
         Err(_) => pos < src.len(),
         Ok(Step::Eof) => pos == src.len(),
         Ok(Step::Element(el)) => pos < src.len() && el.start == pos && pos < el.end && el.end
-            <= src.len() && value_shape_agrees(el),
+            <= src.len() && value_shape_agrees(el) && kind_agrees_proven(goal, html, src, el),
     }
 }
 
 /// What [`next_token`] is proven to return: the token is after `pos`,
 /// inside the source text and not trivia, and the flag is set only by a
 /// line terminator code point between `pos` and the token.
-pub open spec fn next_token_proven(src: Seq<u32>, pos: usize, r: Result<Next, LexError>) -> bool {
+pub open spec fn next_token_proven(
+    src: Seq<u32>,
+    pos: usize,
+    goal: Goal,
+    html: bool,
+    r: Result<Next, LexError>,
+) -> bool {
     match r {
         Err(_) => pos < src.len(),
         Ok(Next::Eof { newline_before }) => newline_before ==> contains_line_terminator(
@@ -103,18 +140,17 @@ pub open spec fn next_token_proven(src: Seq<u32>, pos: usize, r: Result<Next, Le
             src.len() as int,
         ),
         Ok(Next::Token(tok)) => pos <= tok.element.start < tok.element.end <= src.len()
-            && !is_trivia(tok.element.kind) && value_shape_agrees(tok.element) && (
-        tok.newline_before ==> contains_line_terminator(
-            src,
-            pos as int,
-            tok.element.start as int,
-        )),
+            && !is_trivia(tok.element.kind) && value_shape_agrees(tok.element)
+            && kind_agrees_proven(goal, html, src, tok.element) && (tok.newline_before
+            ==> contains_line_terminator(src, pos as int, tok.element.start as int)),
     }
 }
 
 /// The full contract implies what is proven of [`next_input_element`]
 /// (except the value's shape, which the full contract states value by
 /// value): the proven part is a weakening, not a different claim.
+/// ([`kind_agrees_proven`] is the contract's `element_matches` conjunct
+/// itself, restricted to some kinds.)
 pub proof fn lemma_contract_implies_proven(
     src: Seq<u32>,
     pos: usize,
@@ -130,7 +166,7 @@ pub proof fn lemma_contract_implies_proven(
             Err(_) => pos < src.len(),
             Ok(Step::Eof) => pos == src.len(),
             Ok(Step::Element(el)) => pos < src.len() && el.start == pos && pos < el.end && el.end
-                <= src.len(),
+                <= src.len() && kind_agrees_proven(goal, html, src, el),
         },
 {
 }
@@ -1477,6 +1513,17 @@ pub open spec fn candidate_ok(src: Seq<u32>, pos: usize, c: (Element, Option<Lex
     c.0.start == pos && pos < c.0.end <= src.len() && value_shape_agrees(c.0)
 }
 
+/// [`candidate_ok`], and [`kind_agrees_proven`] in the goal.
+pub open spec fn candidate_agrees(
+    goal: Goal,
+    html: bool,
+    src: Seq<u32>,
+    pos: usize,
+    c: (Element, Option<LexError>),
+) -> bool {
+    candidate_ok(src, pos, c) && kind_agrees_proven(goal, html, src, c.0)
+}
+
 /// The longer of two candidates (the first on a tie).
 fn longer(a: Option<Candidate>, b: Option<Candidate>) -> (r: Option<Candidate>)
     ensures
@@ -1511,7 +1558,7 @@ fn lex_slash_comment(src: &[u32], pos: usize, html: bool) -> (r: Option<Candidat
         pos < src.len(),
     ensures
         match r {
-            Some(c) => candidate_ok(src@, pos, c),
+            Some(c) => candidate_ok(src@, pos, c) && c.0.kind == ElementKind::Comment,
             None => true,
         },
 {
@@ -1546,7 +1593,7 @@ fn lex_common(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Can
         pos < src.len(),
     ensures
         match r {
-            Some(c) => candidate_ok(src@, pos, c),
+            Some(c) => candidate_agrees(goal, html, src@, pos, c),
             None => true,
         },
 {
@@ -1554,6 +1601,7 @@ fn lex_common(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Can
     let c1 = peek(src, pos.saturating_add(1));
     if is_ws(c) {
         // WhiteSpace
+        assert(white_space(src@, pos as int, pos + 1));
         Some((plain(ElementKind::WhiteSpace, pos, pos.saturating_add(1)), None))
     } else if is_lt(c) {
         // LineTerminator; with `html`, Annex B.1.1's
@@ -1576,10 +1624,19 @@ fn lex_common(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Can
         };
         let div = if goal_div(goal) {
             let e = if c1 == 0x3D {
+                // DivPunctuator :: `/=`
+                assert(src@.subrange(pos as int, pos + 2) =~= seq!['/', '='].map_values(
+                    |c: char| c as u32,
+                ));
                 pos.saturating_add(2)
             } else {
+                // DivPunctuator :: `/`
+                assert(src@.subrange(pos as int, pos + 1) =~= seq!['/'].map_values(
+                    |c: char| c as u32,
+                ));
                 pos.saturating_add(1)
             };
+            assert(div_punctuator(src@, pos as int, e as int));
             Some((plain(ElementKind::DivPunctuator, pos, e), None))
         } else {
             None
@@ -1590,6 +1647,11 @@ fn lex_common(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Can
         if goal_template_tail(goal) {
             lex_template(src, pos, true)
         } else if goal_right_brace(goal) {
+            // RightBracePunctuator :: `}`
+            assert(src@.subrange(pos as int, pos + 1) =~= seq!['}'].map_values(
+                |c: char| c as u32,
+            ));
+            assert(right_brace_punctuator(src@, pos as int, pos + 1));
             Some((plain(ElementKind::RightBracePunctuator, pos, pos.saturating_add(1)), None))
         } else {
             None
@@ -1706,7 +1768,7 @@ fn lex_template(src: &[u32], pos: usize, substitution_tail: bool) -> (r: Option<
         pos < src.len(),
     ensures
         match r {
-            Some(c) => candidate_ok(src@, pos, c),
+            Some(c) => candidate_ok(src@, pos, c) && c.0.kind is Template,
             None => true,
         },
 {
@@ -1749,12 +1811,15 @@ fn lex_start(src: &[u32], html: bool) -> (r: Option<Candidate>)
         0 < src.len(),
     ensures
         match r {
-            Some(c) => candidate_ok(src@, 0, c),
+            Some(c) => candidate_agrees(Goal::InputElementHashbangOrRegExp, html, src@, 0, c),
             None => true,
         },
 {
     let hashbang = if peek(src, 0) == 0x23 && peek(src, 1) == 0x21 {
+        // §12.5 HashbangComment :: `#!` SingleLineCommentChars?
         let e = scan_line_chars(src, 2);
+        assert(src@.subrange(0, 2) =~= seq!['#', '!'].map_values(|c: char| c as u32));
+        assert(hashbang_comment(src@, 0, e as int));
         Some((plain(ElementKind::HashbangComment, 0, e), None))
     } else {
         None
@@ -1774,7 +1839,7 @@ fn html_close_candidate(src: &[u32], pos: usize, k: usize) -> (r: Option<Candida
         pos <= k <= src.len(),
     ensures
         match r {
-            Some(c) => candidate_ok(src@, pos, c),
+            Some(c) => candidate_ok(src@, pos, c) && c.0.kind == ElementKind::Comment,
             None => true,
         },
 {
@@ -1788,7 +1853,8 @@ fn regexp_candidate(src: &[u32], pos: usize) -> (r: Option<Candidate>)
         pos < src.len(),
     ensures
         match r {
-            Some(c) => candidate_ok(src@, pos, c),
+            Some(c) => candidate_ok(src@, pos, c) && c.0.kind
+                == ElementKind::RegularExpressionLiteral,
             None => true,
         },
 {
@@ -1819,7 +1885,7 @@ pub fn next_input_element(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r
     requires
         pos <= src.len(),
     ensures
-        next_input_element_proven(src@, pos, r),
+        next_input_element_proven(src@, pos, goal, html, r),
 {
     if pos >= src.len() {
         return Ok(Step::Eof);
@@ -1882,7 +1948,7 @@ pub fn next_token(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Result
     requires
         pos <= src.len(),
     ensures
-        next_token_proven(src@, pos, r),
+        next_token_proven(src@, pos, goal, html, r),
 {
     let mut p = pos;
     let mut newline = false;
