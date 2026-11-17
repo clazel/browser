@@ -28,6 +28,7 @@
 //! Tier: see `[package.metadata.clazel]` in `Cargo.toml` and `docs/VERIFICATION.md`.
 
 pub mod algorithm;
+pub mod axioms;
 pub mod contract;
 pub mod examples;
 pub mod exec_check;
@@ -39,6 +40,7 @@ pub mod exec_numbers;
 pub mod exec_parse;
 pub mod exec_serialize;
 pub mod exec_specificity;
+pub mod exec_steps;
 pub mod exec_strings;
 pub mod exec_types;
 pub mod independent;
