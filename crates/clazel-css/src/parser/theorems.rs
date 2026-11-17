@@ -30,4 +30,270 @@ pub proof fn theorem_output_preserved(string: Seq<u32>)
     lemma_all_good_preserved(values, values.len());
 }
 
+// ------------------------------------------------------------------------------------
+// theorem_value_end
+// ------------------------------------------------------------------------------------
+
+/// A simple block is what the loop of "consume a simple block" returns.
+proof fn lemma_sbl_is_block(
+    input: TokenStream,
+    index: int,
+    ending: Token,
+    assoc: Token,
+    value: Seq<ComponentValue>,
+)
+    ensures
+        simple_block_loop(input, index, ending, assoc, value).0 is SimpleBlock,
+    decreases items_left(input, index), 2nat,
+{
+    let item = next_token(input, index);
+    if !(is(item, Token::Eof) || is(item, ending)) {
+        let (cv, next) = consume_a_component_value(input, index);
+        assert(index < input.tokens.len());
+        lemma_sbl_is_block(input, moved(index, next), ending, assoc, value.push(cv));
+    }
+}
+
+/// A function is what the loop of "consume a function" returns.
+proof fn lemma_fl_is_function(input: TokenStream, index: int, name: Seq<u32>, value: Seq<ComponentValue>)
+    ensures
+        function_loop(input, index, name, value).0 is Function,
+    decreases items_left(input, index), 2nat,
+{
+    let item = next_token(input, index);
+    if !(is(item, Token::Eof) || is(item, Token::CloseParen)) {
+        let (cv, next) = consume_a_component_value(input, index);
+        assert(index < input.tokens.len());
+        lemma_fl_is_function(input, moved(index, next), name, value.push(cv));
+    }
+}
+
+/// "Consume a component value" gives a token only as "consume a token" does: the item at
+/// the index, one step on.
+proof fn lemma_cv_token_is_item(input: TokenStream, p: int)
+    requires
+        !is_empty(input, p),
+    ensures
+        consume_a_component_value(input, p).0 is Token ==> consume_a_component_value(input, p) == (
+            input.tokens[p],
+            p + 1,
+        ),
+{
+    let item = next_token(input, p);
+    assert(p < input.tokens.len());
+    if is_open_bracket(item) {
+        let assoc = match item {
+            ComponentValue::Token { token } => token,
+            _ => Token::Eof,
+        };
+        lemma_sbl_is_block(input, discard_a_token(input, p), mirror(item), assoc, Seq::empty());
+    } else if is_function_token(item) {
+        let (token, next) = consume_a_token(input, p);
+        lemma_fl_is_function(input, next, token_value(token), Seq::empty());
+    }
+}
+
+/// "Consume a component value" does not go past the end of a stream that is not empty,
+/// nor do the loops of the simple block and the function from an index in the stream.
+proof fn lemma_cv_within(input: TokenStream, p: int)
+    requires
+        0 <= p < input.tokens.len(),
+    ensures
+        consume_a_component_value(input, p).1 <= input.tokens.len(),
+    decreases items_left(input, p), 1nat,
+{
+    let item = next_token(input, p);
+    if is_open_bracket(item) {
+        let assoc = match item {
+            ComponentValue::Token { token } => token,
+            _ => Token::Eof,
+        };
+        lemma_sbl_within(input, p + 1, mirror(item), assoc, Seq::empty());
+    } else if is_function_token(item) {
+        lemma_fl_within(input, p + 1, token_value(item), Seq::empty());
+    }
+}
+
+/// The loop of "consume a simple block" does not go past the end of the stream.
+proof fn lemma_sbl_within(
+    input: TokenStream,
+    index: int,
+    ending: Token,
+    assoc: Token,
+    value: Seq<ComponentValue>,
+)
+    requires
+        0 <= index <= input.tokens.len(),
+    ensures
+        simple_block_loop(input, index, ending, assoc, value).1 <= input.tokens.len(),
+    decreases items_left(input, index), 2nat,
+{
+    let item = next_token(input, index);
+    if !(is(item, Token::Eof) || is(item, ending)) {
+        assert(index < input.tokens.len());
+        lemma_cv_within(input, index);
+        crate::parser::termination::lemma_component_value_advances(input, index);
+        let (cv, next) = consume_a_component_value(input, index);
+        lemma_sbl_within(input, moved(index, next), ending, assoc, value.push(cv));
+    }
+}
+
+/// The loop of "consume a function" does not go past the end of the stream.
+proof fn lemma_fl_within(input: TokenStream, index: int, name: Seq<u32>, value: Seq<ComponentValue>)
+    requires
+        0 <= index <= input.tokens.len(),
+    ensures
+        function_loop(input, index, name, value).1 <= input.tokens.len(),
+    decreases items_left(input, index), 2nat,
+{
+    let item = next_token(input, index);
+    if !(is(item, Token::Eof) || is(item, Token::CloseParen)) {
+        assert(index < input.tokens.len());
+        lemma_cv_within(input, index);
+        crate::parser::termination::lemma_component_value_advances(input, index);
+        let (cv, next) = consume_a_component_value(input, index);
+        lemma_fl_within(input, moved(index, next), name, value.push(cv));
+    }
+}
+
+/// The last `m` of `values` are tokens.
+pub open spec fn tokens_at_end(values: Seq<ComponentValue>, m: int) -> bool {
+    forall|k: int| values.len() - m <= k < values.len() ==> #[trigger] values[k] is Token
+}
+
+/// What the loop of "consume a list of component values" keeps as it goes: the tokens at
+/// the end of what it has collected are the items of the stream before the index.
+pub open spec fn exact_suffix(values: Seq<ComponentValue>, idx: int, tokens: Seq<ComponentValue>) -> bool {
+    &&& 0 <= idx <= tokens.len()
+    &&& forall|m: int|
+        #![trigger tokens_at_end(values, m)]
+        0 <= m <= values.len() && tokens_at_end(values, m) ==> (m <= idx && values.subrange(
+            values.len() as int - m,
+            values.len() as int,
+        ) == tokens.subrange(idx - m, idx))
+}
+
+/// The loop of "consume a list of component values" keeps [`exact_suffix`].
+proof fn lemma_list_exact(
+    input: TokenStream,
+    index: int,
+    stop: Option<Token>,
+    nested: bool,
+    values: Seq<ComponentValue>,
+)
+    requires
+        exact_suffix(values, index, input.tokens),
+    ensures
+        ({
+            let (list, end) = list_of_component_values_loop(input, index, stop, nested, values);
+            exact_suffix(list, end, input.tokens)
+        }),
+    decreases items_left(input, index),
+{
+    let item = next_token(input, index);
+    if !(is(item, Token::Eof) || is_stop(item, stop)) {
+        assert(index < input.tokens.len());
+        let (x, next) = if is(item, Token::CloseCurly) && !nested {
+            consume_a_token(input, index)
+        } else {
+            consume_a_component_value(input, index)
+        };
+        if is(item, Token::CloseCurly) {
+            if !nested {
+                lemma_step_exact(input, index, values, x, index + 1);
+                lemma_list_exact(input, next, stop, nested, values.push(x));
+            }
+        } else {
+            lemma_cv_token_is_item(input, index);
+            lemma_cv_within(input, index);
+            crate::parser::termination::lemma_component_value_advances(input, index);
+            lemma_step_exact(input, index, values, x, moved(index, next));
+            lemma_list_exact(input, moved(index, next), stop, nested, values.push(x));
+        }
+    }
+}
+
+/// One step: an item pushed, that is the item at the index, one step on, if it is a token;
+/// or is not one and the index is in the stream.
+proof fn lemma_step_exact(
+    input: TokenStream,
+    index: int,
+    values: Seq<ComponentValue>,
+    x: ComponentValue,
+    after: int,
+)
+    requires
+        exact_suffix(values, index, input.tokens),
+        0 <= index < input.tokens.len(),
+        index < after <= input.tokens.len(),
+        x is Token ==> (x == input.tokens[index] && after == index + 1),
+    ensures
+        exact_suffix(values.push(x), after, input.tokens),
+{
+    let pushed = values.push(x);
+    assert(pushed.len() == values.len() + 1);
+    assert forall|m: int|
+        #![trigger tokens_at_end(pushed, m)]
+        0 <= m <= pushed.len() && tokens_at_end(pushed, m) implies (m <= after && pushed.subrange(
+        pushed.len() as int - m,
+        pushed.len() as int,
+    ) == input.tokens.subrange(after - m, after)) by {
+        if m == 0 {
+            assert(pushed.subrange(pushed.len() as int, pushed.len() as int) =~= Seq::<ComponentValue>::empty());
+            assert(input.tokens.subrange(after as int, after as int) =~= Seq::<ComponentValue>::empty());
+        } else {
+            assert(pushed[pushed.len() - 1] == x);
+            assert(x is Token);
+            assert forall|k: int| values.len() - (m - 1) <= k < values.len() implies #[trigger] values[k] is Token by {
+                assert(pushed[k] == values[k]);
+            }
+            assert(tokens_at_end(values, m - 1));
+            assert(0 <= m - 1 <= values.len());
+            assert(m - 1 <= index);
+            assert(pushed.subrange(pushed.len() as int - m, pushed.len() as int) =~= values.subrange(
+                values.len() - (m - 1),
+                values.len() as int,
+            ).push(x)) by {
+                assert forall|k: int| 0 <= k < m implies #[trigger] pushed.subrange(pushed.len() as int - m, pushed.len() as int)[k]
+                    == values.subrange(values.len() - (m - 1), values.len() as int).push(x)[k] by {
+                    if k < m - 1 {
+                        assert(pushed[values.len() - (m - 1) + k] == values[values.len() - (m - 1) + k]);
+                    }
+                }
+            }
+            assert(input.tokens.subrange(after - m, after) =~= input.tokens.subrange(index - (m - 1), index).push(
+                input.tokens[index],
+            ));
+        }
+    }
+}
+
+/// `theorem_value_end`: the tokens at the end of the list that "consume a list of component
+/// values" returns are the items of the stream before where it stopped. Stated in
+/// `contract.rs` for every `start`; `subrange` has no meaning for a `start` outside the
+/// stream, so this is proven for the starts inside it (`0 <= start <= input.tokens.len()`),
+/// which is every start a parser has.
+pub proof fn theorem_value_end(input: TokenStream, start: int, nested: bool, kept: int)
+    requires
+        0 <= start <= input.tokens.len(),
+    ensures
+        value_end_is_exact(input, start, nested, kept),
+{
+    assert(exact_suffix(Seq::<ComponentValue>::empty(), start, input.tokens)) by {
+        assert forall|m: int|
+            #![trigger tokens_at_end(Seq::<ComponentValue>::empty(), m)]
+            0 <= m <= 0 && tokens_at_end(Seq::<ComponentValue>::empty(), m) implies (m <= start
+            && Seq::<ComponentValue>::empty().subrange(0, 0) == input.tokens.subrange(start - m, start)) by {
+            assert(Seq::<ComponentValue>::empty().subrange(0, 0) =~= Seq::<ComponentValue>::empty());
+            assert(input.tokens.subrange(start, start) =~= Seq::<ComponentValue>::empty());
+        }
+    }
+    lemma_list_exact(input, start, Some(Token::Semicolon), nested, Seq::empty());
+    let (list, end) = consume_a_list_of_component_values(input, start, Some(Token::Semicolon), nested);
+    if 0 <= kept <= list.len() && forall|k: int| kept <= k < list.len() ==> #[trigger] list[k] is Token {
+        let m = list.len() - kept;
+        assert(tokens_at_end(list, m));
+    }
+}
+
 } // verus!
