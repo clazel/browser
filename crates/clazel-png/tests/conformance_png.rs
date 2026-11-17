@@ -93,12 +93,7 @@ fn pngsuite_differential() {
     let (mut pass, mut fail) = (0usize, 0usize);
     let mut notes = Vec::new();
     let mut refused = 0usize;
-    // Under Miri: the files of at most 1 KiB, whichever of the 176 they are.
-    let files: Vec<(&str, &[u8])> = suite::FILES
-        .iter()
-        .map(|c| (c.file, c.bytes))
-        .filter(|(_, b)| !MIRI || b.len() <= MIRI_FILE_BYTES)
-        .collect();
+    let files = pick_files(false, MIRI_DIFFERENTIAL_STRIDE);
     for (name, bytes) in &files {
         let corrupt = name.starts_with('x');
         let ours = decode(bytes, 4096, false);
@@ -152,27 +147,45 @@ fn pngsuite_differential() {
     assert!(notes.is_empty(), "{}", notes.join("\n"));
 }
 
-/// Under Miri, the PngSuite files of at most this many bytes.
+/// Under Miri, the PngSuite files of at most this many bytes (88 of 176), and of
+/// those every `stride`-th (a suite's own, below). Sized by running each suite
+/// natively with `MIRI` forced to `true` and timing it, aiming at 0.04 s a
+/// test (Miri is about 1,600 times slower, so about 64 s): the differential
+/// took 0.23 s with every one of the 88 files, hence its stride of 6; chunking
+/// 0.92 s with chunk sizes 1 and 64 and empty chunks, hence size 1, no empty
+/// chunks and a stride of 10; the mutations 0.40 s, hence a stride of 12.
 const MIRI_FILE_BYTES: usize = 300;
+const MIRI_DIFFERENTIAL_STRIDE: usize = 6;
+const MIRI_CHUNKING_STRIDE: usize = 10;
+const MIRI_MUTATION_STRIDE: usize = 12;
+
+/// The PngSuite files a suite runs: every one natively (without the corrupt
+/// ones if `without_corrupt`), under Miri the small ones, every
+/// `stride`-th.
+fn pick_files(without_corrupt: bool, stride: usize) -> Vec<(&'static str, &'static [u8])> {
+    suite::FILES
+        .iter()
+        .map(|c| (c.file, c.bytes))
+        .filter(|(n, b)| {
+            (!without_corrupt || !n.starts_with('x')) && (!MIRI || b.len() <= MIRI_FILE_BYTES)
+        })
+        .enumerate()
+        .filter(|(i, _)| !MIRI || i.checked_rem(stride) == Some(0))
+        .map(|(_, f)| f)
+        .collect()
+}
 
 #[test]
 fn pngsuite_chunking() {
-    let sizes: &[usize] = if MIRI {
-        &[1, 64]
-    } else {
-        &[1, 2, 3, 7, 64, 4096]
-    };
+    let sizes: &[usize] = if MIRI { &[1] } else { &[1, 2, 3, 7, 64, 4096] };
+    let empties_turns: &[bool] = if MIRI { &[false] } else { &[false, true] };
     let (mut pass, mut fail) = (0usize, 0usize);
-    let files: Vec<(&str, &[u8])> = suite::FILES
-        .iter()
-        .map(|c| (c.file, c.bytes))
-        .filter(|(_, b)| !MIRI || b.len() <= MIRI_FILE_BYTES)
-        .collect();
+    let files = pick_files(false, MIRI_CHUNKING_STRIDE);
     for (name, bytes) in &files {
         let whole = decode(bytes, bytes.len().max(1), false);
         let mut ok = true;
         for &size in sizes {
-            for empties in [false, true] {
+            for &empties in empties_turns {
                 if decode(bytes, size, empties) != whole {
                     println!("  {name}: chunk {size}, empties {empties}: differs from one chunk");
                     ok = false;
@@ -292,14 +305,11 @@ const MIRI_MUTANTS: usize = 2;
 #[test]
 fn pngsuite_mutations() {
     let per_file = if MIRI { MIRI_MUTANTS } else { MUTANTS };
-    let (mut mutants, mut errors, mut frames, mut both_ok, mut one_ok, mut skipped) =
-        (0usize, 0usize, 0usize, 0usize, 0usize, 0usize);
+    let (mut mutants, mut errors, mut frames, mut both_ok, mut skipped) =
+        (0usize, 0usize, 0usize, 0usize, 0usize);
+    let (mut only_ours, mut only_theirs) = (0usize, 0usize);
     let mut notes = Vec::new();
-    let files: Vec<(&str, &[u8])> = suite::FILES
-        .iter()
-        .map(|c| (c.file, c.bytes))
-        .filter(|(n, b)| !n.starts_with('x') && (!MIRI || b.len() <= MIRI_FILE_BYTES))
-        .collect();
+    let files = pick_files(true, MIRI_MUTATION_STRIDE);
     for (name, bytes) in &files {
         let seed = u64::from(crc32(name.as_bytes()));
         for i in 0..per_file {
@@ -320,21 +330,24 @@ fn pngsuite_mutations() {
                 errors += 1;
             }
             if !MIRI {
-                match (o.end == End::Iend, reference(&m)) {
-                    (true, Ok(r)) if r.complete => {
+                let theirs = reference(&m);
+                let ref_accepts = theirs.as_ref().is_ok_and(|r| r.complete);
+                match (o.end == End::Iend, theirs) {
+                    (true, Ok(r)) if ref_accepts => {
                         both_ok += 1;
                         if let Err(why) = compare(&o, &r) {
                             notes.push(format!("{name} mutant {i}: accepted by both, {why}"));
                         }
                     }
-                    (true, _) | (false, Ok(_)) => one_ok += 1,
-                    (false, Err(_)) => {}
+                    (true, _) => only_ours += 1,
+                    (false, _) if ref_accepts => only_theirs += 1,
+                    (false, _) => {}
                 }
             }
         }
     }
     println!(
-        "  {mutants} mutants, {errors} ended in an error, {skipped} refused at the header, {frames} frames completed, {both_ok} accepted by both (and equal), {one_ok} accepted by one only"
+        "  {mutants} mutants, {errors} ended in an error, {skipped} refused at the header, {frames} frames completed, {both_ok} accepted by both (and equal), {only_ours} by ours only, {only_theirs} by png only (our CRC and chunk-rule strictness)"
     );
     report(
         "PNG mutations: no panic, the invariant kept, both chunkings agree",
@@ -523,6 +536,9 @@ fn differential(name: &str, cases: &[(String, Vec<u8>)]) {
     assert_eq!(fail, 0);
 }
 
+/// Under Miri every `MIRI_HAND_STRIDE`-th hand-made stream of each by-hand suite.
+const MIRI_HAND_STRIDE: usize = 6;
+
 /// Under Miri every `MIRI_STRIDE`-th generated image.
 const MIRI_STRIDE: usize = 40;
 
@@ -538,7 +554,7 @@ fn generated_images() {
 fn encoder_images() {
     differential(
         "PNG from the png encoder: compressed, every filter, against png",
-        &encoded(if MIRI { 4 } else { 1 }),
+        &encoded(if MIRI { 12 } else { 1 }),
     );
 }
 
@@ -1116,7 +1132,13 @@ fn hand_cases() -> Vec<(String, Vec<u8>, Want)> {
 
 #[test]
 fn hand_made_streams() {
-    let cases = hand_cases();
+    let all = hand_cases();
+    let cases: Vec<_> = all
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| !MIRI || i.is_multiple_of(MIRI_HAND_STRIDE))
+        .map(|(_, c)| c)
+        .collect();
     let (mut pass, mut fail) = (0usize, 0usize);
     for (name, bytes, want) in &cases {
         let got = outcome(bytes);
@@ -1446,7 +1468,13 @@ fn apng_cases() -> Vec<(String, Vec<u8>, Want)> {
 
 #[test]
 fn apng_by_hand() {
-    let cases = apng_cases();
+    let all = apng_cases();
+    let cases: Vec<_> = all
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| !MIRI || i.is_multiple_of(MIRI_HAND_STRIDE))
+        .map(|(_, c)| c)
+        .collect();
     let (mut pass, mut fail) = (0usize, 0usize);
     for (name, bytes, want) in &cases {
         let got = outcome(bytes);
@@ -1670,9 +1698,15 @@ fn size_limits() {
             .is_err()
     );
     // The widest and tallest images decode, exactly as the reference does.
-    for (w, h) in [(16384u32, 1u32), (1, 16384), (300, 200)] {
+    // (Under Miri the smaller ones: it cannot run 16,384-wide images in time.)
+    let sizes: &[(u32, u32)] = if MIRI {
+        &[(33, 1), (1, 33), (17, 9)]
+    } else {
+        &[(16384, 1), (1, 16384), (300, 200)]
+    };
+    for &(w, h) in sizes {
         let mut rng = Rng(7);
-        let mut img = random_img(&mut rng, w, h, 2, 16, w == 300, false);
+        let mut img = random_img(&mut rng, w, h, 2, 16, w == 300 || w == 17, false);
         img.filters = vec![1, 2, 3, 4, 0];
         let bytes = png_bytes(&img);
         let ours = decode(&bytes, 4096, false);
