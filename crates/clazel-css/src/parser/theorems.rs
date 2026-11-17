@@ -106,7 +106,7 @@ proof fn lemma_cv_token_is_item(input: TokenStream, p: int)
 
 /// "Consume a component value" does not go past the end of a stream that is not empty,
 /// nor do the loops of the simple block and the function from an index in the stream.
-proof fn lemma_cv_within(input: TokenStream, p: int)
+pub proof fn lemma_cv_within(input: TokenStream, p: int)
     requires
         0 <= p < input.tokens.len(),
     ensures

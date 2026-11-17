@@ -13,6 +13,7 @@
 //! - [`theorems`]: proofs of the planned theorems of [`contract`] that [`lemmas`] does not prove.
 
 pub mod blocks;
+pub mod bounded;
 pub mod contract;
 pub mod examples;
 pub mod exec;
