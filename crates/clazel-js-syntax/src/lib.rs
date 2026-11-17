@@ -2,5 +2,7 @@
 //!
 //! - [`ast`]: the arena AST, with spans, its node kinds named after the
 //!   productions of the standard.
+//! - [`spec`]: what a correct parse is.
 
 pub mod ast;
+pub mod spec;
