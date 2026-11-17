@@ -35,6 +35,7 @@ pub mod exec_element;
 pub mod exec_grow;
 pub mod exec_items;
 pub mod exec_match;
+pub mod exec_numbers;
 pub mod exec_parse;
 pub mod exec_serialize;
 pub mod exec_specificity;
