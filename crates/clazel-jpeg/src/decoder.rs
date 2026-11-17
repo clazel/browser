@@ -904,7 +904,19 @@ impl Jpeg {
         if !done {
             return Ok(());
         }
-        // The block is complete: A.3.3's inverse DCT into the plane.
+        self.store_block(ci, bx, by, work)
+    }
+
+    /// The block is complete: A.3.3's inverse DCT into the plane at block
+    /// position `(bx, by)` of component `ci`, then on to the next block.
+    fn store_block(
+        &mut self,
+        ci: usize,
+        bx: usize,
+        by: usize,
+        work: &mut [u8],
+    ) -> Result<(), Error> {
+        let comp = self.comps.get(ci).ok_or(Error::Malformed("component"))?;
         let samples = idct(&self.block.coef, &comp.q).ok_or(Error::Malformed("IDCT overflow"))?;
         let (bw, bh) = (usize::from(comp.blocks_w), usize::from(comp.blocks_h));
         if bx >= bw || by >= bh {
@@ -1200,3 +1212,7 @@ impl Decoder for Jpeg {
 
 /// The frame count of every JPEG.
 pub(crate) const FRAMES: FrameCount = FrameCount::Known(1);
+
+#[cfg(kani)]
+#[path = "decoder_proofs.rs"]
+mod proofs;

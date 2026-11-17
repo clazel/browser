@@ -557,7 +557,7 @@ every width and height up to 2^14. Tests: PngSuite's every file (its `x*`
 files must be refused), exact against `png`; mutated PngSuite files never
 panic.
 
-### 6.5 JPEG: baseline (L)
+### 6.5 JPEG: baseline (L) — built (2026-11-17)
 
 `clazel-jpeg`, target tier 1. ITU-T T.81 Annex B (markers: SOI, SOF0, SOF1,
 DHT, DQT, DRI, SOS, RSTn, APPn, COM, EOI), Annex C (Huffman tables),
