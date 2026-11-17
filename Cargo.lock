@@ -383,10 +383,20 @@ dependencies = [
 [[package]]
 name = "clazel-js-lexer"
 version = "0.0.0"
+dependencies = [
+ "vstd",
+]
 
 [[package]]
 name = "clazel-js-regexp"
 version = "0.0.0"
+
+[[package]]
+name = "clazel-js-vm"
+version = "0.0.0"
+dependencies = [
+ "vstd",
+]
 
 [[package]]
 name = "clazel-kernel"
@@ -634,6 +644,7 @@ dependencies = [
 name = "clazel-x64"
 version = "0.0.0"
 dependencies = [
+ "vstd",
  "yaxpeax-arch",
  "yaxpeax-x86",
 ]

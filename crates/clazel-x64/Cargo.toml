@@ -4,18 +4,22 @@ version = "0.0.0"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "The x86-64 instruction-set subset the JIT emits (docs/phases/jit.md item J.3): semantics, encoder and decoder. Empty until then; it holds the vendored instruction-set sources."
+description = "The x86-64 instruction-set subset the JIT emits (docs/phases/jit.md item J.3): semantics, encoder and decoder. Only the primary spec and the contracts exist so far; it also holds the vendored instruction-set sources."
 
-# No dependencies yet: jit.md item J.2 only vendors this crate's test data and
-# inputs. The specification and implementation arrive with the item named in
-# src/lib.rs.
+[dependencies]
+vstd = "=0.0.0-2026-10-04-0306"
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
-# shipped code today (nothing: the crate is empty); `target-tier` is what
-# jit.md's "Crates" table sets. The contracts come first (rule 3).
+# shipped code today (nothing: the spec and the contracts are written, but no
+# encoder or decoder exists, so there is no shipped code to prove);
+# `target-tier` is what jit.md's "Crates" table sets. The contracts come first
+# (rule 3).
 [package.metadata.clazel]
 tier = 0
 target-tier = 2
+
+[package.metadata.verus]
+verify = true
 
 [lints]
 workspace = true
