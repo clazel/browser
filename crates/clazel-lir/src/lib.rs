@@ -16,3 +16,4 @@
 
 pub mod spec;
 pub mod syntax;
+pub mod typing;
