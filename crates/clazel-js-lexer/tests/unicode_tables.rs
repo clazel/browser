@@ -30,12 +30,17 @@ fn tables_are_sorted_and_disjoint() {
 #[test]
 fn lookups_agree_with_the_tables() {
     let in_table = |table: &[Range], c: u32| table.iter().any(|r| r.first <= c && c <= r.last);
-    // Under Miri a stride of the code points (each scan is about 800 rows);
-    // natively a smaller stride than 1 would take minutes in a debug build,
-    // so every 7th code point plus every row's ends.
-    let stride = if cfg!(miri) { 40_009 } else { 7 };
+    // Each linear scan reads about 800 rows, so natively every 7th code
+    // point (all of them would take minutes in a debug build) plus every
+    // row's ends; under Miri, which interprets each step, a wider stride of
+    // both.
+    let (stride, row_stride) = if cfg!(miri) { (40_009, 97) } else { (7, 1) };
     let mut points: Vec<u32> = (0..=0x11_0000u32).step_by(stride).collect();
-    for row in ID_START.iter().chain(ID_CONTINUE.iter()) {
+    for row in ID_START
+        .iter()
+        .chain(ID_CONTINUE.iter())
+        .step_by(row_stride)
+    {
         points.extend([
             row.first.saturating_sub(1),
             row.first,

@@ -634,7 +634,7 @@ fn small_inputs_are_total() {
     const GOALS: [Goal; 5] = [DIV, RE, RE_TAIL, TAIL, START];
     // Under Miri a stride of the inputs (it interprets every step); the
     // full set natively.
-    let stride = if cfg!(miri) { 97 } else { 1 };
+    let stride = if cfg!(miri) { 331 } else { 1 };
     let mut inputs: Vec<Vec<u32>> = ALPHABET.iter().map(|&a| vec![a]).collect();
     for &a in ALPHABET {
         for &b in ALPHABET {
