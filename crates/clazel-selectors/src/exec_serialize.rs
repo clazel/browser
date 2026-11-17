@@ -9,12 +9,16 @@
 //! result of `parse_selector` is (`exec_check`). The `<an+b>` part is `clazel-css`'s
 //! `write_a_n_plus_b`, proven equal to its spec there.
 
+#[cfg(verus_only)]
 use super::contract::*;
+#[cfg(verus_only)]
 use super::exec_match::{lemma_compound_wf_at, lemma_compounds_wf_at, lemma_list_wf_at};
 use super::exec_types::*;
 #[allow(unused_imports)]
 use super::spec::*;
-use clazel_css::parser::exec_anb::{ExecInteger, view_integer, write_a_n_plus_b};
+use clazel_css::parser::exec_anb::{ExecInteger, write_a_n_plus_b};
+#[cfg(verus_only)]
+use clazel_css::parser::exec_anb::view_integer;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 

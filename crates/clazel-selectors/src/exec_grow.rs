@@ -7,6 +7,7 @@
 //! of lists there are, and every list it names is below that. The lemmas say that a pending
 //! one means the same in every later state, and in the list that finally holds it.
 
+#[cfg(verus_only)]
 use super::exec_types::*;
 #[allow(unused_imports)]
 use super::spec::*;

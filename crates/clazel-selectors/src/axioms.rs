@@ -1,6 +1,7 @@
 //! The one fact about `Vec` that Verus's model of the standard library leaves out: a vector
 //! never holds `usize::MAX` elements.
 
+#[cfg(verus_only)]
 use super::exec_types::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;

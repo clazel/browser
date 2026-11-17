@@ -7,6 +7,7 @@
 
 #[cfg(verus_only)]
 use super::contract::*;
+#[cfg(verus_only)]
 use super::exec_numbers::{lemma_token_ok, token_ok};
 use super::exec_types::item;
 #[allow(unused_imports)]
