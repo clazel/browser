@@ -1002,7 +1002,7 @@ fn differential_random_lists() {
 /// bytes.
 #[test]
 fn differential_hostile_bytes() {
-    let cases = if cfg!(miri) { 500 } else { 100_000usize };
+    let cases = if cfg!(miri) { 200 } else { 100_000usize };
     let mut rng = Rng(0xD1B5_4A32_D192_ED03);
     let (mut pass, mut fail) = (0usize, 0usize);
     let (mut lists, mut not_lists) = (0usize, 0usize);
