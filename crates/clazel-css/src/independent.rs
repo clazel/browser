@@ -11,7 +11,11 @@
 //!
 //! This file holds the tokenizer (§4, and §3.3 "filter code points"); the parser
 //! (§5) is in [`parse`]. The equivalence with the spec is in the `equiv_*` modules,
-//! which were written after the definitions had been committed (`aa0567aa`).
+//! which were written after the definitions had been committed (`aa0567aa`). A second
+//! round of definitions, committed on their own (`c72dd828`) before the spec for them
+//! was read, adds the input byte stream ([`input`], §3.2), the An+B microsyntax and its
+//! serialization ([`anb`], §6 and §9.1) and the grammar hooks with the entry points on
+//! lists ([`hooks`], §5.3.1 to §5.3.3); see "The second round" below.
 //!
 //! ## How the definitions were written
 //!
@@ -90,9 +94,12 @@
 //!   when those four agree (they determine the value); leading zeros and the
 //!   percentage's type flag, which the spec keeps and the standard drops, are not
 //!   compared.
-//! - The input byte stream (§3.2), the An+B microsyntax (§6), serialization (§9), the
-//!   grammar hooks of §5.3.1 and entry points on token or component-value lists are
-//!   not transcribed here, so nothing is proven about them by this file.
+//! - What the second round (below) leaves out: the four entry points that read the
+//!   source text of a declaration or a rule (parse a stylesheet's contents, a list of
+//!   declarations, a rule, a declaration) on a list of tokens or of component values,
+//!   the composition of "decode bytes" with an entry point, and the serialization of
+//!   tokens that §9 asks to round-trip (§9.1 is covered, §9's table of what needs a
+//!   comment between two tokens is not transcribed here).
 //! - "Valid in the current context" is true on both sides (a modelling choice both
 //!   transcriptions make), and "original source text" is the filtered string on both.
 //! - The theorems hold for streams with the shape [`equiv_stream::shaped`] gives,
@@ -100,6 +107,78 @@
 //!   tokenizer makes (including the inner one of a unicode-range value).
 //! - Two transcriptions of one text by two sessions of one model can share a
 //!   misreading; this shows only that they say the same.
+//!
+//! ## The second round: byte stream, An+B, serialization, hooks, lists
+//!
+//! Written in a later session (Claude Sonnet 5.5, on branch `claude/css-tier-2`), in the
+//! order the repository's rules ask: the definitions in [`input`], [`anb`] and [`hooks`]
+//! from the pinned text of CSS Syntax 3 alone (§3.2, §5.3.1 to §5.3.3, §6 and §9.1,
+//! read from the raw file of that commit), committed on their own (`c72dd828`); then
+//! the spec for them was read and the `equiv_input`, `equiv_anb`, `equiv_good`,
+//! `equiv_hooks` and `equiv_tokens` modules written. After that commit the definitions
+//! changed once: [`hooks`] lost the four entry points on a list of tokens that read a
+//! source text (they gave a declaration an empty original text where the spec, rightly,
+//! gives it none), and its module header said so.
+//!
+//! What that session had read before it wrote the definitions, with no claim that it
+//! had not: this file and [`parse`] (definitions only, no `equiv_*`), `lib.rs`,
+//! `Cargo.toml`, the README, and the public specs of `clazel-encoding` that §3.2's "get
+//! an encoding" and "decode" are (`labels::spec::get_an_encoding`, `hooks::spec::decode`
+//! and the `Encoding` type, which [`input`] uses rather than transcribe the Encoding
+//! Standard a third time). The same session, in an earlier job on `clazel-selectors`,
+//! had opened parts of this crate's spec, which the brief that picked it for this job
+//! believed it had not: `parser/spec.rs` for the `ComponentValue` enum, `Input` and
+//! `normalize`, `is`, `is_whitespace_token`, `ascii_lowercase`, `matches_from`, the
+//! helpers of An+B and the start of `a_n_plus_b`, and a listing of the names of its
+//! functions (which includes `serialize_a_n_plus_b` and the comma-list parsing); and
+//! `tokenizer/spec.rs` for the `Token` enum and helpers and the `via_fn` termination
+//! examples. So the An+B and serialization definitions here were written by a session
+//! that knew the spec's helper names and shape of the first clauses, though not its
+//! algorithm for the rest; [`anb`] is organised by the head token, the spec by what a
+//! clause looks like with whitespace removed, which is some evidence of independence
+//! and no proof of it. A Verus warning printed, before the definitions were committed,
+//! one doc-comment fragment of the tokenizer spec (about the code point of an
+//! error), which no definition uses. Nothing from `contract.rs`, `lemmas.rs`,
+//! `exec*.rs`, `examples.rs`, `rows.rs` or the `equiv_*` proofs was read before the
+//! commit; `contract.rs` was read after it, for the theorems below.
+//!
+//! What the second round proves (every theorem is in its module; `omap`, `agrees`,
+//! `cvs_ok` and `all_good` say what the hypotheses are):
+//!
+//! - [`equiv_input::theorem_decode_bytes_equals`]: "decode" of a stylesheet's bytes
+//!   (§3.2) with its fallback encoding ([`equiv_input::lemma_fallback`], the
+//!   `@charset` pattern in [`equiv_input::lemma_declared_label`]) is the spec's, for
+//!   every bytes, protocol label and environment encoding;
+//! - [`equiv_anb::theorem_a_n_plus_b_equals`]: `<a-n-plus-b>` (§6) matches the same
+//!   lists of component values, with the same A and B, for every list whose integer
+//!   numbers have no exponent and a sign character that their text shows
+//!   ([`equiv_anb::cvs_ok`]; [`equiv_anb::lemma_tokenize_ok`] proves every number
+//!   the tokenizer makes is so); [`equiv_anb::theorem_serialize_a_n_plus_b_equals`]:
+//!   §9.1 gives the same string for every A and B;
+//! - [`equiv_hooks::theorem_parse_grammar_str`] and
+//!   [`equiv_hooks::theorem_parse_list_grammar_str`]: "parse something according to a
+//!   CSS grammar" and "parse a comma-separated list according to a CSS grammar" of a
+//!   string, for every pair of grammars that [`equiv_hooks::agrees`] (and
+//!   [`equiv_hooks::theorem_parse_anb_str`] for `<a-n-plus-b>`);
+//!   [`equiv_tokens`] has them for a list of tokens (without an `<EOF-token>`, with
+//!   numbers the tokenizer could make) and for a list of component values (of the
+//!   kind the parser returns: no `<function-token>`, opening bracket or
+//!   `<EOF-token>` among its tokens, [`equiv_good::all_good`]);
+//! - [`equiv_tokens::theorem_tokens_parse_component_value`],
+//!   `theorem_tokens_parse_list_of_component_values` and
+//!   `theorem_tokens_parse_comma_separated_list`, and
+//!   [`equiv_hooks::theorem_values_parse_component_value`],
+//!   `theorem_values_parse_list_of_component_values` and
+//!   `theorem_values_parse_comma_separated_list`: those three entry points on a list
+//!   of tokens and on a list of component values are the spec's;
+//! - [`equiv_good`]: every list that an entry point returns is [`equiv_good::all_good`],
+//!   which [`crate::parser::theorems::theorem_output_preserved`] uses.
+//!
+//! A list of component values as an input is read as already consumed: "consume a
+//! component value" returns an item as it is, as the spec's does, and the hypothesis
+//! [`equiv_good::all_good`] is what keeps the standard's "tokens and/or component
+//! values" from meaning an unconsumed `<function-token>` in the list, which the
+//! standard does not say how to read.
 //!
 //! ## Modelling choices
 //!

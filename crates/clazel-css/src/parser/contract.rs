@@ -7,7 +7,8 @@
 //! [`super::rows`] says what they build.
 //!
 //! Each statement below is a `spec fn`, because a `proof fn` with no proof is not allowed.
-//! [`super::lemmas`] proves the ones that say so; the others are not proven.
+//! [`super::lemmas`] and [`super::theorems`] prove the ones that say so; the others are not
+//! proven.
 
 #[allow(unused_imports)]
 use super::spec::*;
@@ -296,8 +297,8 @@ pub open spec fn all_preserved(values: Seq<ComponentValue>, n: nat) -> bool
     ))
 }
 
-/// `theorem_output_preserved`: §5.2's note, "never appear in any parser output". Not
-/// proven.
+/// `theorem_output_preserved`: §5.2's note, "never appear in any parser output". Proven in
+/// [`super::theorems`].
 pub open spec fn output_preserved(string: Seq<u32>) -> bool {
     let values = parse_a_list_of_component_values(Input::String { string });
     all_preserved(values, values.len())
@@ -322,7 +323,8 @@ pub open spec fn spans_in_order(string: Seq<u32>, unicode_ranges_allowed: bool) 
 
 /// `theorem_value_end`: what [`declaration_value`] relies on for `value_end`. If the items
 /// of `list` from `kept` on are all tokens, each is one item of the stream, so the items
-/// before `kept` end `list.len() - kept` before `end`. Not proven.
+/// before `kept` end `list.len() - kept` before `end`. Proven in [`super::theorems`] for the
+/// `start`s inside the stream, the only ones for which `subrange` means anything here.
 pub open spec fn value_end_is_exact(
     input: TokenStream,
     start: int,
