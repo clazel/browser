@@ -15,12 +15,20 @@ use vstd::prelude::*;
 verus! {
 
 /// Appends `text`.
-fn put(out: &mut Vec<u32>, text: &[u32]) {
+fn put(out: &mut Vec<u32>, text: &[u32])
+    ensures
+        final(out)@ == old(out)@ + text@,
+{
     out.extend_from_slice(text);
 }
 
 /// The lowercase hexadecimal digit of `d`, below 16.
-fn hex_digit_of(d: u32) -> u32 {
+fn hex_digit_of(d: u32) -> (r: u32)
+    requires
+        d < 16,
+    ensures
+        r == hex_digit(d as nat),
+{
     if d < 10 {
         0x30u32.saturating_add(d)
     } else {
@@ -28,39 +36,97 @@ fn hex_digit_of(d: u32) -> u32 {
     }
 }
 
+/// One step of `hex_digits`.
+proof fn lemma_hex_digits_step(v: u32, acc: Seq<u32>)
+    requires
+        v >= 16,
+    ensures
+        hex_digits(v as nat, acc) == hex_digits((v / 16) as nat, seq![hex_digit((v % 16) as nat)] + acc),
+{
+    assert((v as nat) / 16 == (v / 16) as nat);
+    assert((v as nat) % 16 == (v % 16) as nat);
+}
+
 /// [`escape_as_code_point`].
-fn put_code_point(out: &mut Vec<u32>, c: u32) {
+fn put_code_point(out: &mut Vec<u32>, c: u32)
+    ensures
+        final(out)@ == old(out)@ + escape_as_code_point(c),
+{
+    let ghost start = out@;
     out.push(0x5C);
     let mut digits: Vec<u32> = Vec::new();
     let mut v = c;
     loop
+        invariant_except_break
+            hex_digits(c as nat, Seq::empty()) == hex_digits(v as nat, digits@.reverse()),
+        ensures
+            hex_digits(c as nat, Seq::empty()) == digits@.reverse(),
         decreases v,
     {
-        digits.push(hex_digit_of(v % 16));
+        let ghost before = digits@;
+        let d = hex_digit_of(v % 16);
+        digits.push(d);
+        proof {
+            assert(digits@.reverse() =~= seq![d] + before.reverse());
+        }
         if v < 16 {
+            proof {
+                assert((v as nat) < 16);
+                assert(v % 16 == v);
+                assert(hex_digits(v as nat, before.reverse()) == seq![hex_digit(v as nat)] + before.reverse());
+            }
             break;
+        }
+        proof {
+            lemma_hex_digits_step(v, before.reverse());
         }
         v /= 16;
     }
     let mut k = digits.len();
+    proof {
+        assert(out@ == start.push(0x5C));
+    }
     while k > 0
         invariant
             k <= digits@.len(),
+            out@ == start + seq![0x5Cu32] + digits@.reverse().subrange(0, (digits@.len() - k) as int),
         decreases k,
     {
         k = k.saturating_sub(1);
-        out.push(*item(digits.as_slice(), k));
+        let x = *item(digits.as_slice(), k);
+        out.push(x);
+        proof {
+            let n = digits@.len() as int;
+            let r = digits@.reverse();
+            assert(r[n - k as int - 1] == digits@[k as int]);
+            assert(r.subrange(0, n - k as int) =~= r.subrange(0, n - k as int - 1).push(x));
+        }
     }
     out.push(0x20);
+    proof {
+        let r = digits@.reverse();
+        assert(r.subrange(0, digits@.len() as int) =~= r);
+        assert(out@ =~= start + escape_as_code_point(c));
+    }
 }
 
 /// CSSOM "serialize an identifier".
-fn put_identifier(out: &mut Vec<u32>, s: &[u32]) {
+fn put_identifier(out: &mut Vec<u32>, s: &[u32])
+    ensures
+        final(out)@ == old(out)@ + serialize_an_identifier(s@),
+{
+    let ghost start = out@;
     let mut i: usize = 0;
     while i < s.len()
+        invariant
+            i <= s@.len(),
+            out@ == start + identifier_prefix(s@, i as int),
         decreases s.len() - i,
     {
         let c = *item(s, i);
+        proof {
+            assert(identifier_prefix(s@, i as int + 1) == identifier_prefix(s@, i as int) + identifier_char(s@, i as int));
+        }
         if c == 0 {
             out.push(0xFFFD);
         } else if (0x01..=0x1F).contains(&c) || c == 0x7F || (i == 0 && (0x30..=0x39).contains(&c))
@@ -78,12 +144,21 @@ fn put_identifier(out: &mut Vec<u32>, s: &[u32]) {
             out.push(0x5C);
             out.push(c);
         }
+        proof {
+            assert(out@ =~= start + identifier_prefix(s@, i as int + 1));
+        }
         i = i.saturating_add(1);
+    }
+    proof {
+        assert(identifier_prefix(s@, s@.len() as int) == serialize_an_identifier(s@));
     }
 }
 
 /// CSS Syntax's "non-ASCII ident code point".
-fn is_non_ascii_ident_code_point_exec(c: u32) -> bool {
+fn is_non_ascii_ident_code_point_exec(c: u32) -> (r: bool)
+    ensures
+        r == is_non_ascii_ident(c),
+{
     c == 0xB7 || (0xC0..=0xD6).contains(&c) || (0xD8..=0xF6).contains(&c) || (0xF8..=0x37D).contains(
         &c,
     ) || (0x37F..=0x1FFF).contains(&c) || c == 0x200C || c == 0x200D || c == 0x203F || c
@@ -94,13 +169,23 @@ fn is_non_ascii_ident_code_point_exec(c: u32) -> bool {
 }
 
 /// CSSOM "serialize a string".
-fn put_string(out: &mut Vec<u32>, s: &[u32]) {
+fn put_string(out: &mut Vec<u32>, s: &[u32])
+    ensures
+        final(out)@ == old(out)@ + serialize_a_string(s@),
+{
+    let ghost start = out@;
     out.push(0x22);
     let mut i: usize = 0;
     while i < s.len()
+        invariant
+            i <= s@.len(),
+            out@ == start + seq![0x22u32] + string_prefix(s@, i as int),
         decreases s.len() - i,
     {
         let c = *item(s, i);
+        proof {
+            assert(string_prefix(s@, i as int + 1) == string_prefix(s@, i as int) + string_char(s@[i as int]));
+        }
         if c == 0 {
             out.push(0xFFFD);
         } else if (0x01..=0x1F).contains(&c) || c == 0x7F {
@@ -111,9 +196,15 @@ fn put_string(out: &mut Vec<u32>, s: &[u32]) {
         } else {
             out.push(c);
         }
+        proof {
+            assert(out@ =~= start + seq![0x22u32] + string_prefix(s@, i as int + 1));
+        }
         i = i.saturating_add(1);
     }
     out.push(0x22);
+    proof {
+        assert(out@ =~= start + serialize_a_string(s@));
+    }
 }
 
 /// The name of a pseudo-class without an argument ([`pseudo_class_name`]).
