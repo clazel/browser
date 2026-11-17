@@ -22,7 +22,8 @@
 //!   `verify` fail if a committed table is stale.
 //! - `cargo xtask tables`: regenerate the Unicode tables generated from
 //!   vendored Unicode data (`crates/clazel-idna/src/uts46/data.rs` and
-//!   `crates/clazel-layout/src/text/data.rs`), the
+//!   `crates/clazel-layout/src/text/data.rs` and
+//!   `crates/clazel-js-lexer/src/unicode_data.rs`), the
 //!   Public Suffix List, and the root certificate table from NSS's
 //!   `certdata.txt` (`crates/clazel-x509/src/roots/data.rs`), and the
 //!   user agent style sheet from HTML §15 (`crates/clazel-style/data/*.css`).
@@ -39,6 +40,7 @@ mod conformance;
 mod deps;
 mod encoding_indexes;
 mod entities;
+mod js_idents;
 mod linebreak;
 mod mutate;
 mod parts;
@@ -367,6 +369,8 @@ fn static_checks(r: &mut Runner, crates: &[Crate], pins: &Pins) {
     r.step("generated test data", outcome(problems, notes));
     let (problems, notes) = unicode::run(false);
     r.step("generated Unicode tables", outcome(problems, notes));
+    let (problems, notes) = js_idents::run(false);
+    r.step("generated JS identifier tables", outcome(problems, notes));
     let (problems, notes) = linebreak::run(false);
     r.step("generated line breaking tables", outcome(problems, notes));
     let (problems, notes) = psl::run(false);
@@ -1029,6 +1033,8 @@ fn generate_tables() -> ExitCode {
     }
     let (problems, notes) = unicode::run(true);
     r.step("generate Unicode tables", outcome(problems, notes));
+    let (problems, notes) = js_idents::run(true);
+    r.step("generate JS identifier tables", outcome(problems, notes));
     let (problems, notes) = linebreak::run(true);
     r.step("generate line breaking tables", outcome(problems, notes));
     let (problems, notes) = psl::run(true);
