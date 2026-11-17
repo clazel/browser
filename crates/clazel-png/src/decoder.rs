@@ -358,7 +358,12 @@ impl<E: Engine> Png<E> {
                     return Err(bad("PLTE length"));
                 }
                 self.seen_plte = true;
-                self.palette_len = u16::try_from(len / 3).unwrap_or(256);
+                // At most the palette's capacity (256, the most PLTE can
+                // hold; the proofs use an engine with fewer): entries past it
+                // are not stored.
+                self.palette_len =
+                    u16::try_from((len / 3).min(u32::try_from(E::PALETTE_ENTRIES).unwrap_or(0)))
+                        .unwrap_or(0);
                 if self.layout.color == ColorType::Indexed {
                     Phase::Palette
                 } else {
@@ -936,5 +941,172 @@ impl<E: Engine> Decoder for Png<E> {
         buffers.pixels.len() == plen
             && buffers.work.len() == wlen
             && (matches!(self.phase, Phase::Spent | Phase::Ended) || self.state_inv())
+    }
+}
+
+/// One of `options`, chosen symbolically.
+#[cfg(kani)]
+fn pick<T: Copy>(options: &[T]) -> Option<T> {
+    let i: usize = kani::any();
+    kani::assume(i < options.len());
+    options.get(i).copied()
+}
+
+#[cfg(kani)]
+fn any_frame_info() -> Option<FrameInfo> {
+    Some(FrameInfo {
+        x: kani::any(),
+        y: kani::any(),
+        width: kani::any(),
+        height: kani::any(),
+        delay_num: kani::any(),
+        delay_den: kani::any(),
+        dispose: pick(&[Dispose::None, Dispose::Background, Dispose::Previous])?,
+        blend: pick(&[Blend::Source, Blend::Over])?,
+        animated: kani::any(),
+    })
+}
+
+/// Any state of a decoder of a 2 by 2 canvas, with `Phase` one of `phases`
+/// and every other field symbolic (the harness assumes `inv` on top).
+#[cfg(kani)]
+fn any_png_in(phases: &[Phase]) -> Option<Png<crate::proofs::AnyEngine>> {
+    // A canvas of exactly 2 by 2: the template compares the bytes of its
+    // arrays past the buffers, and the model checker follows every access.
+    let config = Config::new(Format::Png, 2, 2, FrameCount::Unknown).ok()?;
+    let mut p = Png::<crate::proofs::AnyEngine>::start(&config).ok()?;
+    p.phase = pick(phases)?;
+    p.kind = pick(&[
+        Kind::Ihdr,
+        Kind::Plte,
+        Kind::Trns,
+        Kind::Idat,
+        Kind::Iend,
+        Kind::Actl,
+        Kind::Fctl,
+        Kind::Fdat,
+        Kind::Other,
+    ])?;
+    p.len = kani::any();
+    p.at = kani::any();
+    p.crc = kani::any();
+    p.hold = kani::any();
+    p.have = kani::any();
+    p.need = kani::any();
+    p.header_done = kani::any();
+    p.layout = Layout {
+        color: pick(&[
+            ColorType::Gray,
+            ColorType::Rgb,
+            ColorType::Indexed,
+            ColorType::GrayAlpha,
+            ColorType::Rgba,
+        ])?,
+        depth: kani::any(),
+    };
+    p.interlaced = kani::any();
+    p.trns = match pick(&[0u8, 1, 2])? {
+        0 => Trns::None,
+        1 => Trns::Gray(kani::any()),
+        _ => Trns::Rgb(kani::any(), kani::any(), kani::any()),
+    };
+    p.palette_len = kani::any();
+    p.seen_plte = kani::any();
+    p.seen_trns = kani::any();
+    p.idat = pick(&[Idat::NotYet, Idat::Open, Idat::Closed])?;
+    p.animation = if kani::any() {
+        Some(Animation {
+            frames: kani::any(),
+            plays: kani::any(),
+        })
+    } else {
+        None
+    };
+    p.next_seq = kani::any();
+    p.fctl_seen = kani::any();
+    p.pending = if kani::any() {
+        Some(any_frame_info()?)
+    } else {
+        None
+    };
+    p.frame = any_frame_info()?;
+    p.has_frame = kani::any();
+    p.stage = pick(&[Stage::Idle, Stage::Active, Stage::Finished])?;
+    p.data_kind = pick(&[Kind::Idat, Kind::Fdat, Kind::Other])?;
+    p.report = kani::any();
+    p.pass = kani::any();
+    p.row = kani::any();
+    p.row_have = kani::any();
+    p.pass_w = kani::any();
+    p.pass_h = kani::any();
+    p.row_len = kani::any();
+    p.rows_done = kani::any();
+    p.frames_done = kani::any();
+    p.anim_begun = kani::any();
+    p.default_hidden = kani::any();
+    p.prev_dispose = pick(&[Dispose::None, Dispose::Background, Dispose::Previous])?;
+    p.prev_rect = (kani::any(), kani::any(), kani::any(), kani::any());
+    Some(p)
+}
+
+/// Every phase.
+#[cfg(kani)]
+pub(crate) fn any_png() -> Option<Png<crate::proofs::AnyEngine>> {
+    any_png_in(&[
+        Phase::Signature,
+        Phase::Header,
+        Phase::Gather,
+        Phase::Skip,
+        Phase::Palette,
+        Phase::Trns,
+        Phase::Data,
+        Phase::Crc,
+        Phase::Ended,
+        Phase::Spent,
+    ])
+}
+
+/// Every phase but the image data's.
+#[cfg(kani)]
+pub(crate) fn any_png_control() -> Option<Png<crate::proofs::AnyEngine>> {
+    any_png_in(&[
+        Phase::Signature,
+        Phase::Header,
+        Phase::Gather,
+        Phase::Skip,
+        Phase::Palette,
+        Phase::Trns,
+        Phase::Crc,
+    ])
+}
+
+/// The phase of image data.
+#[cfg(kani)]
+pub(crate) fn any_png_data() -> Option<Png<crate::proofs::AnyEngine>> {
+    any_png_in(&[Phase::Data])
+}
+
+/// What the harnesses ask of a state.
+#[cfg(kani)]
+impl<E: Engine> Png<E> {
+    /// No frame's data has begun.
+    pub(crate) fn idle_stage(&self) -> bool {
+        self.stage == Stage::Idle
+    }
+
+    /// A frame is being received.
+    pub(crate) fn active_frame(&self) -> bool {
+        self.stage == Stage::Active && self.has_frame
+    }
+
+    /// Makes the scanline buffer hold a whole scanline (its filter-type byte
+    /// and `row_len` bytes), which is the state `feed` calls `finish_row` in
+    /// and which the invariant (a scanline in progress is shorter) excludes.
+    pub(crate) fn complete_row(&mut self) -> bool {
+        if self.stage != Stage::Active || self.rows_done {
+            return false;
+        }
+        self.row_have = self.row_len.saturating_add(1);
+        true
     }
 }

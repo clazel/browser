@@ -148,16 +148,17 @@ fn pngsuite_differential() {
 }
 
 /// Under Miri, the PngSuite files of at most this many bytes (88 of 176), and of
-/// those every `stride`-th (a suite's own, below). Sized by running each suite
-/// natively with `MIRI` forced to `true` and timing it, aiming at 0.04 s a
-/// test (Miri is about 1,600 times slower, so about 64 s): the differential
-/// took 0.23 s with every one of the 88 files, hence its stride of 6; chunking
-/// 0.92 s with chunk sizes 1 and 64 and empty chunks, hence size 1, no empty
-/// chunks and a stride of 10; the mutations 0.40 s, hence a stride of 12.
+/// those every `stride`-th (a suite's own, below). The first Miri run, with
+/// strides sized from native timings at 0.04 s a test, took 690 s for the
+/// differential (stride 6), 850 s for chunking (10, with chunk sizes 1 and 64)
+/// and 778 s for the mutations (12): the limit is 300 s, and Miri was about
+/// 25,000 times slower than native here, not 1,600. The strides below are those
+/// cut by 4, 5 and 4 (chunking also to chunk size 1 only); they have not been
+/// timed on Miri again.
 const MIRI_FILE_BYTES: usize = 300;
-const MIRI_DIFFERENTIAL_STRIDE: usize = 6;
-const MIRI_CHUNKING_STRIDE: usize = 10;
-const MIRI_MUTATION_STRIDE: usize = 12;
+const MIRI_DIFFERENTIAL_STRIDE: usize = 24;
+const MIRI_CHUNKING_STRIDE: usize = 50;
+const MIRI_MUTATION_STRIDE: usize = 48;
 
 /// The PngSuite files a suite runs: every one natively (without the corrupt
 /// ones if `without_corrupt`), under Miri the small ones, every
@@ -554,7 +555,7 @@ fn generated_images() {
 fn encoder_images() {
     differential(
         "PNG from the png encoder: compressed, every filter, against png",
-        &encoded(if MIRI { 12 } else { 1 }),
+        &encoded(if MIRI { 60 } else { 1 }),
     );
 }
 
@@ -629,7 +630,7 @@ fn animations(count: usize) -> Vec<(String, Vec<u8>)> {
 fn animation_images() {
     differential(
         "APNG: frames, dispose and blend, composited, against png",
-        &animations(if MIRI { 8 } else { 600 }),
+        &animations(if MIRI { 3 } else { 600 }),
     );
 }
 

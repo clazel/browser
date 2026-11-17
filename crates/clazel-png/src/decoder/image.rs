@@ -29,7 +29,7 @@ impl<E: Engine> Png<E> {
     /// Bytes of IDAT or fdAT data of the current chunk: begin the frame if
     /// this is its first, then feed the engine unless the frame is complete
     /// (more data chunks after the end of the zlib stream are skipped).
-    pub(super) fn image_bytes(&mut self, part: &[u8], parts: &mut Parts<'_>) -> Result<(), Error> {
+    pub(crate) fn image_bytes(&mut self, part: &[u8], parts: &mut Parts<'_>) -> Result<(), Error> {
         if self.stage == Stage::Idle {
             self.begin_frame(parts)?;
         }
@@ -43,7 +43,7 @@ impl<E: Engine> Png<E> {
     /// image begins on a canvas of fully transparent black; the previous
     /// frame's `dispose_op` is applied; a frame whose own `dispose_op` is
     /// "previous" has the canvas saved.
-    fn begin_frame(&mut self, parts: &mut Parts<'_>) -> Result<(), Error> {
+    pub(crate) fn begin_frame(&mut self, parts: &mut Parts<'_>) -> Result<(), Error> {
         let frame = match self.kind {
             // 11.3.6.2: the default image's fcTL, if there was one; else the
             // image is the whole canvas, blended as "source", not part of
@@ -165,7 +165,7 @@ impl<E: Engine> Png<E> {
     /// Gives the engine the bytes of a data chunk until they are used or the
     /// zlib stream is done. The engine writes straight into the scanline
     /// buffer; a scanline that is complete is finished before the next one.
-    fn feed(&mut self, part: &[u8], parts: &mut Parts<'_>) -> Result<(), Error> {
+    pub(crate) fn feed(&mut self, part: &[u8], parts: &mut Parts<'_>) -> Result<(), Error> {
         let mut src = part;
         loop {
             let want = usize::try_from(self.row_len).unwrap_or(0).saturating_add(1);
@@ -226,7 +226,7 @@ impl<E: Engine> Png<E> {
     /// 7.2, 9, 8: a complete scanline in `cur` (its filter-type byte, then
     /// its bytes) is unfiltered, its pixels placed, and the next scanline or
     /// pass begun.
-    fn finish_row(&mut self, parts: &mut Parts<'_>) -> Result<(), Error> {
+    pub(crate) fn finish_row(&mut self, parts: &mut Parts<'_>) -> Result<(), Error> {
         let len = usize::try_from(self.row_len).unwrap_or(0);
         let Some((filter, data)) = parts.cur.split_first_mut() else {
             return Err(bad("scanline buffer"));
