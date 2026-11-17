@@ -25,4 +25,5 @@ verify = true
 workspace = true
 
 [dev-dependencies]
-iced-x86 = { version = "=1.22.0", default-features = false, features = ["std", "decoder", "encoder", "instr_info", "intel"] }
+yaxpeax-x86 = { version = "=2.2.1", default-features = false }
+yaxpeax-arch = { version = "=0.3.3", default-features = false }

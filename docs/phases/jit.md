@@ -365,7 +365,7 @@ code.
     to each other must be read before they count as independent; Intel's SDM
     volume 2 for the encoding tables;
   - A64: Arm's machine-readable specification and the Sail Arm model.
-- Pin reference disassemblers for tests only (for example `iced-x86` and
+- Pin reference disassemblers for tests only (for example `yaxpeax-x86` and
   `yaxpeax-arm`), each a `test` row in DEPENDENCIES.md.
 - Pin the benchmark set, and record the JIT-off numbers.
 
@@ -402,10 +402,11 @@ code.
   from the Intel manuals, as the second x86-64 source. It has a single
   author, no review, and leaves floating-point arithmetic external
   (`extern`, supplied by its emulator). It is not pinned or vendored.
-- **Reference disassemblers:** `iced-x86` 1.22.0 (with `lazy_static`) and
-  `yaxpeax-arm` 0.5.0 (with `yaxpeax-arch`, `bitvec` and four small
-  packages), each a `test` row in DEPENDENCIES.md, dev-dependencies of the new
-  crates only.
+- **Reference disassemblers:** `yaxpeax-x86` 2.2.1 and `yaxpeax-arm` 0.5.0
+  (with `yaxpeax-arch`, `bitvec` and four small packages), each a `test` row
+  in DEPENDENCIES.md, dev-dependencies of the new crates only. On
+  2026-11-17 `yaxpeax-x86` replaced `iced-x86` 1.22.0, whose decoder Miri
+  reports as undefined behaviour under Stacked Borrows.
 - **Proposed benchmark set** (a proposal, for a person to accept): the
   compute-bound programs of Octane 2.0, from `chromium/octane` (archived;
   BSD-3-Clause for the harness, each benchmark file with its own licence
