@@ -13,6 +13,11 @@ clazel-css = { path = "../clazel-css" }
 # The node tree selectors are matched against (Phase 4 item 4.8).
 clazel-dom = { path = "../clazel-dom" }
 
+# Servo's selectors engine, the reference in tests/conformance_differential.rs
+# (class `test` in docs/DEPENDENCIES.md: never shipped).
+[dev-dependencies]
+selectors = "=0.36.1"
+
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
 # shipped code today; `target-tier` is what the policy requires, since this
 # parses selectors a page chose. Tier 0 until the parser and serializer are
