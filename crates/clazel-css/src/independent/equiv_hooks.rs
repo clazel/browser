@@ -329,12 +329,43 @@ pub proof fn lemma_split_run(vs: Seq<ICv>, p: nat, group: Seq<ICv>, groups: Seq<
     }
 }
 
+/// A list all of whose items are good is a good list.
+pub proof fn lemma_good_pointwise(vs: Seq<ps::ComponentValue>, n: nat)
+    requires
+        n <= vs.len(),
+        forall|i: int| 0 <= i < n ==> good(#[trigger] vs[i]),
+    ensures
+        all_good(vs, n),
+    decreases n,
+{
+    if n > 0 {
+        lemma_good_pointwise(vs, (n - 1) as nat);
+    }
+}
+
+/// A part of a good list is a good list.
+pub proof fn lemma_good_subrange(g: Seq<ps::ComponentValue>, i: int, j: int)
+    requires
+        all_good(g, g.len()),
+        0 <= i <= j <= g.len(),
+    ensures
+        all_good(g.subrange(i, j), g.subrange(i, j).len()),
+{
+    let sub = g.subrange(i, j);
+    assert forall|k: int| 0 <= k < sub.len() implies good(#[trigger] sub[k]) by {
+        lemma_all_good_at(g, g.len(), i + k);
+        assert(sub[k] == g[i + k]);
+    }
+    lemma_good_pointwise(sub, sub.len());
+}
+
 /// The loop of "parse a comma-separated list of component values" of a list of good
 /// items is the independent split.
 pub proof fn lemma_comma_equal(g: Seq<ps::ComponentValue>, p: int, groups: Seq<Seq<ps::ComponentValue>>)
     requires
         all_good(g, g.len()),
         0 <= p <= g.len(),
+        forall|i: int| 0 <= i < groups.len() ==> all_good(#[trigger] groups[i], groups[i].len()),
     ensures
         groups_of(ps::comma_separated_list_loop(list_stream(g), p, groups)) == i_values_comma_split(
             cvs_of(g),
@@ -342,6 +373,10 @@ pub proof fn lemma_comma_equal(g: Seq<ps::ComponentValue>, p: int, groups: Seq<S
             seq![],
             groups_of(groups),
         ),
+        ({
+            let r = ps::comma_separated_list_loop(list_stream(g), p, groups);
+            forall|i: int| 0 <= i < r.len() ==> all_good(#[trigger] r[i], r[i].len())
+        }),
     decreases g.len() - p,
 {
     let st = list_stream(g);
@@ -353,6 +388,15 @@ pub proof fn lemma_comma_equal(g: Seq<ps::ComponentValue>, p: int, groups: Seq<S
         let q = first_comma(vs, p as nat) as int;
         let lst = g.subrange(p, q);
         assert(Seq::<ps::ComponentValue>::empty() + lst =~= lst);
+        lemma_good_subrange(g, p, q);
+        let pushed = groups.push(lst);
+        assert forall|i: int| 0 <= i < pushed.len() implies all_good(#[trigger] pushed[i], pushed[i].len()) by {
+            if i < groups.len() {
+                assert(pushed[i] == groups[i]);
+            } else {
+                assert(pushed[i] == lst);
+            }
+        }
         lemma_split_run(vs, p as nat, seq![], groups_of(groups));
         lemma_cvs_sub(g, p, q);
         assert(Seq::<ICv>::empty() + vs.subrange(p, q) =~= vs.subrange(p, q));
@@ -396,6 +440,20 @@ pub proof fn theorem_values_parse_comma_separated_list(g: Seq<ps::ComponentValue
 {
     lemma_comma_equal(g, 0, Seq::empty());
     assert(groups_of(Seq::<Seq<ps::ComponentValue>>::empty()) =~= Seq::<Seq<ICv>>::empty());
+}
+
+/// The lists that "parse a comma-separated list of component values" of a list of good
+/// items returns are good.
+pub proof fn lemma_values_groups_good(g: Seq<ps::ComponentValue>)
+    requires
+        all_good(g, g.len()),
+    ensures
+        ({
+            let r = ps::parse_a_comma_separated_list_of_component_values(ps::Input::List { list: g });
+            forall|i: int| 0 <= i < r.len() ==> all_good(#[trigger] r[i], r[i].len())
+        }),
+{
+    lemma_comma_equal(g, 0, Seq::empty());
 }
 
 // ---------------------------------------------------------------------

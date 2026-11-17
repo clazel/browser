@@ -13,7 +13,12 @@
 //!   a token stream.
 //! - A list of tokens becomes a token stream "with |input| as its tokens"
 //!   ([`i_lex_tokens`]): the stream has no source string, so the position of every
-//!   token is 0 and the "original text" of a declaration is the empty string.
+//!   token is 0. Only the three entry points that never read the source string are
+//!   defined on a list of tokens (parse a component value, parse a list of component
+//!   values, parse a comma-separated list of component values): the "original text" of
+//!   a declaration and the unicode-range value of a descriptor, which the other four
+//!   entry points read from the source, have no source in a list of tokens, and what
+//!   the algorithms do then is left out here.
 //! - A list of component values is a stream whose items are already component
 //!   values, so "consume a component value" returns the item at the index as it
 //!   is. This is what the standard leaves out (it says "tokens and/or component
@@ -56,26 +61,6 @@ pub open spec fn i_lex_tokens(ts: Seq<ITok>) -> Seq<Lex> {
 
 // ---------------------------------------------------------------------
 // The entry points on a list of tokens
-
-/// "parse a stylesheet's contents" of a list of tokens.
-pub open spec fn i_tokens_parse_stylesheet_contents(ts: Seq<ITok>) -> Seq<IRule> {
-    i_parse_stylesheet_contents_of(i_lex_tokens(ts), seq![])
-}
-
-/// "parse a list of declarations" of a list of tokens.
-pub open spec fn i_tokens_parse_list_of_declarations(ts: Seq<ITok>) -> Seq<IDecl> {
-    i_parse_list_of_declarations_of(i_lex_tokens(ts), seq![])
-}
-
-/// "parse a rule" of a list of tokens.
-pub open spec fn i_tokens_parse_rule(ts: Seq<ITok>) -> IParsed<IRule> {
-    i_parse_rule_of(i_lex_tokens(ts), seq![])
-}
-
-/// "parse a declaration" of a list of tokens.
-pub open spec fn i_tokens_parse_declaration(ts: Seq<ITok>) -> IParsed<IDecl> {
-    i_parse_declaration_of(i_lex_tokens(ts), seq![])
-}
 
 /// "parse a component value" of a list of tokens.
 pub open spec fn i_tokens_parse_component_value(ts: Seq<ITok>) -> IParsed<ICv> {

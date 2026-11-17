@@ -11,7 +11,11 @@
 //! gives the same on both, since each reads the stream only through its next token.
 
 #[cfg(verus_only)]
+use super::equiv_anb::*;
+#[cfg(verus_only)]
 use super::equiv_base::*;
+#[cfg(verus_only)]
+use super::equiv_good::*;
 #[cfg(verus_only)]
 use super::equiv_hooks::*;
 #[cfg(verus_only)]
@@ -386,6 +390,204 @@ pub proof fn theorem_tokens_parse_comma_separated_list(ts: Seq<t::Token>)
     lemma_ext_comma(a, b, 0, Seq::empty());
     lemma_comma_loop_equal(b, 0, Seq::empty());
     assert(groups_of(Seq::<Seq<ps::ComponentValue>>::empty()) =~= Seq::<Seq<ICv>>::empty());
+}
+
+// ---------------------------------------------------------------------
+// The hooks, on a list of tokens and on a list of component values
+
+/// A list of tokens whose numbers the tokenizer could have made.
+pub open spec fn toks_ok(ts: Seq<t::Token>) -> bool {
+    forall|i: int| 0 <= i < ts.len() ==> #[trigger] tok_ok(ts[i])
+}
+
+/// The stream of a list of tokens is [`stream_ok`] when its tokens are [`toks_ok`].
+pub proof fn lemma_tokens_stream_ok(ts: Seq<t::Token>)
+    requires
+        toks_ok(ts),
+    ensures
+        stream_ok(tokens_stream(ts)),
+{
+    assert forall|i: int| 0 <= i < ts.len() implies (#[trigger] tokens_stream(ts).tokens[i] is Token && tok_ok(
+        tokens_stream(ts).tokens[i]->Token_token,
+    )) by {
+        assert(ps::as_items(ts)[i] == (ps::ComponentValue::Token { token: ts[i] }));
+    }
+}
+
+/// §5.3.2 "parse something according to a CSS grammar" of a list of component values.
+pub proof fn theorem_parse_grammar_values<T, G>(
+    g: Seq<ps::ComponentValue>,
+    gs: spec_fn(Seq<ps::ComponentValue>) -> Option<T>,
+    gm: spec_fn(Seq<ICv>) -> Option<G>,
+    f: spec_fn(T) -> G,
+)
+    requires
+        all_good(g, g.len()),
+        agrees(gs, gm, f),
+    ensures
+        i_parse_grammar(IInput::Values(cvs_of(g)), gm) == omap(
+            ps::parse_something_according_to_a_css_grammar(ps::Input::List { list: g }, gs),
+            f,
+        ),
+{
+    lemma_list_identity(g);
+    lemma_all_good_item_ok(g);
+}
+
+/// §5.3.2 "parse something according to a CSS grammar" of a list of tokens.
+pub proof fn theorem_parse_grammar_tokens<T, G>(
+    ts: Seq<t::Token>,
+    gs: spec_fn(Seq<ps::ComponentValue>) -> Option<T>,
+    gm: spec_fn(Seq<ICv>) -> Option<G>,
+    f: spec_fn(T) -> G,
+)
+    requires
+        no_eof(ts),
+        toks_ok(ts),
+        agrees(gs, gm, f),
+    ensures
+        i_parse_grammar(IInput::Tokens(itoks(ts)), gm) == omap(
+            ps::parse_something_according_to_a_css_grammar(ps::Input::List { list: ps::as_items(ts) }, gs),
+            f,
+        ),
+{
+    theorem_tokens_parse_list_of_component_values(ts);
+    lemma_tokens_stream_ok(ts);
+    lemma_list_good(tokens_stream(ts), 0, None, false, Seq::empty());
+    let list = ps::parse_a_list_of_component_values(ps::Input::List { list: ps::as_items(ts) });
+    lemma_all_good_item_ok(list);
+}
+
+/// §5.3.3 "parse a comma-separated list according to a CSS grammar" of a list of
+/// component values.
+pub proof fn theorem_parse_list_grammar_values<T, G>(
+    g: Seq<ps::ComponentValue>,
+    gs: spec_fn(Seq<ps::ComponentValue>) -> Option<T>,
+    gm: spec_fn(Seq<ICv>) -> Option<G>,
+    f: spec_fn(T) -> G,
+)
+    requires
+        all_good(g, g.len()),
+        agrees(gs, gm, f),
+    ensures
+        i_parse_list_grammar(IInput::Values(cvs_of(g)), gm) == omap_seq(
+            ps::parse_a_comma_separated_list_according_to_a_css_grammar(ps::Input::List { list: g }, gs),
+            f,
+        ),
+{
+    let st = list_stream(g);
+    let vs = cvs_of(g);
+    lemma_dw_values(g, 0);
+    lemma_empty_values(g, i_values_discard_whitespace(vs, 0) as int);
+    // "contains only whitespace-tokens": nothing but whitespace from the first non-whitespace item on.
+    assert(ps::is_empty(st, ps::discard_whitespace(st, 0)) == i_input_only_whitespace(IInput::Values(vs))) by {
+        lemma_values_only_ws(g, 0);
+    }
+    if ps::is_empty(st, ps::discard_whitespace(st, 0)) {
+        assert(omap_seq(Seq::<Option<T>>::empty(), f) =~= Seq::<Option<G>>::empty());
+    } else {
+        theorem_values_parse_comma_separated_list(g);
+        lemma_values_groups_good(g);
+        let list = ps::parse_a_comma_separated_list_of_component_values(ps::Input::List { list: g });
+        let mine = i_parse_list_grammar(IInput::Values(vs), gm);
+        let theirs = ps::parse_a_comma_separated_list_according_to_a_css_grammar(ps::Input::List { list: g }, gs);
+        assert(mine =~= omap_seq(theirs, f)) by {
+            assert(mine.len() == list.len());
+            assert forall|i: int| 0 <= i < list.len() implies mine[i] == omap_seq(theirs, f)[i] by {
+                lemma_list_identity(list[i]);
+                lemma_all_good_item_ok(list[i]);
+                assert(gm(cvs_of(list[i])) == omap(gs(list[i]), f));
+            }
+        }
+    }
+}
+
+/// Nothing but whitespace from `p` on, in a list of good items.
+pub proof fn lemma_values_only_ws(g: Seq<ps::ComponentValue>, p: int)
+    requires
+        all_good(g, g.len()),
+        0 <= p,
+    ensures
+        ps::is_empty(list_stream(g), ps::discard_whitespace(list_stream(g), p)) == (forall|k: int|
+            p <= k < g.len() ==> #[trigger] cvs_of(g)[k] == ICv::Token(ITok::Whitespace)),
+    decreases g.len() - p,
+{
+    lemma_dw_values(g, p);
+    lemma_empty_values(g, ps::discard_whitespace(list_stream(g), p));
+    if p < g.len() {
+        lemma_all_good_at(g, g.len(), p);
+        lemma_ws_item(g[p]);
+        if g[p] == (ps::ComponentValue::Token { token: t::Token::Whitespace }) {
+            lemma_values_only_ws(g, p + 1);
+        }
+    }
+}
+
+/// §5.3.3 "parse a comma-separated list according to a CSS grammar" of a list of tokens.
+pub proof fn theorem_parse_list_grammar_tokens<T, G>(
+    ts: Seq<t::Token>,
+    gs: spec_fn(Seq<ps::ComponentValue>) -> Option<T>,
+    gm: spec_fn(Seq<ICv>) -> Option<G>,
+    f: spec_fn(T) -> G,
+)
+    requires
+        no_eof(ts),
+        toks_ok(ts),
+        agrees(gs, gm, f),
+    ensures
+        i_parse_list_grammar(IInput::Tokens(itoks(ts)), gm) == omap_seq(
+            ps::parse_a_comma_separated_list_according_to_a_css_grammar(ps::Input::List { list: ps::as_items(ts) }, gs),
+            f,
+        ),
+{
+    lemma_same_next(ts);
+    let a = tokens_stream(ts);
+    let b = stream_with_eof(ts);
+    assert(no_eof_items(a)) by {
+        assert forall|i: int| 0 <= i < a.tokens.len() implies !ps::is(#[trigger] a.tokens[i], t::Token::Eof) by {
+            assert(a.tokens[i] == ps::as_items(ts)[i]);
+        }
+    }
+    lemma_ext_dw(a, b, 0);
+    lemma_ext_basic(a, b, ps::discard_whitespace(a, 0));
+    lemma_discard_whitespace(b, 0);
+    lemma_discard_whitespace_bound(b, 0);
+    lemma_is_empty(b, ps::discard_whitespace(b, 0) as nat);
+    assert(lex_of(b) == i_lex_tokens(itoks(ts)));
+    lemma_only_ws(lex_of(b), 0);
+    assert(ps::is_empty(a, ps::discard_whitespace(a, 0)) == i_input_only_whitespace(IInput::Tokens(itoks(ts)))) by {
+        if ps::is_empty(a, ps::discard_whitespace(a, 0)) {
+            assert forall|k: int| 0 <= k < itoks(ts).len() implies itoks(ts)[k] == ITok::Whitespace by {
+                assert(lex_of(b)[k].tok == itoks(ts)[k]);
+            }
+        }
+        if i_input_only_whitespace(IInput::Tokens(itoks(ts))) {
+            assert forall|k: int| 0 <= k < lex_of(b).len() implies lex_of(b)[k].tok == ITok::Whitespace by {
+                assert(lex_of(b)[k].tok == itoks(ts)[k]);
+            }
+        }
+    }
+    if ps::is_empty(a, ps::discard_whitespace(a, 0)) {
+        assert(omap_seq(Seq::<Option<T>>::empty(), f) =~= Seq::<Option<G>>::empty());
+    } else {
+        theorem_tokens_parse_comma_separated_list(ts);
+        lemma_tokens_stream_ok(ts);
+        lemma_comma_good(a, 0, Seq::empty());
+        let list = ps::parse_a_comma_separated_list_of_component_values(ps::Input::List { list: ps::as_items(ts) });
+        let mine = i_parse_list_grammar(IInput::Tokens(itoks(ts)), gm);
+        let theirs = ps::parse_a_comma_separated_list_according_to_a_css_grammar(
+            ps::Input::List { list: ps::as_items(ts) },
+            gs,
+        );
+        assert(mine =~= omap_seq(theirs, f)) by {
+            assert(mine.len() == list.len());
+            assert forall|i: int| 0 <= i < list.len() implies mine[i] == omap_seq(theirs, f)[i] by {
+                lemma_list_identity(list[i]);
+                lemma_all_good_item_ok(list[i]);
+                assert(gm(cvs_of(list[i])) == omap(gs(list[i]), f));
+            }
+        }
+    }
 }
 
 } // verus!
