@@ -296,4 +296,79 @@ pub proof fn theorem_value_end(input: TokenStream, start: int, nested: bool, kep
     }
 }
 
+// ------------------------------------------------------------------------------------
+// theorem_spans_in_order
+// ------------------------------------------------------------------------------------
+
+/// What [`spans_loop`] keeps as it goes: every span so far lies in the string, and each
+/// starts where the one before it ended or later; the last ends at `pos`.
+pub open spec fn spans_ok(input: Seq<u32>, spans: Seq<Span>, pos: int) -> bool {
+    &&& 0 <= pos <= input.len()
+    &&& spans.len() > 0 ==> spans.last().end == pos
+    &&& forall|i: int|
+        0 <= i < spans.len() ==> 0 <= #[trigger] spans[i].start <= spans[i].end <= input.len()
+    &&& forall|i: int| 0 <= i && i + 1 < spans.len() ==> #[trigger] spans[i].end <= spans[i + 1].start
+}
+
+/// [`spans_loop`] keeps [`spans_ok`], for a string of any `u32`s.
+proof fn lemma_spans_loop_ok(input: Seq<u32>, pos: int, flag: bool, spans: Seq<Span>)
+    requires
+        spans_ok(input, spans, pos),
+    ensures
+        ({
+            let all = spans_loop(input, pos, flag, spans);
+            &&& all.len() > spans.len()
+            &&& forall|i: int| 0 <= i < all.len() ==> 0 <= #[trigger] all[i].start <= all[i].end <= input.len()
+            &&& forall|i: int| 0 <= i && i + 1 < all.len() ==> #[trigger] all[i].end <= all[i + 1].start
+        }),
+    decreases remaining(input, pos),
+{
+    crate::tokenizer::termination::lemma_token_advances(input, pos, flag);
+    crate::tokenizer::termination::lemma_comments_advance(input, pos);
+    crate::tokenizer::lemmas::lemma_token_within(input, pos, flag);
+    let (token, next) = read_a_token(input, pos, flag);
+    let span = Span { start: consume_comments(input, pos), end: next };
+    let pushed = spans.push(span);
+    assert(span.start >= pos);
+    assert(span.start <= span.end);
+    assert(span.end <= input.len());
+    assert(spans_ok(input, pushed, next)) by {
+        assert forall|i: int| 0 <= i < pushed.len() implies 0 <= #[trigger] pushed[i].start
+            <= pushed[i].end <= input.len() by {
+            if i < spans.len() {
+                assert(pushed[i] == spans[i]);
+            }
+        }
+        assert forall|i: int| 0 <= i && i + 1 < pushed.len() implies #[trigger] pushed[i].end
+            <= pushed[i + 1].start by {
+            if i + 1 < spans.len() {
+                assert(pushed[i] == spans[i]);
+                assert(pushed[i + 1] == spans[i + 1]);
+            } else {
+                assert(pushed[i] == spans.last());
+            }
+        }
+    }
+    if !(token is Eof) {
+        lemma_spans_loop_ok(input, next, flag, pushed);
+    }
+}
+
+/// `theorem_spans_in_order`: for every string of `u32`s, not only code points. A code
+/// point above U+10FFFF in the input is read as an ordinary one, and EOF (U+110000)
+/// inside the input ends the tokens, with the EOF token's span, empty, where it stops.
+pub proof fn theorem_spans_in_order(string: Seq<u32>, unicode_ranges_allowed: bool)
+    ensures
+        super::contract::spans_in_order(string, unicode_ranges_allowed),
+{
+    let empty = Seq::<Span>::empty();
+    assert(spans_ok(string, empty, 0));
+    lemma_spans_loop_ok(string, 0, unicode_ranges_allowed, empty);
+    super::lemmas::lemma_spans_walk(string, 0, unicode_ranges_allowed, Seq::empty(), Seq::empty());
+    let tokens = tokenize_with(string, unicode_ranges_allowed);
+    let all = spans_loop(string, 0, unicode_ranges_allowed, empty);
+    assert(all.len() == tokens.len());
+    assert(token_stream(string, unicode_ranges_allowed).tokens.len() == tokens.len());
+}
+
 } // verus!
