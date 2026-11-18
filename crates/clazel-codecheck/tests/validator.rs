@@ -3,7 +3,9 @@
 //! decoder checks. The programs are the ones of `src/examples.rs`, whose
 //! jump displacements are worked out there.
 
-use clazel_codecheck::exec::{decode, encode, validate};
+use clazel_codecheck::validate::validate;
+use clazel_x64::decoder_exec::decode_exec as decode;
+use clazel_x64::encoder::encode_exec as encode;
 use clazel_x64::spec::{AluOp, Index, Instr, Mem, Size};
 
 fn ctxm(disp: i32) -> Mem {
