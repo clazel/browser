@@ -64,6 +64,8 @@ pub struct Parser<'a> {
     pub prev_end: usize,
     /// The arena (garbage included: [`crate::check`] sees the compacted one).
     pub nodes: Vec<Node>,
+    /// `spec::lvl` of each node.
+    pub lv: Vec<i32>,
     /// The nesting of recursive calls that each sit inside a node.
     pub depth: usize,
     /// Nodes that are only valid as a cover grammar (§13.2.5.1's
@@ -90,6 +92,7 @@ impl<'a> Parser<'a> {
             t,
             prev_end: 0,
             nodes: Vec::new(),
+            lv: Vec::new(),
             depth: 0,
             bad: HashSet::new(),
             covers: HashMap::new(),
@@ -189,7 +192,11 @@ impl<'a> Parser<'a> {
 
     /// Runs `f` one level deeper; [`ParseError::TooDeep`] past [`MAX_DEPTH`].
     pub fn nest<T>(&mut self, f: impl FnOnce(&mut Self) -> R<T>) -> R<T> {
-        if self.depth >= MAX_DEPTH {
+        // Each nested call sits inside a node, but one node can have two (an
+        // assignment expression whose right side is a function), so the counter
+        // may be a few times the height: it bounds the stack, and [`crate::check`]
+        // applies the exact limit, to the height.
+        if self.depth >= MAX_DEPTH.saturating_mul(4) {
             return Err(ParseError::TooDeep);
         }
         self.depth = self.depth.saturating_add(1);
@@ -203,7 +210,22 @@ impl<'a> Parser<'a> {
     /// Adds a node; its id.
     pub fn mk(&mut self, kind: NodeKind, op: Op, flag: bool, start: usize, end: usize, children: Vec<u32>) -> u32 {
         let id = u32::try_from(self.nodes.len()).unwrap_or(u32::MAX);
+        let first = children.first().copied();
         self.nodes.push(Node { kind, op, flag, start, end, children });
+        // A chain of `MemberExpression` and `TaggedTemplate` nodes is 17 when
+        // its base is, 15 otherwise (remembered, so that a long chain is not
+        // walked at every link).
+        let l = match kind {
+            NodeKind::MemberExpression | NodeKind::TaggedTemplate => {
+                if first.is_some_and(|c| c < id && self.lvl(c) == 17) {
+                    17
+                } else {
+                    15
+                }
+            }
+            k => self.lvl_kind(id, k),
+        };
+        self.lv.push(l);
         id
     }
 
@@ -255,37 +277,7 @@ impl<'a> Parser<'a> {
 
     /// The binding strength of expression `id` (`spec::lvl`).
     pub fn lvl(&self, id: u32) -> i32 {
-        // A chain of `MemberExpression` and `TaggedTemplate` nodes is 17 when
-        // its base is, 15 otherwise.
-        let base = self.lvl_base(id);
-        match self.kind(id) {
-            NodeKind::MemberExpression | NodeKind::TaggedTemplate => {
-                if base == 17 {
-                    17
-                } else {
-                    15
-                }
-            }
-            _ => base,
-        }
-    }
-
-    /// `lvl` of a node that is not a member chain's link, or the base of a chain.
-    fn lvl_base(&self, id: u32) -> i32 {
-        let mut id = id;
-        loop {
-            let Some(n) = self.node(id) else { return -100 };
-            match n.kind {
-                NodeKind::MemberExpression | NodeKind::TaggedTemplate => {
-                    let c = n.children.first().copied().unwrap_or(u32::MAX);
-                    if c >= id {
-                        return 15;
-                    }
-                    id = c;
-                }
-                k => return self.lvl_kind(id, k),
-            }
-        }
+        self.lv.get(id as usize).copied().unwrap_or(-100)
     }
 
     /// `lvl` of a node of kind `k` that is not a member chain's link.

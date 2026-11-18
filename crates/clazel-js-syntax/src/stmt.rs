@@ -696,6 +696,10 @@ impl<'a> Parser<'a> {
     /// or expression, at `function` (or at `async` when `async_start`).
     /// `deflt`: the name may be absent (`export default`).
     pub fn parse_function(&mut self, cx: Cx, async_start: Option<usize>, is_expr: bool, deflt: bool) -> R<u32> {
+        self.nest(|p| p.parse_function_inner(cx, async_start, is_expr, deflt))
+    }
+
+    fn parse_function_inner(&mut self, cx: Cx, async_start: Option<usize>, is_expr: bool, deflt: bool) -> R<u32> {
         let start = async_start.unwrap_or(self.t.start);
         let is_async = async_start.is_some();
         if is_async {
@@ -754,6 +758,10 @@ impl<'a> Parser<'a> {
 
     /// `ClassDeclaration` or `ClassExpression`, at `class`.
     pub fn parse_class(&mut self, cx: Cx, is_expr: bool, deflt: bool) -> R<u32> {
+        self.nest(|p| p.parse_class_inner(cx, is_expr, deflt))
+    }
+
+    fn parse_class_inner(&mut self, cx: Cx, is_expr: bool, deflt: bool) -> R<u32> {
         let start = self.t.start;
         self.expect_w("class")?;
         let name = if self.t.is_name() && self.ident_ok(cx) {
