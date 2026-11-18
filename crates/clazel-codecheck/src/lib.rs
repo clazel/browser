@@ -39,6 +39,7 @@
 
 pub mod api;
 pub mod contract;
+pub mod decode_all;
 pub mod examples;
 pub mod exec;
 pub mod lemmas;
