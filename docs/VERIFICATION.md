@@ -93,9 +93,15 @@ installs nothing if a checksum differs.
 
 The full `cargo xtask verify` takes hours, so it runs where it is the gate:
 in CI (`.github/workflows/ci.yml`), on Linux x86-64 with the pinned
-toolchain, on every push to `main`, every manual run (Actions, "Run
-workflow") and every pull request. Nothing is done, and no tier is raised,
-until that run is green.
+toolchain, on every merge-queue entry, every push to `main` and every
+manual run (Actions, "Run workflow"). The merge queue's run is the gate
+before `main`: a pull request reaches `main` only through the queue.
+
+A pull request runs the same jobs, but the proofs (the `crate` parts below)
+only for the crates it selects: its changed crates and every crate that
+depends on one, against the base it merges into, as `--changed` selects
+them below (`cargo xtask crates --changed HEAD^1`). Nothing is done, and no
+tier is raised, until that run is green.
 
 On a pull request the proofs (the `crate` parts below) wait for a person:
 they need CI's `approval` job, which uses the `full-verification`
@@ -103,7 +109,10 @@ environment, and a reviewer set in that environment's settings approves it
 ("Review deployments" on the run). Until then only the cheap jobs run and
 `Full verification` stays pending, so opening pull requests, however many,
 never starts hours of proof jobs. Every push to a pull request starts a new
-run, which needs a new approval.
+run, which needs a new approval. A pull request that selects no crate (a
+change to documentation only) has no proof jobs and asks for no approval.
+A merge-queue run needs no approval: adding a pull request to the queue is
+already a person's decision.
 
 CI splits the run into parts, one job each, so no job comes near GitHub's
 six-hour limit (`xtask/src/parts.rs`):
@@ -129,10 +138,13 @@ six-hour limit (`xtask/src/parts.rs`):
   changes).
 - `verify --part assemble --metrics <dir>`, the `Full verification` job,
   which fails unless every other job passed (a skipped job included, but
-  `approval`, which runs on pull requests only): static checks, then it
-  requires a file for every
-  workspace crate from this commit, and reports whether docs/STATUS.md's
-  table and the status images match them.
+  `approval`, which runs on pull requests only, and `approval` and the
+  crate jobs on a pull request that selects no crate): static checks, then
+  it requires a file for every workspace crate from this commit, and
+  reports whether docs/STATUS.md's table and the status images match them.
+  On a pull request it runs with `--changed HEAD^1`: it requires a file for
+  every selected crate, carries the other rows over from the committed
+  table, and ends in `CHANGED CRATE PARTS ASSEMBLED`.
 - On pushes to `main` only, the `table` job runs the same part with
   `--write` after `assemble` passed, and commits the regenerated table in
   docs/STATUS.md and the two images drawn from it (`docs/status.svg`,
@@ -158,10 +170,14 @@ untracked files) with HEAD's merge base with it (`xtask/src/changed.rs`):
 - Tests, Miri, Kani, Verus, mutations and conformance run only for the
   crates with a changed file and every crate that depends on one of them,
   directly or not, dev-dependencies included.
+- A change to `Cargo.lock` adds the crates whose locked packages changed:
+  those whose dependency closure in the lockfile (every package they
+  reach, dev-dependencies included, with its version, source and checksum)
+  differs from the base's.
 - A change anywhere else, except `docs/`, `.github/`, `.claude/`, README.md,
   CLAUDE.md, LICENSE and `.gitignore`, checks every crate. That covers
-  `Cargo.lock`, the workspace `Cargo.toml`, `rust-toolchain.toml`,
-  `scripts/` and `xtask/`, which decides what passing means.
+  the workspace `Cargo.toml`, `rust-toolchain.toml`, `scripts/` and
+  `xtask/`, which decides what passing means.
 - The run ends in `RESULT: CHANGED CRATES PASSED (n of m crates …)`, never
   `ALL CHECKS PASSED`.
 
