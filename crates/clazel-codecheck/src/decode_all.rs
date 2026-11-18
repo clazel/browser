@@ -1,9 +1,10 @@
 //! The decoding half of the validator, proven: [`decode_all`] reads a blob
 //! into the instruction list the spec quantifies over (`spec::decodes_to`),
 //! with each instruction's start offset. Its `Some` result is sound by
-//! `clazel-x64`'s proven executable decoder. A `None` result makes no claim
-//! here (that no other decomposition exists needs the prefix-freeness of the
-//! encoding, proven in `clazel-x64`, applied by induction; not done yet).
+//! `clazel-x64`'s proven executable decoder, and it finds **the**
+//! decomposition: if the blob decomposes as `w` at all, the answer is `Some`
+//! with exactly `w` (by the prefix-freeness of the encoding, proven in
+//! `clazel-x64`).
 
 #[allow(unused_imports)]
 use super::spec::*;
@@ -36,7 +37,19 @@ pub proof fn lemma_start_of_push(ins: Seq<Instr>, x: Instr, j: int)
     }
 }
 
-/// Decodes the whole blob into instructions and their start offsets.
+/// The instruction list of a [`decode_all`] result.
+pub open spec fn res_ins(r: Option<(Vec<Instr>, Vec<usize>)>) -> Seq<Instr> {
+    match r {
+        Some((i, _)) => i@,
+        None => Seq::empty(),
+    }
+}
+
+/// Decodes the whole blob into instructions and their start offsets. It
+/// finds **the** decomposition: if the blob decomposes as `w` at all
+/// (`spec::decodes_to`), the answer is `Some` and the instructions are `w`.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(2000)]
 pub fn decode_all(blob: &[u8]) -> (r: Option<(Vec<Instr>, Vec<usize>)>)
     requires
         blob@.len() < 0x8000_0000,
@@ -49,6 +62,8 @@ pub fn decode_all(blob: &[u8]) -> (r: Option<(Vec<Instr>, Vec<usize>)>)
             },
             None => true,
         },
+        forall|w: Seq<Instr>|
+            #[trigger] decodes_to(blob@, w) ==> (r is Some && res_ins(r) =~= w),
 {
     let mut ins: Vec<Instr> = Vec::new();
     let mut st: Vec<usize> = Vec::new();
@@ -62,11 +77,24 @@ pub fn decode_all(blob: &[u8]) -> (r: Option<(Vec<Instr>, Vec<usize>)>)
             st@.len() == ins@.len(),
             forall|j: int| 0 <= j < ins@.len() ==> st@[j] as int == start_of(ins@, j),
             pos as int == start_of(ins@, ins@.len() as int),
+            forall|w: Seq<Instr>|
+                #[trigger] decodes_to(blob@, w) ==> (ins@.len() <= w.len() && w.subrange(
+                    0,
+                    ins@.len() as int,
+                ) =~= ins@),
         decreases blob.len() - pos,
     {
         let rest = vstd::slice::slice_subrange(blob, pos, blob.len());
         match decode_exec(rest) {
             None => {
+                proof {
+                    assert forall|w: Seq<Instr>| decodes_to(blob@, w) implies false by {
+                        let k = ins@.len() as int;
+                        assert(w.subrange(0, k) =~= ins@);
+                        super::uniq::lemma_start_of_prefix(w, k, k);
+                        super::uniq::lemma_next_instr(blob@, w, k, pos as int);
+                    }
+                }
                 return None;
             },
             Some((c, n)) => {
@@ -104,11 +132,18 @@ pub fn decode_all(blob: &[u8]) -> (r: Option<(Vec<Instr>, Vec<usize>)>)
                         ins@,
                         j,
                     ) by {
-                        if j < old_ins.len() {
-                            lemma_start_of_push(old_ins, c2, j);
-                        } else {
-                            lemma_start_of_push(old_ins, c2, j);
-                        }
+                        lemma_start_of_push(old_ins, c2, j);
+                    }
+                    clazel_x64::decoder_proofs::lemma_canonical_prefix_free();
+                    assert forall|w: Seq<Instr>| decodes_to(blob@, w) implies (ins@.len() <= w.len()
+                        && w.subrange(0, ins@.len() as int) =~= ins@) by {
+                        let k = old_ins.len() as int;
+                        assert(w.subrange(0, k) =~= old_ins);
+                        super::uniq::lemma_start_of_prefix(w, k, k);
+                        super::uniq::lemma_next_instr(blob@, w, k, pos as int);
+                        assert(starts_with_encoding(rest@, c2));
+                        assert(c2 == w[k]);
+                        assert(w.subrange(0, k + 1) =~= old_ins.push(c2));
                     }
                 }
                 pos = pos.saturating_add(n);
@@ -117,6 +152,13 @@ pub fn decode_all(blob: &[u8]) -> (r: Option<(Vec<Instr>, Vec<usize>)>)
     }
     proof {
         assert(blob@.subrange(0, pos as int) =~= blob@);
+        assert forall|w: Seq<Instr>| decodes_to(blob@, w) implies res_ins(Some((ins, st))) =~= w by {
+            let k = ins@.len() as int;
+            assert(w.subrange(0, k) =~= ins@);
+            super::uniq::lemma_start_of_prefix(w, k, k);
+            super::uniq::lemma_finish(blob@, w, k);
+            assert(w.subrange(0, k) =~= w);
+        }
     }
     Some((ins, st))
 }
