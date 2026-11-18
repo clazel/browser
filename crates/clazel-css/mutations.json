@@ -59,6 +59,7 @@
       "replace": "string.len() == 3 && (string[0] == 0x75)",
       "expect": "killed",
       "reason": "\"URL(\" would be a function token, not a url token.",
+      "module": "tokenizer::examples",
       "certificate": {
         "file": "src/tokenizer/lemmas.rs",
         "lemma": "super::examples::lemma_example_urls()",
