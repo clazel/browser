@@ -1308,6 +1308,172 @@ fn check_empty(
     Some((x, x.saturating_add(1), -100))
 }
 
+/// What `check_derivation` found.
+pub enum Derivation {
+    /// Every node derives the tokens it spans: `derives_root` holds.
+    Verified,
+    /// A node of a kind the check does not cover: nothing is claimed.
+    Unsupported,
+    /// A covered node that is not derived: the parser built what the grammar does not allow.
+    Failed,
+}
+
+/// §16.1, §16.2: the root derives the whole stream, from the items it holds.
+#[verifier::spinoff_prover]
+fn check_root(
+    src: &Vec<u32>,
+    nodes: &Vec<Node>,
+    toks: &Vec<DTok>,
+    gaps: &Vec<Ins>,
+    lo: &Vec<usize>,
+    hi: &Vec<usize>,
+    lv: &Vec<i32>,
+    module: bool,
+    Ghost(ts): Ghost<Stream>,
+) -> (r: bool)
+    requires
+        nodes.len() > 0,
+        env_ok(src@, nodes@, toks@, gaps@, ts),
+        inv(
+            arena_of(nodes@),
+            ts,
+            root_ctx(goal_of(module)),
+            lo@,
+            hi@,
+            lv@,
+            nodes.len() as int - 1,
+        ),
+    ensures
+        r ==> derives_root(arena_of(nodes@), ts, goal_of(module)),
+{
+    let n = nodes.len();
+    let root = n.saturating_sub(1);
+    let nt = toks.len();
+    let ghost a = arena_of(nodes@);
+    let ghost cx = root_ctx(goal_of(module));
+    let nd = match nodes.as_slice().get(root) {
+        Some(x) => x,
+        None => {
+            return false;
+        },
+    };
+    let kind_ok = if module {
+        matches!(nd.kind, NodeKind::Module)
+    } else {
+        matches!(nd.kind, NodeKind::Script)
+    };
+    if !kind_ok {
+        return false;
+    }
+    proof {
+        lemma_env_toks_wf(src@, nodes@, toks@, gaps@, ts);
+        assert(a.nodes[root as int] == nodes@[root as int]@);
+        assert(nd == &nodes@[root as int]);
+        assert(a.nodes[root as int].kind == nd.kind);
+    }
+    let len = nd.children.len();
+    let mut k = len;
+    let mut pos = nt;
+    while k > 0
+        invariant
+            nodes.len() > 0,
+            n == nodes.len(),
+            root + 1 == n,
+            nt == toks.len(),
+            tn(ts) == nt,
+            ast_wf(a),
+            a == arena_of(nodes@),
+            cx == root_ctx(goal_of(module)),
+            nd == &nodes@[root as int],
+            len == nd.children.len(),
+            k <= len,
+            pos <= nt,
+            env_ok(src@, nodes@, toks@, gaps@, ts),
+            inv(a, ts, cx, lo@, hi@, lv@, root as int),
+            dl(a, ts, root as int, a.nodes[root as int].children, k as int, cx, pos as int, nt as int),
+            forall|j: int|
+                k <= j < len ==> is_item_kind(kd(a, #[trigger] a.nodes[root as int].children[j])),
+        decreases k,
+    {
+        let c = match nd.children.as_slice().get(k.saturating_sub(1)) {
+            Some(x) => *x as usize,
+            None => {
+                return false;
+            },
+        };
+        proof {
+            assert(a.nodes[root as int].children[k as int - 1] == c as int);
+            lemma_child_before(a, root as int, k as int - 1);
+        }
+        let lo_c = match lo.as_slice().get(c) {
+            Some(x) => *x,
+            None => {
+                return false;
+            },
+        };
+        let hi_c = match hi.as_slice().get(c) {
+            Some(x) => *x,
+            None => {
+                return false;
+            },
+        };
+        let item = match nodes.as_slice().get(c) {
+            Some(x) => matches!(x.kind, NodeKind::ExpressionStatement | NodeKind::EmptyStatement),
+            None => false,
+        };
+        if hi_c != pos || !item {
+            return false;
+        }
+        proof {
+            lemma_inv_get(a, ts, cx, lo@, hi@, lv@, root as int, c as int);
+            assert(a.nodes[c as int] == nodes@[c as int]@);
+            let ks = a.nodes[root as int].children;
+            lemma_dl_cons(a, ts, root as int, ks, k as int - 1, cx, lo_c as int, hi_c as int, nt as int);
+            assert(is_item_kind(kd(a, c as int)));
+        }
+        pos = lo_c;
+        k = k.saturating_sub(1);
+    }
+    if pos != 0 {
+        return false;
+    }
+    let spans = if nt == 0 {
+        nd.start == 0 && nd.end == 0
+    } else {
+        let first = match toks.as_slice().get(0) {
+            Some(t) => t,
+            None => {
+                return false;
+            },
+        };
+        let last = match toks.as_slice().get(nt.saturating_sub(1)) {
+            Some(t) => t,
+            None => {
+                return false;
+            },
+        };
+        nd.start == first.start && nd.end == last.end
+    };
+    if !spans {
+        return false;
+    }
+    proof {
+        lemma_root_cx(goal_of(module));
+        assert(nd.start as int == a.nodes[root as int].start);
+        assert(nd.end as int == a.nodes[root as int].end);
+        if nt == 0 {
+            assert(span_ok(a, ts, root as int, 0, 0));
+        } else {
+            lemma_env_tok(src@, nodes@, toks@, gaps@, ts, 0);
+            lemma_env_tok(src@, nodes@, toks@, gaps@, ts, nt as int - 1);
+            assert(span_ok(a, ts, root as int, 0, tn(ts)));
+        }
+        assert(all_items(a, a.nodes[root as int].children));
+        lemma_root_derives(a, ts, root as int, cx, goal_of(module));
+    }
+    true
+}
+
 /// An `EmptyStatement` of the check.
 proof fn lemma_empty_done(a: AstV, ts: Stream, cx: Ctx, m: int, x: int)
     requires
