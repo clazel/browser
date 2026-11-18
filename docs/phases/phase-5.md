@@ -639,12 +639,15 @@ declarations.
 Proven: `theorem_parse_total`; `theorem_blocks_balanced` (each simple block
 closes on its opening token's mirror or EOF); `theorem_reader` (below); and that
 every loop of the spec goes forward (`parser/termination.rs`), which the spec's
-`moved` relies on. Stated in `parser/contract.rs`, proof still to come:
-`theorem_parse_bounded` (the output's component values number at most the code
-points and one, so parsing is linear; not the tokens, since a unicode-range
-value is tokenized twice); `theorem_block_ends_agree` ("consume a block" and
-"consume a simple block" end at the same index); `theorem_output_preserved`;
-`theorem_spans_in_order`; `theorem_value_end`. §9's round trip is stated for a
+`moved` relies on. Stated in `parser/contract.rs` and proven in `parser/theorems.rs`
+(with `parser/blocks.rs` and `parser/bounded.rs`): `theorem_parse_bounded` (the
+output's component values number at most the code points and one, so parsing is
+linear; not the tokens, since a unicode-range value is tokenized twice, so each
+part of the output is charged the code points it was read from);
+`theorem_block_ends_agree` ("consume a block" and "consume a simple block" end at
+the same index, for every token stream); `theorem_output_preserved`;
+`theorem_spans_in_order` (for every string of `u32`, not only code points);
+`theorem_value_end` (for the starts inside the stream). §9's round trip is stated for a
 serializer, which the text does not define and no crate has yet.
 
 **How the exec parser reads (settled here, built in 5.4; `parser/exec*.rs`).** The spec keeps the
@@ -1674,22 +1677,22 @@ tests of 5.4, 5.5 and 5.7, not their proofs or tiers.
 | 5.0 Decisions | taken (2026-11-04), (d) as a GPU rasterizer and the rest as recommended; open: how 5.18 fits with (g) (see 5.0) |
 | 5.1 Inventory and test data | started, not on `main`: `css-parsing-tests`' ten syntax files (301 cases) and WPT `css/css-syntax/` (191 calls read, 23 pages and 1 test not run) vendored in `clazel-css`; no other WPT directories, inventory, Unicode tables, test fonts or dev-dependencies yet |
 | 5.2 CSS tokenizer | built and proven, not on `main`: spec, exec and theorems in `clazel-css`, 17 of 17 mutations killed with certificates, and the token-level suites passing (61 cases, 3 expected failures); §3.2 decoding of the input bytes built and proven in `input/` |
-| 5.3 CSS parser | built, not on `main`: `parser/spec.rs` from the text pinned in 5.2, every algorithm of §5, §6 and §9.1, with `contract.rs`, evaluated examples and the theorems above; `theorem_parse_bounded`, `theorem_block_ends_agree`, `theorem_output_preserved`, `theorem_spans_in_order` and `theorem_value_end` stated, not proven |
-| 5.4 CSS syntax evidence | started, not on `main`: the exec parser is proven equal to the spec at every entry point, with `tests/conformance_syntax.rs` passing with its expected failures listed, and the parser's mutations; `independent.rs` not started; the differential against `cssparser` compares tokens, not yet rule structure; one quadratic shape left, under 5.3 |
+| 5.3 CSS parser | built, not on `main`: `parser/spec.rs` from the text pinned in 5.2, every algorithm of §5, §6 and §9.1, with `contract.rs`, evaluated examples and the theorems above; `theorem_parse_bounded`, `theorem_block_ends_agree`, `theorem_output_preserved`, `theorem_spans_in_order` and `theorem_value_end` stated and proven in `parser/theorems.rs` |
+| 5.4 CSS syntax evidence | built, not on `main`: the exec parser is proven equal to the spec at every entry point, with `tests/conformance_syntax.rs` passing with its expected failures listed, and the parser's mutations; `independent.rs`, a second transcription of the tokenizer and the parser from the pinned CSS Syntax 3 (not CSS 2.1 as planned above), is proven equal to the spec over strings (not the input bytes, An+B or serialization); the differential against `cssparser` compares tokens and rule structure ("cssparser rule differential"); `clazel-css` is raised to tier 2; one quadratic shape left, under 5.3 |
 | 5.5 Selectors | built, on `main`, `clazel-selectors` at tier 2: spec and contracts, the parser, matching, specificity and the serializer proven against the spec (the parser one axiom, that a `Vec` of its arrays has fewer than `usize::MAX` elements), 123 of 123 mutations killed, `tests/conformance_selectors.rs`. `src/independent.rs` (Selectors 4 at the spec's pin, not CSS 2.1 as this item first said, so that the two read one standard) is proven equal to the spec for specificity, matching and parsing (on the selectors both support). The serializer is proven equal to CSSOM's (`exec_serialize.rs`), `parse_selector` ensures `parse_selector_ensures` (`exec_parse.rs`, with `exec_anb.rs` for `<an+b>`), and `tests/conformance_differential.rs` runs Servo's `selectors` 0.36.1 through an `Element` adapter over the arena on the WPT inputs and generated selectors and documents (434 + 6000 selectors, 1.1 million element checks; four listed differences). Tier 2 waits on CI's full verification on the pull request |
-| 5.6 Property values | not started |
-| 5.7 Cascade and computed values | not started |
-| 5.8 Style sources and media queries | not started |
-| 5.9 Font tables | not started |
-| 5.10 Outlines and font matching | not started |
+| 5.6 Property values | built, on `main`; `clazel-style` at tier 1 on this branch, pending CI's green full verification: 18 Kani harnesses in `values/proofs.rs`, each on every input within the bound stated in the harness and in the README. No harness reaches `values::parse`, whole grammars or the named-colour tables (README, "Not done") |
+| 5.7 Cascade and computed values | built, on `main`; `clazel-style` at tier 1 on this branch, pending CI's green full verification: 9 Kani harnesses in `cascade/proofs.rs` with their bounds stated. The tree walk, the sort of four candidates, `cascade` itself and the rule index have no harness (README, "Not done") |
+| 5.8 Style sources and media queries | built, on `main`; `clazel-style` at tier 1 on this branch, pending CI's green full verification: 2 Kani harnesses in `sources/proofs.rs` (`kleene_any`, `feature_any`). The condition evaluator on lists, the parser and the sheet walk have no harness (README, "Not done") |
+| 5.9 Font tables | built, on `main`; `clazel-font` at tier 1 on this branch, pending CI's green full verification: the 24 Kani harnesses of `src/proofs.rs` (the table parsers and outline steps), each on every input within the bound in its name, its comment and the README. `loca` with `glyf` flattened, `name` lookups, `GPOS` from its header and `Face::parse` have no harness (README, "Not done") |
+| 5.10 Outlines and font matching | outlines built, on `main`: `clazel-font`'s `outline/`, its four step harnesses part of the 24 above, same tier 1 and same condition. Font matching in `clazel-layout`: not started |
 | 5.11 Shaping | not started |
 | 5.12 White space and line breaking | not started |
 | 5.13 Box tree | not started |
 | 5.14 Block and inline layout | not started |
 | 5.15 Table layout | not started |
 | 5.16 Paint | not started |
-| 5.17 Glyph masks | not started |
-| 5.17a Display list codec and validator | built and proven, not on `main`: `clazel-displaylist` at tier 0, with the encoder, decoder and validator proven against the spec, the theorems proven, and 79 of 79 mutations killed with certificates. Tier 2 waits on `independent.rs` and CI |
+| 5.17 Glyph masks | built, on `main`; `clazel-glyph-mask` at tier 1 on this branch, pending CI's green full verification: 10 Kani harnesses in `src/proofs.rs`, one step each (placement, walk, flattening points, one cell, one row, coverage) with the bound in the harness and the README. The whole pipeline on any path has no harness (README, "Not covered by a harness") |
+| 5.17a Display list codec and validator | built and proven, on `main`: `clazel-displaylist` at tier 2 on this branch, pending CI's green full verification: the encoder, decoder and validator proven against the spec, 79 of 79 mutations killed with certificates, `src/independent.rs` proven equal to the spec (`theorem_read_equals_decode`, `theorem_check_equals_validate`; a same-session second text, since the format is ours), and `tests/conformance_list.rs` |
 | 5.17b GPU process: drawing | not started |
 | 5.17c Software fallback, blocklist, crash policy | not started |
 | 5.18 IPC and kernel: surfaces, viewports, input | not started |

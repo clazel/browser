@@ -7,7 +7,7 @@
 //! [`super::rows`] says what they build.
 //!
 //! Each statement below is a `spec fn`, because a `proof fn` with no proof is not allowed.
-//! [`super::lemmas`] proves the ones that say so; the others are not proven.
+//! [`super::lemmas`] and [`super::theorems`] prove them.
 
 #[allow(unused_imports)]
 use super::spec::*;
@@ -256,7 +256,8 @@ pub open spec fn blocks_balanced(input: TokenStream, index: int) -> bool {
 /// `theorem_parse_bounded`: the output's component values number at most the code points of
 /// the input and one, so everything that walks the output is linear in the sheet. The plan
 /// counted tokens; a unicode-range value is tokenized a second time, into other tokens,
-/// so what bounds both is the code points. Not proven.
+/// so what bounds both is the code points. Proven in [`super::theorems`], from
+/// [`super::bounded`].
 pub open spec fn parse_bounded(string: Seq<u32>) -> bool {
     let rules = parse_a_stylesheet(Input::String { string }, None).rules;
     rules_size(rules, rules.len()) <= filter_code_points(string).len() + 1
@@ -264,11 +265,12 @@ pub open spec fn parse_bounded(string: Seq<u32>) -> bool {
 
 /// `theorem_block_ends_agree`: "consume a block" and "consume a simple block" end at the
 /// same index, whatever the block holds, since everything inside a block's contents stops
-/// before an unmatched `}`. Nothing in the exec parser uses it yet: the plan (item 5.3 of
+/// before an unmatched `}`. Proven in [`super::theorems`], from [`super::blocks`], for every
+/// token stream. Nothing in the exec parser uses it yet: the plan (item 5.3 of
 /// `docs/phases/phase-5.md`) wants a table of closing positions, which this would justify,
 /// so that a declaration that is about to fail can step over a block without reading it,
 /// but no such table is built, and a block as the first value of a declaration that then
-/// fails stays quadratic (the plan lists this). Not proven.
+/// fails stays quadratic (the plan lists this).
 pub open spec fn block_ends_agree(input: TokenStream, index: int) -> bool {
     is(next_token(input, index), Token::OpenCurly) ==> consume_a_block(input, index).1
         == consume_a_simple_block(input, index).1
@@ -296,8 +298,8 @@ pub open spec fn all_preserved(values: Seq<ComponentValue>, n: nat) -> bool
     ))
 }
 
-/// `theorem_output_preserved`: §5.2's note, "never appear in any parser output". Not
-/// proven.
+/// `theorem_output_preserved`: §5.2's note, "never appear in any parser output". Proven in
+/// [`super::theorems`].
 pub open spec fn output_preserved(string: Seq<u32>) -> bool {
     let values = parse_a_list_of_component_values(Input::String { string });
     all_preserved(values, values.len())
@@ -309,9 +311,9 @@ pub open spec fn reader_is_the_stream(string: Seq<u32>, unicode_ranges_allowed: 
 }
 
 /// `theorem_spans_in_order`: a stream made from a string has one span per token, in order
-/// and inside the string, so [`segment`]'s `subrange` is always of a real range. Not proven:
-/// the tokenizer's exec `next_token` proves `next <= input.len()`, but no lemma states it of
-/// the spec yet.
+/// and inside the string, so [`segment`]'s `subrange` is always of a real range. Proven in
+/// [`super::theorems`], for every string of `u32`s, with the tokenizer's
+/// `tokenizer::lemmas::lemma_token_within`.
 pub open spec fn spans_in_order(string: Seq<u32>, unicode_ranges_allowed: bool) -> bool {
     let stream = token_stream(string, unicode_ranges_allowed);
     let spans = stream.source.unwrap().spans;
@@ -322,7 +324,8 @@ pub open spec fn spans_in_order(string: Seq<u32>, unicode_ranges_allowed: bool) 
 
 /// `theorem_value_end`: what [`declaration_value`] relies on for `value_end`. If the items
 /// of `list` from `kept` on are all tokens, each is one item of the stream, so the items
-/// before `kept` end `list.len() - kept` before `end`. Not proven.
+/// before `kept` end `list.len() - kept` before `end`. Proven in [`super::theorems`] for the
+/// `start`s inside the stream, the only ones for which `subrange` means anything here.
 pub open spec fn value_end_is_exact(
     input: TokenStream,
     start: int,
