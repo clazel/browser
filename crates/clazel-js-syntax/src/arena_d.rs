@@ -600,8 +600,8 @@ pub open spec fn inv(
     m: int,
 ) -> bool {
     lo.len() == m && hi.len() == m && lv.len() == m && (forall|j: int|
-        0 <= j < m ==> #[trigger] node_done(a, ts, j, cx, lo[j] as int, hi[j] as int) && lv[j] as int
-            == lvl(a, j))
+        0 <= j < m ==> (#[trigger] lv[j]) as int == lvl(a, j) && (kd(a, j) != NodeKind::Absent
+            ==> node_done(a, ts, j, cx, lo[j] as int, hi[j] as int)))
 }
 
 /// The binding strengths of the kinds the check covers.
@@ -3419,11 +3419,15 @@ proof fn lemma_inv_get(a: AstV, ts: Stream, cx: Ctx, lo: Seq<usize>, hi: Seq<usi
         inv(a, ts, cx, lo, hi, lv, m),
         0 <= j < m,
     ensures
-        node_done(a, ts, j, cx, lo[j] as int, hi[j] as int),
+        kd(a, j) != NodeKind::Absent ==> node_done(a, ts, j, cx, lo[j] as int, hi[j] as int),
+        lvl(a, j) != -100 ==> node_done(a, ts, j, cx, lo[j] as int, hi[j] as int),
         lv[j] as int == lvl(a, j),
 {
     reveal(inv);
-    assert(node_done(a, ts, j, cx, lo[j] as int, hi[j] as int));
+    assert(lv[j] as int == lvl(a, j));
+    if kd(a, j) == NodeKind::Absent {
+        assert(lvl(a, j) == -100);
+    }
 }
 
 /// Token `k` of the executable tokens is the specification's.
@@ -3532,8 +3536,15 @@ proof fn lemma_inv_push(
         assert(lo2.len() == m + 1);
         assert(hi2.len() == m + 1);
         assert(lv2.len() == m + 1);
-        assert forall|j: int| 0 <= j < m + 1 implies #[trigger] node_done(a, ts, j, cx, lo2[j] as int, hi2[j] as int)
-            && lv2[j] as int == lvl(a, j) by {
+        assert forall|j: int| 0 <= j < m + 1 implies (#[trigger] lv2[j]) as int == lvl(a, j)
+            && (kd(a, j) != NodeKind::Absent ==> node_done(
+            a,
+            ts,
+            j,
+            cx,
+            lo2[j] as int,
+            hi2[j] as int,
+        )) by {
             if j < m {
                 assert(lo2[j] == lo[j]);
                 assert(hi2[j] == hi[j]);
@@ -3542,6 +3553,53 @@ proof fn lemma_inv_push(
                 assert(lo2[j] == l0);
                 assert(hi2[j] == h0);
                 assert(lv2[j] == l);
+            }
+        }
+    }
+}
+
+/// Extending the processed nodes by an `Absent` node, which has no token range of
+/// its own: its parent places it.
+proof fn lemma_inv_push_absent(
+    a: AstV,
+    ts: Stream,
+    cx: Ctx,
+    lo: Seq<usize>,
+    hi: Seq<usize>,
+    lv: Seq<i32>,
+    m: int,
+)
+    requires
+        inv(a, ts, cx, lo, hi, lv, m),
+        0 <= m < a.nodes.len(),
+        kd(a, m) == NodeKind::Absent,
+    ensures
+        inv(a, ts, cx, lo.push(usize::MAX), hi.push(usize::MAX), lv.push(-100i32), m + 1),
+{
+    let lo2 = lo.push(usize::MAX);
+    let hi2 = hi.push(usize::MAX);
+    let lv2 = lv.push(-100i32);
+    assert(lvl(a, m) == -100);
+    assert(inv(a, ts, cx, lo2, hi2, lv2, m + 1)) by {
+        reveal(inv);
+        assert(lo2.len() == m + 1);
+        assert(hi2.len() == m + 1);
+        assert(lv2.len() == m + 1);
+        assert forall|j: int| 0 <= j < m + 1 implies (#[trigger] lv2[j]) as int == lvl(a, j)
+            && (kd(a, j) != NodeKind::Absent ==> node_done(
+            a,
+            ts,
+            j,
+            cx,
+            lo2[j] as int,
+            hi2[j] as int,
+        )) by {
+            if j < m {
+                assert(lo2[j] == lo[j]);
+                assert(hi2[j] == hi[j]);
+                assert(lv2[j] == lv[j]);
+            } else {
+                assert(lv2[j] == -100i32);
             }
         }
     }
