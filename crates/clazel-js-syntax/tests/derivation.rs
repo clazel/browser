@@ -67,6 +67,26 @@ var c;",
         "a + b * c;",
         "a.b.c = d ? e : f;",
         "typeof a === 'x';",
+        "while (a) b;",
+        "while (a) { b; c }",
+        "do a; while (b)",
+        "do { a } while (b);",
+        "do a; while (b) c;",
+        "throw a;",
+        "throw a\nx",
+        "debugger;",
+        "debugger\nx",
+        "a: b;",
+        "a: b: c;",
+        "a: while (x) { break a; continue a; break; continue; }",
+        "while (1) { break\nx }",
+        "try { a } catch (e) { b }",
+        "try { a } catch { b }",
+        "try { a } finally { b }",
+        "try { a } catch (e) { b } finally { c }",
+        "switch (a) {}",
+        "switch (a) { case 1: b; c; case 2: default: d; }",
+        "switch (a) { default: case 1: }",
         "a in b;",
         "// c\n 1 /* d */ + 2 ;;",
     ] {
@@ -83,7 +103,7 @@ var c;",
 
 #[test]
 fn other_programs_are_unsupported_not_failed() {
-    for s in ["while (1) ;", "var [a] = 1;", "[1];", "({});"] {
+    for s in ["for (;;) ;", "var [a] = 1;", "[1];", "({});"] {
         assert!(
             derivation(s, SourceGoal::Script) == Some(Derivation::Unsupported),
             "{s}"
