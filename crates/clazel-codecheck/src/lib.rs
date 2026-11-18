@@ -25,22 +25,29 @@
 //!
 //! # Status
 //!
-//! Tier 0. [`exec`] is an executable validator, but **unverified**: plain
-//! Rust that follows the spec, tested (`tests/validator.rs`) and not proven
-//! against [`contract`]. What is proven is in `clazel-x64`: the encoding is a
-//! prefix code and its specification-level decoder is complete, which is what
-//! the contract's completeness half assumes. The spec, the contract,
-//! examples, lemmas and mutations are proven as before. The theorem of jit.md exit criterion 2 (an accepted blob
+//! Tier 0. [`validate::validate`] is the executable validator, written in
+//! `verus!` and proven **sound and complete**: it returns `true` if and only
+//! if the blob is `spec::accepted`, which is `contract::validate_ensures`. It
+//! is built from verified parts: `clazel-x64`'s executable decoder and
+//! encoder, [`decode_all`] (which finds the unique decomposition), [`unit_exec`]
+//! (each unit check equal to its spec function) and [`scan_exec`] (the scan
+//! equal to the spec's recursive `scan`). The tier stays 0 until CI's full
+//! verification runs (CLAUDE.md rule 7). The theorem of jit.md exit criterion 2
+//! (an accepted blob
 //! is confined) is not stated or proven here; see the end of [`spec`]'s
 //! header.
 //!
 //! Tier: see `[package.metadata.clazel]` in `Cargo.toml` and
 //! `docs/VERIFICATION.md`.
 
+pub mod acc_lemmas;
 pub mod api;
 pub mod contract;
 pub mod decode_all;
 pub mod examples;
-pub mod exec;
 pub mod lemmas;
+pub mod scan_exec;
 pub mod spec;
+pub mod uniq;
+pub mod unit_exec;
+pub mod validate;
