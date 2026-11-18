@@ -354,4 +354,35 @@ pub proof fn example_lone_surrogate_is_ill_formed()
     }
 }
 
+/// §15.1 `FormalParameters`, §14.3.3: a `...rest` ends its list. A list of the rest
+/// alone is fine; a rest followed by another item is not.
+pub proof fn example_rest_ends_its_list()
+    ensures
+        ({
+            let a = AstV {
+                nodes: seq![
+                    node(NodeKind::FunctionRestParameter, Op::None, 0, 0, Seq::empty()),
+                    node(NodeKind::FunctionRestParameter, Op::None, 0, 0, Seq::empty()),
+                ],
+                root: 1,
+            };
+            !rest_only_last(a, seq![0int, 1int]) && rest_only_last(a, seq![1int])
+        }),
+{
+    let a = AstV {
+        nodes: seq![
+            node(NodeKind::FunctionRestParameter, Op::None, 0, 0, Seq::empty()),
+            node(NodeKind::FunctionRestParameter, Op::None, 0, 0, Seq::empty()),
+        ],
+        root: 1,
+    };
+    let two = seq![0int, 1int];
+    assert(two[0] == 0);
+    assert(is_rest_kind(kd(a, two[0])));
+    reveal_with_fuel(rest_free_from, 3);
+    assert(!rest_only_last(a, two));
+    let one = seq![1int];
+    assert(rest_only_last(a, one));
+}
+
 } // verus!
