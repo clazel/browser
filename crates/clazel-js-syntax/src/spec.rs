@@ -2509,9 +2509,22 @@ pub open spec fn all_args(a: AstV, ks: Seq<int>) -> bool {
             == NodeKind::SpreadElement
 }
 
-/// A `...rest` child is the last of its list.
+/// A `...rest` child is the last of its list: no child but the last is one. (Written
+/// as a recursion over the positions `0 <= k` and `k + 1 < len`: a `forall` over
+/// `0 <= k + 1 < len` would take in `k == -1`, whose `ks[k]` is unconstrained.)
 pub open spec fn rest_only_last(a: AstV, ks: Seq<int>) -> bool {
-    forall|k: int| 0 <= k + 1 < ks.len() ==> !is_rest_kind(kd(a, #[trigger] ks[k]))
+    rest_free_from(a, ks, 0)
+}
+
+/// No child of `ks[k..]` but the last is a `...rest`.
+pub open spec fn rest_free_from(a: AstV, ks: Seq<int>, k: int) -> bool
+    decreases ks.len() - k,
+{
+    if k + 1 >= ks.len() {
+        true
+    } else {
+        !is_rest_kind(kd(a, ks[k])) && rest_free_from(a, ks, k + 1)
+    }
 }
 
 /// An optional `Expression`: absent, or an `Expression`.

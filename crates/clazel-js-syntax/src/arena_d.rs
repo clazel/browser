@@ -8610,7 +8610,8 @@ fn check_default(
     Some((x, j, -100))
 }
 
-/// §14.12 `switch ( Expression ) CaseBlock`.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(60)]
 #[verifier::spinoff_prover]
 proof fn lemma_switch_done(a: AstV, ts: Stream, cx: Ctx, m: int, e: int, x: int, me: int, j: int)
     requires

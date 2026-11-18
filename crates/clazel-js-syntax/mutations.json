@@ -64,6 +64,19 @@
         "lemma": "example_lone_surrogate_is_ill_formed()",
         "witness": "surrogate_ok_at(seq![0xDC00u32], 0)"
       }
+    },
+    {
+      "id": "rest-anywhere-in-list",
+      "file": "src/spec.rs",
+      "find": "!is_rest_kind(kd(a, ks[k])) && rest_free_from(a, ks, k + 1)",
+      "replace": "rest_free_from(a, ks, k + 1)",
+      "expect": "killed",
+      "reason": "Lets a `...rest` parameter or element come before another item of its list, so `function f(...a, b) {}` would parse, which §15.1 and §14.3.3 forbid: example_rest_ends_its_list is false (its first conjunct).",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_rest_ends_its_list()",
+        "witness": "rest_only_last(AstV { nodes: seq![node(NodeKind::FunctionRestParameter, Op::None, 0, 0, Seq::empty()), node(NodeKind::FunctionRestParameter, Op::None, 0, 0, Seq::empty())], root: 1 }, seq![0int, 1int])"
+      }
     }
   ]
 }
