@@ -82,6 +82,20 @@ var c;",
         "(async a => await a);",
         "(async (a) => 1);",
         "function f() { function g() { return 1 } return g }",
+        "for (;;) ;",
+        "for (;;) { break; }",
+        "for (a = 0; a < 10; a = a + 1) b;",
+        "for (var i = 0, n = 5; i < n; i = i + 1) { c }",
+        "for (let i = 0; i < n; i = i + 1) c;",
+        "for (const i = 0;;) c;",
+        "for (var i = 0 + 1 * 2;;) ;",
+        "for (x of y) z;",
+        
+        "for (let x in o) z;",
+        "for (x in o) ;",
+        "for (const a of b.c) { d }",
+        "for (var i in a, b) ;",
+        "for (a in b) for (c of d) e;",
         "while (a) b;",
         "while (a) { b; c }",
         "do a; while (b)",
@@ -118,7 +132,7 @@ var c;",
 
 #[test]
 fn other_programs_are_unsupported_not_failed() {
-    for s in ["for (;;) ;", "var [a] = 1;", "[1];", "({});"] {
+    for s in ["for (a, b;;) ;", "var [a] = 1;", "[1];", "({});"] {
         assert!(
             derivation(s, SourceGoal::Script) == Some(Derivation::Unsupported),
             "{s}"

@@ -11,7 +11,7 @@
 //! spread, `this`/`null`/`true`/`false`; and the statements expression, empty,
 //! `var`/`let`/`const` (no destructuring), block, `if`, `while`, `do`-`while`,
 //! `throw`, `break`/`continue`, labelled, `try`/`catch`/`finally`, `switch` and
-//! `debugger`, `return`; function declarations and expressions, generators,
+//! `debugger`, `return`; `for` (all heads); function declarations and expressions, generators,
 //! `async` functions, arrow functions (simple parameters, defaults and `...rest`
 //! of a name), `yield` and `await`. Each node is checked in the context its
 //! parent's production gives it (`Done::cxs`, [`Cx5`]); the assignment is
@@ -852,8 +852,7 @@ proof fn lemma_binary_done(
         0 <= m < a.nodes.len(),
         0 <= l < m,
         0 <= r < m,
-        cx_in(cx, true) == cx,
-        cx.in_,
+        a.nodes[m].op == Op::In ==> cx.in_,
         a.nodes[m].children =~= seq![l, r],
         is_bin_kind(a.nodes[m].kind),
         bin_op_ok(a.nodes[m].kind, a.nodes[m].op),
@@ -929,8 +928,6 @@ fn check_binary(
 ) -> (r: Option<(usize, usize, i32)>)
     requires
         m < nodes.len(),
-        cx_in(g.cx, true) == g.cx,
-        g.cx.in_,
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
         inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
         cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
@@ -955,7 +952,13 @@ fn check_binary(
         },
     };
     let (own, lmin, rmin, opok) = bin_info(nd.kind, nd.op);
-    if !opok || nd.children.len() != 2 {
+    let cxm = match done.cxs.get(m) {
+        Some(c) => c,
+        None => {
+            return None;
+        },
+    };
+    if !opok || nd.children.len() != 2 || (matches!(nd.op, Op::In) && !cxm.i) {
         return None;
     }
     let l = match nd.children.as_slice().get(ZERO) {
@@ -1082,6 +1085,9 @@ fn check_binary(
         assert(is_op_tok(g.ts, mi as int, op)) by {
             lemma_op_chars(op);
         }
+        assert(cxm == &done.cxs@[m as int]);
+        assert(g.cx.in_ == cxm.i);
+        assert(a.nodes[m as int].op == nd.op);
         lemma_binary_done(a, g.ts, g.cx, m as int, l as int, r as int, lo_l as int, mi as int, lo_r as int, j as int);
     }
     Some((lo_l, j, own))
@@ -1627,7 +1633,6 @@ fn check_list(
 ) -> (r: Option<usize>)
     requires
         ls.m < nodes.len(),
-        cx_in(g.cx, true) == g.cx,
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
         inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, ls.m as int),
         cx_ok(arena_of(nodes@), done.cxs@, ls.m as int, g.cx),
@@ -1783,7 +1788,6 @@ fn check_list(
             e <= toks.len(),
             pos <= e,
             ast_wf(a),
-            cx_in(g.cx, true) == g.cx,
             env_ok(src@, nodes@, toks@, gaps@, g.ts),
             inv(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
             cx_ok(a, done.cxs@, m as int, g.cx),
@@ -2923,7 +2927,7 @@ fn check_binding(
 ) -> (r: Option<(usize, usize, i32)>)
     requires
         m < nodes.len(),
-        cx_in(g.cx, true) == g.cx,
+        nodes@[m as int].kind == NodeKind::BindingElement ==> cx_in(g.cx, true) == g.cx,
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
         inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
         cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
@@ -3137,7 +3141,7 @@ proof fn lemma_decl_stmt_done(
 )
     requires
         toks_wf(ts),
-        cx_in(cx, true) == cx,
+        a.nodes[m].kind == NodeKind::VariableStatement ==> cx_in(cx, true) == cx,
         0 <= m < a.nodes.len(),
         0 <= x < tn(ts),
         a.nodes[m].children.len() > 0,
@@ -3209,7 +3213,7 @@ fn check_decl_stmt(
 ) -> (r: Option<(usize, usize, i32)>)
     requires
         m < nodes.len(),
-        cx_in(g.cx, true) == g.cx,
+        nodes@[m as int].kind == NodeKind::VariableStatement ==> cx_in(g.cx, true) == g.cx,
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
         inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
         cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
@@ -5921,20 +5925,47 @@ pub fn check_derivation(
                 return Derivation::Failed;
             },
         };
-        // The statements and expressions covered so far are checked with `[+In]`.
-        if !cxm.i || cxm.d {
-            return Derivation::Unsupported;
-        }
+        // Most statements and expressions are checked with `[+In]` and no `[Default]`.
+        let plain = cxm.i && !cxm.d;
         proof {
             lemma_env_toks_wf(src@, nodes@, toks@, gaps@, ts);
         }
         let ghost cx = cx_of(cxm);
         proof {
-            assert(cx_in(cx, true) == cx);
+            if plain {
+                assert(cx_in(cx, true) == cx);
+            }
             assert(cxm == done.cxs@[m as int]);
         }
         let is_arrow = matches!(nd.kind, NodeKind::ArrowFunction | NodeKind::AsyncArrowFunction);
-        let res = if is_arrow {
+        let is_for = matches!(
+            nd.kind,
+            NodeKind::ForStatement | NodeKind::ForInStatement | NodeKind::ForOfStatement
+        );
+        let res = if is_for {
+            if !plain {
+                return Derivation::Unsupported;
+            }
+            let cxi = cx5_noin(&cxm);
+            if matches!(nd.kind, NodeKind::ForStatement) {
+                if !kids_cx4(nodes, done.cxs.as_slice(), m, &cxi, &cxm, &cxm, &cxm) {
+                    return Derivation::Unsupported;
+                }
+                proof {
+                    assert(nd == &nodes@[m as int]);
+                }
+                check_for(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx }))
+            } else {
+                if !kids_cx3(nodes, done.cxs.as_slice(), m, &cxi, &cxm, &cxm) {
+                    return Derivation::Unsupported;
+                }
+                let sh = InOfShape { m, of: matches!(nd.kind, NodeKind::ForOfStatement) };
+                proof {
+                    assert(nd == &nodes@[m as int]);
+                }
+                check_for_in_of(src, nodes, toks, gaps, &done, &sh, Ghost(GCx { ts, cx }))
+            }
+        } else if is_arrow {
             let is_async = matches!(nd.kind, NodeKind::AsyncArrowFunction);
             if nd.children.len() != 2 {
                 return Derivation::Unsupported;
@@ -5979,7 +6010,26 @@ pub fn check_derivation(
         if !kids_cx(nodes, done.cxs.as_slice(), m, &cxm) {
             return Derivation::Unsupported;
         }
+        // The kinds whose checks do not need `[+In]`.
+        let any_ctx = matches!(
+            nd.kind,
+            NodeKind::NumericLiteral | NodeKind::StringLiteral | NodeKind::RegularExpressionLiteral
+                | NodeKind::IdentifierName | NodeKind::AdditiveExpression | NodeKind::MultiplicativeExpression
+                | NodeKind::ExponentiationExpression | NodeKind::ShiftExpression | NodeKind::EqualityExpression
+                | NodeKind::BitwiseANDExpression | NodeKind::BitwiseXORExpression | NodeKind::BitwiseORExpression
+                | NodeKind::LogicalANDExpression | NodeKind::LogicalORExpression | NodeKind::CoalesceExpression
+                | NodeKind::RelationalExpression | NodeKind::IdentifierReference | NodeKind::BindingIdentifier
+                | NodeKind::LabelIdentifier | NodeKind::ThisExpression | NodeKind::NullLiteral
+                | NodeKind::BooleanLiteral | NodeKind::UnaryExpression | NodeKind::AssignmentExpression
+                | NodeKind::MemberExpression | NodeKind::VariableDeclaration | NodeKind::LexicalBinding
+                | NodeKind::VariableDeclarationList | NodeKind::ForDeclaration | NodeKind::LexicalDeclaration
+        );
+        if !plain && !any_ctx {
+            return Derivation::Unsupported;
+        }
         match nd.kind {
+            NodeKind::VariableDeclarationList => check_var_list(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
+            NodeKind::ForDeclaration => check_for_decl(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
             NodeKind::NumericLiteral | NodeKind::StringLiteral | NodeKind::RegularExpressionLiteral | NodeKind::IdentifierName => {
                 proof {
                     lemma_env_literal_facts(src@, nodes@, toks@, gaps@, ts);
@@ -6299,6 +6349,25 @@ fn child_cx(kind: NodeKind, k: usize, p: &Cx5, ident: bool, braced: bool) -> (r:
     if matches!(kind, NodeKind::ArrowFunction | NodeKind::AsyncArrowFunction) {
         let (c0, c1) = arrow_cx5(p, matches!(kind, NodeKind::AsyncArrowFunction), ident, braced);
         return if k == 0 { c0 } else { c1 };
+    }
+    if matches!(
+        kind,
+        NodeKind::ForStatement | NodeKind::ForInStatement | NodeKind::ForOfStatement
+    ) {
+        return if k == 0 { cx5_noin(p) } else { *p };
+    }
+    // These productions pass their own context to their children.
+    if matches!(
+        kind,
+        NodeKind::AdditiveExpression | NodeKind::MultiplicativeExpression | NodeKind::ExponentiationExpression
+            | NodeKind::ShiftExpression | NodeKind::EqualityExpression | NodeKind::BitwiseANDExpression
+            | NodeKind::BitwiseXORExpression | NodeKind::BitwiseORExpression | NodeKind::LogicalANDExpression
+            | NodeKind::LogicalORExpression | NodeKind::CoalesceExpression | NodeKind::RelationalExpression
+            | NodeKind::UnaryExpression | NodeKind::AssignmentExpression | NodeKind::MemberExpression
+            | NodeKind::VariableDeclaration | NodeKind::LexicalBinding | NodeKind::VariableDeclarationList
+            | NodeKind::LexicalDeclaration | NodeKind::ForDeclaration
+    ) {
+        return *p;
     }
     Cx5 { y: p.y, a: p.a, i: true, r: p.r, d: false }
 }
@@ -10598,6 +10667,934 @@ fn check_rest_param(
         lemma_rest_param_done(a, g.ts, g.cx, m as int, c as int, x as int, j as int);
     }
     Some((x, j, -100))
+}
+
+// ---------------------------------------------------------------------
+// The `for` statements (§14.7.4, §14.7.5): their heads are `[~In]`.
+// ---------------------------------------------------------------------
+
+/// The context of a `for` head: `[~In]`, `[Default]` cleared (`cx_in(cx, false)`).
+fn cx5_noin(p: &Cx5) -> (r: Cx5)
+    ensures
+        cx_of(r) == cx_in(cx_of(*p), false),
+{
+    Cx5 { y: p.y, a: p.a, i: false, r: p.r, d: false }
+}
+
+/// The four children of node `m` are checked in `c0`..`c3`.
+pub open spec fn cx_kids4(a: AstV, cxs: Seq<Cx5>, m: int, c0: Ctx, c1: Ctx, c2: Ctx, c3: Ctx) -> bool {
+    0 <= m < a.nodes.len() && a.nodes[m].children.len() == 4 && (forall|k: int|
+        0 <= k < 4 ==> 0 <= #[trigger] a.nodes[m].children[k] < cxs.len()) && cx_of(
+        cxs[a.nodes[m].children[0]],
+    ) == c0 && cx_of(cxs[a.nodes[m].children[1]]) == c1 && cx_of(cxs[a.nodes[m].children[2]])
+        == c2 && cx_of(cxs[a.nodes[m].children[3]]) == c3
+}
+
+/// The four children of node `m` are checked in `c0`..`c3`.
+fn kids_cx4(nodes: &[Node], cxs: &[Cx5], m: usize, c0: &Cx5, c1: &Cx5, c2: &Cx5, c3: &Cx5) -> (r: bool)
+    requires
+        m < nodes.len(),
+        cxs.len() == nodes.len(),
+        ast_wf(arena_of(nodes@)),
+    ensures
+        r ==> cx_kids4(arena_of(nodes@), cxs@, m as int, cx_of(*c0), cx_of(*c1), cx_of(*c2), cx_of(*c3)),
+{
+    let nd = match nodes.get(m) {
+        Some(x) => x,
+        None => {
+            return false;
+        },
+    };
+    if nd.children.len() != 4 {
+        return false;
+    }
+    let a0 = match kid_of(nodes, m, 0) {
+        Some(c) => c,
+        None => {
+            return false;
+        },
+    };
+    let a1 = match kid_of(nodes, m, 1) {
+        Some(c) => c,
+        None => {
+            return false;
+        },
+    };
+    let a2 = match kid_of(nodes, m, 2) {
+        Some(c) => c,
+        None => {
+            return false;
+        },
+    };
+    let a3 = match kid_of(nodes, m, 3) {
+        Some(c) => c,
+        None => {
+            return false;
+        },
+    };
+    let (k0, k1, k2, k3) = match (cxs.get(a0), cxs.get(a1), cxs.get(a2), cxs.get(a3)) {
+        (Some(x), Some(y), Some(z), Some(w)) => (x, y, z, w),
+        _ => {
+            return false;
+        },
+    };
+    let ok = cx_eq(k0, c0) && cx_eq(k1, c1) && cx_eq(k2, c2) && cx_eq(k3, c3);
+    proof {
+        let a = arena_of(nodes@);
+        assert(a.nodes[m as int] == nodes@[m as int]@);
+        assert(nd == &nodes@[m as int]);
+        if ok {
+            assert forall|k: int| 0 <= k < 4 implies 0 <= #[trigger] a.nodes[m as int].children[k] < cxs.len() by {
+                lemma_child_before(a, m as int, k);
+            }
+        }
+    }
+    ok
+}
+
+/// Token `x` is not the keyword `w` (it may not exist).
+fn not_word_at(
+    src: &[u32],
+    nodes: &[Node],
+    toks: &[DTok],
+    gaps: &[Ins],
+    x: usize,
+    w: &[u32],
+    Ghost(gw): Ghost<GW>,
+) -> (r: bool)
+    requires
+        env_ok(src@, nodes@, toks@, gaps@, gw.g.ts),
+        cps(gw.w) =~= w@,
+    ensures
+        r ==> !is_kw(gw.g.ts, x as int, gw.w),
+{
+    let _ = (nodes.len(), gaps.len());
+    let ghost g = gw.g;
+    proof {
+        lemma_env_toks_wf(src@, nodes@, toks@, gaps@, g.ts);
+    }
+    let t = match toks.get(x) {
+        Some(t) => t,
+        None => {
+            return true;
+        },
+    };
+    proof {
+        lemma_env_tok(src@, nodes@, toks@, gaps@, g.ts, x as int);
+        assert(t == &toks@[x as int]);
+    }
+    let r = !(matches!(t.kind, TokKind::IdentifierName) && !t.escaped && text_is(src, t, w));
+    proof {
+        if r {
+            assert(g.ts.toks[x as int].text =~= src@.subrange(t.start as int, t.end as int));
+        }
+    }
+    r
+}
+
+/// §14.3.2 `var VariableDeclarationList`, as the head of a `for`.
+#[verifier::spinoff_prover]
+proof fn lemma_vdl_done(a: AstV, ts: Stream, cx: Ctx, m: int, x: int, e: int)
+    requires
+        toks_wf(ts),
+        0 <= m < a.nodes.len(),
+        a.nodes[m].kind == NodeKind::VariableDeclarationList,
+        a.nodes[m].children.len() > 0,
+        is_kw(ts, x, "var"@),
+        dsep(a, ts, m, a.nodes[m].children, 0, cx, x + 1, e, false),
+        forall|k: int|
+            0 <= k < a.nodes[m].children.len() ==> list_item_ok(a, #[trigger] a.nodes[m].children[k], 2),
+        x + 1 <= e <= tn(ts),
+        a.nodes[m].start == ts.toks[x].start,
+        a.nodes[m].end == ts.toks[e - 1].end,
+    ensures
+        node_done(a, ts, m, cx, x, e),
+        lvl(a, m) == -100,
+{
+    assert(span_ok(a, ts, m, x, e));
+    assert forall|k: int| 0 <= k < a.nodes[m].children.len() implies kd(
+        a,
+        #[trigger] a.nodes[m].children[k],
+    ) == NodeKind::VariableDeclaration by {
+        assert(list_item_ok(a, a.nodes[m].children[k], 2));
+    }
+    assert(d_stmt(a, ts, m, cx, x, e));
+    lemma_ed_of(a, ts, m, x, e);
+}
+
+/// §14.3.2 `var VariableDeclarationList`.
+#[verifier::spinoff_prover]
+fn check_var_list(
+    src: &[u32],
+    nodes: &[Node],
+    toks: &[DTok],
+    gaps: &[Ins],
+    done: &Done,
+    m: usize,
+    Ghost(g): Ghost<GCx>,
+) -> (r: Option<(usize, usize, i32)>)
+    requires
+        m < nodes.len(),
+        env_ok(src@, nodes@, toks@, gaps@, g.ts),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
+    ensures
+        match r {
+            Some((l0, h0, l)) => node_done(
+                arena_of(nodes@),
+                g.ts,
+                m as int,
+                g.cx,
+                l0 as int,
+                h0 as int,
+            ) && l as int == lvl(arena_of(nodes@), m as int),
+            None => true,
+        },
+{
+    proof {
+        lemma_decl_words();
+        lemma_env_toks_wf(src@, nodes@, toks@, gaps@, g.ts);
+    }
+    let nd = match nodes.get(m) {
+        Some(x) => x,
+        None => {
+            return None;
+        },
+    };
+    if !matches!(nd.kind, NodeKind::VariableDeclarationList) || nd.children.is_empty() {
+        return None;
+    }
+    let x = match start_tok(src, nodes, toks, gaps, done, m, Ghost(g)) {
+        Some(x) => x,
+        None => {
+            return None;
+        },
+    };
+    if !word_at(src, nodes, toks, gaps, x, &[0x76, 0x61, 0x72], Ghost(GW { g, w: "var"@ })) {
+        return None;
+    }
+    let ls = ListSpec { m, start: x.saturating_add(1), mode: 2, trail: false };
+    let e = match check_list(src, nodes, toks, gaps, done, &ls, Ghost(g)) {
+        Some(e) => e,
+        None => {
+            return None;
+        },
+    };
+    if !end_ok(src, nodes, toks, gaps, nd.end, e, Ghost(g)) {
+        return None;
+    }
+    proof {
+        let a = arena_of(nodes@);
+        assert(nd == &nodes@[m as int]);
+        assert(a.nodes[m as int] == nodes@[m as int]@);
+        assert(x.saturating_add(1) as int == x as int + 1);
+        assert(a.nodes[m as int].kind == nd.kind);
+        assert(a.nodes[m as int].start == nd.start as int);
+        assert(a.nodes[m as int].end == nd.end as int);
+        assert(a.nodes[m as int].children.len() > 0);
+        lemma_vdl_done(a, g.ts, g.cx, m as int, x as int, e as int);
+    }
+    Some((x, e, -100))
+}
+
+/// §14.7.5 `ForDeclaration : var|let|const ForBinding`.
+#[verifier::spinoff_prover]
+proof fn lemma_for_decl_done(a: AstV, ts: Stream, cx: Ctx, m: int, c: int, x: int, j: int)
+    requires
+        toks_wf(ts),
+        0 <= m < a.nodes.len(),
+        0 <= c < m,
+        a.nodes[m].kind == NodeKind::ForDeclaration,
+        a.nodes[m].children =~= seq![c],
+        if a.nodes[m].op == Op::Var {
+            is_kw(ts, x, "var"@)
+        } else if a.nodes[m].op == Op::Let {
+            is_kw(ts, x, "let"@)
+        } else {
+            a.nodes[m].op == Op::Const && is_kw(ts, x, "const"@)
+        },
+        kd(a, c) == NodeKind::BindingIdentifier,
+        node_done(a, ts, c, cx, x + 1, j),
+        x < j <= tn(ts),
+        a.nodes[m].start == ts.toks[x].start,
+        a.nodes[m].end == ts.toks[j - 1].end,
+    ensures
+        node_done(a, ts, m, cx, x, j),
+        lvl(a, m) == -100,
+{
+    assert(span_ok(a, ts, m, x, j));
+    assert(a.nodes[m].children[0] == c);
+    assert(dc(a, ts, m, c, cx, x + 1, j));
+    assert(d_stmt(a, ts, m, cx, x, j));
+    lemma_ed_of(a, ts, m, x, j);
+}
+
+/// §14.7.5 `ForDeclaration`.
+#[verifier::spinoff_prover]
+fn check_for_decl(
+    src: &[u32],
+    nodes: &[Node],
+    toks: &[DTok],
+    gaps: &[Ins],
+    done: &Done,
+    m: usize,
+    Ghost(g): Ghost<GCx>,
+) -> (r: Option<(usize, usize, i32)>)
+    requires
+        m < nodes.len(),
+        env_ok(src@, nodes@, toks@, gaps@, g.ts),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
+    ensures
+        match r {
+            Some((l0, h0, l)) => node_done(
+                arena_of(nodes@),
+                g.ts,
+                m as int,
+                g.cx,
+                l0 as int,
+                h0 as int,
+            ) && l as int == lvl(arena_of(nodes@), m as int),
+            None => true,
+        },
+{
+    proof {
+        lemma_decl_words();
+        lemma_env_toks_wf(src@, nodes@, toks@, gaps@, g.ts);
+    }
+    let nd = match nodes.get(m) {
+        Some(x) => x,
+        None => {
+            return None;
+        },
+    };
+    if !matches!(nd.kind, NodeKind::ForDeclaration) || nd.children.len() != 1 {
+        return None;
+    }
+    let c = match kid_of(nodes, m, 0) {
+        Some(c) => c,
+        None => {
+            return None;
+        },
+    };
+    let x = match start_tok(src, nodes, toks, gaps, done, m, Ghost(g)) {
+        Some(x) => x,
+        None => {
+            return None;
+        },
+    };
+    let kw_ok = match nd.op {
+        Op::Var => word_at(src, nodes, toks, gaps, x, &[0x76, 0x61, 0x72], Ghost(GW { g, w: "var"@ })),
+        Op::Let => word_at(src, nodes, toks, gaps, x, &[0x6C, 0x65, 0x74], Ghost(GW { g, w: "let"@ })),
+        Op::Const => word_at(src, nodes, toks, gaps, x, &[0x63, 0x6F, 0x6E, 0x73, 0x74], Ghost(GW { g, w: "const"@ })),
+        _ => false,
+    };
+    let (lo_c, j, _) = match done_at(done, c) {
+        Some(r) => r,
+        None => {
+            return None;
+        },
+    };
+    if !kw_ok || !matches!(kind_at(nodes, c), NodeKind::BindingIdentifier)
+        || lo_c != x.saturating_add(1) || !end_ok(src, nodes, toks, gaps, nd.end, j, Ghost(g))
+        || j <= x {
+        return None;
+    }
+    proof {
+        let a = arena_of(nodes@);
+        assert(nd == &nodes@[m as int]);
+        assert(a.nodes[m as int] == nodes@[m as int]@);
+        assert(x.saturating_add(1) as int == x as int + 1);
+        assert(a.nodes[m as int].children =~= seq![c as int]) by {
+            assert(a.nodes[m as int].children.len() == 1);
+        }
+        assert(a.nodes[m as int].kind == nd.kind);
+        assert(a.nodes[m as int].op == nd.op);
+        assert(a.nodes[m as int].start == nd.start as int);
+        assert(a.nodes[m as int].end == nd.end as int);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, c as int, g.cx, 0);
+        lemma_for_decl_done(a, g.ts, g.cx, m as int, c as int, x as int, j as int);
+    }
+    Some((x, j, -100))
+}
+
+/// §14.7.4 `for ( init ; test ; update ) Statement`.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(300)]
+proof fn lemma_for_done(
+    a: AstV,
+    ts: Stream,
+    cx: Ctx,
+    m: int,
+    k0: int,
+    k1: int,
+    k2: int,
+    k3: int,
+    x: int,
+    m0: int,
+    q: int,
+    r: int,
+    j: int,
+)
+    requires
+        toks_wf(ts),
+        cx_in(cx, true) == cx,
+        0 <= m < a.nodes.len(),
+        0 <= k0 < m,
+        0 <= k1 < m,
+        0 <= k2 < m,
+        0 <= k3 < m,
+        a.nodes[m].kind == NodeKind::ForStatement,
+        a.nodes[m].children =~= seq![k0, k1, k2, k3],
+        is_kw(ts, x, "for"@),
+        is_p(ts, x + 1, "("@),
+        is_statement_kind(kd(a, k3)),
+        d(a, ts, k0, cx_in(cx, false), x + 2, m0),
+        ed(a, ts, k0, x + 2) == m0,
+        if kd(a, k0) == NodeKind::LexicalDeclaration {
+            is_p(ts, m0 - 1, ";"@)
+        } else {
+            is_p(ts, m0, ";"@) && (kd(a, k0) == NodeKind::Absent || kd(a, k0)
+                == NodeKind::VariableDeclarationList || (lvl(a, k0) >= -1 && !(is_kw(
+                ts,
+                x + 2,
+                "let"@,
+            ) && is_p(ts, x + 3, "["@))))
+        },
+        opt_expr(a, k1),
+        d(a, ts, k1, cx, for_init_next(a, ts, k0, x + 2), q),
+        ed(a, ts, k1, for_init_next(a, ts, k0, x + 2)) == q,
+        is_p(ts, q, ";"@),
+        opt_expr(a, k2),
+        d(a, ts, k2, cx, q + 1, r),
+        ed(a, ts, k2, q + 1) == r,
+        is_p(ts, r, ")"@),
+        d(a, ts, k3, cx, r + 1, j),
+        0 <= x < j <= tn(ts),
+        a.nodes[m].start == ts.toks[x].start,
+        a.nodes[m].end == ts.toks[j - 1].end,
+    ensures
+        node_done(a, ts, m, cx, x, j),
+        lvl(a, m) == -100,
+{
+    assert(span_ok(a, ts, m, x, j));
+    assert(a.nodes[m].children[0] == k0);
+    assert(a.nodes[m].children[1] == k1);
+    assert(a.nodes[m].children[2] == k2);
+    assert(a.nodes[m].children[3] == k3);
+    assert(for_init_ok(a, ts, m, k0, cx, x + 2));
+    assert(dc(a, ts, m, k1, cx, for_init_next(a, ts, k0, x + 2), q));
+    assert(dc(a, ts, m, k2, cx, q + 1, r));
+    assert(dc(a, ts, m, k3, cx, r + 1, j));
+    assert(d_stmt(a, ts, m, cx, x, j));
+    lemma_ed_of(a, ts, m, x, j);
+}
+
+/// §14.7.4 `for ( init ; test ; update ) Statement`.
+#[verifier::spinoff_prover]
+fn check_for(
+    src: &[u32],
+    nodes: &[Node],
+    toks: &[DTok],
+    gaps: &[Ins],
+    done: &Done,
+    m: usize,
+    Ghost(g): Ghost<GCx>,
+) -> (r: Option<(usize, usize, i32)>)
+    requires
+        m < nodes.len(),
+        cx_in(g.cx, true) == g.cx,
+        env_ok(src@, nodes@, toks@, gaps@, g.ts),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        0 <= m < done.cxs@.len(),
+        cx_of(done.cxs@[m as int]) == g.cx,
+        cx_kids4(
+            arena_of(nodes@),
+            done.cxs@,
+            m as int,
+            cx_in(g.cx, false),
+            g.cx,
+            g.cx,
+            g.cx,
+        ),
+    ensures
+        match r {
+            Some((l0, h0, l)) => node_done(
+                arena_of(nodes@),
+                g.ts,
+                m as int,
+                g.cx,
+                l0 as int,
+                h0 as int,
+            ) && l as int == lvl(arena_of(nodes@), m as int),
+            None => true,
+        },
+{
+    proof {
+        lemma_words5();
+        lemma_punct_text();
+        lemma_env_toks_wf(src@, nodes@, toks@, gaps@, g.ts);
+    }
+    let nd = match nodes.get(m) {
+        Some(x) => x,
+        None => {
+            return None;
+        },
+    };
+    if !matches!(nd.kind, NodeKind::ForStatement) || nd.children.len() != 4 {
+        return None;
+    }
+    let k0 = match kid_of(nodes, m, 0) {
+        Some(c) => c,
+        None => {
+            return None;
+        },
+    };
+    let k1 = match kid_of(nodes, m, 1) {
+        Some(c) => c,
+        None => {
+            return None;
+        },
+    };
+    let k2 = match kid_of(nodes, m, 2) {
+        Some(c) => c,
+        None => {
+            return None;
+        },
+    };
+    let k3 = match kid_of(nodes, m, 3) {
+        Some(c) => c,
+        None => {
+            return None;
+        },
+    };
+    let x = match start_tok(src, nodes, toks, gaps, done, m, Ghost(g)) {
+        Some(x) => x,
+        None => {
+            return None;
+        },
+    };
+    if !word_at(src, nodes, toks, gaps, x, &[0x66, 0x6F, 0x72], Ghost(GW { g, w: "for"@ }))
+        || !punct_at(src, nodes, toks, gaps, x.saturating_add(1), 0x28, Ghost(GW { g, w: "("@ })) {
+        return None;
+    }
+    let s = x.saturating_add(2);
+    let ghost cxi = cx_in(g.cx, false);
+    // The initializer.
+    let ki = kind_at(nodes, k0);
+    let lexical = matches!(ki, NodeKind::LexicalDeclaration);
+    let (m0, lv0): (usize, i32) = if matches!(ki, NodeKind::Absent) {
+        if !check_absent(src, nodes, toks, gaps, k0, s, Ghost(GCx { ts: g.ts, cx: cxi })) {
+            return None;
+        }
+        (s, -100)
+    } else {
+        let (lo0, h0, lv0) = match done_at(done, k0) {
+            Some(r) => r,
+            None => {
+                return None;
+            },
+        };
+        if lo0 != s {
+            return None;
+        }
+        (h0, lv0)
+    };
+    let p0: usize = if lexical { m0 } else { m0.saturating_add(1) };
+    if lexical {
+        if m0 < 1 || !punct_at(src, nodes, toks, gaps, m0.saturating_sub(1), 0x3B, Ghost(GW { g, w: ";"@ })) {
+            return None;
+        }
+    } else {
+        let init_ok = matches!(ki, NodeKind::Absent | NodeKind::VariableDeclarationList)
+            || (lv0 >= -1 && not_word_at(src, nodes, toks, gaps, s, &[0x6C, 0x65, 0x74], Ghost(GW { g, w: "let"@ })));
+        if !init_ok || !punct_at(src, nodes, toks, gaps, m0, 0x3B, Ghost(GW { g, w: ";"@ })) {
+            return None;
+        }
+    }
+    // The test.
+    let kt = kind_at(nodes, k1);
+    let q: usize = if matches!(kt, NodeKind::Absent) {
+        if !check_absent(src, nodes, toks, gaps, k1, p0, Ghost(g)) {
+            return None;
+        }
+        p0
+    } else {
+        let (lo1, h1, lv1) = match done_at(done, k1) {
+            Some(r) => r,
+            None => {
+                return None;
+            },
+        };
+        if lo1 != p0 || lv1 < -1 {
+            return None;
+        }
+        h1
+    };
+    if !punct_at(src, nodes, toks, gaps, q, 0x3B, Ghost(GW { g, w: ";"@ })) {
+        return None;
+    }
+    // The update.
+    let q1 = q.saturating_add(1);
+    let ku = kind_at(nodes, k2);
+    let rr: usize = if matches!(ku, NodeKind::Absent) {
+        if !check_absent(src, nodes, toks, gaps, k2, q1, Ghost(g)) {
+            return None;
+        }
+        q1
+    } else {
+        let (lo2, h2, lv2) = match done_at(done, k2) {
+            Some(r) => r,
+            None => {
+                return None;
+            },
+        };
+        if lo2 != q1 || lv2 < -1 {
+            return None;
+        }
+        h2
+    };
+    if !punct_at(src, nodes, toks, gaps, rr, 0x29, Ghost(GW { g, w: ")"@ })) {
+        return None;
+    }
+    let (lo3, j, _) = match done_at(done, k3) {
+        Some(r) => r,
+        None => {
+            return None;
+        },
+    };
+    if !stmt_kind_exec(kind_at(nodes, k3)) || lo3 != rr.saturating_add(1)
+        || !end_ok(src, nodes, toks, gaps, nd.end, j, Ghost(g)) || j <= x {
+        return None;
+    }
+    proof {
+        let a = arena_of(nodes@);
+        assert(nd == &nodes@[m as int]);
+        assert(a.nodes[m as int] == nodes@[m as int]@);
+        assert(x.saturating_add(1) as int == x as int + 1);
+        assert(s as int == x as int + 2);
+        assert(q1 as int == q as int + 1);
+        assert(rr.saturating_add(1) as int == rr as int + 1);
+        assert(a.nodes[m as int].children =~= seq![k0 as int, k1 as int, k2 as int, k3 as int]) by {
+            assert(a.nodes[m as int].children.len() == 4);
+        }
+        assert(a.nodes[m as int].kind == nd.kind);
+        assert(a.nodes[m as int].start == nd.start as int);
+        assert(a.nodes[m as int].end == nd.end as int);
+        lemma_inv_get_at(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, k0 as int);
+        lemma_inv_get_at(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, k1 as int);
+        lemma_inv_get_at(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, k2 as int);
+        lemma_inv_get_at(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, k3 as int);
+        assert(kd(a, k0 as int) == ki);
+        assert(kd(a, k1 as int) == kt);
+        assert(kd(a, k2 as int) == ku);
+        assert(kd(a, k3 as int) == nodes@[k3 as int].kind);
+        assert(is_statement_kind(kd(a, k3 as int)));
+        assert(cx_of(done.cxs@[k0 as int]) == cxi);
+        assert(cx_of(done.cxs@[k1 as int]) == g.cx);
+        assert(cx_of(done.cxs@[k2 as int]) == g.cx);
+        assert(cx_of(done.cxs@[k3 as int]) == g.cx);
+        if !matches!(ki, NodeKind::Absent) {
+            assert(lvl(a, k0 as int) == lv0 as int);
+            assert(kd(a, k0 as int) != NodeKind::Absent);
+        }
+        if !matches!(kt, NodeKind::Absent) {
+            assert(kd(a, k1 as int) != NodeKind::Absent);
+        }
+        if !matches!(ku, NodeKind::Absent) {
+            assert(kd(a, k2 as int) != NodeKind::Absent);
+        }
+        assert(opt_expr(a, k1 as int));
+        assert(opt_expr(a, k2 as int));
+        assert(for_init_next(a, g.ts, k0 as int, x as int + 2) == p0 as int);
+        assert(m0 >= 1 || !lexical);
+        lemma_for_done(a, g.ts, g.cx, m as int, k0 as int, k1 as int, k2 as int, k3 as int, x as int, m0 as int, q as int, rr as int, j as int);
+    }
+    Some((x, j, -100))
+}
+
+/// §14.7.5 `for ( ForDeclaration|LeftHandSideExpression in|of ... ) Statement`.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(60)]
+proof fn lemma_for_in_of_done(
+    a: AstV,
+    ts: Stream,
+    cx: Ctx,
+    m: int,
+    h: int,
+    e: int,
+    b: int,
+    of: bool,
+    x: int,
+    mh: int,
+    q: int,
+    j: int,
+)
+    requires
+        toks_wf(ts),
+        cx_in(cx, true) == cx,
+        0 <= m < a.nodes.len(),
+        0 <= h < m,
+        0 <= e < m,
+        0 <= b < m,
+        a.nodes[m].kind == (if of {
+            NodeKind::ForOfStatement
+        } else {
+            NodeKind::ForInStatement
+        }),
+        a.nodes[m].children =~= seq![h, e, b],
+        !a.nodes[m].flag,
+        is_kw(ts, x, "for"@),
+        is_p(ts, x + 1, "("@),
+        for_head_ok(a, ts, h, x + 2, of, false),
+        of ==> first_kid_kind(a, h) != NodeKind::VariableDeclaration,
+        if of {
+            is_assign_expr(a, e)
+        } else {
+            lvl(a, e) >= -1
+        },
+        is_statement_kind(kd(a, b)),
+        d(a, ts, h, cx_in(cx, false), x + 2, mh),
+        ed(a, ts, h, x + 2) == mh,
+        is_kw(ts, mh, if of {
+            "of"@
+        } else {
+            "in"@
+        }),
+        d(a, ts, e, cx, mh + 1, q),
+        ed(a, ts, e, mh + 1) == q,
+        is_p(ts, q, ")"@),
+        d(a, ts, b, cx, q + 1, j),
+        0 <= x < j <= tn(ts),
+        a.nodes[m].start == ts.toks[x].start,
+        a.nodes[m].end == ts.toks[j - 1].end,
+    ensures
+        node_done(a, ts, m, cx, x, j),
+        lvl(a, m) == -100,
+{
+    assert(span_ok(a, ts, m, x, j));
+    assert(a.nodes[m].children[0] == h);
+    assert(a.nodes[m].children[1] == e);
+    assert(a.nodes[m].children[2] == b);
+    assert(dc(a, ts, m, h, cx_in(cx, false), x + 2, mh));
+    assert(dc(a, ts, m, e, cx, mh + 1, q));
+    assert(dc(a, ts, m, b, cx, q + 1, j));
+    assert(d_stmt(a, ts, m, cx, x, j));
+    lemma_ed_of(a, ts, m, x, j);
+}
+
+/// What `check_for_in_of` reads: the node, and whether it is `for`-`of`.
+pub struct InOfShape {
+    /// The node.
+    pub m: usize,
+    /// `for`-`of` (else `for`-`in`).
+    pub of: bool,
+}
+
+/// §14.7.5 `for ( head in|of expression ) Statement`, with a declaration or an
+/// identifier as head.
+#[verifier::spinoff_prover]
+fn check_for_in_of(
+    src: &[u32],
+    nodes: &[Node],
+    toks: &[DTok],
+    gaps: &[Ins],
+    done: &Done,
+    sh: &InOfShape,
+    Ghost(g): Ghost<GCx>,
+) -> (r: Option<(usize, usize, i32)>)
+    requires
+        sh.m < nodes.len(),
+        cx_in(g.cx, true) == g.cx,
+        nodes@[sh.m as int].kind == (if sh.of {
+            NodeKind::ForOfStatement
+        } else {
+            NodeKind::ForInStatement
+        }),
+        env_ok(src@, nodes@, toks@, gaps@, g.ts),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, sh.m as int),
+        0 <= sh.m < done.cxs@.len(),
+        cx_of(done.cxs@[sh.m as int]) == g.cx,
+        cx_kids3(arena_of(nodes@), done.cxs@, sh.m as int, cx_in(g.cx, false), g.cx, g.cx),
+    ensures
+        match r {
+            Some((l0, h0, l)) => node_done(
+                arena_of(nodes@),
+                g.ts,
+                sh.m as int,
+                g.cx,
+                l0 as int,
+                h0 as int,
+            ) && l as int == lvl(arena_of(nodes@), sh.m as int),
+            None => true,
+        },
+{
+    let m = sh.m;
+    proof {
+        lemma_words5();
+        lemma_punct_text();
+        lemma_env_toks_wf(src@, nodes@, toks@, gaps@, g.ts);
+    }
+    let nd = match nodes.get(m) {
+        Some(x) => x,
+        None => {
+            return None;
+        },
+    };
+    if nd.children.len() != 3 || nd.flag {
+        return None;
+    }
+    let h = match kid_of(nodes, m, 0) {
+        Some(c) => c,
+        None => {
+            return None;
+        },
+    };
+    let e = match kid_of(nodes, m, 1) {
+        Some(c) => c,
+        None => {
+            return None;
+        },
+    };
+    let b = match kid_of(nodes, m, 2) {
+        Some(c) => c,
+        None => {
+            return None;
+        },
+    };
+    let x = match start_tok(src, nodes, toks, gaps, done, m, Ghost(g)) {
+        Some(x) => x,
+        None => {
+            return None;
+        },
+    };
+    if !word_at(src, nodes, toks, gaps, x, &[0x66, 0x6F, 0x72], Ghost(GW { g, w: "for"@ }))
+        || !punct_at(src, nodes, toks, gaps, x.saturating_add(1), 0x28, Ghost(GW { g, w: "("@ })) {
+        return None;
+    }
+    let s = x.saturating_add(2);
+    let kh = kind_at(nodes, h);
+    let decl = matches!(kh, NodeKind::ForDeclaration);
+    // A head that is not a declaration is an identifier reference, not `let` (`async` for `of`).
+    let head_ok = decl || (matches!(kh, NodeKind::IdentifierReference)
+        && not_word_at(src, nodes, toks, gaps, s, &[0x6C, 0x65, 0x74], Ghost(GW { g, w: "let"@ }))
+        && (!sh.of || not_word_at(src, nodes, toks, gaps, s, &[0x61, 0x73, 0x79, 0x6E, 0x63], Ghost(GW { g, w: "async"@ }))));
+    let head_first_ok = if decl {
+        match kid_of(nodes, h, 0) {
+            Some(c) => !matches!(kind_at(nodes, c), NodeKind::VariableDeclaration),
+            None => false,
+        }
+    } else {
+        match nodes.get(h) {
+            Some(hn) => hn.children.is_empty(),
+            None => false,
+        }
+    };
+    let (lo_h, mh, _) = match done_at(done, h) {
+        Some(r) => r,
+        None => {
+            return None;
+        },
+    };
+    let (lo_e, q, lv_e) = match done_at(done, e) {
+        Some(r) => r,
+        None => {
+            return None;
+        },
+    };
+    let (lo_b, j, _) = match done_at(done, b) {
+        Some(r) => r,
+        None => {
+            return None;
+        },
+    };
+    let kw_ok = if sh.of {
+        word_at(src, nodes, toks, gaps, mh, &[0x6F, 0x66], Ghost(GW { g, w: "of"@ }))
+    } else {
+        word_at(src, nodes, toks, gaps, mh, &[0x69, 0x6E], Ghost(GW { g, w: "in"@ }))
+    };
+    let e_ok = if sh.of { lv_e >= 0 } else { lv_e >= -1 };
+    if !head_ok || !head_first_ok || lo_h != s || !kw_ok || !e_ok || lo_e != mh.saturating_add(1)
+        || !punct_at(src, nodes, toks, gaps, q, 0x29, Ghost(GW { g, w: ")"@ }))
+        || !stmt_kind_exec(kind_at(nodes, b)) || lo_b != q.saturating_add(1)
+        || !end_ok(src, nodes, toks, gaps, nd.end, j, Ghost(g)) || j <= x {
+        return None;
+    }
+    proof {
+        let a = arena_of(nodes@);
+        assert(nd == &nodes@[m as int]);
+        assert(a.nodes[m as int] == nodes@[m as int]@);
+        assert(x.saturating_add(1) as int == x as int + 1);
+        assert(s as int == x as int + 2);
+        assert(mh.saturating_add(1) as int == mh as int + 1);
+        assert(q.saturating_add(1) as int == q as int + 1);
+        assert(a.nodes[m as int].children =~= seq![h as int, e as int, b as int]) by {
+            assert(a.nodes[m as int].children.len() == 3);
+        }
+        assert(a.nodes[m as int].kind == nd.kind);
+        assert(a.nodes[m as int].flag == nd.flag);
+        assert(a.nodes[m as int].start == nd.start as int);
+        assert(a.nodes[m as int].end == nd.end as int);
+        lemma_inv_get_at(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, h as int);
+        lemma_inv_get_at(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, e as int);
+        lemma_inv_get_at(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, b as int);
+        assert(kd(a, h as int) == kh);
+        assert(kd(a, b as int) == nodes@[b as int].kind);
+        assert(is_statement_kind(kd(a, b as int)));
+        assert(cx_of(done.cxs@[h as int]) == cx_in(g.cx, false));
+        assert(cx_of(done.cxs@[e as int]) == g.cx);
+        assert(cx_of(done.cxs@[b as int]) == g.cx);
+        assert(lvl(a, e as int) == lv_e as int);
+        if sh.of {
+            assert(is_assign_expr(a, e as int));
+        }
+        // The head.
+        if !decl {
+            assert(kd(a, h as int) == NodeKind::IdentifierReference);
+            assert(lvl(a, h as int) == 17);
+            assert(is_destructuring_target(a, h as int));
+        }
+        assert(a.nodes[h as int] == nodes@[h as int]@);
+        assert(for_head_ok(a, g.ts, h as int, x as int + 2, sh.of, false)) by {
+            if !decl {
+                assert(!is_kw(g.ts, s as int, "let"@));
+            }
+        }
+        assert(sh.of ==> first_kid_kind(a, h as int) != NodeKind::VariableDeclaration) by {
+            if sh.of {
+                if decl {
+                    let hc = a.nodes[h as int].children[0];
+                    assert(kid(kids(a, h as int), 0) == hc);
+                } else {
+                    assert(a.nodes[h as int].children.len() == 0);
+                    assert(kid(kids(a, h as int), 0) == -1int);
+                }
+            }
+        }
+        lemma_for_in_of_done(a, g.ts, g.cx, m as int, h as int, e as int, b as int, sh.of, x as int, mh as int, q as int, j as int);
+    }
+    Some((x, j, -100))
+}
+
+/// The words `for`, `of` and `in`, as code points.
+proof fn lemma_words5()
+    ensures
+        cps("for"@) =~= seq![0x66u32, 0x6F, 0x72],
+        cps("of"@) =~= seq![0x6Fu32, 0x66],
+        cps("in"@) =~= seq![0x69u32, 0x6E],
+        cps("let"@) =~= seq![0x6Cu32, 0x65, 0x74],
+        cps("async"@) =~= seq![0x61u32, 0x73, 0x79, 0x6E, 0x63],
+{
+    reveal_strlit("for");
+    reveal_strlit("of");
+    reveal_strlit("in");
+    reveal_strlit("let");
+    reveal_strlit("async");
+    assert("for"@ =~= seq!['f', 'o', 'r']);
+    assert("of"@ =~= seq!['o', 'f']);
+    assert("in"@ =~= seq!['i', 'n']);
+    assert("let"@ =~= seq!['l', 'e', 't']);
+    assert("async"@ =~= seq!['a', 's', 'y', 'n', 'c']);
 }
 
 } // verus!
