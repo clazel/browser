@@ -1474,6 +1474,219 @@ fn check_root(
     true
 }
 
+/// Checks, bottom-up, that every node of the arena derives the tokens it spans
+/// (`spec::d`), for the kinds the check covers, and that the root derives the
+/// whole stream. `ast` has passed [`crate::check::finish`]; `toks` and `gaps` are
+/// the tokens the parser consumed and the gaps where it inserted a `;`
+/// (`gaps.len() == toks.len() + 1`). Proven: `Verified` implies
+/// `derives_root(ast, ts, goal)` for every stream `ts` that is the executable
+/// one (`stream_matches`), which is the assumption; see the module header.
+pub fn check_derivation(
+    src: &Vec<u32>,
+    nodes: &Vec<Node>,
+    toks: &Vec<DTok>,
+    gaps: &Vec<Ins>,
+    module: bool,
+    Ghost(ts): Ghost<Stream>,
+) -> (r: Derivation)
+    requires
+        ast_wf(arena_of(nodes@)),
+        stream_matches(src@, toks@, gaps@, ts),
+        gaps@.len() == toks@.len() + 1,
+    ensures
+        r is Verified ==> derives_root(arena_of(nodes@), ts, goal_of(module)),
+{
+    let n = nodes.len();
+    let nt = toks.len();
+    // The tokens are not empty and their ends increase.
+    let mut k: usize = 0;
+    while k < nt
+        invariant
+            nt == toks.len(),
+            k <= nt,
+            stream_matches(src@, toks@, gaps@, ts),
+            forall|x: int| 0 <= x < k ==> toks@[x].start < toks@[x].end,
+            forall|x: int, y: int| 0 <= x < y < k ==> toks@[x].end < toks@[y].end,
+        decreases nt - k,
+    {
+        let t = match toks.as_slice().get(k) {
+            Some(t) => t,
+            None => {
+                return Derivation::Failed;
+            },
+        };
+        if t.start >= t.end {
+            return Derivation::Failed;
+        }
+        if k > 0 {
+            let p = match toks.as_slice().get(k.saturating_sub(1)) {
+                Some(p) => p,
+                None => {
+                    return Derivation::Failed;
+                },
+            };
+            if p.end >= t.end {
+                return Derivation::Failed;
+            }
+        }
+        k = k.saturating_add(1);
+    }
+    proof {
+        assert(toks_wf(ts)) by {
+            assert forall|x: int| 0 <= x < tn(ts) implies (#[trigger] ts.toks[x]).start
+                < ts.toks[x].end by {
+                assert(dtok_matches(src@, toks@[x], ts.toks[x]));
+            }
+            assert forall|x: int, y: int| 0 <= x < y < tn(ts) implies (#[trigger] ts.toks[x]).end
+                < (#[trigger] ts.toks[y]).end by {
+                assert(dtok_matches(src@, toks@[x], ts.toks[x]));
+                assert(dtok_matches(src@, toks@[y], ts.toks[y]));
+            }
+        }
+        assert(env_ok(src@, nodes@, toks@, gaps@, ts)) by {
+            reveal(env_ok);
+        }
+        lemma_root_cx(goal_of(module));
+    }
+    // A hint for finding a token from the start of a node.
+    let mut by_start: Vec<usize> = Vec::new();
+    let mut q: usize = 0;
+    let size = src.len().saturating_add(1);
+    while q < size
+        invariant
+            q <= size,
+            by_start.len() == q,
+        decreases size - q,
+    {
+        by_start.push(usize::MAX);
+        q = q.saturating_add(1);
+    }
+    let mut x: usize = 0;
+    while x < nt
+        invariant
+            x <= nt,
+            nt == toks.len(),
+            by_start.len() == size,
+        decreases nt - x,
+    {
+        let t = match toks.as_slice().get(x) {
+            Some(t) => t,
+            None => {
+                return Derivation::Failed;
+            },
+        };
+        if t.start < by_start.len() {
+            by_start.set(t.start, x);
+        }
+        x = x.saturating_add(1);
+    }
+    let ghost cx = root_ctx(goal_of(module));
+    let mut lo: Vec<usize> = Vec::new();
+    let mut hi: Vec<usize> = Vec::new();
+    let mut lv: Vec<i32> = Vec::new();
+    let last = n.saturating_sub(1);
+    let mut m: usize = 0;
+    proof {
+        reveal(inv);
+    }
+    while m < last
+        invariant
+            n == nodes.len(),
+            last + 1 == n,
+            n > 0,
+            m <= last,
+            cx == root_ctx(goal_of(module)),
+            cx_in(cx, true) == cx,
+            env_ok(src@, nodes@, toks@, gaps@, ts),
+            inv(arena_of(nodes@), ts, cx, lo@, hi@, lv@, m as int),
+        decreases last - m,
+    {
+        let nd = match nodes.as_slice().get(m) {
+            Some(x) => x,
+            None => {
+                return Derivation::Failed;
+            },
+        };
+        let res = match nd.kind {
+            NodeKind::NumericLiteral | NodeKind::StringLiteral | NodeKind::RegularExpressionLiteral => {
+                proof {
+                    lemma_env_literal_facts(src@, nodes@, toks@, gaps@, ts);
+                }
+                check_literal(nodes, toks, &by_start, m, Ghost(ts), Ghost(cx))
+            },
+            NodeKind::ParenthesizedExpression => check_paren(
+                src,
+                nodes,
+                toks,
+                gaps,
+                &lo,
+                &hi,
+                &lv,
+                m,
+                Ghost(ts),
+                Ghost(cx),
+            ),
+            NodeKind::AdditiveExpression | NodeKind::MultiplicativeExpression
+            | NodeKind::RelationalExpression => check_binary(
+                src,
+                nodes,
+                toks,
+                gaps,
+                &lo,
+                &hi,
+                &lv,
+                m,
+                Ghost(ts),
+                Ghost(cx),
+            ),
+            NodeKind::ExpressionStatement => check_exprstmt(
+                src,
+                nodes,
+                toks,
+                gaps,
+                &lo,
+                &hi,
+                &lv,
+                m,
+                Ghost(ts),
+                Ghost(cx),
+            ),
+            NodeKind::EmptyStatement => check_empty(
+                src,
+                nodes,
+                toks,
+                gaps,
+                &by_start,
+                m,
+                Ghost(ts),
+                Ghost(cx),
+            ),
+            _ => {
+                return Derivation::Unsupported;
+            },
+        };
+        match res {
+            Some((l0, h0, l)) => {
+                proof {
+                    lemma_inv_push(arena_of(nodes@), ts, cx, lo@, hi@, lv@, m as int, l0, h0, l);
+                }
+                lo.push(l0);
+                hi.push(h0);
+                lv.push(l);
+            },
+            None => {
+                return Derivation::Failed;
+            },
+        }
+        m = m.saturating_add(1);
+    }
+    if check_root(src, nodes, toks, gaps, &lo, &hi, &lv, module, Ghost(ts)) {
+        Derivation::Verified
+    } else {
+        Derivation::Failed
+    }
+}
+
 /// An `EmptyStatement` of the check.
 proof fn lemma_empty_done(a: AstV, ts: Stream, cx: Ctx, m: int, x: int)
     requires
