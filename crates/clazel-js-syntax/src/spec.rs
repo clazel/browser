@@ -78,7 +78,8 @@
 //!   ends, no arm guesses where a child ends: `ed` reads it off the span, and
 //!   `span_ok` checks that the span is the range of tokens derived.
 //! - **Optional symbols are `Absent` nodes**, with an empty span where they
-//!   would be, so a kind's children are at fixed positions, as the production's symbols
+//!   would be (anywhere in the white space before the next token, so that it
+//!   lies inside the parent whether it comes first or last: `span_ok`), so a kind's children are at fixed positions, as the production's symbols
 //!   are. A list is one child per item. A comma-separated list with an optional
 //!   trailing `,` is `dsep`, and an `ElementList` with `Elision`s is `darray`.
 //! - **Precedence is `lvl`.** The chain of productions from `Expression` down to
@@ -510,7 +511,9 @@ pub struct EarlyEnv {
     pub no_arguments: bool,
     /// A `YieldExpression` or `AwaitExpression` is not allowed: in the formal
     /// parameters of a generator, async function or arrow function (§15.5.1 and
-    /// the other "Contains YieldExpression / AwaitExpression" rules).
+    /// the other "Contains YieldExpression / AwaitExpression" rules), and in a
+    /// class static block, where `for await` is not allowed either (§15.7.1
+    /// ContainsAwait; `[~Yield]` already leaves no `YieldExpression` there).
     pub no_yield_await: bool,
     /// The `[Tagged]` parameter of a `TemplateLiteral` (§13.2.8).
     pub tagged: bool,
@@ -1274,7 +1277,8 @@ pub open spec fn early_local(a: AstV, ts: Stream, n: int, env: EarlyEnv) -> bool
         ),
         NodeKind::AssignmentRestProperty => !is_assignment_pattern_kind(kd(a, k0))
             && destructuring_target_ok(a, ts, k0, env.strict),
-        // 15.5.1 and the like: `yield` and `await` expressions are not allowed in parameters.
+        // 15.5.1 and the like: `yield` and `await` expressions are not allowed in parameters;
+        // 15.7.1 ContainsAwait: nor `await` in a static block.
         NodeKind::YieldExpression | NodeKind::AwaitExpression => !env.no_yield_await,
         // 14.2.1 Block
         NodeKind::BlockStatement => list_early(a, ts, n, ks, env.strict, false),
@@ -1298,10 +1302,11 @@ pub open spec fn early_local(a: AstV, ts: Stream, n: int, env: EarlyEnv) -> bool
             bound_names(a, ts, k0),
             var_names_sub(a, ts, n, k3),
         )),
-        // 14.7.5.1 and Annex B.3.5
+        // 14.7.5.1 and Annex B.3.5; 15.7.1 ContainsAwait: no `for await` in a static block.
         NodeKind::ForInStatement | NodeKind::ForOfStatement => {
             let bn = bound_names(a, ts, k0);
-            !is_labelled_function(a, k2) && (if kd(a, k0) == NodeKind::ForDeclaration {
+            !(nd.kind == NodeKind::ForOfStatement && nd.flag && env.no_yield_await)
+                && !is_labelled_function(a, k2) && (if kd(a, k0) == NodeKind::ForDeclaration {
                 (op_of(a, k0) != Op::Var ==> (!has_name(bn, sv("let"@)) && !has_duplicate(bn)
                     && !intersects(bn, var_names_sub(a, ts, n, k2)))) && (first_kid_kind(a, k0)
                     == NodeKind::VariableDeclaration ==> (!env.strict && first_kid_kind(
@@ -1540,8 +1545,10 @@ pub open spec fn child_env(a: AstV, ts: Stream, n: int, k: int, env: EarlyEnv) -
         } else {
             env
         },
-        // 15.7.? a static block: `[~Yield, +Await]`.
-        NodeKind::ClassStaticBlock => env_fn(env, env.strict, false, true, true, false, true, true, false),
+        // 15.7 a static block: `[~Yield, +Await]`. 15.7.1 `ClassStaticBlockBody`: "It is a
+        // Syntax Error if ContainsAwait of ClassStaticBlockStatementList is true", and
+        // ContainsAwait, like `nya`, does not look inside functions or async arrow bodies.
+        NodeKind::ClassStaticBlock => env_fn(env, env.strict, false, true, true, false, true, true, true),
         // 15.7: every part of a class is strict mode code; the heritage is outside the class's own
         // private names, and a body is `derived` when there is a heritage.
         NodeKind::ClassDeclaration | NodeKind::ClassExpression => EarlyEnv {
@@ -2137,11 +2144,21 @@ pub open spec fn ed(a: AstV, ts: Stream, c: int, p: int) -> int {
 }
 
 /// The source range of node `n` is the range of tokens `ts[i..j)`: it starts at
-/// the first token and ends at the last; a node with no tokens is the empty
-/// range at the end of the token before.
+/// the first token and ends at the last; a node with no tokens is an empty
+/// range in the gap before token `i`, from the end of the token before to the
+/// start of token `i` (or at the end of the last token when `i` is past it).
+/// The gap, not one point in it: an `Absent` first child must sit inside its
+/// parent, which starts at token `i`, and an `Absent` last child inside its
+/// parent, which ends at token `i - 1`; with white space between them no one
+/// point is in both (`spans_wf`).
 pub open spec fn span_ok(a: AstV, ts: Stream, n: int, i: int, j: int) -> bool {
     if i == j {
-        a.nodes[n].start == prev_end(ts, i) && a.nodes[n].end == a.nodes[n].start
+        a.nodes[n].end == a.nodes[n].start && prev_end(ts, i) <= a.nodes[n].start && (if 0 <= i
+            < tn(ts) {
+            a.nodes[n].start <= ts.toks[i].start
+        } else {
+            a.nodes[n].start == prev_end(ts, i)
+        })
     } else {
         a.nodes[n].start == ts.toks[i].start && a.nodes[n].end == ts.toks[j - 1].end
     }
