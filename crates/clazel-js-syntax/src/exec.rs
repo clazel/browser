@@ -26,8 +26,9 @@ pub fn parse(src: &[u32], goal: SourceGoal) -> Result<Ast, ParseError> {
     let run = || parse_inner(src, goal);
     std::thread::scope(|s| {
         match std::thread::Builder::new().stack_size(256 * 1024 * 1024).spawn_scoped(s, run) {
-            Ok(h) => h.join().unwrap_or(Err(ParseError::TooDeep)),
-            Err(_) => Err(ParseError::TooDeep),
+            Ok(h) => h.join().unwrap_or(Err(ParseError::Syntax)),
+            // No thread to be had: parse here, on the stack this thread has.
+            Err(_) => run(),
         }
     })
 }
