@@ -36,6 +36,14 @@ fn covered_programs_are_verified() {
         "1 ?? 2 ?? 3;",
         "1 <= 2 >= 3 < 4;",
         "1 in 2 instanceof 3;",
+        "-1; !2; ~3; +4; typeof 5; void 6; delete (7).a;",
+        "- -1 + +2;",
+        "1 ? 2 : 3 ? 4 : 5;",
+        "(1).a;",
+        "(1).a.b.c;",
+        "(1).a = 2;",
+        "(1).a += 2 ** 3;",
+        "(1).a &&= (1).b ||= 3;",
         "// c\n 1 /* d */ + 2 ;;",
     ] {
         assert!(
@@ -51,14 +59,7 @@ fn covered_programs_are_verified() {
 
 #[test]
 fn other_programs_are_unsupported_not_failed() {
-    for s in [
-        "a;",
-        "f(1);",
-        "if (1) ;",
-        "var a = 1;",
-        "1 ? 2 : 3",
-        "-1",
-    ] {
+    for s in ["a;", "f(1);", "if (1) ;", "var a = 1;"] {
         assert!(
             derivation(s, SourceGoal::Script) == Some(Derivation::Unsupported),
             "{s}"

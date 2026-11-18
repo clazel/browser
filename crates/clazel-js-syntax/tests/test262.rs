@@ -248,3 +248,45 @@ fn test262_fixtures_parse() -> Result<(), String> {
     assert_eq!(rejected, expected);
     Ok(())
 }
+
+/// How much of Test262 the proven derivation check ([`clazel_js_syntax::arena_d`])
+/// covers: the share of the positive tests and of the harness files whose whole arena
+/// comes out `Verified`, not `Unsupported`. Printed, not asserted: it grows as the
+/// check covers more of the grammar.
+#[test]
+#[cfg_attr(miri, ignore = "reads files")]
+fn test262_verified_share() -> Result<(), String> {
+    use clazel_js_syntax::arena_d::Derivation;
+    use clazel_js_syntax::exec::parse_checked;
+    let (mut positives, mut verified) = (0usize, 0usize);
+    for case in TEST262 {
+        if !judged(case) || case.negative.is_some() {
+            continue;
+        }
+        let src = read(case)?;
+        for (goal, strict) in runs(case) {
+            let mut s: Vec<u32> = Vec::new();
+            if strict {
+                s.extend("\"use strict\";\n".chars().map(u32::from));
+            }
+            s.extend(src.iter().copied());
+            positives += 1;
+            if let Ok((_, Derivation::Verified)) = parse_checked(&s, goal) {
+                verified += 1;
+            }
+        }
+    }
+    let mut files = Vec::new();
+    all_js(&root().join("../harness"), &mut files);
+    let (mut hv, mut hn) = (0usize, 0usize);
+    for f in &files {
+        let text = std::fs::read_to_string(f).map_err(|e| e.to_string())?;
+        let src: Vec<u32> = text.chars().map(u32::from).collect();
+        hn += 1;
+        if let Ok((_, Derivation::Verified)) = parse_checked(&src, SourceGoal::Script) {
+            hv += 1;
+        }
+    }
+    println!("Verified: {verified} of {positives} positive runs, {hv} of {hn} harness files");
+    Ok(())
+}
