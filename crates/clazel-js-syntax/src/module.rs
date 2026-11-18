@@ -80,7 +80,14 @@ impl<'a> Parser<'a> {
             let spec = self.parse_module_specifier()?;
             let with = self.parse_with_clause()?;
             let end = self.semi()?;
-            return Ok(self.mk(K::ImportDeclaration, Op::None, false, start, end, vec![clause, spec, with]));
+            return Ok(self.mk(
+                K::ImportDeclaration,
+                Op::None,
+                false,
+                start,
+                end,
+                vec![clause, spec, with],
+            ));
         }
         // The absent default binding is at the start of the clause, inside it
         // (`spec::span_ok` allows any point of the white space before the clause).
@@ -112,7 +119,14 @@ impl<'a> Parser<'a> {
         let spec = self.parse_module_specifier()?;
         let with = self.parse_with_clause()?;
         let end = self.semi()?;
-        Ok(self.mk(K::ImportDeclaration, Op::None, false, start, end, vec![clause, spec, with]))
+        Ok(self.mk(
+            K::ImportDeclaration,
+            Op::None,
+            false,
+            start,
+            end,
+            vec![clause, spec, with],
+        ))
     }
 
     /// `NameSpaceImport` or `NamedImports`.
@@ -181,7 +195,14 @@ impl<'a> Parser<'a> {
                 let e = self.en(local);
                 (self.leaf(K::Absent, e, e), e)
             };
-            kids.push(self.mk(K::ExportSpecifier, Op::None, false, ss, end, vec![local, exported]));
+            kids.push(self.mk(
+                K::ExportSpecifier,
+                Op::None,
+                false,
+                ss,
+                end,
+                vec![local, exported],
+            ));
             if !self.eat_p(",")? && !self.t.is_p("}") {
                 return syn();
             }
@@ -195,7 +216,9 @@ impl<'a> Parser<'a> {
     fn parse_export(&mut self, cx: Cx) -> R<u32> {
         let start = self.t.start;
         self.bump()?;
-        let mk = |p: &mut Self, op: Op, end: usize, kids: Vec<u32>| p.mk(K::ExportDeclaration, op, false, start, end, kids);
+        let mk = |p: &mut Self, op: Op, end: usize, kids: Vec<u32>| {
+            p.mk(K::ExportDeclaration, op, false, start, end, kids)
+        };
         if self.t.is_p("*") {
             self.bump()?;
             if self.t.is_w("as") {

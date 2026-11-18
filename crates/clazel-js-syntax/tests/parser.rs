@@ -23,7 +23,10 @@ fn ok(s: &str) {
 }
 
 fn bad(s: &str) {
-    assert!(matches!(script(s), Err(ParseError::Syntax)), "should be a syntax error: {s}");
+    assert!(
+        matches!(script(s), Err(ParseError::Syntax)),
+        "should be a syntax error: {s}"
+    );
 }
 
 #[test]
@@ -39,7 +42,9 @@ fn empty_and_simple() {
     ok("for (x in y) ;");
     ok("function f(a, b = 1, ...c) { return a; }");
     ok("a => a; (a, b) => a + b; async x => x; async (x) => x;");
-    ok("class A extends B { constructor() { super(); } static x = 1; #p = 2; get a() { return 1; } static { } }");
+    ok(
+        "class A extends B { constructor() { super(); } static x = 1; #p = 2; get a() { return 1; } static { } }",
+    );
     ok("x = `a${b}c${d}e`; tag`x`;");
     ok("var re = /ab+c/gi; a = b / c / d;");
     ok("a?.b?.[c]?.(d)");
@@ -78,7 +83,10 @@ fn syntax_errors() {
 
 #[test]
 fn modules() {
-    assert!(module("import a, {b as c} from 'm'; export default a; export {c}; export * from 'x';").is_ok());
+    assert!(
+        module("import a, {b as c} from 'm'; export default a; export {c}; export * from 'x';")
+            .is_ok()
+    );
     assert!(module("await 1").is_ok());
     assert!(module("export default class {}").is_ok());
     assert!(script("import a from 'm'").is_err());

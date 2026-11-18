@@ -110,7 +110,9 @@ fn op_name(o: Op) -> &'static str {
 }
 
 fn dump_node(ast: &Ast, id: u32, out: &mut String) {
-    let Some(n) = ast.nodes.get(id as usize) else { return };
+    let Some(n) = ast.nodes.get(id as usize) else {
+        return;
+    };
     out.push_str(kind_name(n.kind));
     out.push_str(op_name(n.op));
     if n.flag {
@@ -149,7 +151,10 @@ fn script(src: &str) -> String {
 fn statements() {
     // 14.5: the `;` is in the statement's span; an inserted one is not.
     assert_eq!(script("a;"), "Script(0..2)[ExprStmt(0..2)[Ref(0..1)]]");
-    assert_eq!(script("a\nb"), "Script(0..3)[ExprStmt(0..1)[Ref(0..1)] ExprStmt(2..3)[Ref(2..3)]]");
+    assert_eq!(
+        script("a\nb"),
+        "Script(0..3)[ExprStmt(0..1)[Ref(0..1)] ExprStmt(2..3)[Ref(2..3)]]"
+    );
     // 14.3.2, 14.3.1: declarations; the absent initializer is at the end of the target.
     assert_eq!(
         script("var a = 1, b;"),
@@ -215,12 +220,27 @@ fn expressions() {
         script("a = b, c"),
         "Script(0..8)[ExprStmt(0..8)[Seq(0..8)[Assign:=(0..5)[Ref(0..1) Ref(4..5)] Ref(7..8)]]]"
     );
-    assert_eq!(script("a ?? b"), "Script(0..6)[ExprStmt(0..6)[Coalesce:??(0..6)[Ref(0..1) Ref(5..6)]]]");
-    assert_eq!(script("a++"), "Script(0..3)[ExprStmt(0..3)[Update:x++(0..3)[Ref(0..1)]]]");
-    assert_eq!(script("typeof a"), "Script(0..8)[ExprStmt(0..8)[Unary:typeof(0..8)[Ref(7..8)]]]");
+    assert_eq!(
+        script("a ?? b"),
+        "Script(0..6)[ExprStmt(0..6)[Coalesce:??(0..6)[Ref(0..1) Ref(5..6)]]]"
+    );
+    assert_eq!(
+        script("a++"),
+        "Script(0..3)[ExprStmt(0..3)[Update:x++(0..3)[Ref(0..1)]]]"
+    );
+    assert_eq!(
+        script("typeof a"),
+        "Script(0..8)[ExprStmt(0..8)[Unary:typeof(0..8)[Ref(7..8)]]]"
+    );
     // 13.2.9: parentheses are a node of their own.
-    assert_eq!(script("(a)"), "Script(0..3)[ExprStmt(0..3)[Paren(0..3)[Ref(1..2)]]]");
-    assert_eq!(script("(a, b)"), "Script(0..6)[ExprStmt(0..6)[Paren(0..6)[Seq(1..5)[Ref(1..2) Ref(4..5)]]]]");
+    assert_eq!(
+        script("(a)"),
+        "Script(0..3)[ExprStmt(0..3)[Paren(0..3)[Ref(1..2)]]]"
+    );
+    assert_eq!(
+        script("(a, b)"),
+        "Script(0..6)[ExprStmt(0..6)[Paren(0..6)[Seq(1..5)[Ref(1..2) Ref(4..5)]]]]"
+    );
     // 13.2.8: template elements and substitutions alternate.
     assert_eq!(
         script("`a${b}c`"),

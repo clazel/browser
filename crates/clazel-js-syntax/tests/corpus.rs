@@ -729,7 +729,11 @@ fn scripts_that_parse() {
             failed.push(*s);
         }
     }
-    assert!(failed.is_empty(), "should parse as a Script:\n{}", failed.join("\n---\n"));
+    assert!(
+        failed.is_empty(),
+        "should parse as a Script:\n{}",
+        failed.join("\n---\n")
+    );
 }
 
 #[test]
@@ -740,7 +744,11 @@ fn scripts_that_do_not_parse() {
             failed.push(*s);
         }
     }
-    assert!(failed.is_empty(), "should not parse as a Script:\n{}", failed.join("\n---\n"));
+    assert!(
+        failed.is_empty(),
+        "should not parse as a Script:\n{}",
+        failed.join("\n---\n")
+    );
 }
 
 #[test]
@@ -751,7 +759,11 @@ fn modules_that_parse() {
             failed.push(*s);
         }
     }
-    assert!(failed.is_empty(), "should parse as a Module:\n{}", failed.join("\n---\n"));
+    assert!(
+        failed.is_empty(),
+        "should parse as a Module:\n{}",
+        failed.join("\n---\n")
+    );
 }
 
 #[test]
@@ -762,5 +774,9 @@ fn modules_that_do_not_parse() {
             failed.push(*s);
         }
     }
-    assert!(failed.is_empty(), "should not parse as a Module:\n{}", failed.join("\n---\n"));
+    assert!(
+        failed.is_empty(),
+        "should not parse as a Module:\n{}",
+        failed.join("\n---\n")
+    );
 }

@@ -39,13 +39,65 @@ pub struct Tok {
 
 /// The words the parser compares tokens with.
 const WORDS: &[&str] = &[
-    "await", "break", "case", "catch", "class", "const", "continue", "debugger", "default",
-    "delete", "do", "else", "enum", "export", "extends", "false", "finally", "for", "function",
-    "if", "import", "in", "instanceof", "new", "null", "return", "super", "switch", "this",
-    "throw", "true", "try", "typeof", "var", "void", "while", "with", "yield", "let", "static",
-    "async", "of", "get", "set", "from", "as", "target", "meta", "implements", "interface",
-    "package", "private", "protected", "public", "eval", "arguments", "constructor",
-    "prototype", "__proto__",
+    "await",
+    "break",
+    "case",
+    "catch",
+    "class",
+    "const",
+    "continue",
+    "debugger",
+    "default",
+    "delete",
+    "do",
+    "else",
+    "enum",
+    "export",
+    "extends",
+    "false",
+    "finally",
+    "for",
+    "function",
+    "if",
+    "import",
+    "in",
+    "instanceof",
+    "new",
+    "null",
+    "return",
+    "super",
+    "switch",
+    "this",
+    "throw",
+    "true",
+    "try",
+    "typeof",
+    "var",
+    "void",
+    "while",
+    "with",
+    "yield",
+    "let",
+    "static",
+    "async",
+    "of",
+    "get",
+    "set",
+    "from",
+    "as",
+    "target",
+    "meta",
+    "implements",
+    "interface",
+    "package",
+    "private",
+    "protected",
+    "public",
+    "eval",
+    "arguments",
+    "constructor",
+    "prototype",
+    "__proto__",
 ];
 
 /// The punctuators.
@@ -104,7 +156,11 @@ pub fn lex(src: &[u32], pos: usize, goal: Goal, html: bool) -> Option<Tok> {
                 | ElementKind::DivPunctuator
                 | ElementKind::RightBracePunctuator => tok.s = intern(text, PUNCTS),
                 ElementKind::IdentifierName => {
-                    if let Value::Name { code_points, escaped } = el.value {
+                    if let Value::Name {
+                        code_points,
+                        escaped,
+                    } = el.value
+                    {
                         tok.escaped = escaped;
                         if !escaped {
                             tok.s = intern(text, WORDS);
@@ -113,7 +169,11 @@ pub fn lex(src: &[u32], pos: usize, goal: Goal, html: bool) -> Option<Tok> {
                     }
                 }
                 ElementKind::PrivateIdentifier => {
-                    if let Value::Name { code_points, escaped } = el.value {
+                    if let Value::Name {
+                        code_points,
+                        escaped,
+                    } = el.value
+                    {
                         tok.escaped = escaped;
                         tok.name = code_points;
                     }
@@ -168,6 +228,30 @@ fn has_legacy_escape(text: &[u32]) -> bool {
 /// The resolved name `n` is a `ReservedWord` other than `yield` and `await`.
 pub fn name_is_reserved_always(n: &[u32]) -> bool {
     is_reserved_always(intern(n, WORDS))
+}
+
+/// The token as the arena check ([`crate::arena_d`]) reads it.
+pub fn dtok_of(t: &Tok) -> crate::arena_d::DTok {
+    use crate::spec::{TemplateKind as ST, TokKind as SK};
+    let kind = match t.kind {
+        ElementKind::IdentifierName => SK::IdentifierName,
+        ElementKind::PrivateIdentifier => SK::PrivateIdentifier,
+        ElementKind::NumericLiteral => SK::NumericLiteral,
+        ElementKind::StringLiteral => SK::StringLiteral,
+        ElementKind::RegularExpressionLiteral => SK::RegularExpressionLiteral,
+        ElementKind::Template(TemplateKind::NoSubstitution) => SK::Template(ST::NoSubstitution),
+        ElementKind::Template(TemplateKind::Head) => SK::Template(ST::Head),
+        ElementKind::Template(TemplateKind::Middle) => SK::Template(ST::Middle),
+        ElementKind::Template(TemplateKind::Tail) => SK::Template(ST::Tail),
+        _ => SK::Punctuator,
+    };
+    crate::arena_d::DTok {
+        kind,
+        start: t.start,
+        end: t.end,
+        nl: t.nl,
+        escaped: t.escaped,
+    }
 }
 
 impl Tok {
@@ -250,7 +334,14 @@ pub fn name_is_reserved(n: &[u32]) -> bool {
 pub fn name_is_strict_reserved(n: &[u32]) -> bool {
     matches!(
         intern(n, WORDS),
-        "implements" | "interface" | "let" | "package" | "private" | "protected" | "public"
-            | "static" | "yield"
+        "implements"
+            | "interface"
+            | "let"
+            | "package"
+            | "private"
+            | "protected"
+            | "public"
+            | "static"
+            | "yield"
     )
 }

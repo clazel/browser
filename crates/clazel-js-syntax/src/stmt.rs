@@ -10,11 +10,20 @@ impl<'a> Parser<'a> {
 
     /// `Script` or `Module`: every item until the end of the source text.
     pub fn parse_program(&mut self) -> R<u32> {
-        let cx = Cx { y: false, a: self.module, i: true, r: false };
+        let cx = Cx {
+            y: false,
+            a: self.module,
+            i: true,
+            r: false,
+        };
         let start = if self.t.eof { 0 } else { self.t.start };
         let mut items = Vec::new();
         while !self.t.eof {
-            let item = if self.module { self.parse_module_item(cx)? } else { self.parse_item(cx)? };
+            let item = if self.module {
+                self.parse_module_item(cx)?
+            } else {
+                self.parse_item(cx)?
+            };
             items.push(item);
         }
         let end = if items.is_empty() { 0 } else { self.prev_end };
@@ -187,7 +196,14 @@ impl<'a> Parser<'a> {
                     self.bump()?;
                     let body = self.parse_stmt_or_function(cx)?;
                     let end = self.en(body);
-                    return Ok(self.mk(K::LabelledStatement, Op::None, false, start, end, vec![label, body]));
+                    return Ok(self.mk(
+                        K::LabelledStatement,
+                        Op::None,
+                        false,
+                        start,
+                        end,
+                        vec![label, body],
+                    ));
                 }
             }
         }
@@ -230,7 +246,14 @@ impl<'a> Parser<'a> {
         } else {
             (self.absent(), self.en(cons))
         };
-        Ok(self.mk(K::IfStatement, Op::None, false, start, end, vec![test, cons, alt]))
+        Ok(self.mk(
+            K::IfStatement,
+            Op::None,
+            false,
+            start,
+            end,
+            vec![test, cons, alt],
+        ))
     }
 
     /// `DoWhileStatement` (§14.7.2), with §12.10.1's third rule for the `;`.
@@ -245,9 +268,18 @@ impl<'a> Parser<'a> {
             self.bump()?;
             e
         } else {
+            self.gap_events
+                .push((self.rec.len(), crate::spec::Ins::DoWhile));
             self.prev_end
         };
-        Ok(self.mk(K::DoWhileStatement, Op::None, false, start, end, vec![body, test]))
+        Ok(self.mk(
+            K::DoWhileStatement,
+            Op::None,
+            false,
+            start,
+            end,
+            vec![body, test],
+        ))
     }
 
     /// `WhileStatement` (§14.7.3).
@@ -257,7 +289,14 @@ impl<'a> Parser<'a> {
         let test = self.parse_paren_head(cx)?;
         let body = self.parse_statement(cx)?;
         let end = self.en(body);
-        Ok(self.mk(K::WhileStatement, Op::None, false, start, end, vec![test, body]))
+        Ok(self.mk(
+            K::WhileStatement,
+            Op::None,
+            false,
+            start,
+            end,
+            vec![test, body],
+        ))
     }
 
     /// `WithStatement` (§14.11).
@@ -267,13 +306,24 @@ impl<'a> Parser<'a> {
         let obj = self.parse_paren_head(cx)?;
         let body = self.parse_statement(cx)?;
         let end = self.en(body);
-        Ok(self.mk(K::WithStatement, Op::None, false, start, end, vec![obj, body]))
+        Ok(self.mk(
+            K::WithStatement,
+            Op::None,
+            false,
+            start,
+            end,
+            vec![obj, body],
+        ))
     }
 
     /// `ContinueStatement` and `BreakStatement` (§14.8, §14.9).
     fn parse_jump(&mut self, cx: Cx) -> R<u32> {
         let start = self.t.start;
-        let kind = if self.t.is_w("continue") { K::ContinueStatement } else { K::BreakStatement };
+        let kind = if self.t.is_w("continue") {
+            K::ContinueStatement
+        } else {
+            K::BreakStatement
+        };
         self.bump()?;
         let label = if self.t.is_name() && !self.t.nl && self.ident_ok(cx) {
             self.parse_ident(K::LabelIdentifier, cx)?
@@ -388,7 +438,14 @@ impl<'a> Parser<'a> {
         if self.kind(catch) == K::Absent && self.kind(finally) == K::Absent {
             return syn();
         }
-        Ok(self.mk(K::TryStatement, Op::None, false, start, end, vec![block, catch, finally]))
+        Ok(self.mk(
+            K::TryStatement,
+            Op::None,
+            false,
+            start,
+            end,
+            vec![block, catch, finally],
+        ))
     }
 
     // ----- for (§14.7.4, §14.7.5) --------------------------------------
@@ -416,7 +473,10 @@ impl<'a> Parser<'a> {
             let init = self.absent();
             return self.parse_for_rest(cx, start, init);
         }
-        if self.t.is_w("var") || self.t.is_w("const") || (self.t.is_w("let") && self.let_starts_declaration()?) {
+        if self.t.is_w("var")
+            || self.t.is_w("const")
+            || (self.t.is_w("let") && self.let_starts_declaration()?)
+        {
             let dstart = self.t.start;
             let op = if self.t.is_w("var") {
                 Op::Var
@@ -445,7 +505,14 @@ impl<'a> Parser<'a> {
                 } else {
                     target
                 };
-                let head = self.mk(K::ForDeclaration, op, false, dstart, self.en(first), vec![binding]);
+                let head = self.mk(
+                    K::ForDeclaration,
+                    op,
+                    false,
+                    dstart,
+                    self.en(first),
+                    vec![binding],
+                );
                 return self.parse_for_in_of(cx, start, head, of, is_await);
             }
             if is_await {
@@ -453,7 +520,9 @@ impl<'a> Parser<'a> {
             }
             // A classic `for`: the rest of the list.
             let mut kids = vec![first];
-            if self.kind(self.child(first, 1)) == K::Absent && self.kind(self.child(first, 0)) != K::BindingIdentifier {
+            if self.kind(self.child(first, 1)) == K::Absent
+                && self.kind(self.child(first, 0)) != K::BindingIdentifier
+            {
                 return syn();
             }
             while self.eat_p(",")? {
@@ -480,11 +549,19 @@ impl<'a> Parser<'a> {
         let e0 = self.parse_assign(cxn)?;
         if self.t.is_w("of") || self.t.is_w("in") {
             let of = self.t.is_w("of");
-            if of && (first_is_let || (first_is_async && !is_await && self.kind(e0) == K::IdentifierReference)) {
+            if of
+                && (first_is_let
+                    || (first_is_async && !is_await && self.kind(e0) == K::IdentifierReference))
+            {
                 return syn();
             }
             let head = self.as_assign_target(e0)?;
-            if self.lvl(head) < 14 && !matches!(self.kind(head), K::ObjectAssignmentPattern | K::ArrayAssignmentPattern) {
+            if self.lvl(head) < 14
+                && !matches!(
+                    self.kind(head),
+                    K::ObjectAssignmentPattern | K::ArrayAssignmentPattern
+                )
+            {
                 return syn();
             }
             return self.parse_for_in_of(cx, start, head, of, is_await);
@@ -515,29 +592,65 @@ impl<'a> Parser<'a> {
     }
 
     /// The test, the update and the body of a classic `for`.
-    fn parse_for_after_init(&mut self, cx: Cx, start: usize, init: u32, _semi_done: bool) -> R<u32> {
+    fn parse_for_after_init(
+        &mut self,
+        cx: Cx,
+        start: usize,
+        init: u32,
+        _semi_done: bool,
+    ) -> R<u32> {
         let cxi = cx.with_in(true);
-        let test = if self.t.is_p(";") { self.absent() } else { self.parse_expression(cxi)? };
+        let test = if self.t.is_p(";") {
+            self.absent()
+        } else {
+            self.parse_expression(cxi)?
+        };
         self.expect_p(";")?;
-        let update = if self.t.is_p(")") { self.absent() } else { self.parse_expression(cxi)? };
+        let update = if self.t.is_p(")") {
+            self.absent()
+        } else {
+            self.parse_expression(cxi)?
+        };
         self.expect_p(")")?;
         let body = self.parse_statement(cx)?;
         let end = self.en(body);
-        Ok(self.mk(K::ForStatement, Op::None, false, start, end, vec![init, test, update, body]))
+        Ok(self.mk(
+            K::ForStatement,
+            Op::None,
+            false,
+            start,
+            end,
+            vec![init, test, update, body],
+        ))
     }
 
     /// `for ( head in/of expression ) Statement`, at the `in` or `of`.
-    fn parse_for_in_of(&mut self, cx: Cx, start: usize, head: u32, of: bool, is_await: bool) -> R<u32> {
+    fn parse_for_in_of(
+        &mut self,
+        cx: Cx,
+        start: usize,
+        head: u32,
+        of: bool,
+        is_await: bool,
+    ) -> R<u32> {
         if is_await && !of {
             return syn();
         }
         self.bump()?;
         let cxi = cx.with_in(true);
-        let e = if of { self.parse_assign(cxi)? } else { self.parse_expression(cxi)? };
+        let e = if of {
+            self.parse_assign(cxi)?
+        } else {
+            self.parse_expression(cxi)?
+        };
         self.expect_p(")")?;
         let body = self.parse_statement(cx)?;
         let end = self.en(body);
-        let kind = if of { K::ForOfStatement } else { K::ForInStatement };
+        let kind = if of {
+            K::ForOfStatement
+        } else {
+            K::ForInStatement
+        };
         Ok(self.mk(kind, Op::None, is_await, start, end, vec![head, e, body]))
     }
 
@@ -565,7 +678,14 @@ impl<'a> Parser<'a> {
         } else {
             (self.absent(), self.en(target))
         };
-        Ok(self.mk(K::BindingElement, Op::None, false, start, end, vec![target, init]))
+        Ok(self.mk(
+            K::BindingElement,
+            Op::None,
+            false,
+            start,
+            end,
+            vec![target, init],
+        ))
     }
 
     fn parse_array_binding(&mut self, cx: Cx) -> R<u32> {
@@ -639,7 +759,14 @@ impl<'a> Parser<'a> {
                 self.expect_p(":")?;
                 let el = self.parse_binding_element(cx)?;
                 let end = self.en(el);
-                kids.push(self.mk(K::BindingProperty, Op::KeyValue, false, ps, end, vec![name, el]));
+                kids.push(self.mk(
+                    K::BindingProperty,
+                    Op::KeyValue,
+                    false,
+                    ps,
+                    end,
+                    vec![name, el],
+                ));
             }
             if !self.eat_p(",")? && !self.t.is_p("}") {
                 return syn();
@@ -695,11 +822,23 @@ impl<'a> Parser<'a> {
     /// A function, generator, async function or async generator, declaration
     /// or expression, at `function` (or at `async` when `async_start`).
     /// `deflt`: the name may be absent (`export default`).
-    pub fn parse_function(&mut self, cx: Cx, async_start: Option<usize>, is_expr: bool, deflt: bool) -> R<u32> {
+    pub fn parse_function(
+        &mut self,
+        cx: Cx,
+        async_start: Option<usize>,
+        is_expr: bool,
+        deflt: bool,
+    ) -> R<u32> {
         self.nest(|p| p.parse_function_inner(cx, async_start, is_expr, deflt))
     }
 
-    fn parse_function_inner(&mut self, cx: Cx, async_start: Option<usize>, is_expr: bool, deflt: bool) -> R<u32> {
+    fn parse_function_inner(
+        &mut self,
+        cx: Cx,
+        async_start: Option<usize>,
+        is_expr: bool,
+        deflt: bool,
+    ) -> R<u32> {
         let start = async_start.unwrap_or(self.t.start);
         let is_async = async_start.is_some();
         if is_async {
@@ -707,7 +846,12 @@ impl<'a> Parser<'a> {
         }
         self.expect_w("function")?;
         let is_gen = self.eat_p("*")?;
-        let fcx = Cx { y: is_gen, a: is_async, i: true, r: false };
+        let fcx = Cx {
+            y: is_gen,
+            a: is_async,
+            i: true,
+            r: false,
+        };
         let name = if is_expr {
             if self.t.is_name() && !self.t.is_p("(") {
                 self.parse_ident(K::BindingIdentifier, fcx)?
@@ -738,20 +882,41 @@ impl<'a> Parser<'a> {
     }
 
     /// The rest of a `MethodDefinition` (§15.4) after its name: `( ... ) { ... }`.
-    pub fn parse_method(&mut self, _cx: Cx, op: Op, is_static: bool, start: usize, name: u32) -> R<u32> {
+    pub fn parse_method(
+        &mut self,
+        _cx: Cx,
+        op: Op,
+        is_static: bool,
+        start: usize,
+        name: u32,
+    ) -> R<u32> {
         let is_gen = matches!(op, Op::GeneratorMethod | Op::AsyncGeneratorMethod);
         let is_async = matches!(op, Op::AsyncMethod | Op::AsyncGeneratorMethod);
-        let pcx = Cx { y: is_gen, a: is_async, i: true, r: false };
+        let pcx = Cx {
+            y: is_gen,
+            a: is_async,
+            i: true,
+            r: false,
+        };
         let params = self.parse_formal_params(pcx)?;
         let n = self.nchildren(params);
         match op {
             Op::Getter if n != 0 => return syn(),
-            Op::Setter if n != 1 || self.kind(self.child(params, 0)) != K::BindingElement => return syn(),
+            Op::Setter if n != 1 || self.kind(self.child(params, 0)) != K::BindingElement => {
+                return syn();
+            }
             _ => {}
         }
         let body = self.parse_function_body(Cx { r: true, ..pcx })?;
         let end = self.en(body);
-        Ok(self.mk(K::MethodDefinition, op, is_static, start, end, vec![name, params, body]))
+        Ok(self.mk(
+            K::MethodDefinition,
+            op,
+            is_static,
+            start,
+            end,
+            vec![name, params, body],
+        ))
     }
 
     // ----- Classes (§15.7) ---------------------------------------------
@@ -779,8 +944,19 @@ impl<'a> Parser<'a> {
         };
         let body = self.parse_class_body(cx)?;
         let end = self.en(body);
-        let kind = if is_expr { K::ClassExpression } else { K::ClassDeclaration };
-        Ok(self.mk(kind, Op::None, false, start, end, vec![name, heritage, body]))
+        let kind = if is_expr {
+            K::ClassExpression
+        } else {
+            K::ClassDeclaration
+        };
+        Ok(self.mk(
+            kind,
+            Op::None,
+            false,
+            start,
+            end,
+            vec![name, heritage, body],
+        ))
     }
 
     /// `ClassBody`.
@@ -824,10 +1000,22 @@ impl<'a> Parser<'a> {
                 is_static = true;
                 self.bump()?;
                 if self.t.is_p("{") {
-                    let bcx = Cx { y: false, a: true, i: true, r: false };
+                    let bcx = Cx {
+                        y: false,
+                        a: true,
+                        i: true,
+                        r: false,
+                    };
                     let body = self.parse_function_body(bcx)?;
                     let end = self.en(body);
-                    return Ok(self.mk(K::ClassStaticBlock, Op::None, false, start, end, vec![body]));
+                    return Ok(self.mk(
+                        K::ClassStaticBlock,
+                        Op::None,
+                        false,
+                        start,
+                        end,
+                        vec![body],
+                    ));
                 }
             }
         }
@@ -842,7 +1030,11 @@ impl<'a> Parser<'a> {
             let nx = self.peek()?;
             if !self.ends_name(&nx) && !nx.nl {
                 self.bump()?;
-                let op = if self.eat_p("*")? { Op::AsyncGeneratorMethod } else { Op::AsyncMethod };
+                let op = if self.eat_p("*")? {
+                    Op::AsyncGeneratorMethod
+                } else {
+                    Op::AsyncMethod
+                };
                 let name = self.parse_class_element_name(cx)?;
                 return self.parse_method(cx, op, is_static, start, name);
             }
@@ -850,7 +1042,11 @@ impl<'a> Parser<'a> {
         if self.t.is_w("get") || self.t.is_w("set") {
             let nx = self.peek()?;
             if !self.ends_name(&nx) {
-                let op = if self.t.is_w("get") { Op::Getter } else { Op::Setter };
+                let op = if self.t.is_w("get") {
+                    Op::Getter
+                } else {
+                    Op::Setter
+                };
                 self.bump()?;
                 let name = self.parse_class_element_name(cx)?;
                 return self.parse_method(cx, op, is_static, start, name);
@@ -863,22 +1059,66 @@ impl<'a> Parser<'a> {
         // A field.
         let init = if self.t.is_p("=") {
             self.bump()?;
-            self.parse_assign(Cx { y: false, a: false, i: true, r: false })?
+            self.parse_assign(Cx {
+                y: false,
+                a: false,
+                i: true,
+                r: false,
+            })?
         } else {
             self.absent()
         };
         let end = self.semi()?;
-        Ok(self.mk(K::FieldDefinition, Op::None, is_static, start, end, vec![name, init]))
+        Ok(self.mk(
+            K::FieldDefinition,
+            Op::None,
+            is_static,
+            start,
+            end,
+            vec![name, init],
+        ))
     }
 }
 
 /// The ASCII word `n` as a `&str` if it is short and ASCII, `""` otherwise.
 fn word_of(n: &[u32]) -> &'static str {
     const RESERVED: &[&str] = &[
-        "break", "case", "catch", "class", "const", "continue", "debugger", "default", "delete", "do",
-        "else", "enum", "export", "extends", "false", "finally", "for", "function", "if", "import",
-        "in", "instanceof", "new", "null", "return", "super", "switch", "this", "throw", "true",
-        "try", "typeof", "var", "void", "while", "with",
+        "break",
+        "case",
+        "catch",
+        "class",
+        "const",
+        "continue",
+        "debugger",
+        "default",
+        "delete",
+        "do",
+        "else",
+        "enum",
+        "export",
+        "extends",
+        "false",
+        "finally",
+        "for",
+        "function",
+        "if",
+        "import",
+        "in",
+        "instanceof",
+        "new",
+        "null",
+        "return",
+        "super",
+        "switch",
+        "this",
+        "throw",
+        "true",
+        "try",
+        "typeof",
+        "var",
+        "void",
+        "while",
+        "with",
     ];
     for w in RESERVED {
         if crate::token::name_is(n, w) {

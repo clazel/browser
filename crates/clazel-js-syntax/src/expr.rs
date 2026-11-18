@@ -5,13 +5,18 @@
 //! ([`crate::cover`]).
 
 use crate::ast::{NodeKind as K, Op};
-use crate::parser::{Cx, Cover, Parser, R, syn};
+use crate::parser::{Cover, Cx, Parser, R, syn};
 use clazel_js_lexer::spec::{ElementKind, TemplateKind};
 
 /// The cx of the body of an arrow function with a braced body, and of its
 /// expression body (`In` kept by the caller).
 fn arrow_body_cx(is_async: bool, i: bool, braced: bool) -> Cx {
-    Cx { y: false, a: is_async, i: if braced { true } else { i }, r: braced }
+    Cx {
+        y: false,
+        a: is_async,
+        i: if braced { true } else { i },
+        r: braced,
+    }
 }
 
 impl<'a> Parser<'a> {
@@ -48,7 +53,10 @@ impl<'a> Parser<'a> {
         if self.t.is_name() {
             // `x => ...` and `async x => ...`.
             let nx = self.peek()?;
-            if self.t.is_w("async") && !nx.nl && nx.is_name() && !matches!(nx.s, "function" | "in" | "instanceof")
+            if self.t.is_w("async")
+                && !nx.nl
+                && nx.is_name()
+                && !matches!(nx.s, "function" | "in" | "instanceof")
             {
                 let nx2 = self.peek_after(&nx)?;
                 if nx2.is_p("=>") && !nx2.nl {
@@ -73,7 +81,11 @@ impl<'a> Parser<'a> {
             if !ok {
                 return syn();
             }
-            let target = if op == Op::Assign { self.as_assign_target(lhs)? } else { lhs };
+            let target = if op == Op::Assign {
+                self.as_assign_target(lhs)?
+            } else {
+                lhs
+            };
             self.bump()?;
             let rhs = self.parse_assign(cx)?;
             let (s, e) = (self.st(lhs), self.en(rhs));
@@ -84,7 +96,12 @@ impl<'a> Parser<'a> {
 
     /// The assignment operator at the current token.
     fn assign_op(&self) -> Option<Op> {
-        if self.t.eof || !matches!(self.t.kind, ElementKind::Punctuator | ElementKind::DivPunctuator) {
+        if self.t.eof
+            || !matches!(
+                self.t.kind,
+                ElementKind::Punctuator | ElementKind::DivPunctuator
+            )
+        {
             return None;
         }
         Some(match self.t.s {
@@ -115,16 +132,31 @@ impl<'a> Parser<'a> {
         self.bump()?;
         let ends = self.t.nl
             || self.t.eof
-            || (!self.t.is_name() && matches!(self.t.s, ")" | "]" | "}" | "," | ";" | ":" | "?" | "=>"))
+            || (!self.t.is_name()
+                && matches!(self.t.s, ")" | "]" | "}" | "," | ";" | ":" | "?" | "=>"))
             || self.t.is_w("in")
-            || matches!(self.t.kind, ElementKind::Template(TemplateKind::Middle | TemplateKind::Tail));
+            || matches!(
+                self.t.kind,
+                ElementKind::Template(TemplateKind::Middle | TemplateKind::Tail)
+            );
         if ends {
             let a = self.absent();
-            return Ok(self.mk(K::YieldExpression, Op::YieldPlain, false, start, kw_end, vec![a]));
+            return Ok(self.mk(
+                K::YieldExpression,
+                Op::YieldPlain,
+                false,
+                start,
+                kw_end,
+                vec![a],
+            ));
         }
         let delegate = self.eat_p("*")?;
         let e = self.parse_assign(cx)?;
-        let op = if delegate { Op::YieldDelegate } else { Op::YieldPlain };
+        let op = if delegate {
+            Op::YieldDelegate
+        } else {
+            Op::YieldPlain
+        };
         let end = self.en(e);
         Ok(self.mk(K::YieldExpression, op, false, start, end, vec![e]))
     }
@@ -140,7 +172,14 @@ impl<'a> Parser<'a> {
         self.expect_p(":")?;
         let alt = self.parse_assign(cx)?;
         let (s, e) = (self.st(test), self.en(alt));
-        Ok(self.mk(K::ConditionalExpression, Op::None, false, s, e, vec![test, cons, alt]))
+        Ok(self.mk(
+            K::ConditionalExpression,
+            Op::None,
+            false,
+            s,
+            e,
+            vec![test, cons, alt],
+        ))
     }
 
     /// The binary operator at the current token and its precedence (§13.6 to
@@ -157,7 +196,10 @@ impl<'a> Parser<'a> {
                 _ => None,
             };
         }
-        if !matches!(self.t.kind, ElementKind::Punctuator | ElementKind::DivPunctuator) {
+        if !matches!(
+            self.t.kind,
+            ElementKind::Punctuator | ElementKind::DivPunctuator
+        ) {
             return None;
         }
         Some(match self.t.s {
@@ -206,8 +248,12 @@ impl<'a> Parser<'a> {
                 break;
             }
             let mixes = match kind {
-                K::CoalesceExpression => !(self.lvl(left) >= 3 || self.kind(left) == K::CoalesceExpression),
-                K::LogicalORExpression | K::LogicalANDExpression => self.kind(left) == K::CoalesceExpression,
+                K::CoalesceExpression => {
+                    !(self.lvl(left) >= 3 || self.kind(left) == K::CoalesceExpression)
+                }
+                K::LogicalORExpression | K::LogicalANDExpression => {
+                    self.kind(left) == K::CoalesceExpression
+                }
                 _ => false,
             };
             if mixes {
@@ -244,7 +290,14 @@ impl<'a> Parser<'a> {
         self.bump()?;
         let r = self.nest(|p| p.parse_exp(cx))?;
         let (s, e) = (self.st(u), self.en(r));
-        Ok(self.mk(K::ExponentiationExpression, Op::Exp, false, s, e, vec![u, r]))
+        Ok(self.mk(
+            K::ExponentiationExpression,
+            Op::Exp,
+            false,
+            s,
+            e,
+            vec![u, r],
+        ))
     }
 
     /// `UnaryExpression` (§13.5), `UpdateExpression` (§13.4), `AwaitExpression`.
@@ -288,11 +341,22 @@ impl<'a> Parser<'a> {
             self.bump()?;
             let operand = self.nest(|p| p.parse_unary(cx))?;
             let end = self.en(operand);
-            return Ok(self.mk(K::AwaitExpression, Op::None, false, start, end, vec![operand]));
+            return Ok(self.mk(
+                K::AwaitExpression,
+                Op::None,
+                false,
+                start,
+                end,
+                vec![operand],
+            ));
         }
         let e = self.parse_lhs(cx)?;
         if (self.t.is_p("++") || self.t.is_p("--")) && !self.t.nl {
-            let op = if self.t.is_p("++") { Op::PostfixIncrement } else { Op::PostfixDecrement };
+            let op = if self.t.is_p("++") {
+                Op::PostfixIncrement
+            } else {
+                Op::PostfixDecrement
+            };
             let end = self.t.end;
             self.bump()?;
             let s = self.st(e);
@@ -326,7 +390,10 @@ impl<'a> Parser<'a> {
                 let callee_is_async = self.kind(e) == K::IdentifierReference
                     && self.en(e).saturating_sub(self.st(e)) == 5
                     && !self.t.nl
-                    && self.src.get(self.st(e)..self.en(e)).is_some_and(|t| crate::token::name_is(t, "async"));
+                    && self
+                        .src
+                        .get(self.st(e)..self.en(e))
+                        .is_some_and(|t| crate::token::name_is(t, "async"));
                 let args = self.parse_arguments(cx)?;
                 let (s, en) = (self.st(e), self.en(args));
                 if !matches!(self.lvl(e), 15 | 17) {
@@ -379,7 +446,14 @@ impl<'a> Parser<'a> {
         let end = self.t.end;
         self.expect_p("]")?;
         let os = self.st(obj);
-        Ok(self.mk(K::MemberExpression, Op::Bracket, false, os, end, vec![obj, idx]))
+        Ok(self.mk(
+            K::MemberExpression,
+            Op::Bracket,
+            false,
+            os,
+            end,
+            vec![obj, idx],
+        ))
     }
 
     /// `MemberExpression TemplateLiteral[+Tagged]`.
@@ -424,13 +498,27 @@ impl<'a> Parser<'a> {
             let link = if self.t.is_p("(") {
                 let args = self.parse_arguments(cx)?;
                 end = self.en(args);
-                self.mk(K::OptionalChain, Op::ChainCall, flag, link_start, end, vec![args])
+                self.mk(
+                    K::OptionalChain,
+                    Op::ChainCall,
+                    flag,
+                    link_start,
+                    end,
+                    vec![args],
+                )
             } else if self.t.is_p("[") {
                 self.bump()?;
                 let idx = self.parse_expression(cx.with_in(true))?;
                 end = self.t.end;
                 self.expect_p("]")?;
-                self.mk(K::OptionalChain, Op::ChainBracket, flag, link_start, end, vec![idx])
+                self.mk(
+                    K::OptionalChain,
+                    Op::ChainBracket,
+                    flag,
+                    link_start,
+                    end,
+                    vec![idx],
+                )
             } else {
                 if !flag {
                     // `.`
@@ -499,11 +587,25 @@ impl<'a> Parser<'a> {
         if self.t.is_p("(") {
             let args = self.parse_arguments(cx)?;
             let end = self.en(args);
-            Ok(self.mk(K::NewExpression, Op::None, false, start, end, vec![callee, args]))
+            Ok(self.mk(
+                K::NewExpression,
+                Op::None,
+                false,
+                start,
+                end,
+                vec![callee, args],
+            ))
         } else {
             let a = self.absent();
             let end = self.en(callee);
-            Ok(self.mk(K::NewExpression, Op::None, false, start, end, vec![callee, a]))
+            Ok(self.mk(
+                K::NewExpression,
+                Op::None,
+                false,
+                start,
+                end,
+                vec![callee, a],
+            ))
         }
     }
 
@@ -725,7 +827,14 @@ impl<'a> Parser<'a> {
                 self.bump()?;
                 let target = self.parse_binding_target(cxi)?;
                 let end = self.en(target);
-                let rest = self.mk(K::FunctionRestParameter, Op::None, false, s, end, vec![target]);
+                let rest = self.mk(
+                    K::FunctionRestParameter,
+                    Op::None,
+                    false,
+                    s,
+                    end,
+                    vec![target],
+                );
                 items.push(rest);
                 has_rest = true;
                 if !self.t.is_p(")") {
@@ -750,12 +859,22 @@ impl<'a> Parser<'a> {
         let children = if items.len() == 1 && !trailing && !has_rest {
             items
         } else if items.len() >= 2 && !trailing && !has_rest {
-            let (s, e) = (self.st(items.first().copied().unwrap_or(u32::MAX)), self.en(items.last().copied().unwrap_or(u32::MAX)));
+            let (s, e) = (
+                self.st(items.first().copied().unwrap_or(u32::MAX)),
+                self.en(items.last().copied().unwrap_or(u32::MAX)),
+            );
             vec![self.mk(K::Expression, Op::None, false, s, e, items)]
         } else {
             items
         };
-        let id = self.mk(K::ParenthesizedExpression, Op::None, false, start, end, children);
+        let id = self.mk(
+            K::ParenthesizedExpression,
+            Op::None,
+            false,
+            start,
+            end,
+            children,
+        );
         if cover_items.is_empty() || trailing || has_rest {
             self.bad.insert(id);
         }
@@ -884,7 +1003,14 @@ impl<'a> Parser<'a> {
             self.bump()?;
             let e = self.parse_assign(cx.with_in(true))?;
             let end = self.en(e);
-            return Ok(self.mk(K::PropertyDefinition, Op::Spread, false, start, end, vec![e]));
+            return Ok(self.mk(
+                K::PropertyDefinition,
+                Op::Spread,
+                false,
+                start,
+                end,
+                vec![e],
+            ));
         }
         // Modifiers.
         if self.t.is_p("*") {
@@ -896,7 +1022,11 @@ impl<'a> Parser<'a> {
             let nx = self.peek()?;
             if !self.ends_name(&nx) && !nx.nl {
                 self.bump()?;
-                let op = if self.eat_p("*")? { Op::AsyncGeneratorMethod } else { Op::AsyncMethod };
+                let op = if self.eat_p("*")? {
+                    Op::AsyncGeneratorMethod
+                } else {
+                    Op::AsyncMethod
+                };
                 let name = self.parse_prop_name(cx)?;
                 return self.parse_method(cx, op, false, start, name);
             }
@@ -904,7 +1034,11 @@ impl<'a> Parser<'a> {
         if self.t.is_w("get") || self.t.is_w("set") {
             let nx = self.peek()?;
             if !self.ends_name(&nx) {
-                let op = if self.t.is_w("get") { Op::Getter } else { Op::Setter };
+                let op = if self.t.is_w("get") {
+                    Op::Getter
+                } else {
+                    Op::Setter
+                };
                 self.bump()?;
                 let name = self.parse_prop_name(cx)?;
                 return self.parse_method(cx, op, false, start, name);
@@ -920,12 +1054,26 @@ impl<'a> Parser<'a> {
                     self.bump()?;
                     let init = self.parse_assign(cx.with_in(true))?;
                     let end = self.en(init);
-                    let n = self.mk(K::CoverInitializedName, Op::None, false, start, end, vec![id, init]);
+                    let n = self.mk(
+                        K::CoverInitializedName,
+                        Op::None,
+                        false,
+                        start,
+                        end,
+                        vec![id, init],
+                    );
                     self.bad.insert(n);
                     return Ok(n);
                 }
                 let end = self.en(id);
-                return Ok(self.mk(K::PropertyDefinition, Op::Shorthand, false, start, end, vec![id]));
+                return Ok(self.mk(
+                    K::PropertyDefinition,
+                    Op::Shorthand,
+                    false,
+                    start,
+                    end,
+                    vec![id],
+                ));
             }
         }
         let name = self.parse_prop_name(cx)?;
@@ -935,7 +1083,14 @@ impl<'a> Parser<'a> {
         self.expect_p(":")?;
         let v = self.parse_assign(cx.with_in(true))?;
         let end = self.en(v);
-        Ok(self.mk(K::PropertyDefinition, Op::KeyValue, false, start, end, vec![name, v]))
+        Ok(self.mk(
+            K::PropertyDefinition,
+            Op::KeyValue,
+            false,
+            start,
+            end,
+            vec![name, v],
+        ))
     }
 
     // ----- Arrow functions (§15.3, §15.9) ------------------------------
@@ -955,7 +1110,11 @@ impl<'a> Parser<'a> {
             return syn();
         }
         self.bump()?;
-        let kind = if is_async { K::AsyncArrowFunction } else { K::ArrowFunction };
+        let kind = if is_async {
+            K::AsyncArrowFunction
+        } else {
+            K::ArrowFunction
+        };
         if self.t.is_p("{") {
             let body = self.parse_function_body(arrow_body_cx(is_async, cx.i, true))?;
             let end = self.en(body);
@@ -973,7 +1132,11 @@ impl<'a> Parser<'a> {
             return syn();
         }
         if self.kind(lhs) == K::ParenthesizedExpression && self.covers.contains_key(&lhs) {
-            let items = self.covers.get(&lhs).map(|c| c.items.clone()).unwrap_or_default();
+            let items = self
+                .covers
+                .get(&lhs)
+                .map(|c| c.items.clone())
+                .unwrap_or_default();
             let (s, e) = (self.st(lhs), self.en(lhs));
             let params = self.cover_to_params(&items, s, e)?;
             return self.parse_arrow_rest(cx, params, s, false);
@@ -982,7 +1145,10 @@ impl<'a> Parser<'a> {
             let callee = self.child(lhs, 0);
             let args = self.child(lhs, 1);
             let start = self.st(callee);
-            let items = self.node(args).map(|n| n.children.clone()).unwrap_or_default();
+            let items = self
+                .node(args)
+                .map(|n| n.children.clone())
+                .unwrap_or_default();
             let (s, e) = (self.st(args), self.en(args));
             let mut conv = Vec::new();
             let n = items.len();
@@ -1010,8 +1176,13 @@ impl<'a> Parser<'a> {
             return false;
         };
         let e = self.en(last);
-        crate::token::lex(self.src, e, clazel_js_lexer::spec::Goal::InputElementDiv, false)
-            .is_some_and(|t| t.is_p(","))
+        crate::token::lex(
+            self.src,
+            e,
+            clazel_js_lexer::spec::Goal::InputElementDiv,
+            false,
+        )
+        .is_some_and(|t| t.is_p(","))
     }
 
     /// The `FormalParameters` node of an arrow function, from the items of its

@@ -11,9 +11,7 @@
 
 use crate::api::ParseError;
 use crate::ast::{Ast, Node, NodeKind as K, Op};
-use crate::token::{
-    lex, name_is, name_is_reserved_always, name_is_strict_reserved,
-};
+use crate::token::{lex, name_is, name_is_reserved_always, name_is_strict_reserved};
 use clazel_js_lexer::spec::Goal;
 use std::collections::HashSet;
 
@@ -74,7 +72,12 @@ struct Chk<'a> {
 
 /// Rejects `ast` if it has an early error (the rules of `spec::early_local`).
 pub fn check(src: &[u32], ast: &Ast, module: bool) -> Result<(), ParseError> {
-    let mut c = Chk { src, nodes: &ast.nodes, labels: Vec::new(), privates: Vec::new() };
+    let mut c = Chk {
+        src,
+        nodes: &ast.nodes,
+        labels: Vec::new(),
+        privates: Vec::new(),
+    };
     let root = ast.root as usize;
     let strict = module || c.has_use_strict(c.ch(root));
     let env = Env {
@@ -91,7 +94,11 @@ pub fn check(src: &[u32], ast: &Ast, module: bool) -> Result<(), ParseError> {
         no_yield_await: false,
         derived: false,
     };
-    if c.walk(root, env) { Ok(()) } else { Err(ParseError::Syntax) }
+    if c.walk(root, env) {
+        Ok(())
+    } else {
+        Err(ParseError::Syntax)
+    }
 }
 
 fn is_assignment_pattern(k: K) -> bool {
@@ -115,7 +122,10 @@ fn is_function_kind(k: K) -> bool {
 fn is_generator_kind(k: K) -> bool {
     matches!(
         k,
-        K::GeneratorDeclaration | K::GeneratorExpression | K::AsyncGeneratorDeclaration | K::AsyncGeneratorExpression
+        K::GeneratorDeclaration
+            | K::GeneratorExpression
+            | K::AsyncGeneratorDeclaration
+            | K::AsyncGeneratorExpression
     )
 }
 
@@ -132,7 +142,10 @@ fn is_async_kind(k: K) -> bool {
 fn is_function_expression_kind(k: K) -> bool {
     matches!(
         k,
-        K::FunctionExpression | K::GeneratorExpression | K::AsyncFunctionExpression | K::AsyncGeneratorExpression
+        K::FunctionExpression
+            | K::GeneratorExpression
+            | K::AsyncFunctionExpression
+            | K::AsyncGeneratorExpression
     )
 }
 
@@ -142,7 +155,8 @@ fn well_formed_utf16(s: &[u32]) -> bool {
         let next = s.get(k.saturating_add(1));
         let prev = k.checked_sub(1).and_then(|p| s.get(p));
         (!(0xD800..=0xDBFF).contains(u) || next.is_some_and(|x| (0xDC00..=0xDFFF).contains(x)))
-            && (!(0xDC00..=0xDFFF).contains(u) || prev.is_some_and(|x| (0xD800..=0xDBFF).contains(x)))
+            && (!(0xDC00..=0xDFFF).contains(u)
+                || prev.is_some_and(|x| (0xD800..=0xDBFF).contains(x)))
     })
 }
 
@@ -190,8 +204,12 @@ impl<'a> Chk<'a> {
 
     /// The name of the identifier, string or private name node `i`.
     fn name(&self, i: usize) -> Vec<u32> {
-        let Some(n) = self.node(i) else { return Vec::new() };
-        lex(self.src, n.start, Goal::InputElementDiv, true).map(|t| t.name).unwrap_or_default()
+        let Some(n) = self.node(i) else {
+            return Vec::new();
+        };
+        lex(self.src, n.start, Goal::InputElementDiv, true)
+            .map(|t| t.name)
+            .unwrap_or_default()
     }
 
     /// The first token of node `i`.
@@ -216,10 +234,18 @@ impl<'a> Chk<'a> {
             K::MemberExpression | K::SuperProperty => Target::Simple,
             K::ParenthesizedExpression => {
                 let k0 = self.k(c, 0);
-                if k0 < c { self.target_type(k0, strict) } else { Target::Invalid }
+                if k0 < c {
+                    self.target_type(k0, strict)
+                } else {
+                    Target::Invalid
+                }
             }
             K::CallExpression => {
-                if strict { Target::Invalid } else { Target::WebCompat }
+                if strict {
+                    Target::Invalid
+                } else {
+                    Target::WebCompat
+                }
             }
             _ => Target::Invalid,
         }
@@ -243,7 +269,11 @@ impl<'a> Chk<'a> {
     fn is_iteration(&self, mut c: usize) -> bool {
         loop {
             match self.kd(c) {
-                K::DoWhileStatement | K::WhileStatement | K::ForStatement | K::ForInStatement | K::ForOfStatement => {
+                K::DoWhileStatement
+                | K::WhileStatement
+                | K::ForStatement
+                | K::ForInStatement
+                | K::ForOfStatement => {
                     return true;
                 }
                 K::LabelledStatement => {
@@ -284,7 +314,9 @@ impl<'a> Chk<'a> {
         }
         let s = self.k(c, 0);
         let Some(n) = self.node(s) else { return false };
-        let Some(text) = self.src.get(n.start..n.end) else { return false };
+        let Some(text) = self.src.get(n.start..n.end) else {
+            return false;
+        };
         text.len() == 12
             && matches!(text.first(), Some(0x22 | 0x27))
             && text.get(1..11).is_some_and(|t| name_is(t, "use strict"))
@@ -320,7 +352,9 @@ impl<'a> Chk<'a> {
     }
 
     fn is_constructor_named(&self, c: usize) -> bool {
-        self.kd(c) == K::MethodDefinition && !self.flag(c) && self.prop_name_is(self.k(c, 0), "constructor")
+        self.kd(c) == K::MethodDefinition
+            && !self.flag(c)
+            && self.prop_name_is(self.k(c, 0), "constructor")
     }
 
     /// BoundNames of the binding node `c`.
@@ -374,17 +408,29 @@ impl<'a> Chk<'a> {
         match self.kd(c) {
             K::LexicalDeclaration => {
                 for n in self.bound_names(c) {
-                    out.push(Decl { name: n, plain_function: false });
+                    out.push(Decl {
+                        name: n,
+                        plain_function: false,
+                    });
                 }
             }
             K::ClassDeclaration => {
                 if self.kd(k0) == K::BindingIdentifier {
-                    out.push(Decl { name: self.name(k0), plain_function: false });
+                    out.push(Decl {
+                        name: self.name(k0),
+                        plain_function: false,
+                    });
                 }
             }
-            K::FunctionDeclaration | K::GeneratorDeclaration | K::AsyncFunctionDeclaration | K::AsyncGeneratorDeclaration => {
+            K::FunctionDeclaration
+            | K::GeneratorDeclaration
+            | K::AsyncFunctionDeclaration
+            | K::AsyncGeneratorDeclaration => {
                 if !top && self.kd(k0) == K::BindingIdentifier {
-                    out.push(Decl { name: self.name(k0), plain_function: self.kd(c) == K::FunctionDeclaration });
+                    out.push(Decl {
+                        name: self.name(k0),
+                        plain_function: self.kd(c) == K::FunctionDeclaration,
+                    });
                 }
             }
             K::LabelledStatement => {
@@ -399,8 +445,10 @@ impl<'a> Chk<'a> {
                 }
             }
             K::ExportDeclaration
-                if matches!(self.op(c), Op::ExportDecl | Op::ExportDefaultHoistable | Op::ExportDefaultClass)
-                    && k0 < c =>
+                if matches!(
+                    self.op(c),
+                    Op::ExportDecl | Op::ExportDefaultHoistable | Op::ExportDefaultClass
+                ) && k0 < c =>
             {
                 self.lex_names_item(k0, false, out);
             }
@@ -412,13 +460,22 @@ impl<'a> Chk<'a> {
     fn bound_names_import(&self, c: usize, out: &mut Vec<Decl>) {
         let (k0, k1) = (self.k(c, 0), self.k(c, 1));
         if self.kd(k0) == K::BindingIdentifier {
-            out.push(Decl { name: self.name(k0), plain_function: false });
+            out.push(Decl {
+                name: self.name(k0),
+                plain_function: false,
+            });
         }
         if self.kd(k1) == K::NameSpaceImport {
-            out.push(Decl { name: self.name(self.k(k1, 0)), plain_function: false });
+            out.push(Decl {
+                name: self.name(self.k(k1, 0)),
+                plain_function: false,
+            });
         } else if self.kd(k1) == K::NamedImports {
             for s in self.ch(k1) {
-                out.push(Decl { name: self.name(self.k(*s as usize, 1)), plain_function: false });
+                out.push(Decl {
+                    name: self.name(self.k(*s as usize, 1)),
+                    plain_function: false,
+                });
             }
         }
     }
@@ -432,12 +489,13 @@ impl<'a> Chk<'a> {
     }
 
     fn has_forbidden_duplicate(ds: &[Decl], strict: bool) -> bool {
-        let mut index: std::collections::HashMap<&Vec<u32>, Vec<&Decl>> = std::collections::HashMap::new();
+        let mut index: std::collections::HashMap<&Vec<u32>, Vec<&Decl>> =
+            std::collections::HashMap::new();
         for d in ds {
-            if index
-                .get(&d.name)
-                .is_some_and(|prev| prev.iter().any(|p| !(!strict && p.plain_function && d.plain_function)))
-            {
+            if index.get(&d.name).is_some_and(|prev| {
+                prev.iter()
+                    .any(|p| !(!strict && p.plain_function && d.plain_function))
+            }) {
                 return true;
             }
             index.entry(&d.name).or_default().push(d);
@@ -490,7 +548,10 @@ impl<'a> Chk<'a> {
             }
             K::Catch => self.var_names_sub(c, k1, out),
             K::Finally => self.var_names_sub(c, k0, out),
-            K::FunctionDeclaration | K::GeneratorDeclaration | K::AsyncFunctionDeclaration | K::AsyncGeneratorDeclaration => {
+            K::FunctionDeclaration
+            | K::GeneratorDeclaration
+            | K::AsyncFunctionDeclaration
+            | K::AsyncGeneratorDeclaration => {
                 if top && self.kd(k0) == K::BindingIdentifier {
                     out.push(self.name(k0));
                 }
@@ -561,11 +622,13 @@ impl<'a> Chk<'a> {
                     return false;
                 }
             }
-            if self.kd(c) == K::MethodDefinition && is_static && self.prop_name_is(key, "prototype") {
+            if self.kd(c) == K::MethodDefinition && is_static && self.prop_name_is(key, "prototype")
+            {
                 return false;
             }
             if self.kd(c) == K::FieldDefinition
-                && (self.prop_name_is(key, "constructor") || (is_static && self.prop_name_is(key, "prototype")))
+                && (self.prop_name_is(key, "constructor")
+                    || (is_static && self.prop_name_is(key, "prototype")))
             {
                 return false;
             }
@@ -577,7 +640,8 @@ impl<'a> Chk<'a> {
             return false;
         }
         // Private names are declared once, except a getter and a setter pair.
-        let mut seen: std::collections::HashMap<Vec<u32>, Vec<(Op, bool, bool)>> = std::collections::HashMap::new();
+        let mut seen: std::collections::HashMap<Vec<u32>, Vec<(Op, bool, bool)>> =
+            std::collections::HashMap::new();
         for c in ks {
             let c = *c as usize;
             let key = self.k(c, 0);
@@ -607,7 +671,9 @@ impl<'a> Chk<'a> {
     }
 
     fn is_proto_entry(&self, c: usize) -> bool {
-        self.kd(c) == K::PropertyDefinition && self.op(c) == Op::KeyValue && self.prop_name_is(self.k(c, 0), "__proto__")
+        self.kd(c) == K::PropertyDefinition
+            && self.op(c) == Op::KeyValue
+            && self.prop_name_is(self.k(c, 0), "__proto__")
     }
 
     /// §13.5.1.1: `delete` of an identifier or private member in strict code.
@@ -628,7 +694,9 @@ impl<'a> Chk<'a> {
         let is_yield = name_is(&nm, "yield");
         let is_await = name_is(&nm, "await");
         let kind = self.kd(n);
-        !(kind == K::BindingIdentifier && env.strict && (name_is(&nm, "arguments") || name_is(&nm, "eval")))
+        !(kind == K::BindingIdentifier
+            && env.strict
+            && (name_is(&nm, "arguments") || name_is(&nm, "eval")))
             && !(env.strict && name_is_strict_reserved(&nm))
             && !(env.module && is_await)
             && !(env.yield_ && is_yield)
@@ -643,12 +711,17 @@ impl<'a> Chk<'a> {
         let ks = self.ch(n);
         let (k0, k1, k2, k3) = (self.k(n, 0), self.k(n, 1), self.k(n, 2), self.k(n, 3));
         match self.kd(n) {
-            K::IdentifierReference | K::BindingIdentifier | K::LabelIdentifier => self.identifier_ok(n, env),
+            K::IdentifierReference | K::BindingIdentifier | K::LabelIdentifier => {
+                self.identifier_ok(n, env)
+            }
             K::NumericLiteral | K::StringLiteral => {
                 !(env.strict && self.tok(n).is_some_and(|t| t.legacy))
             }
             K::ObjectLiteral => {
-                let protos = ks.iter().filter(|c| self.is_proto_entry(**c as usize)).count();
+                let protos = ks
+                    .iter()
+                    .filter(|c| self.is_proto_entry(**c as usize))
+                    .count();
                 protos <= 1
             }
             K::CoverInitializedName => false,
@@ -656,23 +729,33 @@ impl<'a> Chk<'a> {
             K::SuperCall => env.super_call,
             K::NewTarget => env.new_target,
             K::ImportMeta => env.module,
-            K::MemberExpression => self.op(n) != Op::PrivateDot || self.private_declared(&self.name(k1)),
+            K::MemberExpression => {
+                self.op(n) != Op::PrivateDot || self.private_declared(&self.name(k1))
+            }
             K::OptionalChain => {
                 self.op(n) != Op::ChainTemplate
                     && (self.op(n) != Op::ChainPrivateDot || self.private_declared(&self.name(k0)))
             }
-            K::RelationalExpression => self.kd(k0) != K::PrivateIdentifier || self.private_declared(&self.name(k0)),
+            K::RelationalExpression => {
+                self.kd(k0) != K::PrivateIdentifier || self.private_declared(&self.name(k0))
+            }
             K::UnaryExpression => !(self.op(n) == Op::Delete && self.delete_error(k0, env.strict)),
             K::UpdateExpression => self.target_type(k0, env.strict) != Target::Invalid,
             K::AssignmentExpression => {
                 let op = self.op(n);
                 (op == Op::Assign && is_assignment_pattern(self.kd(k0)))
                     || (self.target_type(k0, env.strict) != Target::Invalid
-                        && (!matches!(op, Op::LogicalAndAssign | Op::LogicalOrAssign | Op::CoalesceAssign)
-                            || self.target_type(k0, env.strict) == Target::Simple))
+                        && (!matches!(
+                            op,
+                            Op::LogicalAndAssign | Op::LogicalOrAssign | Op::CoalesceAssign
+                        ) || self.target_type(k0, env.strict) == Target::Simple))
             }
-            K::AssignmentProperty => self.op(n) != Op::Shorthand || self.target_type(k0, env.strict) == Target::Simple,
-            K::AssignmentElement | K::AssignmentRestElement => self.destructuring_target_ok(k0, env.strict),
+            K::AssignmentProperty => {
+                self.op(n) != Op::Shorthand || self.target_type(k0, env.strict) == Target::Simple
+            }
+            K::AssignmentElement | K::AssignmentRestElement => {
+                self.destructuring_target_ok(k0, env.strict)
+            }
             K::AssignmentRestProperty => {
                 !is_assignment_pattern(self.kd(k0)) && self.destructuring_target_ok(k0, env.strict)
             }
@@ -683,12 +766,16 @@ impl<'a> Chk<'a> {
                 !bn.iter().any(|x| name_is(x, "let"))
                     && !has_dup(&bn)
                     && (self.op(n) != Op::Const
-                        || ks.iter().all(|b| self.kd(self.k(*b as usize, 1)) != K::Absent))
+                        || ks
+                            .iter()
+                            .all(|b| self.kd(self.k(*b as usize, 1)) != K::Absent))
             }
             K::IfStatement => {
                 !self.is_labelled_function(k1)
                     && !self.is_labelled_function(k2)
-                    && !(env.strict && (self.kd(k1) == K::FunctionDeclaration || self.kd(k2) == K::FunctionDeclaration))
+                    && !(env.strict
+                        && (self.kd(k1) == K::FunctionDeclaration
+                            || self.kd(k2) == K::FunctionDeclaration))
             }
             K::DoWhileStatement => !self.is_labelled_function(k0),
             K::WhileStatement => !self.is_labelled_function(k1),
@@ -719,7 +806,10 @@ impl<'a> Chk<'a> {
                     if self.op(k0) != Op::Var {
                         let mut v = Vec::new();
                         self.var_names_sub(n, k2, &mut v);
-                        if bn.iter().any(|x| name_is(x, "let")) || has_dup(&bn) || intersects(&bn, &v) {
+                        if bn.iter().any(|x| name_is(x, "let"))
+                            || has_dup(&bn)
+                            || intersects(&bn, &v)
+                        {
                             return false;
                         }
                     }
@@ -732,7 +822,8 @@ impl<'a> Chk<'a> {
                     }
                     true
                 } else {
-                    is_assignment_pattern(self.kd(k0)) || self.target_type(k0, env.strict) != Target::Invalid
+                    is_assignment_pattern(self.kd(k0))
+                        || self.target_type(k0, env.strict) != Target::Invalid
                 }
             }
             K::ContinueStatement => {
@@ -761,11 +852,13 @@ impl<'a> Chk<'a> {
                 }
                 let mut vars = Vec::new();
                 self.var_names_list(n, ks, 1, &mut vars);
-                !Self::has_forbidden_duplicate(&lex, env.strict) && !intersects(&Self::plain(&lex), &vars)
+                !Self::has_forbidden_duplicate(&lex, env.strict)
+                    && !intersects(&Self::plain(&lex), &vars)
             }
             K::LabelledStatement => {
                 let nm = self.name(k0);
-                !self.labels.iter().any(|(l, _)| *l == nm) && !(env.strict && self.kd(k1) == K::FunctionDeclaration)
+                !self.labels.iter().any(|(l, _)| *l == nm)
+                    && !(env.strict && self.kd(k1) == K::FunctionDeclaration)
             }
             K::Catch => {
                 let bn = self.bound_names(k0);
@@ -789,7 +882,11 @@ impl<'a> Chk<'a> {
                 self.function_early(k1, body, false, env.strict || self.has_use_strict(body))
             }
             K::ArrowFunction | K::AsyncArrowFunction => {
-                let body: &[u32] = if self.kd(k1) == K::FunctionBody { self.ch(k1) } else { &[] };
+                let body: &[u32] = if self.kd(k1) == K::FunctionBody {
+                    self.ch(k1)
+                } else {
+                    &[]
+                };
                 self.function_early(k0, body, true, env.strict || self.has_use_strict(body))
             }
             K::MethodDefinition => {
@@ -802,7 +899,10 @@ impl<'a> Chk<'a> {
             K::ExportSpecifier => self.export_name_ok(k0) && self.export_name_ok(k1),
             K::ImportSpecifier => self.export_name_ok(k0),
             K::WithClause => {
-                let keys: Vec<Vec<u32>> = ks.iter().map(|c| self.name(self.k(*c as usize, 0))).collect();
+                let keys: Vec<Vec<u32>> = ks
+                    .iter()
+                    .map(|c| self.name(self.k(*c as usize, 0)))
+                    .collect();
                 !has_dup(&keys)
             }
             K::ExportDeclaration => {
@@ -843,7 +943,11 @@ impl<'a> Chk<'a> {
                 .map(|s| {
                     let s = *s as usize;
                     let e = self.k(s, 1);
-                    if self.kd(e) == K::Absent { self.name(self.k(s, 0)) } else { self.name(e) }
+                    if self.kd(e) == K::Absent {
+                        self.name(self.k(s, 0))
+                    } else {
+                        self.name(e)
+                    }
                 })
                 .collect(),
             Op::ExportVar => self.bound_names(k0),
@@ -925,7 +1029,17 @@ impl<'a> Chk<'a> {
         let fn_strict = env.strict || self.has_use_strict(self.ch(k2));
         let arrow_strict =
             env.strict || (self.kd(k1) == K::FunctionBody && self.has_use_strict(self.ch(k1)));
-        let loop_body = |b: bool| if b { Env { in_loop: true, in_breakable: true, ..env } } else { env };
+        let loop_body = |b: bool| {
+            if b {
+                Env {
+                    in_loop: true,
+                    in_breakable: true,
+                    ..env
+                }
+            } else {
+                env
+            }
+        };
         match kind {
             kd if is_function_kind(kd) => {
                 if k == 0 {
@@ -940,23 +1054,55 @@ impl<'a> Chk<'a> {
                         false,
                     )
                 } else {
-                    let f = Fl { y: g, aw, sp: false, sc: false, nt: true, na: false, nya: k == 1 };
+                    let f = Fl {
+                        y: g,
+                        aw,
+                        sp: false,
+                        sc: false,
+                        nt: true,
+                        na: false,
+                        nya: k == 1,
+                    };
                     (Self::env_fn(env, fn_strict, f), true)
                 }
             }
             K::ArrowFunction => {
                 if k == 0 {
-                    (Self::env_fn(env, arrow_strict, Self::arrow_flags(env, env.yield_, env.await_, true)), false)
+                    (
+                        Self::env_fn(
+                            env,
+                            arrow_strict,
+                            Self::arrow_flags(env, env.yield_, env.await_, true),
+                        ),
+                        false,
+                    )
                 } else {
-                    (Self::env_fn(env, arrow_strict, Self::arrow_flags(env, false, false, false)), true)
+                    (
+                        Self::env_fn(
+                            env,
+                            arrow_strict,
+                            Self::arrow_flags(env, false, false, false),
+                        ),
+                        true,
+                    )
                 }
             }
             K::AsyncArrowFunction => {
                 if k == 0 {
                     let y = self.kd(k0) == K::BindingIdentifier && env.yield_;
-                    (Self::env_fn(env, arrow_strict, Self::arrow_flags(env, y, true, true)), false)
+                    (
+                        Self::env_fn(env, arrow_strict, Self::arrow_flags(env, y, true, true)),
+                        false,
+                    )
                 } else {
-                    (Self::env_fn(env, arrow_strict, Self::arrow_flags(env, false, true, false)), true)
+                    (
+                        Self::env_fn(
+                            env,
+                            arrow_strict,
+                            Self::arrow_flags(env, false, true, false),
+                        ),
+                        true,
+                    )
                 }
             }
             K::MethodDefinition => {
@@ -967,13 +1113,29 @@ impl<'a> Chk<'a> {
                     let mg = matches!(op, Op::GeneratorMethod | Op::AsyncGeneratorMethod);
                     let ma = matches!(op, Op::AsyncMethod | Op::AsyncGeneratorMethod);
                     let sc = env.derived && self.is_constructor_named(n) && op == Op::Method;
-                    let f = Fl { y: mg, aw: ma, sp: true, sc, nt: true, na: false, nya: k == 1 };
+                    let f = Fl {
+                        y: mg,
+                        aw: ma,
+                        sp: true,
+                        sc,
+                        nt: true,
+                        na: false,
+                        nya: k == 1,
+                    };
                     (Self::env_fn(env, fn_strict, f), true)
                 }
             }
             K::FieldDefinition => {
                 if k == 1 {
-                    let f = Fl { y: env.yield_, aw: env.await_, sp: true, sc: false, nt: true, na: true, nya: false };
+                    let f = Fl {
+                        y: env.yield_,
+                        aw: env.await_,
+                        sp: true,
+                        sc: false,
+                        nt: true,
+                        na: true,
+                        nya: false,
+                    };
                     (Self::env_fn(env, env.strict, f), true)
                 } else {
                     (env, false)
@@ -981,23 +1143,51 @@ impl<'a> Chk<'a> {
             }
             // 15.7.1 ContainsAwait: no `await` and no `for await` in a static block.
             K::ClassStaticBlock => {
-                let f = Fl { y: false, aw: true, sp: true, sc: false, nt: true, na: true, nya: true };
+                let f = Fl {
+                    y: false,
+                    aw: true,
+                    sp: true,
+                    sc: false,
+                    nt: true,
+                    na: true,
+                    nya: true,
+                };
                 (Self::env_fn(env, env.strict, f), true)
             }
             K::ClassDeclaration | K::ClassExpression => (
                 Env {
                     strict: true,
-                    derived: if k == 2 { self.kd(k1) != K::Absent } else { env.derived },
+                    derived: if k == 2 {
+                        self.kd(k1) != K::Absent
+                    } else {
+                        env.derived
+                    },
                     ..env
                 },
                 false,
             ),
-            K::ObjectLiteral => (Env { derived: false, ..env }, false),
+            K::ObjectLiteral => (
+                Env {
+                    derived: false,
+                    ..env
+                },
+                false,
+            ),
             K::DoWhileStatement => (loop_body(k == 0), false),
             K::WhileStatement => (loop_body(k == 1), false),
             K::ForStatement => (loop_body(k == 3), false),
             K::ForInStatement | K::ForOfStatement => (loop_body(k == 2), false),
-            K::SwitchStatement => (if k >= 1 { Env { in_breakable: true, ..env } } else { env }, false),
+            K::SwitchStatement => (
+                if k >= 1 {
+                    Env {
+                        in_breakable: true,
+                        ..env
+                    }
+                } else {
+                    env
+                },
+                false,
+            ),
             _ => (env, false),
         }
     }
@@ -1029,7 +1219,11 @@ impl<'a> Chk<'a> {
                 return false;
             }
             let (cenv, clear) = self.child_env(n, k, env);
-            let saved = if clear { Some(std::mem::take(&mut self.labels)) } else { None };
+            let saved = if clear {
+                Some(std::mem::take(&mut self.labels))
+            } else {
+                None
+            };
             let pushed_label = kind == K::LabelledStatement && k == 1;
             if pushed_label {
                 let nm = self.name(self.k(n, 0));

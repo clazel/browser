@@ -38,7 +38,10 @@
 //! error ([`spec::is_valid_parse`]), and that an `Err` means there is no such
 //! parse ([`contract::parse_ensures`]). So [`exec::parse`] does not implement
 //! [`api::JsParser`], and the crate stays at Tier 0. The first steps towards
-//! that proof are in [`derive`]: rule lemmas that a node of the shape the parser
+//! that proof are in [`arena_d`], a proven check of `spec::d` over the whole arena
+//! against the tokens the parser consumed, for the productions it covers (a
+//! `Script` or `Module` of empty and expression statements over literals,
+//! parentheses and `+ - * / % < >`), run by [`exec::parse_checked`]; and in [`derive`]: rule lemmas that a node of the shape the parser
 //! builds is derived by [`spec::d`] (literals, names, keywords, unary, binary,
 //! conditional, assignment, parenthesized and member-dot expressions), and
 //! `check_leaf`, a checked leaf against the executable tokens. They are not yet

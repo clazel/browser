@@ -143,13 +143,33 @@ fn test262_parse_and_early_errors() -> Result<(), String> {
         .collect();
     let newly: Vec<_> = failing.difference(&expected).collect();
     let fixed: Vec<_> = expected.difference(&failing).collect();
-    assert!(newly.is_empty(), "{} tests newly fail:\n{}", newly.len(), newly.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("\n"));
-    assert!(fixed.is_empty(), "{} listed tests now pass (remove them):\n{}", fixed.len(), fixed.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("\n"));
+    assert!(
+        newly.is_empty(),
+        "{} tests newly fail:\n{}",
+        newly.len(),
+        newly
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+    assert!(
+        fixed.is_empty(),
+        "{} listed tests now pass (remove them):\n{}",
+        fixed.len(),
+        fixed
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
     Ok(())
 }
 
 fn all_js(dir: &std::path::Path, out: &mut Vec<PathBuf>) {
-    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
     let mut entries: Vec<_> = rd.filter_map(Result::ok).collect();
     entries.sort_by_key(|e| e.path());
     for e in entries {
@@ -179,7 +199,11 @@ fn test262_harness_parses() -> Result<(), String> {
             bad.push(f.display().to_string());
         }
     }
-    assert!(bad.is_empty(), "harness files that do not parse:\n{}", bad.join("\n"));
+    assert!(
+        bad.is_empty(),
+        "harness files that do not parse:\n{}",
+        bad.join("\n")
+    );
     Ok(())
 }
 
@@ -207,7 +231,10 @@ fn test262_fixtures_parse() -> Result<(), String> {
     all_js(&root(), &mut files);
     let mut rejected = BTreeSet::new();
     let mut n = 0;
-    for f in files.iter().filter(|f| f.to_string_lossy().ends_with("_FIXTURE.js")) {
+    for f in files
+        .iter()
+        .filter(|f| f.to_string_lossy().ends_with("_FIXTURE.js"))
+    {
         n += 1;
         let text = std::fs::read_to_string(f).map_err(|e| e.to_string())?;
         let src: Vec<u32> = text.chars().map(u32::from).collect();

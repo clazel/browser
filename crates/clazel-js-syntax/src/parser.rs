@@ -64,6 +64,10 @@ pub struct Parser<'a> {
     pub prev_end: usize,
     /// The arena (garbage included: [`crate::check`] sees the compacted one).
     pub nodes: Vec<Node>,
+    /// The tokens consumed so far.
+    pub rec: Vec<crate::arena_d::DTok>,
+    /// Where a `;` was inserted (before the token with this index), and which.
+    pub gap_events: Vec<(usize, crate::spec::Ins)>,
     /// `spec::lvl` of each node.
     pub lv: Vec<i32>,
     /// The nesting of recursive calls that each sit inside a node.
@@ -92,6 +96,8 @@ impl<'a> Parser<'a> {
             t,
             prev_end: 0,
             nodes: Vec::new(),
+            rec: Vec::new(),
+            gap_events: Vec::new(),
             lv: Vec::new(),
             depth: 0,
             bad: HashSet::new(),
@@ -105,8 +111,12 @@ impl<'a> Parser<'a> {
 
     /// Moves to the next token, read with `InputElementDiv`.
     pub fn bump(&mut self) -> R<()> {
+        if !self.t.eof {
+            self.rec.push(crate::token::dtok_of(&self.t));
+        }
         self.prev_end = self.t.end;
-        let t = lex(self.src, self.t.end, Goal::InputElementDiv, self.html).ok_or(ParseError::Syntax)?;
+        let t = lex(self.src, self.t.end, Goal::InputElementDiv, self.html)
+            .ok_or(ParseError::Syntax)?;
         self.t = t;
         Ok(())
     }
@@ -139,8 +149,13 @@ impl<'a> Parser<'a> {
     /// `InputElementTemplateTail`.
     pub fn relex_template_tail(&mut self) -> R<()> {
         let nl = self.t.nl;
-        let mut t = lex(self.src, self.t.start, Goal::InputElementTemplateTail, self.html)
-            .ok_or(ParseError::Syntax)?;
+        let mut t = lex(
+            self.src,
+            self.t.start,
+            Goal::InputElementTemplateTail,
+            self.html,
+        )
+        .ok_or(ParseError::Syntax)?;
         t.nl = nl;
         self.t = t;
         Ok(())
@@ -158,20 +173,12 @@ impl<'a> Parser<'a> {
 
     /// Consumes the punctuator `p`, or a syntax error.
     pub fn expect_p(&mut self, p: &str) -> R<()> {
-        if self.t.is_p(p) {
-            self.bump()
-        } else {
-            syn()
-        }
+        if self.t.is_p(p) { self.bump() } else { syn() }
     }
 
     /// Consumes the word `w`, or a syntax error.
     pub fn expect_w(&mut self, w: &str) -> R<()> {
-        if self.t.is_w(w) {
-            self.bump()
-        } else {
-            syn()
-        }
+        if self.t.is_w(w) { self.bump() } else { syn() }
     }
 
     /// §12.10: the end of a statement that ends with `;`: a real `;`, or one
@@ -184,6 +191,8 @@ impl<'a> Parser<'a> {
             self.bump()?;
             Ok(e)
         } else if self.t.eof || self.t.nl || self.t.is_p("}") {
+            self.gap_events
+                .push((self.rec.len(), crate::spec::Ins::Semicolon));
             Ok(self.prev_end)
         } else {
             syn()
@@ -208,10 +217,25 @@ impl<'a> Parser<'a> {
     // ----- nodes ------------------------------------------------------
 
     /// Adds a node; its id.
-    pub fn mk(&mut self, kind: NodeKind, op: Op, flag: bool, start: usize, end: usize, children: Vec<u32>) -> u32 {
+    pub fn mk(
+        &mut self,
+        kind: NodeKind,
+        op: Op,
+        flag: bool,
+        start: usize,
+        end: usize,
+        children: Vec<u32>,
+    ) -> u32 {
         let id = u32::try_from(self.nodes.len()).unwrap_or(u32::MAX);
         let first = children.first().copied();
-        self.nodes.push(Node { kind, op, flag, start, end, children });
+        self.nodes.push(Node {
+            kind,
+            op,
+            flag,
+            start,
+            end,
+            children,
+        });
         // A chain of `MemberExpression` and `TaggedTemplate` nodes is 17 when
         // its base is, 15 otherwise (remembered, so that a long chain is not
         // walked at every link).
@@ -267,7 +291,9 @@ impl<'a> Parser<'a> {
 
     /// Child `k` of `id`, `u32::MAX` (which no check accepts) if none.
     pub fn child(&self, id: u32, k: usize) -> u32 {
-        self.node(id).and_then(|n| n.children.get(k).copied()).unwrap_or(u32::MAX)
+        self.node(id)
+            .and_then(|n| n.children.get(k).copied())
+            .unwrap_or(u32::MAX)
     }
 
     /// The number of children of `id`.

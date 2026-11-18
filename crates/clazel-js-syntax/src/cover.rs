@@ -16,7 +16,9 @@ impl<'a> Parser<'a> {
 
     /// The children of `id`.
     fn kids(&self, id: u32) -> Vec<u32> {
-        self.node(id).map(|n| n.children.clone()).unwrap_or_default()
+        self.node(id)
+            .map(|n| n.children.clone())
+            .unwrap_or_default()
     }
 
     /// `DestructuringAssignmentTarget`, and the target of `=`: a
@@ -62,16 +64,37 @@ impl<'a> Parser<'a> {
                 (K::PropertyDefinition, Op::Shorthand) => {
                     let ident = self.child(c, 0);
                     let a = self.absent_at(e);
-                    out.push(self.mk(K::AssignmentProperty, Op::Shorthand, false, s, e, vec![ident, a]));
+                    out.push(self.mk(
+                        K::AssignmentProperty,
+                        Op::Shorthand,
+                        false,
+                        s,
+                        e,
+                        vec![ident, a],
+                    ));
                 }
                 (K::CoverInitializedName, _) => {
                     let (ident, init) = (self.child(c, 0), self.child(c, 1));
-                    out.push(self.mk(K::AssignmentProperty, Op::Shorthand, false, s, e, vec![ident, init]));
+                    out.push(self.mk(
+                        K::AssignmentProperty,
+                        Op::Shorthand,
+                        false,
+                        s,
+                        e,
+                        vec![ident, init],
+                    ));
                 }
                 (K::PropertyDefinition, Op::KeyValue) => {
                     let (name, v) = (self.child(c, 0), self.child(c, 1));
                     let el = self.as_assign_element(v)?;
-                    out.push(self.mk(K::AssignmentProperty, Op::KeyValue, false, s, e, vec![name, el]));
+                    out.push(self.mk(
+                        K::AssignmentProperty,
+                        Op::KeyValue,
+                        false,
+                        s,
+                        e,
+                        vec![name, el],
+                    ));
                 }
                 (K::PropertyDefinition, Op::Spread) => {
                     if !last || self.rest_comma.contains(&id) {
@@ -170,7 +193,14 @@ impl<'a> Parser<'a> {
                 (K::PropertyDefinition, Op::KeyValue) | (K::AssignmentProperty, Op::KeyValue) => {
                     let (name, v) = (self.child(c, 0), self.child(c, 1));
                     let el = self.as_binding_element(v)?;
-                    out.push(self.mk(K::BindingProperty, Op::KeyValue, false, s, e, vec![name, el]));
+                    out.push(self.mk(
+                        K::BindingProperty,
+                        Op::KeyValue,
+                        false,
+                        s,
+                        e,
+                        vec![name, el],
+                    ));
                 }
                 (K::PropertyDefinition, Op::Spread) | (K::AssignmentRestProperty, _) => {
                     if !last || self.rest_comma.contains(&id) {

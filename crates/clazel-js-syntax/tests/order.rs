@@ -9,22 +9,33 @@ use clazel_js_syntax::spec::SourceGoal;
 
 fn check_ordered(src: &str, goal: SourceGoal) -> Result<(), String> {
     let cps: Vec<u32> = src.chars().map(u32::from).collect();
-    let Ok(ast) = parse(&cps, goal) else { return Ok(()) };
+    let Ok(ast) = parse(&cps, goal) else {
+        return Ok(());
+    };
     for (i, n) in ast.nodes.iter().enumerate() {
         let mut prev_end = n.start;
         for c in &n.children {
-            let Some(cn) = ast.nodes.get(*c as usize) else { return Err(format!("node {i}: no child {c}")) };
+            let Some(cn) = ast.nodes.get(*c as usize) else {
+                return Err(format!("node {i}: no child {c}"));
+            };
             if cn.start < prev_end {
-                return Err(format!("node {i}: child {c} starts at {} before {prev_end}", cn.start));
+                return Err(format!(
+                    "node {i}: child {c} starts at {} before {prev_end}",
+                    cn.start
+                ));
             }
             prev_end = cn.end;
         }
         if n.start < n.end {
             let first = cps.get(n.start).copied().unwrap_or(0);
             let last = cps.get(n.end.saturating_sub(1)).copied().unwrap_or(0);
-            let is_space = |c: u32| char::from_u32(c).is_some_and(char::is_whitespace) || c == 0xFEFF;
+            let is_space =
+                |c: u32| char::from_u32(c).is_some_and(char::is_whitespace) || c == 0xFEFF;
             if is_space(first) || is_space(last) {
-                return Err(format!("node {i} {}..{} starts or ends in white space", n.start, n.end));
+                return Err(format!(
+                    "node {i} {}..{} starts or ends in white space",
+                    n.start, n.end
+                ));
             }
         }
     }
@@ -33,13 +44,15 @@ fn check_ordered(src: &str, goal: SourceGoal) -> Result<(), String> {
 
 #[test]
 fn children_are_ordered_and_spans_are_tokens() -> Result<(), String> {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../clazel-js-lexer/tests/data/test262/harness");
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../clazel-js-lexer/tests/data/test262/harness");
     let mut n = 0;
     for entry in std::fs::read_dir(root).map_err(|e| e.to_string())? {
         let p = entry.map_err(|e| e.to_string())?.path();
         if p.extension().is_some_and(|x| x == "js") {
             let text = std::fs::read_to_string(&p).map_err(|e| e.to_string())?;
-            check_ordered(&text, SourceGoal::Script).map_err(|e| format!("{}: {e}", p.display()))?;
+            check_ordered(&text, SourceGoal::Script)
+                .map_err(|e| format!("{}: {e}", p.display()))?;
             n += 1;
         }
     }
