@@ -13,6 +13,11 @@
 //!   sequences).
 //! - [`contract`]: what the validator must be proven to satisfy.
 //! - [`api`]: the contract-only trait [`api::Validator`] (no implementation).
+//! - [`examples`]: instruction sequences (and one byte sequence) that are
+//!   accepted and refused, proven by evaluating the spec.
+//! - [`lemmas`]: general facts proven about the spec (a region access is a
+//!   checked access, the region table is never written, ...). They are what
+//!   the kill certificates of `mutations.json` cite.
 //!
 //! The decoder of untrusted bytes will be this crate's own (CLAUDE.md rule
 //! 8); the only thing shared with `clazel-x64` is its specification of the
@@ -30,4 +35,6 @@
 
 pub mod api;
 pub mod contract;
+pub mod examples;
+pub mod lemmas;
 pub mod spec;

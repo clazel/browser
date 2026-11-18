@@ -1,0 +1,111 @@
+{
+  "mutations": [
+    {
+      "id": "index-fact-ignored",
+      "file": "src/spec.rs",
+      "find": "(Fact::Base(k), Fact::Idx(k2, n)) => k == k2 && a.size <= n,",
+      "replace": "(Fact::Base(k), _) => true,",
+      "expect": "killed",
+      "reason": "Accepts a region access through any base register, whatever is known of the index (J.6: an index register compared against the region's bound): a load through an index no bounds check touched would be accepted, so lemma_region_access_facts is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_region_access_facts(cx_base2(), cx_load())",
+        "witness": "access_ok(cx_base2(), cx_load()) && !(fact_of(cx_base2(), 1) is Idx)"
+      }
+    },
+    {
+      "id": "check-size-order-reversed",
+      "file": "src/spec.rs",
+      "find": "k == k2 && a.size <= n,",
+      "replace": "k == k2 && n <= a.size,",
+      "expect": "killed",
+      "reason": "Reverses the comparison of the checked size and the access size, so a check for 4 bytes would license an 8-byte access and the last 4 bytes could lie outside the region: lemma_region_access_facts is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_region_access_facts(cx_idx4(), cx_load())",
+        "witness": "access_ok(cx_idx4(), cx_load()) && !idx_covers(fact_of(cx_idx4(), 1), 8)"
+      }
+    },
+    {
+      "id": "check-region-not-compared",
+      "file": "src/spec.rs",
+      "find": "k == k2 && a.size <= n,",
+      "replace": "a.size <= n,",
+      "expect": "killed",
+      "reason": "Does not compare the region of the base register with the region the index was checked against, so an index checked against a small region could be used with a large region's base: lemma_region_access_facts is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_region_access_facts(cx_idx_region2(), cx_load())",
+        "witness": "access_ok(cx_idx_region2(), cx_load()) && !same_region(fact_of(cx_idx_region2(), 2), fact_of(cx_idx_region2(), 1))"
+      }
+    },
+    {
+      "id": "stack-pointer-not-reserved",
+      "file": "src/spec.rs",
+      "find": "r == ctx_reg() || r == sp_reg()",
+      "replace": "r == ctx_reg()",
+      "expect": "killed",
+      "reason": "Lets the code write the stack pointer (J.6: reserved registers and the stack pointer are written only in the fixed prologue and epilogue), which would make the exit sequence's ret return anywhere: lemma_plain_ok_safe is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_plain_ok_safe(no_facts(), cx_mov_rsp())",
+        "witness": "plain_ok(no_facts(), cx_mov_rsp()) is Some"
+      }
+    },
+    {
+      "id": "targets-not-boundaries",
+      "file": "src/spec.rs",
+      "find": "Some(starts) => subset_of(all_targets(ins, entries), starts),",
+      "replace": "Some(starts) => true,",
+      "expect": "killed-incidentally",
+      "reason": "Drops the rule that every direct target is the start of a unit (J.6: every direct target is a decoded boundary inside the blob). Verus fails on example_jump_into_check_rejected (a jump into the middle of a bounds check would be accepted), but that example is evaluated with compute_only, which cannot be a certificate (see the header of lemmas.rs), and no general lemma states the rule yet."
+    },
+    {
+      "id": "facts-kept-at-targets",
+      "file": "src/spec.rs",
+      "find": "let fs0 = if seq_has(tg, here) {",
+      "replace": "let fs0 = if false && seq_has(tg, here) {",
+      "expect": "killed-incidentally",
+      "reason": "Keeps what is known about registers at a jump target, though the target can be reached without the instructions that established it (J.6: earlier in the same basic block). Verus fails on example_jump_over_check_rejected, which is evaluated with compute_only and so cannot be a certificate; no general lemma states the rule yet."
+    },
+    {
+      "id": "region-table-writable",
+      "file": "src/spec.rs",
+      "find": "!a.store || abi::exit_code_off() <= a.mem.disp",
+      "replace": "true",
+      "expect": "killed",
+      "reason": "Lets a store go anywhere in the context, including the region table: the code could rewrite a region's base or bound, then pass its own bounds check against the forged bound. lemma_ctx_store_in_exit_area is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_ctx_store_in_exit_area(no_facts(), cx_table_store())",
+        "witness": "access_ok(no_facts(), cx_table_store())"
+      }
+    },
+    {
+      "id": "end-of-blob-not-checked",
+      "file": "src/spec.rs",
+      "find": "(ins.last() is Ret || ins.last() is Jmp) && match scan(",
+      "replace": "true && match scan(",
+      "expect": "killed",
+      "reason": "Drops the rule that the last instruction is ret or jmp (J.6: every path ends in the exit sequence or a branch): control could run past the end of the blob into whatever follows. lemma_policy_ends is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_policy_ends(cx_falls_off(), seq![0int])",
+        "witness": "policy(cx_falls_off(), seq![0int])"
+      }
+    },
+    {
+      "id": "bare-ret-allowed",
+      "file": "src/spec.rs",
+      "find": "if i is Ret {",
+      "replace": "if i is Ret && false {",
+      "expect": "killed",
+      "reason": "Accepts a ret that is not the end of an exit sequence (J.6: no indirect branch except the exit sequence): the blob could return without having stored an exit code. lemma_plain_ok_safe is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_plain_ok_safe(no_facts(), Instr::Ret)",
+        "witness": "plain_ok(no_facts(), Instr::Ret) is Some"
+      }
+    }
+  ]
+}
