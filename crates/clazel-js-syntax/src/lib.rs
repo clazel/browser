@@ -53,6 +53,7 @@
 //!   are the only vendored negative tests the parser does not reject.
 
 pub mod api;
+pub mod arena_d;
 pub mod ast;
 pub mod check;
 pub mod contract;
