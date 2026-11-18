@@ -395,6 +395,7 @@ version = "0.0.0"
 name = "clazel-js-syntax"
 version = "0.0.0"
 dependencies = [
+ "clazel-js-lexer",
  "vstd",
 ]
 
