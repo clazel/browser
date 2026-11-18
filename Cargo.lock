@@ -218,6 +218,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "clazel-codecheck"
+version = "0.0.0"
+dependencies = [
+ "clazel-x64",
+ "vstd",
+]
+
+[[package]]
 name = "clazel-cookie"
 version = "0.0.0"
 dependencies = [
