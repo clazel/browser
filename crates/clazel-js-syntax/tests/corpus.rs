@@ -149,6 +149,7 @@ const SCRIPT_OK: &[&str] = &[
     "a = b || c && d | e ^ f & g == h < i << j + k * l ** m",
     "a instanceof b in c",
     "async function f() { class C { static { } } }",
+    "class A { static { async () => { await 0 }; async function f() { for await (x of y); } } }",
     "class C { static async *#m() {} static accessor }",
     "x = class { static x = 1; y = () => this }",
     "x = { f() { return () => super.g } }",
@@ -383,6 +384,9 @@ const SCRIPT_BAD: &[&str] = &[
     "class A { #x; m() { #x } }",
     "class A { #x; m() { 1 + #x in y } }",
     "class A { static { await } }",
+    "async function f() { class C { static { await 0 } } }",
+    "async function f() { class C { static { for await (x of y); } } }",
+    "class A { static { (x = await 0) => x } }",
     "class A { static { return } }",
     "class A { x = arguments }",
     "class A { static { arguments } }",
@@ -600,6 +604,9 @@ const SCRIPT_BAD: &[&str] = &[
 ];
 
 const MODULE_OK: &[&str] = &[
+    "import {a} from 'm'",
+    "import  {a, b as c}  from 'm'",
+    "import d, {a} from 'm'",
     "import a from 'm'",
     "import * as a from 'm'",
     "import { a } from 'm'",

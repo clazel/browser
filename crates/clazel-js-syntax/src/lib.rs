@@ -44,11 +44,10 @@
 //! - **Regular expression literals** are taken as valid
 //!   (`IsValidRegularExpressionLiteral`, §13.2.7.1): `clazel-js-regexp` (item
 //!   7.10) is not written. Test262 has 167 negative tests of their contents.
-//! - **A `static` block that contains `await`** (§15.7.1: "ContainsAwait ... is
-//!   true") is accepted, because `spec::early_local` has no rule for it, as it
-//!   has none for the duplicate and undeclared exports of §16.2.1.1; the
-//!   specification lists the latter as not yet specified, and the contract
-//!   promises an `Err` only where the specification finds no parse.
+//! - **Duplicate and undeclared exports** (§16.2.1.1) are accepted, because
+//!   `spec::early_local` has no rule for them: the specification lists them as
+//!   not yet specified, and the contract promises an `Err` only where the
+//!   specification finds no parse.
 
 pub mod api;
 pub mod ast;

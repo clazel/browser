@@ -697,6 +697,10 @@ impl<'a> Chk<'a> {
                 true
             }
             K::ForInStatement | K::ForOfStatement => {
+                // 15.7.1 ContainsAwait: no `for await` in a static block.
+                if self.kd(n) == K::ForOfStatement && self.flag(n) && env.no_yield_await {
+                    return false;
+                }
                 if self.is_labelled_function(k2) {
                     return false;
                 }
@@ -902,8 +906,9 @@ impl<'a> Chk<'a> {
                     (env, false)
                 }
             }
+            // 15.7.1 ContainsAwait: no `await` and no `for await` in a static block.
             K::ClassStaticBlock => {
-                let f = Fl { y: false, aw: true, sp: true, sc: false, nt: true, na: true, nya: false };
+                let f = Fl { y: false, aw: true, sp: true, sc: false, nt: true, na: true, nya: true };
                 (Self::env_fn(env, env.strict, f), true)
             }
             K::ClassDeclaration | K::ClassExpression => (

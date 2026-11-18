@@ -82,10 +82,8 @@ impl<'a> Parser<'a> {
             let end = self.semi()?;
             return Ok(self.mk(K::ImportDeclaration, Op::None, false, start, end, vec![clause, spec, with]));
         }
-        // The absent default binding is at the start of the clause, inside it: the
-        // specification puts it at the end of the `import` (`spec::span_ok`), which
-        // is outside the clause's span when white space separates them, so
-        // `spans_wf` would fail (reported with 7.3's second half).
+        // The absent default binding is at the start of the clause, inside it
+        // (`spec::span_ok` allows any point of the white space before the clause).
         let cs = self.t.start;
         let mut default = None;
         let mut named = None;
