@@ -39,14 +39,19 @@
 #             No setup.sh (it supports Linux and macOS): the base part needs
 #             only the pinned Rust toolchain. Proofs, harnesses and Miri are
 #             not repeated, as on macOS.
-#   miri      `verify --part miri`: the workspace's tests under Miri.
+#   miri      `verify --part miri <names>`: the tests under Miri, one job per
+#             crate group of `crates` (the same groups as the `crate` jobs),
+#             so no crate waits for another; run together in one job they
+#             took almost three hours. On a pull request, only the selected
+#             groups, as for the proofs, but with no approval: Miri was never
+#             behind it. Not at all when no crate is selected.
 #   base-macos the base part on macOS arm64: the Seatbelt sandbox, the demo,
 #             the host and escape tests, and the macOS-only code under
 #             clippy; then `verify --part miri clazel-sys`, the one crate with
 #             macOS-only code that has tests Miri can run. The workspace is
 #             not repeated under Miri there: Miri cannot run foreign calls, so
 #             every sandbox test is ignored under it on both platforms, and
-#             the rest is portable Rust that the `miri` job already
+#             the rest is portable Rust that the `miri` jobs already
 #             interprets with the same pinned nightly. Proofs and harnesses
 #             are not repeated either: Verus and Kani give the same answer
 #             for the same pinned versions on either platform.
@@ -58,8 +63,8 @@
 #             only once `approval` passed.
 #   assemble  `verify --part assemble`, the job named `Full verification`:
 #             fails unless every job above passed (`approval` is skipped
-#             outside pull requests, and `approval` and `crate` on a pull
-#             request that selected no crate), then checks that every
+#             outside pull requests, and `approval`, `miri` and `crate` on
+#             a pull request that selected no crate), then checks that every
 #             crate's measurements are present and from this commit, and
 #             reports whether docs/STATUS.md's table and images match them.
 #             On a pull request, every selected crate's measurements, with
@@ -241,9 +246,17 @@ jobs:
         run: cargo xtask verify --part base
 
   miri:
-    name: Verify (Miri)
+    # One job per crate group, as for `crate`; no approval (see the header).
+    name: Verify (Miri, ${{ contains(matrix.crate, ',') && 'crates without proofs' || matrix.crate }})
+    needs: crates
+    if: needs.crates.outputs.list != '[]'
     runs-on: ubuntu-24.04
     timeout-minutes: 360
+    strategy:
+      # Run every group, so one failure does not hide another.
+      fail-fast: false
+      matrix:
+        crate: ${{ fromJSON(needs.crates.outputs.list) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -257,8 +270,8 @@ jobs:
         run: scripts/setup.sh
       # No AppArmor step: tests that spawn the sandboxed renderer are
       # ignored under Miri.
-      - name: Verify (Miri)
-        run: cargo xtask verify --part miri
+      - name: Verify (Miri, ${{ matrix.crate }})
+        run: cargo xtask verify --part miri "${{ matrix.crate }}"
 
   approval:
     # The proofs take hours: on a pull request a reviewer of this
@@ -348,14 +361,14 @@ jobs:
           LIST: ${{ needs.crates.outputs.list }}
         run: |
           # `approval` is skipped outside pull requests, and only there;
-          # `approval` and `crate` are skipped on a pull request that
-          # selected no crate, and only then.
+          # `approval`, `miri` and `crate` are skipped on a pull request
+          # that selected no crate, and only then.
           none=$([ "$EVENT" = pull_request ] && [ "$LIST" = "[]" ] && echo true || echo false)
           bad=$(echo "$NEEDS" | jq -r --arg event "$EVENT" --argjson none "$none" '
             to_entries[]
             | select(.value.result != "success")
             | select(.key != "approval" or $event == "pull_request" or .value.result != "skipped")
-            | select(((.key == "approval" or .key == "crate") and $none and .value.result == "skipped") | not)
+            | select(((.key == "approval" or .key == "miri" or .key == "crate") and $none and .value.result == "skipped") | not)
             | "\(.key): \(.value.result)"')
           if [ -n "$bad" ]; then
             echo "Not every job passed:"

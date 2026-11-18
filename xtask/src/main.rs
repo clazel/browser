@@ -1389,7 +1389,7 @@ fn run_part(r: &mut Runner, part: Part, crates: &[Crate], pins: &Pins, root: &Pa
             };
             miri(r, pins, Some(&selected));
             format!(
-                "MIRI PART PASSED ({}: static checks and the tests under Miri; the other crates run in the workspace-wide miri part)",
+                "MIRI PART PASSED ({}: static checks and the tests under Miri; the other crates run in their own miri parts)",
                 names.join(", ")
             )
         }

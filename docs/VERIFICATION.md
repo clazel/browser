@@ -97,8 +97,8 @@ toolchain, on every merge-queue entry, every push to `main` and every
 manual run (Actions, "Run workflow"). The merge queue's run is the gate
 before `main`: a pull request reaches `main` only through the queue.
 
-A pull request runs the same jobs, but the proofs (the `crate` parts below)
-only for the crates it selects: its changed crates and every crate that
+A pull request runs the same jobs, but the proofs and Miri (the `crate`
+and `miri` parts below) only for the crates it selects: its changed crates and every crate that
 depends on one, against the base it merges into, as `--changed` selects
 them below (`cargo xtask crates --changed HEAD^1`). Nothing is done, and no
 tier is raised, until that run is green.
@@ -125,7 +125,10 @@ six-hour limit (`xtask/src/parts.rs`):
   after it: `clazel-sys` is the one crate with code that compiles only on
   macOS and has tests Miri can run (its foreign calls are ignored under
   Miri on both platforms), and every other crate's tests are portable Rust
-  that the Linux run interprets identically.
+  that the Linux run interprets identically. On Linux CI runs it once per
+  crate group of `cargo xtask crates`, one job each, as for `crate`: the
+  whole workspace in one job took almost three hours of Miri. On a pull
+  request, only the selected groups (above), with no approval.
 - `verify --part crate <names> --metrics <dir>`, where `<names>` is one
   crate or several separated by commas: static checks, then Kani, Verus,
   line counts, mutations and conformance for those crates. CI runs one job
@@ -138,8 +141,9 @@ six-hour limit (`xtask/src/parts.rs`):
   changes).
 - `verify --part assemble --metrics <dir>`, the `Full verification` job,
   which fails unless every other job passed (a skipped job included, but
-  `approval`, which runs on pull requests only, and `approval` and the
-  crate jobs on a pull request that selects no crate): static checks, then
+  `approval`, which runs on pull requests only, and `approval`, the Miri
+  jobs and the crate jobs on a pull request that selects no crate): static
+  checks, then
   it requires a file for every workspace crate from this commit, and
   reports whether docs/STATUS.md's table and the status images match them.
   On a pull request it runs with `--changed HEAD^1`: it requires a file for
