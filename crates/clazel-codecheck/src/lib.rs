@@ -1,0 +1,33 @@
+//! The JIT's code validators (docs/phases/jit.md item J.6), the x86-64 one
+//! first. The A64 validator and the second, independent x86-64 validator are
+//! later work.
+//!
+//! This is the first part of item J.6: the specification of what the
+//! validator accepts and the contract of its entry point, written before any
+//! validator (CLAUDE.md rule 3).
+//!
+//! - [`spec`]: **what an accepted blob is.** The checks of jit.md J.6 as spec
+//!   functions over the instruction subset of `clazel-x64`. Read its header
+//!   first: it lists the modelling choices and the ABI the validator fixes
+//!   (the context register, the region table, the bounds-check and exit
+//!   sequences).
+//! - [`contract`]: what the validator must be proven to satisfy.
+//! - [`api`]: the contract-only trait [`api::Validator`] (no implementation).
+//!
+//! The decoder of untrusted bytes will be this crate's own (CLAUDE.md rule
+//! 8); the only thing shared with `clazel-x64` is its specification of the
+//! subset and its canonical encoding.
+//!
+//! # Status
+//!
+//! Tier 0: there is no validator. The spec, the contract, examples and
+//! mutations exist. The theorem of jit.md exit criterion 2 (an accepted blob
+//! is confined) is not stated or proven here; see the end of [`spec`]'s
+//! header.
+//!
+//! Tier: see `[package.metadata.clazel]` in `Cargo.toml` and
+//! `docs/VERIFICATION.md`.
+
+pub mod api;
+pub mod contract;
+pub mod spec;
