@@ -722,13 +722,46 @@ proof fn lemma_child_before(a: AstV, m: int, k: int)
 {
 }
 
-/// The binding strength and operand minima of the binary kinds of the check.
+
+/// The kinds of binary expression: §13.6 to §13.13.
+pub open spec fn is_bin_kind(k: NodeKind) -> bool {
+    k == NodeKind::ExponentiationExpression || k == NodeKind::MultiplicativeExpression || k
+        == NodeKind::AdditiveExpression || k == NodeKind::ShiftExpression || k
+        == NodeKind::RelationalExpression || k == NodeKind::EqualityExpression || k
+        == NodeKind::BitwiseANDExpression || k == NodeKind::BitwiseXORExpression || k
+        == NodeKind::BitwiseORExpression || k == NodeKind::LogicalANDExpression || k
+        == NodeKind::LogicalORExpression || k == NodeKind::CoalesceExpression
+}
+
+/// The binding strength of a binary kind, and the least strength of its left and
+/// right operands (for `??` the left may also be a `CoalesceExpression`).
 pub open spec fn bin_levels(k: NodeKind) -> (int, int, int) {
     match k {
-        NodeKind::AdditiveExpression => (9, 9, 10),
+        NodeKind::ExponentiationExpression => (11, 13, 11),
         NodeKind::MultiplicativeExpression => (10, 10, 11),
-        _ => (7, 7, 8),
+        NodeKind::AdditiveExpression => (9, 9, 10),
+        NodeKind::ShiftExpression => (8, 8, 9),
+        NodeKind::RelationalExpression => (7, 7, 8),
+        NodeKind::EqualityExpression => (6, 6, 7),
+        NodeKind::BitwiseANDExpression => (5, 5, 6),
+        NodeKind::BitwiseXORExpression => (4, 4, 5),
+        NodeKind::BitwiseORExpression => (3, 3, 4),
+        NodeKind::LogicalANDExpression => (2, 2, 3),
+        NodeKind::LogicalORExpression => (1, 1, 2),
+        _ => (0, 3, 3),
     }
+}
+
+/// The operand levels make `binary_operands_ok`.
+proof fn lemma_operands(a: AstV, k: NodeKind, op: Op, l: int, r: int)
+    requires
+        is_bin_kind(k),
+        lvl(a, l) >= bin_levels(k).1 || (k == NodeKind::CoalesceExpression && kd(a, l)
+            == NodeKind::CoalesceExpression),
+        lvl(a, r) >= bin_levels(k).2,
+    ensures
+        binary_operands_ok(a, k, op, l, r),
+{
 }
 
 /// A binary node of the check whose operands and operator token are as read.
@@ -744,8 +777,6 @@ proof fn lemma_binary_done(
     mi: int,
     lo_r: int,
     j: int,
-    code: u32,
-    own: int,
 )
     requires
         toks_wf(ts),
@@ -753,72 +784,70 @@ proof fn lemma_binary_done(
         0 <= l < m,
         0 <= r < m,
         cx_in(cx, true) == cx,
+        cx.in_,
         a.nodes[m].children =~= seq![l, r],
-        a.nodes[m].kind == NodeKind::AdditiveExpression || a.nodes[m].kind
-            == NodeKind::MultiplicativeExpression || a.nodes[m].kind
-            == NodeKind::RelationalExpression,
-        a.nodes[m].kind == NodeKind::AdditiveExpression ==> (a.nodes[m].op == Op::Add
-            || a.nodes[m].op == Op::Sub),
-        a.nodes[m].kind == NodeKind::MultiplicativeExpression ==> (a.nodes[m].op == Op::Mul
-            || a.nodes[m].op == Op::Div || a.nodes[m].op == Op::Rem),
-        a.nodes[m].kind == NodeKind::RelationalExpression ==> (a.nodes[m].op == Op::Lt
-            || a.nodes[m].op == Op::Gt),
-        code == op_code(a.nodes[m].op),
-        own == bin_levels(a.nodes[m].kind).0,
-        lvl(a, l) >= bin_levels(a.nodes[m].kind).1,
+        is_bin_kind(a.nodes[m].kind),
+        bin_op_ok(a.nodes[m].kind, a.nodes[m].op),
+        lvl(a, l) >= bin_levels(a.nodes[m].kind).1 || (a.nodes[m].kind
+            == NodeKind::CoalesceExpression && kd(a, l) == NodeKind::CoalesceExpression),
         lvl(a, r) >= bin_levels(a.nodes[m].kind).2,
         node_done(a, ts, l, cx, lo_l, mi),
         node_done(a, ts, r, cx, lo_r, j),
         lo_r == mi + 1,
         0 <= mi < tn(ts),
-        ts.toks[mi].kind == TokKind::Punctuator,
-        ts.toks[mi].text =~= seq![code],
+        is_op_tok(ts, mi, a.nodes[m].op),
         a.nodes[m].start == ts.toks[lo_l].start,
         a.nodes[m].end == ts.toks[j - 1].end,
     ensures
         node_done(a, ts, m, cx, lo_l, j),
-        lvl(a, m) == own,
+        lvl(a, m) == bin_levels(a.nodes[m].kind).0,
 {
-    lemma_op_is_tok(ts, mi, a.nodes[m].op);
     assert(span_ok(a, ts, m, lo_l, j));
-    assert(bin_op_ok(a.nodes[m].kind, a.nodes[m].op));
-    assert(binary_operands_ok(a, a.nodes[m].kind, a.nodes[m].op, l, r));
+    lemma_operands(a, a.nodes[m].kind, a.nodes[m].op, l, r);
     crate::derive::lemma_binary_derives(a, ts, m, cx, lo_l, mi, j, l, r);
     lemma_ed_of(a, ts, m, lo_l, j);
 }
 
-/// The binding strengths, the operator check and the code point of a binary
-/// kind and operator of the check.
-fn bin_info(kind: NodeKind, op: Op) -> (r: (i32, i32, i32, bool, u32))
+/// The binding strengths of a binary kind and whether `op` is one of its operators.
+fn bin_info(kind: NodeKind, op: Op) -> (r: (i32, i32, i32, bool))
     ensures
-        r.3 ==> ((kind == NodeKind::AdditiveExpression && (op == Op::Add || op == Op::Sub))
-            || (kind == NodeKind::MultiplicativeExpression && (op == Op::Mul || op == Op::Div
-            || op == Op::Rem)) || (kind == NodeKind::RelationalExpression && (op == Op::Lt || op
-            == Op::Gt))) && r.4 == op_code(op) && r.0 == bin_levels(kind).0 && r.1
-            == bin_levels(kind).1 && r.2 == bin_levels(kind).2,
+        r.3 ==> (is_bin_kind(kind) && bin_op_ok(kind, op) && op_supported(op) && r.0 == bin_levels(
+            kind,
+        ).0 && r.1 == bin_levels(kind).1 && r.2 == bin_levels(kind).2),
 {
     match kind {
-        NodeKind::AdditiveExpression => match op {
-            Op::Add => (9, 9, 10, true, 0x2B),
-            Op::Sub => (9, 9, 10, true, 0x2D),
-            _ => (0, 0, 0, false, 0),
-        },
-        NodeKind::MultiplicativeExpression => match op {
-            Op::Mul => (10, 10, 11, true, 0x2A),
-            Op::Div => (10, 10, 11, true, 0x2F),
-            Op::Rem => (10, 10, 11, true, 0x25),
-            _ => (0, 0, 0, false, 0),
-        },
-        NodeKind::RelationalExpression => match op {
-            Op::Lt => (7, 7, 8, true, 0x3C),
-            Op::Gt => (7, 7, 8, true, 0x3E),
-            _ => (0, 0, 0, false, 0),
-        },
-        _ => (0, 0, 0, false, 0),
+        NodeKind::ExponentiationExpression => (11, 13, 11, matches!(op, Op::Exp)),
+        NodeKind::MultiplicativeExpression => (
+            10,
+            10,
+            11,
+            matches!(op, Op::Mul | Op::Div | Op::Rem),
+        ),
+        NodeKind::AdditiveExpression => (9, 9, 10, matches!(op, Op::Add | Op::Sub)),
+        NodeKind::ShiftExpression => (8, 8, 9, matches!(op, Op::Shl | Op::Shr | Op::UShr)),
+        NodeKind::RelationalExpression => (
+            7,
+            7,
+            8,
+            matches!(op, Op::Lt | Op::Gt | Op::Le | Op::Ge | Op::InstanceOf | Op::In),
+        ),
+        NodeKind::EqualityExpression => (
+            6,
+            6,
+            7,
+            matches!(op, Op::Eq | Op::Ne | Op::StrictEq | Op::StrictNe),
+        ),
+        NodeKind::BitwiseANDExpression => (5, 5, 6, matches!(op, Op::BitAnd)),
+        NodeKind::BitwiseXORExpression => (4, 4, 5, matches!(op, Op::BitXor)),
+        NodeKind::BitwiseORExpression => (3, 3, 4, matches!(op, Op::BitOr)),
+        NodeKind::LogicalANDExpression => (2, 2, 3, matches!(op, Op::LogicalAnd)),
+        NodeKind::LogicalORExpression => (1, 1, 2, matches!(op, Op::LogicalOr)),
+        NodeKind::CoalesceExpression => (0, 3, 3, matches!(op, Op::Coalesce)),
+        _ => (0, 0, 0, false),
     }
 }
 
-/// §13.6 to §13.13 `+ - * / % < >`: a binary node of the check.
+/// §13.6 to §13.13: a binary node of the check.
 #[verifier::spinoff_prover]
 fn check_binary(
     src: &[u32],
@@ -832,12 +861,19 @@ fn check_binary(
     requires
         m < nodes.len(),
         cx_in(g.cx, true) == g.cx,
+        g.cx.in_,
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
         inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
     ensures
         match r {
-            Some((l0, h0, l)) => node_done(arena_of(nodes@), g.ts, m as int, g.cx, l0 as int, h0 as int)
-                && l as int == lvl(arena_of(nodes@), m as int),
+            Some((l0, h0, l)) => node_done(
+                arena_of(nodes@),
+                g.ts,
+                m as int,
+                g.cx,
+                l0 as int,
+                h0 as int,
+            ) && l as int == lvl(arena_of(nodes@), m as int),
             None => true,
         },
 {
@@ -848,7 +884,7 @@ fn check_binary(
             return None;
         },
     };
-    let (own, lmin, rmin, opok, code) = bin_info(nd.kind, nd.op);
+    let (own, lmin, rmin, opok) = bin_info(nd.kind, nd.op);
     if !opok || nd.children.len() != 2 {
         return None;
     }
@@ -910,7 +946,13 @@ fn check_binary(
             return None;
         },
     };
-    if lvl_l < lmin || lvl_r < rmin || lo_r != mi.saturating_add(1) {
+    let left_coalesce = match nodes.get(l) {
+        Some(x) => matches!(x.kind, NodeKind::CoalesceExpression),
+        None => false,
+    };
+    let left_ok = lvl_l >= lmin || (matches!(nd.kind, NodeKind::CoalesceExpression)
+        && left_coalesce);
+    if !left_ok || lvl_r < rmin || lo_r != mi.saturating_add(1) {
         return None;
     }
     let opt = match toks.get(mi) {
@@ -935,8 +977,7 @@ fn check_binary(
         lemma_env_tok(src@, nodes@, toks@, gaps@, g.ts, mi as int);
         assert(opt == &toks@[mi as int]);
     }
-    if !matches!(opt.kind, TokKind::Punctuator) || !text_is1(src, opt, code) || nd.start
-        != first.start || nd.end != last.end {
+    if !tok_is_op(src, opt, nd.op) || nd.start != first.start || nd.end != last.end {
         return None;
     }
     proof {
@@ -964,22 +1005,14 @@ fn check_binary(
         assert(a.nodes[m as int].op == nd.op);
         assert(a.nodes[m as int].start == nd.start as int);
         assert(a.nodes[m as int].end == nd.end as int);
-        assert(g.ts.toks[mi as int].kind == TokKind::Punctuator);
-        assert(g.ts.toks[mi as int].text =~= seq![code]);
-        lemma_binary_done(
-            a,
-            g.ts,
-            g.cx,
-            m as int,
-            l as int,
-            r as int,
-            lo_l as int,
-            mi as int,
-            lo_r as int,
-            j as int,
-            code,
-            own as int,
-        );
+        assert(kd(a, l as int) == nodes@[l as int].kind);
+        assert(left_coalesce ==> kd(a, l as int) == NodeKind::CoalesceExpression);
+        let op = nd.op;
+        assert(dtok_matches(src@, *opt, g.ts.toks[mi as int]));
+        assert(is_op_tok(g.ts, mi as int, op)) by {
+            lemma_op_chars(op);
+        }
+        lemma_binary_done(a, g.ts, g.cx, m as int, l as int, r as int, lo_l as int, mi as int, lo_r as int, j as int);
     }
     Some((lo_l, j, own))
 }
@@ -1218,6 +1251,7 @@ pub open spec fn goal_of(module: bool) -> SourceGoal {
 /// The context of the root has `[+In]` and no `[Default]`, so `cx_in` does not change it.
 proof fn lemma_root_cx(g: SourceGoal)
     ensures
+        root_ctx(g).in_,
         cx_in(root_ctx(g), true) == root_ctx(g),
 {
 }
@@ -1864,6 +1898,7 @@ pub fn check_derivation(
             m <= last,
             cx == root_ctx(goal_of(module)),
             cx_in(cx, true) == cx,
+            cx.in_,
             env_ok(src@, nodes@, toks@, gaps@, ts),
             inv(arena_of(nodes@), ts, cx, done.lo@, done.hi@, done.lv@, m as int),
         decreases last - m,
@@ -1890,7 +1925,7 @@ pub fn check_derivation(
                 m,
                 Ghost(GCx { ts, cx }),
             ),
-            NodeKind::AdditiveExpression | NodeKind::MultiplicativeExpression
+            NodeKind::AdditiveExpression | NodeKind::MultiplicativeExpression | NodeKind::ExponentiationExpression | NodeKind::ShiftExpression | NodeKind::EqualityExpression | NodeKind::BitwiseANDExpression | NodeKind::BitwiseXORExpression | NodeKind::BitwiseORExpression | NodeKind::LogicalANDExpression | NodeKind::LogicalORExpression | NodeKind::CoalesceExpression
             | NodeKind::RelationalExpression => check_binary(
                 src,
                 nodes,
