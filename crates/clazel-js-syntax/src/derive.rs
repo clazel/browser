@@ -141,7 +141,7 @@ pub fn check_leaf(nodes: &Vec<Node>, toks: &Vec<ETok>, n: usize, i: usize, Ghost
             return false;
         },
     };
-    if nd.children.len() != 0 || nd.start != t.start || nd.end != t.end || !(t.start < t.end) {
+    if !nd.children.is_empty() || nd.start != t.start || nd.end != t.end || !(t.start < t.end) {
         return false;
     }
     let kind_ok = match nd.kind {
