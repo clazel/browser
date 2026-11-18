@@ -590,21 +590,59 @@ proof fn lemma_op_is_tok(ts: Stream, i: int, op: Op)
     lemma_punct_text();
 }
 
+/// The context a node is checked in, as the check carries it: the booleans of
+/// [`Ctx`] (`[Yield]`, `[Await]`, `[In]`, `[Return]`, `[Default]`).
+#[derive(Clone, Copy)]
+pub struct Cx5 {
+    /// `[Yield]`.
+    pub y: bool,
+    /// `[Await]`.
+    pub a: bool,
+    /// `[In]`.
+    pub i: bool,
+    /// `[Return]`.
+    pub r: bool,
+    /// `[Default]`.
+    pub d: bool,
+}
+
+/// The specification's context of a carried one.
+pub open spec fn cx_of(c: Cx5) -> Ctx {
+    Ctx { yield_: c.y, await_: c.a, in_: c.i, return_: c.r, deflt: c.d }
+}
+
+/// Two carried contexts are the same.
+fn cx_eq(p: &Cx5, q: &Cx5) -> (r: bool)
+    ensures
+        r == (cx_of(*p) == cx_of(*q)),
+{
+    p.y == q.y && p.a == q.a && p.i == q.i && p.r == q.r && p.d == q.d
+}
+
+/// Node `m` is checked in `cx`, and so are all its children (the productions of
+/// the statements and expressions the check covers pass their context down).
+pub open spec fn cx_ok(a: AstV, cxs: Seq<Cx5>, m: int, cx: Ctx) -> bool {
+    0 <= m < a.nodes.len() && m < cxs.len() && cx_of(cxs[m]) == cx && (forall|k: int|
+        0 <= k < a.nodes[m].children.len() ==> 0 <= a.nodes[m].children[k] < cxs.len() && cx_of(
+            cxs[#[trigger] a.nodes[m].children[k]],
+        ) == cx)
+}
+
 /// What a processed node `j < m` has proven: it derives tokens `lo[j]..hi[j]` in
-/// context `cx`, and has the binding strength `lv[j]`.
+/// its context `cxs[j]`, and has the binding strength `lv[j]`.
 #[verifier::opaque]
 pub open spec fn inv(
     a: AstV,
     ts: Stream,
-    cx: Ctx,
+    cxs: Seq<Cx5>,
     lo: Seq<usize>,
     hi: Seq<usize>,
     lv: Seq<i32>,
     m: int,
 ) -> bool {
-    lo.len() == m && hi.len() == m && lv.len() == m && (forall|j: int|
+    lo.len() == m && hi.len() == m && lv.len() == m && m <= cxs.len() && (forall|j: int|
         0 <= j < m ==> (#[trigger] lv[j]) as int == lvl(a, j) && (kd(a, j) != NodeKind::Absent
-            ==> node_done(a, ts, j, cx, lo[j] as int, hi[j] as int)))
+            ==> node_done(a, ts, j, cx_of(cxs[j]), lo[j] as int, hi[j] as int)))
 }
 
 /// The binding strengths of the kinds the check covers.
@@ -891,7 +929,8 @@ fn check_binary(
         cx_in(g.cx, true) == g.cx,
         g.cx.in_,
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
     ensures
         match r {
             Some((l0, h0, l)) => node_done(
@@ -1017,8 +1056,8 @@ fn check_binary(
             assert(a.nodes[m as int].children[0] == l as int);
             assert(a.nodes[m as int].children[1] == r as int);
         }
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, l as int);
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, r as int);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, l as int, g.cx, 0);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, r as int, g.cx, 1);
         lemma_env_tok(src@, nodes@, toks@, gaps@, g.ts, mi as int);
         lemma_env_tok(src@, nodes@, toks@, gaps@, g.ts, lo_l as int);
         lemma_env_tok(src@, nodes@, toks@, gaps@, g.ts, j as int - 1);
@@ -1386,7 +1425,7 @@ fn check_ident(
 ) -> (r: Option<(usize, usize, i32)>)
     requires
         m < nodes.len(),
-        g.cx == root_ctx(goal_of(done.module)),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
     ensures
         match r {
@@ -1404,6 +1443,12 @@ fn check_ident(
     let _ = gaps.len();
     let nd = match nodes.get(m) {
         Some(x) => x,
+        None => {
+            return None;
+        },
+    };
+    let cxm = match done.cxs.get(m) {
+        Some(c) => c,
         None => {
             return None;
         },
@@ -1431,7 +1476,7 @@ fn check_ident(
         assert(t == &toks@[x as int]);
     }
     if !matches!(t.kind, TokKind::IdentifierName) || t.start != nd.start || t.end != nd.end
-        || !ident_ok(src, t, false, done.module) {
+        || !ident_ok(src, t, cxm.y, cxm.a) {
         return None;
     }
     let x1 = x.saturating_add(1);
@@ -1452,8 +1497,9 @@ fn check_ident(
         assert(g.ts.toks[x as int].kind == TokKind::IdentifierName);
         assert(g.ts.toks[x as int].escaped == t.escaped);
         assert(g.ts.toks[x as int].text =~= src@.subrange(t.start as int, t.end as int));
-        assert(g.cx.yield_ == false);
-        assert(g.cx.await_ == done.module);
+        assert(cxm == &done.cxs@[m as int]);
+        assert(g.cx.yield_ == cxm.y);
+        assert(g.cx.await_ == cxm.a);
         lemma_ident_tok(g.ts, x as int, g.cx);
         lemma_ident_done(a, g.ts, g.cx, m as int, x as int);
     }
@@ -1576,7 +1622,8 @@ fn check_list(
         ls.m < nodes.len(),
         cx_in(g.cx, true) == g.cx,
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, ls.m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, ls.m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, ls.m as int, g.cx),
     ensures
         match r {
             Some(e) => ls.start <= e && e <= toks.len() && dsep(
@@ -1678,7 +1725,7 @@ fn check_list(
     }
     let e: usize = if comma_after { hc.saturating_add(1) } else { hc };
     proof {
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, c as int);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, c as int, g.cx, last as int);
         assert(hc <= toks.len());
         assert(kd(a, c as int) == nodes@[c as int].kind);
         assert(!is_rest_kind(kd(a, c as int)));
@@ -1727,7 +1774,8 @@ fn check_list(
             ast_wf(a),
             cx_in(g.cx, true) == g.cx,
             env_ok(src@, nodes@, toks@, gaps@, g.ts),
-            inv(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+            inv(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+            cx_ok(a, done.cxs@, m as int, g.cx),
             dsep(
                 a,
                 g.ts,
@@ -1803,7 +1851,7 @@ fn check_list(
         proof {
             lemma_comma_text();
             lemma_env_toks_wf(src@, nodes@, toks@, gaps@, g.ts);
-            lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, c2 as int);
+            lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, c2 as int, g.cx, k as int - 1);
             assert(hi2 < toks.len());
             assert(toks.len() <= usize::MAX);
             assert(hi2 + 1 == pos);
@@ -1900,7 +1948,8 @@ fn check_arguments(
         m < nodes.len(),
         cx_in(g.cx, true) == g.cx,
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
     ensures
         match r {
             Some((l0, h0, l)) => node_done(
@@ -2048,7 +2097,8 @@ fn check_call(
     requires
         m < nodes.len(),
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
     ensures
         match r {
             Some((l0, h0, l)) => node_done(
@@ -2155,8 +2205,8 @@ fn check_call(
             assert(a.nodes[m as int].children[0] == f as int);
             assert(a.nodes[m as int].children[1] == args as int);
         }
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, f as int);
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, args as int);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, f as int, g.cx, 0);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, args as int, g.cx, 1);
         lemma_env_tok(src@, nodes@, toks@, gaps@, g.ts, lo_f as int);
         lemma_env_tok(src@, nodes@, toks@, gaps@, g.ts, j as int - 1);
         assert(j >= 1);
@@ -2220,7 +2270,8 @@ fn check_expression(
         m < nodes.len(),
         cx_in(g.cx, true) == g.cx,
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
     ensures
         match r {
             Some((l0, h0, l)) => node_done(
@@ -2350,7 +2401,8 @@ fn check_spread(
         m < nodes.len(),
         cx_in(g.cx, true) == g.cx,
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
     ensures
         match r {
             Some((l0, h0, l)) => node_done(
@@ -2437,7 +2489,7 @@ fn check_spread(
             assert(a.nodes[m as int].children.len() == 1);
             assert(a.nodes[m as int].children[0] == c as int);
         }
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, c as int);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, c as int, g.cx, 0);
         lemma_env_tok(src@, nodes@, toks@, gaps@, g.ts, hc as int - 1);
         assert(lo_c >= 1);
         assert(lo_c.saturating_sub(1) as int == lo_c as int - 1);
@@ -2857,7 +2909,8 @@ fn check_binding(
     requires
         m < nodes.len(),
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
     ensures
         match r {
             Some((l0, h0, l)) => node_done(
@@ -2947,7 +3000,7 @@ fn check_binding(
         }
         proof {
             let a = arena_of(nodes@);
-            lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, t as int);
+            lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, t as int, g.cx, 0);
             lemma_env_tok(src@, nodes@, toks@, gaps@, g.ts, lo_t as int);
             lemma_env_tok(src@, nodes@, toks@, gaps@, g.ts, mt as int - 1);
             assert(nd == &nodes@[m as int]);
@@ -3008,8 +3061,8 @@ fn check_binding(
     }
     proof {
         let a = arena_of(nodes@);
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, t as int);
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, init as int);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, t as int, g.cx, 0);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, init as int, g.cx, 1);
         lemma_env_tok(src@, nodes@, toks@, gaps@, g.ts, lo_t as int);
         lemma_env_tok(src@, nodes@, toks@, gaps@, g.ts, j as int - 1);
         assert(nd == &nodes@[m as int]);
@@ -3142,7 +3195,8 @@ fn check_decl_stmt(
         m < nodes.len(),
         cx_in(g.cx, true) == g.cx,
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
     ensures
         match r {
             Some((l0, h0, l)) => node_done(
@@ -3314,7 +3368,8 @@ fn check_dl(
     requires
         rng.m < nodes.len(),
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, rng.m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, rng.m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, rng.m as int, g.cx),
         rng.end <= toks.len(),
     ensures
         r ==> (dl(
@@ -3360,7 +3415,8 @@ fn check_dl(
             tn(g.ts) == toks.len(),
             ast_wf(a),
             env_ok(src@, nodes@, toks@, gaps@, g.ts),
-            inv(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+            inv(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+            cx_ok(a, done.cxs@, m as int, g.cx),
             dl(
                 a,
                 g.ts,
@@ -3414,7 +3470,7 @@ fn check_dl(
             assert(kd(a, c as int) == nodes@[c as int].kind);
             assert(is_item_kind(kd(a, c as int)));
             assert(kd(a, c as int) != NodeKind::Absent);
-            lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, c as int);
+            lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, c as int, g.cx, k as int - 1);
             let ks = a.nodes[m as int].children;
             assert(node_done(a, g.ts, c as int, g.cx, lo_c as int, hi_c as int));
             lemma_dl_cons(a, g.ts, m as int, ks, k as int - 1, g.cx, lo_c as int, hi_c as int, rng.end as int);
@@ -3504,7 +3560,8 @@ fn check_block(
     requires
         m < nodes.len(),
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
     ensures
         match r {
             Some((l0, h0, l)) => node_done(
@@ -3710,7 +3767,8 @@ fn check_if(
         m < nodes.len(),
         cx_in(g.cx, true) == g.cx,
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
     ensures
         match r {
             Some((l0, h0, l)) => node_done(
@@ -3905,8 +3963,8 @@ fn check_if(
             assert(a.nodes[m as int].children[1] == c as int);
             assert(a.nodes[m as int].children[2] == alt as int);
         }
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, t as int);
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, c as int);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, t as int, g.cx, 0);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, c as int, g.cx, 1);
         lemma_env_tok(src@, nodes@, toks@, gaps@, g.ts, j as int - 1);
         assert(x < toks.len());
         assert(toks.len() <= usize::MAX);
@@ -3944,7 +4002,7 @@ fn check_if(
             assert(is_statement_kind(kd(a, alt as int)));
             assert(is_stmt_or_function(a, alt as int));
             assert(kd(a, alt as int) != NodeKind::Absent);
-            lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, alt as int);
+            lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, alt as int, g.cx, 2);
             assert(g.ts.toks[q as int].kind == TokKind::IdentifierName);
             assert(g.ts.toks[q as int].text =~= seq![0x65u32, 0x6C, 0x73, 0x65]);
             lemma_if_done(a, g.ts, g.cx, m as int, t as int, c as int, alt as int, x as int, lo_t as int, mt as int, lo_c as int, q as int, j as int, lo_a as int, true);
@@ -4019,7 +4077,8 @@ fn check_unary(
     requires
         m < nodes.len(),
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
     ensures
         match r {
             Some((l0, h0, l)) => node_done(
@@ -4108,7 +4167,7 @@ fn check_unary(
             assert(a.nodes[m as int].children.len() == 1);
             assert(a.nodes[m as int].children[0] == c as int);
         }
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, c as int);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, c as int, g.cx, 0);
         lemma_env_tok(src@, nodes@, toks@, gaps@, g.ts, hc as int - 1);
         assert(lo_c >= 1);
         assert(lo_c.saturating_sub(1) as int == lo_c as int - 1);
@@ -4198,7 +4257,8 @@ fn check_conditional(
         m < nodes.len(),
         cx_in(g.cx, true) == g.cx,
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
     ensures
         match r {
             Some((l0, h0, l)) => node_done(
@@ -4358,9 +4418,9 @@ fn check_conditional(
             assert(a.nodes[m as int].children[1] == c as int);
             assert(a.nodes[m as int].children[2] == e as int);
         }
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, t as int);
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, c as int);
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, e as int);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, t as int, g.cx, 0);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, c as int, g.cx, 1);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, e as int, g.cx, 2);
         lemma_env_tok(src@, nodes@, toks@, gaps@, g.ts, lo_t as int);
         lemma_env_tok(src@, nodes@, toks@, gaps@, g.ts, j as int - 1);
         assert(mt < toks.len());
@@ -4442,7 +4502,8 @@ fn check_assign(
     requires
         m < nodes.len(),
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
     ensures
         match r {
             Some((l0, h0, l)) => node_done(
@@ -4582,8 +4643,8 @@ fn check_assign(
             assert(a.nodes[m as int].children[0] == l as int);
             assert(a.nodes[m as int].children[1] == r as int);
         }
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, l as int);
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, r as int);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, l as int, g.cx, 0);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, r as int, g.cx, 1);
         lemma_env_tok(src@, nodes@, toks@, gaps@, g.ts, lo_l as int);
         lemma_env_tok(src@, nodes@, toks@, gaps@, g.ts, j as int - 1);
         assert(mi < toks.len());
@@ -4669,7 +4730,8 @@ fn check_member_dot(
     requires
         m < nodes.len(),
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
     ensures
         match r {
             Some((l0, h0, l)) => node_done(
@@ -4788,8 +4850,8 @@ fn check_member_dot(
             assert(a.nodes[m as int].children[0] == o as int);
             assert(a.nodes[m as int].children[1] == p as int);
         }
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, o as int);
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, p as int);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, o as int, g.cx, 0);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, p as int, g.cx, 1);
         lemma_env_tok(src@, nodes@, toks@, gaps@, g.ts, lo_o as int);
         lemma_env_tok(src@, nodes@, toks@, gaps@, g.ts, mo as int + 1);
         assert(mo < toks.len());
@@ -4811,17 +4873,33 @@ fn check_member_dot(
     Some((lo_o, j, own))
 }
 
-/// Node `j < m` is done (`inv`).
-proof fn lemma_inv_get(a: AstV, ts: Stream, cx: Ctx, lo: Seq<usize>, hi: Seq<usize>, lv: Seq<i32>, m: int, j: int)
+/// Node `j < m`, the child `k` of node `m` checked in `cx`, is done (`inv`).
+proof fn lemma_inv_get(
+    a: AstV,
+    ts: Stream,
+    cxs: Seq<Cx5>,
+    lo: Seq<usize>,
+    hi: Seq<usize>,
+    lv: Seq<i32>,
+    m: int,
+    j: int,
+    cx: Ctx,
+    k: int,
+)
     requires
-        inv(a, ts, cx, lo, hi, lv, m),
+        inv(a, ts, cxs, lo, hi, lv, m),
+        cx_ok(a, cxs, m, cx),
         0 <= j < m,
+        0 <= k < a.nodes[m].children.len(),
+        a.nodes[m].children[k] == j,
     ensures
         kd(a, j) != NodeKind::Absent ==> node_done(a, ts, j, cx, lo[j] as int, hi[j] as int),
         lvl(a, j) != -100 ==> node_done(a, ts, j, cx, lo[j] as int, hi[j] as int),
         lv[j] as int == lvl(a, j),
 {
     reveal(inv);
+    assert(cx_of(cxs[a.nodes[m].children[k]]) == cx);
+    assert(cx_of(cxs[j]) == cx);
     assert(lv[j] as int == lvl(a, j));
     if kd(a, j) == NodeKind::Absent {
         assert(lvl(a, j) == -100);
@@ -4910,7 +4988,7 @@ proof fn lemma_env_gap(src: Seq<u32>, nodes: Seq<Node>, toks: Seq<DTok>, gaps: S
 proof fn lemma_inv_push(
     a: AstV,
     ts: Stream,
-    cx: Ctx,
+    cxs: Seq<Cx5>,
     lo: Seq<usize>,
     hi: Seq<usize>,
     lv: Seq<i32>,
@@ -4920,16 +4998,17 @@ proof fn lemma_inv_push(
     l: i32,
 )
     requires
-        inv(a, ts, cx, lo, hi, lv, m),
-        node_done(a, ts, m, cx, l0 as int, h0 as int),
+        inv(a, ts, cxs, lo, hi, lv, m),
+        m < cxs.len(),
+        node_done(a, ts, m, cx_of(cxs[m]), l0 as int, h0 as int),
         l as int == lvl(a, m),
     ensures
-        inv(a, ts, cx, lo.push(l0), hi.push(h0), lv.push(l), m + 1),
+        inv(a, ts, cxs, lo.push(l0), hi.push(h0), lv.push(l), m + 1),
 {
     let lo2 = lo.push(l0);
     let hi2 = hi.push(h0);
     let lv2 = lv.push(l);
-    assert(inv(a, ts, cx, lo2, hi2, lv2, m + 1)) by {
+    assert(inv(a, ts, cxs, lo2, hi2, lv2, m + 1)) by {
         reveal(inv);
         assert(lo2.len() == m + 1);
         assert(hi2.len() == m + 1);
@@ -4939,7 +5018,7 @@ proof fn lemma_inv_push(
             a,
             ts,
             j,
-            cx,
+            cx_of(cxs[j]),
             lo2[j] as int,
             hi2[j] as int,
         )) by {
@@ -4961,24 +5040,25 @@ proof fn lemma_inv_push(
 proof fn lemma_inv_push_absent(
     a: AstV,
     ts: Stream,
-    cx: Ctx,
+    cxs: Seq<Cx5>,
     lo: Seq<usize>,
     hi: Seq<usize>,
     lv: Seq<i32>,
     m: int,
 )
     requires
-        inv(a, ts, cx, lo, hi, lv, m),
+        inv(a, ts, cxs, lo, hi, lv, m),
         0 <= m < a.nodes.len(),
+        m < cxs.len(),
         kd(a, m) == NodeKind::Absent,
     ensures
-        inv(a, ts, cx, lo.push(usize::MAX), hi.push(usize::MAX), lv.push(-100i32), m + 1),
+        inv(a, ts, cxs, lo.push(usize::MAX), hi.push(usize::MAX), lv.push(-100i32), m + 1),
 {
     let lo2 = lo.push(usize::MAX);
     let hi2 = hi.push(usize::MAX);
     let lv2 = lv.push(-100i32);
     assert(lvl(a, m) == -100);
-    assert(inv(a, ts, cx, lo2, hi2, lv2, m + 1)) by {
+    assert(inv(a, ts, cxs, lo2, hi2, lv2, m + 1)) by {
         reveal(inv);
         assert(lo2.len() == m + 1);
         assert(hi2.len() == m + 1);
@@ -4988,7 +5068,7 @@ proof fn lemma_inv_push_absent(
             a,
             ts,
             j,
-            cx,
+            cx_of(cxs[j]),
             lo2[j] as int,
             hi2[j] as int,
         )) by {
@@ -5132,7 +5212,8 @@ fn check_paren(
         m < nodes.len(),
         cx_in(g.cx, true) == g.cx,
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
     ensures
         match r {
             Some((l0, h0, l)) => node_done(arena_of(nodes@), g.ts, m as int, g.cx, l0 as int, h0 as int)
@@ -5217,7 +5298,7 @@ fn check_paren(
             assert(a.nodes[m as int].children.len() == 1);
             assert(a.nodes[m as int].children[0] == c as int);
         }
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, c as int);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, c as int, g.cx, 0);
         assert(a.nodes[m as int].kind == nd.kind);
         assert(a.nodes[m as int].start == nd.start as int);
         assert(a.nodes[m as int].end == nd.end as int);
@@ -5252,7 +5333,8 @@ fn check_exprstmt(
         m < nodes.len(),
         cx_in(g.cx, true) == g.cx,
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
     ensures
         match r {
             Some((l0, h0, l)) => node_done(arena_of(nodes@), g.ts, m as int, g.cx, l0 as int, h0 as int)
@@ -5367,7 +5449,7 @@ fn check_exprstmt(
             assert(a.nodes[m as int].children.len() == 1);
             assert(a.nodes[m as int].children[0] == c as int);
         }
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, c as int);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, c as int, g.cx, 0);
         assert(a.nodes[m as int].kind == nd.kind);
         assert(a.nodes[m as int].start == nd.start as int);
         assert(a.nodes[m as int].end == nd.end as int);
@@ -5471,6 +5553,9 @@ pub struct Done {
     pub hi: Vec<usize>,
     /// The binding strength (`spec::lvl`) of each node.
     pub lv: Vec<i32>,
+    /// The context each node is checked in: the one its parent's production gives
+    /// it, which the parent's check compares (`cx_ok`); not trusted otherwise.
+    pub cxs: Vec<Cx5>,
     /// The token that starts at each source position (a hint, checked at use).
     pub by_start: Vec<usize>,
     /// The goal symbol is `Module`.
@@ -5513,12 +5598,13 @@ fn check_root(
         inv(
             arena_of(nodes@),
             ts,
-            root_ctx(goal_of(module)),
+            done.cxs@,
             done.lo@,
             done.hi@,
             done.lv@,
             nodes.len() as int - 1,
         ),
+        cx_ok(arena_of(nodes@), done.cxs@, nodes.len() as int - 1, root_ctx(goal_of(module))),
     ensures
         r ==> derives_root(arena_of(nodes@), ts, goal_of(module)),
 {
@@ -5566,7 +5652,8 @@ fn check_root(
             k <= len,
             pos <= nt,
             env_ok(src@, nodes@, toks@, gaps@, ts),
-            inv(a, ts, cx, done.lo@, done.hi@, done.lv@, root as int),
+            inv(a, ts, done.cxs@, done.lo@, done.hi@, done.lv@, root as int),
+            cx_ok(a, done.cxs@, root as int, cx),
             dl(a, ts, root as int, a.nodes[root as int].children, k as int, cx, pos as int, nt as int),
             forall|j: int|
                 k <= j < len ==> is_item_kind(kd(a, #[trigger] a.nodes[root as int].children[j])),
@@ -5602,7 +5689,7 @@ fn check_root(
             return false;
         }
         proof {
-            lemma_inv_get(a, ts, cx, done.lo@, done.hi@, done.lv@, root as int, c as int);
+            lemma_inv_get(a, ts, done.cxs@, done.lo@, done.hi@, done.lv@, root as int, c as int, cx, k as int - 1);
             assert(a.nodes[c as int] == nodes@[c as int]@);
             let ks = a.nodes[root as int].children;
             lemma_dl_cons(a, ts, root as int, ks, k as int - 1, cx, lo_c as int, hi_c as int, nt as int);
@@ -5757,11 +5844,13 @@ pub fn check_derivation(
         }
         x = x.saturating_add(1);
     }
-    let ghost cx = root_ctx(goal_of(module));
+    let cxs = assign_ctx(nodes, module);
+    let ghost cxs0 = cxs@;
     let mut done = Done {
         lo: Vec::new(),
         hi: Vec::new(),
         lv: Vec::new(),
+        cxs,
         by_start,
         module,
     };
@@ -5776,12 +5865,11 @@ pub fn check_derivation(
             last + 1 == n,
             n > 0,
             m <= last,
-            cx == root_ctx(goal_of(module)),
-            cx_in(cx, true) == cx,
-            cx.in_,
+            done.cxs@ == cxs0,
+            done.cxs.len() == n,
             done.module == module,
             env_ok(src@, nodes@, toks@, gaps@, ts),
-            inv(arena_of(nodes@), ts, cx, done.lo@, done.hi@, done.lv@, m as int),
+            inv(arena_of(nodes@), ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
         decreases last - m,
     {
         let nd = match nodes.get(m) {
@@ -5796,13 +5884,35 @@ pub fn check_derivation(
                 assert(a.nodes[m as int] == nodes@[m as int]@);
                 assert(nd == &nodes@[m as int]);
                 assert(kd(a, m as int) == NodeKind::Absent);
-                lemma_inv_push_absent(a, ts, cx, done.lo@, done.hi@, done.lv@, m as int);
+                lemma_env_toks_wf(src@, nodes@, toks@, gaps@, ts);
+                lemma_inv_push_absent(a, ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int);
             }
             done.lo.push(usize::MAX);
             done.hi.push(usize::MAX);
             done.lv.push(-100);
             m = m.saturating_add(1);
             continue;
+        }
+        let cxm: Cx5 = match done.cxs.get(m) {
+            Some(c) => *c,
+            None => {
+                return Derivation::Failed;
+            },
+        };
+        // The statements and expressions covered so far are checked with `[+In]`.
+        if !cxm.i || cxm.d {
+            return Derivation::Unsupported;
+        }
+        proof {
+            lemma_env_toks_wf(src@, nodes@, toks@, gaps@, ts);
+        }
+        if !kids_cx(nodes, done.cxs.as_slice(), m, &cxm) {
+            return Derivation::Unsupported;
+        }
+        let ghost cx = cx_of(cxm);
+        proof {
+            assert(cx_in(cx, true) == cx);
+            assert(cxm == done.cxs@[m as int]);
         }
         let res = match nd.kind {
             NodeKind::NumericLiteral | NodeKind::StringLiteral | NodeKind::RegularExpressionLiteral | NodeKind::IdentifierName => {
@@ -5987,7 +6097,7 @@ pub fn check_derivation(
         match res {
             Some((l0, h0, l)) => {
                 proof {
-                    lemma_inv_push(arena_of(nodes@), ts, cx, done.lo@, done.hi@, done.lv@, m as int, l0, h0, l);
+                    lemma_inv_push(arena_of(nodes@), ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, l0, h0, l);
                 }
                 done.lo.push(l0);
                 done.hi.push(h0);
@@ -5999,11 +6109,164 @@ pub fn check_derivation(
         }
         m = m.saturating_add(1);
     }
+    // The root's items are in the root's context.
+    let root_cx = Cx5 { y: false, a: module, i: true, r: false, d: false };
+    proof {
+        lemma_env_toks_wf(src@, nodes@, toks@, gaps@, ts);
+        assert(cx_of(root_cx) == root_ctx(goal_of(module)));
+    }
+    if !kids_cx(nodes, done.cxs.as_slice(), last, &root_cx) {
+        return Derivation::Unsupported;
+    }
     if check_root(src, nodes, toks, gaps, &done, module, Ghost(ts)) {
         Derivation::Verified
     } else {
         Derivation::Unsupported
     }
+}
+
+/// The context each node of the arena is to be checked in, from the root down (a
+/// node's index is above its children's). Untrusted: [`kids_cx`] compares it with
+/// what the production of the parent gives, so a wrong guess is `Unsupported`.
+fn assign_ctx(nodes: &[Node], module: bool) -> (r: Vec<Cx5>)
+    ensures
+        r.len() == nodes.len(),
+{
+    let n = nodes.len();
+    let root = Cx5 { y: false, a: module, i: true, r: false, d: false };
+    let mut cxs: Vec<Cx5> = Vec::new();
+    let mut q: usize = 0;
+    while q < n
+        invariant
+            q <= n,
+            cxs.len() == q,
+        decreases n - q,
+    {
+        cxs.push(root);
+        q = q.saturating_add(1);
+    }
+    let mut i = n;
+    while i > 0
+        invariant
+            i <= n,
+            n == nodes.len(),
+            cxs.len() == n,
+        decreases i,
+    {
+        i = i.saturating_sub(1);
+        let p: Cx5 = match cxs.get(i) {
+            Some(p) => *p,
+            None => {
+                return cxs;
+            },
+        };
+        let nd = match nodes.get(i) {
+            Some(x) => x,
+            None => {
+                return cxs;
+            },
+        };
+        let len = nd.children.len();
+        let mut k: usize = 0;
+        while k < len
+            invariant
+                k <= len,
+                len == nd.children.len(),
+                cxs.len() == n,
+            decreases len - k,
+        {
+            if let Some(c) = nd.children.as_slice().get(k) {
+                let c = *c as usize;
+                if c < n {
+                    let cc = child_cx(nd.kind, k, &p);
+                    cxs.set(c, cc);
+                }
+            }
+            k = k.saturating_add(1);
+        }
+    }
+    cxs
+}
+
+/// The context the production of node kind `kind` gives its child `k`, when it is
+/// checked in `p`: `[+In]`, as the statements and expressions covered so far have.
+fn child_cx(kind: NodeKind, k: usize, p: &Cx5) -> (r: Cx5) {
+    let _ = (kind, k);
+    Cx5 { y: p.y, a: p.a, i: true, r: p.r, d: false }
+}
+
+/// Node `m` and its children are all checked in `p` (`cx_ok`).
+fn kids_cx(nodes: &[Node], cxs: &[Cx5], m: usize, p: &Cx5) -> (r: bool)
+    requires
+        m < nodes.len(),
+        cxs.len() == nodes.len(),
+        ast_wf(arena_of(nodes@)),
+    ensures
+        r ==> cx_ok(arena_of(nodes@), cxs@, m as int, cx_of(*p)),
+{
+    let nd = match nodes.get(m) {
+        Some(x) => x,
+        None => {
+            return false;
+        },
+    };
+    match cxs.get(m) {
+        Some(c) => {
+            if !cx_eq(c, p) {
+                return false;
+            }
+        },
+        None => {
+            return false;
+        },
+    }
+    let len = nd.children.len();
+    let ghost a = arena_of(nodes@);
+    proof {
+        assert(a.nodes[m as int] == nodes@[m as int]@);
+        assert(nd == &nodes@[m as int]);
+        assert(a.nodes[m as int].children.len() == len);
+    }
+    let mut k: usize = 0;
+    while k < len
+        invariant
+            m < nodes.len(),
+            nodes@.len() == nodes.len(),
+            a == arena_of(nodes@),
+            ast_wf(a),
+            nd == &nodes@[m as int],
+            len == nd.children.len(),
+            len == a.nodes[m as int].children.len(),
+            k <= len,
+            cxs.len() == nodes.len(),
+            cx_of(cxs@[m as int]) == cx_of(*p),
+            forall|q: int|
+                0 <= q < k ==> 0 <= #[trigger] a.nodes[m as int].children[q] < cxs.len()
+                    && cx_of(cxs@[a.nodes[m as int].children[q]]) == cx_of(*p),
+        decreases len - k,
+    {
+        let c = match nd.children.as_slice().get(k) {
+            Some(x) => *x as usize,
+            None => {
+                return false;
+            },
+        };
+        proof {
+            assert(a.nodes[m as int].children[k as int] == c as int);
+            lemma_child_before(a, m as int, k as int);
+        }
+        let cc = match cxs.get(c) {
+            Some(x) => x,
+            None => {
+                return false;
+            },
+        };
+        if !cx_eq(cc, p) {
+            return false;
+        }
+        k = k.saturating_add(1);
+    }
+    true
 }
 
 /// The specification's token for an executable one: the fields the check reads, and
@@ -6542,7 +6805,8 @@ fn check_debugger(
     requires
         m < nodes.len(),
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
     ensures
         match r {
             Some((l0, h0, l)) => node_done(
@@ -6639,7 +6903,8 @@ fn check_throw(
         m < nodes.len(),
         cx_in(g.cx, true) == g.cx,
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
     ensures
         match r {
             Some((l0, h0, l)) => node_done(
@@ -6705,7 +6970,7 @@ fn check_throw(
         assert(a.nodes[m as int].children =~= seq![e as int]) by {
             assert(a.nodes[m as int].children.len() == 1);
         }
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, e as int);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, e as int, g.cx, 0);
         assert(lvl(a, e as int) >= -1);
         lemma_throw_done(a, g.ts, g.cx, m as int, e as int, x as int, me as int, j as int);
     }
@@ -6789,7 +7054,8 @@ fn check_jump(
     requires
         m < nodes.len(),
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
     ensures
         match r {
             Some((l0, h0, l)) => node_done(
@@ -6860,7 +7126,7 @@ fn check_jump(
         };
         proof {
             let a = arena_of(nodes@);
-            lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, c as int);
+            lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, c as int, g.cx, 0);
             assert(x1 as int == x as int + 1);
             assert(x2 as int == x as int + 2);
         }
@@ -6956,7 +7222,8 @@ fn check_while(
         m < nodes.len(),
         cx_in(g.cx, true) == g.cx,
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
     ensures
         match r {
             Some((l0, h0, l)) => node_done(
@@ -7037,8 +7304,8 @@ fn check_while(
         assert(a.nodes[m as int].kind == nd.kind);
         assert(a.nodes[m as int].start == nd.start as int);
         assert(a.nodes[m as int].end == nd.end as int);
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, t as int);
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, c as int);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, t as int, g.cx, 0);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, c as int, g.cx, 1);
         assert(lvl(a, t as int) >= -1);
         assert(is_statement_kind(kd(a, c as int)));
         lemma_while_done(a, g.ts, g.cx, m as int, t as int, c as int, x as int, mt as int, j as int);
@@ -7114,7 +7381,8 @@ fn check_do_while(
         m < nodes.len(),
         cx_in(g.cx, true) == g.cx,
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
     ensures
         match r {
             Some((l0, h0, l)) => node_done(
@@ -7205,8 +7473,8 @@ fn check_do_while(
         assert(a.nodes[m as int].kind == nd.kind);
         assert(a.nodes[m as int].start == nd.start as int);
         assert(a.nodes[m as int].end == nd.end as int);
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, b as int);
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, t as int);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, b as int, g.cx, 0);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, t as int, g.cx, 1);
         assert(lvl(a, t as int) >= -1);
         assert(is_statement_kind(kd(a, b as int)));
         lemma_do_while_done(a, g.ts, g.cx, m as int, b as int, t as int, x as int, mb as int, q as int, j as int);
@@ -7259,7 +7527,8 @@ fn check_labelled(
     requires
         m < nodes.len(),
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
     ensures
         match r {
             Some((l0, h0, l)) => node_done(
@@ -7337,8 +7606,8 @@ fn check_labelled(
         assert(a.nodes[m as int].kind == nd.kind);
         assert(a.nodes[m as int].start == nd.start as int);
         assert(a.nodes[m as int].end == nd.end as int);
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, l as int);
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, b as int);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, l as int, g.cx, 0);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, b as int, g.cx, 1);
         assert(is_statement_kind(kd(a, b as int)));
         assert(is_stmt_or_function(a, b as int));
         lemma_labelled_done(a, g.ts, g.cx, m as int, l as int, b as int, x as int, j as int);
@@ -7410,7 +7679,8 @@ fn check_try(
     requires
         m < nodes.len(),
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
     ensures
         match r {
             Some((l0, h0, l)) => node_done(
@@ -7528,12 +7798,12 @@ fn check_try(
         assert(a.nodes[m as int].kind == nd.kind);
         assert(a.nodes[m as int].start == nd.start as int);
         assert(a.nodes[m as int].end == nd.end as int);
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, b as int);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, b as int, g.cx, 0);
         if has_catch {
-            lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, ca as int);
+            lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, ca as int, g.cx, 1);
         }
         if has_finally {
-            lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, fi as int);
+            lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, fi as int, g.cx, 2);
         }
         lemma_try_done(a, g.ts, g.cx, m as int, b as int, ca as int, fi as int, x as int, mb as int, q as int, j as int);
     }
@@ -7617,7 +7887,8 @@ fn check_catch(
     requires
         m < nodes.len(),
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
     ensures
         match r {
             Some((l0, h0, l)) => node_done(
@@ -7711,11 +7982,11 @@ fn check_catch(
         assert(a.nodes[m as int].kind == nd.kind);
         assert(a.nodes[m as int].start == nd.start as int);
         assert(a.nodes[m as int].end == nd.end as int);
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, blk as int);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, blk as int, g.cx, 1);
         if has_param {
             assert(x.saturating_add(2) as int == x as int + 2);
             assert(mp.saturating_add(1) as int == mp as int + 1);
-            lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, p as int);
+            lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, p as int, g.cx, 0);
         }
         lemma_catch_done(a, g.ts, g.cx, m as int, p as int, blk as int, x as int, has_param, mp as int, j as int);
     }
@@ -7762,7 +8033,8 @@ fn check_finally(
     requires
         m < nodes.len(),
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
     ensures
         match r {
             Some((l0, h0, l)) => node_done(
@@ -7825,7 +8097,7 @@ fn check_finally(
         assert(a.nodes[m as int].kind == nd.kind);
         assert(a.nodes[m as int].start == nd.start as int);
         assert(a.nodes[m as int].end == nd.end as int);
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, blk as int);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, blk as int, g.cx, 0);
         lemma_finally_done(a, g.ts, g.cx, m as int, blk as int, x as int, j as int);
     }
     Some((x, j, -100))
@@ -7868,7 +8140,8 @@ fn check_dl_from(
     requires
         sp.m < nodes.len(),
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, sp.m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, sp.m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, sp.m as int, g.cx),
         sp.end <= toks.len(),
     ensures
         r ==> (dl(
@@ -7925,7 +8198,8 @@ fn check_dl_from(
             tn(g.ts) == toks.len(),
             ast_wf(a),
             env_ok(src@, nodes@, toks@, gaps@, g.ts),
-            inv(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+            inv(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+            cx_ok(a, done.cxs@, m as int, g.cx),
             dl(
                 a,
                 g.ts,
@@ -7989,7 +8263,7 @@ fn check_dl_from(
             assert(a.nodes[c as int] == nodes@[c as int]@);
             assert(kd(a, c as int) == nodes@[c as int].kind);
             assert(kd(a, c as int) != NodeKind::Absent);
-            lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, c as int);
+            lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, c as int, g.cx, k as int - 1);
             let ks = a.nodes[m as int].children;
             assert(node_done(a, g.ts, c as int, g.cx, lo_c as int, hi_c as int));
             lemma_dl_cons(a, g.ts, m as int, ks, k as int - 1, g.cx, lo_c as int, hi_c as int, sp.end as int);
@@ -8118,7 +8392,8 @@ fn check_case(
         m < nodes.len(),
         cx_in(g.cx, true) == g.cx,
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
     ensures
         match r {
             Some((l0, h0, l)) => node_done(
@@ -8209,7 +8484,7 @@ fn check_case(
         assert(a.nodes[m as int].kind == nd.kind);
         assert(a.nodes[m as int].start == nd.start as int);
         assert(a.nodes[m as int].end == nd.end as int);
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, e as int);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, e as int, g.cx, 0);
         assert(lvl(a, e as int) >= -1);
         lemma_case_done(a, g.ts, g.cx, m as int, e as int, x as int, me as int, j as int);
     }
@@ -8253,7 +8528,8 @@ fn check_default(
     requires
         m < nodes.len(),
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
     ensures
         match r {
             Some((l0, h0, l)) => node_done(
@@ -8384,7 +8660,8 @@ fn check_switch(
         m < nodes.len(),
         cx_in(g.cx, true) == g.cx,
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
-        inv(arena_of(nodes@), g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
     ensures
         match r {
             Some((l0, h0, l)) => node_done(
@@ -8486,7 +8763,7 @@ fn check_switch(
         assert(a.nodes[m as int].kind == nd.kind);
         assert(a.nodes[m as int].start == nd.start as int);
         assert(a.nodes[m as int].end == nd.end as int);
-        lemma_inv_get(a, g.ts, g.cx, done.lo@, done.hi@, done.lv@, m as int, e as int);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, e as int, g.cx, 0);
         assert(lvl(a, e as int) >= -1);
         assert(all_kind2(a, a.nodes[m as int].children, 1, NodeKind::CaseClause, NodeKind::DefaultClause));
         lemma_switch_done(a, g.ts, g.cx, m as int, e as int, x as int, me as int, j as int);
