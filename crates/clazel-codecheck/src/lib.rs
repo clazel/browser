@@ -25,8 +25,12 @@
 //!
 //! # Status
 //!
-//! Tier 0: there is no validator. The spec, the contract, examples and
-//! mutations exist. The theorem of jit.md exit criterion 2 (an accepted blob
+//! Tier 0. [`exec`] is an executable validator, but **unverified**: plain
+//! Rust that follows the spec, tested (`tests/validator.rs`) and not proven
+//! against [`contract`]. What is proven is in `clazel-x64`: the encoding is a
+//! prefix code and its specification-level decoder is complete, which is what
+//! the contract's completeness half assumes. The spec, the contract,
+//! examples, lemmas and mutations are proven as before. The theorem of jit.md exit criterion 2 (an accepted blob
 //! is confined) is not stated or proven here; see the end of [`spec`]'s
 //! header.
 //!
