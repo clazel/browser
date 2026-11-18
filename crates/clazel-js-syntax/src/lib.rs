@@ -54,6 +54,7 @@ pub mod ast;
 pub mod check;
 pub mod contract;
 pub mod cover;
+pub mod derive;
 pub mod early;
 pub mod examples;
 pub mod exec;
