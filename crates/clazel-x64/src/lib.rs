@@ -18,5 +18,7 @@
 
 pub mod api;
 pub mod contract;
+pub mod decoder;
+pub mod decoder_proofs;
 pub mod examples;
 pub mod spec;
