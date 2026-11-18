@@ -37,17 +37,20 @@
 //! token stream of the source text by the grammar of [`spec`] with no early
 //! error ([`spec::is_valid_parse`]), and that an `Err` means there is no such
 //! parse ([`contract::parse_ensures`]). So [`exec::parse`] does not implement
-//! [`api::JsParser`], and the crate stays at Tier 0.
+//! [`api::JsParser`], and the crate stays at Tier 0. The first steps towards
+//! that proof are in [`derive`]: rule lemmas that a node of the shape the parser
+//! builds is derived by [`spec::d`] (literals, names, keywords, unary, binary,
+//! conditional, assignment, parenthesized and member-dot expressions), and
+//! `check_leaf`, a checked leaf against the executable tokens. They are not yet
+//! applied to the parser's output, and they assume the tokens are the lexer
+//! specification's, which the executable lexer does not meet yet.
 //!
 //! Where the parser differs from the specification, on purpose or not:
 //!
 //! - **Regular expression literals** are taken as valid
 //!   (`IsValidRegularExpressionLiteral`, §13.2.7.1): `clazel-js-regexp` (item
-//!   7.10) is not written. Test262 has 167 negative tests of their contents.
-//! - **Duplicate and undeclared exports** (§16.2.1.1) are accepted, because
-//!   `spec::early_local` has no rule for them: the specification lists them as
-//!   not yet specified, and the contract promises an `Err` only where the
-//!   specification finds no parse.
+//!   7.10) is not written. Test262 has 167 negative tests of their contents; they
+//!   are the only vendored negative tests the parser does not reject.
 
 pub mod api;
 pub mod ast;

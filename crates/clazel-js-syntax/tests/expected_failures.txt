@@ -165,15 +165,3 @@ language/literals/regexp/u-invalid-range-negative-lookbehind.js
 language/literals/regexp/u-unicode-esc-bounds.js
 language/literals/regexp/u-unicode-esc-non-hex.js
 language/literals/regexp/unicode-escape-nls-err.js
-language/module-code/early-dup-export-as-star-as.js
-language/module-code/early-dup-export-dflt-id.js
-language/module-code/early-dup-export-id-as.js
-language/module-code/early-dup-export-id.js
-language/module-code/early-dup-export-star-as-dflt.js
-language/module-code/early-export-global.js
-language/module-code/early-export-ill-formed-string.js
-language/module-code/early-export-unresolvable.js
-language/module-code/export-expname-from-as-unpaired-surrogate.js
-language/module-code/export-expname-from-unpaired-surrogate.js
-language/module-code/export-expname-import-unpaired-surrogate.js
-language/module-code/export-expname-unpaired-surrogate.js

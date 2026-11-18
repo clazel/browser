@@ -136,6 +136,16 @@ fn is_function_expression_kind(k: K) -> bool {
     )
 }
 
+/// `s`, read as UTF-16 code units, has no lone surrogate (`spec::well_formed_utf16`).
+fn well_formed_utf16(s: &[u32]) -> bool {
+    s.iter().enumerate().all(|(k, u)| {
+        let next = s.get(k.saturating_add(1));
+        let prev = k.checked_sub(1).and_then(|p| s.get(p));
+        (!(0xD800..=0xDBFF).contains(u) || next.is_some_and(|x| (0xDC00..=0xDFFF).contains(x)))
+            && (!(0xDC00..=0xDFFF).contains(u) || prev.is_some_and(|x| (0xD800..=0xDBFF).contains(x)))
+    })
+}
+
 fn has_dup(ns: &[Vec<u32>]) -> bool {
     let mut seen: HashSet<&Vec<u32>> = HashSet::new();
     ns.iter().any(|n| !seen.insert(n))
@@ -788,13 +798,15 @@ impl<'a> Chk<'a> {
             }
             K::ClassBody => self.class_body_early(ks),
             K::Script => self.list_early(n, ks, env.strict, true),
-            K::Module => self.list_early(n, ks, true, false),
+            K::Module => self.list_early(n, ks, true, false) && self.exports_early(n, ks),
+            K::ExportSpecifier => self.export_name_ok(k0) && self.export_name_ok(k1),
+            K::ImportSpecifier => self.export_name_ok(k0),
             K::WithClause => {
                 let keys: Vec<Vec<u32>> = ks.iter().map(|c| self.name(self.k(*c as usize, 0))).collect();
                 !has_dup(&keys)
             }
             K::ExportDeclaration => {
-                self.op(n) != Op::ExportNamed
+                (self.op(n) != Op::ExportNamed
                     || self.ch(k0).iter().all(|s| {
                         let loc = self.k(*s as usize, 0);
                         let nm = self.name(loc);
@@ -803,10 +815,71 @@ impl<'a> Chk<'a> {
                             && !name_is(&nm, "yield")
                             && !name_is(&nm, "await")
                             && !name_is_strict_reserved(&nm)
-                    })
+                    }))
+                    && (self.op(n) != Op::ExportAllAs || self.export_name_ok(k0))
             }
             _ => true,
         }
+    }
+
+    /// §16.2.2.1, §16.2.3.1: a `StringLiteral` that is a `ModuleExportName` is well
+    /// formed (`spec::module_export_name_ok`).
+    fn export_name_ok(&self, c: usize) -> bool {
+        self.kd(c) != K::StringLiteral || well_formed_utf16(&self.name(c))
+    }
+
+    /// `spec::exported_names_item`: the names an export declaration exports.
+    fn exported_names_item(&self, c: usize) -> Vec<Vec<u32>> {
+        if self.kd(c) != K::ExportDeclaration {
+            return Vec::new();
+        }
+        let k0 = self.k(c, 0);
+        match self.op(c) {
+            Op::ExportAll => Vec::new(),
+            Op::ExportAllAs => vec![self.name(k0)],
+            Op::ExportFrom | Op::ExportNamed => self
+                .ch(k0)
+                .iter()
+                .map(|s| {
+                    let s = *s as usize;
+                    let e = self.k(s, 1);
+                    if self.kd(e) == K::Absent { self.name(self.k(s, 0)) } else { self.name(e) }
+                })
+                .collect(),
+            Op::ExportVar => self.bound_names(k0),
+            Op::ExportDecl => {
+                let mut out = Vec::new();
+                self.lex_names_item(k0, false, &mut out);
+                Self::plain(&out)
+            }
+            _ => vec!["default".chars().map(u32::from).collect()],
+        }
+    }
+
+    /// §16.2.1.1: no name is exported twice, and every local name of an
+    /// `export { ... };` is declared in the module (`spec::exports_early`).
+    fn exports_early(&self, n: usize, ks: &[u32]) -> bool {
+        let mut exported = Vec::new();
+        let mut local = Vec::new();
+        for c in ks {
+            let c = *c as usize;
+            exported.extend(self.exported_names_item(c));
+            if self.kd(c) == K::ExportDeclaration && self.op(c) == Op::ExportNamed {
+                for s in self.ch(self.k(c, 0)) {
+                    local.push(self.name(self.k(*s as usize, 0)));
+                }
+            }
+        }
+        if has_dup(&exported) {
+            return false;
+        }
+        if local.is_empty() {
+            return true;
+        }
+        let mut declared = Self::plain(&self.lex_names_list(ks, 0, false));
+        self.var_names_list(n, ks, 0, &mut declared);
+        let set: HashSet<&Vec<u32>> = declared.iter().collect();
+        local.iter().all(|l| set.contains(l))
     }
 
     // ----- the environment of the children -----------------------------

@@ -604,6 +604,14 @@ const SCRIPT_BAD: &[&str] = &[
 ];
 
 const MODULE_OK: &[&str] = &[
+    "var a, b; export { a, b as c }; export { a as d }",
+    "import { a } from 'm'; export { a }",
+    "let a; export { a as 'x' , a as 'y' }",
+    "var a; export { a as '\\uD83D\\uDE00' }",
+    "export { a } from 'm'; export { a as b } from 'n'",
+    "export default function f() {} export { f as g }",
+    "export * from 'm'; export * from 'n'",
+    "class C {} export { C }",
     "import {a} from 'm'",
     "import  {a, b as c}  from 'm'",
     "import d, {a} from 'm'",
@@ -658,6 +666,19 @@ const MODULE_OK: &[&str] = &[
 ];
 
 const MODULE_BAD: &[&str] = &[
+    "var a; export { a }; export { a }",
+    "var a, b; export { a, b as a }",
+    "export var a; export { a }",
+    "export default 1; export default 2",
+    "var a; export { a as default }; export default 1",
+    "export { a }",
+    "export { a as b }",
+    "export * as a from 'm'; export * as a from 'n'",
+    "export { 'a' as b }; var a",
+    "var a; export { a as '\\uD800' }",
+    "export * as '\\uDC00' from 'm'",
+    "import { '\\uD800' as a } from 'm'",
+    "export { a as b } from 'm'; export { c as b } from 'n'",
     "var await",
     "function await() {}",
     "await: 1",
