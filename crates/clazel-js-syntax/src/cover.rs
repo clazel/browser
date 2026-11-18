@@ -22,7 +22,7 @@ impl<'a> Parser<'a> {
     /// `DestructuringAssignmentTarget`, and the target of `=`: a
     /// `LeftHandSideExpression` that is not an `ObjectLiteral` or an
     /// `ArrayLiteral`, or an assignment pattern read from one of them.
-    pub fn to_assign_target(&mut self, id: u32) -> R<u32> {
+    pub fn as_assign_target(&mut self, id: u32) -> R<u32> {
         match self.kind(id) {
             K::ObjectLiteral => self.obj_to_assign(id),
             K::ArrayLiteral => self.arr_to_assign(id),
@@ -38,13 +38,13 @@ impl<'a> Parser<'a> {
     }
 
     /// An `AssignmentElement`: a target with an optional initializer.
-    fn to_assign_element(&mut self, c: u32) -> R<u32> {
+    fn as_assign_element(&mut self, c: u32) -> R<u32> {
         let (s, e) = (self.st(c), self.en(c));
         if self.kind(c) == K::AssignmentExpression && self.op(c) == Op::Assign {
             let (t, init) = (self.child(c, 0), self.child(c, 1));
             Ok(self.mk(K::AssignmentElement, Op::None, false, s, e, vec![t, init]))
         } else {
-            let t = self.to_assign_target(c)?;
+            let t = self.as_assign_target(c)?;
             let a = self.absent_at(e);
             Ok(self.mk(K::AssignmentElement, Op::None, false, s, e, vec![t, a]))
         }
@@ -70,7 +70,7 @@ impl<'a> Parser<'a> {
                 }
                 (K::PropertyDefinition, Op::KeyValue) => {
                     let (name, v) = (self.child(c, 0), self.child(c, 1));
-                    let el = self.to_assign_element(v)?;
+                    let el = self.as_assign_element(v)?;
                     out.push(self.mk(K::AssignmentProperty, Op::KeyValue, false, s, e, vec![name, el]));
                 }
                 (K::PropertyDefinition, Op::Spread) => {
@@ -81,7 +81,7 @@ impl<'a> Parser<'a> {
                     if matches!(self.kind(x), K::ObjectLiteral | K::ArrayLiteral) {
                         return syn();
                     }
-                    let t = self.to_assign_target(x)?;
+                    let t = self.as_assign_target(x)?;
                     out.push(self.mk(K::AssignmentRestProperty, Op::None, false, s, e, vec![t]));
                 }
                 _ => return syn(),
@@ -105,10 +105,10 @@ impl<'a> Parser<'a> {
                     if !last || self.rest_comma.contains(&id) {
                         return syn();
                     }
-                    let t = self.to_assign_target(self.child(c, 0))?;
+                    let t = self.as_assign_target(self.child(c, 0))?;
                     out.push(self.mk(K::AssignmentRestElement, Op::None, false, s, e, vec![t]));
                 }
-                _ => out.push(self.to_assign_element(c)?),
+                _ => out.push(self.as_assign_element(c)?),
             }
         }
         let (s, e) = (self.st(id), self.en(id));
@@ -117,7 +117,7 @@ impl<'a> Parser<'a> {
 
     /// A `BindingIdentifier` or `BindingPattern` read from an expression or an
     /// assignment pattern (the parameters of an arrow function).
-    pub fn to_binding_target(&mut self, id: u32) -> R<u32> {
+    pub fn as_binding_target(&mut self, id: u32) -> R<u32> {
         let (s, e) = (self.st(id), self.en(id));
         match self.kind(id) {
             K::IdentifierReference => Ok(self.leaf(K::BindingIdentifier, s, e)),
@@ -129,16 +129,16 @@ impl<'a> Parser<'a> {
     }
 
     /// A `BindingElement` read from an expression or an assignment element.
-    pub fn to_binding_element(&mut self, id: u32) -> R<u32> {
+    pub fn as_binding_element(&mut self, id: u32) -> R<u32> {
         let (s, e) = (self.st(id), self.en(id));
         match (self.kind(id), self.op(id)) {
             (K::AssignmentExpression, Op::Assign) | (K::AssignmentElement, _) => {
                 let (t, init) = (self.child(id, 0), self.child(id, 1));
-                let bt = self.to_binding_target(t)?;
+                let bt = self.as_binding_target(t)?;
                 Ok(self.mk(K::BindingElement, Op::None, false, s, e, vec![bt, init]))
             }
             _ => {
-                let bt = self.to_binding_target(id)?;
+                let bt = self.as_binding_target(id)?;
                 let a = self.absent_at(e);
                 Ok(self.mk(K::BindingElement, Op::None, false, s, e, vec![bt, a]))
             }
@@ -156,20 +156,20 @@ impl<'a> Parser<'a> {
             match (self.kind(c), self.op(c)) {
                 (K::PropertyDefinition, Op::Shorthand) => {
                     let ident = self.child(c, 0);
-                    let bi = self.to_binding_target(ident)?;
+                    let bi = self.as_binding_target(ident)?;
                     let a = self.absent_at(e);
                     let el = self.mk(K::BindingElement, Op::None, false, s, e, vec![bi, a]);
                     out.push(self.mk(K::BindingProperty, Op::Shorthand, false, s, e, vec![el]));
                 }
                 (K::CoverInitializedName, _) | (K::AssignmentProperty, Op::Shorthand) => {
                     let (ident, init) = (self.child(c, 0), self.child(c, 1));
-                    let bi = self.to_binding_target(ident)?;
+                    let bi = self.as_binding_target(ident)?;
                     let el = self.mk(K::BindingElement, Op::None, false, s, e, vec![bi, init]);
                     out.push(self.mk(K::BindingProperty, Op::Shorthand, false, s, e, vec![el]));
                 }
                 (K::PropertyDefinition, Op::KeyValue) | (K::AssignmentProperty, Op::KeyValue) => {
                     let (name, v) = (self.child(c, 0), self.child(c, 1));
-                    let el = self.to_binding_element(v)?;
+                    let el = self.as_binding_element(v)?;
                     out.push(self.mk(K::BindingProperty, Op::KeyValue, false, s, e, vec![name, el]));
                 }
                 (K::PropertyDefinition, Op::Spread) | (K::AssignmentRestProperty, _) => {
@@ -180,7 +180,7 @@ impl<'a> Parser<'a> {
                     if !matches!(self.kind(x), K::IdentifierReference | K::BindingIdentifier) {
                         return syn();
                     }
-                    let bi = self.to_binding_target(x)?;
+                    let bi = self.as_binding_target(x)?;
                     out.push(self.mk(K::BindingRestProperty, Op::None, false, s, e, vec![bi]));
                 }
                 _ => return syn(),
@@ -204,10 +204,10 @@ impl<'a> Parser<'a> {
                     if !last || self.rest_comma.contains(&id) {
                         return syn();
                     }
-                    let t = self.to_binding_target(self.child(c, 0))?;
+                    let t = self.as_binding_target(self.child(c, 0))?;
                     out.push(self.mk(K::BindingRestElement, Op::None, false, s, e, vec![t]));
                 }
-                _ => out.push(self.to_binding_element(c)?),
+                _ => out.push(self.as_binding_element(c)?),
             }
         }
         let (s, e) = (self.st(id), self.en(id));

@@ -15,7 +15,6 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 /// A test's row in the generated table.
-#[allow(dead_code)]
 struct Case {
     path: &'static str,
     flags: &'static [&'static str],
@@ -26,7 +25,6 @@ struct Case {
 }
 
 /// Whether a test is expected to pass, and if not why.
-#[allow(dead_code)]
 enum Expect {
     Run,
     Fail(&'static str),
@@ -93,9 +91,20 @@ fn expected_path() -> PathBuf {
 #[test]
 #[cfg_attr(miri, ignore = "reads files")]
 fn test262_parse_and_early_errors() -> Result<(), String> {
+    assert_eq!(TREE_SHA256.len(), 64);
     let mut failing = BTreeSet::new();
     let (mut total, mut neg_total, mut neg_fail, mut pos_fail) = (0, 0, 0, 0);
+    let mut features = BTreeSet::new();
+    let mut with_includes = 0;
+    let mut reasons = BTreeSet::new();
     for case in TEST262 {
+        features.extend(case.features.iter().copied());
+        if !case.includes.is_empty() {
+            with_includes += 1;
+        }
+        if let Expect::Fail(reason) = case.expect {
+            reasons.insert(reason);
+        }
         if !judged(case) {
             continue;
         }
@@ -116,8 +125,11 @@ fn test262_parse_and_early_errors() -> Result<(), String> {
         }
     }
     println!(
-        "{total} judged tests: {neg_total} negative ({neg_fail} not rejected), {} positive ({pos_fail} not accepted)",
-        total - neg_total
+        "{total} judged tests: {neg_total} negative ({neg_fail} not rejected), {} positive ({pos_fail} not accepted); \
+         {} features, {with_includes} tests with includes, {} reasons for expected failures",
+        total - neg_total,
+        features.len(),
+        reasons.len()
     );
     let listing: String = failing.iter().map(|p| format!("{p}\n")).collect();
     if std::env::var("UPDATE_EXPECTED").is_ok() {

@@ -327,6 +327,10 @@ impl<'a> Parser<'a> {
                 clause_kids.push(self.parse_expression(cx.with_in(true))?);
                 K::CaseClause
             } else if self.t.is_w("default") {
+                // §14.12: a `CaseBlock` has at most one `DefaultClause`.
+                if kids.iter().any(|c| self.kind(*c) == K::DefaultClause) {
+                    return syn();
+                }
                 self.bump()?;
                 K::DefaultClause
             } else {
@@ -479,7 +483,7 @@ impl<'a> Parser<'a> {
             if of && (first_is_let || (first_is_async && !is_await && self.kind(e0) == K::IdentifierReference)) {
                 return syn();
             }
-            let head = self.to_assign_target(e0)?;
+            let head = self.as_assign_target(e0)?;
             if self.lvl(head) < 14 && !matches!(self.kind(head), K::ObjectAssignmentPattern | K::ArrayAssignmentPattern) {
                 return syn();
             }

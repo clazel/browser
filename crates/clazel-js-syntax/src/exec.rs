@@ -40,8 +40,11 @@ fn parse_inner(src: &[u32], goal: SourceGoal) -> Result<Ast, ParseError> {
         return Err(ParseError::Syntax);
     }
     let nodes = compact(std::mem::take(&mut p.nodes), root);
-    crate::early::check(src, &nodes, module)?;
-    crate::check::finish(nodes, src.len())
+    // The arena check first: it bounds the height, which bounds the recursion of
+    // the early errors.
+    let ast = crate::check::finish(nodes, src.len())?;
+    crate::early::check(src, &ast, module)?;
+    Ok(ast)
 }
 
 /// The nodes reachable from `root`, in their original order, renumbered. The

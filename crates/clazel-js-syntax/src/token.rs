@@ -129,11 +129,45 @@ pub fn lex(src: &[u32], pos: usize, goal: Goal, html: bool) -> Option<Tok> {
                         tok.invalid_escape = cooked.is_none();
                     }
                 }
+                ElementKind::StringLiteral => {
+                    if let Value::String { units } = el.value {
+                        tok.name = units.iter().map(|u| u32::from(*u)).collect();
+                    }
+                    tok.legacy = has_legacy_escape(text);
+                }
                 _ => {}
             }
             Some(tok)
         }
     }
+}
+
+/// The source text of a `StringLiteral` holds a `LegacyOctalEscapeSequence` or
+/// a `NonOctalDecimalEscapeSequence` (§12.9.4.1): `\1` to `\9`, or `\0` followed
+/// by a decimal digit.
+fn has_legacy_escape(text: &[u32]) -> bool {
+    let digit = |c: Option<&u32>| c.is_some_and(|c| (0x30..=0x39).contains(c));
+    let mut i = 0usize;
+    while let Some(c) = text.get(i) {
+        if *c == 0x5C {
+            let n = text.get(i.saturating_add(1));
+            if n.is_some_and(|n| (0x31..=0x39).contains(n)) {
+                return true;
+            }
+            if n == Some(&0x30) && digit(text.get(i.saturating_add(2))) {
+                return true;
+            }
+            i = i.saturating_add(2);
+        } else {
+            i = i.saturating_add(1);
+        }
+    }
+    false
+}
+
+/// The resolved name `n` is a `ReservedWord` other than `yield` and `await`.
+pub fn name_is_reserved_always(n: &[u32]) -> bool {
+    is_reserved_always(intern(n, WORDS))
 }
 
 impl Tok {

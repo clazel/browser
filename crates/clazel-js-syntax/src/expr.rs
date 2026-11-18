@@ -48,7 +48,7 @@ impl<'a> Parser<'a> {
         if self.t.is_name() {
             // `x => ...` and `async x => ...`.
             let nx = self.peek()?;
-            if self.t.is_w("async") && !nx.nl && nx.is_name() && !matches!(nx.s, "function" | "in" | "instanceof" | "of")
+            if self.t.is_w("async") && !nx.nl && nx.is_name() && !matches!(nx.s, "function" | "in" | "instanceof")
             {
                 let nx2 = self.peek_after(&nx)?;
                 if nx2.is_p("=>") && !nx2.nl {
@@ -73,7 +73,7 @@ impl<'a> Parser<'a> {
             if !ok {
                 return syn();
             }
-            let target = if op == Op::Assign { self.to_assign_target(lhs)? } else { lhs };
+            let target = if op == Op::Assign { self.as_assign_target(lhs)? } else { lhs };
             self.bump()?;
             let rhs = self.parse_assign(cx)?;
             let (s, e) = (self.st(lhs), self.en(rhs));
@@ -205,19 +205,13 @@ impl<'a> Parser<'a> {
             if prec < min {
                 break;
             }
-            match kind {
-                K::CoalesceExpression => {
-                    let l = self.lvl(left);
-                    if !(l >= 3 || self.kind(left) == K::CoalesceExpression) {
-                        return syn();
-                    }
-                }
-                K::LogicalORExpression | K::LogicalANDExpression => {
-                    if self.kind(left) == K::CoalesceExpression {
-                        return syn();
-                    }
-                }
-                _ => {}
+            let mixes = match kind {
+                K::CoalesceExpression => !(self.lvl(left) >= 3 || self.kind(left) == K::CoalesceExpression),
+                K::LogicalORExpression | K::LogicalANDExpression => self.kind(left) == K::CoalesceExpression,
+                _ => false,
+            };
+            if mixes {
+                return syn();
             }
             if self.kind(left) == K::PrivateIdentifier && op != Op::In {
                 return syn();
@@ -998,7 +992,7 @@ impl<'a> Parser<'a> {
                     if k.saturating_add(1) != n || self.args_trailing_comma(args) {
                         return syn();
                     }
-                    let t = self.to_binding_target(self.child(*it, 0))?;
+                    let t = self.as_binding_target(self.child(*it, 0))?;
                     let (is_, ie) = (self.st(*it), self.en(*it));
                     conv.push(self.mk(K::FunctionRestParameter, Op::None, false, is_, ie, vec![t]));
                 } else {
@@ -1033,7 +1027,7 @@ impl<'a> Parser<'a> {
                 }
                 out.push(*it);
             } else {
-                out.push(self.to_binding_element(*it)?);
+                out.push(self.as_binding_element(*it)?);
             }
         }
         Ok(self.mk(K::FormalParameters, Op::None, false, s, e, out))
