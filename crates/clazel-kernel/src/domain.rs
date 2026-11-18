@@ -196,7 +196,10 @@ pub open spec fn event_domain(rules: Seq<clazel_psl::spec::Rule>, s: State, e: E
 
 /// The declassified part of a `FromRenderer(id, bytes)` event in state `s`:
 /// `NavigateTab(its tab, resolved URL)` if the frame decodes to a
-/// `Navigate` that decodes and resolves, and nothing otherwise. (A
+/// `Navigate` that decodes and resolves, `SubmitTab(its tab, resolved URL,
+/// request)` (item 6.16) if it is a `Submit` the sender may send, whose
+/// request the kernel builds and whose URL decodes and resolves, and nothing
+/// otherwise. (A
 /// `Net` event has no declassified part of its own: it is kept whole for
 /// every observer, see [`ipurge_event`].)
 pub open spec fn declassified(urls: UrlFns, s: State, e: Event) -> Option<Event> {
@@ -212,6 +215,27 @@ pub open spec fn declassified(urls: UrlFns, s: State, e: Event) -> Option<Event>
                             None => None,
                             Some(resolved) => Some(Event::NavigateTab { tab: r.tab, url: resolved }),
                         },
+                    },
+                    // Item 6.16: a `Submit` a committed renderer may send, whose
+                    // request the kernel builds ([`super::spec::submit_request`])
+                    // and whose URL decodes and resolves, is
+                    // `SubmitTab(its tab, resolved, request)`. A `Submit` of a
+                    // renderer that is not committed is a frame it may not send
+                    // (the sender is killed), and any other `Submit` is answered
+                    // with an error: neither has a declassified part.
+                    Some(clazel_ipc::message::spec::Message::Submit { url, method, content_type, body }) => if !r.committed {
+                        None
+                    } else {
+                        match super::spec::submit_request(r, method, content_type, body) {
+                            None => None,
+                            Some(req) => match clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+                                None => None,
+                                Some(relative) => match (urls.resolve)(r.url, relative) {
+                                    None => None,
+                                    Some(resolved) => Some(Event::SubmitTab { tab: r.tab, url: resolved, req }),
+                                },
+                            },
+                        }
                     },
                     _ => None,
                 }

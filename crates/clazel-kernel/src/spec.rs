@@ -809,6 +809,21 @@ pub enum Event {
         /// The URL.
         url: Seq<u32>,
     },
+    /// Item 6.16: the declassified part of a renderer's `Submit` (see
+    /// [`crate::domain::declassified`]): the tab's renderer starts navigating
+    /// to the URL with the request `req`. It is what a `Submit` of another
+    /// domain's renderer is replaced by in a purge, so that two related runs
+    /// start the same navigation with the same request. The host shell never
+    /// produces it (it has no `EventRecord`); a theorem about what a real run
+    /// does leaves it out of the trace (`crate::statements::no_submit_tab`).
+    SubmitTab {
+        /// The tab.
+        tab: nat,
+        /// The URL.
+        url: Seq<u32>,
+        /// The request.
+        req: clazel_fetch::request::spec::Req,
+    },
     /// The network shell reports on a connection the kernel asked for
     /// (item 3.7): it is open, bytes arrived, the peer closed it, or it
     /// failed.
@@ -2849,6 +2864,7 @@ pub open spec fn step(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: F
         Event::FromRenderer { id, bytes } => from_renderer(rules, urls, fetch, s, id, bytes),
         Event::OpenTab { url, script } => open_tab(rules, urls, fetch, s, url, script),
         Event::NavigateTab { tab, url } => begin_navigation(rules, urls, fetch, s, tab, url, clazel_fetch::request::spec::get_req()),
+        Event::SubmitTab { tab, url, req } => begin_navigation(rules, urls, fetch, s, tab, url, req),
         Event::Net { conn, input } => net(rules, urls, fetch, s, conn, input),
         Event::RendererExited { id } => renderer_exited(s, id),
         Event::Tick { time } => tick_all(s, time),
