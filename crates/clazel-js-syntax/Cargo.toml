@@ -10,10 +10,14 @@ description = "The JavaScript parser for Clazel's Phase 7 browser (phase-7.md it
 vstd = "=0.0.0-2026-10-04-0306"
 clazel-js-lexer = { path = "../clazel-js-lexer" }
 
-# Verification tier (docs/VERIFICATION.md). Tier 0: this is the first half of
-# item 7.3 (CLAUDE.md rule 3): the AST, the specification and the contract,
-# with a few proven examples. There is no parser yet, so nothing about shipped
-# code is proven. `target-tier` is 1 (phase-7.md, Crates).
+# Verification tier (docs/VERIFICATION.md). Tier 0: the AST, the specification
+# and the contract (item 7.3, first half, CLAUDE.md rule 3), and the parser
+# (second half). Proven (src/check.rs): the arena the parser returns is well
+# formed, inside the source text and at most MAX_DEPTH high. Not proven: that it
+# is the parse the specification defines (that is tested: tests/), so the
+# parser does not implement the contract's trait, there are no Kani harnesses
+# (Tier 1) and no independent transcription (Tier 2). `target-tier` is 1
+# (phase-7.md, Crates).
 [package.metadata.clazel]
 tier = 0
 target-tier = 1

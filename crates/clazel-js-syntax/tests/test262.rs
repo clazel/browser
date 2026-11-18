@@ -147,3 +147,77 @@ fn test262_parse_and_early_errors() -> Result<(), String> {
     assert!(fixed.is_empty(), "{} listed tests now pass (remove them):\n{}", fixed.len(), fixed.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("\n"));
     Ok(())
 }
+
+fn all_js(dir: &std::path::Path, out: &mut Vec<PathBuf>) {
+    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    let mut entries: Vec<_> = rd.filter_map(Result::ok).collect();
+    entries.sort_by_key(|e| e.path());
+    for e in entries {
+        let p = e.path();
+        if p.is_dir() {
+            all_js(&p, out);
+        } else if p.extension().is_some_and(|x| x == "js") {
+            out.push(p);
+        }
+    }
+}
+
+/// Test262's harness is real JavaScript (about 600 KB of it): every file
+/// must parse as a `Script`.
+#[test]
+#[cfg_attr(miri, ignore = "reads files")]
+fn test262_harness_parses() -> Result<(), String> {
+    let dir = root().join("../harness");
+    let mut files = Vec::new();
+    all_js(&dir, &mut files);
+    assert!(files.len() > 20);
+    let mut bad = Vec::new();
+    for f in &files {
+        let text = std::fs::read_to_string(f).map_err(|e| e.to_string())?;
+        let src: Vec<u32> = text.chars().map(u32::from).collect();
+        if !accepts(&src, SourceGoal::Script) {
+            bad.push(f.display().to_string());
+        }
+    }
+    assert!(bad.is_empty(), "harness files that do not parse:\n{}", bad.join("\n"));
+    Ok(())
+}
+
+/// The fixtures that are meant to be syntax errors (`break;`, `0++;`, ...):
+/// the modules that tests of linking import to get an error.
+const ERRONEOUS_FIXTURES: &[&str] = &[
+    "language/import/import-attributes/text-javascript_FIXTURE.js",
+    "language/import/import-defer/errors/syntax-error/syntax-error_FIXTURE.js",
+    "language/module-code/instn-resolve-empty-export_FIXTURE.js",
+    "language/module-code/instn-resolve-empty-import_FIXTURE.js",
+    "language/module-code/instn-resolve-err-syntax-1_FIXTURE.js",
+    "language/module-code/instn-resolve-err-syntax-2_FIXTURE.js",
+    "language/module-code/instn-resolve-order-depth-reference_FIXTURE.js",
+    "language/module-code/instn-resolve-order-depth-syntax_FIXTURE.js",
+    "language/module-code/instn-resolve-order-src-reference_FIXTURE.js",
+    "language/module-code/instn-resolve-order-src-syntax_FIXTURE.js",
+];
+
+/// The `_FIXTURE.js` files that tests import parse as a `Module` or a
+/// `Script`, except those that are meant to be syntax errors.
+#[test]
+#[cfg_attr(miri, ignore = "reads files")]
+fn test262_fixtures_parse() -> Result<(), String> {
+    let mut files = Vec::new();
+    all_js(&root(), &mut files);
+    let mut rejected = BTreeSet::new();
+    let mut n = 0;
+    for f in files.iter().filter(|f| f.to_string_lossy().ends_with("_FIXTURE.js")) {
+        n += 1;
+        let text = std::fs::read_to_string(f).map_err(|e| e.to_string())?;
+        let src: Vec<u32> = text.chars().map(u32::from).collect();
+        if !accepts(&src, SourceGoal::Module) && !accepts(&src, SourceGoal::Script) {
+            let rel = f.strip_prefix(root()).map_err(|e| e.to_string())?;
+            rejected.insert(rel.to_string_lossy().replace('\\', "/"));
+        }
+    }
+    assert!(n > 100);
+    let expected: BTreeSet<String> = ERRONEOUS_FIXTURES.iter().map(|s| s.to_string()).collect();
+    assert_eq!(rejected, expected);
+    Ok(())
+}
