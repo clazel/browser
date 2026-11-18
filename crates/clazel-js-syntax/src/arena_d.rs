@@ -1042,6 +1042,422 @@ fn check_binary(
     Some((lo_l, j, own))
 }
 
+/// The code points of the `w`th `ReservedWord` of `spec::reserved_words` (§12.7.2).
+pub open spec fn reserved_chars(w: int) -> Seq<u32> {
+    if w == 0 {
+        seq![0x61u32, 0x77, 0x61, 0x69, 0x74]
+    } else if w == 1 {
+        seq![0x62u32, 0x72, 0x65, 0x61, 0x6B]
+    } else if w == 2 {
+        seq![0x63u32, 0x61, 0x73, 0x65]
+    } else if w == 3 {
+        seq![0x63u32, 0x61, 0x74, 0x63, 0x68]
+    } else if w == 4 {
+        seq![0x63u32, 0x6C, 0x61, 0x73, 0x73]
+    } else if w == 5 {
+        seq![0x63u32, 0x6F, 0x6E, 0x73, 0x74]
+    } else if w == 6 {
+        seq![0x63u32, 0x6F, 0x6E, 0x74, 0x69, 0x6E, 0x75, 0x65]
+    } else if w == 7 {
+        seq![0x64u32, 0x65, 0x62, 0x75, 0x67, 0x67, 0x65, 0x72]
+    } else if w == 8 {
+        seq![0x64u32, 0x65, 0x66, 0x61, 0x75, 0x6C, 0x74]
+    } else if w == 9 {
+        seq![0x64u32, 0x65, 0x6C, 0x65, 0x74, 0x65]
+    } else if w == 10 {
+        seq![0x64u32, 0x6F]
+    } else if w == 11 {
+        seq![0x65u32, 0x6C, 0x73, 0x65]
+    } else if w == 12 {
+        seq![0x65u32, 0x6E, 0x75, 0x6D]
+    } else if w == 13 {
+        seq![0x65u32, 0x78, 0x70, 0x6F, 0x72, 0x74]
+    } else if w == 14 {
+        seq![0x65u32, 0x78, 0x74, 0x65, 0x6E, 0x64, 0x73]
+    } else if w == 15 {
+        seq![0x66u32, 0x61, 0x6C, 0x73, 0x65]
+    } else if w == 16 {
+        seq![0x66u32, 0x69, 0x6E, 0x61, 0x6C, 0x6C, 0x79]
+    } else if w == 17 {
+        seq![0x66u32, 0x6F, 0x72]
+    } else if w == 18 {
+        seq![0x66u32, 0x75, 0x6E, 0x63, 0x74, 0x69, 0x6F, 0x6E]
+    } else if w == 19 {
+        seq![0x69u32, 0x66]
+    } else if w == 20 {
+        seq![0x69u32, 0x6D, 0x70, 0x6F, 0x72, 0x74]
+    } else if w == 21 {
+        seq![0x69u32, 0x6E]
+    } else if w == 22 {
+        seq![0x69u32, 0x6E, 0x73, 0x74, 0x61, 0x6E, 0x63, 0x65, 0x6F, 0x66]
+    } else if w == 23 {
+        seq![0x6Eu32, 0x65, 0x77]
+    } else if w == 24 {
+        seq![0x6Eu32, 0x75, 0x6C, 0x6C]
+    } else if w == 25 {
+        seq![0x72u32, 0x65, 0x74, 0x75, 0x72, 0x6E]
+    } else if w == 26 {
+        seq![0x73u32, 0x75, 0x70, 0x65, 0x72]
+    } else if w == 27 {
+        seq![0x73u32, 0x77, 0x69, 0x74, 0x63, 0x68]
+    } else if w == 28 {
+        seq![0x74u32, 0x68, 0x69, 0x73]
+    } else if w == 29 {
+        seq![0x74u32, 0x68, 0x72, 0x6F, 0x77]
+    } else if w == 30 {
+        seq![0x74u32, 0x72, 0x75, 0x65]
+    } else if w == 31 {
+        seq![0x74u32, 0x72, 0x79]
+    } else if w == 32 {
+        seq![0x74u32, 0x79, 0x70, 0x65, 0x6F, 0x66]
+    } else if w == 33 {
+        seq![0x76u32, 0x61, 0x72]
+    } else if w == 34 {
+        seq![0x76u32, 0x6F, 0x69, 0x64]
+    } else if w == 35 {
+        seq![0x77u32, 0x68, 0x69, 0x6C, 0x65]
+    } else if w == 36 {
+        seq![0x77u32, 0x69, 0x74, 0x68]
+    } else {
+        seq![0x79u32, 0x69, 0x65, 0x6C, 0x64]
+    }
+}
+
+/// The table of reserved words has the 38 words of the specification, in its order.
+proof fn lemma_reserved_chars(w: int)
+    requires
+        0 <= w < 38,
+    ensures
+        reserved_words().len() == 38,
+        cps(reserved_words()[w]) =~= reserved_chars(w),
+{
+    reveal_strlit("await");
+    reveal_strlit("break");
+    reveal_strlit("case");
+    reveal_strlit("catch");
+    reveal_strlit("class");
+    reveal_strlit("const");
+    reveal_strlit("continue");
+    reveal_strlit("debugger");
+    reveal_strlit("default");
+    reveal_strlit("delete");
+    reveal_strlit("do");
+    reveal_strlit("else");
+    reveal_strlit("enum");
+    reveal_strlit("export");
+    reveal_strlit("extends");
+    reveal_strlit("false");
+    reveal_strlit("finally");
+    reveal_strlit("for");
+    reveal_strlit("function");
+    reveal_strlit("if");
+    reveal_strlit("import");
+    reveal_strlit("in");
+    reveal_strlit("instanceof");
+    reveal_strlit("new");
+    reveal_strlit("null");
+    reveal_strlit("return");
+    reveal_strlit("super");
+    reveal_strlit("switch");
+    reveal_strlit("this");
+    reveal_strlit("throw");
+    reveal_strlit("true");
+    reveal_strlit("try");
+    reveal_strlit("typeof");
+    reveal_strlit("var");
+    reveal_strlit("void");
+    reveal_strlit("while");
+    reveal_strlit("with");
+    reveal_strlit("yield");
+    let rw = reserved_words();
+    assert(rw.len() == 38);
+    assert("await"@ =~= seq!['a', 'w', 'a', 'i', 't']);
+    assert("break"@ =~= seq!['b', 'r', 'e', 'a', 'k']);
+    assert("case"@ =~= seq!['c', 'a', 's', 'e']);
+    assert("catch"@ =~= seq!['c', 'a', 't', 'c', 'h']);
+    assert("class"@ =~= seq!['c', 'l', 'a', 's', 's']);
+    assert("const"@ =~= seq!['c', 'o', 'n', 's', 't']);
+    assert("continue"@ =~= seq!['c', 'o', 'n', 't', 'i', 'n', 'u', 'e']);
+    assert("debugger"@ =~= seq!['d', 'e', 'b', 'u', 'g', 'g', 'e', 'r']);
+    assert("default"@ =~= seq!['d', 'e', 'f', 'a', 'u', 'l', 't']);
+    assert("delete"@ =~= seq!['d', 'e', 'l', 'e', 't', 'e']);
+    assert("do"@ =~= seq!['d', 'o']);
+    assert("else"@ =~= seq!['e', 'l', 's', 'e']);
+    assert("enum"@ =~= seq!['e', 'n', 'u', 'm']);
+    assert("export"@ =~= seq!['e', 'x', 'p', 'o', 'r', 't']);
+    assert("extends"@ =~= seq!['e', 'x', 't', 'e', 'n', 'd', 's']);
+    assert("false"@ =~= seq!['f', 'a', 'l', 's', 'e']);
+    assert("finally"@ =~= seq!['f', 'i', 'n', 'a', 'l', 'l', 'y']);
+    assert("for"@ =~= seq!['f', 'o', 'r']);
+    assert("function"@ =~= seq!['f', 'u', 'n', 'c', 't', 'i', 'o', 'n']);
+    assert("if"@ =~= seq!['i', 'f']);
+    assert("import"@ =~= seq!['i', 'm', 'p', 'o', 'r', 't']);
+    assert("in"@ =~= seq!['i', 'n']);
+    assert("instanceof"@ =~= seq!['i', 'n', 's', 't', 'a', 'n', 'c', 'e', 'o', 'f']);
+    assert("new"@ =~= seq!['n', 'e', 'w']);
+    assert("null"@ =~= seq!['n', 'u', 'l', 'l']);
+    assert("return"@ =~= seq!['r', 'e', 't', 'u', 'r', 'n']);
+    assert("super"@ =~= seq!['s', 'u', 'p', 'e', 'r']);
+    assert("switch"@ =~= seq!['s', 'w', 'i', 't', 'c', 'h']);
+    assert("this"@ =~= seq!['t', 'h', 'i', 's']);
+    assert("throw"@ =~= seq!['t', 'h', 'r', 'o', 'w']);
+    assert("true"@ =~= seq!['t', 'r', 'u', 'e']);
+    assert("try"@ =~= seq!['t', 'r', 'y']);
+    assert("typeof"@ =~= seq!['t', 'y', 'p', 'e', 'o', 'f']);
+    assert("var"@ =~= seq!['v', 'a', 'r']);
+    assert("void"@ =~= seq!['v', 'o', 'i', 'd']);
+    assert("while"@ =~= seq!['w', 'h', 'i', 'l', 'e']);
+    assert("with"@ =~= seq!['w', 'i', 't', 'h']);
+    assert("yield"@ =~= seq!['y', 'i', 'e', 'l', 'd']);
+}
+
+/// The `w`th reserved word, as code points.
+fn reserved_slice(w: usize) -> (r: &'static [u32])
+    requires
+        w < 38,
+    ensures
+        r@ =~= reserved_chars(w as int),
+{
+    match w {
+        0 => &[0x61, 0x77, 0x61, 0x69, 0x74],
+        1 => &[0x62, 0x72, 0x65, 0x61, 0x6B],
+        2 => &[0x63, 0x61, 0x73, 0x65],
+        3 => &[0x63, 0x61, 0x74, 0x63, 0x68],
+        4 => &[0x63, 0x6C, 0x61, 0x73, 0x73],
+        5 => &[0x63, 0x6F, 0x6E, 0x73, 0x74],
+        6 => &[0x63, 0x6F, 0x6E, 0x74, 0x69, 0x6E, 0x75, 0x65],
+        7 => &[0x64, 0x65, 0x62, 0x75, 0x67, 0x67, 0x65, 0x72],
+        8 => &[0x64, 0x65, 0x66, 0x61, 0x75, 0x6C, 0x74],
+        9 => &[0x64, 0x65, 0x6C, 0x65, 0x74, 0x65],
+        10 => &[0x64, 0x6F],
+        11 => &[0x65, 0x6C, 0x73, 0x65],
+        12 => &[0x65, 0x6E, 0x75, 0x6D],
+        13 => &[0x65, 0x78, 0x70, 0x6F, 0x72, 0x74],
+        14 => &[0x65, 0x78, 0x74, 0x65, 0x6E, 0x64, 0x73],
+        15 => &[0x66, 0x61, 0x6C, 0x73, 0x65],
+        16 => &[0x66, 0x69, 0x6E, 0x61, 0x6C, 0x6C, 0x79],
+        17 => &[0x66, 0x6F, 0x72],
+        18 => &[0x66, 0x75, 0x6E, 0x63, 0x74, 0x69, 0x6F, 0x6E],
+        19 => &[0x69, 0x66],
+        20 => &[0x69, 0x6D, 0x70, 0x6F, 0x72, 0x74],
+        21 => &[0x69, 0x6E],
+        22 => &[0x69, 0x6E, 0x73, 0x74, 0x61, 0x6E, 0x63, 0x65, 0x6F, 0x66],
+        23 => &[0x6E, 0x65, 0x77],
+        24 => &[0x6E, 0x75, 0x6C, 0x6C],
+        25 => &[0x72, 0x65, 0x74, 0x75, 0x72, 0x6E],
+        26 => &[0x73, 0x75, 0x70, 0x65, 0x72],
+        27 => &[0x73, 0x77, 0x69, 0x74, 0x63, 0x68],
+        28 => &[0x74, 0x68, 0x69, 0x73],
+        29 => &[0x74, 0x68, 0x72, 0x6F, 0x77],
+        30 => &[0x74, 0x72, 0x75, 0x65],
+        31 => &[0x74, 0x72, 0x79],
+        32 => &[0x74, 0x79, 0x70, 0x65, 0x6F, 0x66],
+        33 => &[0x76, 0x61, 0x72],
+        34 => &[0x76, 0x6F, 0x69, 0x64],
+        35 => &[0x77, 0x68, 0x69, 0x6C, 0x65],
+        36 => &[0x77, 0x69, 0x74, 0x68],
+        _ => &[0x79, 0x69, 0x65, 0x6C, 0x64],
+    }
+}
+
+/// The index of the reserved word that is the token's text, if there is one.
+fn reserved_index(src: &[u32], t: &DTok) -> (r: Option<usize>)
+    requires
+        t.start <= t.end <= src.len(),
+    ensures
+        match r {
+            Some(w) => w < 38 && src@.subrange(t.start as int, t.end as int) =~= reserved_chars(
+                w as int,
+            ),
+            None => forall|w: int|
+                0 <= w < 38 ==> !(src@.subrange(t.start as int, t.end as int) =~= #[trigger] reserved_chars(w)),
+        },
+{
+    let mut w: usize = 0;
+    while w < 38
+        invariant
+            t.start <= t.end <= src.len(),
+            w <= 38,
+            forall|q: int|
+                0 <= q < w ==> !(src@.subrange(t.start as int, t.end as int) =~= #[trigger] reserved_chars(q)),
+        decreases 38 - w,
+    {
+        if text_is(src, t, reserved_slice(w)) {
+            return Some(w);
+        }
+        w = w.saturating_add(1);
+    }
+    None
+}
+
+/// The text of the token is not a reserved word, or is `yield` where `[~Yield]`, or
+/// `await` where `[~Await]`: `spec::ident_tok` for a token of an identifier name.
+fn ident_ok(src: &[u32], t: &DTok, yield_: bool, await_: bool) -> (r: bool)
+    requires
+        t.start <= t.end <= src.len(),
+    ensures
+        r ==> (t.kind == TokKind::IdentifierName ==> (t.escaped || !(exists|w: int|
+            0 <= w < 38 && src@.subrange(t.start as int, t.end as int) =~= #[trigger] reserved_chars(w))
+            || (src@.subrange(t.start as int, t.end as int) =~= reserved_chars(37) && !yield_) || (
+        src@.subrange(t.start as int, t.end as int) =~= reserved_chars(0) && !await_))),
+{
+    if t.escaped {
+        return true;
+    }
+    match reserved_index(src, t) {
+        None => true,
+        Some(w) => (w == 37 && !yield_) || (w == 0 && !await_),
+    }
+}
+
+/// An identifier-name token whose text is not a reserved word, or is `yield` or
+/// `await` where those are identifiers, is an `Identifier` (§13.1, `spec::ident_tok`).
+proof fn lemma_ident_tok(ts: Stream, x: int, cx: Ctx)
+    requires
+        0 <= x < tn(ts),
+        ts.toks[x].kind == TokKind::IdentifierName,
+        ts.toks[x].escaped || !(exists|w: int|
+            0 <= w < 38 && ts.toks[x].text =~= #[trigger] reserved_chars(w)) || (ts.toks[x].text
+            =~= reserved_chars(37) && !cx.yield_) || (ts.toks[x].text =~= reserved_chars(0)
+            && !cx.await_),
+    ensures
+        ident_tok(ts, x, cx),
+{
+    lemma_reserved_chars(37);
+    lemma_reserved_chars(0);
+    assert(reserved_words()[37] == "yield"@) by {
+        reveal_strlit("yield");
+    }
+    assert(reserved_words()[0] == "await"@) by {
+        reveal_strlit("await");
+    }
+    let t = ts.toks[x];
+    if !t.escaped && is_reserved_text(t.text) {
+        let w = choose|w: int|
+            0 <= w < reserved_words().len() && t.text =~= cps(#[trigger] reserved_words()[w]);
+        lemma_reserved_chars(w);
+        assert(t.text =~= reserved_chars(w));
+        assert(exists|w2: int| 0 <= w2 < 38 && t.text =~= #[trigger] reserved_chars(w2));
+        assert(is_kw(ts, x, "yield"@) || is_kw(ts, x, "await"@));
+    }
+}
+
+/// A leaf `IdentifierReference`, `BindingIdentifier` or `LabelIdentifier` of the check.
+#[verifier::spinoff_prover]
+proof fn lemma_ident_done(a: AstV, ts: Stream, cx: Ctx, m: int, x: int)
+    requires
+        toks_wf(ts),
+        0 <= m < a.nodes.len(),
+        0 <= x < tn(ts),
+        a.nodes[m].children.len() == 0,
+        a.nodes[m].kind == NodeKind::IdentifierReference || a.nodes[m].kind
+            == NodeKind::BindingIdentifier || a.nodes[m].kind == NodeKind::LabelIdentifier,
+        ts.toks[x].kind == TokKind::IdentifierName,
+        ident_tok(ts, x, cx),
+        a.nodes[m].start == ts.toks[x].start,
+        a.nodes[m].end == ts.toks[x].end,
+    ensures
+        node_done(a, ts, m, cx, x, x + 1),
+        lvl(a, m) == (if a.nodes[m].kind == NodeKind::IdentifierReference {
+            17int
+        } else {
+            -100int
+        }),
+{
+    assert(ts.toks[x].start < ts.toks[x].end);
+    crate::derive::lemma_leaf_identifier(a, ts, m, cx, x);
+    assert(span_ok(a, ts, m, x, x + 1));
+    lemma_ed_of(a, ts, m, x, x + 1);
+}
+
+/// §13.1 an identifier leaf.
+#[verifier::spinoff_prover]
+fn check_ident(
+    src: &[u32],
+    nodes: &[Node],
+    toks: &[DTok],
+    gaps: &[Ins],
+    done: &Done,
+    m: usize,
+    Ghost(g): Ghost<GCx>,
+) -> (r: Option<(usize, usize, i32)>)
+    requires
+        m < nodes.len(),
+        g.cx == root_ctx(goal_of(done.module)),
+        env_ok(src@, nodes@, toks@, gaps@, g.ts),
+    ensures
+        match r {
+            Some((l0, h0, l)) => node_done(
+                arena_of(nodes@),
+                g.ts,
+                m as int,
+                g.cx,
+                l0 as int,
+                h0 as int,
+            ) && l as int == lvl(arena_of(nodes@), m as int),
+            None => true,
+        },
+{
+    let _ = gaps.len();
+    let nd = match nodes.get(m) {
+        Some(x) => x,
+        None => {
+            return None;
+        },
+    };
+    if !matches!(
+        nd.kind,
+        NodeKind::IdentifierReference | NodeKind::BindingIdentifier | NodeKind::LabelIdentifier,
+    ) || !nd.children.is_empty() {
+        return None;
+    }
+    let x = match done.by_start.get(nd.start) {
+        Some(x) => *x,
+        None => {
+            return None;
+        },
+    };
+    let t = match toks.get(x) {
+        Some(t) => t,
+        None => {
+            return None;
+        },
+    };
+    proof {
+        lemma_env_tok(src@, nodes@, toks@, gaps@, g.ts, x as int);
+        assert(t == &toks@[x as int]);
+    }
+    if !matches!(t.kind, TokKind::IdentifierName) || t.start != nd.start || t.end != nd.end
+        || !ident_ok(src, t, false, done.module) {
+        return None;
+    }
+    let x1 = x.saturating_add(1);
+    proof {
+        let a = arena_of(nodes@);
+        lemma_env_toks_wf(src@, nodes@, toks@, gaps@, g.ts);
+        assert(nd == &nodes@[m as int]);
+        assert(a.nodes[m as int] == nodes@[m as int]@);
+        assert(a.nodes[m as int].children.len() == 0);
+        assert(a.nodes[m as int].kind == nd.kind);
+        assert(a.nodes[m as int].start == nd.start as int);
+        assert(a.nodes[m as int].end == nd.end as int);
+        assert(x < toks.len());
+        assert(toks.len() <= usize::MAX);
+        assert(x1 as int == x as int + 1);
+        assert(g.ts.toks[x as int].start == t.start as int);
+        assert(g.ts.toks[x as int].end == t.end as int);
+        assert(g.ts.toks[x as int].kind == TokKind::IdentifierName);
+        assert(g.ts.toks[x as int].escaped == t.escaped);
+        assert(g.ts.toks[x as int].text =~= src@.subrange(t.start as int, t.end as int));
+        assert(g.cx.yield_ == false);
+        assert(g.cx.await_ == done.module);
+        lemma_ident_tok(g.ts, x as int, g.cx);
+        lemma_ident_done(a, g.ts, g.cx, m as int, x as int);
+    }
+    let l: i32 = if matches!(nd.kind, NodeKind::IdentifierReference) { 17 } else { -100 };
+    Some((x, x1, l))
+}
+
 /// The words that cannot start an `ExpressionStatement` (§14.5), as code points.
 proof fn lemma_kw_text()
     ensures
@@ -2493,6 +2909,10 @@ pub struct Done {
     pub hi: Vec<usize>,
     /// The binding strength (`spec::lvl`) of each node.
     pub lv: Vec<i32>,
+    /// The token that starts at each source position (a hint, checked at use).
+    pub by_start: Vec<usize>,
+    /// The goal symbol is `Module`.
+    pub module: bool,
 }
 
 /// The specification's stream and the context the nodes are derived in (ghost).
@@ -2776,7 +3196,13 @@ pub fn check_derivation(
         x = x.saturating_add(1);
     }
     let ghost cx = root_ctx(goal_of(module));
-    let mut done = Done { lo: Vec::new(), hi: Vec::new(), lv: Vec::new() };
+    let mut done = Done {
+        lo: Vec::new(),
+        hi: Vec::new(),
+        lv: Vec::new(),
+        by_start,
+        module,
+    };
     let last = n.saturating_sub(1);
     let mut m: usize = 0;
     proof {
@@ -2791,6 +3217,7 @@ pub fn check_derivation(
             cx == root_ctx(goal_of(module)),
             cx_in(cx, true) == cx,
             cx.in_,
+            done.module == module,
             env_ok(src@, nodes@, toks@, gaps@, ts),
             inv(arena_of(nodes@), ts, cx, done.lo@, done.hi@, done.lv@, m as int),
         decreases last - m,
@@ -2806,7 +3233,7 @@ pub fn check_derivation(
                 proof {
                     lemma_env_literal_facts(src@, nodes@, toks@, gaps@, ts);
                 }
-                check_literal(nodes, toks, &by_start, m, Ghost(ts), Ghost(cx))
+                check_literal(nodes, toks, &done.by_start, m, Ghost(ts), Ghost(cx))
             },
             NodeKind::ParenthesizedExpression => check_paren(
                 src,
@@ -2819,6 +3246,15 @@ pub fn check_derivation(
             ),
             NodeKind::AdditiveExpression | NodeKind::MultiplicativeExpression | NodeKind::ExponentiationExpression | NodeKind::ShiftExpression | NodeKind::EqualityExpression | NodeKind::BitwiseANDExpression | NodeKind::BitwiseXORExpression | NodeKind::BitwiseORExpression | NodeKind::LogicalANDExpression | NodeKind::LogicalORExpression | NodeKind::CoalesceExpression
             | NodeKind::RelationalExpression => check_binary(
+                src,
+                nodes,
+                toks,
+                gaps,
+                &done,
+                m,
+                Ghost(GCx { ts, cx }),
+            ),
+            NodeKind::IdentifierReference | NodeKind::BindingIdentifier | NodeKind::LabelIdentifier => check_ident(
                 src,
                 nodes,
                 toks,
@@ -2877,7 +3313,7 @@ pub fn check_derivation(
                 nodes,
                 toks,
                 gaps,
-                &by_start,
+                &done.by_start,
                 m,
                 Ghost(GCx { ts, cx }),
             ),

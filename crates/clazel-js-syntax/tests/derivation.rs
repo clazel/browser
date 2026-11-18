@@ -44,6 +44,11 @@ fn covered_programs_are_verified() {
         "(1).a = 2;",
         "(1).a += 2 ** 3;",
         "(1).a &&= (1).b ||= 3;",
+        "a;",
+        "a + b * c;",
+        "a.b.c = d ? e : f;",
+        "typeof a === 'x';",
+        "a in b;",
         "// c\n 1 /* d */ + 2 ;;",
     ] {
         assert!(
@@ -59,7 +64,7 @@ fn covered_programs_are_verified() {
 
 #[test]
 fn other_programs_are_unsupported_not_failed() {
-    for s in ["a;", "f(1);", "if (1) ;", "var a = 1;"] {
+    for s in ["f(1);", "if (1) ;", "var a = 1;"] {
         assert!(
             derivation(s, SourceGoal::Script) == Some(Derivation::Unsupported),
             "{s}"
@@ -81,7 +86,7 @@ fn errors_are_still_errors() {
 fn what_the_check_costs() {
     let body = "(1 + 2 * 3) < 4 - 5 / 6 % 7;\n".repeat(60_000);
     let covered = cps(&body);
-    let stopped = cps(&format!("a;\n{body}"));
+    let stopped = cps(&format!("this;\n{body}"));
     let time = |src: &[u32]| {
         let t = Instant::now();
         let r = parse_checked(src, SourceGoal::Script);
