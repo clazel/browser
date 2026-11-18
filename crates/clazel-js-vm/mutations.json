@@ -6,10 +6,10 @@
       "find": "else { 0x8000_0000_0000_0000 } // 4.b.",
       "replace": "else { 0 } // 4.b.",
       "expect": "killed",
-      "reason": "Returns +0 instead of -0 for `-0 × y` with y positive (§6.1.6.1.4 step 4.b): lemma_multiply_zero_signs is false.",
+      "reason": "Returns +0 instead of -0 for `-0 × y` with y positive (§6.1.6.1.4 step 4.b): example_multiply_zero_signs is false.",
       "certificate": {
         "file": "src/lemmas.rs",
-        "lemma": "lemma_multiply_zero_signs()",
+        "lemma": "crate::examples::example_multiply_zero_signs()",
         "witness": "number_multiply(0x8000_0000_0000_0000u64, 0x4014_0000_0000_0000u64) == 0u64"
       }
     },
@@ -19,10 +19,10 @@
       "find": "else { 0x8000_0000_0000_0000 } // 5.b.",
       "replace": "else { 0 } // 5.b.",
       "expect": "killed",
-      "reason": "Returns +0 instead of -0 for `x × -0` with x positive (§6.1.6.1.4 step 5.b): lemma_multiply_zero_signs is false.",
+      "reason": "Returns +0 instead of -0 for `x × -0` with x positive (§6.1.6.1.4 step 5.b): example_multiply_zero_signs is false.",
       "certificate": {
         "file": "src/lemmas.rs",
-        "lemma": "lemma_multiply_zero_signs()",
+        "lemma": "crate::examples::example_multiply_zero_signs()",
         "witness": "number_multiply(0x4014_0000_0000_0000u64, 0x8000_0000_0000_0000u64) == 0u64"
       }
     },
@@ -32,10 +32,10 @@
       "find": "(f64_sign(x) ^ f64_sign(y)) << 63",
       "replace": "0",
       "expect": "killed",
-      "reason": "Drops the step 5a erratum's sign, so `+0 × -5` would be +0 where every engine and IEEE 754 give -0: lemma_multiply_zero_signs is false.",
+      "reason": "Drops the step 5a erratum's sign, so `+0 × -5` would be +0 where every engine and IEEE 754 give -0: example_multiply_zero_signs is false.",
       "certificate": {
         "file": "src/lemmas.rs",
-        "lemma": "lemma_multiply_zero_signs()",
+        "lemma": "crate::examples::example_multiply_zero_signs()",
         "witness": "number_multiply(0u64, 0xC014_0000_0000_0000u64) == 0u64"
       }
     }
