@@ -57,16 +57,26 @@
       "file": "src/spec.rs",
       "find": "Some(starts) => subset_of(all_targets(ins, entries), starts),",
       "replace": "Some(starts) => true,",
-      "expect": "killed-incidentally",
-      "reason": "Drops the rule that every direct target is the start of a unit (J.6: every direct target is a decoded boundary inside the blob). Verus fails on example_jump_into_check_rejected (a jump into the middle of a bounds check would be accepted), but that example is evaluated with compute_only, which cannot be a certificate (see the header of lemmas.rs), and no general lemma states the rule yet."
+      "expect": "killed",
+      "reason": "Drops the rule that every direct target is the start of a unit (J.6: every direct target is a decoded boundary inside the blob): a jump into the middle of a bounds check, skipping its first instructions, would be accepted, so lemma_policy_targets_are_unit_starts is false. (example_jump_into_check_rejected is false too.)",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_policy_targets_are_unit_starts(super::examples::prog_jump_into_check(), seq![0int])",
+        "witness": "policy(super::examples::prog_jump_into_check(), seq![0int]) && !subset_of(all_targets(super::examples::prog_jump_into_check(), seq![0int]), unit_starts(super::examples::prog_jump_into_check(), seq![0int]))"
+      }
     },
     {
       "id": "facts-kept-at-targets",
       "file": "src/spec.rs",
       "find": "let fs0 = if seq_has(tg, here) {",
       "replace": "let fs0 = if false && seq_has(tg, here) {",
-      "expect": "killed-incidentally",
-      "reason": "Keeps what is known about registers at a jump target, though the target can be reached without the instructions that established it (J.6: earlier in the same basic block). Verus fails on example_jump_over_check_rejected, which is evaluated with compute_only and so cannot be a certificate; no general lemma states the rule yet."
+      "expect": "killed",
+      "reason": "Keeps what is known about registers at a jump target, though the target can be reached without the instructions that established it (J.6: earlier in the same basic block): a jump past a bounds check to the access would be accepted, so lemma_scan_forgets_at_targets is false. (example_jump_over_check_rejected is false too.)",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_scan_forgets_at_targets(super::examples::prog_jump_over_check(), all_targets(super::examples::prog_jump_over_check(), seq![0int]), 10, cx_checked())",
+        "witness": "seq_has(all_targets(super::examples::prog_jump_over_check(), seq![0int]), start_of(super::examples::prog_jump_over_check(), 10)) && scan(super::examples::prog_jump_over_check(), all_targets(super::examples::prog_jump_over_check(), seq![0int]), 10, cx_checked()) is Some && scan(super::examples::prog_jump_over_check(), all_targets(super::examples::prog_jump_over_check(), seq![0int]), 10, no_facts()) is None"
+      }
     },
     {
       "id": "region-table-writable",

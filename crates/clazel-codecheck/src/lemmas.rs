@@ -108,7 +108,46 @@ pub proof fn lemma_policy_ends(ins: Seq<Instr>, entries: Seq<int>)
 {
 }
 
+/// The offsets at which the scan found units begin (empty if it refused one).
+pub open spec fn unit_starts(ins: Seq<Instr>, entries: Seq<int>) -> Seq<int> {
+    match scan(ins, all_targets(ins, entries), 0, no_facts()) {
+        Some(starts) => starts,
+        None => Seq::empty(),
+    }
+}
+
+/// **Every direct target and every entry is the start of a unit** (J.6:
+/// "every direct target is a decoded boundary inside the blob"; stronger here,
+/// because a jump into the middle of a recognized sequence would skip part of
+/// it). A unit starts at an instruction boundary of the blob, so a target that
+/// is a unit start is a boundary inside the blob.
+pub proof fn lemma_policy_targets_are_unit_starts(ins: Seq<Instr>, entries: Seq<int>)
+    requires
+        policy(ins, entries),
+    ensures
+        subset_of(all_targets(ins, entries), unit_starts(ins, entries)),
+{
+}
+
+/// **What is known about registers does not flow into a jump target** (J.6:
+/// the check is "earlier in the same basic block"): the scan from an
+/// instruction whose offset is a target gives the same result whatever was
+/// known before it.
+pub proof fn lemma_scan_forgets_at_targets(ins: Seq<Instr>, tg: Seq<int>, j: int, fs: Facts)
+    requires
+        0 <= j < ins.len(),
+        seq_has(tg, start_of(ins, j)),
+    ensures
+        scan(ins, tg, j, fs) == scan(ins, tg, j, no_facts()),
+{
+}
+
 // ---- Data for the certificates ----
+
+/// `r2` is region 3's base and `r1` is checked for 8 bytes of region 3.
+pub open spec fn cx_checked() -> Facts {
+    set_fact(cx_base2(), 1, Fact::Idx(3, 8))
+}
 
 /// `r2` is region 3's base.
 pub open spec fn cx_base2() -> Facts {
