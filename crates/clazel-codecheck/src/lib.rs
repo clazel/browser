@@ -43,5 +43,6 @@ pub mod decode_all;
 pub mod examples;
 pub mod exec;
 pub mod lemmas;
+pub mod scan_exec;
 pub mod spec;
 pub mod unit_exec;
