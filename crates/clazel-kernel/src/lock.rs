@@ -385,6 +385,9 @@ pub proof fn theorem_lock_set_only_by_navigation(rules: Seq<clazel_psl::spec::Ru
             Event::NavigateTab { tab, url } => {
                 lemma_begin_stable(rules, urls, fetch, s, tab, url, clazel_fetch::request::spec::get_req());
             },
+            Event::SubmitTab { tab, url, req } => {
+                lemma_begin_stable(rules, urls, fetch, s, tab, url, req);
+            },
             Event::Net { conn, input } => {
                 lemma_net_stable(rules, urls, fetch, s, conn, input);
             },
@@ -397,6 +400,17 @@ pub proof fn theorem_lock_set_only_by_navigation(rules: Seq<clazel_psl::spec::Ru
                             if let Some(resolved) = (urls.resolve)(r.url, relative) {
                                 if lock_of_url(urls, resolved, s.next_id) is Some {
                                     lemma_begin_stable(rules, urls, fetch, s, r.tab, resolved, clazel_fetch::request::spec::get_req());
+                                }
+                            }
+                        }
+                    }
+                    if let Some(clazel_ipc::message::spec::Message::Submit { url, method, content_type, body }) = accepted_message(r, bytes) {
+                        if let Some(req) = submit_request(r, method, content_type, body) {
+                            if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+                                if let Some(resolved) = (urls.resolve)(r.url, relative) {
+                                    if lock_of_url(urls, resolved, s.next_id) is Some {
+                                        lemma_begin_stable(rules, urls, fetch, s, r.tab, resolved, req);
+                                    }
                                 }
                             }
                         }

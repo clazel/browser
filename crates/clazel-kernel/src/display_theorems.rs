@@ -158,6 +158,9 @@ proof fn lemma_other_events_no_show(rules: Seq<clazel_psl::spec::Rule>, urls: Ur
         Event::NavigateTab { tab, url } => {
             lemma_begin_no_show(rules, urls, fetch, s, tab, url, clazel_fetch::request::spec::get_req());
         },
+        Event::SubmitTab { tab, url, req } => {
+            lemma_begin_no_show(rules, urls, fetch, s, tab, url, req);
+        },
         Event::Net { conn, input } => {
             crate::net_theorems::theorem_net_only_to_tab(rules, urls, fetch, s, conn, input);
             if net_target(s, conn) is Some {

@@ -745,6 +745,9 @@ pub proof fn lemma_step_preserves_wf(rules: Seq<clazel_psl::spec::Rule>, urls: U
         Event::NavigateTab { tab, url } => {
             crate::net_wf::lemma_begin_navigation_wf(rules, urls, fetch, s, tab, url, clazel_fetch::request::spec::get_req());
         },
+        Event::SubmitTab { tab, url, req } => {
+            crate::net_wf::lemma_begin_navigation_wf(rules, urls, fetch, s, tab, url, req);
+        },
         // Item 5.18: a GPU process's frame keeps the state or kills its
         // renderer (as a renderer's disallowed frame does); a resize and an
         // input change only the viewports, which `kernel_wf` does not read.

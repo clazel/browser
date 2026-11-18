@@ -341,6 +341,7 @@ pub proof fn lemma_step_tables(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns,
         Event::FromRenderer { id, bytes } => lemma_from_renderer_tables(rules, urls, fetch, s, id, bytes),
         Event::OpenTab { url, script } => lemma_open_tab_tables(rules, urls, fetch, s, url, script),
         Event::NavigateTab { tab, url } => lemma_begin_tables(rules, urls, fetch, s, tab, url, clazel_fetch::request::spec::get_req()),
+        Event::SubmitTab { tab, url, req } => lemma_begin_tables(rules, urls, fetch, s, tab, url, req),
         Event::Net { conn, input } => lemma_net_tables(rules, urls, fetch, s, conn, input),
         Event::RendererExited { id } => {
             if let Some(i) = find_by_id(s.renderers, id, 0) {

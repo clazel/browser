@@ -1259,14 +1259,14 @@ pub proof fn lemma_handle_message_conns(rules: Seq<clazel_psl::spec::Rule>, urls
         ({
             let (s1, out) = handle_message(rules, urls, fetch, s, r, m);
             (s1.conns == s.conns && s1.next_conn == s.next_conn && s1.renderers == s.renderers && forall|k: int|
-                0 <= k < out.len() ==> !((#[trigger] out[k]) is Connect || out[k] is Send || out[k] is Close)) || (m is Navigate && exists|resolved: Seq<u32>| #[trigger] (handle_message(
+                0 <= k < out.len() ==> !((#[trigger] out[k]) is Connect || out[k] is Send || out[k] is Close)) || ((m is Navigate || m is Submit) && exists|resolved: Seq<u32>, req: clazel_fetch::request::spec::Req| #[trigger] (handle_message(
                 rules,
                 urls,
                 fetch,
                 s,
                 r,
                 m,
-            )) == begin_navigation(rules, urls, fetch, s, r.tab, resolved, clazel_fetch::request::spec::get_req()))
+            )) == begin_navigation(rules, urls, fetch, s, r.tab, resolved, req))
         }),
 {
     match m {
@@ -1315,7 +1315,7 @@ pub proof fn lemma_handle_message_conns(rules: Seq<clazel_psl::spec::Rule>, urls
 pub proof fn lemma_step_non_navigate_conns(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat, bytes: Seq<u8>)
     requires
         find_by_id(s.renderers, id, 0) is Some,
-        accepted_message(s.renderers[find_by_id(s.renderers, id, 0)->Some_0], bytes) matches Some(m) && !(m is Navigate),
+        accepted_message(s.renderers[find_by_id(s.renderers, id, 0)->Some_0], bytes) matches Some(m) && !(m is Navigate) && !(m is Submit),
     ensures
         step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).0.conns == s.conns,
         step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).0.next_conn == s.next_conn,
@@ -1876,6 +1876,9 @@ pub proof fn theorem_connection_ownership(rules: Seq<clazel_psl::spec::Rule>, ur
         },
         Event::NavigateTab { tab, url } => {
             lemma_own_begin(rules, urls, fetch, s, tab, url, clazel_fetch::request::spec::get_req());
+        },
+        Event::SubmitTab { tab, url, req } => {
+            lemma_own_begin(rules, urls, fetch, s, tab, url, req);
         },
         Event::Net { conn, input } => {
             lemma_own_all_net(rules, urls, fetch, s, conn, input);

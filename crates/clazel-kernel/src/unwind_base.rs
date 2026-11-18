@@ -641,6 +641,9 @@ pub proof fn lemma_step_gpu_frame(rules: Seq<clazel_psl::spec::Rule>, urls: UrlF
         Event::NavigateTab { tab, url } => {
             lemma_navigation_frame(rules, urls, fetch, s, tab, url, clazel_fetch::request::spec::get_req(), script_document(seq![]));
         },
+        Event::SubmitTab { tab, url, req } => {
+            lemma_navigation_frame(rules, urls, fetch, s, tab, url, req, script_document(seq![]));
+        },
         Event::Net { conn, input } => {
             lemma_net_frame(rules, urls, fetch, s, conn, input);
         },
@@ -721,6 +724,9 @@ pub proof fn lemma_jar_no_public_suffix_step(rules: Seq<clazel_psl::spec::Rule>,
         },
         Event::NavigateTab { tab, url } => {
             lemma_navigation_frame(rules, urls, fetch, s, tab, url, clazel_fetch::request::spec::get_req(), script_document(seq![]));
+        },
+        Event::SubmitTab { tab, url, req } => {
+            lemma_navigation_frame(rules, urls, fetch, s, tab, url, req, script_document(seq![]));
         },
         Event::SubNet { renderer, serial, hop, input } => {
             crate::subfetch_rel::lemma_sub_net_wf(rules, urls, fetch, s, renderer, serial, hop, input);

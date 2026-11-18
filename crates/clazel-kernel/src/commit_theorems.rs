@@ -506,6 +506,9 @@ proof fn lemma_step_sent(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch
         Event::NavigateTab { tab, url } => {
             lemma_begin_sent(rules, urls, fetch, s, o, tab, url, clazel_fetch::request::spec::get_req());
         },
+        Event::SubmitTab { tab, url, req } => {
+            lemma_begin_sent(rules, urls, fetch, s, o, tab, url, req);
+        },
         Event::Net { conn, input } => {
             lemma_net_sent(rules, urls, fetch, s, o, conn, input);
         },

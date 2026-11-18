@@ -376,4 +376,34 @@ pub proof fn lemma_declassified_is_navigate_tab(
     }
 }
 
+/// Item 6.16: a renderer's `Submit` that the kernel accepts does exactly what
+/// its declassified part, a `SubmitTab`, does: the same state and the same
+/// outputs (it starts the navigation, with the same request, and its fetch).
+/// As [`lemma_declassified_is_navigate_tab`].
+pub proof fn lemma_declassified_is_submit_tab(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns,
+    fetch: FetchFns,
+    s: State,
+    e: Event,
+    d: Event,
+)
+    requires
+        declassified(urls, s, e) == Some(d),
+        d is SubmitTab,
+        lock_of_url(urls, d->SubmitTab_url, s.next_id) is Some,
+    ensures
+        step(rules, urls, fetch, s, e) == step(rules, urls, fetch, s, d),
+{
+    let id = e->FromRenderer_id;
+    let i = find_by_id(s.renderers, id, 0)->Some_0;
+    let r = s.renderers[i];
+    match decode_renderer_frame(e->FromRenderer_bytes) {
+        Some(clazel_ipc::message::spec::Message::Submit { url, method, content_type, body }) => {
+            assert(r.committed);
+        },
+        _ => {},
+    }
+}
+
 } // verus!

@@ -49,7 +49,71 @@ pub proof fn lemma_navigate_declassify(rules: Seq<clazel_psl::spec::Rule>, urls:
             reveal(Seq::filter);
             assert(crate::noninterference::outputs_for(rules, d, s2, s2b, o2) == Seq::<Output>::empty());
         }
+    } else if let Some(clazel_ipc::message::spec::Message::Submit { url, method, content_type, body }) = decode_renderer_frame(bytes) {
+        // Item 6.16: the declassified event is a `SubmitTab` of the sender's
+        // tab, with the request the kernel built from the message.
+        assert(r.committed);
+        let req = submit_request(r, method, content_type, body)->Some_0;
+        let relative = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url)->Some_0;
+        let resolved = (urls.resolve)(r.url, relative)->Some_0;
+        assert(dn == (Event::SubmitTab { tab: r.tab, url: resolved, req }));
+        crate::unwind_base::lemma_found_contained(s1, r.tab);
+        assert(s1.renderers.contains(r));
+        crate::unwind_base::lemma_find_contained(urls, s1, r);
+        if lock_of_url(urls, resolved, s1.next_id) is Some {
+            crate::domain::lemma_declassified_is_submit_tab(rules, urls, fetch, s1, e, dn);
+            crate::net_rel::lemma_begin_consistency(rules, urls, fetch, d, s1, s2, r.tab, resolved, req);
+            crate::unwind_base::lemma_outputs_for_same_rb(rules, urls, d, s1, s2, s1b, s2b, o1, o2);
+        } else {
+            // The kernel answers the sender with an error; the SubmitTab is ignored.
+            assert(s1b == s1);
+            assert(s2b == s2);
+            assert(o2 == Seq::<Output>::empty());
+            lemma_local_error_outputs_submit(rules, urls, fetch, d, s1, s2, id, bytes, d2);
+            assert(o1 == step(rules, urls, fetch, s1, e).1);
+            reveal(Seq::filter);
+            assert(crate::noninterference::outputs_for(rules, d, s2, s2b, o2) == Seq::<Output>::empty());
+        }
     }
+}
+
+/// A `Submit` (item 6.16) answered with an error: nothing is addressed to
+/// `d`. (As [`lemma_local_error_outputs`] for a `Navigate`.)
+pub proof fn lemma_local_error_outputs_submit(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns, fetch: FetchFns,
+    d: crate::domain::Domain,
+    s1: State,
+    s2: State,
+    id: nat,
+    bytes: Seq<u8>,
+    d2: crate::domain::Domain,
+)
+    requires
+        crate::noninterference::rel(rules, urls, d, s1, s2),
+        crate::domain::event_domain(rules, s1, Event::FromRenderer { id, bytes }) == Some(d2),
+        d2 != d,
+        accepted_message(s1.renderers[find_by_id(s1.renderers, id, 0)->Some_0], bytes) matches Some(clazel_ipc::message::spec::Message::Submit { url, method, content_type, body })
+            && submit_request(s1.renderers[find_by_id(s1.renderers, id, 0)->Some_0], method, content_type, body) is Some
+            && clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) matches Some(relative)
+            && (urls.resolve)(s1.renderers[find_by_id(s1.renderers, id, 0)->Some_0].url, relative) matches Some(resolved)
+            && lock_of_url(urls, resolved, s1.next_id) is None,
+    ensures
+        crate::noninterference::outputs_for(rules, d, s1, s1, step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).1) == Seq::<Output>::empty(),
+{
+    crate::unwind_base::lemma_found_contained(s1, id);
+    let i1 = find_by_id(s1.renderers, id, 0)->Some_0;
+    let r = s1.renderers[i1];
+    let out = step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).1;
+    assert forall|k: int| 0 <= k < out.len() implies !crate::noninterference::addressed_to(rules, d, s1, s1, #[trigger] out[k]) by {
+        if crate::noninterference::addressed_to(rules, d, s1, s1, out[k]) {
+            let q = choose|q: Renderer| (s1.renderers.contains(q) || s1.renderers.contains(q)) && q.id == crate::domain::output_id(out[k]) && crate::domain::domain_of_renderer(rules, q) == d;
+            assert(crate::domain::output_id(out[k]) == id);
+            assert(s1.renderers.contains(r));
+            crate::unwind_base::lemma_same_id_same_renderer(urls, s1.renderers, s1.next_id, q, r);
+        }
+    }
+    crate::unwind_base::lemma_filter_none(out, |o: Output| crate::noninterference::addressed_to(rules, d, s1, s1, o));
 }
 
 /// A `Navigate` answered with an error: nothing is addressed to `d`.
@@ -112,7 +176,7 @@ pub proof fn lemma_kept_step(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
             assert(crate::domain::event_domain(rules, s1, e) is Some);
             if d2 != d {
                 assert(crate::domain::declassified(urls, s1, e) == Some(e));
-                assert(crate::domain::declassified(urls, s1, e) matches Some(x) ==> x is NavigateTab);
+                assert(crate::domain::declassified(urls, s1, e) matches Some(x) ==> (x is NavigateTab || x is SubmitTab));
                 assert(false);
             }
             crate::unwinding_d::lemma_d_event(rules, urls, fetch, d, s1, s2, id, bytes);
@@ -122,6 +186,9 @@ pub proof fn lemma_kept_step(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
         },
         Event::NavigateTab { tab, url } => {
             crate::net_rel::lemma_begin_consistency(rules, urls, fetch, d, s1, s2, tab, url, clazel_fetch::request::spec::get_req());
+        },
+        Event::SubmitTab { tab, url, req } => {
+            crate::net_rel::lemma_begin_consistency(rules, urls, fetch, d, s1, s2, tab, url, req);
         },
         Event::Net { conn, input } => {
             crate::net_rel::lemma_net_consistency(rules, urls, fetch, d, s1, s2, conn, input);

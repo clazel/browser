@@ -195,7 +195,7 @@ proof fn lemma_no_paint_open_tab(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
 proof fn lemma_no_paint_navigate(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
     requires
         reachable(rules, urls, fetch, s),
-        e is NavigateTab,
+        e is NavigateTab || e is SubmitTab,
     ensures
         forall|k: int| 0 <= k < step(rules, urls, fetch, s, e).1.len() ==> !((#[trigger] step(rules, urls, fetch, s, e).1[k]) is Paint),
 {
@@ -203,6 +203,9 @@ proof fn lemma_no_paint_navigate(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
     match e {
         Event::NavigateTab { tab, url } => {
             lemma_begin_no_surface(rules, urls, fetch, s, tab, url, clazel_fetch::request::spec::get_req());
+        },
+        Event::SubmitTab { tab, url, req } => {
+            lemma_begin_no_surface(rules, urls, fetch, s, tab, url, req);
         },
         _ => {},
     }
@@ -336,7 +339,7 @@ proof fn lemma_no_paint_but_gpu(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns
     match e {
         Event::FromRenderer { .. } => lemma_no_paint_from_renderer(rules, urls, fetch, s, e),
         Event::OpenTab { .. } => lemma_no_paint_open_tab(rules, urls, fetch, s, e),
-        Event::NavigateTab { .. } => lemma_no_paint_navigate(rules, urls, fetch, s, e),
+        Event::NavigateTab { .. } | Event::SubmitTab { .. } => lemma_no_paint_navigate(rules, urls, fetch, s, e),
         Event::Net { .. } => lemma_no_paint_net(rules, urls, fetch, s, e),
         Event::RendererExited { .. } => lemma_no_paint_exited(rules, urls, fetch, s, e),
         Event::Resize { .. } => lemma_no_paint_resize(rules, urls, fetch, s, e),
@@ -700,6 +703,9 @@ pub proof fn theorem_channel_only_own_tab(rules: Seq<clazel_psl::spec::Rule>, ur
         },
         Event::NavigateTab { tab, url } => {
             lemma_begin_no_surface(rules, urls, fetch, s, tab, url, clazel_fetch::request::spec::get_req());
+        },
+        Event::SubmitTab { tab, url, req } => {
+            lemma_begin_no_surface(rules, urls, fetch, s, tab, url, req);
         },
         Event::Net { conn, input } => {
             lemma_channel_net(rules, urls, fetch, s, conn, input);

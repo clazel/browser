@@ -391,7 +391,7 @@ fn eq8(a: &[u8], b: &[u8]) -> (r: bool)
 }
 
 /// `m` is "GET".
-fn is_get(m: &[u8]) -> (r: bool)
+pub fn is_get(m: &[u8]) -> (r: bool)
     ensures
         r == (m@ == lit_get()),
 {
@@ -402,7 +402,7 @@ fn is_get(m: &[u8]) -> (r: bool)
 }
 
 /// `m` is "POST".
-fn is_post(m: &[u8]) -> (r: bool)
+pub fn is_post(m: &[u8]) -> (r: bool)
     ensures
         r == (m@ == lit_post()),
 {
