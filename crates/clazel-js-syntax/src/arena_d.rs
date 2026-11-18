@@ -319,6 +319,7 @@ proof fn lemma_op_is_tok(ts: Stream, i: int, op: Op)
 
 /// What a processed node `j < m` has proven: it derives tokens `lo[j]..hi[j]` in
 /// context `cx`, and has the binding strength `lv[j]`.
+#[verifier::opaque]
 pub open spec fn inv(
     a: AstV,
     ts: Stream,
@@ -435,6 +436,331 @@ fn check_literal(
         assert(lvl(av, m as int) == 17);
     }
     Some((x, x1, 17))
+}
+
+/// What the helpers below assume of the executable data: the stream is the
+/// specification's, the tokens are not empty and increase, and the arena is
+/// well formed.
+#[verifier::opaque]
+pub open spec fn env_ok(
+    src: Seq<u32>,
+    nodes: Seq<Node>,
+    toks: Seq<DTok>,
+    gaps: Seq<Ins>,
+    ts: Stream,
+) -> bool {
+    stream_matches(src, toks, gaps, ts) && toks_wf(ts) && ast_wf(arena_of(nodes)) && gaps.len()
+        == toks.len() + 1
+}
+
+/// The children of a node of a well-formed arena are before it.
+proof fn lemma_child_before(a: AstV, m: int, k: int)
+    requires
+        ast_wf(a),
+        0 <= m < a.nodes.len(),
+        0 <= k < a.nodes[m].children.len(),
+    ensures
+        0 <= a.nodes[m].children[k] < m,
+{
+}
+
+/// The binding strength and operand minima of the binary kinds of the check.
+pub open spec fn bin_levels(k: NodeKind) -> (int, int, int) {
+    match k {
+        NodeKind::AdditiveExpression => (9, 9, 10),
+        NodeKind::MultiplicativeExpression => (10, 10, 11),
+        _ => (7, 7, 8),
+    }
+}
+
+/// A binary node of the check whose operands and operator token are as read.
+#[verifier::spinoff_prover]
+proof fn lemma_binary_done(
+    a: AstV,
+    ts: Stream,
+    cx: Ctx,
+    m: int,
+    l: int,
+    r: int,
+    lo_l: int,
+    mi: int,
+    lo_r: int,
+    j: int,
+    code: u32,
+    own: int,
+)
+    requires
+        toks_wf(ts),
+        0 <= m < a.nodes.len(),
+        0 <= l < m,
+        0 <= r < m,
+        cx_in(cx, true) == cx,
+        a.nodes[m].children =~= seq![l, r],
+        a.nodes[m].kind == NodeKind::AdditiveExpression || a.nodes[m].kind
+            == NodeKind::MultiplicativeExpression || a.nodes[m].kind
+            == NodeKind::RelationalExpression,
+        a.nodes[m].kind == NodeKind::AdditiveExpression ==> (a.nodes[m].op == Op::Add
+            || a.nodes[m].op == Op::Sub),
+        a.nodes[m].kind == NodeKind::MultiplicativeExpression ==> (a.nodes[m].op == Op::Mul
+            || a.nodes[m].op == Op::Div || a.nodes[m].op == Op::Rem),
+        a.nodes[m].kind == NodeKind::RelationalExpression ==> (a.nodes[m].op == Op::Lt
+            || a.nodes[m].op == Op::Gt),
+        code == op_code(a.nodes[m].op),
+        own == bin_levels(a.nodes[m].kind).0,
+        lvl(a, l) >= bin_levels(a.nodes[m].kind).1,
+        lvl(a, r) >= bin_levels(a.nodes[m].kind).2,
+        node_done(a, ts, l, cx, lo_l, mi),
+        node_done(a, ts, r, cx, lo_r, j),
+        lo_r == mi + 1,
+        0 <= mi < tn(ts),
+        ts.toks[mi].kind == TokKind::Punctuator,
+        ts.toks[mi].text =~= seq![code],
+        a.nodes[m].start == ts.toks[lo_l].start,
+        a.nodes[m].end == ts.toks[j - 1].end,
+    ensures
+        node_done(a, ts, m, cx, lo_l, j),
+        lvl(a, m) == own,
+{
+    lemma_op_is_tok(ts, mi, a.nodes[m].op);
+    assert(span_ok(a, ts, m, lo_l, j));
+    assert(bin_op_ok(a.nodes[m].kind, a.nodes[m].op));
+    assert(binary_operands_ok(a, a.nodes[m].kind, a.nodes[m].op, l, r));
+    crate::derive::lemma_binary_derives(a, ts, m, cx, lo_l, mi, j, l, r);
+    lemma_ed_of(a, ts, m, lo_l, j);
+}
+
+/// The binding strengths, the operator check and the code point of a binary
+/// kind and operator of the check.
+fn bin_info(kind: NodeKind, op: Op) -> (r: (i32, i32, i32, bool, u32))
+    ensures
+        r.3 ==> ((kind == NodeKind::AdditiveExpression && (op == Op::Add || op == Op::Sub))
+            || (kind == NodeKind::MultiplicativeExpression && (op == Op::Mul || op == Op::Div
+            || op == Op::Rem)) || (kind == NodeKind::RelationalExpression && (op == Op::Lt || op
+            == Op::Gt))) && r.4 == op_code(op) && r.0 == bin_levels(kind).0 && r.1
+            == bin_levels(kind).1 && r.2 == bin_levels(kind).2,
+{
+    match kind {
+        NodeKind::AdditiveExpression => match op {
+            Op::Add => (9, 9, 10, true, 0x2B),
+            Op::Sub => (9, 9, 10, true, 0x2D),
+            _ => (0, 0, 0, false, 0),
+        },
+        NodeKind::MultiplicativeExpression => match op {
+            Op::Mul => (10, 10, 11, true, 0x2A),
+            Op::Div => (10, 10, 11, true, 0x2F),
+            Op::Rem => (10, 10, 11, true, 0x25),
+            _ => (0, 0, 0, false, 0),
+        },
+        NodeKind::RelationalExpression => match op {
+            Op::Lt => (7, 7, 8, true, 0x3C),
+            Op::Gt => (7, 7, 8, true, 0x3E),
+            _ => (0, 0, 0, false, 0),
+        },
+        _ => (0, 0, 0, false, 0),
+    }
+}
+
+/// §13.6 to §13.13 `+ - * / % < >`: a binary node of the check.
+#[verifier::spinoff_prover]
+fn check_binary(
+    src: &Vec<u32>,
+    nodes: &Vec<Node>,
+    toks: &Vec<DTok>,
+    gaps: &Vec<Ins>,
+    lo: &Vec<usize>,
+    hi: &Vec<usize>,
+    lv: &Vec<i32>,
+    m: usize,
+    Ghost(ts): Ghost<Stream>,
+    Ghost(cx): Ghost<Ctx>,
+) -> (r: Option<(usize, usize, i32)>)
+    requires
+        m < nodes.len(),
+        cx_in(cx, true) == cx,
+        env_ok(src@, nodes@, toks@, gaps@, ts),
+        inv(arena_of(nodes@), ts, cx, lo@, hi@, lv@, m as int),
+    ensures
+        match r {
+            Some((l0, h0, l)) => node_done(arena_of(nodes@), ts, m as int, cx, l0 as int, h0 as int)
+                && l as int == lvl(arena_of(nodes@), m as int),
+            None => true,
+        },
+{
+    let nd = match nodes.as_slice().get(m) {
+        Some(x) => x,
+        None => {
+            return None;
+        },
+    };
+    let (own, lmin, rmin, opok, code) = bin_info(nd.kind, nd.op);
+    if !opok || nd.children.len() != 2 {
+        return None;
+    }
+    let l = match nd.children.as_slice().get(0) {
+        Some(x) => *x as usize,
+        None => {
+            return None;
+        },
+    };
+    let r = match nd.children.as_slice().get(1) {
+        Some(x) => *x as usize,
+        None => {
+            return None;
+        },
+    };
+    proof {
+        let a = arena_of(nodes@);
+        assert(a.nodes[m as int] == nodes@[m as int]@);
+        lemma_env_toks_wf(src@, nodes@, toks@, gaps@, ts);
+        lemma_child_before(a, m as int, 0);
+        lemma_child_before(a, m as int, 1);
+    }
+    if l >= m || r >= m {
+        return None;
+    }
+    let lo_l = match lo.as_slice().get(l) {
+        Some(x) => *x,
+        None => {
+            return None;
+        },
+    };
+    let mi = match hi.as_slice().get(l) {
+        Some(x) => *x,
+        None => {
+            return None;
+        },
+    };
+    let lo_r = match lo.as_slice().get(r) {
+        Some(x) => *x,
+        None => {
+            return None;
+        },
+    };
+    let j = match hi.as_slice().get(r) {
+        Some(x) => *x,
+        None => {
+            return None;
+        },
+    };
+    let lvl_l = match lv.as_slice().get(l) {
+        Some(x) => *x,
+        None => {
+            return None;
+        },
+    };
+    let lvl_r = match lv.as_slice().get(r) {
+        Some(x) => *x,
+        None => {
+            return None;
+        },
+    };
+    if lvl_l < lmin || lvl_r < rmin || lo_r != mi.saturating_add(1) {
+        return None;
+    }
+    let opt = match toks.as_slice().get(mi) {
+        Some(t) => t,
+        None => {
+            return None;
+        },
+    };
+    let first = match toks.as_slice().get(lo_l) {
+        Some(t) => t,
+        None => {
+            return None;
+        },
+    };
+    let last = match toks.as_slice().get(j.saturating_sub(1)) {
+        Some(t) => t,
+        None => {
+            return None;
+        },
+    };
+    proof {
+        lemma_env_tok(src@, nodes@, toks@, gaps@, ts, mi as int);
+        assert(opt == &toks@[mi as int]);
+    }
+    if !matches!(opt.kind, TokKind::Punctuator) || !text_is1(src, opt, code) || nd.start
+        != first.start || nd.end != last.end {
+        return None;
+    }
+    proof {
+        let a = arena_of(nodes@);
+        assert(nd == &nodes@[m as int]);
+        assert(a.nodes[m as int] == nodes@[m as int]@);
+        assert(a.nodes[m as int].children =~= seq![l as int, r as int]) by {
+            assert(a.nodes[m as int].children.len() == 2);
+            assert(a.nodes[m as int].children[0] == l as int);
+            assert(a.nodes[m as int].children[1] == r as int);
+        }
+        lemma_inv_get(a, ts, cx, lo@, hi@, lv@, m as int, l as int);
+        lemma_inv_get(a, ts, cx, lo@, hi@, lv@, m as int, r as int);
+        lemma_env_tok(src@, nodes@, toks@, gaps@, ts, mi as int);
+        lemma_env_tok(src@, nodes@, toks@, gaps@, ts, lo_l as int);
+        lemma_env_tok(src@, nodes@, toks@, gaps@, ts, j as int - 1);
+        lemma_env_toks_wf(src@, nodes@, toks@, gaps@, ts);
+        assert(mi < toks.len());
+        assert(toks.len() <= usize::MAX);
+        assert(lo_r == mi + 1);
+        assert(j >= 1);
+        assert(first.start as int == ts.toks[lo_l as int].start);
+        assert(last.end as int == ts.toks[j as int - 1].end);
+        assert(a.nodes[m as int].kind == nd.kind);
+        assert(a.nodes[m as int].op == nd.op);
+        assert(a.nodes[m as int].start == nd.start as int);
+        assert(a.nodes[m as int].end == nd.end as int);
+        assert(ts.toks[mi as int].kind == TokKind::Punctuator);
+        assert(ts.toks[mi as int].text =~= seq![code]);
+        lemma_binary_done(
+            a,
+            ts,
+            cx,
+            m as int,
+            l as int,
+            r as int,
+            lo_l as int,
+            mi as int,
+            lo_r as int,
+            j as int,
+            code,
+            own as int,
+        );
+    }
+    Some((lo_l, j, own))
+}
+
+/// Node `j < m` is done (`inv`).
+proof fn lemma_inv_get(a: AstV, ts: Stream, cx: Ctx, lo: Seq<usize>, hi: Seq<usize>, lv: Seq<i32>, m: int, j: int)
+    requires
+        inv(a, ts, cx, lo, hi, lv, m),
+        0 <= j < m,
+    ensures
+        node_done(a, ts, j, cx, lo[j] as int, hi[j] as int),
+        lv[j] as int == lvl(a, j),
+{
+    reveal(inv);
+}
+
+/// Token `k` of the executable tokens is the specification's.
+proof fn lemma_env_tok(src: Seq<u32>, nodes: Seq<Node>, toks: Seq<DTok>, gaps: Seq<Ins>, ts: Stream, k: int)
+    requires
+        env_ok(src, nodes, toks, gaps, ts),
+        0 <= k < toks.len(),
+    ensures
+        dtok_matches(src, toks[k], ts.toks[k]),
+{
+    reveal(env_ok);
+}
+
+/// The specification's tokens are not empty and their ends increase.
+proof fn lemma_env_toks_wf(src: Seq<u32>, nodes: Seq<Node>, toks: Seq<DTok>, gaps: Seq<Ins>, ts: Stream)
+    requires
+        env_ok(src, nodes, toks, gaps, ts),
+    ensures
+        toks_wf(ts),
+        tn(ts) == toks.len(),
+        ast_wf(arena_of(nodes)),
+{
+    reveal(env_ok);
 }
 
 /// `lemma_leaf_literal` for the three literal kinds.
