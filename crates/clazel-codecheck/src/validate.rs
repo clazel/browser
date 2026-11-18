@@ -1,11 +1,10 @@
-//! The executable validator, proven **sound**: [`validate`] returns `true`
-//! only if the blob is [`crate::spec::accepted`] for the entries. It decodes
-//! once ([`crate::decode_all::decode_all`]), marks the entries and the jump
+//! The executable validator, proven **sound and complete**: [`validate`]
+//! returns `true` if and only if the blob is [`crate::spec::accepted`] for the
+//! entries, so it meets `contract::validate_ensures`. It decodes once
+//! ([`crate::decode_all::decode_all`]), marks the entries and the jump
 //! targets, runs the unit scan ([`crate::scan_exec::scan_exec`]) and checks
 //! that every target is a unit start, in time and space linear in the blob.
-//!
-//! Completeness (`accepted ==> true`) is not proven here.
-
+//! Being Verus code it has no panic and no overflow.
 use super::decode_all::decode_all;
 use super::scan_exec::scan_exec;
 #[allow(unused_imports)]
@@ -104,20 +103,45 @@ pub fn jump_rel_e(i: &Instr) -> (r: Option<i32>)
     }
 }
 
-/// Whether `blob`, entered at `entries`, is accepted. Sound: a `true`
-/// answer means [`accepted`].
+/// If the decomposition `ins` of the blob is the only one, an accepted blob
+/// passes the policy as `ins`.
+pub proof fn lemma_acc_policy(blob: Seq<u8>, ent: Seq<int>, ins: Seq<Instr>)
+    requires
+        decodes_to(blob, ins),
+        forall|w: Seq<Instr>| #[trigger] decodes_to(blob, w) ==> ins =~= w,
+    ensures
+        accepted(blob, ent) ==> policy(ins, ent),
+{
+    if accepted(blob, ent) {
+        let w = choose|w: Seq<Instr>| decodes_to(blob, w) && policy(w, ent);
+        assert(decodes_to(blob, w));
+        assert(ins =~= w);
+    }
+}
+
+/// Whether `blob`, entered at `entries`, is accepted: `true` if and only if
+/// it is, so the contract's soundness and completeness both hold.
 #[verifier::spinoff_prover]
 #[verifier::rlimit(4000)]
 pub fn validate(blob: &[u8], entries: &[usize]) -> (ok: bool)
     requires
         blob@.len() <= 0x7FFF_FFFF,
     ensures
-        ok ==> accepted(blob@, entries@.map_values(|e: usize| e as int)),
+        crate::contract::validate_ensures(blob@, entries@, ok),
 {
     let total = blob.len();
+    let ghost ent = crate::contract::entry_offsets(entries@);
     let (ins, st) = match decode_all(blob) {
         Some(x) => x,
         None => {
+            proof {
+                assert(!accepted(blob@, ent)) by {
+                    if accepted(blob@, ent) {
+                        let w = choose|w: Seq<Instr>| decodes_to(blob@, w) && policy(w, ent);
+                        assert(decodes_to(blob@, w));
+                    }
+                }
+            }
             return false;
         },
     };
@@ -126,16 +150,26 @@ pub fn validate(blob: &[u8], entries: &[usize]) -> (ok: bool)
         lemma_enc_all_len(ins@);
         assert(total as int == start_of(ins@, n as int));
         lemma_start_of_ge(ins@, n as int);
+        lemma_acc_policy(blob@, ent, ins@);
     }
     if n == 0 {
+        proof {
+            assert(!accepted(blob@, ent));
+        }
         return false;
     }
     // The last instruction is ret or jmp.
     let last_ok = matches!(ins.get(n.saturating_sub(1)), Some(Instr::Ret | Instr::Jmp { .. }));
     if !last_ok {
+        proof {
+            assert(!accepted(blob@, ent)) by {
+                if accepted(blob@, ent) {
+                    super::lemmas::lemma_policy_ends(ins@, ent);
+                }
+            }
+        }
         return false;
     }
-    let ghost ent = entries@.map_values(|e: usize| e as int);
     // Targets: the entries, then the jump targets.
     let mut target: Vec<bool> = vec![false; total];
     let ghost mut tgacc: Seq<int> = Seq::empty();
@@ -145,6 +179,10 @@ pub fn validate(blob: &[u8], entries: &[usize]) -> (ok: bool)
             k <= entries.len(),
             target@.len() == total,
             total <= 0x7FFF_FFFF,
+            n == ins@.len(),
+            total as int == start_of(ins@, ins@.len() as int),
+            accepted(blob@, ent) ==> policy(ins@, ent),
+            ent == crate::contract::entry_offsets(entries@),
             tgacc.len() == k,
             forall|q: int| 0 <= q < k ==> #[trigger] tgacc[q] == entries@[q] as int,
             forall|q: int| 0 <= q < tgacc.len() ==> 0 <= #[trigger] tgacc[q] < total,
@@ -154,10 +192,29 @@ pub fn validate(blob: &[u8], entries: &[usize]) -> (ok: bool)
         let e = match entries.get(k) {
             Some(e) => *e,
             None => {
+                proof { assert(false); }
                 return false;
             },
         };
         if e >= total {
+            proof {
+                assert(!accepted(blob@, ent)) by {
+                    if accepted(blob@, ent) {
+                        assert(ent.len() == entries@.len());
+                        assert(e == entries@[k as int]);
+                        assert(ent[k as int] == entries@[k as int] as int);
+                        assert(ent[k as int] == e as int);
+                        lemma_seq_has_at(ent, k as int);
+                        super::acc_lemmas::lemma_seq_has_concat(
+                            ent,
+                            jump_targets(ins@, 0),
+                            e as int,
+                        );
+                        assert(all_targets(ins@, ent) =~= ent + jump_targets(ins@, 0));
+                        super::acc_lemmas::lemma_policy_in_range(ins@, ent, e as int);
+                    }
+                }
+            }
             return false;
         }
         target.set(e, true);
@@ -187,6 +244,8 @@ pub fn validate(blob: &[u8], entries: &[usize]) -> (ok: bool)
             all_valid(ins@),
             target@.len() == total,
             total <= 0x7FFF_FFFF,
+            accepted(blob@, ent) ==> policy(ins@, ent),
+            ent == crate::contract::entry_offsets(entries@),
             forall|q: int| 0 <= q < tgacc.len() ==> 0 <= #[trigger] tgacc[q] < total,
             forall|p: int| 0 <= p < total ==> target@[p] == seq_has(tgacc, p),
             tgacc + jump_targets(ins@, j as int) =~= all_targets(ins@, ent),
@@ -200,6 +259,7 @@ pub fn validate(blob: &[u8], entries: &[usize]) -> (ok: bool)
             match st.get(j1) {
                 Some(s) => *s,
                 None => {
+                    proof { assert(false); }
                     return false;
                 },
             }
@@ -216,6 +276,7 @@ pub fn validate(blob: &[u8], entries: &[usize]) -> (ok: bool)
         let rel = match ins.get(j) {
             Some(i) => jump_rel_e(i),
             None => {
+                proof { assert(false); }
                 return false;
             },
         };
@@ -227,9 +288,44 @@ pub fn validate(blob: &[u8], entries: &[usize]) -> (ok: bool)
                 }
             },
             Some(d) => {
+                proof {
+                    // The target `next + d` is in the targets, so inside the blob if
+                    // the blob is accepted.
+                    assert(jump_rel(ins@[j as int]) == Some(d as int));
+                    assert(jump_targets(ins@, j as int) =~= seq![next as int + d as int]
+                        + jump_targets(ins@, j as int + 1));
+                    super::acc_lemmas::lemma_seq_has_concat(
+                        seq![next as int + d as int],
+                        jump_targets(ins@, j as int + 1),
+                        next as int + d as int,
+                    );
+                    super::acc_lemmas::lemma_seq_has_single(
+                        next as int + d as int,
+                        next as int + d as int,
+                    );
+                    super::acc_lemmas::lemma_seq_has_concat(
+                        tgacc,
+                        jump_targets(ins@, j as int),
+                        next as int + d as int,
+                    );
+                    assert(seq_has(all_targets(ins@, ent), next as int + d as int));
+                    assert(accepted(blob@, ent) ==> (0 <= next as int + d as int && (next as int
+                        + d as int) < total)) by {
+                        if accepted(blob@, ent) {
+                            super::acc_lemmas::lemma_policy_in_range(
+                                ins@,
+                                ent,
+                                next as int + d as int,
+                            );
+                        }
+                    }
+                }
                 let t: i64 = match (next as i64).checked_add(d as i64) {
                     Some(t) => t,
                     None => {
+                        proof {
+                            assert(!accepted(blob@, ent));
+                        }
                         return false;
                     },
                 };
@@ -243,6 +339,9 @@ pub fn validate(blob: &[u8], entries: &[usize]) -> (ok: bool)
                     assert(t as int == next as int + d as int);
                 }
                 if t < 0 || t >= total as i64 {
+                    proof {
+                        assert(!accepted(blob@, ent));
+                    }
                     return false;
                 }
                 target.set(t as usize, true);
@@ -278,9 +377,19 @@ pub fn validate(blob: &[u8], entries: &[usize]) -> (ok: bool)
     let us = match scan_exec(ins.as_slice(), st.as_slice(), target.as_slice(), tg, total) {
         Some(us) => us,
         None => {
+            proof {
+                assert(!accepted(blob@, ent)) by {
+                    if accepted(blob@, ent) {
+                        assert(tgacc =~= all_targets(ins@, ent));
+                    }
+                }
+            }
             return false;
         },
     };
+    proof {
+        assert(tgacc =~= all_targets(ins@, ent));
+    }
     // Every target is a unit start.
     let mut p: usize = 0;
     while p < total
@@ -288,23 +397,44 @@ pub fn validate(blob: &[u8], entries: &[usize]) -> (ok: bool)
             p <= total,
             target@.len() == total,
             total <= 0x7FFF_FFFF,
+            accepted(blob@, ent) ==> policy(ins@, ent),
+            ent == crate::contract::entry_offsets(entries@),
             us@.len() == total,
             forall|q: int| 0 <= q < p ==> (target@[q] ==> us@[q]),
+            tgacc =~= all_targets(ins@, ent),
+            scan(ins@, tgacc, 0, no_facts()) is Some,
+            forall|q: int| 0 <= q < total ==> target@[q] == seq_has(tgacc, q),
+            forall|q: int|
+                0 <= q < total ==> us@[q] == seq_has(
+                    scan(ins@, tgacc, 0, no_facts())->Some_0,
+                    q,
+                ),
+            accepted(blob@, ent) ==> policy(ins@, ent),
         decreases total - p,
     {
         let t = match target.get(p) {
             Some(t) => *t,
             None => {
+                proof { assert(false); }
                 return false;
             },
         };
         let u = match us.get(p) {
             Some(u) => *u,
             None => {
+                proof { assert(false); }
                 return false;
             },
         };
         if t && !u {
+            proof {
+                assert(!accepted(blob@, ent)) by {
+                    if accepted(blob@, ent) {
+                        let starts = scan(ins@, tgacc, 0, no_facts())->Some_0;
+                        super::acc_lemmas::lemma_subset_elim(tgacc, starts, p as int);
+                    }
+                }
+            }
             return false;
         }
         p = p.saturating_add(1);
