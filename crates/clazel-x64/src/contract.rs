@@ -52,9 +52,9 @@ pub open spec fn decode_ensures(bytes: Seq<u8>, r: Option<(Instr, usize)>) -> bo
 
 /// No canonical encoding is a proper prefix of another instruction's, nor
 /// two different instructions' encodings of one input: the set of canonical
-/// encodings is a prefix code, so a decoder's `Some` is unique. To be proven
-/// about [`encode`] in the implementation half; the contracts above are
-/// meaningful (a decoder may pick any match) without it.
+/// encodings is a prefix code, so a decoder's `Some` is unique. Proven:
+/// `decoder_proofs::lemma_canonical_prefix_free`, from the completeness of
+/// the specification-level decoder in `decoder`.
 pub open spec fn canonical_prefix_free() -> bool {
     forall|i: Instr, j: Instr, bytes: Seq<u8>|
         starts_with_encoding(bytes, i) && starts_with_encoding(bytes, j) ==> i == j
