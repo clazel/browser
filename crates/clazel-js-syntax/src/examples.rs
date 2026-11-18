@@ -317,9 +317,19 @@ pub proof fn example_duplicate_export_is_an_early_error()
     assert(n9 =~= seq![seq![0x61u32]]);
     let all = exported_names_list(a, ts, ks, 0);
     assert(all =~= seq![seq![0x61u32], seq![0x61u32]]);
-    assert(has_duplicate(all)) by {
-        assert(all[0] =~= all[1]);
-    }
+    example_repeated_export_names_are_not_unique();
+    assert(all == seq![seq![0x61u32], seq![0x61u32]]);
+}
+
+/// §16.2.1.1: the same name twice is a duplicate.
+pub proof fn example_repeated_export_names_are_not_unique()
+    ensures
+        !exported_names_unique(seq![seq![0x61u32], seq![0x61u32]]),
+{
+    let ns = seq![seq![0x61u32], seq![0x61u32]];
+    assert(ns[0] == ns[1]);
+    assert(name_in(ns, ns[0], 1));
+    assert(names_repeat_from(ns, 0));
 }
 
 /// §16.2.2.1: a string that holds a lone surrogate is not well formed; a
@@ -328,16 +338,20 @@ pub proof fn example_lone_surrogate_is_ill_formed()
     ensures
         !well_formed_utf16(seq![0xD800u32]),
         !well_formed_utf16(seq![0xDC00u32]),
+        !surrogate_ok_at(seq![0xDC00u32], 0),
         well_formed_utf16(seq![0xD83Du32, 0xDE00u32]),
 {
     let lone = seq![0xD800u32];
-    assert(!(0xD800 <= lone[0] <= 0xDBFF ==> (0 + 1 < lone.len() && 0xDC00 <= lone[1] <= 0xDFFF)));
+    assert(!surrogate_ok_at(lone, 0));
     let low = seq![0xDC00u32];
-    assert(!(0xDC00 <= low[0] <= 0xDFFF ==> (0 > 0 && 0xD800 <= low[-1] <= 0xDBFF)));
+    assert(!surrogate_ok_at(low, 0));
     let pair = seq![0xD83Du32, 0xDE00u32];
-    assert forall|k: int| 0 <= k < pair.len() implies ((0xD800 <= #[trigger] pair[k] <= 0xDBFF) ==> (k
-        + 1 < pair.len() && 0xDC00 <= pair[k + 1] <= 0xDFFF)) && ((0xDC00 <= pair[k] <= 0xDFFF) ==> (
-    k > 0 && 0xD800 <= pair[k - 1] <= 0xDBFF)) by {}
+    assert forall|k: int| 0 <= k < pair.len() implies #[trigger] surrogate_ok_at(pair, k) by {
+        if k == 0 {
+        } else {
+            assert(k == 1);
+        }
+    }
 }
 
 } // verus!

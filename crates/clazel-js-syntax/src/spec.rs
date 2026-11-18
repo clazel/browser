@@ -1204,10 +1204,34 @@ pub open spec fn private_declared(env: EarlyEnv, nm: Seq<u32>) -> bool {
 /// is a Syntax Error if IsStringWellFormedUnicode(the SV of the StringLiteral) is
 /// false").
 pub open spec fn well_formed_utf16(s: Seq<u32>) -> bool {
-    forall|k: int|
-        0 <= k < s.len() ==> ((0xD800 <= #[trigger] s[k] <= 0xDBFF) ==> (k + 1 < s.len() && 0xDC00
-            <= s[k + 1] <= 0xDFFF)) && ((0xDC00 <= s[k] <= 0xDFFF) ==> (k > 0 && 0xD800 <= s[k - 1]
-            <= 0xDBFF))
+    forall|k: int| 0 <= k < s.len() ==> #[trigger] surrogate_ok_at(s, k)
+}
+
+/// The code unit at `k` of `s` is not a lone surrogate: a high surrogate is
+/// followed by a low one, and a low one preceded by a high one.
+pub open spec fn surrogate_ok_at(s: Seq<u32>, k: int) -> bool {
+    (0xD800 <= s[k] <= 0xDBFF ==> (k + 1 < s.len() && 0xDC00 <= s[k + 1] <= 0xDFFF)) && (0xDC00
+        <= s[k] <= 0xDFFF ==> (k > 0 && 0xD800 <= s[k - 1] <= 0xDBFF))
+}
+
+/// `n` is the name at `ns[k]` or after it.
+pub open spec fn name_in(ns: Seq<Seq<u32>>, n: Seq<u32>, k: int) -> bool
+    decreases ns.len() - k,
+{
+    k < ns.len() && (ns[k] == n || name_in(ns, n, k + 1))
+}
+
+/// A name of `ns[k..]` occurs again after it.
+pub open spec fn names_repeat_from(ns: Seq<Seq<u32>>, k: int) -> bool
+    decreases ns.len() - k,
+{
+    k + 1 < ns.len() && (name_in(ns, ns[k], k + 1) || names_repeat_from(ns, k + 1))
+}
+
+/// The exported names `ns` are all different (§16.2.1.1: "the ExportedNames of
+/// ModuleItemList contains any duplicate entries" is a Syntax Error).
+pub open spec fn exported_names_unique(ns: Seq<Seq<u32>>) -> bool {
+    !names_repeat_from(ns, 0)
 }
 
 /// §16.2.2.1, §16.2.3.1 `ModuleExportName : StringLiteral`: the string is well formed.
@@ -1294,7 +1318,7 @@ pub open spec fn exports_early(a: AstV, ts: Stream, n: int, ks: Seq<int>) -> boo
         ks,
         0,
     );
-    !has_duplicate(exported_names_list(a, ts, ks, 0)) && (forall|x: int|
+    exported_names_unique(exported_names_list(a, ts, ks, 0)) && (forall|x: int|
         0 <= x < exported_bindings_list(a, ts, ks, 0).len() ==> has_name(
             declared,
             #[trigger] exported_bindings_list(a, ts, ks, 0)[x],

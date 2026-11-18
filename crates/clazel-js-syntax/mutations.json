@@ -42,27 +42,27 @@
     {
       "id": "duplicate-exports-allowed",
       "file": "src/spec.rs",
-      "find": "!has_duplicate(exported_names_list(a, ts, ks, 0)) && (forall|x: int|",
-      "replace": "true && (forall|x: int|",
+      "find": "!names_repeat_from(ns, 0)",
+      "replace": "true",
       "expect": "killed",
-      "reason": "Drops the rule of §16.2.1.1 that the ExportedNames of a module have no duplicate, so `export {a}; export {a}` would be valid: example_duplicate_export_is_an_early_error is false.",
+      "reason": "Drops the rule of §16.2.1.1 that the ExportedNames of a module have no duplicate, so `export {a}; export {a}` would be valid: example_repeated_export_names_are_not_unique is false.",
       "certificate": {
         "file": "src/examples.rs",
-        "lemma": "example_duplicate_export_is_an_early_error()",
-        "witness": "exports_early(module_export_a_twice(), Stream { toks: seq![name_a(8), name_a(27)], gaps: seq![Ins::None, Ins::None, Ins::None] }, 10, module_export_a_twice().nodes[10].children)"
+        "lemma": "example_repeated_export_names_are_not_unique()",
+        "witness": "exported_names_unique(seq![seq![0x61u32], seq![0x61u32]])"
       }
     },
     {
       "id": "lone-low-surrogate-allowed",
       "file": "src/spec.rs",
-      "find": "<= s[k + 1] <= 0xDFFF)) && ((0xDC00 <= s[k] <= 0xDFFF) ==> (k > 0 && 0xD800 <= s[k - 1]",
-      "replace": "<= s[k + 1] <= 0xDFFF)) && ((0xDC00 <= s[k] <= 0xDFFF) ==> (true || 0xD800 <= s[k - 1]",
+      "find": "<= s[k] <= 0xDFFF ==> (k > 0 && 0xD800 <= s[k - 1] <= 0xDBFF))",
+      "replace": "<= s[k] <= 0xDFFF ==> (true || 0xD800 <= s[k - 1] <= 0xDBFF))",
       "expect": "killed",
-      "reason": "Lets a low surrogate stand alone in the name of a ModuleExportName, which IsStringWellFormedUnicode forbids: example_lone_surrogate_is_ill_formed is false.",
+      "reason": "Lets a low surrogate stand alone in the name of a ModuleExportName, which IsStringWellFormedUnicode forbids: example_lone_surrogate_is_ill_formed is false (its surrogate_ok_at conjunct).",
       "certificate": {
         "file": "src/examples.rs",
         "lemma": "example_lone_surrogate_is_ill_formed()",
-        "witness": "well_formed_utf16(seq![0xDC00u32])"
+        "witness": "surrogate_ok_at(seq![0xDC00u32], 0)"
       }
     }
   ]
