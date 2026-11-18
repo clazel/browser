@@ -187,6 +187,302 @@ proof fn lemma_root_derives(a: AstV, ts: Stream, n: int, cx: Ctx, g: SourceGoal)
     }
 }
 
+/// The operators of the expressions the check covers: unary, binary and assignment.
+pub open spec fn op_supported(op: Op) -> bool {
+    is_unary_op(op) || is_assign_op(op) || op == Op::Exp || op == Op::Mul || op == Op::Div || op
+        == Op::Rem || op == Op::Add || op == Op::Sub || op == Op::Shl || op == Op::Shr || op
+        == Op::UShr || op == Op::Lt || op == Op::Gt || op == Op::Le || op == Op::Ge || op
+        == Op::InstanceOf || op == Op::In || op == Op::Eq || op == Op::Ne || op == Op::StrictEq
+        || op == Op::StrictNe || op == Op::BitAnd || op == Op::BitXor || op == Op::BitOr || op
+        == Op::LogicalAnd || op == Op::LogicalOr || op == Op::Coalesce
+}
+
+/// The code points of the text of an operator.
+pub open spec fn op_chars(op: Op) -> Seq<u32> {
+    match op {
+        Op::Delete => seq![0x64u32, 0x65, 0x6C, 0x65, 0x74, 0x65],
+        Op::Void => seq![0x76u32, 0x6F, 0x69, 0x64],
+        Op::Typeof => seq![0x74u32, 0x79, 0x70, 0x65, 0x6F, 0x66],
+        Op::Plus | Op::Add => seq![0x2Bu32],
+        Op::Minus | Op::Sub => seq![0x2Du32],
+        Op::BitNot => seq![0x7Eu32],
+        Op::LogicalNot => seq![0x21u32],
+        Op::Exp => seq![0x2Au32, 0x2A],
+        Op::Mul => seq![0x2Au32],
+        Op::Div => seq![0x2Fu32],
+        Op::Rem => seq![0x25u32],
+        Op::Shl => seq![0x3Cu32, 0x3C],
+        Op::Shr => seq![0x3Eu32, 0x3E],
+        Op::UShr => seq![0x3Eu32, 0x3E, 0x3E],
+        Op::Lt => seq![0x3Cu32],
+        Op::Gt => seq![0x3Eu32],
+        Op::Le => seq![0x3Cu32, 0x3D],
+        Op::Ge => seq![0x3Eu32, 0x3D],
+        Op::InstanceOf => seq![0x69u32, 0x6E, 0x73, 0x74, 0x61, 0x6E, 0x63, 0x65, 0x6F, 0x66],
+        Op::In => seq![0x69u32, 0x6E],
+        Op::Eq => seq![0x3Du32, 0x3D],
+        Op::Ne => seq![0x21u32, 0x3D],
+        Op::StrictEq => seq![0x3Du32, 0x3D, 0x3D],
+        Op::StrictNe => seq![0x21u32, 0x3D, 0x3D],
+        Op::BitAnd => seq![0x26u32],
+        Op::BitXor => seq![0x5Eu32],
+        Op::BitOr => seq![0x7Cu32],
+        Op::LogicalAnd => seq![0x26u32, 0x26],
+        Op::LogicalOr => seq![0x7Cu32, 0x7C],
+        Op::Coalesce => seq![0x3Fu32, 0x3F],
+        Op::Assign => seq![0x3Du32],
+        Op::MulAssign => seq![0x2Au32, 0x3D],
+        Op::DivAssign => seq![0x2Fu32, 0x3D],
+        Op::RemAssign => seq![0x25u32, 0x3D],
+        Op::AddAssign => seq![0x2Bu32, 0x3D],
+        Op::SubAssign => seq![0x2Du32, 0x3D],
+        Op::ShlAssign => seq![0x3Cu32, 0x3C, 0x3D],
+        Op::ShrAssign => seq![0x3Eu32, 0x3E, 0x3D],
+        Op::UShrAssign => seq![0x3Eu32, 0x3E, 0x3E, 0x3D],
+        Op::BitAndAssign => seq![0x26u32, 0x3D],
+        Op::BitXorAssign => seq![0x5Eu32, 0x3D],
+        Op::BitOrAssign => seq![0x7Cu32, 0x3D],
+        Op::ExpAssign => seq![0x2Au32, 0x2A, 0x3D],
+        Op::LogicalAndAssign => seq![0x26u32, 0x26, 0x3D],
+        Op::LogicalOrAssign => seq![0x7Cu32, 0x7C, 0x3D],
+        Op::CoalesceAssign => seq![0x3Fu32, 0x3F, 0x3D],
+        _ => Seq::empty(),
+    }
+}
+
+/// The text of an operator, as the specification's `op_text` and the table agree.
+proof fn lemma_op_chars(op: Op)
+    requires
+        op_supported(op),
+    ensures
+        cps(op_text(op)) =~= op_chars(op),
+{
+    reveal_strlit("delete");
+    reveal_strlit("void");
+    reveal_strlit("typeof");
+    reveal_strlit("+");
+    reveal_strlit("-");
+    reveal_strlit("~");
+    reveal_strlit("!");
+    reveal_strlit("**");
+    reveal_strlit("*");
+    reveal_strlit("/");
+    reveal_strlit("%");
+    reveal_strlit("<<");
+    reveal_strlit(">>");
+    reveal_strlit(">>>");
+    reveal_strlit("<");
+    reveal_strlit(">");
+    reveal_strlit("<=");
+    reveal_strlit(">=");
+    reveal_strlit("instanceof");
+    reveal_strlit("in");
+    reveal_strlit("==");
+    reveal_strlit("!=");
+    reveal_strlit("===");
+    reveal_strlit("!==");
+    reveal_strlit("&");
+    reveal_strlit("^");
+    reveal_strlit("|");
+    reveal_strlit("&&");
+    reveal_strlit("||");
+    reveal_strlit("??");
+    reveal_strlit("=");
+    reveal_strlit("*=");
+    reveal_strlit("/=");
+    reveal_strlit("%=");
+    reveal_strlit("+=");
+    reveal_strlit("-=");
+    reveal_strlit("<<=");
+    reveal_strlit(">>=");
+    reveal_strlit(">>>=");
+    reveal_strlit("&=");
+    reveal_strlit("^=");
+    reveal_strlit("|=");
+    reveal_strlit("**=");
+    reveal_strlit("&&=");
+    reveal_strlit("||=");
+    reveal_strlit("??=");
+    match op {
+        Op::Delete => assert("delete"@ =~= seq!['d', 'e', 'l', 'e', 't', 'e']),
+        Op::Void => assert("void"@ =~= seq!['v', 'o', 'i', 'd']),
+        Op::Typeof => assert("typeof"@ =~= seq!['t', 'y', 'p', 'e', 'o', 'f']),
+        Op::Plus | Op::Add => assert("+"@ =~= seq!['+']),
+        Op::Minus | Op::Sub => assert("-"@ =~= seq!['-']),
+        Op::BitNot => assert("~"@ =~= seq!['~']),
+        Op::LogicalNot => assert("!"@ =~= seq!['!']),
+        Op::Exp => assert("**"@ =~= seq!['*', '*']),
+        Op::Mul => assert("*"@ =~= seq!['*']),
+        Op::Div => assert("/"@ =~= seq!['/']),
+        Op::Rem => assert("%"@ =~= seq!['%']),
+        Op::Shl => assert("<<"@ =~= seq!['<', '<']),
+        Op::Shr => assert(">>"@ =~= seq!['>', '>']),
+        Op::UShr => assert(">>>"@ =~= seq!['>', '>', '>']),
+        Op::Lt => assert("<"@ =~= seq!['<']),
+        Op::Gt => assert(">"@ =~= seq!['>']),
+        Op::Le => assert("<="@ =~= seq!['<', '=']),
+        Op::Ge => assert(">="@ =~= seq!['>', '=']),
+        Op::InstanceOf => assert("instanceof"@ =~= seq!['i', 'n', 's', 't', 'a', 'n', 'c', 'e', 'o', 'f']),
+        Op::In => assert("in"@ =~= seq!['i', 'n']),
+        Op::Eq => assert("=="@ =~= seq!['=', '=']),
+        Op::Ne => assert("!="@ =~= seq!['!', '=']),
+        Op::StrictEq => assert("==="@ =~= seq!['=', '=', '=']),
+        Op::StrictNe => assert("!=="@ =~= seq!['!', '=', '=']),
+        Op::BitAnd => assert("&"@ =~= seq!['&']),
+        Op::BitXor => assert("^"@ =~= seq!['^']),
+        Op::BitOr => assert("|"@ =~= seq!['|']),
+        Op::LogicalAnd => assert("&&"@ =~= seq!['&', '&']),
+        Op::LogicalOr => assert("||"@ =~= seq!['|', '|']),
+        Op::Coalesce => assert("??"@ =~= seq!['?', '?']),
+        Op::Assign => assert("="@ =~= seq!['=']),
+        Op::MulAssign => assert("*="@ =~= seq!['*', '=']),
+        Op::DivAssign => assert("/="@ =~= seq!['/', '=']),
+        Op::RemAssign => assert("%="@ =~= seq!['%', '=']),
+        Op::AddAssign => assert("+="@ =~= seq!['+', '=']),
+        Op::SubAssign => assert("-="@ =~= seq!['-', '=']),
+        Op::ShlAssign => assert("<<="@ =~= seq!['<', '<', '=']),
+        Op::ShrAssign => assert(">>="@ =~= seq!['>', '>', '=']),
+        Op::UShrAssign => assert(">>>="@ =~= seq!['>', '>', '>', '=']),
+        Op::BitAndAssign => assert("&="@ =~= seq!['&', '=']),
+        Op::BitXorAssign => assert("^="@ =~= seq!['^', '=']),
+        Op::BitOrAssign => assert("|="@ =~= seq!['|', '=']),
+        Op::ExpAssign => assert("**="@ =~= seq!['*', '*', '=']),
+        Op::LogicalAndAssign => assert("&&="@ =~= seq!['&', '&', '=']),
+        Op::LogicalOrAssign => assert("||="@ =~= seq!['|', '|', '=']),
+        Op::CoalesceAssign => assert("??="@ =~= seq!['?', '?', '=']),
+        _ => {},
+    }
+}
+
+/// The code points of an operator's text.
+fn op_slice(op: Op) -> (r: &'static [u32])
+    ensures
+        op_supported(op) ==> r@ =~= op_chars(op),
+{
+    match op {
+        Op::Delete => &[0x64, 0x65, 0x6C, 0x65, 0x74, 0x65],
+        Op::Void => &[0x76, 0x6F, 0x69, 0x64],
+        Op::Typeof => &[0x74, 0x79, 0x70, 0x65, 0x6F, 0x66],
+        Op::Plus | Op::Add => &[0x2B],
+        Op::Minus | Op::Sub => &[0x2D],
+        Op::BitNot => &[0x7E],
+        Op::LogicalNot => &[0x21],
+        Op::Exp => &[0x2A, 0x2A],
+        Op::Mul => &[0x2A],
+        Op::Div => &[0x2F],
+        Op::Rem => &[0x25],
+        Op::Shl => &[0x3C, 0x3C],
+        Op::Shr => &[0x3E, 0x3E],
+        Op::UShr => &[0x3E, 0x3E, 0x3E],
+        Op::Lt => &[0x3C],
+        Op::Gt => &[0x3E],
+        Op::Le => &[0x3C, 0x3D],
+        Op::Ge => &[0x3E, 0x3D],
+        Op::InstanceOf => &[0x69, 0x6E, 0x73, 0x74, 0x61, 0x6E, 0x63, 0x65, 0x6F, 0x66],
+        Op::In => &[0x69, 0x6E],
+        Op::Eq => &[0x3D, 0x3D],
+        Op::Ne => &[0x21, 0x3D],
+        Op::StrictEq => &[0x3D, 0x3D, 0x3D],
+        Op::StrictNe => &[0x21, 0x3D, 0x3D],
+        Op::BitAnd => &[0x26],
+        Op::BitXor => &[0x5E],
+        Op::BitOr => &[0x7C],
+        Op::LogicalAnd => &[0x26, 0x26],
+        Op::LogicalOr => &[0x7C, 0x7C],
+        Op::Coalesce => &[0x3F, 0x3F],
+        Op::Assign => &[0x3D],
+        Op::MulAssign => &[0x2A, 0x3D],
+        Op::DivAssign => &[0x2F, 0x3D],
+        Op::RemAssign => &[0x25, 0x3D],
+        Op::AddAssign => &[0x2B, 0x3D],
+        Op::SubAssign => &[0x2D, 0x3D],
+        Op::ShlAssign => &[0x3C, 0x3C, 0x3D],
+        Op::ShrAssign => &[0x3E, 0x3E, 0x3D],
+        Op::UShrAssign => &[0x3E, 0x3E, 0x3E, 0x3D],
+        Op::BitAndAssign => &[0x26, 0x3D],
+        Op::BitXorAssign => &[0x5E, 0x3D],
+        Op::BitOrAssign => &[0x7C, 0x3D],
+        Op::ExpAssign => &[0x2A, 0x2A, 0x3D],
+        Op::LogicalAndAssign => &[0x26, 0x26, 0x3D],
+        Op::LogicalOrAssign => &[0x7C, 0x7C, 0x3D],
+        Op::CoalesceAssign => &[0x3F, 0x3F, 0x3D],
+        _ => &[],
+    }
+}
+
+/// The source text of the token is the code points `w`.
+fn text_is(src: &[u32], t: &DTok, w: &[u32]) -> (r: bool)
+    requires
+        t.start <= t.end <= src.len(),
+    ensures
+        r == (src@.subrange(t.start as int, t.end as int) =~= w@),
+{
+    let len = t.end.saturating_sub(t.start);
+    if len != w.len() {
+        return false;
+    }
+    let mut k: usize = 0;
+    while k < len
+        invariant
+            t.start <= t.end <= src.len(),
+            len == t.end - t.start,
+            len == w.len(),
+            k <= len,
+            forall|q: int| 0 <= q < k ==> src@[t.start as int + q] == w@[q],
+        decreases len - k,
+    {
+        let a = match src.get(t.start.saturating_add(k)) {
+            Some(x) => *x,
+            None => {
+                return false;
+            },
+        };
+        let b = match w.get(k) {
+            Some(x) => *x,
+            None => {
+                return false;
+            },
+        };
+        if a != b {
+            proof {
+                assert(src@.subrange(t.start as int, t.end as int)[k as int] == src@[t.start as int
+                    + k]);
+            }
+            return false;
+        }
+        k = k.saturating_add(1);
+    }
+    true
+}
+
+/// The token is the operator `op`: a punctuator, or for `delete void typeof
+/// instanceof in` a keyword written without escapes (`spec::is_op_tok`).
+fn tok_is_op(src: &[u32], t: &DTok, op: Op) -> (r: bool)
+    requires
+        t.start <= t.end <= src.len(),
+        op_supported(op),
+    ensures
+        r ==> (src@.subrange(t.start as int, t.end as int) =~= cps(op_text(op)) && (if op
+            == Op::Delete || op == Op::Void || op == Op::Typeof || op == Op::InstanceOf || op
+            == Op::In {
+            t.kind == TokKind::IdentifierName && !t.escaped
+        } else {
+            t.kind == TokKind::Punctuator
+        })),
+{
+    let keyword = matches!(op, Op::Delete | Op::Void | Op::Typeof | Op::InstanceOf | Op::In);
+    let kind_ok = if keyword {
+        matches!(t.kind, TokKind::IdentifierName) && !t.escaped
+    } else {
+        matches!(t.kind, TokKind::Punctuator)
+    };
+    let r = kind_ok && text_is(src, t, op_slice(op));
+    proof {
+        lemma_op_chars(op);
+    }
+    r
+}
+
 /// The index of the first element, named so that it is not read as a request for `first()`.
 const ZERO: usize = 0;
 
