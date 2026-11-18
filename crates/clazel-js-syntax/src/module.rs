@@ -82,6 +82,10 @@ impl<'a> Parser<'a> {
             let end = self.semi()?;
             return Ok(self.mk(K::ImportDeclaration, Op::None, false, start, end, vec![clause, spec, with]));
         }
+        // The absent default binding is at the start of the clause, inside it: the
+        // specification puts it at the end of the `import` (`spec::span_ok`), which
+        // is outside the clause's span when white space separates them, so
+        // `spans_wf` would fail (reported with 7.3's second half).
         let cs = self.t.start;
         let mut default = None;
         let mut named = None;
@@ -147,6 +151,7 @@ impl<'a> Parser<'a> {
                 }
                 let (s, e) = (self.st(first), self.en(first));
                 let b = self.leaf(K::BindingIdentifier, s, e);
+                // At the start of the specifier, inside it (see `parse_import`).
                 let a = self.leaf(K::Absent, s, s);
                 kids.push(self.mk(K::ImportSpecifier, Op::None, false, ss, e, vec![a, b]));
             }

@@ -589,6 +589,7 @@ impl<'a> Parser<'a> {
         self.expect_p("(")?;
         let cxi = cx.with_in(true);
         let spec = self.parse_assign(cxi)?;
+        let spec_end = self.en(spec);
         let mut opts = None;
         if self.eat_p(",")? && !self.t.is_p(")") {
             opts = Some(self.parse_assign(cxi)?);
@@ -596,12 +597,10 @@ impl<'a> Parser<'a> {
         }
         let end = self.t.end;
         self.expect_p(")")?;
+        // The absent options are at the end of the specifier (`spec::d_expr`).
         let o = match opts {
             Some(o) => o,
-            None => {
-                let p = self.prev_end;
-                self.leaf(K::Absent, p, p)
-            }
+            None => self.leaf(K::Absent, spec_end, spec_end),
         };
         Ok(self.mk(K::ImportCall, Op::None, false, start, end, vec![spec, o]))
     }
