@@ -45,6 +45,12 @@ fn covered_programs_are_verified() {
         "(1).a += 2 ** 3;",
         "(1).a &&= (1).b ||= 3;",
         "a;",
+        "var a = 1, b;",
+        "let x = a + 1;
+const y = f(2), z = (3);",
+        "var a
+var b = 2
+var c;",
         "f(1);",
         "f(a, ...b,);",
         "f();",
@@ -71,7 +77,7 @@ fn covered_programs_are_verified() {
 
 #[test]
 fn other_programs_are_unsupported_not_failed() {
-    for s in ["if (1) ;", "var a = 1;", "[1];", "({});"] {
+    for s in ["if (1) ;", "var [a] = 1;", "[1];", "({});"] {
         assert!(
             derivation(s, SourceGoal::Script) == Some(Derivation::Unsupported),
             "{s}"
