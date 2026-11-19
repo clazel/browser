@@ -145,7 +145,7 @@ pub open spec fn reads(
 }
 
 /// [`spans_loop`] and [`tokenize_loop`] walk together, one span for each token read.
-proof fn lemma_spans_walk(
+pub proof fn lemma_spans_walk(
     input: Seq<u32>,
     pos: int,
     flag: bool,

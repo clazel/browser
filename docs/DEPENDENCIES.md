@@ -69,6 +69,16 @@ Changing a row is a reviewable act. Adding one means saying why below.
 | phf_generator | 0.14.0 | test | The perfect-hash search used by `phf_macros`. |
 | phf_macros | 0.14.0 | test | The `phf_map!` macro, enabled by `cssparser`. |
 | phf_shared | 0.14.0 | test | The hashing shared by `phf` and its generator. |
+| selectors | 0.36.1 | test | Servo's selector engine (parsing, matching, specificity, serialization): the reference engine in `clazel-selectors`'s differential test (`tests/conformance_differential.rs`, phase-5.md item 5.5). It adds the nine packages in the rows below, and uses `cssparser` 0.36.0 (not the 0.38.0 `clazel-css` uses) because it requires that version. |
+| cssparser | 0.36.0 | test | The CSS Syntax parser `selectors` 0.36.1 is written against, for its tokenizer and `ToCss`. |
+| cssparser-macros | 0.6.1 | test | Procedural macros of `cssparser` 0.36.0. |
+| derive_more | 2.1.1 | test | Derive macros for `Add`, required by `selectors` (specificity arithmetic). |
+| derive_more-impl | 2.1.1 | test | The procedural macros of `derive_more`. |
+| phf_macros | 0.13.1 | test | The `phf_map!` macro of the `phf` 0.13 line, enabled by `cssparser` 0.36.0. |
+| rustc_version | 0.4.1 | test | Compiler version detection in the build script of `derive_more-impl`. |
+| semver | 1.0.28 | test | Version parsing, required by `rustc_version`. |
+| servo_arc | 0.4.3 | test | Servo's `Arc`, in `selectors`'s selector representation. |
+| stable_deref_trait | 1.2.1 | test | The `StableDeref` marker trait, required by `servo_arc`. |
 | cfg-if | 1.0.5 | shipped | `#[cfg]` helper macro, required by `encoding_rs`. Also reached from libcrux (`clazel-crypto`) through normal edges under `cfg(hax)` or `cfg(valgrind_ct_test)`, which our builds never set, so it is locked there but never compiled into the browser. |
 | percent-encoding | 2.3.2 | test | rust-url's percent-encoding (used by the `url` crate and Servo): a reference engine in `clazel-percent`'s differential test (`tests/conformance_percent.rs`). No dependencies. |
 | form_urlencoded | 1.2.2 | test | rust-url's `application/x-www-form-urlencoded` serializer: the reference for that percent-encode set in the same test. Its only dependency is `percent-encoding`. |
