@@ -221,9 +221,12 @@ source.
   answers `false`, so hand-written tables can test it.
 - **Replaced elements** are the four the plan names: `img`, `input`,
   `textarea` and `iframe`. An `img` is HTML §15.4.2's image that "represents
-  nothing", with natural size 0 by 0 (no image is decoded in this phase), so
-  its `width` and `height` come from its attributes through the
-  presentational hints; its `alt` text is not shown. An `iframe` keeps its
+  nothing", with natural size 0 by 0, so its `width` and `height` come from
+  its attributes through the presentational hints, until its config arrives
+  in an [`images::Images`] map (item 6.11; the renderer pipeline, 6.18, fills
+  it): then its natural size and ratio apply (CSS 2.1 §10.3.2 and §10.6.2),
+  and a broken image with `alt` text is an inline box holding the text
+  (HTML §15.4.2; `boxes/generate.rs`). An `iframe` keeps its
   `src` for item 5.24. `audio`, `canvas`, `embed`, `object`, `video`, `button`
   and `select` are ordinary elements in this phase.
 - **`br` and `wbr`** compute to `display: inline` (their `display-outside`
@@ -594,8 +597,15 @@ also in `src/paint/mod.rs`.
   opaque white.
 - **Borders are solid** (the plan), four strips with the corners in the top
   and bottom ones; no diagonal joins.
-- **Backgrounds** are `background-color` over the border box; images are
-  not applied (item 5.6).
+- **Backgrounds** are `background-color` over the box the bottom-most layer's
+  `background-clip` names (CSS Backgrounds 3 §2.2), and, from item 6.11, the
+  `background-image` layers whose images are uploaded, as tiled `Item::Image`s
+  clipped to the painting area (`paint/background.rs`: `background-repeat`
+  including `space` and `round`, `-position` of one or two values, `-size`,
+  `-origin`, `-clip`; the canvas as §2.11.1 and §2.11.2). Not painted:
+  gradients, `background-attachment: fixed` (taken as `scroll`), a three- or
+  four-value `background-position` (not parsed), images on inline boxes and on
+  table rows, row groups and columns, and more than 16,384 tiles of one layer.
 - **Tables**: the table's background, then the column group, column, row
   group and row backgrounds each over the cells in that track (none in the
   border spacing, §17.6.1; a column's cells are those starting in it), then
@@ -617,7 +627,9 @@ also in `src/paint/mod.rs`.
 - **Text items' bounds** for culling are the pen extent widened by a font
   size on each side, two above the baseline and one below; glyphs keep
   exact positions in 1/64 device px.
-- **Replaced boxes** paint their background and borders, not content.
+- **Replaced boxes** paint their background and borders, and (item 6.11) an
+  `img` whose pixels are uploaded as one `Item::Image` over its content box
+  (stretched, `object-fit: fill`).
 - **Hit regions**, in paint order: every box in a link (`a` or `area` with
   `href`) gives its border box, every inline piece its border area. URLs are
   parsed with `clazel-url`'s basic URL parser against the base URL the
