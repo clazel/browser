@@ -33,6 +33,11 @@
 //! - `extensions`: the standard extensions.
 //! - `requirements`: the prose's "shall" clauses.
 //! - `matching`: RFC 6125.
+//! - `spki`: SubjectPublicKeyInfo decoding and key classification, from
+//!   RFC 5280, RFC 3279, RFC 4055, RFC 5480 and RFC 8410, written later by
+//!   another author under the same rule; its header lists its sources and
+//!   what that author did and did not read. `spki_examples` are its sanity
+//!   checks. No equivalence proof covers it yet.
 //! - `examples`: sanity checks that Verus evaluates.
 //! - `equivalence`: the proof, with its domain and what it leaves unproven.
 //!   `equivalence_der`, `_time`, `_name`, `_structures`, `_extensions` and
@@ -71,4 +76,6 @@ pub mod examples;
 pub mod extensions;
 pub mod matching;
 pub mod requirements;
+pub mod spki;
+pub mod spki_examples;
 pub mod structures;
