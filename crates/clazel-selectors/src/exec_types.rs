@@ -137,6 +137,54 @@ pub open spec fn view_test(test: Option<ExecAttrTest>) -> Option<AttrTest> {
     }
 }
 
+/// The argument list `list` stands for in a list whose index is `bound`: an argument's list
+/// must come before it, or it is read as empty.
+pub open spec fn arg_view(s: ExecSelectors, bound: int, list: int) -> Seq<Complex>
+    decreases bound, 0int, 0int,
+{
+    if 0 <= list < bound {
+        view_list(s, list)
+    } else {
+        Seq::empty()
+    }
+}
+
+/// A simple selector with no argument.
+pub open spec fn plain(e: ExecSimple) -> bool {
+    !(e is Is || e is Where || e is Not)
+}
+
+/// What a simple selector with no argument is.
+pub open spec fn view_plain(e: ExecSimple) -> Simple {
+    match e {
+        ExecSimple::Type { ns, name } => Simple::Type { ns, name: name@ },
+        ExecSimple::Universal { ns } => Simple::Universal { ns },
+        ExecSimple::Id { name } => Simple::Id { name: name@ },
+        ExecSimple::Class { name } => Simple::Class { name: name@ },
+        ExecSimple::Attribute { ns, name, test } => Simple::Attribute {
+            ns,
+            name: name@,
+            test: view_test(test),
+        },
+        ExecSimple::PseudoClass { class } => Simple::PseudoClass { class },
+        ExecSimple::Nth { kind, a, b } => Simple::Nth { kind, a: a as int, b: b as int },
+        ExecSimple::PseudoElement { element } => Simple::PseudoElement { element },
+        _ => Simple::Universal { ns: NsPrefix::Absent },
+    }
+}
+
+/// A simple selector `e`, in a list whose index is `bound`.
+pub open spec fn view_exec_simple(s: ExecSelectors, bound: int, e: ExecSimple) -> Simple
+    decreases bound, 0int, 1int,
+{
+    match e {
+        ExecSimple::Is { list } => Simple::Is { arg: arg_view(s, bound, list as int) },
+        ExecSimple::Where { list } => Simple::Where { arg: arg_view(s, bound, list as int) },
+        ExecSimple::Not { list } => Simple::Not { arg: arg_view(s, bound, list as int) },
+        _ => view_plain(e),
+    }
+}
+
 /// The simple selector at `si`, in a list whose index is `bound`: an argument's list must
 /// come before it, or it is read as empty.
 pub open spec fn view_simple(s: ExecSelectors, bound: int, si: int) -> Simple
@@ -240,6 +288,15 @@ pub open spec fn view_complex(s: ExecSelectors, bound: int, ci: int) -> Complex
     }
 }
 
+/// The complex selector `c`, in a list whose index is `bound`: what [`view_complex`] gives
+/// for the complex selector at an index that holds `c`.
+pub open spec fn view_complex_of(s: ExecSelectors, bound: int, c: ExecComplex) -> Complex {
+    Complex {
+        compounds: view_compounds(s, bound, c.compounds.lo as int, c.compounds.hi as int),
+        combinators: view_combinators(s, c.combinators),
+    }
+}
+
 /// The complex selectors `lo` up to `hi`.
 pub open spec fn view_complexes(s: ExecSelectors, bound: int, lo: int, hi: int) -> Seq<Complex>
     decreases bound, 5int, hi,
@@ -265,6 +322,30 @@ pub open spec fn view_list(s: ExecSelectors, li: int) -> Seq<Complex>
 /// The result: the last list.
 pub open spec fn view_selectors(s: ExecSelectors) -> Seq<Complex> {
     view_list(s, s.lists.len() - 1)
+}
+
+/// The simple selector at `si` is the view of the simple selector that is there.
+pub proof fn lemma_view_simple_is(s: ExecSelectors, bound: int, si: int)
+    requires
+        0 <= si < s.simples.len(),
+    ensures
+        view_simple(s, bound, si) == view_exec_simple(s, bound, s.simples[si]),
+{
+    match s.simples[si] {
+        ExecSimple::Is { list } => {},
+        ExecSimple::Where { list } => {},
+        ExecSimple::Not { list } => {},
+        _ => {},
+    }
+}
+
+/// The complex selector at `ci` is the view of the complex selector that is there.
+pub proof fn lemma_view_complex_is(s: ExecSelectors, bound: int, ci: int)
+    requires
+        0 <= ci < s.complexes.len(),
+    ensures
+        view_complex(s, bound, ci) == view_complex_of(s, bound, s.complexes[ci]),
+{
 }
 
 /// The arrays' ranges are in bounds and in order, and each argument's list comes before
