@@ -51,6 +51,14 @@
 //!     `-critical`, both FAILURE), critical or not. A critical one is also
 //!     refused by §6.1.5 (f). §6.1 never processes the target's own
 //!     constraints; whether the browsers refuse it is *unconfirmed*.
+//!   - **policyConstraints on the target is not refused.** RFC 5280
+//!     §6.1.5 (b) processes it on the final certificate (`spec.rs`), and
+//!     §4.2.1.11 has no "MUST be used only in a CA certificate", unlike
+//!     §4.2.1.10. X.509 (10/2019) §9.4.2 "shall be used only in CA
+//!     certificates" is stricter; this follows the RFC that `spec.rs`
+//!     transcribes. Chrome (BoringSSL `WrapUp`) applies §6.1.5 (b) and does
+//!     not refuse; Firefox *unconfirmed*. No limbo case, root or 3.5g corpus
+//!     certificate has one.
 //! - **Each intermediate** (`certs[0..n-1]`):
 //!   - **(R) keyUsage must be present** (design Q6; BR §7.1.2.6.1 "keyUsage
 //!     MUST", §7.1.2.10.7 keyCertSign required). §6.1.4 (n) checks

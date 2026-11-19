@@ -35,12 +35,14 @@
 //!   adds no rule"; `rfc5280::san::noncritical-with-empty-subject`).
 //! - `basic_constraints_rules`' "flagged as critical": neither `leaf/spec.rs`
 //!   nor §6.1.4 (k) reads the flag of basicConstraints, and RFC 5280 §6.1.4 (k)
-//!   does not ask it of a relying party.
+//!   does not ask it of a relying party. A modelling choice in `path/spec.rs`'s
+//!   header: two NSS roots are non-critical.
 //! - `ca_only_extensions`' policyConstraints on a target: `path/profile.rs`
-//!   refuses nameConstraints there and has no rule for policyConstraints.
+//!   refuses nameConstraints there and, as a modelling choice in its header,
+//!   not policyConstraints, which RFC 5280 §6.1.5 (b) processes.
 //!
-//! X.501 9.3's `name_types_distinct`: `name/spec.rs` has no such rule and
-//! production does not parse the Name.
+//! X.501 9.3's `name_types_distinct`: `name/spec.rs` has no such rule (a
+//! modelling choice in its header) and production does not parse the Name.
 
 #[allow(unused_imports)]
 use vstd::prelude::*;
