@@ -86,13 +86,16 @@ to trust the agents. Read `docs/VERIFICATION.md` and `docs/ROADMAP.md` first.
   output honestly. It runs every check, but repeats proofs, harnesses,
   mutations, conformance and tests only for the crates that differ from
   `origin/main` (the commit CI last verified) and the crates that depend on
-  them; a change to anything shared (`Cargo.lock`, the workspace manifest,
+  them; a change to `Cargo.lock` adds the crates whose locked packages
+  changed, and a change to anything else shared (the workspace manifest,
   toolchain pins, `scripts/`, `xtask/`) makes it check every crate. It ends
   in `CHANGED CRATES PASSED`, which is not `ALL CHECKS PASSED` and must not
   be reported as such. Work is **done** only when CI's full verification
   (every job of `.github/workflows/ci.yml`, ending in `Full verification`)
-  is green on its pull request; say so if it has not run yet. On a pull
-  request the proof jobs wait until a reviewer of the `full-verification`
+  is green on its pull request; say so if it has not run yet. A pull
+  request's run proves the crates the change selects, as `--changed` does;
+  the merge queue then runs every crate, with no approval, before anything
+  reaches `main`. On a pull request the proof jobs wait until a reviewer of the `full-verification`
   environment approves the run, and every push needs a new approval: ask
   for one, and never report a run whose proofs are waiting as passed. To repeat CI's run locally, use `scripts/verify.sh` or the
   Docker command in README.md. `cargo xtask check` runs only the fast static
