@@ -1586,6 +1586,8 @@ pub open spec fn item_ok_val(l: int, k: NodeKind, mode: int) -> bool {
         k == NodeKind::PropertyDefinition
     } else if mode == 7 {
         k == NodeKind::BindingProperty || k == NodeKind::BindingRestProperty
+    } else if mode == 9 {
+        k == NodeKind::AssignmentProperty || k == NodeKind::AssignmentRestProperty
     } else {
         k == NodeKind::BindingElement || k == NodeKind::FunctionRestParameter
     }
@@ -1608,6 +1610,8 @@ fn item_ok_exec(l: i32, k: NodeKind, mode: u8) -> (r: bool)
         matches!(k, NodeKind::PropertyDefinition)
     } else if mode == 7 {
         matches!(k, NodeKind::BindingProperty | NodeKind::BindingRestProperty)
+    } else if mode == 9 {
+        matches!(k, NodeKind::AssignmentProperty | NodeKind::AssignmentRestProperty)
     } else {
         matches!(k, NodeKind::BindingElement | NodeKind::FunctionRestParameter)
     }
@@ -1734,7 +1738,10 @@ fn check_list(
     // The end: after a trailing `,` if one is allowed and there.
     let mut comma_after = false;
     let tok_after = if ls.trail
-        && !matches!(kc_kind, NodeKind::FunctionRestParameter | NodeKind::BindingRestProperty) {
+        && !matches!(
+            kc_kind,
+            NodeKind::FunctionRestParameter | NodeKind::BindingRestProperty | NodeKind::AssignmentRestProperty
+        ) {
         toks.get(hc)
     } else {
         None
@@ -2850,6 +2857,7 @@ proof fn lemma_list_next(
 /// A `VariableDeclaration` or `LexicalBinding` of the check: a binding identifier and
 /// an optional initializer.
 #[verifier::spinoff_prover]
+#[verifier::rlimit(150)]
 proof fn lemma_binding_done(
     a: AstV,
     ts: Stream,
@@ -2869,9 +2877,9 @@ proof fn lemma_binding_done(
         0 <= t < m,
         0 <= init < m,
         a.nodes[m].kind == NodeKind::VariableDeclaration || a.nodes[m].kind
-            == NodeKind::LexicalBinding || (a.nodes[m].kind == NodeKind::BindingElement && cx_in(cx, true) == cx),
+            == NodeKind::LexicalBinding || ((a.nodes[m].kind == NodeKind::BindingElement || a.nodes[m].kind == NodeKind::AssignmentElement) && cx_in(cx, true) == cx),
         a.nodes[m].children =~= seq![t, init],
-        is_binding_target_kind(kd(a, t)),
+        if a.nodes[m].kind == NodeKind::AssignmentElement { is_destructuring_target(a, t) } else { is_binding_target_kind(kd(a, t)) },
         node_done(a, ts, t, cx, lo_t, mt),
         a.nodes[m].start == ts.toks[lo_t].start,
         a.nodes[m].end == ts.toks[j - 1].end,
@@ -2888,7 +2896,7 @@ proof fn lemma_binding_done(
                 j,
             )
         } else {
-            kd(a, init) == NodeKind::Absent && (a.nodes[m].kind == NodeKind::BindingElement || !is_binding_pattern_kind(kd(a, t))) && j == mt && d(a, ts, init, cx, mt, mt) && ed(
+            kd(a, init) == NodeKind::Absent && (a.nodes[m].kind == NodeKind::BindingElement || a.nodes[m].kind == NodeKind::AssignmentElement || !is_binding_pattern_kind(kd(a, t))) && j == mt && d(a, ts, init, cx, mt, mt) && ed(
                 a,
                 ts,
                 init,
@@ -2916,7 +2924,7 @@ proof fn lemma_binding_done(
         assert(dc(a, ts, m, init, cx, mt, mt));
         assert(d_init(a, ts, m, init, cx, mt, j, false));
     }
-    if a.nodes[m].kind == NodeKind::BindingElement {
+    if a.nodes[m].kind == NodeKind::BindingElement || a.nodes[m].kind == NodeKind::AssignmentElement {
         assert(d_pat(a, ts, m, cx, lo_t, j));
     } else {
         assert(d_stmt(a, ts, m, cx, lo_t, j));
@@ -2937,7 +2945,7 @@ fn check_binding(
 ) -> (r: Option<(usize, usize, i32)>)
     requires
         m < nodes.len(),
-        nodes@[m as int].kind == NodeKind::BindingElement ==> cx_in(g.cx, true) == g.cx,
+        (nodes@[m as int].kind == NodeKind::BindingElement || nodes@[m as int].kind == NodeKind::AssignmentElement) ==> cx_in(g.cx, true) == g.cx,
         env_ok(src@, nodes@, toks@, gaps@, g.ts),
         inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
         cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
@@ -2960,7 +2968,7 @@ fn check_binding(
             return None;
         },
     };
-    if !matches!(nd.kind, NodeKind::VariableDeclaration | NodeKind::LexicalBinding | NodeKind::BindingElement)
+    if !matches!(nd.kind, NodeKind::VariableDeclaration | NodeKind::LexicalBinding | NodeKind::BindingElement | NodeKind::AssignmentElement)
         || nd.children.len() != 2 {
         return None;
     }
@@ -2998,11 +3006,22 @@ fn check_binding(
             return None;
         },
     };
+    let lv_t = match done.lv.get(t) {
+        Some(x) => *x,
+        None => {
+            return None;
+        },
+    };
     let target_ok = match nodes.get(t) {
-        Some(x) => matches!(
-            x.kind,
-            NodeKind::BindingIdentifier | NodeKind::ObjectBindingPattern | NodeKind::ArrayBindingPattern
-        ),
+        Some(x) => if matches!(nd.kind, NodeKind::AssignmentElement) {
+            matches!(x.kind, NodeKind::ObjectAssignmentPattern | NodeKind::ArrayAssignmentPattern)
+                || (lv_t >= 14 && !matches!(x.kind, NodeKind::ObjectLiteral | NodeKind::ArrayLiteral))
+        } else {
+            matches!(
+                x.kind,
+                NodeKind::BindingIdentifier | NodeKind::ObjectBindingPattern | NodeKind::ArrayBindingPattern
+            )
+        },
         None => false,
     };
     if !target_ok {
@@ -3019,7 +3038,7 @@ fn check_binding(
         },
     };
     if init_absent {
-        let pat = !matches!(nd.kind, NodeKind::BindingElement)
+        let pat = !matches!(nd.kind, NodeKind::BindingElement | NodeKind::AssignmentElement)
             && match nodes.get(t) {
                 Some(x) => !matches!(x.kind, NodeKind::BindingIdentifier),
                 None => true,
@@ -4508,9 +4527,11 @@ proof fn lemma_assign_done(
         a.nodes[m].kind == NodeKind::AssignmentExpression,
         a.nodes[m].children =~= seq![l, r],
         is_assign_op(a.nodes[m].op),
-        lvl(a, l) >= 14,
-        kd(a, l) != NodeKind::ObjectLiteral,
-        kd(a, l) != NodeKind::ArrayLiteral,
+        if a.nodes[m].op == Op::Assign {
+            is_destructuring_target(a, l)
+        } else {
+            is_lhs_expr(a, l)
+        },
         lvl(a, r) >= 0,
         node_done(a, ts, l, cx, lo_l, mi),
         node_done(a, ts, r, cx, lo_r, j),
@@ -4524,8 +4545,6 @@ proof fn lemma_assign_done(
         lvl(a, m) == 0,
 {
     assert(span_ok(a, ts, m, lo_l, j));
-    assert(is_lhs_expr(a, l));
-    assert(is_destructuring_target(a, l));
     crate::derive::lemma_assignment_derives(a, ts, m, cx, lo_l, mi, j, l, r);
     lemma_ed_of(a, ts, m, lo_l, j);
 }
@@ -4649,7 +4668,13 @@ fn check_assign(
         Some(x) => !matches!(x.kind, NodeKind::ObjectLiteral | NodeKind::ArrayLiteral),
         None => false,
     };
-    if lvl_l < 14 || !left_plain || lvl_r < 0 || lo_r != mi.saturating_add(1) {
+    let left_pattern = matches!(nd.op, Op::Assign)
+        && matches!(
+            kind_at(nodes, l),
+            NodeKind::ObjectAssignmentPattern | NodeKind::ArrayAssignmentPattern
+        );
+    if !((lvl_l >= 14 && left_plain) || left_pattern) || lvl_r < 0
+        || lo_r != mi.saturating_add(1) {
         return None;
     }
     let opt = match toks.get(mi) {
@@ -6232,8 +6257,16 @@ pub fn check_derivation(
             NodeKind::DefaultClause => check_default(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
             NodeKind::ReturnStatement => check_return(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
             NodeKind::FormalParameters => check_params(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
-            NodeKind::ArrayBindingPattern | NodeKind::ObjectBindingPattern => {
-                let sh = PatShape { m, array: matches!(nd.kind, NodeKind::ArrayBindingPattern) };
+            NodeKind::AssignmentElement => check_binding(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
+            NodeKind::AssignmentProperty => check_assignment_property(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
+            NodeKind::AssignmentRestElement | NodeKind::AssignmentRestProperty => check_binding_rest(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
+            NodeKind::ArrayBindingPattern | NodeKind::ObjectBindingPattern | NodeKind::ArrayAssignmentPattern
+            | NodeKind::ObjectAssignmentPattern => {
+                let sh = PatShape {
+                    m,
+                    array: matches!(nd.kind, NodeKind::ArrayBindingPattern | NodeKind::ArrayAssignmentPattern),
+                    assign: matches!(nd.kind, NodeKind::ArrayAssignmentPattern | NodeKind::ObjectAssignmentPattern),
+                };
                 proof {
                     assert(nd == &nodes@[m as int]);
                 }
@@ -11651,6 +11684,9 @@ pub open spec fn array_item_mode_ok(a: AstV, c: int, mode: int) -> bool {
     if mode == 6 {
         kd(a, c) == NodeKind::BindingElement || kd(a, c) == NodeKind::Elision || kd(a, c)
             == NodeKind::BindingRestElement
+    } else if mode == 8 {
+        kd(a, c) == NodeKind::AssignmentElement || kd(a, c) == NodeKind::Elision || kd(a, c)
+            == NodeKind::AssignmentRestElement
     } else {
         array_item_ok(a, c)
     }
@@ -11662,12 +11698,17 @@ fn array_item_exec(l: i32, k: NodeKind, mode: u8) -> (r: bool)
         r ==> (if mode == 6 {
             k == NodeKind::BindingElement || k == NodeKind::Elision || k
                 == NodeKind::BindingRestElement
+        } else if mode == 8 {
+            k == NodeKind::AssignmentElement || k == NodeKind::Elision || k
+                == NodeKind::AssignmentRestElement
         } else {
             l as int >= 0 || k == NodeKind::SpreadElement || k == NodeKind::Elision
         }),
 {
     if mode == 6 {
         matches!(k, NodeKind::BindingElement | NodeKind::Elision | NodeKind::BindingRestElement)
+    } else if mode == 8 {
+        matches!(k, NodeKind::AssignmentElement | NodeKind::Elision | NodeKind::AssignmentRestElement)
     } else {
         l >= 0 || matches!(k, NodeKind::SpreadElement | NodeKind::Elision)
     }
@@ -11850,7 +11891,8 @@ fn check_array_items(
             lemma_env_tok(src@, nodes@, toks@, gaps@, g.ts, hc as int);
             assert(t == &toks@[hc as int]);
         }
-        if !is_hole && !matches!(kc_kind, NodeKind::BindingRestElement)
+        if !is_hole
+            && !matches!(kc_kind, NodeKind::BindingRestElement | NodeKind::AssignmentRestElement)
             && matches!(t.kind, TokKind::Punctuator) && text_is1(src, t, 0x2C) {
             comma_after = true;
         }
@@ -12536,9 +12578,12 @@ proof fn lemma_binding_rest_done(a: AstV, ts: Stream, cx: Ctx, m: int, c: int, x
         0 <= m < a.nodes.len(),
         0 <= c < m,
         a.nodes[m].kind == NodeKind::BindingRestElement || a.nodes[m].kind
-            == NodeKind::BindingRestProperty,
+            == NodeKind::BindingRestProperty || a.nodes[m].kind == NodeKind::AssignmentRestElement
+            || a.nodes[m].kind == NodeKind::AssignmentRestProperty,
         a.nodes[m].children =~= seq![c],
         is_p(ts, x, "..."@),
+        (a.nodes[m].kind == NodeKind::AssignmentRestElement || a.nodes[m].kind
+            == NodeKind::AssignmentRestProperty) ==> is_destructuring_target(a, c),
         a.nodes[m].kind == NodeKind::BindingRestElement ==> is_binding_target_kind(kd(a, c)),
         a.nodes[m].kind == NodeKind::BindingRestProperty ==> kd(a, c) == NodeKind::BindingIdentifier,
         node_done(a, ts, c, cx, x + 1, j),
@@ -12594,8 +12639,11 @@ fn check_binding_rest(
             return None;
         },
     };
-    if !matches!(nd.kind, NodeKind::BindingRestElement | NodeKind::BindingRestProperty)
-        || nd.children.len() != 1 {
+    if !matches!(
+        nd.kind,
+        NodeKind::BindingRestElement | NodeKind::BindingRestProperty | NodeKind::AssignmentRestElement
+            | NodeKind::AssignmentRestProperty
+    ) || nd.children.len() != 1 {
         return None;
     }
     let c = match kid_of(nodes, m, 0) {
@@ -12610,7 +12658,7 @@ fn check_binding_rest(
             return None;
         },
     };
-    let (lo_c, j, _) = match done_at(done, c) {
+    let (lo_c, j, lv_c) = match done_at(done, c) {
         Some(r) => r,
         None => {
             return None;
@@ -12622,7 +12670,9 @@ fn check_binding_rest(
             kc,
             NodeKind::BindingIdentifier | NodeKind::ObjectBindingPattern | NodeKind::ArrayBindingPattern
         ),
-        _ => matches!(kc, NodeKind::BindingIdentifier),
+        NodeKind::BindingRestProperty => matches!(kc, NodeKind::BindingIdentifier),
+        _ => matches!(kc, NodeKind::ObjectAssignmentPattern | NodeKind::ArrayAssignmentPattern)
+            || (lv_c >= 14 && !matches!(kc, NodeKind::ObjectLiteral | NodeKind::ArrayLiteral)),
     };
     if !ellipsis_at(src, nodes, toks, gaps, x, Ghost(g)) || !kind_ok || lo_c != x.saturating_add(1)
         || !end_ok(src, nodes, toks, gaps, nd.end, j, Ghost(g)) || j <= x {
@@ -12920,8 +12970,10 @@ proof fn lemma_object_pattern_done(a: AstV, ts: Stream, cx: Ctx, m: int, x: int,
 pub struct PatShape {
     /// The node.
     pub m: usize,
-    /// An `ArrayBindingPattern` (else an `ObjectBindingPattern`).
+    /// An array pattern (else an object pattern).
     pub array: bool,
+    /// An assignment pattern (else a binding pattern).
+    pub assign: bool,
 }
 
 /// §14.3.3 `ArrayBindingPattern`, `ObjectBindingPattern`.
@@ -12937,7 +12989,13 @@ fn check_pattern(
 ) -> (r: Option<(usize, usize, i32)>)
     requires
         sh.m < nodes.len(),
-        nodes@[sh.m as int].kind == (if sh.array {
+        nodes@[sh.m as int].kind == (if sh.assign {
+            if sh.array {
+                NodeKind::ArrayAssignmentPattern
+            } else {
+                NodeKind::ObjectAssignmentPattern
+            }
+        } else if sh.array {
             NodeKind::ArrayBindingPattern
         } else {
             NodeKind::ObjectBindingPattern
@@ -12981,7 +13039,7 @@ fn check_pattern(
         if !punct_at(src, nodes, toks, gaps, x, 0x5B, Ghost(GW { g, w: "["@ })) {
             return None;
         }
-        let als = ListSpec { m, start: x1, mode: 6, trail: true };
+        let als = ListSpec { m, start: x1, mode: if sh.assign { 8 } else { 6 }, trail: true };
         let e = match check_array_items(src, nodes, toks, gaps, done, &als, Ghost(g)) {
             Some(e) => e,
             None => {
@@ -12993,7 +13051,7 @@ fn check_pattern(
         if !punct_at(src, nodes, toks, gaps, x, 0x7B, Ghost(GW { g, w: "{"@ })) {
             return None;
         }
-        let ls = ListSpec { m, start: x1, mode: 7, trail: true };
+        let ls = ListSpec { m, start: x1, mode: if sh.assign { 9 } else { 7 }, trail: true };
         let e = match check_list(src, nodes, toks, gaps, done, &ls, Ghost(g)) {
             Some(e) => e,
             None => {
@@ -13015,13 +13073,315 @@ fn check_pattern(
         assert(a.nodes[m as int].kind == nd.kind);
         assert(a.nodes[m as int].start == nd.start as int);
         assert(a.nodes[m as int].end == nd.end as int);
-        if sh.array {
+        if sh.assign {
+            if sh.array {
+                lemma_array_apattern_done(a, g.ts, g.cx, m as int, x as int, e as int);
+            } else {
+                lemma_object_apattern_done(a, g.ts, g.cx, m as int, x as int, e as int);
+            }
+        } else if sh.array {
             lemma_array_pattern_done(a, g.ts, g.cx, m as int, x as int, e as int);
         } else {
             lemma_object_pattern_done(a, g.ts, g.cx, m as int, x as int, e as int);
         }
     }
     Some((x, e.saturating_add(1), -100))
+}
+
+// ---------------------------------------------------------------------
+// Assignment patterns (§13.15.5): `[a, b = 1, ...c] = d`, `({a, b: c, ...d} = e)`.
+// ---------------------------------------------------------------------
+
+/// §13.15.5 `ArrayAssignmentPattern : [ elements ]`.
+#[verifier::spinoff_prover]
+proof fn lemma_array_apattern_done(a: AstV, ts: Stream, cx: Ctx, m: int, x: int, e: int)
+    requires
+        toks_wf(ts),
+        0 <= m < a.nodes.len(),
+        0 <= x,
+        x + 1 <= e < tn(ts),
+        a.nodes[m].kind == NodeKind::ArrayAssignmentPattern,
+        darray(a, ts, m, a.nodes[m].children, 0, cx, x + 1, e),
+        forall|k: int|
+            0 <= k < a.nodes[m].children.len() ==> array_item_mode_ok(
+                a,
+                #[trigger] a.nodes[m].children[k],
+                8,
+            ),
+        rest_only_last(a, a.nodes[m].children),
+        is_p(ts, x, "["@),
+        is_p(ts, e, "]"@),
+        a.nodes[m].start == ts.toks[x].start,
+        a.nodes[m].end == ts.toks[e].end,
+    ensures
+        node_done(a, ts, m, cx, x, e + 1),
+        lvl(a, m) == -100,
+{
+    assert(span_ok(a, ts, m, x, e + 1));
+    assert forall|k: int| 0 <= k < a.nodes[m].children.len() implies kd(
+        a,
+        #[trigger] a.nodes[m].children[k],
+    ) == NodeKind::AssignmentElement || kd(a, a.nodes[m].children[k]) == NodeKind::Elision || kd(
+        a,
+        a.nodes[m].children[k],
+    ) == NodeKind::AssignmentRestElement by {
+        assert(array_item_mode_ok(a, a.nodes[m].children[k], 8));
+    }
+    assert(d_pat(a, ts, m, cx, x, e + 1));
+    lemma_ed_of(a, ts, m, x, e + 1);
+}
+
+/// §13.15.5 `ObjectAssignmentPattern : { AssignmentPropertyList ,? }`.
+#[verifier::spinoff_prover]
+proof fn lemma_object_apattern_done(a: AstV, ts: Stream, cx: Ctx, m: int, x: int, e: int)
+    requires
+        toks_wf(ts),
+        0 <= m < a.nodes.len(),
+        0 <= x,
+        x + 1 <= e < tn(ts),
+        a.nodes[m].kind == NodeKind::ObjectAssignmentPattern,
+        dsep(a, ts, m, a.nodes[m].children, 0, cx, x + 1, e, true),
+        forall|k: int|
+            0 <= k < a.nodes[m].children.len() ==> list_item_ok(a, #[trigger] a.nodes[m].children[k], 9),
+        rest_only_last(a, a.nodes[m].children),
+        is_p(ts, x, "{"@),
+        is_p(ts, e, "}"@),
+        a.nodes[m].start == ts.toks[x].start,
+        a.nodes[m].end == ts.toks[e].end,
+    ensures
+        node_done(a, ts, m, cx, x, e + 1),
+        lvl(a, m) == -100,
+{
+    assert(span_ok(a, ts, m, x, e + 1));
+    assert(all_kind2(a, a.nodes[m].children, 0, NodeKind::AssignmentProperty, NodeKind::AssignmentRestProperty)) by {
+        assert forall|k: int| 0 <= k < a.nodes[m].children.len() implies kd(
+            a,
+            #[trigger] a.nodes[m].children[k],
+        ) == NodeKind::AssignmentProperty || kd(a, a.nodes[m].children[k])
+            == NodeKind::AssignmentRestProperty by {
+            assert(list_item_ok(a, a.nodes[m].children[k], 9));
+        }
+    }
+    assert(d_pat(a, ts, m, cx, x, e + 1));
+    lemma_ed_of(a, ts, m, x, e + 1);
+}
+
+/// §13.15.5 `AssignmentProperty : IdentifierReference Initializer? | PropertyName : AssignmentElement`.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(100)]
+proof fn lemma_assignment_property_done(
+    a: AstV,
+    ts: Stream,
+    cx: Ctx,
+    m: int,
+    k0: int,
+    k1: int,
+    x: int,
+    mk: int,
+    j: int,
+    with_init: bool,
+)
+    requires
+        toks_wf(ts),
+        cx_in(cx, true) == cx,
+        0 <= m < a.nodes.len(),
+        0 <= k0 < m,
+        0 <= k1 < m,
+        a.nodes[m].kind == NodeKind::AssignmentProperty,
+        a.nodes[m].children =~= seq![k0, k1],
+        0 <= x < j <= tn(ts),
+        if a.nodes[m].op == Op::Shorthand {
+            kd(a, k0) == NodeKind::IdentifierReference && node_done(a, ts, k0, cx, x, x + 1) && (
+            if with_init {
+                is_p(ts, x + 1, "="@) && is_assign_expr(a, k1) && node_done(a, ts, k1, cx, x + 2, j)
+            } else {
+                kd(a, k1) == NodeKind::Absent && j == x + 1 && d(a, ts, k1, cx, x + 1, x + 1)
+            })
+        } else {
+            a.nodes[m].op == Op::KeyValue && is_prop_name_kind(kd(a, k0)) && kd(a, k1)
+                == NodeKind::AssignmentElement && node_done(a, ts, k0, cx, x, mk) && is_p(
+                ts,
+                mk,
+                ":"@,
+            ) && node_done(a, ts, k1, cx, mk + 1, j)
+        },
+        a.nodes[m].start == ts.toks[x].start,
+        a.nodes[m].end == ts.toks[j - 1].end,
+    ensures
+        node_done(a, ts, m, cx, x, j),
+        lvl(a, m) == -100,
+{
+    assert(span_ok(a, ts, m, x, j));
+    assert(a.nodes[m].children[0] == k0);
+    assert(a.nodes[m].children[1] == k1);
+    if a.nodes[m].op == Op::KeyValue {
+        assert(dc(a, ts, m, k0, cx, x, mk));
+        assert(dc(a, ts, m, k1, cx, mk + 1, j));
+    } else {
+        assert(dc(a, ts, m, k0, cx, x, x + 1));
+        if with_init {
+            assert(dc(a, ts, m, k1, cx_in(cx, true), x + 2, j));
+            assert(d_init(a, ts, m, k1, cx_in(cx, true), x + 1, j, false));
+        } else {
+            assert(dc(a, ts, m, k1, cx_in(cx, true), x + 1, x + 1));
+            assert(d_init(a, ts, m, k1, cx_in(cx, true), x + 1, j, false));
+        }
+    }
+    assert(d_pat(a, ts, m, cx, x, j));
+    lemma_ed_of(a, ts, m, x, j);
+}
+
+/// §13.15.5 `AssignmentProperty`.
+#[verifier::spinoff_prover]
+fn check_assignment_property(
+    src: &[u32],
+    nodes: &[Node],
+    toks: &[DTok],
+    gaps: &[Ins],
+    done: &Done,
+    m: usize,
+    Ghost(g): Ghost<GCx>,
+) -> (r: Option<(usize, usize, i32)>)
+    requires
+        m < nodes.len(),
+        cx_in(g.cx, true) == g.cx,
+        env_ok(src@, nodes@, toks@, gaps@, g.ts),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
+    ensures
+        match r {
+            Some((l0, h0, l)) => node_done(
+                arena_of(nodes@),
+                g.ts,
+                m as int,
+                g.cx,
+                l0 as int,
+                h0 as int,
+            ) && l as int == lvl(arena_of(nodes@), m as int),
+            None => true,
+        },
+{
+    proof {
+        lemma_punct_text();
+        lemma_env_toks_wf(src@, nodes@, toks@, gaps@, g.ts);
+    }
+    let nd = match nodes.get(m) {
+        Some(x) => x,
+        None => {
+            return None;
+        },
+    };
+    proof {
+        reveal_strlit("=");
+        assert("="@ =~= seq!['=']);
+    }
+    if !matches!(nd.kind, NodeKind::AssignmentProperty) || nd.children.len() != 2 {
+        return None;
+    }
+    let k0 = match kid_of(nodes, m, 0) {
+        Some(c) => c,
+        None => {
+            return None;
+        },
+    };
+    let k1 = match kid_of(nodes, m, 1) {
+        Some(c) => c,
+        None => {
+            return None;
+        },
+    };
+    let x = match start_tok(src, nodes, toks, gaps, done, m, Ghost(g)) {
+        Some(x) => x,
+        None => {
+            return None;
+        },
+    };
+    let (lo0, h0, _) = match done_at(done, k0) {
+        Some(r) => r,
+        None => {
+            return None;
+        },
+    };
+    let kk0 = kind_at(nodes, k0);
+    let kk1 = kind_at(nodes, k1);
+    let x1 = x.saturating_add(1);
+    let (j, with_init): (usize, bool) = match nd.op {
+        Op::Shorthand => {
+            if !matches!(kk0, NodeKind::IdentifierReference) || lo0 != x || h0 != x1 {
+                return None;
+            }
+            if matches!(kk1, NodeKind::Absent) {
+                if !check_absent(src, nodes, toks, gaps, k1, x1, Ghost(g)) {
+                    return None;
+                }
+                (x1, false)
+            } else {
+                let (lo1, h1, lv1) = match done_at(done, k1) {
+                    Some(r) => r,
+                    None => {
+                        return None;
+                    },
+                };
+                if lv1 < 0 || lo1 != x.saturating_add(2)
+                    || !punct_at(src, nodes, toks, gaps, x1, 0x3D, Ghost(GW { g, w: "="@ })) {
+                    return None;
+                }
+                (h1, true)
+            }
+        },
+        Op::KeyValue => {
+            let (lo1, h1, _) = match done_at(done, k1) {
+                Some(r) => r,
+                None => {
+                    return None;
+                },
+            };
+            if !matches!(
+                kk0,
+                NodeKind::IdentifierName | NodeKind::StringLiteral | NodeKind::NumericLiteral
+                    | NodeKind::ComputedPropertyName
+            ) || !matches!(kk1, NodeKind::AssignmentElement) || lo0 != x
+                || !punct_at(src, nodes, toks, gaps, h0, 0x3A, Ghost(GW { g, w: ":"@ }))
+                || lo1 != h0.saturating_add(1) {
+                return None;
+            }
+            (h1, false)
+        },
+        _ => {
+            return None;
+        },
+    };
+    let _ = with_init;
+    if !end_ok(src, nodes, toks, gaps, nd.end, j, Ghost(g)) || j <= x {
+        return None;
+    }
+    proof {
+        let a = arena_of(nodes@);
+        assert(nd == &nodes@[m as int]);
+        assert(a.nodes[m as int] == nodes@[m as int]@);
+        assert(x1 as int == x as int + 1);
+        assert(a.nodes[m as int].children =~= seq![k0 as int, k1 as int]) by {
+            assert(a.nodes[m as int].children.len() == 2);
+        }
+        assert(a.nodes[m as int].kind == nd.kind);
+        assert(a.nodes[m as int].op == nd.op);
+        assert(a.nodes[m as int].start == nd.start as int);
+        assert(a.nodes[m as int].end == nd.end as int);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, k0 as int, g.cx, 0);
+        assert(kd(a, k0 as int) == kk0);
+        assert(kd(a, k1 as int) == kk1);
+        let mk: usize = if nd.op == Op::KeyValue { h0 } else { 0 };
+        if nd.op == Op::KeyValue {
+            assert(h0.saturating_add(1) as int == h0 as int + 1);
+            lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, k1 as int, g.cx, 1);
+        } else if with_init {
+            assert(x.saturating_add(2) as int == x as int + 2);
+            lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, k1 as int, g.cx, 1);
+            assert(is_assign_expr(a, k1 as int));
+        }
+        lemma_assignment_property_done(a, g.ts, g.cx, m as int, k0 as int, k1 as int, x as int, mk as int, j as int, with_init);
+    }
+    Some((x, j, -100))
 }
 
 } // verus!
