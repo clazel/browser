@@ -82,6 +82,12 @@ var c;",
         "(async a => await a);",
         "(async (a) => 1);",
         "function f() { function g() { return 1 } return g }",
+        "`a`;",
+        "`a${b}c`;",
+        "`${a}${b}`;",
+        "`a${b}c${d + 1}e${`n${f}`}`;",
+        "f`x${y}z`;",
+        "a.b`c`.d;",
         "class A {}",
         "class A extends B { }",
         "class A { m() {} static s(a) { return a } get g() { return 1 } set g(v) {} }",
@@ -176,7 +182,7 @@ var c;",
 
 #[test]
 fn other_programs_are_unsupported_not_failed() {
-    for s in ["for (a, b;;) ;", "`a`;", "a?.b;"] {
+    for s in ["for (a, b;;) ;", "a?.b;"] {
         assert!(
             derivation(s, SourceGoal::Script) == Some(Derivation::Unsupported),
             "{s}"
@@ -198,8 +204,7 @@ fn errors_are_still_errors() {
 fn what_the_check_costs() {
     let body = "(1 + 2 * 3) < 4 - 5 / 6 % 7;\n".repeat(60_000);
     let covered = cps(&body);
-    let stopped = cps(&format!("`a`;
-{body}"));
+    let stopped = cps(&format!("a?.b;\n{body}"));
     let time = |src: &[u32]| {
         let t = Instant::now();
         let r = parse_checked(src, SourceGoal::Script);

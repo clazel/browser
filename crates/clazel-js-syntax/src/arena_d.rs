@@ -6299,6 +6299,9 @@ pub fn check_derivation(
             },
             NodeKind::BindingProperty => check_binding_property(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
             NodeKind::BindingRestElement | NodeKind::BindingRestProperty => check_binding_rest(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
+            NodeKind::TemplateElement => check_template_element(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
+            NodeKind::TemplateLiteral => check_template(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
+            NodeKind::TaggedTemplate => check_tagged(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
             NodeKind::PrivateIdentifier => check_private(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
             NodeKind::FieldDefinition => check_field(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
             NodeKind::ClassBody => check_class_body(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
@@ -15273,6 +15276,492 @@ fn check_class(
     }
     let l: i32 = if sh.is_expr { 17 } else { -100 };
     Some((x, j, l))
+}
+
+// ---------------------------------------------------------------------
+// Template literals (§13.2.8) and tagged templates (§13.3.11).
+// ---------------------------------------------------------------------
+
+/// §13.2.8 a `TemplateElement`: one template token.
+#[verifier::spinoff_prover]
+fn check_template_element(
+    src: &[u32],
+    nodes: &[Node],
+    toks: &[DTok],
+    gaps: &[Ins],
+    done: &Done,
+    m: usize,
+    Ghost(g): Ghost<GCx>,
+) -> (r: Option<(usize, usize, i32)>)
+    requires
+        m < nodes.len(),
+        env_ok(src@, nodes@, toks@, gaps@, g.ts),
+    ensures
+        match r {
+            Some((l0, h0, l)) => node_done(
+                arena_of(nodes@),
+                g.ts,
+                m as int,
+                g.cx,
+                l0 as int,
+                h0 as int,
+            ) && l as int == lvl(arena_of(nodes@), m as int),
+            None => true,
+        },
+{
+    proof {
+        lemma_env_toks_wf(src@, nodes@, toks@, gaps@, g.ts);
+    }
+    let nd = match nodes.get(m) {
+        Some(x) => x,
+        None => {
+            return None;
+        },
+    };
+    if !matches!(nd.kind, NodeKind::TemplateElement) || !nd.children.is_empty() {
+        return None;
+    }
+    let x = match start_tok(src, nodes, toks, gaps, done, m, Ghost(g)) {
+        Some(x) => x,
+        None => {
+            return None;
+        },
+    };
+    let t = match toks.get(x) {
+        Some(t) => t,
+        None => {
+            return None;
+        },
+    };
+    proof {
+        lemma_env_tok(src@, nodes@, toks@, gaps@, g.ts, x as int);
+        assert(t == &toks@[x as int]);
+    }
+    if !matches!(t.kind, TokKind::Template(_)) || t.end != nd.end {
+        return None;
+    }
+    proof {
+        let a = arena_of(nodes@);
+        assert(nd == &nodes@[m as int]);
+        assert(a.nodes[m as int] == nodes@[m as int]@);
+        assert(x.saturating_add(1) as int == x as int + 1);
+        assert(a.nodes[m as int].kind == nd.kind);
+        assert(a.nodes[m as int].children.len() == 0);
+        assert(a.nodes[m as int].start == nd.start as int);
+        assert(a.nodes[m as int].end == nd.end as int);
+        assert(g.ts.toks[x as int].end == t.end as int);
+        assert(g.ts.toks[x as int].kind == t.kind);
+        assert(g.ts.toks[x as int].start < g.ts.toks[x as int].end);
+        assert(span_ok(a, g.ts, m as int, x as int, x as int + 1));
+        assert(d_expr_lhs(a, g.ts, m as int, g.cx, x as int, x as int + 1));
+        lemma_ed_of(a, g.ts, m as int, x as int, x as int + 1);
+    }
+    Some((x, x.saturating_add(1), -100))
+}
+
+/// The last component of a template.
+#[verifier::spinoff_prover]
+proof fn lemma_dtemplate_last(a: AstV, ts: Stream, bound: int, ks: Seq<int>, k: int, cx: Ctx, i: int, j: int)
+    requires
+        0 <= k,
+        k + 1 == ks.len(),
+        j == i + 1,
+        kd(a, ks[k]) == NodeKind::TemplateElement,
+        dc(a, ts, bound, ks[k], cx, i, j),
+        if k == 0 {
+            is_kind(ts, i, TokKind::Template(TemplateKind::NoSubstitution))
+        } else {
+            is_kind(ts, i, TokKind::Template(TemplateKind::Tail))
+        },
+    ensures
+        dtemplate(a, ts, bound, ks, k, cx, i, j),
+{
+}
+
+/// A component before an expression and the rest of a template.
+#[verifier::spinoff_prover]
+proof fn lemma_dtemplate_step(
+    a: AstV,
+    ts: Stream,
+    bound: int,
+    ks: Seq<int>,
+    k: int,
+    cx: Ctx,
+    i: int,
+    e: int,
+    j: int,
+)
+    requires
+        0 <= k,
+        k + 1 < ks.len(),
+        kd(a, ks[k]) == NodeKind::TemplateElement,
+        dc(a, ts, bound, ks[k], cx, i, i + 1),
+        if k == 0 {
+            is_kind(ts, i, TokKind::Template(TemplateKind::Head))
+        } else {
+            is_kind(ts, i, TokKind::Template(TemplateKind::Middle))
+        },
+        lvl(a, ks[k + 1]) >= -1,
+        dc(a, ts, bound, ks[k + 1], cx, i + 1, e),
+        ed(a, ts, ks[k + 1], i + 1) == e,
+        dtemplate(a, ts, bound, ks, k + 2, cx, e, j),
+    ensures
+        dtemplate(a, ts, bound, ks, k, cx, i, j),
+{
+}
+
+/// §13.2.8 `TemplateLiteral`.
+#[verifier::spinoff_prover]
+proof fn lemma_template_done(a: AstV, ts: Stream, cx: Ctx, m: int, x: int, j: int)
+    requires
+        toks_wf(ts),
+        cx_in(cx, true) == cx,
+        0 <= m < a.nodes.len(),
+        a.nodes[m].kind == NodeKind::TemplateLiteral,
+        dtemplate(a, ts, m, a.nodes[m].children, 0, cx, x, j),
+        0 <= x < j <= tn(ts),
+        a.nodes[m].start == ts.toks[x].start,
+        a.nodes[m].end == ts.toks[j - 1].end,
+    ensures
+        node_done(a, ts, m, cx, x, j),
+        lvl(a, m) == 17,
+{
+    assert(span_ok(a, ts, m, x, j));
+    assert(d_expr_lhs(a, ts, m, cx, x, j));
+    lemma_ed_of(a, ts, m, x, j);
+}
+
+/// §13.2.8 `TemplateLiteral`: elements and substitutions alternate.
+#[verifier::spinoff_prover]
+fn check_template(
+    src: &[u32],
+    nodes: &[Node],
+    toks: &[DTok],
+    gaps: &[Ins],
+    done: &Done,
+    m: usize,
+    Ghost(g): Ghost<GCx>,
+) -> (r: Option<(usize, usize, i32)>)
+    requires
+        m < nodes.len(),
+        cx_in(g.cx, true) == g.cx,
+        env_ok(src@, nodes@, toks@, gaps@, g.ts),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
+    ensures
+        match r {
+            Some((l0, h0, l)) => node_done(
+                arena_of(nodes@),
+                g.ts,
+                m as int,
+                g.cx,
+                l0 as int,
+                h0 as int,
+            ) && l as int == lvl(arena_of(nodes@), m as int),
+            None => true,
+        },
+{
+    proof {
+        lemma_env_toks_wf(src@, nodes@, toks@, gaps@, g.ts);
+    }
+    let nd = match nodes.get(m) {
+        Some(x) => x,
+        None => {
+            return None;
+        },
+    };
+    let len = nd.children.len();
+    if !matches!(nd.kind, NodeKind::TemplateLiteral) || len == 0 || len % 2 == 0 {
+        return None;
+    }
+    let ghost a = arena_of(nodes@);
+    proof {
+        assert(a.nodes[m as int] == nodes@[m as int]@);
+        assert(nd == &nodes@[m as int]);
+        assert(a.nodes[m as int].children.len() == len);
+    }
+    let last_ix = len.saturating_sub(1);
+    let last = match kid_of(nodes, m, last_ix) {
+        Some(c) => c,
+        None => {
+            return None;
+        },
+    };
+    let (lo_l, hi_l, _) = match done_at(done, last) {
+        Some(r) => r,
+        None => {
+            return None;
+        },
+    };
+    let kl = kind_at(nodes, last);
+    let tk = match toks.get(lo_l) {
+        Some(t) => t,
+        None => {
+            return None;
+        },
+    };
+    proof {
+        lemma_env_tok(src@, nodes@, toks@, gaps@, g.ts, lo_l as int);
+        assert(tk == &toks@[lo_l as int]);
+    }
+    let last_kind_ok = if last_ix == 0 {
+        matches!(tk.kind, TokKind::Template(TemplateKind::NoSubstitution))
+    } else {
+        matches!(tk.kind, TokKind::Template(TemplateKind::Tail))
+    };
+    if !matches!(kl, NodeKind::TemplateElement) || !last_kind_ok || hi_l != lo_l.saturating_add(1) {
+        return None;
+    }
+    proof {
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, last as int, g.cx, last_ix as int);
+        assert(lo_l.saturating_add(1) as int == lo_l as int + 1);
+        assert(kd(a, last as int) == kl);
+        assert(lo_l < toks.len());
+        let ks = a.nodes[m as int].children;
+        assert(dc(a, g.ts, m as int, last as int, g.cx, lo_l as int, hi_l as int));
+        assert(g.ts.toks[lo_l as int].kind == tk.kind);
+        lemma_dtemplate_last(a, g.ts, m as int, ks, last_ix as int, g.cx, lo_l as int, hi_l as int);
+    }
+    let end = hi_l;
+    let mut k = last_ix;
+    let mut pos = lo_l;
+    while k > 0
+        invariant
+            m < nodes.len(),
+            nodes@.len() == nodes.len(),
+            nd == &nodes@[m as int],
+            a == arena_of(nodes@),
+            len == nd.children.len(),
+            len == a.nodes[m as int].children.len(),
+            len % 2 == 1,
+            k < len,
+            k % 2 == 0,
+            end <= toks.len(),
+            pos < end,
+            tn(g.ts) == toks.len(),
+            ast_wf(a),
+            env_ok(src@, nodes@, toks@, gaps@, g.ts),
+            inv(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+            cx_ok(a, done.cxs@, m as int, g.cx),
+            dtemplate(a, g.ts, m as int, a.nodes[m as int].children, k as int, g.cx, pos as int, end as int),
+        decreases k,
+    {
+        let ix_e = k.saturating_sub(2);
+        let ix_x = k.saturating_sub(1);
+        let el = match kid_of(nodes, m, ix_e) {
+            Some(c) => c,
+            None => {
+                return None;
+            },
+        };
+        let ex = match kid_of(nodes, m, ix_x) {
+            Some(c) => c,
+            None => {
+                return None;
+            },
+        };
+        let (lo_e, hi_e, _) = match done_at(done, el) {
+            Some(r) => r,
+            None => {
+                return None;
+            },
+        };
+        let (lo_x, hi_x, lv_x) = match done_at(done, ex) {
+            Some(r) => r,
+            None => {
+                return None;
+            },
+        };
+        let tt = match toks.get(lo_e) {
+            Some(t) => t,
+            None => {
+                return None;
+            },
+        };
+        proof {
+            lemma_env_tok(src@, nodes@, toks@, gaps@, g.ts, lo_e as int);
+            assert(tt == &toks@[lo_e as int]);
+        }
+        let el_kind_ok = if ix_e == 0 {
+            matches!(tt.kind, TokKind::Template(TemplateKind::Head))
+        } else {
+            matches!(tt.kind, TokKind::Template(TemplateKind::Middle))
+        };
+        if !matches!(kind_at(nodes, el), NodeKind::TemplateElement) || !el_kind_ok
+            || hi_e != lo_e.saturating_add(1) || lo_x != hi_e || hi_x != pos || lv_x < -1 {
+            return None;
+        }
+        proof {
+            assert(k >= 2);
+            assert(ix_e as int == k as int - 2);
+            assert(ix_x as int == k as int - 1);
+            lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, el as int, g.cx, k as int - 2);
+            lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, ex as int, g.cx, k as int - 1);
+            assert(lo_e.saturating_add(1) as int == lo_e as int + 1);
+            assert(kd(a, el as int) == NodeKind::TemplateElement);
+            assert(lvl(a, ex as int) >= -1);
+            assert(lo_e < toks.len());
+            let ks = a.nodes[m as int].children;
+            assert(g.ts.toks[lo_e as int].kind == tt.kind);
+            assert(dc(a, g.ts, m as int, el as int, g.cx, lo_e as int, lo_e as int + 1));
+            assert(dc(a, g.ts, m as int, ex as int, g.cx, lo_e as int + 1, pos as int));
+            assert(ed(a, g.ts, ex as int, lo_e as int + 1) == pos as int);
+            lemma_dtemplate_step(a, g.ts, m as int, ks, k as int - 2, g.cx, lo_e as int, pos as int, end as int);
+        }
+        pos = lo_e;
+        k = k.saturating_sub(2);
+    }
+    let x = pos;
+    if !end_ok(src, nodes, toks, gaps, nd.end, end, Ghost(g)) {
+        return None;
+    }
+    let first = match start_tok(src, nodes, toks, gaps, done, m, Ghost(g)) {
+        Some(x) => x,
+        None => {
+            return None;
+        },
+    };
+    if first != x || end <= x {
+        return None;
+    }
+    proof {
+        assert(k == 0);
+        assert(a.nodes[m as int].kind == nd.kind);
+        assert(a.nodes[m as int].start == nd.start as int);
+        assert(a.nodes[m as int].end == nd.end as int);
+        lemma_template_done(a, g.ts, g.cx, m as int, x as int, end as int);
+    }
+    Some((x, end, 17))
+}
+
+/// §13.3.11 `tag TemplateLiteral`.
+#[verifier::spinoff_prover]
+proof fn lemma_tagged_done(a: AstV, ts: Stream, cx: Ctx, m: int, t: int, l: int, x: int, mt: int, j: int)
+    requires
+        toks_wf(ts),
+        0 <= m < a.nodes.len(),
+        0 <= t < m,
+        0 <= l < m,
+        a.nodes[m].kind == NodeKind::TaggedTemplate,
+        a.nodes[m].children =~= seq![t, l],
+        is_member_or_call(a, t),
+        kd(a, l) == NodeKind::TemplateLiteral,
+        node_done(a, ts, t, cx, x, mt),
+        node_done(a, ts, l, cx, mt, j),
+        0 <= x < j <= tn(ts),
+        a.nodes[m].start == ts.toks[x].start,
+        a.nodes[m].end == ts.toks[j - 1].end,
+    ensures
+        node_done(a, ts, m, cx, x, j),
+        lvl(a, m) == (if lvl(a, t) == 17 {
+            17int
+        } else {
+            15int
+        }),
+{
+    assert(span_ok(a, ts, m, x, j));
+    assert(a.nodes[m].children[0] == t);
+    assert(a.nodes[m].children[1] == l);
+    assert(dc(a, ts, m, t, cx, x, mt));
+    assert(dc(a, ts, m, l, cx, mt, j));
+    assert(d_expr_lhs(a, ts, m, cx, x, j));
+    lemma_ed_of(a, ts, m, x, j);
+}
+
+/// §13.3.11 `TaggedTemplate`.
+#[verifier::spinoff_prover]
+fn check_tagged(
+    src: &[u32],
+    nodes: &[Node],
+    toks: &[DTok],
+    gaps: &[Ins],
+    done: &Done,
+    m: usize,
+    Ghost(g): Ghost<GCx>,
+) -> (r: Option<(usize, usize, i32)>)
+    requires
+        m < nodes.len(),
+        env_ok(src@, nodes@, toks@, gaps@, g.ts),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
+    ensures
+        match r {
+            Some((l0, h0, l)) => node_done(
+                arena_of(nodes@),
+                g.ts,
+                m as int,
+                g.cx,
+                l0 as int,
+                h0 as int,
+            ) && l as int == lvl(arena_of(nodes@), m as int),
+            None => true,
+        },
+{
+    proof {
+        lemma_env_toks_wf(src@, nodes@, toks@, gaps@, g.ts);
+    }
+    let nd = match nodes.get(m) {
+        Some(x) => x,
+        None => {
+            return None;
+        },
+    };
+    if !matches!(nd.kind, NodeKind::TaggedTemplate) || nd.children.len() != 2 {
+        return None;
+    }
+    let t = match kid_of(nodes, m, 0) {
+        Some(c) => c,
+        None => {
+            return None;
+        },
+    };
+    let l = match kid_of(nodes, m, 1) {
+        Some(c) => c,
+        None => {
+            return None;
+        },
+    };
+    let x = match start_tok(src, nodes, toks, gaps, done, m, Ghost(g)) {
+        Some(x) => x,
+        None => {
+            return None;
+        },
+    };
+    let (lo_t, mt, lv_t) = match done_at(done, t) {
+        Some(r) => r,
+        None => {
+            return None;
+        },
+    };
+    let (lo_l, j, _) = match done_at(done, l) {
+        Some(r) => r,
+        None => {
+            return None;
+        },
+    };
+    if lo_t != x || !(lv_t == 17 || lv_t == 15) || lo_l != mt
+        || !matches!(kind_at(nodes, l), NodeKind::TemplateLiteral)
+        || !end_ok(src, nodes, toks, gaps, nd.end, j, Ghost(g)) || j <= x {
+        return None;
+    }
+    proof {
+        let a = arena_of(nodes@);
+        assert(nd == &nodes@[m as int]);
+        assert(a.nodes[m as int] == nodes@[m as int]@);
+        assert(a.nodes[m as int].children =~= seq![t as int, l as int]) by {
+            assert(a.nodes[m as int].children.len() == 2);
+        }
+        assert(a.nodes[m as int].kind == nd.kind);
+        assert(a.nodes[m as int].start == nd.start as int);
+        assert(a.nodes[m as int].end == nd.end as int);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, t as int, g.cx, 0);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, l as int, g.cx, 1);
+        assert(kd(a, l as int) == NodeKind::TemplateLiteral);
+        assert(is_member_or_call(a, t as int));
+        lemma_tagged_done(a, g.ts, g.cx, m as int, t as int, l as int, x as int, mt as int, j as int);
+    }
+    let own: i32 = if lv_t == 17 { 17 } else { 15 };
+    Some((x, j, own))
 }
 
 } // verus!
