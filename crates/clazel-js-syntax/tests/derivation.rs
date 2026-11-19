@@ -82,6 +82,20 @@ var c;",
         "(async a => await a);",
         "(async (a) => 1);",
         "function f() { function g() { return 1 } return g }",
+        "[];",
+        "[1, 2, 3];",
+        "[1, 2,];",
+        "[,];",
+        "[, , 1, , 2, ,];",
+        "[...a, b, ...c];",
+        "[[1], [2, [3]]];",
+        "({});",
+        "({a});",
+        "({a: 1, b: 2,});",
+        "({'a': 1, 2: 3, [k]: 4, ...r});",
+        "({a, b: [1], c: {d: e}});",
+        "var o = {x: 1}, p = [o];",
+        "for (var k of [1, 2]) ;",
         "for (;;) ;",
         "for (;;) { break; }",
         "for (a = 0; a < 10; a = a + 1) b;",
@@ -132,7 +146,7 @@ var c;",
 
 #[test]
 fn other_programs_are_unsupported_not_failed() {
-    for s in ["for (a, b;;) ;", "var [a] = 1;", "[1];", "({});"] {
+    for s in ["for (a, b;;) ;", "var [a] = 1;", "new a;", "a++;"] {
         assert!(
             derivation(s, SourceGoal::Script) == Some(Derivation::Unsupported),
             "{s}"
@@ -154,7 +168,7 @@ fn errors_are_still_errors() {
 fn what_the_check_costs() {
     let body = "(1 + 2 * 3) < 4 - 5 / 6 % 7;\n".repeat(60_000);
     let covered = cps(&body);
-    let stopped = cps(&format!("[];\n{body}"));
+    let stopped = cps(&format!("new a;\n{body}"));
     let time = |src: &[u32]| {
         let t = Instant::now();
         let r = parse_checked(src, SourceGoal::Script);
