@@ -82,6 +82,16 @@ var c;",
         "(async a => await a);",
         "(async (a) => 1);",
         "function f() { function g() { return 1 } return g }",
+        "class A {}",
+        "class A extends B { }",
+        "class A { m() {} static s(a) { return a } get g() { return 1 } set g(v) {} }",
+        "class A { *gen() { yield 1 } async am() { await 1 } async *ag() { yield 1 } }",
+        "class A { x; y = 1; static z = 2; 'q' = 3; [k] = 4; }",
+        "class A { #p = 1; #m() {} static #s; get #g() { return 1 } }",
+        "class A { ; ; m() {} ; }",
+        "class A { static { a; } static { var x = 1; } }",
+        "(class {}); (class B extends C {});",
+        "x = {m() {}, get a() { return 1 }, set a(v) {}, *g() {}, async f() {}, [k]() {}};",
         "a++; b--; ++c; --d.e;",
         "x = a[0] + b[c][d];",
         "new a;",
@@ -166,7 +176,7 @@ var c;",
 
 #[test]
 fn other_programs_are_unsupported_not_failed() {
-    for s in ["for (a, b;;) ;", "class A {}", "`a`;", "a?.b;"] {
+    for s in ["for (a, b;;) ;", "`a`;", "a?.b;"] {
         assert!(
             derivation(s, SourceGoal::Script) == Some(Derivation::Unsupported),
             "{s}"
@@ -188,7 +198,8 @@ fn errors_are_still_errors() {
 fn what_the_check_costs() {
     let body = "(1 + 2 * 3) < 4 - 5 / 6 % 7;\n".repeat(60_000);
     let covered = cps(&body);
-    let stopped = cps(&format!("class A {{}}\n{body}"));
+    let stopped = cps(&format!("`a`;
+{body}"));
     let time = |src: &[u32]| {
         let t = Instant::now();
         let r = parse_checked(src, SourceGoal::Script);
