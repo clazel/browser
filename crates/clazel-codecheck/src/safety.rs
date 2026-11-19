@@ -152,12 +152,18 @@ pub open spec fn start_ok(s: State, h: Handed, blob: Seq<u8>, e: int) -> bool {
 /// regions allow: a load in the context or a region, a store in the exit
 /// area or a region.
 pub open spec fn access_allowed(h: Handed, addr: int, a: Access) -> bool {
-    (if a.store {
+    ctx_access_ok(h, addr, a) || exists|k: int|
+        0 <= k < 16 && within(addr, a.size, (#[trigger] h.rg[k]).base, h.rg[k].bound)
+}
+
+/// The access lies in the context: a load anywhere in its 512 bytes, a store
+/// in the exit area (the region table is never written).
+pub open spec fn ctx_access_ok(h: Handed, addr: int, a: Access) -> bool {
+    if a.store {
         within(addr, a.size, h.ctx + abi::exit_code_off(), abi::ctx_size() - abi::table_end())
     } else {
         within(addr, a.size, h.ctx, abi::ctx_size())
-    }) || exists|k: int|
-        0 <= k < 16 && within(addr, a.size, (#[trigger] h.rg[k]).base, h.rg[k].bound)
+    }
 }
 
 /// The step `s -> s2` by `i` is safe: its memory access (observed as

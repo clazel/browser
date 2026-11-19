@@ -30,8 +30,13 @@ pub open spec fn fact_holds(s: State, h: Handed, r: u8, f: Fact) -> bool {
     match f {
         Fact::Unknown => true,
         Fact::Base(k) => 0 <= k < 16 && s.rgf[r as int] as int == h.rg[k].base,
-        Fact::Idx(k, n) => 0 <= k < 16 && s.rgf[r as int] as int + n <= h.rg[k].bound,
+        Fact::Idx(k, n) => 0 <= k < 16 && idx_fits(s.rgf[r as int] as int, n, h.rg[k].bound),
     }
+}
+
+/// An index `v` with `n` bytes after it still lies within `bound`.
+pub open spec fn idx_fits(v: int, n: int, bound: int) -> bool {
+    v + n <= bound
 }
 
 /// Every fact in `fs` is true of `s`.
