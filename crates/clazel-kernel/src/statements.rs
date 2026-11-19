@@ -1074,6 +1074,11 @@ pub open spec fn no_submit_tab(t: Seq<Event>) -> bool {
     forall|k: int| 0 <= k < t.len() ==> !((#[trigger] t[k]) is SubmitTab)
 }
 
+/// `bytes` ends with `tail`: it is some octets, then `tail`.
+pub open spec fn ends_with(bytes: Seq<u8>, tail: Seq<u8>) -> bool {
+    tail.len() <= bytes.len() && bytes.subrange(bytes.len() - tail.len(), bytes.len()) == tail
+}
+
 /// `theorem_body_from_requester` (item 6.16): in any state a run of the
 /// kernel from the initial state reaches, by a trace with no `SubmitTab`,
 ///
@@ -1101,7 +1106,7 @@ pub open spec fn body_from_requester_statement(rules: Seq<clazel_psl::spec::Rule
             &&& nav.fetch.req.body is Some ==> submitted_in(rules, urls, fetch, init_state(), t, c.tab, nav.fetch.req.body->Some_0)
             &&& forall|k: int|
                 0 <= k < out.len() ==> match #[trigger] out[k] {
-                    Output::Send { bytes, .. } => exists|head: Seq<u8>| bytes == head + clazel_fetch::request::spec::body_bytes(nav.fetch.req),
+                    Output::Send { bytes, .. } => ends_with(bytes, clazel_fetch::request::spec::body_bytes(nav.fetch.req)),
                     _ => true,
                 }
         },

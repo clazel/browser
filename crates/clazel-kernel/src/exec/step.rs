@@ -1229,7 +1229,7 @@ pub fn submit_request_exec(r: &RendererRecord, method: &[u8], content_type: Vec<
         },
 {
     if clazel_fetch::request::build::is_get(method) {
-        if content_type.len() == 0 && body.len() == 0 {
+        if content_type.is_empty() && body.is_empty() {
             let q = clazel_fetch::request::build::ReqBuf { method: vstd::slice::slice_to_vec(method), body: None, initiator: Some(clone_origin(&r.lock)), origin_tainted: false };
             Some(q)
         } else {
@@ -1725,7 +1725,7 @@ pub fn from_renderer_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s
                         Some(r) => r.committed,
                         None => false,
                     };
-                    let display = matches!(m, Msg::Display { .. } | Msg::Title { .. } | Msg::FetchStyle { .. });
+                    let display = matches!(m, Msg::Display { .. } | Msg::Title { .. } | Msg::FetchStyle { .. } | Msg::Submit { .. });
                     if clazel_ipc::message::codec::is_from_renderer(&m) && (committed || !display) {
                         handle_message_exec(urls, fetch, s, i, m)
                     } else {
