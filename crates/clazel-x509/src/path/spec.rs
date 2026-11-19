@@ -206,7 +206,8 @@ pub enum PathError {
     /// on the target.
     ExtendedKeyUsage,
     /// `profile.rs`: the target fails the leaf checks (identity, key usage,
-    /// role, validity; `leaf::spec::check_extensions`).
+    /// role, validity; `leaf::spec::check_extensions`), or (R) its subject
+    /// is empty and its subjectAltName is not critical (RFC 5280 §4.1.2.6).
     Leaf,
     /// `profile.rs`, (R): the target carries nameConstraints.
     LeafNameConstraints,

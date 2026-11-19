@@ -3113,6 +3113,34 @@
       }
     },
     {
+      "id": "profile-leaf-empty-subject-needs-critical-san",
+      "file": "src/path/profile.rs",
+      "module": "path::examples",
+      "find": "else if subject_is_empty(leaf) && !san_is_critical(leaf) { Err(super::spec::PathError::Leaf) }",
+      "replace": "else if false { Err(super::spec::PathError::Leaf) }",
+      "expect": "killed",
+      "reason": "(R) RFC 5280 \u00a74.1.2.6: an empty subject requires a critical subjectAltName.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_leaf_empty_subject()",
+        "witness": "super::examples::profile_of(super::examples::anchor(), seq![super::parsed::spec::PathCert { tbs: crate::tbs::spec::TbsCertificate { subject_der: seq![0x30u8, 0x00], ..super::examples::leaf_under_root().tbs }, ..super::examples::leaf_under_root() }]) == Ok::<(), PathError>(())"
+      }
+    },
+    {
+      "id": "profile-leaf-empty-subject-reads-criticality",
+      "file": "src/path/profile.rs",
+      "module": "path::examples",
+      "find": "Some(i) => 0 <= i < leaf.extensions.len() && leaf.extensions[i].critical,",
+      "replace": "Some(i) => false,",
+      "expect": "killed",
+      "reason": "RFC 5280 \u00a74.1.2.6: a critical subjectAltName satisfies the rule for an empty subject.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_leaf_empty_subject()",
+        "witness": "super::examples::profile_of(super::examples::anchor(), seq![super::parsed::spec::PathCert { tbs: crate::tbs::spec::TbsCertificate { subject_der: seq![0x30u8, 0x00], ..super::examples::leaf_under_root().tbs }, extensions: seq![super::examples::extension(crate::extensions::spec::subject_alt_name_oid(), true, super::examples::san_example_com_der()), super::examples::extension(crate::leaf::spec::extended_key_usage_extension_oid(), false, super::examples::eku_server_auth_der())], ..super::examples::leaf_under_root() }]) == Err::<(), PathError>(PathError::Leaf)"
+      }
+    },
+    {
       "id": "profile-intermediate-key-usage-required",
       "file": "src/path/profile.rs",
       "module": "path::examples",

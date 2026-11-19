@@ -51,6 +51,16 @@
 //!     `-critical`, both FAILURE), critical or not. A critical one is also
 //!     refused by §6.1.5 (f). §6.1 never processes the target's own
 //!     constraints; whether the browsers refuse it is *unconfirmed*.
+//!   - **(R) An empty subject needs a critical subjectAltName** (RFC 5280
+//!     §4.1.2.6 "the subject name MUST be an empty sequence and the
+//!     subjectAltName extension MUST be critical", §4.2.1.6; limbo
+//!     `rfc5280::san::noncritical-with-empty-subject` FAILURE). The rule
+//!     binds the issuer and §6.1 does not check it; Chrome refuses such a
+//!     certificate (BoringSSL `ParsedCertificate::Create`,
+//!     `kSubjectAltNameNotCritical`), Firefox *unconfirmed*, rustls-webpki
+//!     does not check it. Reported as `PathError::Leaf`. Only the target:
+//!     an intermediate's subject is the next issuer, which is never empty
+//!     (`theorem_issuer_non_empty`).
 //!   - **policyConstraints on the target is not refused.** RFC 5280
 //!     §6.1.5 (b) processes it on the final certificate (`spec.rs`), and
 //!     §4.2.1.11 has no "MUST be used only in a CA certificate", unlike
@@ -98,6 +108,20 @@ pub open spec fn leaf_policy() -> crate::leaf::spec::LeafPolicy {
     crate::leaf::spec::LeafPolicy { allow_any_extended_key_usage: false }
 }
 
+/// RFC 5280 §4.1.2.6: the subject is the empty sequence, whose only DER
+/// encoding is `30 00`.
+pub open spec fn subject_is_empty(leaf: super::parsed::spec::PathCert) -> bool {
+    leaf.tbs.subject_der =~= seq![0x30u8, 0x00]
+}
+
+/// The subjectAltName extension is present and marked critical.
+pub open spec fn san_is_critical(leaf: super::parsed::spec::PathCert) -> bool {
+    match crate::leaf::spec::find_extension_index(leaf.extensions, crate::extensions::spec::subject_alt_name_oid(), 0) {
+        Some(i) => 0 <= i < leaf.extensions.len() && leaf.extensions[i].critical,
+        None => false,
+    }
+}
+
 /// The target certificate's checks.
 pub open spec fn leaf_profile(
     leaf: super::parsed::spec::PathCert, reference: crate::spec::ReferenceIdentity,
@@ -112,6 +136,8 @@ pub open spec fn leaf_profile(
     else if leaf.eku is None { Err(super::spec::PathError::ExtendedKeyUsage) }
     // 3. (R) RFC 5280 §4.2.1.10, BR §7.1.2.7.6: "nameConstraints | MUST NOT".
     else if leaf.name_constraints is Some { Err(super::spec::PathError::LeafNameConstraints) }
+    // 4. (R) RFC 5280 §4.1.2.6: an empty subject needs a critical subjectAltName.
+    else if subject_is_empty(leaf) && !san_is_critical(leaf) { Err(super::spec::PathError::Leaf) }
     else { Ok(()) }
 }
 
