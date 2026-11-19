@@ -5,20 +5,25 @@
 //! [`Derivation::Verified`] only if `derives_root` holds for it: every node
 //! derives the tokens it spans, bottom-up, in the context the root's goal gives.
 //!
-//! **Covered:** a `Script` or `Module` of statements, in the one context of the
-//! root: literals, parentheses, every binary level, unary, conditional and
-//! assignment, member-dot, identifiers, arguments, calls, the comma operator,
-//! spread, `this`/`null`/`true`/`false`; and the statements expression, empty,
-//! `var`/`let`/`const` (no destructuring), block, `if`, `while`, `do`-`while`,
-//! `throw`, `break`/`continue`, labelled, `try`/`catch`/`finally`, `switch` and
-//! `debugger`, `return`; `for` (all heads); function declarations and expressions, generators,
-//! `async` functions, arrow functions (simple parameters, defaults and `...rest`
-//! of a name), `yield` and `await`. Each node is checked in the context its
-//! parent's production gives it (`Done::cxs`, [`Cx5`]); the assignment is
+//! **Covered:** a `Script` or `Module` whose nodes are: literals, identifiers,
+//! parentheses, every binary level, unary, `++`/`--`, conditional, assignment
+//! (with assignment patterns), member access (`.name`, `.#name`, `[expr]`),
+//! arguments, calls, `new`, the comma operator, spread, array and object
+//! literals (properties, methods, accessors, computed names), templates and tagged
+//! templates, `this`/`null`/`true`/`false`, function and class declarations and
+//! expressions (generators, `async`, arrows, methods, fields, static blocks,
+//! private names), `yield` and `await`, binding patterns; and every statement of
+//! §14 (`for` with declarations and identifier or member heads, `with`,
+//! `switch`, `try`, labels, ...). Each node is checked in the context its
+//! parent's production gives it (`Done::cxs`, [`Cx5`]: `[~In]` in a `for` head,
+//! `cx_fn` in functions, `[+Await]` in a static block, ...); the assignment is
 //! untrusted and compared by the parent's check. For any other node the result is
-//! [`Derivation::Unsupported`]: nothing is claimed. The `for` statements (their
-//! heads are `[~In]`, which the checks do not take yet), destructuring, classes,
-//! array and object literals, templates and modules have no checks yet.
+//! [`Derivation::Unsupported`]: nothing is claimed. Not covered: optional chains,
+//! `super`, `new.target`, `import(...)` and `import.meta`, patterns as `for`
+//! heads, `for await`, the Annex B forms (`for (var x = 1 in o)`, function
+//! declarations as statements), expressions and patterns inside `[~In]` heads
+//! other than the simplest, `CoverInitializedName`, and modules' `import` and
+//! `export`.
 //!
 //! [`crate::exec::parse_checked`] runs [`check_derivation_canon`] on every arena
 //! the parser builds, and rejects it if a covered node is `Failed`.
@@ -6244,6 +6249,8 @@ pub fn check_derivation(
                         return Derivation::Unsupported;
                     }
                     check_member_bracket(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx }))
+                } else if matches!(nd.op, Op::PrivateDot) {
+                    check_member_private(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx }))
                 } else {
                     check_member_dot(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx }))
                 }
@@ -15790,6 +15797,153 @@ fn check_tagged(
     }
     let own: i32 = if lv_t == 17 { 17 } else { 15 };
     Some((x, j, own))
+}
+
+// ---------------------------------------------------------------------
+// `object.#name` (§13.3.2).
+// ---------------------------------------------------------------------
+
+/// §13.3.2 `MemberExpression . PrivateIdentifier`.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(100)]
+proof fn lemma_member_private_done(a: AstV, ts: Stream, cx: Ctx, m: int, o: int, p: int, x: int, mo: int)
+    requires
+        toks_wf(ts),
+        0 <= m < a.nodes.len(),
+        0 <= o < m,
+        0 <= p < m,
+        a.nodes[m].kind == NodeKind::MemberExpression,
+        a.nodes[m].op == Op::PrivateDot,
+        a.nodes[m].children =~= seq![o, p],
+        is_member_or_call(a, o),
+        kd(a, p) == NodeKind::PrivateIdentifier,
+        node_done(a, ts, o, cx, x, mo),
+        is_p(ts, mo, "."@),
+        node_done(a, ts, p, cx, mo + 1, mo + 2),
+        0 <= x,
+        mo + 2 <= tn(ts),
+        a.nodes[m].start == ts.toks[x].start,
+        a.nodes[m].end == ts.toks[mo + 1].end,
+    ensures
+        node_done(a, ts, m, cx, x, mo + 2),
+        lvl(a, m) == (if lvl(a, o) == 17 {
+            17int
+        } else {
+            15int
+        }),
+{
+    assert(span_ok(a, ts, m, x, mo + 2));
+    assert(a.nodes[m].children[0] == o);
+    assert(a.nodes[m].children[1] == p);
+    assert(dc(a, ts, m, o, cx, x, mo));
+    assert(dc(a, ts, m, p, cx, mo + 1, mo + 2));
+    assert(d_expr_lhs(a, ts, m, cx, x, mo + 2));
+    lemma_ed_of(a, ts, m, x, mo + 2);
+}
+
+/// §13.3.2 `object . #name`.
+#[verifier::spinoff_prover]
+fn check_member_private(
+    src: &[u32],
+    nodes: &[Node],
+    toks: &[DTok],
+    gaps: &[Ins],
+    done: &Done,
+    m: usize,
+    Ghost(g): Ghost<GCx>,
+) -> (r: Option<(usize, usize, i32)>)
+    requires
+        m < nodes.len(),
+        env_ok(src@, nodes@, toks@, gaps@, g.ts),
+        inv(arena_of(nodes@), g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int),
+        cx_ok(arena_of(nodes@), done.cxs@, m as int, g.cx),
+    ensures
+        match r {
+            Some((l0, h0, l)) => node_done(
+                arena_of(nodes@),
+                g.ts,
+                m as int,
+                g.cx,
+                l0 as int,
+                h0 as int,
+            ) && l as int == lvl(arena_of(nodes@), m as int),
+            None => true,
+        },
+{
+    proof {
+        lemma_punct_text();
+        lemma_env_toks_wf(src@, nodes@, toks@, gaps@, g.ts);
+    }
+    let nd = match nodes.get(m) {
+        Some(x) => x,
+        None => {
+            return None;
+        },
+    };
+    if !matches!(nd.kind, NodeKind::MemberExpression) || !matches!(nd.op, Op::PrivateDot)
+        || nd.children.len() != 2 {
+        return None;
+    }
+    let o = match kid_of(nodes, m, 0) {
+        Some(c) => c,
+        None => {
+            return None;
+        },
+    };
+    let p = match kid_of(nodes, m, 1) {
+        Some(c) => c,
+        None => {
+            return None;
+        },
+    };
+    let x = match start_tok(src, nodes, toks, gaps, done, m, Ghost(g)) {
+        Some(x) => x,
+        None => {
+            return None;
+        },
+    };
+    let (lo_o, mo, lv_o) = match done_at(done, o) {
+        Some(r) => r,
+        None => {
+            return None;
+        },
+    };
+    let (lo_p, hi_p, _) = match done_at(done, p) {
+        Some(r) => r,
+        None => {
+            return None;
+        },
+    };
+    let mo1 = mo.saturating_add(1);
+    if lo_o != x || !(lv_o == 17 || lv_o == 15) || !matches!(kind_at(nodes, p), NodeKind::PrivateIdentifier)
+        || lo_p != mo1 || hi_p != mo.saturating_add(2)
+        || !punct_at(src, nodes, toks, gaps, mo, 0x2E, Ghost(GW { g, w: "."@ }))
+        || !end_ok(src, nodes, toks, gaps, nd.end, hi_p, Ghost(g)) {
+        return None;
+    }
+    proof {
+        let a = arena_of(nodes@);
+        assert(nd == &nodes@[m as int]);
+        assert(a.nodes[m as int] == nodes@[m as int]@);
+        assert(mo1 as int == mo as int + 1);
+        assert(a.nodes[m as int].children =~= seq![o as int, p as int]) by {
+            assert(a.nodes[m as int].children.len() == 2);
+        }
+        assert(a.nodes[m as int].kind == nd.kind);
+        assert(a.nodes[m as int].op == nd.op);
+        assert(a.nodes[m as int].start == nd.start as int);
+        assert(a.nodes[m as int].end == nd.end as int);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, o as int, g.cx, 0);
+        lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, p as int, g.cx, 1);
+        assert(kd(a, p as int) == NodeKind::PrivateIdentifier);
+        assert(is_member_or_call(a, o as int));
+        assert(hi_p as int == mo as int + 2);
+        lemma_env_tok(src@, nodes@, toks@, gaps@, g.ts, hi_p as int - 1);
+        assert(g.ts.toks[mo as int + 1].end == nd.end as int);
+        lemma_member_private_done(a, g.ts, g.cx, m as int, o as int, p as int, x as int, mo as int);
+    }
+    let own: i32 = if lv_o == 17 { 17 } else { 15 };
+    Some((x, hi_p, own))
 }
 
 } // verus!
