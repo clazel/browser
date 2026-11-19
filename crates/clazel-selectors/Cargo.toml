@@ -13,12 +13,22 @@ clazel-css = { path = "../clazel-css" }
 # The node tree selectors are matched against (Phase 4 item 4.8).
 clazel-dom = { path = "../clazel-dom" }
 
+# Servo's selectors engine, the reference in tests/conformance_differential.rs
+# (class `test` in docs/DEPENDENCIES.md: never shipped).
+[dev-dependencies]
+selectors = "=0.36.1"
+# The version `selectors` is written against: its ToCss and parser types.
+cssparser = "=0.36.0"
+precomputed-hash = "=0.1.1"
+
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
 # shipped code today; `target-tier` is what the policy requires, since this
-# parses selectors a page chose. Tier 0 until the proofs, an independent
-# transcription and the suites are in, and CI's full verification is green.
+# parses selectors a page chose. Tier 2: the parser, the serializer, matching and
+# specificity are proven equal to the spec, the independent transcription's
+# equivalence covers parsing in full, and the suites are in. CI's full verification
+# on the pull request is what makes it hold.
 [package.metadata.clazel]
-tier = 0
+tier = 2
 target-tier = 2
 # Item 5.5's theorems (src/lemmas.rs). `cargo xtask check` fails if one is not
 # defined as a `proof fn` in this crate.
@@ -28,6 +38,11 @@ theorems = [
     "theorem_specificity_monotone",
     "theorem_where_zero",
     "theorem_is_most_specific",
+    # The independent transcription's equivalence to the spec (src/independent_*.rs).
+    "theorem_specificity_equivalent",
+    "theorem_match_equivalent",
+    "theorem_parse_spec_to_transcription",
+    "theorem_parse_transcription_to_spec",
 ]
 
 [package.metadata.verus]

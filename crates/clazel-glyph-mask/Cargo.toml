@@ -20,10 +20,10 @@ ab_glyph_rasterizer = { version = "=0.1.10", default-features = false, features 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
 # shipped code today; `target-tier` is the plan's (phase-5.md, "Crates"):
 # page-controlled coordinates in arithmetic, so Tier 1 (Kani harnesses in
-# src/proofs.rs). The tier stays 0 until CI's full verification has run those
-# harnesses green.
+# src/proofs.rs). Raised to 1 with the harnesses
+# passing; stands only once CI's full verification has run them green.
 [package.metadata.clazel]
-tier = 0
+tier = 1
 target-tier = 1
 
 [lints]
