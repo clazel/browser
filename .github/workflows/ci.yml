@@ -1,13 +1,18 @@
 # Runs the checks in docs/VERIFICATION.md, in full, on every push to main,
-# every manual run (Actions, "Run workflow", which needs write access to the
-# repository) and every pull request. On a pull request the proofs (the
-# `crate` jobs, which take hours) wait for a person to approve them: they
-# need the `approval` job, which uses the `full-verification` environment,
-# whose required reviewers are set in the repository's settings
-# (Environments). Until one of them approves ("Review deployments" on the
-# run), the proofs do not start and `Full verification` stays pending, so
-# opening pull requests, however many, starts only the cheap jobs. Every push
-# to a pull request starts a new run, which needs a new approval. The full
+# every merge-queue entry and every manual run (Actions, "Run workflow",
+# which needs write access to the repository). On a pull request it runs the
+# same jobs, but the proofs only for the crates the pull request changes and
+# the crates that depend on them (`cargo xtask crates --changed`,
+# xtask/src/changed.rs): the merge queue's full run is the gate before main.
+# On a pull request the proofs (the `crate` jobs, which take hours) also
+# wait for a person to approve them: they need the `approval` job, which
+# uses the `full-verification` environment, whose required reviewers are set
+# in the repository's settings (Environments). Until one of them approves
+# ("Review deployments" on the run), the proofs do not start and `Full
+# verification` stays pending, so opening pull requests, however many,
+# starts only the cheap jobs. Every push to a pull request starts a new run,
+# which needs a new approval. A merge-queue run needs none: adding a pull
+# request to the queue is already a person's decision. The full
 # verification is split into parts (xtask/src/parts.rs) so that no job comes
 # near GitHub's six-hour limit:
 #
@@ -15,10 +20,17 @@
 #             overrides, escape hatches, tier declarations, pins, allowlist),
 #             which fail in a minute or two so obvious mistakes show up early;
 #             then the crate groups (`cargo xtask crates`) for the matrix
-#             below, so a new crate cannot be left out.
-#   approval  pull requests only, after `crates` passed: waits for a
-#             reviewer of the `full-verification` environment to approve
-#             the proof jobs, and does nothing else. It checks out no code.
+#             below, so a new crate cannot be left out. On a pull request,
+#             only the groups of the crates it changes or that depend on
+#             one it changes, against the base it merges into (`HEAD^1` of
+#             the merge commit GitHub checks out); a change to Cargo.lock
+#             selects the crates whose locked packages changed, and a change
+#             to anything shared (the workspace manifest, toolchain pins,
+#             scripts/, xtask/) selects every crate.
+#   approval  pull requests only, after `crates` passed and if it selected
+#             a crate: waits for a reviewer of the `full-verification`
+#             environment to approve the proof jobs, and does nothing else.
+#             It checks out no code.
 #   base      `verify --part base`: static checks, rustfmt, clippy and tests
 #             over the whole workspace.
 #   base-windows the base part on Windows x86-64: the AppContainer sandbox
@@ -27,14 +39,19 @@
 #             No setup.sh (it supports Linux and macOS): the base part needs
 #             only the pinned Rust toolchain. Proofs, harnesses and Miri are
 #             not repeated, as on macOS.
-#   miri      `verify --part miri`: the workspace's tests under Miri.
+#   miri      `verify --part miri <names>`: the tests under Miri, one job per
+#             crate group of `crates` (the same groups as the `crate` jobs),
+#             so no crate waits for another; run together in one job they
+#             took almost three hours. On a pull request, only the selected
+#             groups, as for the proofs, but with no approval: Miri was never
+#             behind it. Not at all when no crate is selected.
 #   base-macos the base part on macOS arm64: the Seatbelt sandbox, the demo,
 #             the host and escape tests, and the macOS-only code under
 #             clippy; then `verify --part miri clazel-sys`, the one crate with
 #             macOS-only code that has tests Miri can run. The workspace is
 #             not repeated under Miri there: Miri cannot run foreign calls, so
 #             every sandbox test is ignored under it on both platforms, and
-#             the rest is portable Rust that the `miri` job already
+#             the rest is portable Rust that the `miri` jobs already
 #             interprets with the same pinned nightly. Proofs and harnesses
 #             are not repeated either: Verus and Kani give the same answer
 #             for the same pinned versions on either platform.
@@ -46,9 +63,12 @@
 #             only once `approval` passed.
 #   assemble  `verify --part assemble`, the job named `Full verification`:
 #             fails unless every job above passed (`approval` is skipped
-#             outside pull requests), then checks that every crate's
-#             measurements are present and from this commit, and reports
-#             whether docs/STATUS.md's table and images match them.
+#             outside pull requests, and `approval`, `miri` and `crate` on
+#             a pull request that selected no crate), then checks that every
+#             crate's measurements are present and from this commit, and
+#             reports whether docs/STATUS.md's table and images match them.
+#             On a pull request, every selected crate's measurements, with
+#             the others' rows carried over from the committed table.
 #   table     on pushes to main only, after `assemble` passed: writes
 #             docs/STATUS.md's table and the status images from the same
 #             measurements (`verify --part assemble --write`) and, if they
@@ -97,6 +117,8 @@ on:
       - docs/status.svg
       - docs/status-detail.svg
   pull_request:
+  # The merge queue's run is the full one, and the gate before main.
+  merge_group:
   workflow_dispatch:
 
 permissions:
@@ -120,6 +142,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # On a pull request, the merge commit and its first parent, the
+          # base it merges into, to select the changed crates against.
+          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 1 }}
       # rustup reads rust-toolchain.toml and installs the pinned toolchain.
       - name: Install Rust
         run: rustup toolchain install
@@ -127,7 +152,16 @@ jobs:
         run: cargo xtask check
       - id: list
         name: cargo xtask crates
-        run: echo "list=$(cargo xtask crates)" >> "$GITHUB_OUTPUT"
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            list=$(cargo xtask crates --changed HEAD^1)
+          else
+            list=$(cargo xtask crates)
+          fi
+          echo "$list"
+          echo "list=$list" >> "$GITHUB_OUTPUT"
 
   base:
     name: Verify (base)
@@ -234,9 +268,17 @@ jobs:
         run: cargo xtask verify --part base
 
   miri:
-    name: Verify (Miri)
+    # One job per crate group, as for `crate`; no approval (see the header).
+    name: Verify (Miri, ${{ contains(matrix.crate, ',') && 'crates without proofs' || matrix.crate }})
+    needs: crates
+    if: needs.crates.outputs.list != '[]'
     runs-on: ubuntu-24.04
     timeout-minutes: 360
+    strategy:
+      # Run every group, so one failure does not hide another.
+      fail-fast: false
+      matrix:
+        crate: ${{ fromJSON(needs.crates.outputs.list) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -250,8 +292,8 @@ jobs:
         run: scripts/setup.sh
       # No AppArmor step: tests that spawn the sandboxed renderer are
       # ignored under Miri.
-      - name: Verify (Miri)
-        run: cargo xtask verify --part miri
+      - name: Verify (Miri, ${{ matrix.crate }})
+        run: cargo xtask verify --part miri "${{ matrix.crate }}"
 
   approval:
     # The proofs take hours: on a pull request a reviewer of this
@@ -259,7 +301,7 @@ jobs:
     # approval, so one review starts every proof job of the run.
     name: Approve the proofs
     needs: crates
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && needs.crates.outputs.list != '[]'
     environment: full-verification
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -272,9 +314,10 @@ jobs:
     name: Verify ${{ contains(matrix.crate, ',') && 'crates without proofs' || matrix.crate }}
     needs: [crates, approval]
     # After an approval on a pull request; `approval` is skipped, and not
-    # needed, everywhere else.
+    # needed, everywhere else. Not at all when no crate is selected.
     if: >-
       ${{ !cancelled() && needs.crates.result == 'success' &&
+      needs.crates.outputs.list != '[]' &&
       (needs.approval.result == 'success' ||
       (github.event_name != 'pull_request' && needs.approval.result == 'skipped')) }}
     runs-on: ubuntu-24.04
@@ -337,12 +380,17 @@ jobs:
         env:
           NEEDS: ${{ toJSON(needs) }}
           EVENT: ${{ github.event_name }}
+          LIST: ${{ needs.crates.outputs.list }}
         run: |
-          # `approval` is skipped outside pull requests, and only there.
-          bad=$(echo "$NEEDS" | jq -r --arg event "$EVENT" '
+          # `approval` is skipped outside pull requests, and only there;
+          # `approval`, `miri` and `crate` are skipped on a pull request
+          # that selected no crate, and only then.
+          none=$([ "$EVENT" = pull_request ] && [ "$LIST" = "[]" ] && echo true || echo false)
+          bad=$(echo "$NEEDS" | jq -r --arg event "$EVENT" --argjson none "$none" '
             to_entries[]
             | select(.value.result != "success")
             | select(.key != "approval" or $event == "pull_request" or .value.result != "skipped")
+            | select(((.key == "approval" or .key == "miri" or .key == "crate") and $none and .value.result == "skipped") | not)
             | "\(.key): \(.value.result)"')
           if [ -n "$bad" ]; then
             echo "Not every job passed:"
@@ -352,16 +400,27 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # As in `crates`: the base, to select the same crates.
+          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 1 }}
       - name: Install Rust
         run: rustup toolchain install
       - name: Download measurements
+        if: needs.crates.outputs.list != '[]'
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: part-*
           path: parts
           merge-multiple: true
+      # On a pull request, the selected crates' parts only (`--changed`).
       - name: Assemble
-        run: cargo xtask verify --part assemble --metrics parts
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            cargo xtask verify --part assemble --metrics parts --changed HEAD^1
+          else
+            cargo xtask verify --part assemble --metrics parts
+          fi
 
   table:
     name: Update status table
