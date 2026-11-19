@@ -46,8 +46,10 @@ instruction table: no bytecode ever runs on font bytes.
 
 ## Verification
 
-Tier: `tier = 0`, `target-tier = 1` in `Cargo.toml`. The tier is raised only
-after CI's full verification has run the harnesses below green.
+Tier: `tier = 1`, `target-tier = 1` in `Cargo.toml`. The claim stands only once CI's
+full verification of the pull request that raised the tier has run the harnesses below
+green. It covers what the harnesses cover, each on every input within its stated bound;
+the "Not done" list below is not covered by a harness.
 
 Kani harnesses (`src/proofs.rs`): no panic, no arithmetic overflow and no read
 outside a slice, on every input within these bounds, with every loop's
