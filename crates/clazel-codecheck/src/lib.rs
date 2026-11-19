@@ -47,6 +47,7 @@ pub mod decode_all;
 pub mod examples;
 pub mod lemmas;
 pub mod safety;
+pub mod safety_inv;
 pub mod safety_sem;
 pub mod scan_exec;
 pub mod spec;
