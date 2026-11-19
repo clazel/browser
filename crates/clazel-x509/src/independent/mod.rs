@@ -37,7 +37,8 @@
 //!   RFC 5280, RFC 3279, RFC 4055, RFC 5480 and RFC 8410, written later by
 //!   another author under the same rule; its header lists its sources and
 //!   what that author did and did not read. `spki_examples` are its sanity
-//!   checks. No equivalence proof covers it yet.
+//!   checks. `equivalence_spki` proves its classification
+//!   against `spki/spec.rs`'s.
 //! - `examples`: sanity checks that Verus evaluates.
 //! - `equivalence`: the proof, with its domain and what it leaves unproven.
 //!   `equivalence_der`, `_time`, `_name`, `_structures`, `_extensions` and
@@ -68,6 +69,7 @@ pub mod equivalence_name_constraints;
 pub mod equivalence_path;
 pub mod equivalence_requirements;
 pub mod equivalence_signature;
+pub mod equivalence_spki;
 pub mod equivalence_structures;
 pub mod equivalence_tbs;
 pub mod equivalence_time;
