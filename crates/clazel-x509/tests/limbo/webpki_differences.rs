@@ -33,6 +33,7 @@ const WEBPKI_DIFFERENCES: &[(&str, &str, &str)] = &[
     ("webpki::nc::intermediate-permitted-excluded-subtrees-both-null", "webpki", ANCHOR_OR_ISSUER),
     ("rfc5280::nc::not-allowed-in-ee-critical", "webpki", LEAF),
     ("rfc5280::san::underscore-dns", "webpki", LEAF),
+    ("rfc5280::san::noncritical-with-empty-subject", "webpki", LEAF),
     ("rfc5280::leaf-ku-keycertsign", "webpki", LEAF),
     ("webpki::san::public-suffix-multi-label-wildcard-san", "webpki", LEAF),
     ("rfc5280::nc::not-allowed-in-ee-noncritical", "webpki", LEAF_CONSTRAINTS),
