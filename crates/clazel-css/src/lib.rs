@@ -6,6 +6,7 @@
 //!
 //! Tier: see `[package.metadata.clazel]` in `Cargo.toml` and `docs/VERIFICATION.md`.
 
+pub mod independent;
 pub mod input;
 pub mod parser;
 pub mod tokenizer;
