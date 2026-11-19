@@ -11,7 +11,8 @@
 //!   out for (4 bytes each, little-endian; [`Laid`]), then the list's bytes as
 //!   `clazel_displaylist` encodes them, at most [`LIST_MAX`]. The IPC frame
 //!   (`clazel_ipc`'s `MAX_FRAME`, 1 MiB) is too small for a list with masks (the
-//!   validator allows 64 MiB of live coverage), and a list is not CBOR.
+//!   validator allows 64 MiB of live coverage and 256 MiB of live images), and a list is not
+//!   CBOR.
 //! - **Why a list names its viewport.** The kernel tells the renderer
 //!   (`Viewport`) and the GPU process (`GpuViewport`) of a resize in one step,
 //!   on two sockets, and the GPU process reads its two inputs on two threads, so
@@ -41,11 +42,16 @@ use std::io::{self, Read, Write};
 
 use crate::geom::MAX_VIEWPORT_SIDE;
 
-/// The largest list the GPU process reads, in bytes: 256 MiB. Item 6.10 grew
-/// `clazel_displaylist::spec::MAX_LIST_BYTES` to 384 MiB for image uploads, so until
-/// 6.12 decides this limit (or a second channel for uploads) it is the tighter one:
-/// a list between the two is refused here, never misread.
-pub const LIST_MAX: usize = 1 << 28;
+/// The largest list the GPU process reads, in bytes: the display list's own limit,
+/// `clazel_displaylist::spec::MAX_LIST_BYTES`, 384 MiB (2^27 for everything but
+/// images, as item 5.17a set it, and 2^28 more for the image uploads of item 6.10).
+/// Item 6.12 settles the caveat 6.10 left: this limit was 256 MiB, below the list's,
+/// so a valid list between the two would have been refused here. It is the list's
+/// limit now, and a test says so, so the two cannot drift apart again. **Whether
+/// uploads should instead leave the list socket for a second channel is not decided
+/// here**: item 6.12's measurement (`tests/upload_measure.rs`) is the evidence the
+/// maintainer decides it on.
+pub const LIST_MAX: usize = clazel_displaylist::spec::MAX_LIST_BYTES;
 
 /// The ring's slots per GPU process (the kernel's ring of 3, item 5.18).
 pub const SLOTS: u32 = 3;
@@ -226,6 +232,15 @@ mod tests {
         assert_eq!(read_list(&mut r).ok().flatten(), Some((a, b"abc".to_vec())));
         assert_eq!(read_list(&mut r).ok().flatten(), Some((b, Vec::new())));
         assert!(matches!(read_list(&mut r), Ok(None)));
+    }
+
+    /// The socket takes every list the validator allows, and no longer one.
+    #[test]
+    fn the_socket_limit_is_the_lists() {
+        assert_eq!(LIST_MAX, 402_653_184);
+        assert_eq!(LIST_MAX, (1 << 27) + (1 << 28));
+        // A frame's length word holds the list and the viewport.
+        assert!(u32::try_from(LIST_MAX.saturating_add(8)).is_ok());
     }
 
     #[test]

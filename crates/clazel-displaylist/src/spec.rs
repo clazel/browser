@@ -69,9 +69,11 @@
 //!   [`MAX_LIST_BYTES`] is 2^27 + 2^28. That is room for one upload of the whole image
 //!   budget beside the 2^27 bytes of everything else. 6.10 allows "uploads move to a
 //!   second channel if 6.12's prototype shows copying through the socket is too slow";
-//!   that is decided there, and if it happens this limit shrinks again. Until then
-//!   `clazel-gpu`'s socket limit (`LIST_MAX`, 256 MiB) is the tighter of the two, and
-//!   refuses a list between them.
+//!   that is decided there, and if it happens this limit shrinks again. Item 6.12
+//!   made `clazel-gpu`'s socket limit (`LIST_MAX`) this limit, so no list the validator
+//!   allows is refused by the socket, and measured the upload (`clazel-gpu`
+//!   `tests/upload_measure.rs`); the second channel is not built, and whether to
+//!   build it is the maintainer's decision.
 //! - **A draw's source rectangle is checked against the image's size at that point**,
 //!   so it is a rule of the walk and not of the item: [`masks_after`] refuses a draw
 //!   whose source is not inside its image. An empty source rectangle is inside (it draws
