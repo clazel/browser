@@ -180,6 +180,23 @@ var c;",
     }
 }
 
+/// Productions only a sloppy-mode `Script` has.
+#[test]
+fn covered_sloppy_programs_are_verified() {
+    for s in [
+        "with (a) b;",
+        "with (a) { b = 1; }",
+        "for (a.b of c) ;",
+        "for (a.b.c in d) ;",
+        "for (x of y) with (x) z;",
+    ] {
+        assert!(
+            derivation(s, SourceGoal::Script) == Some(Derivation::Verified),
+            "{s}"
+        );
+    }
+}
+
 #[test]
 fn other_programs_are_unsupported_not_failed() {
     for s in ["for (a, b;;) ;", "a?.b;"] {

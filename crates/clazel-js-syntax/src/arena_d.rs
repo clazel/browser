@@ -6271,7 +6271,7 @@ pub fn check_derivation(
             NodeKind::DebuggerStatement => check_debugger(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
             NodeKind::ThrowStatement => check_throw(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
             NodeKind::BreakStatement | NodeKind::ContinueStatement => check_jump(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
-            NodeKind::WhileStatement => check_while(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
+            NodeKind::WhileStatement | NodeKind::WithStatement => check_while(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
             NodeKind::DoWhileStatement => check_do_while(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
             NodeKind::LabelledStatement => check_labelled(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
             NodeKind::TryStatement => check_try(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
@@ -6707,7 +6707,10 @@ proof fn lemma_words2()
         cps("case"@) =~= seq![0x63u32, 0x61, 0x73, 0x65],
         cps("default"@) =~= seq![0x64u32, 0x65, 0x66, 0x61, 0x75, 0x6C, 0x74],
         cps("}"@) =~= seq![0x7Du32],
+        cps("with"@) =~= seq![0x77u32, 0x69, 0x74, 0x68],
 {
+    reveal_strlit("with");
+    assert("with"@ =~= seq!['w', 'i', 't', 'h']);
     reveal_strlit("do");
     reveal_strlit("while");
     reveal_strlit("throw");
@@ -7489,10 +7492,10 @@ proof fn lemma_while_done(
         0 <= m < a.nodes.len(),
         0 <= t < m,
         0 <= c < m,
-        a.nodes[m].kind == NodeKind::WhileStatement,
+        a.nodes[m].kind == NodeKind::WhileStatement || a.nodes[m].kind == NodeKind::WithStatement,
         a.nodes[m].children =~= seq![t, c],
-        is_kw(ts, x, "while"@),
         is_p(ts, x + 1, "("@),
+        is_kw(ts, x, if a.nodes[m].kind == NodeKind::WhileStatement { "while"@ } else { "with"@ }),
         lvl(a, t) >= -1,
         node_done(a, ts, t, cx, x + 2, mt),
         is_p(ts, mt, ")"@),
@@ -7513,12 +7516,20 @@ proof fn lemma_while_done(
     assert(ed(a, ts, t, x + 2) == mt);
     assert(a.nodes[m].children.len() == 2);
     assert(is_p(ts, mt, ")"@));
-    assert(d_stmt(a, ts, m, cx, x, j));
+    if a.nodes[m].kind == NodeKind::WhileStatement {
+        assert(is_kw(ts, x, "while"@));
+        assert(d_stmt(a, ts, m, cx, x, j));
+    } else {
+        assert(a.nodes[m].kind == NodeKind::WithStatement);
+        assert(is_kw(ts, x, "with"@));
+        assert(d_stmt(a, ts, m, cx, x, j));
+    }
     lemma_ed_of(a, ts, m, x, j);
 }
 
 /// §14.7.3 `while ( Expression ) Statement`.
 #[verifier::spinoff_prover]
+#[verifier::rlimit(100)]
 fn check_while(
     src: &[u32],
     nodes: &[Node],
@@ -7558,7 +7569,7 @@ fn check_while(
             return None;
         },
     };
-    if !matches!(nd.kind, NodeKind::WhileStatement) || nd.children.len() != 2 {
+    if !matches!(nd.kind, NodeKind::WhileStatement | NodeKind::WithStatement) || nd.children.len() != 2 {
         return None;
     }
     let t = match kid_of(nodes, m, 0) {
@@ -7595,7 +7606,12 @@ fn check_while(
     if !c_ok || lv_t < -1 || lo_t != x.saturating_add(2) || lo_c != mt.saturating_add(1) {
         return None;
     }
-    if !word_at(src, nodes, toks, gaps, x, &[0x77, 0x68, 0x69, 0x6C, 0x65], Ghost(GW { g, w: "while"@ }))
+    let kw_ok = if matches!(nd.kind, NodeKind::WhileStatement) {
+        word_at(src, nodes, toks, gaps, x, &[0x77, 0x68, 0x69, 0x6C, 0x65], Ghost(GW { g, w: "while"@ }))
+    } else {
+        word_at(src, nodes, toks, gaps, x, &[0x77, 0x69, 0x74, 0x68], Ghost(GW { g, w: "with"@ }))
+    };
+    if !kw_ok
         || !punct_at(src, nodes, toks, gaps, x.saturating_add(1), 0x28, Ghost(GW { g, w: "("@ }))
         || !punct_at(src, nodes, toks, gaps, mt, 0x29, Ghost(GW { g, w: ")"@ }))
         || !end_ok(src, nodes, toks, gaps, nd.end, j, Ghost(g)) || j <= x {
@@ -7618,6 +7634,11 @@ fn check_while(
         lemma_inv_get(a, g.ts, done.cxs@, done.lo@, done.hi@, done.lv@, m as int, c as int, g.cx, 1);
         assert(lvl(a, t as int) >= -1);
         assert(is_statement_kind(kd(a, c as int)));
+        if matches!(nd.kind, NodeKind::WhileStatement) {
+            assert(is_kw(g.ts, x as int, "while"@));
+        } else {
+            assert(is_kw(g.ts, x as int, "with"@));
+        }
         lemma_while_done(a, g.ts, g.cx, m as int, t as int, c as int, x as int, mt as int, j as int);
     }
     Some((x, j, -100))
@@ -11609,7 +11630,7 @@ fn check_for_in_of(
     let kh = kind_at(nodes, h);
     let decl = matches!(kh, NodeKind::ForDeclaration);
     // A head that is not a declaration is an identifier reference, not `let` (`async` for `of`).
-    let head_ok = decl || (matches!(kh, NodeKind::IdentifierReference)
+    let head_ok = decl || (matches!(kh, NodeKind::IdentifierReference | NodeKind::MemberExpression)
         && not_word_at(src, nodes, toks, gaps, s, &[0x6C, 0x65, 0x74], Ghost(GW { g, w: "let"@ }))
         && (!sh.of || not_word_at(src, nodes, toks, gaps, s, &[0x61, 0x73, 0x79, 0x6E, 0x63], Ghost(GW { g, w: "async"@ }))));
     let head_first_ok = if decl {
@@ -11618,12 +11639,15 @@ fn check_for_in_of(
             None => false,
         }
     } else {
-        match nodes.get(h) {
-            Some(hn) => hn.children.is_empty(),
-            None => false,
+        match kid_of(nodes, h, 0) {
+            Some(c) => !matches!(kind_at(nodes, c), NodeKind::VariableDeclaration),
+            None => match nodes.get(h) {
+                Some(hn) => hn.children.is_empty(),
+                None => false,
+            },
         }
     };
-    let (lo_h, mh, _) = match done_at(done, h) {
+    let (lo_h, mh, lv_h) = match done_at(done, h) {
         Some(r) => r,
         None => {
             return None;
@@ -11647,7 +11671,7 @@ fn check_for_in_of(
         word_at(src, nodes, toks, gaps, mh, &[0x69, 0x6E], Ghost(GW { g, w: "in"@ }))
     };
     let e_ok = if sh.of { lv_e >= 0 } else { lv_e >= -1 };
-    if !head_ok || !head_first_ok || lo_h != s || !kw_ok || !e_ok || lo_e != mh.saturating_add(1)
+    if !head_ok || !head_first_ok || (!decl && lv_h < 14) || lo_h != s || !kw_ok || !e_ok || lo_e != mh.saturating_add(1)
         || !punct_at(src, nodes, toks, gaps, q, 0x29, Ghost(GW { g, w: ")"@ }))
         || !stmt_kind_exec(kind_at(nodes, b)) || lo_b != q.saturating_add(1)
         || !end_ok(src, nodes, toks, gaps, nd.end, j, Ghost(g)) || j <= x {
@@ -11683,8 +11707,10 @@ fn check_for_in_of(
         }
         // The head.
         if !decl {
-            assert(kd(a, h as int) == NodeKind::IdentifierReference);
-            assert(lvl(a, h as int) == 17);
+            assert(lvl(a, h as int) == lv_h as int);
+            assert(lvl(a, h as int) >= 14);
+            assert(kd(a, h as int) == NodeKind::IdentifierReference || kd(a, h as int)
+                == NodeKind::MemberExpression);
             assert(is_destructuring_target(a, h as int));
         }
         assert(a.nodes[h as int] == nodes@[h as int]@);
@@ -11698,9 +11724,11 @@ fn check_for_in_of(
                 if decl {
                     let hc = a.nodes[h as int].children[0];
                     assert(kid(kids(a, h as int), 0) == hc);
-                } else {
-                    assert(a.nodes[h as int].children.len() == 0);
+                } else if a.nodes[h as int].children.len() == 0 {
                     assert(kid(kids(a, h as int), 0) == -1int);
+                } else {
+                    let hc = a.nodes[h as int].children[0];
+                    assert(kid(kids(a, h as int), 0) == hc);
                 }
             }
         }
