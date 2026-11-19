@@ -15,10 +15,10 @@ read-fonts = "=0.44.0"
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
 # shipped code today; `target-tier` is what the policy requires: a parser of
-# untrusted bytes, so Tier 1 (Kani harnesses in src/proofs.rs). The tier stays
-# 0 until CI's full verification has run those harnesses green.
+# untrusted bytes, so Tier 1 (Kani harnesses in src/proofs.rs). Raised to 1 with the
+# harnesses passing; stands only once CI's full verification has run them green.
 [package.metadata.clazel]
-tier = 0
+tier = 1
 target-tier = 1
 
 [lints]
