@@ -352,6 +352,20 @@
       }
     },
     {
+      "id": "name-constraints-one-field-present-at-decode",
+      "file": "src/name_constraints/spec.rs",
+      "find": "if pos == end {\n        None\n    } else {",
+      "replace": "if pos == end {\n        Some(NameConstraints { permitted_subtrees: None, excluded_subtrees: None })\n    } else {",
+      "expect": "killed",
+      "reason": "RFC 5280 \u00a74.2.1.10: either permittedSubtrees or excludedSubtrees MUST be present (X.509 \u00a79.4.2.2: at least one shall be present), so an empty NameConstraints is refused at decode.",
+      "certificate": {
+        "file": "src/name_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_empty_name_constraints_are_rejected()",
+        "witness": "parse_name_constraints(seq![0x30u8,0x00]) is Some"
+      },
+      "module": "name_constraints::certificates"
+    },
+    {
       "id": "name-constraints-general-subtrees-nonempty",
       "file": "src/name_constraints/spec.rs",
       "find": "if acc.len() > 0 { Some((acc, end)) } else { None }",
@@ -417,7 +431,7 @@
       "certificate": {
         "file": "src/name_constraints/mutation_certificates.rs",
         "lemma": "super::certificates::lemma_trailing_name_constraints_bytes_are_rejected()",
-        "witness": "parse_name_constraints(seq![0x30u8,0x00,0x05,0x00]) is Some"
+        "witness": "parse_name_constraints(seq![0x30u8,0x07,0xa1,0x05,0x30,0x03,0x82,0x01,b'a',0x05,0x00]) is Some"
       },
       "module": "name_constraints::certificates"
     },
