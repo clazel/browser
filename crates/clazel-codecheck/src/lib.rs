@@ -46,6 +46,7 @@ pub mod contract;
 pub mod decode_all;
 pub mod examples;
 pub mod lemmas;
+pub mod safety;
 pub mod scan_exec;
 pub mod spec;
 pub mod uniq;
