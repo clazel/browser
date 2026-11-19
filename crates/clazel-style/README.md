@@ -51,11 +51,16 @@ Syntax says), and `values::get_property_value` is CSSOM's `getPropertyValue`.
 **Parsed, no effect in Phase 5** (HN uses them; a later phase adds only their effect):
 `cursor` (`<url>` with hotspot, and the keywords), `pointer-events`, `resize`, `transform`
 (`none` and the 2D functions of CSS Transforms 1), `page-break-before`, `text-overflow`
-(one value), `background-image` (`none`, `<url>`, `linear-gradient()` and
-`repeating-linear-gradient()`), `background-repeat`, `background-attachment`,
-`background-position` (one or two values), `background-size`, `background-origin`,
-`background-clip`, `font-variant-caps`, `font-stretch`, `text-decoration-thickness`, and
+(one value), `background-attachment`, `font-variant-caps`, `font-stretch`, `text-decoration-thickness`, and
 the border styles other than `solid` and `none` (drawn `solid`).
+
+**Computed from item 6.11** (`ComputedStyle::backgrounds`, CSS Backgrounds 3 §2.1): `background-image`
+(`none`, `<url>` made absolute against its sheet by `cascade/urls.rs`; a gradient is a layer
+that paints nothing), `background-repeat`, `background-position` (one or two values, keywords as
+percentages), `background-size`, `background-origin` and `background-clip`, one layer per
+`background-image` item with the other lists repeated to match. The sheet's URL is
+`SheetSource::url` (a link's, set by the renderer) and `Sources::document_url`; unset, a relative
+`url()` stays relative.
 
 **Not in the subset, so invalid and dropped:** `calc()` and the other math functions,
 `var()`, viewport and container units, the intrinsic sizing keywords (`min-content`,

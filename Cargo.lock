@@ -526,6 +526,7 @@ dependencies = [
  "clazel-mime",
  "clazel-selectors",
  "clazel-treebuilder",
+ "clazel-url",
 ]
 
 [[package]]

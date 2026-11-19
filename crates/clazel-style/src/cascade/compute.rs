@@ -24,9 +24,10 @@
 //! modules) leaves the property defaulted, as if the declaration were invalid.
 
 use super::computed::{
-    BLACK, ComputedStyle, DecorationLines, DecorationStyle, Display, Family, FontStyle, LineHeight,
-    LineStyle, ListStyleType, Lp, MEDIUM_PX64, MaxSize, Overflow, OverflowWrap, Rgba, Size,
-    TextAlign, TextIndent, VerticalAlign, Visibility, WhiteSpace, WordBreak,
+    BLACK, BgBox, BgImage, BgRepeat, BgSize, ComputedStyle, DecorationLines, DecorationStyle,
+    Display, Family, FontStyle, LineHeight, LineStyle, ListStyleType, Lp, MEDIUM_PX64, MaxSize,
+    Overflow, OverflowWrap, Rgba, Size, TextAlign, TextIndent, VerticalAlign, Visibility,
+    WhiteSpace, WordBreak,
 };
 use crate::values::Specified;
 use crate::values::Wide;
@@ -315,6 +316,117 @@ pub fn font_weight(v: &[Component], w: Num) -> Option<Num> {
     }
 }
 
+/// The comma-separated layers of a `background-*` list: its components split at the commas
+/// that are not inside a function (a gradient's).
+fn layers(v: &[Component]) -> Vec<&[Component]> {
+    let mut out = Vec::new();
+    let (mut depth, mut start) = (0usize, 0usize);
+    for (i, c) in v.iter().enumerate() {
+        match c {
+            Component::Open(_) => depth = depth.saturating_add(1),
+            Component::Close => depth = depth.saturating_sub(1),
+            Component::Comma if depth == 0 => {
+                out.push(v.get(start..i).unwrap_or_default());
+                start = i.saturating_add(1);
+            }
+            _ => {}
+        }
+    }
+    out.push(v.get(start..).unwrap_or_default());
+    out
+}
+
+/// A comma-separated `background-*` list, each layer computed by `each`.
+fn bg_list<T>(v: &[Component], each: impl Fn(&[Component]) -> Option<T>) -> Option<Vec<T>> {
+    layers(v).into_iter().map(each).collect()
+}
+
+/// One `<bg-image>` (CSS Backgrounds 3 §2.3†): `none`, or an `<image>`. A `url()` computes
+/// to itself (`cascade/urls.rs` made it absolute); a gradient is kept as no image.
+fn bg_image(l: &[Component]) -> Option<BgImage> {
+    match l {
+        [Component::Keyword("none")] => Some(BgImage::None),
+        [Component::Url(u)] => Some(BgImage::Url(u.clone())),
+        [Component::Open(_), .., Component::Close] => Some(BgImage::None),
+        _ => None,
+    }
+}
+
+/// One `<repeat-style>` (§2.4†): `repeat-x` computes to `repeat no-repeat`, `repeat-y` to
+/// `no-repeat repeat`, a single keyword to that keyword twice, two keywords to a pair.
+fn bg_repeat(l: &[Component]) -> Option<[BgRepeat; 2]> {
+    let one = |k: &str| {
+        find(
+            &[
+                ("repeat", BgRepeat::Repeat),
+                ("space", BgRepeat::Space),
+                ("round", BgRepeat::Round),
+                ("no-repeat", BgRepeat::NoRepeat),
+            ],
+            k,
+        )
+    };
+    match l {
+        [Component::Keyword("repeat-x")] => Some([BgRepeat::Repeat, BgRepeat::NoRepeat]),
+        [Component::Keyword("repeat-y")] => Some([BgRepeat::NoRepeat, BgRepeat::Repeat]),
+        [Component::Keyword(a)] => one(a).map(|r| [r, r]),
+        [Component::Keyword(a), Component::Keyword(b)] => Some([one(a)?, one(b)?]),
+        _ => None,
+    }
+}
+
+/// One `<bg-position>` of one or two values (§2.6†): "If only one value is specified, the
+/// second value is assumed to be center"; `top`, `left` compute to 0%, `center` to 50%,
+/// `bottom`, `right` to 100%; "A pair of keywords can be reordered".
+fn bg_position(l: &[Component], em: i32, rem: i32) -> Option<[Lp; 2]> {
+    let pct = |n: i64| Lp::Percent(Num::from_int(n));
+    let edge = |k: &str| match k {
+        "left" | "top" => Some(pct(0)),
+        "center" => Some(pct(50)),
+        "right" | "bottom" => Some(pct(100)),
+        _ => None,
+    };
+    let value = |c: &Component| match c {
+        Component::Keyword(k) => edge(k),
+        other => lp(other, em, rem),
+    };
+    let vertical = |c: &Component| matches!(c, Component::Keyword("top" | "bottom"));
+    let horizontal = |c: &Component| matches!(c, Component::Keyword("left" | "right"));
+    match l {
+        [a] if vertical(a) => Some([pct(50), value(a)?]),
+        [a] => Some([value(a)?, pct(50)]),
+        [a, b] if vertical(a) || horizontal(b) => Some([value(b)?, value(a)?]),
+        [a, b] => Some([value(a)?, value(b)?]),
+        _ => None,
+    }
+}
+
+/// One `<bg-size>` (§2.9†): `cover`, `contain`, or one or two of `auto` and a non-negative
+/// `<length-percentage>`; "If only one value is given the second is assumed to be auto".
+fn bg_size(l: &[Component], em: i32, rem: i32) -> Option<BgSize> {
+    let one = |c: &Component| match c {
+        Component::Keyword("auto") => Some(None),
+        other => lp(other, em, rem).map(Some),
+    };
+    match l {
+        [Component::Keyword("cover")] => Some(BgSize::Cover),
+        [Component::Keyword("contain")] => Some(BgSize::Contain),
+        [a] => Some(BgSize::Explicit([one(a)?, None])),
+        [a, b] => Some(BgSize::Explicit([one(a)?, one(b)?])),
+        _ => None,
+    }
+}
+
+/// One `<visual-box>` of `background-origin` and `background-clip` (§2.7†, §2.8†).
+fn bg_box(l: &[Component]) -> Option<BgBox> {
+    match l {
+        [Component::Keyword("border-box")] => Some(BgBox::Border),
+        [Component::Keyword("padding-box")] => Some(BgBox::Padding),
+        [Component::Keyword("content-box")] => Some(BgBox::Content),
+        _ => None,
+    }
+}
+
 /// The value of one longhand, computed into `s` from its cascaded components `v`. `s`
 /// already holds the computed `font-size` and `color`, which the other properties read.
 fn compute_value(
@@ -522,14 +634,17 @@ fn compute_value(
                 _ => return None,
             };
         }
-        // "Parsed, no effect": cascaded and dropped.
-        L::BackgroundImage
-        | L::BackgroundRepeat
-        | L::BackgroundAttachment
-        | L::BackgroundPosition
-        | L::BackgroundSize
-        | L::BackgroundOrigin
-        | L::BackgroundClip
+        L::BackgroundImage => s.backgrounds.image = bg_list(v, bg_image)?,
+        L::BackgroundRepeat => s.backgrounds.repeat = bg_list(v, bg_repeat)?,
+        L::BackgroundPosition => {
+            s.backgrounds.position = bg_list(v, |l| bg_position(l, em, rem))?;
+        }
+        L::BackgroundSize => s.backgrounds.size = bg_list(v, |l| bg_size(l, em, rem))?,
+        L::BackgroundOrigin => s.backgrounds.origin = bg_list(v, bg_box)?,
+        L::BackgroundClip => s.backgrounds.clip = bg_list(v, bg_box)?,
+        // "Parsed, no effect": cascaded and dropped. `background-attachment` is `scroll`
+        // for every layer (listed in `cascade/mod.rs`).
+        L::BackgroundAttachment
         | L::FontVariantCaps
         | L::FontStretch
         | L::TextDecorationThickness
@@ -614,13 +729,13 @@ fn copy(s: &mut ComputedStyle, from: &ComputedStyle, l: Longhand) {
         L::BorderCollapse => s.border_collapse = from.border_collapse,
         L::TableLayout => s.table_layout_fixed = from.table_layout_fixed,
         L::ListStyleType => s.list_style_type = from.list_style_type.clone(),
-        L::BackgroundImage
-        | L::BackgroundRepeat
-        | L::BackgroundAttachment
-        | L::BackgroundPosition
-        | L::BackgroundSize
-        | L::BackgroundOrigin
-        | L::BackgroundClip
+        L::BackgroundImage => s.backgrounds.image = from.backgrounds.image.clone(),
+        L::BackgroundRepeat => s.backgrounds.repeat = from.backgrounds.repeat.clone(),
+        L::BackgroundPosition => s.backgrounds.position = from.backgrounds.position.clone(),
+        L::BackgroundSize => s.backgrounds.size = from.backgrounds.size.clone(),
+        L::BackgroundOrigin => s.backgrounds.origin = from.backgrounds.origin.clone(),
+        L::BackgroundClip => s.backgrounds.clip = from.backgrounds.clip.clone(),
+        L::BackgroundAttachment
         | L::FontVariantCaps
         | L::FontStretch
         | L::TextDecorationThickness

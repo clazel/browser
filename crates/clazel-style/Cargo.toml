@@ -18,6 +18,8 @@ clazel-encoding = { path = "../clazel-encoding" }
 clazel-mime = { path = "../clazel-mime" }
 # The cascade's selector matching and specificity (item 5.7, through item 5.5's crate).
 clazel-selectors = { path = "../clazel-selectors" }
+# `url()` in `background-image` made absolute against its sheet (item 6.11).
+clazel-url = { path = "../clazel-url" }
 
 [dev-dependencies]
 # The cascade's end-to-end tests parse their documents with the HTML tree builder.

@@ -119,6 +119,10 @@ pub struct SheetSource {
     pub disabled: bool,
     /// The sheet: a `style` element's always, a link's once loaded.
     pub sheet: Option<StyleSheet>,
+    /// The sheet's own URL, which its relative `url()`s resolve against (item 6.11): a link's
+    /// response URL, set by the renderer when the sheet loads; `None` for a `style` element
+    /// (its base is [`Sources::document_url`]) and for a link not yet loaded.
+    pub url: Option<Vec<u32>>,
 }
 
 /// One element's `style` attribute (CSS Style Attributes §4: its declarations "apply to the
@@ -142,6 +146,10 @@ pub struct Sources {
     /// True if the document is in quirks mode (DOM §4.5), which the stylesheet link quirk
     /// and the property values read.
     pub quirks: bool,
+    /// The document's base URL (HTML §2.5.2, "document base URL"), the base of a `style`
+    /// element's and a `style` attribute's relative `url()`s (item 6.11); set by the
+    /// renderer. `None` leaves them relative.
+    pub document_url: Option<Vec<u32>>,
 }
 
 /// A link's response, as the kernel delivers it (5.19).
@@ -280,6 +288,7 @@ fn style_block(arena: &Arena, id: usize, attributes: &[ExecAttr]) -> Option<Shee
         title: attribute(attributes, "title").unwrap_or_default().to_vec(),
         disabled: false,
         sheet: Some(StyleSheet::parse(&text)),
+        url: None,
     })
 }
 
@@ -326,6 +335,7 @@ fn stylesheet_link(id: usize, attributes: &[ExecAttr]) -> Option<SheetSource> {
         title: attribute(attributes, "title").unwrap_or_default().to_vec(),
         disabled: false,
         sheet: None,
+        url: None,
     })
 }
 
