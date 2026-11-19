@@ -340,9 +340,11 @@ pub proof fn lemma_plain_step(
         holds(s2, h, fs2),
         !(i is Jcc) && !(i is Jmp) ==> s2.rip == s.rip + instr_len(i),
         i is Jmp ==> s2.rip == s.rip + instr_len(i) + i->Jmp_rel,
-        i is Jcc ==> (s2.rip == s.rip + instr_len(i) + i->Jcc_rel || s2.rip == s.rip + instr_len(
-            i,
-        )),
+        i is Jcc ==> s2.rip == if jcc_cmovcc_setcc_spec(s, i->Jcc_cc) {
+            s.rip + instr_len(i) + i->Jcc_rel
+        } else {
+            s.rip + instr_len(i)
+        },
         s2.rgf.len() == 16,
 {
     super::lemmas::lemma_plain_ok_safe(fs, i);

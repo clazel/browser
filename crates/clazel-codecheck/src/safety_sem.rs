@@ -90,7 +90,7 @@ pub proof fn lemma_p2_vals()
     vstd::arithmetic::power2::lemma2_to64_rest();
 }
 
-proof fn lemma_wr64(s: State, r: u8, v: int)
+pub proof fn lemma_wr64(s: State, r: u8, v: int)
     requires
         s.rgf.len() == 16,
         r < 16,
@@ -104,7 +104,7 @@ proof fn lemma_wr64(s: State, r: u8, v: int)
     assert(0 <= loghead(64, v) < p2(64));
 }
 
-proof fn lemma_set_rgfi(s: State, sz: Size, r: u8, v: int)
+pub proof fn lemma_set_rgfi(s: State, sz: Size, r: u8, v: int)
     requires
         s.rgf.len() == 16,
         r < 16,
@@ -117,7 +117,7 @@ proof fn lemma_set_rgfi(s: State, sz: Size, r: u8, v: int)
     lemma_wr64(s, r, if sz is W32 { loghead(32, v) } else { v });
 }
 
-proof fn lemma_wr08(s: State, r: u8, v: int)
+pub proof fn lemma_wr08(s: State, r: u8, v: int)
     requires
         s.rgf.len() == 16,
         r < 16,
@@ -421,9 +421,11 @@ pub proof fn lemma_step_frame(u: spec_fn(nat) -> nat, s: State, i: Instr, s2: St
         },
         !(i is Jcc) && !(i is Jmp) && !(i is Ret) ==> s2.rip == s.rip + instr_len(i),
         i is Jmp ==> s2.rip == s.rip + instr_len(i) + i->Jmp_rel,
-        i is Jcc ==> (s2.rip == s.rip + instr_len(i) + i->Jcc_rel || s2.rip == s.rip + instr_len(
-            i,
-        )),
+        i is Jcc ==> s2.rip == if jcc_cmovcc_setcc_spec(s, i->Jcc_cc) {
+            s.rip + instr_len(i) + i->Jcc_rel
+        } else {
+            s.rip + instr_len(i)
+        },
 {
     match i {
         Instr::Jcc { cc, rel } => {},
