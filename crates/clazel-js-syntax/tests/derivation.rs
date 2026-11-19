@@ -82,6 +82,14 @@ var c;",
         "(async a => await a);",
         "(async (a) => 1);",
         "function f() { function g() { return 1 } return g }",
+        "var [a] = 1;",
+        "var [a, , b = 2, ...c] = d;",
+        "var {a, b: c, d = 3, ...e} = f;",
+        "let {a: {b}, c: [d, e]} = g;",
+        "const [x, [y, z], {w}] = h;",
+        "function f({a, b}, [c], d = 1, ...[e, f]) {}",
+        "function g(...{length}) {}",
+        "try { a } catch ({message}) { b }",
         "[];",
         "[1, 2, 3];",
         "[1, 2,];",
@@ -146,7 +154,7 @@ var c;",
 
 #[test]
 fn other_programs_are_unsupported_not_failed() {
-    for s in ["for (a, b;;) ;", "var [a] = 1;", "new a;", "a++;"] {
+    for s in ["for (a, b;;) ;", "new a;", "a++;", "class A {}"] {
         assert!(
             derivation(s, SourceGoal::Script) == Some(Derivation::Unsupported),
             "{s}"
