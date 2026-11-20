@@ -364,6 +364,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "clazel-jpeg"
+version = "0.0.0"
+dependencies = [
+ "clazel-image-shape",
+]
+
+[[package]]
 name = "clazel-kernel"
 version = "0.0.0"
 dependencies = [

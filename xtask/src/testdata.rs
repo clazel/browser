@@ -21,6 +21,7 @@ mod html5lib_tokenizer;
 mod html5lib_tree;
 mod http_state_dates;
 mod http_state_parser;
+mod jpeg;
 mod js;
 mod llhttp;
 mod nist_cavp_sigver;
@@ -190,6 +191,12 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         wycheproof_rsa::FILES,
     ),
     ("x509-limbo", x509_limbo::convert, x509_limbo::FILES),
+    (
+        "libjpeg-turbo-testimages",
+        jpeg::convert,
+        jpeg::FILES_TESTIMAGES,
+    ),
+    ("jpeg-corpus", jpeg::convert, jpeg::FILES_CORPUS),
 ];
 
 /// A converter for a binary artefact written beside a suite's Rust table.
