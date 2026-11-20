@@ -1,6 +1,6 @@
 //! Kani harnesses (Tier 1). Compiled only under `cargo kani`.
 //!
-//! Sixteen statements, bounded as the README lists. Under Kani the colour
+//! Fifty-seven harnesses, bounded as the README lists. Under Kani the colour
 //! cache is 8 entries (`MAX_CACHE_BITS` 3 in `work.rs`) so that a green
 //! alphabet is 288 symbols and a prefix code group 2,352 bytes; the code is
 //! the same code with other constants.
@@ -27,23 +27,30 @@
 //! - [`blend_px_any`]: alpha blending of any two pixels.
 //!
 //! **The step function, in parts** (the whole `step` does not fit the model
-//! checker: README)
-//! - [`vp8l_header_act_any`], [`vp8l_code_act_any`], [`vp8l_pixel_act_any`]:
-//!   one atomic action of the lossless decoder in a phase of each class, over
-//!   any state satisfying `Vp8l::inv`, any bits and **any contents** of every
-//!   scratch region: no panic, `inv` kept on `Ok`.
-//! - [`vp8l_finish_any`]: finishing an image of any role (colour table,
-//!   entropy image, transform data, or the main image with every inverse
-//!   transform): the same.
-//! - [`container_byte_any`]: one byte of the container in any phase but the
-//!   lossless payload, on a 2 by 2 canvas: the same for `Webp::state_inv`.
+//! checker: README). Each is one harness per phase or role, made by a macro
+//! below: with the phase symbolic, CBMC ran out of memory.
+//! - `act_harness!`: one atomic action of the lossless decoder in one phase
+//!   (32 harnesses, `act_signature` to `act_dist_extra`), over any state
+//!   satisfying `Vp8l::inv`, any bits and **any contents** of every scratch
+//!   region: no panic, `inv` kept on `Ok`. `act_build_code` bounds the
+//!   alphabet to 8 symbols (`huffman_build_any` covers `build` itself).
+//! - `finish_harness!`: finishing an image of each role (5 harnesses: colour
+//!   table, entropy image, the two transform images, the main image with
+//!   every inverse transform): the same.
+//! - `container_harness!`: one byte of the container in each phase but the
+//!   lossless payload (9 harnesses), on a 2 by 2 canvas: the same for
+//!   `Webp::state_inv`.
+//!
+//! **Solvers.** The pixel, finish and container harnesses use MiniSat:
+//! CaDiCaL and kissat each ran out of 4 GB on `act_red`, which MiniSat proves
+//! in 30 seconds. The others use kissat.
 
 use crate::compose::blend_px;
-use crate::decoder::any_webp;
+use crate::decoder::{Phase, any_webp};
 use crate::distance;
 use crate::huffman::{self, Decoded, get16};
 use crate::transform::{self, BLACK, px};
-use crate::vp8l::{Class, any_vp8l};
+use crate::vp8l::{P, Role, any_vp8l};
 use crate::work::{
     CACHE_ENTRIES, CL_ALPHABET, COUNTS_BYTES, GROUP_BYTES, MAX_GREEN, PALETTE_BYTES, Parts, Scratch,
 };
@@ -181,7 +188,7 @@ fn predict_any() {
 
 /// The inverse predictor transform of any row of 3 pixels.
 #[kani::proof]
-#[kani::unwind(6)]
+#[kani::unwind(13)]
 fn predictor_row_any() {
     let mut buf: [u8; 24] = kani::any();
     let before = buf;
@@ -340,66 +347,119 @@ fn with_scratch(f: impl FnOnce(&mut Scratch<'_>, &mut [u8; 16])) {
     f(&mut s, &mut target);
 }
 
-/// One action of the header, transform, colour cache and meta prefix reads.
-#[kani::proof]
-#[kani::solver(kissat)]
-#[kani::unwind(40)]
-fn vp8l_header_act_any() {
-    let mut v = any_vp8l(Class::Header, GROUP_BYTES);
-    with_scratch(|s, target| {
-        if v.kani_act(s, target).is_ok() {
-            assert!(v.kani_inv(GROUP_BYTES));
+/// One action of the lossless decoder in `$phase`, over any state satisfying
+/// `inv`, any bits and any scratch contents: no panic, `inv` kept on `Ok`.
+/// One harness per phase (`any_vp8l` says why).
+macro_rules! act_harness {
+    ($name:ident, $phase:ident, $unwind:literal, $alphabet:expr, $solver:ident) => {
+        #[kani::proof]
+        #[kani::solver($solver)]
+        #[kani::unwind($unwind)]
+        fn $name() {
+            let mut v = any_vp8l(P::$phase, None, GROUP_BYTES, $alphabet);
+            with_scratch(|s, target| {
+                if v.kani_act(s, target).is_ok() {
+                    assert!(v.kani_inv(GROUP_BYTES));
+                }
+            });
         }
-    });
+    };
 }
 
-/// One action of reading a prefix code.
-#[kani::proof]
-#[kani::solver(kissat)]
-#[kani::unwind(300)]
-fn vp8l_code_act_any() {
-    let mut v = any_vp8l(Class::Codes, GROUP_BYTES);
-    with_scratch(|s, target| {
-        if v.kani_act(s, target).is_ok() {
-            assert!(v.kani_inv(GROUP_BYTES));
+/// No bound on the alphabet beyond `inv` (at most `MAX_GREEN`).
+const ANY_ALPHABET: u16 = u16::MAX;
+
+// The header, transform, colour cache and meta prefix reads.
+act_harness!(act_signature, Signature, 20, ANY_ALPHABET, kissat);
+act_harness!(act_width, Width, 20, ANY_ALPHABET, kissat);
+act_harness!(act_height, Height, 20, ANY_ALPHABET, kissat);
+act_harness!(act_version, Version, 20, ANY_ALPHABET, kissat);
+act_harness!(act_transform_flag, TransformFlag, 20, ANY_ALPHABET, kissat);
+act_harness!(act_transform_type, TransformType, 20, ANY_ALPHABET, kissat);
+act_harness!(act_transform_bits, TransformBits, 20, ANY_ALPHABET, kissat);
+act_harness!(act_palette_size, PaletteSize, 20, ANY_ALPHABET, kissat);
+act_harness!(act_cache_flag, CacheFlag, 20, ANY_ALPHABET, kissat);
+act_harness!(act_cache_bits, CacheBits, 20, ANY_ALPHABET, kissat);
+act_harness!(act_meta_flag, MetaFlag, 20, ANY_ALPHABET, kissat);
+act_harness!(act_meta_bits, MetaBits, 20, ANY_ALPHABET, kissat);
+
+// Reading a prefix code. `CodeKind` sets the alphabet itself (up to 288
+// symbols, whose lengths it clears).
+act_harness!(act_code_kind, CodeKind, 300, ANY_ALPHABET, kissat);
+act_harness!(act_simple_count, SimpleCount, 20, ANY_ALPHABET, kissat);
+act_harness!(act_simple_first, SimpleFirst, 20, ANY_ALPHABET, kissat);
+act_harness!(act_simple_sym0, SimpleSym0, 20, ANY_ALPHABET, kissat);
+act_harness!(act_simple_sym1, SimpleSym1, 20, ANY_ALPHABET, kissat);
+act_harness!(act_normal_count, NormalCount, 21, ANY_ALPHABET, kissat);
+act_harness!(act_normal_cl, NormalCl, 21, ANY_ALPHABET, kissat);
+act_harness!(act_normal_flag, NormalFlag, 20, ANY_ALPHABET, kissat);
+act_harness!(act_normal_nbits, NormalNbits, 20, ANY_ALPHABET, kissat);
+act_harness!(act_normal_max, NormalMax, 20, ANY_ALPHABET, kissat);
+act_harness!(act_lengths, Lengths, 20, ANY_ALPHABET, kissat);
+act_harness!(act_length_rep, LengthRep, 300, ANY_ALPHABET, kissat);
+// Building a code over any lengths of 288 symbols does not fit in memory:
+// this harness bounds the alphabet to 8 symbols. `huffman_build_any` covers
+// `huffman::build` itself over any lengths.
+act_harness!(act_build_code, BuildCode, 20, 8, kissat);
+
+// Decoding pixels (a literal's symbol, a length, a distance, a cache index,
+// a backward reference of at most 4 pixels).
+act_harness!(act_green, Green, 20, ANY_ALPHABET, minisat);
+act_harness!(act_red, Red, 20, ANY_ALPHABET, minisat);
+act_harness!(act_blue, Blue, 20, ANY_ALPHABET, minisat);
+act_harness!(act_alpha, Alpha, 20, ANY_ALPHABET, minisat);
+act_harness!(act_len_extra, LenExtra, 20, ANY_ALPHABET, minisat);
+act_harness!(act_dist_sym, DistSym, 20, ANY_ALPHABET, minisat);
+act_harness!(act_dist_extra, DistExtra, 20, ANY_ALPHABET, minisat);
+
+/// Finishing an image of `$role`: no panic, `inv` kept on `Ok`.
+macro_rules! finish_harness {
+    ($name:ident, $role:ident) => {
+        #[kani::proof]
+        #[kani::solver(minisat)]
+        #[kani::unwind(40)]
+        fn $name() {
+            let mut v = any_vp8l(P::Done, Some(Role::$role), GROUP_BYTES, ANY_ALPHABET);
+            with_scratch(|s, target| {
+                if v.kani_finish(s, target).is_ok() {
+                    assert!(v.kani_inv(GROUP_BYTES));
+                }
+            });
         }
-    });
+    };
 }
 
-/// One action of decoding pixels (a literal's symbol, a length, a distance, a
-/// cache index, a backward reference of at most 4 pixels).
-#[kani::proof]
-#[kani::solver(kissat)]
-#[kani::unwind(20)]
-fn vp8l_pixel_act_any() {
-    let mut v = any_vp8l(Class::Pixels, GROUP_BYTES);
-    with_scratch(|s, target| {
-        if v.kani_act(s, target).is_ok() {
-            assert!(v.kani_inv(GROUP_BYTES));
+finish_harness!(finish_main, Main);
+finish_harness!(finish_meta, Meta);
+finish_harness!(finish_predictor, Predictor);
+finish_harness!(finish_colour, Colour);
+finish_harness!(finish_palette, Palette);
+
+/// One byte of the container in `$phase`, on a 2 by 2 canvas: no panic,
+/// `state_inv` kept on `Ok`. One harness per phase (`any_webp` says why).
+macro_rules! container_harness {
+    ($name:ident, $phase:ident) => {
+        #[kani::proof]
+        #[kani::solver(minisat)]
+        #[kani::unwind(20)]
+        fn $name() {
+            container_byte(Phase::$phase);
         }
-    });
+    };
 }
 
-/// Finishing an image of any role.
-#[kani::proof]
-#[kani::solver(kissat)]
-#[kani::unwind(40)]
-fn vp8l_finish_any() {
-    let mut v = any_vp8l(Class::Pixels, GROUP_BYTES);
-    with_scratch(|s, target| {
-        if v.kani_finish(s, target).is_ok() {
-            assert!(v.kani_inv(GROUP_BYTES));
-        }
-    });
-}
+container_harness!(container_riff, Riff);
+container_harness!(container_chunk_hdr, ChunkHdr);
+container_harness!(container_vp8x, Vp8x);
+container_harness!(container_anim, Anim);
+container_harness!(container_anmf, Anmf);
+container_harness!(container_skip, Skip);
+container_harness!(container_pad, Pad);
+container_harness!(container_ended, Ended);
+container_harness!(container_spent, Spent);
 
-/// One byte of the container, on a 2 by 2 canvas, in any phase but the
-/// lossless payload.
-#[kani::proof]
-#[kani::solver(kissat)]
-#[kani::unwind(20)]
-fn container_byte_any() {
-    let Some(mut webp) = any_webp() else {
+fn container_byte(phase: Phase) {
+    let Some(mut webp) = any_webp(phase) else {
         return;
     };
     let groups = GROUP_BYTES;

@@ -59,9 +59,13 @@ reference before the first pixel or past the last is an error.
 
 ## Kani harnesses (`src/proofs.rs`)
 
-Sixteen. **Written, not yet run**: the work was done on a machine where Kani
-was not to be run (CI's approved proof jobs run them), so every row below is a
-statement, not a result, and some bounds may have to change when they do.
+Fifty-seven. The step harnesses are one per phase or role, made by three
+macros: with the phase symbolic, CBMC ran out of memory (over 4 GB locally;
+on CI the runner was lost after two hours). The pixel, finish and container
+harnesses use MiniSat, because CaDiCaL and kissat each ran out of 4 GB on
+`act_red`, which MiniSat proves in 30 seconds. **Not yet run green on CI**:
+locally, under Kani 0.68.0, every harness but the pixel, finish and container
+ones has been run green; CI's approved proof jobs are the result that counts.
 
 | Harness | Statement (every one: no panic, no overflow, no out-of-bounds index) | Bound |
 |---------|-----------|-------|
@@ -76,11 +80,9 @@ statement, not a result, and some bounds may have to change when they do.
 | `palette_row_any` | colour indexing with bundling: each pixel is the table entry its packed bits name, or transparent black past the table | every bundling width, rows of 1 to 8 pixels, up to 4 colours |
 | `palette_in_place_any` | the same, two rows expanded in place, last row first, equal to the expansion from a copy | every bundling width, 4 pixels in 2 rows |
 | `blend_px_any` | alpha blending: alpha 255 gives the source, 0 the destination, otherwise alpha does not go down | any two pixels |
-| `vp8l_header_act_any` | one atomic action of the header, transform, cache and meta prefix reads keeps `Vp8l::inv` on `Ok` | any state with the invariant, any bits, any contents of every scratch region; images of at most 4 pixels |
-| `vp8l_code_act_any` | the same for reading a prefix code (simple, normal, lengths, repeats, build) | the same |
-| `vp8l_pixel_act_any` | the same for pixels (literal symbols, lengths, distances, cache lookups, a backward reference of at most 4 pixels) | the same |
-| `vp8l_finish_any` | finishing an image of any role (colour table, entropy image, transform images, the main image with every inverse transform) | the same, up to 4 colours, 2 rows |
-| `container_byte_any` | one byte of the container in any phase but the lossless payload keeps `Webp::state_inv` on `Ok` | any state with the invariant, a 2 by 2 canvas |
+| `act_*` (32, `act_harness!`) | one atomic action of the lossless decoder, in one phase each (header, transforms, cache, meta prefix, every step of reading a prefix code, and pixels: literal symbols, lengths, distances, cache lookups, a backward reference of at most 4 pixels), keeps `Vp8l::inv` on `Ok` | any state with the invariant, any bits, any contents of every scratch region; images of at most 4 pixels; `act_build_code`: an alphabet of at most 8 symbols |
+| `finish_*` (5, `finish_harness!`) | finishing an image of each role (colour table, entropy image, the two transform images, the main image with every inverse transform) keeps `Vp8l::inv` | the same, up to 4 colours, 2 rows |
+| `container_*` (9, `container_harness!`) | one byte of the container, in each phase but the lossless payload, keeps `Webp::state_inv` on `Ok` | any state with the invariant, a 2 by 2 canvas |
 
 ### What Kani covers, and what it does not
 
@@ -91,8 +93,8 @@ statement, not a result, and some bounds may have to change when they do.
   harness's sizes). `step` is `Parts::new` (a unit test and the lengths in
   `inv`), then a loop of `Webp::byte`, which is `dispatch` (the container
   harness) and, in a lossless payload, `Vp8l::push` and `Vp8l::advance`, a
-  loop of `Vp8l::act` (three harnesses, one per class of phases) and
-  `finish_image` (one). What the template would add and is argued here, not
+  loop of `Vp8l::act` (one harness per phase) and `finish_image` (one per
+  role). What the template would add and is argued here, not
   proven: that `inv` is kept over several bytes (induction from one), that
   `consumed <= chunk.len()` and that `NeedMore` consumes the chunk (a loop's
   index), and that nothing outside the buffers is written (safe Rust

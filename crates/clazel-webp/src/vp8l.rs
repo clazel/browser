@@ -48,7 +48,7 @@ const CL_ORDER: [usize; CL_ALPHABET] = [
 
 /// What an image is for (section 3.6.1, "Roles of Image Data").
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Role {
+pub(crate) enum Role {
     /// The ARGB image.
     Main,
     /// The entropy image.
@@ -83,7 +83,7 @@ struct Tf {
 
 /// The phases of the machine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum P {
+pub(crate) enum P {
     /// Section 3.4: the signature byte 0x2f.
     Signature,
     /// 14 bits: width minus one.
@@ -344,9 +344,14 @@ impl Vp8l {
             && usize::from(self.alphabet) <= crate::work::MAX_GREEN
             && self.cl_n <= 19
             && self.cl_i <= 19
+            && (self.phase != P::NormalCl || self.cl_i < self.cl_n)
             && self.nbits <= 16
             && self.rep <= 2
             && self.extra_n <= 18
+            && (self.phase != P::LenExtra
+                || (self.dprefix < 24 && self.extra_n == distance::extra_bits(self.dprefix)))
+            && (self.phase != P::DistExtra
+                || (self.dprefix < 40 && self.extra_n == distance::extra_bits(self.dprefix)))
             && self.sym <= u32::from(self.alphabet)
             && self.length <= 4096
     }
@@ -747,9 +752,13 @@ impl Vp8l {
                             if v != 0 {
                                 self.prev = v;
                             }
-                        } else {
+                        } else if sym <= 18 {
                             self.rep = u8::try_from(sym.saturating_sub(16)).unwrap_or(0);
                             self.phase = P::LengthRep;
+                        } else {
+                            // The code length code has 19 symbols (section
+                            // 3.7.2.1.2), so a built code never yields more.
+                            return Err(bad("a code length symbol over 18"));
                         }
                     }
                     Decoded::More if self.bits.end => return Err(bad(EOS)),
@@ -902,6 +911,11 @@ impl Vp8l {
                     return Ok(Act::Wait);
                 };
                 let prefix = u32::from(sym);
+                // The distance code has 40 symbols (section 3.7.2.3), so a built
+                // code never yields more.
+                if prefix >= 40 {
+                    return Err(bad("a distance code over 39"));
+                }
                 let extra = distance::extra_bits(prefix);
                 if extra == 0 {
                     return self.copy(distance::value(prefix, 0), dest, cache);
@@ -1091,18 +1105,6 @@ impl Vp8l {
     }
 }
 
-/// Which actions a Kani harness runs (the machine is too big for one).
-#[cfg(kani)]
-#[derive(Clone, Copy)]
-pub(crate) enum Class {
-    /// The header, transform, colour cache and meta prefix reads.
-    Header,
-    /// Reading a prefix code.
-    Codes,
-    /// Decoding pixels.
-    Pixels,
-}
-
 #[cfg(kani)]
 fn any_kind() -> Kind {
     match kani::any::<u8>() & 3 {
@@ -1124,65 +1126,15 @@ fn any_role() -> Role {
     }
 }
 
-/// Any state whose phase is of `class`, every field symbolic, with the
-/// invariant and with the bounds a harness can unwind: images of at most 4
-/// pixels, 2 rows, 4 colours, references of at most 4 pixels.
+/// Any state in `phase`, every field symbolic, with the invariant and with
+/// the bounds a harness can unwind: images of at most 4 pixels, 2 rows, 4
+/// colours, references of at most 4 pixels, and an alphabet of at most
+/// `max_alphabet` symbols. The role is `role`, or any role if `None`.
+///
+/// One phase per harness: with the phase symbolic too, CBMC ran out of
+/// memory (over 4 GB) or time (over 15 minutes) on every class of phases.
 #[cfg(kani)]
-pub(crate) fn any_vp8l(class: Class, groups: usize) -> Vp8l {
-    const HEADER: [P; 12] = [
-        P::Signature,
-        P::Width,
-        P::Height,
-        P::Version,
-        P::TransformFlag,
-        P::TransformType,
-        P::TransformBits,
-        P::PaletteSize,
-        P::CacheFlag,
-        P::CacheBits,
-        P::MetaFlag,
-        P::MetaBits,
-    ];
-    const CODES: [P; 13] = [
-        P::CodeKind,
-        P::SimpleCount,
-        P::SimpleFirst,
-        P::SimpleSym0,
-        P::SimpleSym1,
-        P::NormalCount,
-        P::NormalCl,
-        P::NormalFlag,
-        P::NormalNbits,
-        P::NormalMax,
-        P::Lengths,
-        P::LengthRep,
-        P::BuildCode,
-    ];
-    const PIXELS: [P; 7] = [
-        P::Green,
-        P::Red,
-        P::Blue,
-        P::Alpha,
-        P::LenExtra,
-        P::DistSym,
-        P::DistExtra,
-    ];
-    let which: usize = kani::any();
-    let phase = match class {
-        Class::Header => {
-            kani::assume(which < HEADER.len());
-            HEADER.get(which).copied()
-        }
-        Class::Codes => {
-            kani::assume(which < CODES.len());
-            CODES.get(which).copied()
-        }
-        Class::Pixels => {
-            kani::assume(which < PIXELS.len());
-            PIXELS.get(which).copied()
-        }
-    }
-    .unwrap_or(P::Done);
+pub(crate) fn any_vp8l(phase: P, role: Option<Role>, groups: usize, max_alphabet: u16) -> Vp8l {
     let mut v = Vp8l::new(kani::any(), kani::any());
     v.phase = phase;
     v.bits = Bits::any();
@@ -1198,7 +1150,7 @@ pub(crate) fn any_vp8l(class: Class, groups: usize) -> Vp8l {
     }
     v.ntf = kani::any();
     v.used = kani::any();
-    v.role = any_role();
+    v.role = role.unwrap_or_else(any_role);
     v.ixs = kani::any();
     v.total = kani::any();
     v.pos = kani::any();
@@ -1233,6 +1185,7 @@ pub(crate) fn any_vp8l(class: Class, groups: usize) -> Vp8l {
     kani::assume(v.tf.iter().all(|t| t.xsize <= 4 && t.bits <= 9));
     kani::assume(v.ixs <= 4 && v.total <= 4 && v.xsize <= 4 && v.height <= 2);
     kani::assume(v.width <= 4 && v.ncolors <= 4 && v.length <= 4 && v.meta_w <= 4);
+    kani::assume(v.alphabet <= max_alphabet);
     v
 }
 

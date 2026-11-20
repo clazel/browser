@@ -71,7 +71,7 @@ pub struct Animation {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Phase {
+pub(crate) enum Phase {
     /// The 12 bytes `RIFF`, size, `WEBP`, gathered.
     Riff,
     /// A chunk header, 8 bytes, gathered.
@@ -857,11 +857,12 @@ impl Decoder for Webp {
     }
 }
 
-/// Any state of a decoder of a 2 by 2 canvas whose phase is not the lossless
-/// payload (that is `vp8l.rs`'s harnesses), every other field symbolic: the
-/// harness assumes `inv` on top.
+/// Any state of a decoder of a 2 by 2 canvas in `phase`, which is not the
+/// lossless payload (that is `vp8l.rs`'s harnesses), every other field
+/// symbolic: the harness assumes `inv` on top. One phase per harness: with
+/// the phase symbolic too, CBMC ran out of memory (over 4 GB).
 #[cfg(kani)]
-pub(crate) fn any_webp() -> Option<Webp> {
+pub(crate) fn any_webp(phase: Phase) -> Option<Webp> {
     let frames = if kani::any() {
         FrameCount::Unknown
     } else {
@@ -869,20 +870,7 @@ pub(crate) fn any_webp() -> Option<Webp> {
     };
     let config = Config::new(Format::Webp, 2, 2, frames).ok()?;
     let mut w = Webp::start(&config).ok()?;
-    const PHASES: [Phase; 9] = [
-        Phase::Riff,
-        Phase::ChunkHdr,
-        Phase::Vp8x,
-        Phase::Anim,
-        Phase::Anmf,
-        Phase::Skip,
-        Phase::Pad,
-        Phase::Ended,
-        Phase::Spent,
-    ];
-    let which: usize = kani::any();
-    kani::assume(which < PHASES.len());
-    w.phase = *PHASES.get(which)?;
+    w.phase = phase;
     w.hold = kani::any();
     w.have = kani::any();
     w.riff_left = kani::any();
