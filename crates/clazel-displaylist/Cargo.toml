@@ -13,7 +13,7 @@ vstd = "=0.0.0-2026-10-04-0306"
 # shipped code today; `target-tier` is what the policy requires: this is the GPU
 # process's parser of bytes a compromised renderer may have written.
 [package.metadata.clazel]
-tier = 0
+tier = 2
 target-tier = 2
 
 [package.metadata.verus]

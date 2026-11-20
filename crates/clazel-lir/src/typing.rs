@@ -49,8 +49,18 @@ pub open spec fn ty_sub(a: Ty, b: Ty) -> bool {
 }
 
 /// `sub` pointwise, on sequences of equal length.
-pub open spec fn stack_sub(a: Seq<Ty>, b: Seq<Ty>) -> bool {
-    a.len() == b.len() && forall|j: int| 0 <= j < a.len() ==> ty_sub(#[trigger] a[j], b[j])
+///
+/// Stated by recursion on the last element rather than with `forall`, so that
+/// `compute_only` can evaluate it (the kill certificates in `mutations.json`
+/// type a `br` through it); `soundness::lemma_stack_sub_pointwise` proves it
+/// is the pointwise `forall` form.
+pub open spec fn stack_sub(a: Seq<Ty>, b: Seq<Ty>) -> bool
+    decreases a.len(),
+{
+    a.len() == b.len() && (a.len() == 0 || (ty_sub(a.last(), b.last()) && stack_sub(
+        a.drop_last(),
+        b.drop_last(),
+    )))
 }
 
 /// The top `tys.len()` types of `stk` are subtypes of `tys`.

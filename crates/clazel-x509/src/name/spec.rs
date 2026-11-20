@@ -16,6 +16,10 @@
 //!   IDENTIFIER followed by exactly one complete DER TLV for its open value.
 //!   The value is retained opaque; attribute-specific syntax and Directory
 //!   String validation/equivalence are outside this decoder.
+//! - X.501 (10/2019) §9.3's rule that the attribute types within one RDN are
+//!   distinct is not checked: RFC 5280 §4.1.2.4 does not ask it,
+//!   rustls-webpki compares Names as bytes, and no x509-limbo, root or 3.5g
+//!   corpus certificate repeats a type within an RDN.
 //! - Full original Name, RDN and AttributeTypeAndValue TLV bytes are retained.
 //!   This parser does not recursively validate the opaque open value's inner
 //!   constructed contents, nor does it claim RFC 5280 §7.1 comparison.

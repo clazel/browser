@@ -368,10 +368,10 @@ pub open spec fn multi_line_comment_chars(s: Src, i: int, j: int) -> bool
 {
     nonempty(s, i, j) && (
         // 1. MultiLineNotAsteriskChar MultiLineCommentChars?
-        (is_source_character(s[i]) && s[i] != '*' as u32
+        (is_source_character(s[i]) && s[i] != 0x2A
             && (j == i + 1 || multi_line_comment_chars(s, i + 1, j)))
         // 2. `*` PostAsteriskCommentChars?
-        || (s[i] == '*' as u32 && (j == i + 1 || post_asterisk_comment_chars(s, i + 1, j))))
+        || (s[i] == 0x2A && (j == i + 1 || post_asterisk_comment_chars(s, i + 1, j))))
 }
 
 /// §12.4 `PostAsteriskCommentChars`.
@@ -380,10 +380,10 @@ pub open spec fn post_asterisk_comment_chars(s: Src, i: int, j: int) -> bool
 {
     nonempty(s, i, j) && (
         // 1. MultiLineNotForwardSlashOrAsteriskChar MultiLineCommentChars?
-        (is_source_character(s[i]) && s[i] != '/' as u32 && s[i] != '*' as u32
+        (is_source_character(s[i]) && s[i] != 0x2F && s[i] != 0x2A
             && (j == i + 1 || multi_line_comment_chars(s, i + 1, j)))
         // 2. `*` PostAsteriskCommentChars?
-        || (s[i] == '*' as u32 && (j == i + 1 || post_asterisk_comment_chars(s, i + 1, j))))
+        || (s[i] == 0x2A && (j == i + 1 || post_asterisk_comment_chars(s, i + 1, j))))
 }
 
 /// §12.4 `MultiLineComment :: `/*` MultiLineCommentChars? `*/``.
@@ -409,10 +409,10 @@ pub open spec fn single_line_delimited_comment_chars(s: Src, i: int, j: int) -> 
         // 1. SingleLineNotAsteriskChar SingleLineDelimitedCommentChars?
         //    with SingleLineNotAsteriskChar :: SourceCharacter but not one of
         //    `*` or LineTerminator
-        (is_not_line_terminator(s[i]) && s[i] != '*' as u32
+        (is_not_line_terminator(s[i]) && s[i] != 0x2A
             && (j == i + 1 || single_line_delimited_comment_chars(s, i + 1, j)))
         // 2. `*` SingleLinePostAsteriskCommentChars?
-        || (s[i] == '*' as u32
+        || (s[i] == 0x2A
             && (j == i + 1 || single_line_post_asterisk_comment_chars(s, i + 1, j))))
 }
 
@@ -425,10 +425,10 @@ pub open spec fn single_line_post_asterisk_comment_chars(s: Src, i: int, j: int)
         //    SingleLineDelimitedCommentChars?
         //    with SingleLineNotForwardSlashOrAsteriskChar :: SourceCharacter
         //    but not one of `/` or `*` or LineTerminator
-        (is_not_line_terminator(s[i]) && s[i] != '/' as u32 && s[i] != '*' as u32
+        (is_not_line_terminator(s[i]) && s[i] != 0x2F && s[i] != 0x2A
             && (j == i + 1 || single_line_delimited_comment_chars(s, i + 1, j)))
         // 2. `*` SingleLinePostAsteriskCommentChars?
-        || (s[i] == '*' as u32
+        || (s[i] == 0x2A
             && (j == i + 1 || single_line_post_asterisk_comment_chars(s, i + 1, j))))
 }
 
@@ -557,14 +557,14 @@ pub open spec fn contains_line_terminator(s: Src, i: int, j: int) -> bool {
 /// one code point, by radix (10, 8, 2, 16).
 pub open spec fn is_radix_digit(radix: int, c: u32) -> bool {
     if radix == 2 {
-        c == '0' as u32 || c == '1' as u32
+        c == 0x30 || c == 0x31
     } else if radix == 8 {
-        '0' as u32 <= c <= '7' as u32
+        0x30 <= c <= 0x37
     } else if radix == 10 {
-        '0' as u32 <= c <= '9' as u32
+        0x30 <= c <= 0x39
     } else {
-        radix == 16 && (('0' as u32 <= c <= '9' as u32) || ('a' as u32 <= c <= 'f' as u32)
-            || ('A' as u32 <= c <= 'F' as u32))
+        radix == 16 && ((0x30 <= c <= 0x39) || (0x61 <= c <= 0x66)
+            || (0x41 <= c <= 0x46))
     }
 }
 
@@ -585,22 +585,22 @@ pub open spec fn is_octal_digit(c: u32) -> bool {
 
 /// §12.9.3 `NonZeroDigit :: one of 1 2 3 4 5 6 7 8 9`.
 pub open spec fn is_non_zero_digit(c: u32) -> bool {
-    is_decimal_digit(c) && c != '0' as u32
+    is_decimal_digit(c) && c != 0x30
 }
 
 /// §12.9.3 `NonOctalDigit :: one of 8 9`.
 pub open spec fn is_non_octal_digit(c: u32) -> bool {
-    c == '8' as u32 || c == '9' as u32
+    c == 0x38 || c == 0x39
 }
 
 /// The MV of a `HexDigit` (§12.9.3.2: 0 to 15; `a` and `A` are 10, and so on).
 pub open spec fn hex_digit_value(c: u32) -> int {
-    if '0' as u32 <= c <= '9' as u32 {
-        c as int - '0' as int
-    } else if 'a' as u32 <= c <= 'f' as u32 {
-        c as int - 'a' as int + 10
+    if 0x30 <= c <= 0x39 {
+        c as int - 0x30
+    } else if 0x61 <= c <= 0x66 {
+        c as int - 0x61 + 10
     } else {
-        c as int - 'A' as int + 10
+        c as int - 0x41 + 10
     }
 }
 
@@ -615,7 +615,7 @@ pub open spec fn digits(radix: int, sep: bool, s: Src, i: int, j: int) -> bool
         // 2. Digits[?Sep] Digit
         || (i + 1 < j && is_radix_digit(radix, s[j - 1]) && digits(radix, sep, s, i, j - 1))
         // 3. [+Sep] Digits[+Sep] NumericLiteralSeparator Digit
-        || (sep && i + 2 < j && s[j - 2] == '_' as u32 && is_radix_digit(radix, s[j - 1])
+        || (sep && i + 2 < j && s[j - 2] == 0x5F && is_radix_digit(radix, s[j - 1])
             && digits(radix, true, s, i, j - 2)))
 }
 
@@ -678,16 +678,16 @@ pub open spec fn not_code_point(s: Src, i: int, j: int) -> bool {
 pub open spec fn unicode_escape_sequence(s: Src, i: int, j: int) -> bool {
     nonempty(s, i, j) && (
         // 1. `u` Hex4Digits
-        (s[i] == 'u' as u32 && hex4_digits(s, i + 1, j))
+        (s[i] == 0x75 && hex4_digits(s, i + 1, j))
         // 2. `u{` CodePoint `}`
-        || (i + 3 < j && is_lit(s, i, i + 2, seq!['u', '{']) && s[j - 1] == '}' as u32
+        || (i + 3 < j && is_lit(s, i, i + 2, seq!['u', '{']) && s[j - 1] == 0x7D
             && code_point(s, i + 2, j - 1)))
 }
 
 /// §12.7.1.3 IdentifierCodePoint of a `UnicodeEscapeSequence`: "the code
 /// point whose numeric value is the MV of Hex4Digits" (or of CodePoint).
 pub open spec fn unicode_escape_code_point(s: Src, i: int, j: int) -> int {
-    if s[i + 1] == '{' as u32 {
+    if s[i + 1] == 0x7B {
         hex_digits_mv(s, i + 2, j - 1)
     } else {
         hex_digits_mv(s, i + 1, j)
@@ -696,7 +696,7 @@ pub open spec fn unicode_escape_code_point(s: Src, i: int, j: int) -> int {
 
 /// §12.9.4.2 SV of a `UnicodeEscapeSequence`.
 pub open spec fn unicode_escape_sv(s: Src, i: int, j: int) -> Seq<u16> {
-    if s[i + 1] == '{' as u32 {
+    if s[i + 1] == 0x7B {
         // The SV of `u{` CodePoint `}` is the result of performing
         // UTF16EncodeCodePoint on the MV of CodePoint.
         utf16_encode_code_point(hex_digits_mv(s, i + 2, j - 1))
@@ -713,7 +713,7 @@ pub open spec fn unicode_escape_sv(s: Src, i: int, j: int) -> Seq<u16> {
 
 /// The ASCII letters, `AsciiLetter` (§12.7).
 pub open spec fn is_ascii_letter(c: u32) -> bool {
-    ('a' as u32 <= c <= 'z' as u32) || ('A' as u32 <= c <= 'Z' as u32)
+    (0x61 <= c <= 0x7A) || (0x41 <= c <= 0x5A)
 }
 
 /// The code points above U+007F with Unicode property "ID_Start" (§12.7
@@ -738,7 +738,7 @@ pub open spec fn unicode_id_start(c: u32) -> bool {
 /// property "ID_Continue"`. In ASCII, the letters, digits and `_`.
 pub open spec fn unicode_id_continue(c: u32) -> bool {
     if c < 0x80 {
-        is_ascii_letter(c) || is_decimal_digit(c) || c == '_' as u32
+        is_ascii_letter(c) || is_decimal_digit(c) || c == 0x5F
     } else {
         unicode_id_continue_non_ascii(c)
     }
@@ -746,12 +746,12 @@ pub open spec fn unicode_id_continue(c: u32) -> bool {
 
 /// §12.7 `IdentifierStartChar :: UnicodeIDStart | `$` | `_``.
 pub open spec fn is_identifier_start_char(c: u32) -> bool {
-    unicode_id_start(c) || c == '$' as u32 || c == '_' as u32
+    unicode_id_start(c) || c == 0x24 || c == 0x5F
 }
 
 /// §12.7 `IdentifierPartChar :: UnicodeIDContinue | `$``.
 pub open spec fn is_identifier_part_char(c: u32) -> bool {
-    unicode_id_continue(c) || c == '$' as u32
+    unicode_id_continue(c) || c == 0x24
 }
 
 /// §12.7 `IdentifierStart :: IdentifierStartChar | `\` UnicodeEscapeSequence`.
@@ -760,7 +760,7 @@ pub open spec fn identifier_start(s: Src, i: int, j: int) -> bool {
         // 1. IdentifierStartChar
         (j == i + 1 && is_identifier_start_char(s[i]))
         // 2. `\` UnicodeEscapeSequence
-        || (s[i] == '\\' as u32 && unicode_escape_sequence(s, i + 1, j)))
+        || (s[i] == 0x5C && unicode_escape_sequence(s, i + 1, j)))
 }
 
 /// §12.7 `IdentifierPart :: IdentifierPartChar | `\` UnicodeEscapeSequence`.
@@ -769,7 +769,7 @@ pub open spec fn identifier_part(s: Src, i: int, j: int) -> bool {
         // 1. IdentifierPartChar
         (j == i + 1 && is_identifier_part_char(s[i]))
         // 2. `\` UnicodeEscapeSequence
-        || (s[i] == '\\' as u32 && unicode_escape_sequence(s, i + 1, j)))
+        || (s[i] == 0x5C && unicode_escape_sequence(s, i + 1, j)))
 }
 
 /// §12.7.1.3 IdentifierCodePoint of an `IdentifierStart` or `IdentifierPart`
@@ -777,7 +777,7 @@ pub open spec fn identifier_part(s: Src, i: int, j: int) -> bool {
 /// IdentifierStartChar" (or IdentifierPartChar), or the code point of the
 /// `UnicodeEscapeSequence`.
 pub open spec fn identifier_code_point(s: Src, i: int, j: int) -> u32 {
-    if s[i] == '\\' as u32 {
+    if s[i] == 0x5C {
         unicode_escape_code_point(s, i + 1, j) as u32
     } else {
         s[i]
@@ -809,7 +809,7 @@ pub open spec fn identifier_name(s: Src, i: int, j: int) -> bool {
 
 /// §12.7 `PrivateIdentifier :: `#` IdentifierName`.
 pub open spec fn private_identifier(s: Src, i: int, j: int) -> bool {
-    nonempty(s, i, j) && s[i] == '#' as u32 && identifier_name(s, i + 1, j)
+    nonempty(s, i, j) && s[i] == 0x23 && identifier_name(s, i + 1, j)
 }
 
 /// §12.7.1.1 Static Semantics: Early Errors, for the code points `cps` of an
@@ -835,7 +835,7 @@ pub open spec fn identifier_name_valid(s: Src, i: int, j: int) -> bool {
 /// a `\` UnicodeEscapeSequence" (§12.7.2 note): an escaped name is never a
 /// `ReservedWord`.
 pub open spec fn identifier_has_escape(s: Src, i: int, j: int) -> bool {
-    exists|k: int| i <= k < j && s[k] == '\\' as u32
+    exists|k: int| i <= k < j && s[k] == 0x5C
 }
 
 /// The code points of an ASCII word, for comparing with an identifier.
@@ -970,7 +970,7 @@ pub open spec fn legacy_octal_like_decimal_integer_literal(s: Src, i: int, j: in
 {
     nonempty(s, i, j) && (
         // 1. `0` OctalDigit
-        (j == i + 2 && s[i] == '0' as u32 && is_octal_digit(s[i + 1]))
+        (j == i + 2 && s[i] == 0x30 && is_octal_digit(s[i + 1]))
         // 2. LegacyOctalLikeDecimalIntegerLiteral OctalDigit
         || (i + 2 < j && is_octal_digit(s[j - 1])
             && legacy_octal_like_decimal_integer_literal(s, i, j - 1)))
@@ -982,7 +982,7 @@ pub open spec fn non_octal_decimal_integer_literal(s: Src, i: int, j: int) -> bo
 {
     nonempty(s, i, j) && (
         // 1. `0` NonOctalDigit
-        (j == i + 2 && s[i] == '0' as u32 && is_non_octal_digit(s[i + 1]))
+        (j == i + 2 && s[i] == 0x30 && is_non_octal_digit(s[i + 1]))
         // 2. LegacyOctalLikeDecimalIntegerLiteral NonOctalDigit
         || (i + 2 < j && is_non_octal_digit(s[j - 1])
             && legacy_octal_like_decimal_integer_literal(s, i, j - 1))
@@ -998,7 +998,7 @@ pub open spec fn legacy_octal_integer_literal(s: Src, i: int, j: int) -> bool
 {
     nonempty(s, i, j) && (
         // 1. `0` OctalDigit
-        (j == i + 2 && s[i] == '0' as u32 && is_octal_digit(s[i + 1]))
+        (j == i + 2 && s[i] == 0x30 && is_octal_digit(s[i + 1]))
         // 2. LegacyOctalIntegerLiteral OctalDigit
         || (i + 2 < j && is_octal_digit(s[j - 1]) && legacy_octal_integer_literal(s, i, j - 1)))
 }
@@ -1007,13 +1007,13 @@ pub open spec fn legacy_octal_integer_literal(s: Src, i: int, j: int) -> bool
 pub open spec fn decimal_integer_literal(s: Src, i: int, j: int) -> bool {
     nonempty(s, i, j) && (
         // 1. `0`
-        (j == i + 1 && s[i] == '0' as u32)
+        (j == i + 1 && s[i] == 0x30)
         // 2. NonZeroDigit
         || (j == i + 1 && is_non_zero_digit(s[i]))
         // 3. NonZeroDigit NumericLiteralSeparator? DecimalDigits[+Sep]
         || (i + 1 < j && is_non_zero_digit(s[i])
             && (decimal_digits(true, s, i + 1, j)
-                || (s[i + 1] == '_' as u32 && decimal_digits(true, s, i + 2, j))))
+                || (s[i + 1] == 0x5F && decimal_digits(true, s, i + 2, j))))
         // 4. NonOctalDecimalIntegerLiteral
         || non_octal_decimal_integer_literal(s, i, j))
 }
@@ -1024,15 +1024,15 @@ pub open spec fn signed_integer(sep: bool, s: Src, i: int, j: int) -> bool {
         // 1. DecimalDigits[?Sep]
         decimal_digits(sep, s, i, j)
         // 2. `+` DecimalDigits[?Sep]
-        || (s[i] == '+' as u32 && decimal_digits(sep, s, i + 1, j))
+        || (s[i] == 0x2B && decimal_digits(sep, s, i + 1, j))
         // 3. `-` DecimalDigits[?Sep]
-        || (s[i] == '-' as u32 && decimal_digits(sep, s, i + 1, j)))
+        || (s[i] == 0x2D && decimal_digits(sep, s, i + 1, j)))
 }
 
 /// §12.9.3 `ExponentPart[Sep] :: ExponentIndicator SignedInteger[?Sep]`,
 /// with `ExponentIndicator :: one of e E`.
 pub open spec fn exponent_part(sep: bool, s: Src, i: int, j: int) -> bool {
-    nonempty(s, i, j) && (s[i] == 'e' as u32 || s[i] == 'E' as u32)
+    nonempty(s, i, j) && (s[i] == 0x65 || s[i] == 0x45)
         && signed_integer(sep, s, i + 1, j)
 }
 
@@ -1041,7 +1041,7 @@ pub open spec fn exponent_part(sep: bool, s: Src, i: int, j: int) -> bool {
 /// `[a + 1, b)` and the exponent on `[b, j)`.
 pub open spec fn decimal_literal_1(s: Src, i: int, a: int, b: int, j: int) -> bool {
     i < a && a < b && b <= j && j <= s.len() && decimal_integer_literal(s, i, a)
-        && s[a] == '.' as u32 && opt(a + 1, b, decimal_digits(true, s, a + 1, b))
+        && s[a] == 0x2E && opt(a + 1, b, decimal_digits(true, s, a + 1, b))
         && opt(b, j, exponent_part(true, s, b, j))
 }
 
@@ -1051,7 +1051,7 @@ pub open spec fn decimal_literal(s: Src, i: int, j: int) -> bool {
         // 1. DecimalIntegerLiteral `.` DecimalDigits[+Sep]? ExponentPart[+Sep]?
         (exists|a: int, b: int| decimal_literal_1(s, i, a, b, j))
         // 2. `.` DecimalDigits[+Sep] ExponentPart[+Sep]?
-        || (s[i] == '.' as u32
+        || (s[i] == 0x2E
             && exists|b: int| #![auto] i + 1 < b && b <= j && decimal_digits(true, s, i + 1, b)
                 && opt(b, j, exponent_part(true, s, b, j)))
         // 3. DecimalIntegerLiteral ExponentPart[+Sep]?
@@ -1061,14 +1061,14 @@ pub open spec fn decimal_literal(s: Src, i: int, j: int) -> bool {
 
 /// §12.9.3 `DecimalBigIntegerLiteral`.
 pub open spec fn decimal_big_integer_literal(s: Src, i: int, j: int) -> bool {
-    nonempty(s, i, j) && i + 1 < j && s[j - 1] == 'n' as u32 && (
+    nonempty(s, i, j) && i + 1 < j && s[j - 1] == 0x6E && (
         // 1. `0` BigIntLiteralSuffix
-        (j == i + 2 && s[i] == '0' as u32)
+        (j == i + 2 && s[i] == 0x30)
         // 2. NonZeroDigit DecimalDigits[+Sep]? BigIntLiteralSuffix
         || (is_non_zero_digit(s[i]) && opt(i + 1, j - 1, decimal_digits(true, s, i + 1, j - 1)))
         // 3. NonZeroDigit NumericLiteralSeparator DecimalDigits[+Sep]
         //    BigIntLiteralSuffix
-        || (is_non_zero_digit(s[i]) && i + 2 < j - 1 && s[i + 1] == '_' as u32
+        || (is_non_zero_digit(s[i]) && i + 2 < j - 1 && s[i + 1] == 0x5F
             && decimal_digits(true, s, i + 2, j - 1)))
 }
 
@@ -1076,13 +1076,13 @@ pub open spec fn decimal_big_integer_literal(s: Src, i: int, j: int) -> bool {
 /// `HexIntegerLiteral[Sep]` (`0b` `0B`, `0o` `0O`, `0x` `0X` and digits), as
 /// `NonDecimalIntegerLiteral[Sep]`.
 pub open spec fn non_decimal_integer_literal(sep: bool, s: Src, i: int, j: int) -> bool {
-    nonempty(s, i, j) && i + 2 < j && s[i] == '0' as u32 && (
+    nonempty(s, i, j) && i + 2 < j && s[i] == 0x30 && (
         // BinaryIntegerLiteral
-        ((s[i + 1] == 'b' as u32 || s[i + 1] == 'B' as u32) && binary_digits(sep, s, i + 2, j))
+        ((s[i + 1] == 0x62 || s[i + 1] == 0x42) && binary_digits(sep, s, i + 2, j))
         // OctalIntegerLiteral
-        || ((s[i + 1] == 'o' as u32 || s[i + 1] == 'O' as u32) && octal_digits(sep, s, i + 2, j))
+        || ((s[i + 1] == 0x6F || s[i + 1] == 0x4F) && octal_digits(sep, s, i + 2, j))
         // HexIntegerLiteral
-        || ((s[i + 1] == 'x' as u32 || s[i + 1] == 'X' as u32) && hex_digits(sep, s, i + 2, j)))
+        || ((s[i + 1] == 0x78 || s[i + 1] == 0x58) && hex_digits(sep, s, i + 2, j)))
 }
 
 /// §12.9.3 `NumericLiteral`.
@@ -1095,7 +1095,7 @@ pub open spec fn numeric_literal(s: Src, i: int, j: int) -> bool {
         // 3. NonDecimalIntegerLiteral[+Sep]
         || non_decimal_integer_literal(true, s, i, j)
         // 4. NonDecimalIntegerLiteral[+Sep] BigIntLiteralSuffix
-        || (i + 1 < j && s[j - 1] == 'n' as u32 && non_decimal_integer_literal(true, s, i, j - 1))
+        || (i + 1 < j && s[j - 1] == 0x6E && non_decimal_integer_literal(true, s, i, j - 1))
         // 5. LegacyOctalIntegerLiteral
         || legacy_octal_integer_literal(s, i, j))
 }
@@ -1104,7 +1104,7 @@ pub open spec fn numeric_literal(s: Src, i: int, j: int) -> bool {
 /// and 4, which end in `BigIntLiteralSuffix`).
 pub open spec fn numeric_literal_is_bigint(s: Src, i: int, j: int) -> bool {
     decimal_big_integer_literal(s, i, j)
-        || (i + 1 < j && s[j - 1] == 'n' as u32 && non_decimal_integer_literal(true, s, i, j - 1))
+        || (i + 1 < j && s[j - 1] == 0x6E && non_decimal_integer_literal(true, s, i, j - 1))
 }
 
 /// §12.9.3.1: "NumericLiteral :: LegacyOctalIntegerLiteral" and
@@ -1132,30 +1132,30 @@ pub open spec fn numeric_literal_follow_error(s: Src, j: int) -> bool {
 
 /// §12.9.4 `LineContinuation :: `\` LineTerminatorSequence`.
 pub open spec fn line_continuation(s: Src, i: int, j: int) -> bool {
-    nonempty(s, i, j) && s[i] == '\\' as u32 && line_terminator_sequence(s, i + 1, j)
+    nonempty(s, i, j) && s[i] == 0x5C && line_terminator_sequence(s, i + 1, j)
 }
 
 /// §12.9.4 `SingleEscapeCharacter :: one of ' " \ b f n r t v`.
 pub open spec fn is_single_escape_character(c: u32) -> bool {
-    c == '\'' as u32 || c == '"' as u32 || c == '\\' as u32 || c == 'b' as u32
-        || c == 'f' as u32 || c == 'n' as u32 || c == 'r' as u32 || c == 't' as u32
-        || c == 'v' as u32
+    c == 0x27 || c == 0x22 || c == 0x5C || c == 0x62
+        || c == 0x66 || c == 0x6E || c == 0x72 || c == 0x74
+        || c == 0x76
 }
 
 /// §12.9.4.2 Table "String Single Character Escape Sequences": the code unit
 /// of a `SingleEscapeCharacter`.
 pub open spec fn single_escape_code_unit(c: u32) -> u16 {
-    if c == 'b' as u32 {
+    if c == 0x62 {
         0x0008
-    } else if c == 't' as u32 {
+    } else if c == 0x74 {
         0x0009
-    } else if c == 'n' as u32 {
+    } else if c == 0x6E {
         0x000A
-    } else if c == 'v' as u32 {
+    } else if c == 0x76 {
         0x000B
-    } else if c == 'f' as u32 {
+    } else if c == 0x66 {
         0x000C
-    } else if c == 'r' as u32 {
+    } else if c == 0x72 {
         0x000D
     } else {
         // `"`, `'`, `\`: the code unit of the character itself.
@@ -1166,7 +1166,7 @@ pub open spec fn single_escape_code_unit(c: u32) -> u16 {
 /// §12.9.4 `EscapeCharacter :: SingleEscapeCharacter | DecimalDigit | `x` |
 /// `u``.
 pub open spec fn is_escape_character(c: u32) -> bool {
-    is_single_escape_character(c) || is_decimal_digit(c) || c == 'x' as u32 || c == 'u' as u32
+    is_single_escape_character(c) || is_decimal_digit(c) || c == 0x78 || c == 0x75
 }
 
 /// §12.9.4 `NonEscapeCharacter :: SourceCharacter but not one of
@@ -1186,7 +1186,7 @@ pub open spec fn character_escape_sequence_sv(s: Src, i: int, j: int, v: Seq<u16
 
 /// §12.9.4 `HexEscapeSequence :: `x` HexDigit HexDigit`.
 pub open spec fn hex_escape_sequence(s: Src, i: int, j: int) -> bool {
-    nonempty(s, i, j) && j == i + 3 && s[i] == 'x' as u32 && is_hex_digit(s[i + 1])
+    nonempty(s, i, j) && j == i + 3 && s[i] == 0x78 && is_hex_digit(s[i + 1])
         && is_hex_digit(s[i + 2])
 }
 
@@ -1194,16 +1194,16 @@ pub open spec fn hex_escape_sequence(s: Src, i: int, j: int) -> bool {
 pub open spec fn legacy_octal_escape_sequence(s: Src, i: int, j: int) -> bool {
     nonempty(s, i, j) && (
         // 1. `0` [lookahead ∈ { `8`, `9` }]
-        (j == i + 1 && s[i] == '0' as u32 && at_non_octal_digit(s, j))
+        (j == i + 1 && s[i] == 0x30 && at_non_octal_digit(s, j))
         // 2. NonZeroOctalDigit [lookahead ∉ OctalDigit]
-        || (j == i + 1 && is_octal_digit(s[i]) && s[i] != '0' as u32 && !at_octal_digit(s, j))
+        || (j == i + 1 && is_octal_digit(s[i]) && s[i] != 0x30 && !at_octal_digit(s, j))
         // 3. ZeroToThree OctalDigit [lookahead ∉ OctalDigit]
-        || (j == i + 2 && '0' as u32 <= s[i] <= '3' as u32 && is_octal_digit(s[i + 1])
+        || (j == i + 2 && 0x30 <= s[i] <= 0x33 && is_octal_digit(s[i + 1])
             && !at_octal_digit(s, j))
         // 4. FourToSeven OctalDigit
-        || (j == i + 2 && '4' as u32 <= s[i] <= '7' as u32 && is_octal_digit(s[i + 1]))
+        || (j == i + 2 && 0x34 <= s[i] <= 0x37 && is_octal_digit(s[i + 1]))
         // 5. ZeroToThree OctalDigit OctalDigit
-        || (j == i + 3 && '0' as u32 <= s[i] <= '3' as u32 && is_octal_digit(s[i + 1])
+        || (j == i + 3 && 0x30 <= s[i] <= 0x33 && is_octal_digit(s[i + 1])
             && is_octal_digit(s[i + 2])))
 }
 
@@ -1236,16 +1236,16 @@ pub open spec fn at_hex_digit(s: Src, j: int) -> bool {
 pub open spec fn legacy_octal_escape_sequence_mv(s: Src, i: int, j: int) -> int {
     if j == i + 1 {
         // 1. `0`: 0 (§12.9.3.2). 2. NonZeroOctalDigit: the MV of the digit.
-        s[i] as int - '0' as int
+        s[i] as int - 0x30
     } else if j == i + 2 {
         // 3, 4. (8 times the MV of ZeroToThree/FourToSeven) plus the MV of
         // OctalDigit.
-        8 * (s[i] as int - '0' as int) + (s[i + 1] as int - '0' as int)
+        8 * (s[i] as int - 0x30) + (s[i + 1] as int - 0x30)
     } else {
         // 5. (64 times the MV of ZeroToThree) plus (8 times the MV of the
         // first OctalDigit) plus the MV of the second OctalDigit.
-        64 * (s[i] as int - '0' as int) + 8 * (s[i + 1] as int - '0' as int)
-            + (s[i + 2] as int - '0' as int)
+        64 * (s[i] as int - 0x30) + 8 * (s[i + 1] as int - 0x30)
+            + (s[i + 2] as int - 0x30)
     }
 }
 
@@ -1277,7 +1277,7 @@ pub open spec fn template_escape_sequence_sv(s: Src, i: int, j: int, v: Seq<u16>
         character_escape_sequence_sv(s, i, j, v)
         // 2. `0` [lookahead ∉ DecimalDigit]: "the String value consisting of
         //    the code unit 0x0000 (NULL)"
-        || (j == i + 1 && s[i] == '0' as u32 && !at_decimal_digit(s, j) && v =~= seq![0u16])
+        || (j == i + 1 && s[i] == 0x30 && !at_decimal_digit(s, j) && v =~= seq![0u16])
         // 3. HexEscapeSequence: "the code unit whose numeric value is the MV
         //    of HexEscapeSequence", (16 times the MV of the first HexDigit)
         //    plus the MV of the second HexDigit
@@ -1293,14 +1293,14 @@ pub open spec fn string_character_sv(s: Src, i: int, j: int, quote: u32, v: Seq<
     nonempty(s, i, j) && (
         // 1. SourceCharacter but not one of `"` (or `'`) or `\` or
         //    LineTerminator: UTF16EncodeCodePoint of the code point.
-        (j == i + 1 && is_not_line_terminator(s[i]) && s[i] != quote && s[i] != '\\' as u32
+        (j == i + 1 && is_not_line_terminator(s[i]) && s[i] != quote && s[i] != 0x5C
             && v =~= utf16_encode_code_point(s[i] as int))
         // 2. <LS>: "the String value consisting of the code unit 0x2028".
         || (j == i + 1 && s[i] == 0x2028 && v =~= seq![0x2028u16])
         // 3. <PS>: "the String value consisting of the code unit 0x2029".
         || (j == i + 1 && s[i] == 0x2029 && v =~= seq![0x2029u16])
         // 4. `\` EscapeSequence
-        || (s[i] == '\\' as u32 && escape_sequence_sv(s, i + 1, j, v))
+        || (s[i] == 0x5C && escape_sequence_sv(s, i + 1, j, v))
         // 5. LineContinuation: "the empty String".
         || (line_continuation(s, i, j) && v.len() == 0))
 }
@@ -1327,18 +1327,18 @@ pub open spec fn string_literal_sv(s: Src, i: int, j: int, v: Seq<u16>) -> bool 
     nonempty(s, i, j) && i + 1 < j && (
         // 1. `"` DoubleStringCharacters? `"`: "the SV of StringLiteral :: `"`
         //    `"` is the empty String" and otherwise the SV of the characters
-        ((s[i] == '"' as u32 && s[j - 1] == '"' as u32)
+        ((s[i] == 0x22 && s[j - 1] == 0x22)
             && (if j == i + 2 {
                 v.len() == 0
             } else {
-                string_characters_sv(s, i + 1, j - 1, '"' as u32, v)
+                string_characters_sv(s, i + 1, j - 1, 0x22, v)
             }))
         // 2. `'` SingleStringCharacters? `'`
-        || ((s[i] == '\'' as u32 && s[j - 1] == '\'' as u32)
+        || ((s[i] == 0x27 && s[j - 1] == 0x27)
             && (if j == i + 2 {
                 v.len() == 0
             } else {
-                string_characters_sv(s, i + 1, j - 1, '\'' as u32, v)
+                string_characters_sv(s, i + 1, j - 1, 0x27, v)
             })))
 }
 
@@ -1360,15 +1360,15 @@ pub open spec fn is_regexp_non_terminator(c: u32) -> bool {
 /// §12.9.5 `RegularExpressionBackslashSequence :: `\`
 /// RegularExpressionNonTerminator`.
 pub open spec fn regexp_backslash_sequence(s: Src, i: int, j: int) -> bool {
-    nonempty(s, i, j) && j == i + 2 && s[i] == '\\' as u32 && is_regexp_non_terminator(s[i + 1])
+    nonempty(s, i, j) && j == i + 2 && s[i] == 0x5C && is_regexp_non_terminator(s[i + 1])
 }
 
 /// §12.9.5 `RegularExpressionClassChar`.
 pub open spec fn regexp_class_char(s: Src, i: int, j: int) -> bool {
     nonempty(s, i, j) && (
         // 1. RegularExpressionNonTerminator but not one of `]` or `\`
-        (j == i + 1 && is_regexp_non_terminator(s[i]) && s[i] != ']' as u32
-            && s[i] != '\\' as u32)
+        (j == i + 1 && is_regexp_non_terminator(s[i]) && s[i] != 0x5D
+            && s[i] != 0x5C)
         // 2. RegularExpressionBackslashSequence
         || regexp_backslash_sequence(s, i, j))
 }
@@ -1387,7 +1387,7 @@ pub open spec fn regexp_class_chars(s: Src, i: int, j: int) -> bool
 
 /// §12.9.5 `RegularExpressionClass :: `[` RegularExpressionClassChars `]``.
 pub open spec fn regexp_class(s: Src, i: int, j: int) -> bool {
-    nonempty(s, i, j) && i + 1 < j && s[i] == '[' as u32 && s[j - 1] == ']' as u32
+    nonempty(s, i, j) && i + 1 < j && s[i] == 0x5B && s[j - 1] == 0x5D
         && regexp_class_chars(s, i + 1, j - 1)
 }
 
@@ -1396,8 +1396,8 @@ pub open spec fn regexp_first_char(s: Src, i: int, j: int) -> bool {
     nonempty(s, i, j) && (
         // 1. RegularExpressionNonTerminator but not one of `*` or `\` or `/`
         //    or `[`
-        (j == i + 1 && is_regexp_non_terminator(s[i]) && s[i] != '*' as u32
-            && s[i] != '\\' as u32 && s[i] != '/' as u32 && s[i] != '[' as u32)
+        (j == i + 1 && is_regexp_non_terminator(s[i]) && s[i] != 0x2A
+            && s[i] != 0x5C && s[i] != 0x2F && s[i] != 0x5B)
         // 2. RegularExpressionBackslashSequence
         || regexp_backslash_sequence(s, i, j)
         // 3. RegularExpressionClass
@@ -1408,8 +1408,8 @@ pub open spec fn regexp_first_char(s: Src, i: int, j: int) -> bool {
 pub open spec fn regexp_char(s: Src, i: int, j: int) -> bool {
     nonempty(s, i, j) && (
         // 1. RegularExpressionNonTerminator but not one of `\` or `/` or `[`
-        (j == i + 1 && is_regexp_non_terminator(s[i]) && s[i] != '\\' as u32
-            && s[i] != '/' as u32 && s[i] != '[' as u32)
+        (j == i + 1 && is_regexp_non_terminator(s[i]) && s[i] != 0x5C
+            && s[i] != 0x2F && s[i] != 0x5B)
         // 2. RegularExpressionBackslashSequence
         || regexp_backslash_sequence(s, i, j)
         // 3. RegularExpressionClass
@@ -1446,7 +1446,7 @@ pub open spec fn regexp_flags(s: Src, i: int, j: int) -> bool {
 /// BodyText is `s[i + 1..b)` (§12.9.5.1) and FlagText is `s[b + 1..j)`
 /// (§12.9.5.2).
 pub open spec fn regexp_literal(s: Src, i: int, j: int, b: int) -> bool {
-    nonempty(s, i, j) && s[i] == '/' as u32 && i + 1 < b && b < j && s[b] == '/' as u32
+    nonempty(s, i, j) && s[i] == 0x2F && i + 1 < b && b < j && s[b] == 0x2F
         && regexp_body(s, i + 1, b) && regexp_flags(s, b + 1, j)
 }
 
@@ -1491,30 +1491,30 @@ pub open spec fn line_terminator_sequence_trv(s: Src, i: int, j: int) -> Seq<u16
 pub open spec fn not_escape_sequence(s: Src, i: int, j: int) -> bool {
     nonempty(s, i, j) && (
         // 1. `0` DecimalDigit
-        (j == i + 2 && s[i] == '0' as u32 && is_decimal_digit(s[i + 1]))
+        (j == i + 2 && s[i] == 0x30 && is_decimal_digit(s[i + 1]))
         // 2. DecimalDigit but not `0`
         || (j == i + 1 && is_non_zero_digit(s[i]))
         // 3. `x` [lookahead ∉ HexDigit]
-        || (j == i + 1 && s[i] == 'x' as u32 && !at_hex_digit(s, j))
+        || (j == i + 1 && s[i] == 0x78 && !at_hex_digit(s, j))
         // 4. `x` HexDigit [lookahead ∉ HexDigit]
-        || (j == i + 2 && s[i] == 'x' as u32 && is_hex_digit(s[i + 1]) && !at_hex_digit(s, j))
+        || (j == i + 2 && s[i] == 0x78 && is_hex_digit(s[i + 1]) && !at_hex_digit(s, j))
         // 5. `u` [lookahead ∉ HexDigit] [lookahead != `{`]
-        || (j == i + 1 && s[i] == 'u' as u32 && !at_hex_digit(s, j) && !at(s, j, '{'))
+        || (j == i + 1 && s[i] == 0x75 && !at_hex_digit(s, j) && !at(s, j, '{'))
         // 6. `u` HexDigit [lookahead ∉ HexDigit]
-        || (j == i + 2 && s[i] == 'u' as u32 && is_hex_digit(s[i + 1]) && !at_hex_digit(s, j))
+        || (j == i + 2 && s[i] == 0x75 && is_hex_digit(s[i + 1]) && !at_hex_digit(s, j))
         // 7. `u` HexDigit HexDigit [lookahead ∉ HexDigit]
-        || (j == i + 3 && s[i] == 'u' as u32 && is_hex_digit(s[i + 1]) && is_hex_digit(s[i + 2])
+        || (j == i + 3 && s[i] == 0x75 && is_hex_digit(s[i + 1]) && is_hex_digit(s[i + 2])
             && !at_hex_digit(s, j))
         // 8. `u` HexDigit HexDigit HexDigit [lookahead ∉ HexDigit]
-        || (j == i + 4 && s[i] == 'u' as u32 && is_hex_digit(s[i + 1]) && is_hex_digit(s[i + 2])
+        || (j == i + 4 && s[i] == 0x75 && is_hex_digit(s[i + 1]) && is_hex_digit(s[i + 2])
             && is_hex_digit(s[i + 3]) && !at_hex_digit(s, j))
         // 9. `u` `{` [lookahead ∉ HexDigit]
-        || (j == i + 2 && s[i] == 'u' as u32 && s[i + 1] == '{' as u32 && !at_hex_digit(s, j))
+        || (j == i + 2 && s[i] == 0x75 && s[i + 1] == 0x7B && !at_hex_digit(s, j))
         // 10. `u` `{` NotCodePoint [lookahead ∉ HexDigit]
-        || (i + 2 < j && s[i] == 'u' as u32 && s[i + 1] == '{' as u32
+        || (i + 2 < j && s[i] == 0x75 && s[i + 1] == 0x7B
             && not_code_point(s, i + 2, j) && !at_hex_digit(s, j))
         // 11. `u` `{` CodePoint [lookahead ∉ HexDigit] [lookahead != `}`]
-        || (i + 2 < j && s[i] == 'u' as u32 && s[i + 1] == '{' as u32
+        || (i + 2 < j && s[i] == 0x75 && s[i + 1] == 0x7B
             && code_point(s, i + 2, j) && !at_hex_digit(s, j) && !at(s, j, '}')))
 }
 
@@ -1522,17 +1522,17 @@ pub open spec fn not_escape_sequence(s: Src, i: int, j: int) -> bool {
 pub open spec fn template_character(s: Src, i: int, j: int, tv: Tv, trv: Seq<u16>) -> bool {
     nonempty(s, i, j) && (
         // 1. `$` [lookahead != `{`]: both are "the code unit 0x0024".
-        (j == i + 1 && s[i] == '$' as u32 && !at(s, j, '{')
+        (j == i + 1 && s[i] == 0x24 && !at(s, j, '{')
             && tv == Some(seq![0x0024u16]) && trv =~= seq![0x0024u16])
         // 2. `\` TemplateEscapeSequence: TV is the SV of it; TRV is `\`
         //    followed by the TRV of the escape sequence, which (see the
         //    modelling choices) is the UTF-16 of the matched code points.
-        || (s[i] == '\\' as u32
+        || (s[i] == 0x5C
             && exists|v: Seq<u16>| template_escape_sequence_sv(s, i + 1, j, v)
                 && tv == Some(v) && trv =~= utf16_of(s, i, j))
         // 3. `\` NotEscapeSequence: TV is *undefined*; TRV is `\` followed
         //    by the TRV of it (the same UTF-16).
-        || (s[i] == '\\' as u32 && not_escape_sequence(s, i + 1, j)
+        || (s[i] == 0x5C && not_escape_sequence(s, i + 1, j)
             && tv == None::<Seq<u16>> && trv =~= utf16_of(s, i, j))
         // 4. LineContinuation: TV is "the empty String"; TRV is `\`
         //    followed by the TRV of the LineTerminatorSequence.
@@ -1543,8 +1543,8 @@ pub open spec fn template_character(s: Src, i: int, j: int, tv: Tv, trv: Seq<u16
             && trv =~= line_terminator_sequence_trv(s, i, j))
         // 6. SourceCharacter but not one of ` or \ or $ or LineTerminator:
         //    UTF16EncodeCodePoint of the code point.
-        || (j == i + 1 && is_not_line_terminator(s[i]) && s[i] != '`' as u32
-            && s[i] != '\\' as u32 && s[i] != '$' as u32
+        || (j == i + 1 && is_not_line_terminator(s[i]) && s[i] != 0x60
+            && s[i] != 0x5C && s[i] != 0x24
             && tv == Some(utf16_encode_code_point(s[i] as int))
             && trv =~= utf16_encode_code_point(s[i] as int)))
 }
@@ -1586,13 +1586,13 @@ pub open spec fn template_part(
         // The opening: ` for NoSubstitutionTemplate and TemplateHead, } for
         // TemplateMiddle and TemplateTail.
         && (match kind {
-            TemplateKind::NoSubstitution | TemplateKind::Head => s[i] == '`' as u32,
-            TemplateKind::Middle | TemplateKind::Tail => s[i] == '}' as u32,
+            TemplateKind::NoSubstitution | TemplateKind::Head => s[i] == 0x60,
+            TemplateKind::Middle | TemplateKind::Tail => s[i] == 0x7D,
         })
         // The closing: ` for NoSubstitutionTemplate and TemplateTail, ${ for
         // TemplateHead and TemplateMiddle.
         && (match kind {
-            TemplateKind::NoSubstitution | TemplateKind::Tail => s[j - 1] == '`' as u32,
+            TemplateKind::NoSubstitution | TemplateKind::Tail => s[j - 1] == 0x60,
             TemplateKind::Head | TemplateKind::Middle => is_lit(s, j - 2, j, seq!['$', '{']),
         })
         // TemplateCharacters? between.

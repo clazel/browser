@@ -7,6 +7,8 @@
 
 #[cfg(verus_only)]
 use super::contract::*;
+#[cfg(verus_only)]
+use super::exec_numbers::{lemma_token_ok, token_ok};
 use super::exec_types::item;
 #[allow(unused_imports)]
 use super::spec::*;
@@ -77,6 +79,36 @@ pub open spec fn item_is(src: ExecParsed, it: ExecItem, v: ComponentValue) -> bo
     }
 }
 
+/// The component value `it` is.
+pub open spec fn item_view(src: ExecParsed, it: ExecItem) -> ComponentValue {
+    match it {
+        ExecItem::Token { token } => ComponentValue::Token {
+            token: clazel_css::tokenizer::exec::view_token(token),
+        },
+        ExecItem::Function { name, lo, hi } => ComponentValue::Function {
+            name: name@,
+            value: rows_list(src, lo as int, hi as int),
+        },
+        ExecItem::Block { token, lo, hi } => ComponentValue::SimpleBlock {
+            associated_token: clazel_css::tokenizer::exec::view_token(token),
+            value: rows_list(src, lo as int, hi as int),
+        },
+    }
+}
+
+/// A token item's numbers are as the tokenizer makes them ([`token_ok`]).
+pub open spec fn item_ok(it: ExecItem) -> bool {
+    match it {
+        ExecItem::Token { token } => token_ok(clazel_css::tokenizer::exec::view_token(token)),
+        _ => true,
+    }
+}
+
+/// The list of component values `items` are.
+pub open spec fn view_items(src: ExecParsed, items: Seq<ExecItem>) -> Seq<ComponentValue> {
+    items.map_values(|it: ExecItem| item_view(src, it))
+}
+
 /// True if `items` are the list `list`.
 pub open spec fn items_are(src: ExecParsed, items: Seq<ExecItem>, list: Seq<ComponentValue>) -> bool {
     items.len() == list.len() && forall|j: int| 0 <= j < items.len() ==> #[trigger] item_is(src, items[j], list[j])
@@ -104,10 +136,14 @@ fn row_token(src: &ExecParsed, k: usize) -> (r: ExecToken)
             false,
             src.output.rows@[k as int].pos as int,
         ),
+        token_ok(clazel_css::tokenizer::exec::view_token(r)),
 {
     let pos = item(src.output.rows.as_slice(), k).pos as usize;
     if pos <= src.text.len() {
         let (token, _) = clazel_css::tokenizer::exec::next_token(src.text.as_slice(), pos, false);
+        proof {
+            lemma_token_ok(src.text@, pos as int, false);
+        }
         token
     } else {
         proof {
@@ -124,6 +160,7 @@ fn read_item(src: &ExecParsed, k: usize) -> (r: ExecItem)
         k < src.output.rows@.len(),
     ensures
         item_is(*src, r, row_value(*src, k as int)),
+        item_ok(r),
 {
     let token = row_token(src, k);
     let start = item(src.output.rows.as_slice(), k).start as usize;
@@ -142,6 +179,8 @@ pub fn read_items(src: &ExecParsed, lo: usize, hi: usize) -> (r: Vec<ExecItem>)
         src_ok(*src),
     ensures
         items_are(*src, r@, rows_list(*src, lo as int, hi as int)),
+        view_items(*src, r@) == rows_list(*src, lo as int, hi as int),
+        forall|k: int| 0 <= k < r@.len() ==> item_ok(#[trigger] r@[k]),
 {
     let ghost text = src.text@;
     let ghost rows = src.output.rows@;
@@ -193,6 +232,7 @@ pub fn read_items(src: &ExecParsed, lo: usize, hi: usize) -> (r: Vec<ExecItem>)
                     == row_value(*src, met@[i] as int),
             out@.len() == met@.len() - j,
             forall|i: int| 0 <= i < out@.len() ==> #[trigger] item_is(*src, out@[i], whole[i]),
+            forall|i: int| 0 <= i < out@.len() ==> item_ok(#[trigger] out@[i]),
         decreases j,
     {
         j = j.saturating_sub(1);
@@ -203,6 +243,15 @@ pub fn read_items(src: &ExecParsed, lo: usize, hi: usize) -> (r: Vec<ExecItem>)
             assert(out@.len() == whole.len() - 1 - j);
         }
         out.push(it);
+    }
+    proof {
+        assert(out@.len() == whole.len());
+        assert(view_items(*src, out@).len() == out@.len());
+        assert forall|i: int| 0 <= i < whole.len() implies view_items(*src, out@)[i] == whole[i] by {
+            assert(item_is(*src, out@[i], whole[i]));
+            assert(view_items(*src, out@)[i] == item_view(*src, out@[i]));
+        }
+        assert(view_items(*src, out@) =~= whole);
     }
     out
 }
