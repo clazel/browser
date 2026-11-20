@@ -949,7 +949,8 @@ fn hand_built_cases() {
 /// decoder, and gets the same verdict from both validators.
 #[test]
 fn differential_random_lists() {
-    let cases = if cfg!(miri) { 40 } else { 20_000usize };
+    // Under Miri 8 lists: CI took 457 s for 40 (docs/VERIFICATION.md, Miri).
+    let cases = if cfg!(miri) { 8 } else { 20_000usize };
     let mut rng = Rng(0x9E37_79B9_7F4A_7C15);
     let (mut pass, mut fail) = (0usize, 0usize);
     let (mut accepted, mut refused) = (0usize, 0usize);
@@ -1002,7 +1003,8 @@ fn differential_random_lists() {
 /// bytes.
 #[test]
 fn differential_hostile_bytes() {
-    let cases = if cfg!(miri) { 200 } else { 100_000usize };
+    // Under Miri 40 strings: CI took 482 s for 200 (docs/VERIFICATION.md, Miri).
+    let cases = if cfg!(miri) { 40 } else { 100_000usize };
     let mut rng = Rng(0xD1B5_4A32_D192_ED03);
     let (mut pass, mut fail) = (0usize, 0usize);
     let (mut lists, mut not_lists) = (0usize, 0usize);
