@@ -13,25 +13,42 @@
 //! - [`exec_match`]: matching, with [`exec_element`] and [`exec_strings`] for what it asks
 //!   of one element; [`exec_specificity`]: specificity. Both proven equal to the spec.
 //! - [`exec_parse`]: "parse a selector", over the component values [`exec_items`] reads
-//!   from `clazel-css`; [`exec_serialize`]: CSSOM serialization. Both are checked by Verus
-//!   for panics, overflow and termination only, not yet proven equal to the spec; the
-//!   parser's output passes [`exec_check`], which is proven, before it is returned.
+//!   from `clazel-css`, proven to meet [`contract::parse_selector_ensures`] (with
+//!   [`exec_anb`] for `<an+b>`, [`exec_numbers`] for what the tokenizer makes of an integer,
+//!   [`exec_grow`] and [`exec_steps`] for the proof, and one axiom, [`axioms`]); its output is
+//!   [`exec_check::checked`]. [`exec_serialize`]: CSSOM serialization, proven equal to the
+//!   spec.
+//!
+//! - [`independent`]: a second transcription of parsing, matching and specificity, from the
+//!   standard alone. [`independent_equivalence`] (specificity), [`independent_match`] (with
+//!   [`independent_attr`]) and [`independent_parse`] prove it equal to [`spec`] on the
+//!   selectors the two share.
 //!
 //! The crate also holds the vendored test data of item 5.1, under `tests/data/`.
 //!
 //! Tier: see `[package.metadata.clazel]` in `Cargo.toml` and `docs/VERIFICATION.md`.
 
 pub mod algorithm;
+pub mod axioms;
 pub mod contract;
 pub mod examples;
+pub mod exec_anb;
 pub mod exec_check;
 pub mod exec_element;
+pub mod exec_grow;
 pub mod exec_items;
 pub mod exec_match;
+pub mod exec_numbers;
 pub mod exec_parse;
 pub mod exec_serialize;
 pub mod exec_specificity;
+pub mod exec_steps;
 pub mod exec_strings;
 pub mod exec_types;
+pub mod independent;
+pub mod independent_attr;
+pub mod independent_equivalence;
+pub mod independent_match;
+pub mod independent_parse;
 pub mod lemmas;
 pub mod spec;

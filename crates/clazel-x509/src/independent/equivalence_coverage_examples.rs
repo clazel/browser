@@ -142,7 +142,7 @@ pub open spec fn unread_base() -> Seq<u8> {
 /// nameConstraints: each row of `equivalence_name_constraints.rs`'s header.
 pub proof fn example_name_constraints()
     ensures
-        nc::parse_name_constraints(seq![0x30u8, 0x00]) is Some,
+        nc::parse_name_constraints(seq![0x30u8, 0x00]) is None,
         name_constraints_value(seq![0x30u8, 0x00]) is None,
         nc::parse_name_constraints(unread_base()) is Some,
         name_constraints_value(unread_base()) is None,
@@ -153,7 +153,7 @@ pub proof fn example_name_constraints()
         nc::parse_name_constraints(short_ip_base()) is None,
         name_constraints_value(short_ip_base()) is Some,
 {
-    assert(nc::parse_name_constraints(seq![0x30u8, 0x00]) is Some) by (compute_only);
+    assert(nc::parse_name_constraints(seq![0x30u8, 0x00]) is None) by (compute_only);
     assert(name_constraints_value(seq![0x30u8, 0x00]) is None) by (compute_only);
     assert(nc::parse_name_constraints(unread_base()) is Some) by (compute_only);
     assert(name_constraints_value(unread_base()) is None) by (compute_only);

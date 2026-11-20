@@ -60,13 +60,14 @@ criteria and the verification tiers), and recorded here as the plan asks:
   `Error::TooComplex`; it bounds the work per glyph and keeps every cell
   within 2⁴⁷.
 - **Rounding**: `round(min(|area|, 1) × 255)`, half up.
-- **Tier**: 0 now, target 1 (`Cargo.toml`), per the plan's Crates table and
-  exit criterion 1. The tier is raised only after CI's full verification has
-  run the harnesses below green.
+- **Tier**: 1, target 1 (`Cargo.toml`), per the plan's Crates table and
+  exit criterion 1. The claim stands only once CI's full verification of the
+  pull request that raised it has run the harnesses below green, and it covers
+  what the harnesses cover (the table below), each within its stated bound.
 
 ## Verification
 
-Tier: `tier = 0`, `target-tier = 1` in `Cargo.toml`.
+Tier: `tier = 1`, `target-tier = 1` in `Cargo.toml`.
 
 Kani harnesses (`src/proofs.rs`): no panic, no arithmetic overflow and no
 index out of bounds on every input within these bounds, every loop's unwinding
