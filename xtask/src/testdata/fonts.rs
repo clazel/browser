@@ -51,7 +51,7 @@ fn files_of(name: &str) -> Result<&'static [&'static str], String> {
 
 /// The SHA-256 that `SOURCE.md` gives for `file`, from the line that names
 /// it in backquotes.
-fn listed_hash(source: &str, file: &str) -> Result<String, String> {
+pub(super) fn listed_hash(source: &str, file: &str) -> Result<String, String> {
     let quoted = format!("`{file}`");
     let line = source
         .lines()

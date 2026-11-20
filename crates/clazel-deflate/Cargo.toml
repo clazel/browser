@@ -1,0 +1,37 @@
+[package]
+name = "clazel-deflate"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "DEFLATE and zlib decoding (Phase 6 item 6.2): RFC 1951 and RFC 1950 as an executable specification, with a resumable decoder over caller-owned buffers."
+
+[dependencies]
+vstd = "=0.0.0-2026-10-04-0306"
+
+# Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
+# shipped code today; `target-tier` is what the plan requires (phase-6.md
+# item 6.0(a)): DEFLATE and zlib decoding is Tier 2. The tier stays 0 until
+# CI's full verification is green on a pull request that also carries every
+# part of Tier 2 (CLAUDE.md rule 7); README.md says which parts exist.
+# The reference decoder of the differential tests (tests/conformance_deflate.rs),
+# never compiled into the browser: `miniz_oxide` (a Rust port of miniz, the
+# decoder behind the `flate2` crate), written by others (docs/DEPENDENCIES.md,
+# class `test`). Without its default features it has the one dependency
+# `adler2`; `with-alloc` is the one feature the tests need.
+[dev-dependencies]
+miniz_oxide = { version = "=0.9.1", default-features = false, features = ["with-alloc"] }
+
+[package.metadata.clazel]
+tier = 0
+target-tier = 2
+# Theorems that must exist as `proof fn`s (`cargo xtask check`). Only
+# `theorem_output_bounded` exists: the others the plan names are statements in
+# src/contract.rs, not yet proven (README.md).
+theorems = ["theorem_output_bounded"]
+
+[package.metadata.verus]
+verify = true
+
+[lints]
+workspace = true
