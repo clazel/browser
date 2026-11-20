@@ -113,8 +113,9 @@
 //!   decoder accepts. A NameConstraints with both fields absent refuses the
 //!   path: §4.2.1.10 "either the permittedSubtrees field or the
 //!   excludedSubtrees MUST be present" (`webpki::nc::intermediate-permitted-excluded-subtrees-both-null`).
-//!   The decoder already refuses empty `GeneralSubtrees` and an encoded
-//!   minimum or maximum.
+//!   The decoder already refuses that value, empty `GeneralSubtrees` and an
+//!   encoded minimum or maximum; the conjunct here stays so this layer does
+//!   not depend on it.
 //! - An empty dNSName base (BR §7.1.2.5.2's "zero-length dNSName", accepted
 //!   by both browsers and by the decoder) contains every DNS name, read as
 //!   "adding zero or more labels" to the empty name (design §3.4).
