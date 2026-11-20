@@ -552,7 +552,7 @@ fn leaf_profile(leaf: &PathCert<'_>, reference: ReferenceIdentity<'_>, now: &Cer
     if leaf.name_constraints.is_some() { return Err(PathError::LeafNameConstraints); }
     // 4. (R) RFC 5280 §4.1.2.6: an empty subject needs a critical subjectAltName.
     let subject = leaf.tbs.subject_der;
-    let empty = subject.len() == 2 && subject[0] == 0x30u8 && subject[1] == 0x00u8;
+    let empty = subject.len() == 2 && subject.first() == Some(&0x30u8) && subject.get(1) == Some(&0x00u8);
     proof {
         let v = super::parsed::exec::view_path_cert(leaf);
         assert(v.tbs.subject_der == subject@);
@@ -564,7 +564,7 @@ fn leaf_profile(leaf: &PathCert<'_>, reference: ReferenceIdentity<'_>, now: &Cer
         let oid = crate::leaf::exec::san_oid();
         let found = crate::leaf::exec::find_extension_index(leaf.extensions.as_slice(), oid.as_slice());
         let critical = match found {
-            Some(i) => leaf.extensions[i].critical,
+            Some(i) => match leaf.extensions.get(i) { Some(e) => e.critical, None => false },
             None => false,
         };
         proof {
