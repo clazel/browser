@@ -42,6 +42,7 @@ mod wpt_url_percent;
 mod wpt_url_setters;
 mod wpt_urltestdata;
 mod wpt_webstorage;
+mod wuffs_webp;
 mod wycheproof_ecdsa;
 mod wycheproof_rsa;
 mod x509_limbo;
@@ -190,6 +191,7 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         wycheproof_rsa::FILES,
     ),
     ("x509-limbo", x509_limbo::convert, x509_limbo::FILES),
+    ("wuffs-webp", wuffs_webp::convert, wuffs_webp::FILES),
 ];
 
 /// A converter for a binary artefact written beside a suite's Rust table.
