@@ -29,8 +29,8 @@
     {
       "id": "hex-digit-value-lowercase-offset",
       "file": "src/spec.rs",
-      "find": "c as int - 'a' as int + 10",
-      "replace": "c as int - 'a' as int",
+      "find": "c as int - 0x61 + 10",
+      "replace": "c as int - 0x61",
       "expect": "killed",
       "reason": "Gives `b` the MV 1 instead of 11 (§12.9.3.1), so `\\x62`-style escapes and `0xb` would get the wrong value: example_hex_digit_values is false.",
       "certificate": {
