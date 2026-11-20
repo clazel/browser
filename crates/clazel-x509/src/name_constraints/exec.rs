@@ -318,7 +318,10 @@ fn parse_fields(input: &[u8], pos: usize, end: usize) -> (result: Option<NameCon
     requires pos <= end, end <= input.len()
     ensures view_name_constraints_result(result) == nc_spec::parse_name_constraints_fields(input@, pos as nat, end as nat)
 {
-    if pos == end { return Some(NameConstraints { permitted_subtrees: None, excluded_subtrees: None }); }
+    if pos == end {
+        proof { reveal(nc_spec::parse_name_constraints_fields); }
+        return None;
+    }
     let field = der::read_tlv(input, pos, end)?;
     if is_context_tag(field.tag, 0, true) {
         let (permitted, next) = parse_subtrees_field(input, pos, end, 0)?;
