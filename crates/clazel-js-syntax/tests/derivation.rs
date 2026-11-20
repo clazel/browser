@@ -137,6 +137,7 @@ fn errors_are_still_errors() {
 /// check running to the end and with an uncovered node first, which stops it at
 /// once (the parse and the other checks of `parse` are the same).
 #[test]
+#[cfg_attr(miri, ignore = "times two parses of 1.7 million characters")]
 fn what_the_check_costs() {
     let body = "(1 + 2 * 3) < 4 - 5 / 6 % 7;\n".repeat(60_000);
     let covered = cps(&body);

@@ -43,6 +43,7 @@ fn check_ordered(src: &str, goal: SourceGoal) -> Result<(), String> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore = "reads files")]
 fn children_are_ordered_and_spans_are_tokens() -> Result<(), String> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../clazel-js-lexer/tests/data/test262/harness");
@@ -57,6 +58,12 @@ fn children_are_ordered_and_spans_are_tokens() -> Result<(), String> {
         }
     }
     assert!(n > 20);
+    Ok(())
+}
+
+/// The same property on inline sources, so that it also runs under Miri.
+#[test]
+fn inline_children_are_ordered_and_spans_are_tokens() -> Result<(), String> {
     for s in [
         "a = b ? (c, d) : e; for (var a of b) ; ({ a = 1 } = b); (a, [b] = c) => d; class A { static x = 1; #y; m() {} }",
         "export default class {}; import a, { b as c } from 'm'",
