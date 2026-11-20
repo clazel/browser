@@ -411,8 +411,12 @@ fn random_bytes_never_panic() {
         x ^= x << 17;
         x
     };
+    // Miri interprets every step: 20 000 rounds took 401 s there, over
+    // xtask's 300 s limit, so it runs the first 2 000 of the same sequence
+    // (about 40 s). The full count runs in the normal test job.
+    let rounds: usize = if cfg!(miri) { 2_000 } else { 20_000 };
     let mut accepted = 0usize;
-    for round in 0..20_000usize {
+    for round in 0..rounds {
         let n = usize::try_from(next() % 64).unwrap_or(0);
         let blob: Vec<u8> = (0..n).map(|_| next().to_le_bytes()[0]).collect();
         let entries: Vec<usize> = (0..round % 3)
@@ -420,7 +424,7 @@ fn random_bytes_never_panic() {
             .collect();
         accepted += usize::from(validate(&blob, &entries));
     }
-    assert!(accepted < 20_000);
+    assert!(accepted < rounds);
 }
 
 #[test]
