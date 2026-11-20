@@ -13,7 +13,7 @@
 //! | `version_rules` | always | `theorem_version_rules` |
 //! | `signature_algorithms_agree` | one way: `equivalence_signature.rs`; RSA NULL against absent stays | `theorem_signature_algorithms` |
 //! | `issuer_non_empty` | always | `theorem_issuer_non_empty` |
-//! | `subject_rule` | **not enforced** | `example_path_conditions_hold` |
+//! | `subject_rule` | target: enforced by `path/profile.rs` step 4, not yet proven against this predicate; intermediates: implied by `issuer_non_empty` of the next certificate | `example_path_conditions_hold` |
 //! | `extensions_acceptable` | any role, for a relying party with every form | `theorem_extensions_acceptable` |
 //! | `no_duplicate_extensions` | always, and stricter: RFC 5280 covers foreign ids | `theorem_no_duplicates` |
 //! | `key_identifiers_non_critical` | any role | `theorem_key_identifiers` |
@@ -28,19 +28,18 @@
 //! `value_closed` and the name form predicates are what those use, and are
 //! proven through them. `lemma_is_ca` states the first directly.
 //!
-//! **The three clauses production does not enforce.** Each binds the issuer,
-//! and each is a choice, not an oversight, in the crate's tests or specs:
-//! - `subject_rule`, the critical subjectAltName of an empty subject:
-//!   `tests/limbo/expected_failures.rs`, `CABF_SAN_CRITICALITY` ("the profile
-//!   adds no rule"; `rfc5280::san::noncritical-with-empty-subject`).
+//! **The clauses production does not enforce.** Each binds the issuer, and
+//! each is a choice, not an oversight, in the crate's specs:
 //! - `basic_constraints_rules`' "flagged as critical": neither `leaf/spec.rs`
 //!   nor §6.1.4 (k) reads the flag of basicConstraints, and RFC 5280 §6.1.4 (k)
-//!   does not ask it of a relying party.
+//!   does not ask it of a relying party. A modelling choice in `path/spec.rs`'s
+//!   header: two NSS roots are non-critical.
 //! - `ca_only_extensions`' policyConstraints on a target: `path/profile.rs`
-//!   refuses nameConstraints there and has no rule for policyConstraints.
+//!   refuses nameConstraints there and, as a modelling choice in its header,
+//!   not policyConstraints, which RFC 5280 §6.1.5 (b) processes.
 //!
-//! X.501 9.3's `name_types_distinct`: `name/spec.rs` has no such rule and
-//! production does not parse the Name.
+//! X.501 9.3's `name_types_distinct`: `name/spec.rs` has no such rule (a
+//! modelling choice in its header) and production does not parse the Name.
 
 #[allow(unused_imports)]
 use vstd::prelude::*;

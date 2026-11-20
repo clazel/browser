@@ -22,7 +22,7 @@ rustls-pki-types = { version = "=1.15.1", default-features = false, features = [
 webpki-root-certs = "=1.0.11"
 
 [package.metadata.clazel]
-tier = 0
+tier = 2
 target-tier = 2
 
 [package.metadata.verus]
