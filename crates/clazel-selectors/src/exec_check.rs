@@ -1,7 +1,9 @@
 //! A check, proven sound, that parsed selectors are what matching needs: in-bounds arrays
-//! ([`ranges_wf`]) and a well-formed result ([`list_wf`]). The parser runs it on what it
-//! built, so that [`super::exec_match::matches`]'s requirements hold of every parse without
-//! the parser itself being proven (see [`super::exec_parse`]).
+//! ([`ranges_wf`]) and a well-formed result ([`list_wf`]). [`checked`] is what
+//! [`super::exec_parse::parse_selector`] ensures of every result, which it proves from the
+//! equality of its result with the spec's and [`super::lemmas::theorem_parse_total`]; it no
+//! longer runs [`check`], which stays as a proven runtime check of the same property (for a
+//! caller that builds selectors some other way).
 
 #[cfg(verus_only)]
 use super::contract::*;
