@@ -1,12 +1,13 @@
 //! `name_constraints/spec.rs` against `independent/extensions.rs`. The other
 //! value decoders are in `equivalence_values.rs`.
 //!
+//! Both refuse an empty `NameConstraints`: X.509 9.4.2.2 "At least one of
+//! ... shall be present", RFC 5280 §4.2.1.10 "either the permittedSubtrees
+//! field or the excludedSubtrees MUST be present". (The crate read it until
+//! the decoder was brought in line; `example_name_constraints` keeps the
+//! input.)
+//!
 //! The crate reads and the transcription refuses:
-//! - **An empty `NameConstraints`.** `name_constraints/spec.rs` takes both
-//!   fields as OPTIONAL. X.509 9.4.2.2 says "At least one of ...
-//!   shall be present", and RFC 5280 §4.2.1.10 says conforming CAs MUST NOT
-//!   issue one, so **the letter is with the transcription**. The extension
-//!   constrains nothing either way.
 //! - **A base the crate keeps unread that the transcription refuses**
 //!   ([`base_form_decodes`]): a directoryName that is not a Name, an otherName
 //!   with the wrong structure, a non-IA5 URI, a registeredID that is not an
@@ -656,18 +657,16 @@ pub open spec fn optional_forms_decode(a: Option<Seq<nc::GeneralSubtree>>) -> bo
     }
 }
 
-/// What `name_constraints/spec.rs` reads, `extensions.rs` reads: not the empty
-/// sequence, and each base one the second reads.
+/// What `name_constraints/spec.rs` reads, `extensions.rs` reads: each base
+/// one the second reads.
 pub open spec fn name_constraints_decodes(a: nc::NameConstraints) -> bool {
-    &&& a.permitted_subtrees is Some || a.excluded_subtrees is Some
     &&& optional_forms_decode(a.permitted_subtrees)
     &&& optional_forms_decode(a.excluded_subtrees)
 }
 
 /// **`theorem_name_constraints`, from `name_constraints/spec.rs`.** A value
 /// `parse_name_constraints` reads, `extensions.rs` reads to the same value,
-/// unless it is the empty sequence or a base it keeps unread is one
-/// `extensions.rs` refuses.
+/// unless a base it keeps unread is one `extensions.rs` refuses.
 #[verifier::spinoff_prover]
 pub proof fn theorem_name_constraints_fwd(input: Seq<u8>)
     requires
