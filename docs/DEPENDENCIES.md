@@ -276,6 +276,13 @@ Changing a row is a reviewable act. Adding one means saying why below.
 | zerocopy-derive | 0.8.63 | tooling | The `zerocopy` derives (proc-macro), required by `naga` (GLSL to SPIR-V for `clazel-gpu`'s shaders, in `xtask` only). |
 | miniz_oxide | 0.9.1 | test | A Rust port of miniz (the DEFLATE and zlib implementation behind `flate2`, and `png`'s decoder): the reference engine in `clazel-deflate`'s differential tests (`tests/conformance_deflate.rs`), which compare its output on the vendored streams and on mutated ones. Used without default features, with `with-alloc`, so its one dependency is `adler2`. |
 | adler2 | 2.0.1 | test | The Adler-32 checksum (a port of the algorithm RFC 1950 gives), required by `miniz_oxide`. No dependencies. |
+| png | 0.18.1 | test | image-rs's PNG decoder and encoder (the one behind the `image` crate), written by others: the reference engine in `clazel-png`'s differential tests (`tests/conformance_png.rs`, phase-6.md item 6.4), whose RGBA8 output (with `EXPAND` and `STRIP_16`) and APNG frames the shipped decoder's are compared with, exactly; its encoder also writes some of the test streams. Default features (it has none; `zlib-rs` and the others are off). Pinned to 0.18.1, its latest release when added (2026-11-17). It has a known fault the tests work around and report: an interlaced APNG frame narrower than the canvas is written with the canvas's stride. |
+| fdeflate | 0.3.7 | test | image-rs's DEFLATE decoder and compressor tuned for PNG, required by `png` (it decodes IDAT and writes `Compression::Fast` streams). Its one dependency is `simd-adler32`. |
+| flate2 | 1.1.11 | test | The zlib and DEFLATE front end that `png` uses for `Compression::Balanced` and `High`, required by `png`. Default features only, so its backend is `miniz_oxide`; the `zlib-rs` backend it can use is not enabled. |
+| miniz_oxide | 0.8.9 | test | A Rust port of miniz, the DEFLATE backend of `flate2`, required by `png` (feature `simd`). A second version beside 0.9.1, which `clazel-deflate`'s tests use: `png` 0.18.1 asks for 0.8. |
+| crc32fast | 1.5.5 | test | The CRC-32 of PNG's chunks, required by `png` (the reference decoder checks every chunk with it). It has `unsafe` only for CPU-specific CRC instructions chosen at run time. |
+| simd-adler32 | 0.3.10 | test | Adler-32 with CPU-specific instructions, required by `fdeflate` and by `miniz_oxide`'s `simd` feature. |
+| zlib-rs | 0.6.8 | test | A Rust port of zlib, the optional backend of `flate2` (its `zlib-rs` feature). It is in `Cargo.lock` because `flate2` lists it, but the feature is off, so it is not compiled into any build. |
 <!-- END ALLOWLIST -->
 
 The only `shipped` package is `libc`, and only `clazel-sys` depends on it

@@ -24,6 +24,7 @@ mod http_state_parser;
 mod js;
 mod llhttp;
 mod nist_cavp_sigver;
+mod pngsuite;
 mod wpt_base64;
 mod wpt_cookies;
 mod wpt_css_cascade;
@@ -201,6 +202,7 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         wuffs_deflate::convert,
         wuffs_deflate::FILES_ARTIFICIAL,
     ),
+    ("pngsuite", pngsuite::convert, pngsuite::FILES),
 ];
 
 /// A converter for a binary artefact written beside a suite's Rust table.
