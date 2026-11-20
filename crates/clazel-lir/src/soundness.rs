@@ -61,6 +61,34 @@ proof fn lemma_sub_refl(t: Ty)
 {
 }
 
+/// `stack_sub` (stated by recursion so that it can be evaluated) is `ty_sub`
+/// pointwise on sequences of equal length.
+pub proof fn lemma_stack_sub_pointwise(a: Seq<Ty>, b: Seq<Ty>)
+    ensures
+        stack_sub(a, b) <==> (a.len() == b.len() && forall|j: int|
+            0 <= j < a.len() ==> ty_sub(#[trigger] a[j], b[j])),
+    decreases a.len(),
+{
+    if a.len() == b.len() && a.len() > 0 {
+        let (a0, b0) = (a.drop_last(), b.drop_last());
+        lemma_stack_sub_pointwise(a0, b0);
+        assert forall|j: int| 0 <= j < a0.len() implies a0[j] == a[j] && b0[j] == b[j] by {}
+        if stack_sub(a, b) {
+            assert forall|j: int| 0 <= j < a.len() implies ty_sub(#[trigger] a[j], b[j]) by {
+                if j < a0.len() {
+                    assert(ty_sub(a0[j], b0[j]));
+                }
+            }
+        }
+        if forall|j: int| 0 <= j < a.len() ==> ty_sub(#[trigger] a[j], b[j]) {
+            assert(ty_sub(a[a.len() - 1], b[b.len() - 1]));
+            assert forall|j: int| 0 <= j < a0.len() implies ty_sub(#[trigger] a0[j], b0[j]) by {
+                assert(ty_sub(a[j], b[j]));
+            }
+        }
+    }
+}
+
 proof fn lemma_stack_sub_refl(s: Seq<Ty>)
     ensures
         stack_sub(s, s),
@@ -68,6 +96,7 @@ proof fn lemma_stack_sub_refl(s: Seq<Ty>)
     assert forall|j: int| 0 <= j < s.len() implies ty_sub(#[trigger] s[j], s[j]) by {
         lemma_sub_refl(s[j]);
     }
+    lemma_stack_sub_pointwise(s, s);
 }
 
 proof fn lemma_conf_sub(lay: Layout, v: Val, t: Ty, u: Ty)
@@ -86,6 +115,7 @@ proof fn lemma_vals_sub(lay: Layout, vs: Seq<Val>, ts: Seq<Ty>, us: Seq<Ty>)
     ensures
         vals_conform(lay, vs, us),
 {
+    lemma_stack_sub_pointwise(ts, us);
     assert forall|j: int| 0 <= j < vs.len() implies conforms(lay, #[trigger] vs[j], us[j]) by {
         lemma_conf_sub(lay, vs[j], ts[j], us[j]);
     }
