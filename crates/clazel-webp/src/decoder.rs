@@ -217,6 +217,10 @@ impl Webp {
                 if self.riff_left == 0 {
                     return Err(bad("a WebP file with no chunks"));
                 }
+                // No chunk is open yet (as `start` left them).
+                self.chunk_left = 0;
+                self.padded = false;
+                self.in_anmf = false;
                 self.phase = Phase::ChunkHdr;
             }
             return Ok(Event::Continue);
@@ -600,13 +604,23 @@ impl Webp {
         let (cw, ch) = self.canvas();
         self.phase == Phase::Spent
             || (self.have <= 16
-                && self.chunk_left.saturating_add(u32::from(self.padded))
-                    <= if self.in_anmf {
-                        self.anmf_left
-                    } else {
-                        self.riff_left
-                    }
+                // Checked, not saturating: `chunk_header` checks the size and
+                // its padding byte with `checked_add`, and a saturated sum
+                // would not survive a byte.
+                && self
+                    .chunk_left
+                    .checked_add(u32::from(self.padded))
+                    .is_some_and(|t| {
+                        t <= if self.in_anmf {
+                            self.anmf_left
+                        } else {
+                            self.riff_left
+                        }
+                    })
                 && (!self.in_anmf || self.anmf_left <= self.riff_left)
+                // Between chunks no chunk is open.
+                && (!matches!(self.phase, Phase::ChunkHdr | Phase::Pad)
+                    || (self.chunk_left == 0 && !self.padded))
                 && self.cur.left.saturating_add(self.cur.width) <= cw
                 && self.cur.top.saturating_add(self.cur.height) <= ch
                 && self.last.left.saturating_add(self.last.width) <= cw
@@ -910,6 +924,12 @@ impl Webp {
     /// The file is an animation (for the harnesses).
     pub(crate) fn kani_animated(&self) -> bool {
         self.animated
+    }
+
+    /// Sets the phase (for the harnesses: set after `any_webp`'s `Option` is
+    /// unwrapped, so that symbolic execution keeps it a constant).
+    pub(crate) fn kani_set_phase(&mut self, phase: Phase) {
+        self.phase = phase;
     }
 
     /// The invariant of the state (for the harnesses).

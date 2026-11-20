@@ -59,13 +59,14 @@ reference before the first pixel or past the last is an error.
 
 ## Kani harnesses (`src/proofs.rs`)
 
-Fifty-seven. The step harnesses are one per phase or role, made by three
-macros: with the phase symbolic, CBMC ran out of memory (over 4 GB locally;
-on CI the runner was lost after two hours). The pixel, finish and container
-harnesses use MiniSat, because CaDiCaL and kissat each ran out of 4 GB on
-`act_red`, which MiniSat proves in 30 seconds. **Not yet run green on CI**:
-locally, under Kani 0.68.0, every harness but the pixel, finish and container
-ones has been run green; CI's approved proof jobs are the result that counts.
+Sixty-nine. The step harnesses are one per phase, role or transform: with
+the phase symbolic, CBMC ran out of memory (over 4 GB locally; on CI the
+runner was lost after two hours). What keeps each in memory is listed at the
+top of `src/proofs.rs` (MiniSat for the pixel, finish and container ones,
+smaller unwinding, a 4-colour table where it is indexed symbolically).
+**Not yet run green on CI**: locally, under Kani 0.68.0 with a 4 GB cap, each
+was run on its own (results in the pull request); CI's approved proof jobs
+are the result that counts.
 
 | Harness | Statement (every one: no panic, no overflow, no out-of-bounds index) | Bound |
 |---------|-----------|-------|
@@ -80,8 +81,8 @@ ones has been run green; CI's approved proof jobs are the result that counts.
 | `palette_row_any` | colour indexing with bundling: each pixel is the table entry its packed bits name, or transparent black past the table | every bundling width, rows of 1 to 8 pixels, up to 4 colours |
 | `palette_in_place_any` | the same, two rows expanded in place, last row first, equal to the expansion from a copy | every bundling width, 4 pixels in 2 rows |
 | `blend_px_any` | alpha blending: alpha 255 gives the source, 0 the destination, otherwise alpha does not go down | any two pixels |
-| `act_*` (32, `act_harness!`) | one atomic action of the lossless decoder, in one phase each (header, transforms, cache, meta prefix, every step of reading a prefix code, and pixels: literal symbols, lengths, distances, cache lookups, a backward reference of at most 4 pixels), keeps `Vp8l::inv` on `Ok` | any state with the invariant, any bits, any contents of every scratch region; images of at most 4 pixels; `act_build_code`: an alphabet of at most 8 symbols |
-| `finish_*` (5, `finish_harness!`) | finishing an image of each role (colour table, entropy image, the two transform images, the main image with every inverse transform) keeps `Vp8l::inv` | the same, up to 4 colours, 2 rows |
+| `act_*` (40, `act_harness!`) | one atomic action of the lossless decoder, in one phase each (header, transforms, cache, meta prefix, every step of reading a prefix code, and pixels: literal symbols, lengths, distances, cache lookups, a backward reference of at most 4 pixels), keeps `Vp8l::inv` on `Ok`; the two distance phases have one harness per role | any state with the invariant, any bits, any contents of every scratch region; images of at most 4 pixels; `act_build_code`: an alphabet of at most 8 symbols; palette role: a table of 4 colours |
+| `finish_*` (9) | finishing an image keeps `Vp8l::inv`: the colour table, entropy image and two transform images, and the main image with no transform or with one of each kind (inverting several is a loop whose body depends only on that transform and the pixels) | the same, up to 4 colours, 2 rows; `finish_main_predictor` exactly 2 by 2 pixels (`predictor_row_any` covers rows of 3); `finish_main_index`: a table of 4 colours |
 | `container_*` (9, `container_harness!`) | one byte of the container, in each phase but the lossless payload, keeps `Webp::state_inv` on `Ok` | any state with the invariant, a 2 by 2 canvas |
 
 ### What Kani covers, and what it does not

@@ -938,6 +938,10 @@ impl Vp8l {
 
     /// Stores a pixel and moves on.
     fn emit(&mut self, p: Px, dest: &mut [u8], cache: &mut [u8]) -> Result<Act, Error> {
+        // The pixel phases end when `pos` reaches `total` (`after_pixels`).
+        if self.pos >= self.total {
+            return Err(bad("a pixel past the end of the image"));
+        }
         if !put(dest, usize::try_from(self.pos).unwrap_or(usize::MAX), p) {
             return Err(bad("a pixel outside the image"));
         }
@@ -1203,6 +1207,36 @@ impl Vp8l {
         target: &mut [u8],
     ) -> Result<(), Error> {
         self.finish_image(s, target).map(|_| ())
+    }
+
+    /// Keeps only the first transform, of kind `k` (0 predictor, 1 colour, 2
+    /// subtract green, 3 colour indexing), or none if `k` is over 3 (for the
+    /// harnesses: `invert` is a loop whose body depends only on that
+    /// transform and the pixels, so one transform of each kind covers it).
+    pub(crate) fn kani_one_transform(&mut self, k: u8) {
+        let kind = match k {
+            0 => Kind::Predictor,
+            1 => Kind::Colour,
+            2 => Kind::Green,
+            3 => Kind::Index,
+            _ => {
+                self.ntf = 0;
+                return;
+            }
+        };
+        self.ntf = 1;
+        if let Some(t) = self.tf.get_mut(0) {
+            t.kind = kind;
+        }
+    }
+
+    /// Sets the image to `h` rows and the first transform to `w` pixels wide
+    /// (for the harnesses: constants keep symbolic execution small).
+    pub(crate) fn kani_set_first_size(&mut self, w: u32, h: u32) {
+        self.height = h;
+        if let Some(t) = self.tf.get_mut(0) {
+            t.xsize = w;
+        }
     }
 
     /// The invariant, for the harnesses.
