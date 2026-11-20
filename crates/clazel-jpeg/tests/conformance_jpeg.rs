@@ -39,10 +39,10 @@
 //! - **JPEGs by hand**: small streams for DC prediction, restart intervals,
 //!   the marker rules and the errors, in this file and in the sources.
 //!
-//! Under Miri (about 1,600 times slower than a debug build) the suites are
-//! cut to strides, stated at each (`miri_*` constants), chosen from
-//! timings of each test with the Miri branch forced on natively (about
-//! 0.04 s per test, so about a minute under Miri).
+//! Under Miri the suites are cut to strides, stated at each (`miri_*`
+//! constants). They were first sized assuming Miri runs about 1,600 times
+//! slower than a debug build; CI measured about 13,000 times on this crate
+//! (the chunking test took 397 s), and the chunking stride was cut to fit.
 
 use clazel_image_shape::{
     Buffers, Config, ConfigStatus, Decoder, Error, Format, FrameCount, Status,
@@ -69,13 +69,12 @@ const CANARY: u8 = 0xEE;
 /// 134: the small sizes of the corpus; the full-size images take minutes).
 const MIRI_MAX_FILE: usize = 800;
 /// Of those, the differential test takes every 2nd and the chunking test every
-/// 4th, the chunking test at chunk sizes 1 and 64 (natively 1 to 4096). Each
-/// was sized by timing the test natively with the Miri branch forced on:
-/// about 0.04 s per test, so about a minute under Miri (about 1,600 times
-/// slower).
+/// 8th, the chunking test at chunk size 1 only (natively 1 to 4096). CI took
+/// 397 s under Miri for every 4th at sizes 1 and 64; this is about a quarter
+/// of that.
 const MIRI_DIFF_EVERY: usize = 2;
-const MIRI_CHUNK_EVERY: usize = 4;
-const MIRI_CHUNKS: &[usize] = &[1, 64];
+const MIRI_CHUNK_EVERY: usize = 8;
+const MIRI_CHUNKS: &[usize] = &[1];
 /// Mutants per file (natively 10, under Miri 6) and files (natively all, under
 /// Miri 5 spread over the list).
 const MIRI_MUTANTS: usize = 6;
