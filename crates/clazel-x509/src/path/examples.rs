@@ -672,6 +672,34 @@ pub proof fn lemma_leaf_name_constraints()
         == Err::<(), PathError>(PathError::LeafNameConstraints)) by (compute_only);
 }
 
+/// (R) RFC 5280 §4.1.2.6: a target with an empty subject and a non-critical
+/// subjectAltName is refused (`rfc5280::san::noncritical-with-empty-subject`);
+/// with the subjectAltName critical it is accepted.
+pub proof fn lemma_leaf_empty_subject()
+    ensures
+        profile_of(anchor(), seq![super::parsed::spec::PathCert {
+            tbs: crate::tbs::spec::TbsCertificate { subject_der: seq![0x30u8, 0x00], ..leaf_under_root().tbs },
+            ..leaf_under_root() }]) == Err::<(), PathError>(PathError::Leaf),
+        profile_of(anchor(), seq![super::parsed::spec::PathCert {
+            tbs: crate::tbs::spec::TbsCertificate { subject_der: seq![0x30u8, 0x00], ..leaf_under_root().tbs },
+            extensions: seq![
+                extension(crate::extensions::spec::subject_alt_name_oid(), true, san_example_com_der()),
+                extension(crate::leaf::spec::extended_key_usage_extension_oid(), false, eku_server_auth_der()),
+            ],
+            ..leaf_under_root() }]) == Ok::<(), PathError>(()),
+{
+    assert(profile_of(anchor(), seq![super::parsed::spec::PathCert {
+        tbs: crate::tbs::spec::TbsCertificate { subject_der: seq![0x30u8, 0x00], ..leaf_under_root().tbs },
+        ..leaf_under_root() }]) == Err::<(), PathError>(PathError::Leaf)) by (compute_only);
+    assert(profile_of(anchor(), seq![super::parsed::spec::PathCert {
+        tbs: crate::tbs::spec::TbsCertificate { subject_der: seq![0x30u8, 0x00], ..leaf_under_root().tbs },
+        extensions: seq![
+            extension(crate::extensions::spec::subject_alt_name_oid(), true, san_example_com_der()),
+            extension(crate::leaf::spec::extended_key_usage_extension_oid(), false, eku_server_auth_der()),
+        ],
+        ..leaf_under_root() }]) == Ok::<(), PathError>(())) by (compute_only);
+}
+
 /// The leaf checks: a leaf for another name fails; one whose only purpose
 /// is anyExtendedKeyUsage fails.
 pub proof fn lemma_leaf_checks()

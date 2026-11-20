@@ -10,7 +10,10 @@
       "certificate": {
         "file": "src/examples.rs",
         "lemma": "example_add_with_carry()",
-        "witness": "add_with_carry(32, 0xFFFF_FFFF, 1, 0).1 == 0b0100int"
+        "witness": "add_with_carry(32, 0xFFFF_FFFF, 1, 0).1 == 0b0100int",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
       }
     },
     {
@@ -23,7 +26,10 @@
       "certificate": {
         "file": "src/examples.rs",
         "lemma": "example_add_with_carry()",
-        "witness": "add_with_carry(32, 0x7FFF_FFFF, 1, 0).1 == 0b1000int"
+        "witness": "add_with_carry(32, 0x7FFF_FFFF, 1, 0).1 == 0b1000int",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
       }
     },
     {

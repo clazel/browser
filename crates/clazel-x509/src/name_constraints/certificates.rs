@@ -55,9 +55,13 @@ pub proof fn lemma_reversed_name_constraints_fields_are_rejected()
 
 /// A second DER value after the outer NameConstraints SEQUENCE is rejected.
 pub proof fn lemma_trailing_name_constraints_bytes_are_rejected()
-    ensures parse_name_constraints(seq![0x30u8, 0x00, 0x05, 0x00]) is None
+    ensures parse_name_constraints(seq![
+        0x30u8, 0x07, 0xa1, 0x05, 0x30, 0x03, 0x82, 0x01, b'a', 0x05, 0x00,
+    ]) is None
 {
-    assert(parse_name_constraints(seq![0x30u8, 0x00, 0x05, 0x00]) is None) by (compute_only);
+    assert(parse_name_constraints(seq![
+        0x30u8, 0x07, 0xa1, 0x05, 0x30, 0x03, 0x82, 0x01, b'a', 0x05, 0x00,
+    ]) is None) by (compute_only);
 }
 
 /// CA/B BR §7.1.2.5.2's zero-length dNSName is accepted as a base, in
@@ -135,6 +139,14 @@ pub proof fn lemma_directory_name_base_keeps_name_tlv()
         },
         None => false,
     }) by (compute_only);
+}
+
+/// RFC 5280 §4.2.1.10: "either the permittedSubtrees field or the
+/// excludedSubtrees MUST be present"; an empty NameConstraints is refused.
+pub proof fn lemma_empty_name_constraints_are_rejected()
+    ensures parse_name_constraints(seq![0x30u8, 0x00]) is None
+{
+    assert(parse_name_constraints(seq![0x30u8, 0x00]) is None) by (compute_only);
 }
 
 }

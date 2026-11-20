@@ -59,6 +59,7 @@
       "replace": "string.len() == 3 && (string[0] == 0x75)",
       "expect": "killed",
       "reason": "\"URL(\" would be a function token, not a url token.",
+      "module": "tokenizer::examples",
       "certificate": {
         "file": "src/tokenizer/lemmas.rs",
         "lemma": "super::examples::lemma_example_urls()",
@@ -319,6 +320,7 @@
       "replace": "    if false {\n",
       "expect": "killed",
       "reason": "Step 7 removes it.",
+      "module": "parser::examples",
       "certificate": {
         "file": "src/parser/lemmas.rs",
         "lemma": "super::examples::lemma_example_original_text()",
@@ -397,6 +399,7 @@
       "replace": "    if is(item, Token::Eof) {\n        discard_a_token(input, index)\n",
       "expect": "killed",
       "reason": "Bad remnants end at a semicolon.",
+      "module": "parser::examples",
       "certificate": {
         "file": "src/parser/lemmas.rs",
         "lemma": "super::examples::lemma_example_remnants()",

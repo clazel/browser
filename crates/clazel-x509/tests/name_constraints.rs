@@ -163,7 +163,8 @@ fn rejects_field_reordering_trailing_bytes_and_bad_outer_consumption() {
     trailing.extend_from_slice(&[0x05, 0x00]);
     assert!(parse_name_constraints(&trailing).is_none());
 
-    assert!(parse_name_constraints(&[0x30, 0x00]).is_some());
+    // RFC 5280 §4.2.1.10: one of the two fields MUST be present.
+    assert!(parse_name_constraints(&[0x30, 0x00]).is_none());
 }
 
 #[test]
