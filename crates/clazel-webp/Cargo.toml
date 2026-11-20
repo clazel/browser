@@ -1,0 +1,33 @@
+[package]
+name = "clazel-webp"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "A WebP decoder (Phase 6 item 6.8): the RIFF container, VP8X, ANIM and ANMF with every frame composited, and VP8L lossless decoding (transforms, colour cache, meta prefix codes, backward references); lossy VP8 is item 6.9 and is refused. A resumable step function over caller-owned buffers, implementing clazel-image-shape's Decoder."
+
+[dependencies]
+# The decoder interface (item 6.3), our own crate with no dependencies, so no
+# third-party code is shipped (CLAUDE.md rule 8).
+clazel-image-shape = { path = "../clazel-image-shape" }
+
+# The reference decoder of the differential test (tests/conformance_webp.rs),
+# never compiled into the browser: image-rs's `image-webp`, written by others,
+# driven for the pixels and frames of each file (docs/DEPENDENCIES.md, class
+# `test`).
+[dev-dependencies]
+image-webp = "=0.2.4"
+
+# Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
+# shipped code today; `target-tier` is the plan's reading of item 6.8: bytes
+# of a page-chosen file drive every index and counter, so Tier 1 (Kani
+# harnesses in src/proofs.rs: prefix code construction over any code lengths,
+# each transform over any row up to a stated width, and the step function's
+# parts). The tier stays 0 until CI's full verification has run those
+# harnesses green.
+[package.metadata.clazel]
+tier = 0
+target-tier = 1
+
+[lints]
+workspace = true
