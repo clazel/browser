@@ -405,9 +405,10 @@ pub proof fn lemma_one_san_conditions(p: ps::PathCert, y: s::Certificate)
 
 /// **`theorem_path_cert_back`'s and `theorem_path_cert_fwd`'s conditions are met
 /// by a certificate with an extension,** so they, and `theorem_reading`, are
-/// not vacuous. And **`subject_rule` is not enforced:** the certificate's
-/// subject is empty and its subjectAltName is not critical, so 7.2.1 refuses
-/// it, and `parse_path_cert` keeps it (limbo pins the same for a whole path:
+/// not vacuous. And **`subject_rule` is not `parse_path_cert`'s:** the
+/// certificate's subject is empty and its subjectAltName is not critical, so
+/// 7.2.1 refuses it, and `parse_path_cert` keeps it. `leaf_profile` step 4
+/// refuses it as a target (`theorem_subject_rule_target`; limbo:
 /// `rfc5280::san::noncritical-with-empty-subject`).
 #[verifier::spinoff_prover]
 pub proof fn example_path_conditions_hold()
