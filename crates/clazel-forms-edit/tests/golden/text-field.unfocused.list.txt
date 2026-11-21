@@ -1,0 +1,10 @@
+scale 1
+fill 0,0 300x120 #ffffffff
+fill 0,0 80x10 #ffffffff
+push-clip 0,0 80x10
+text -8,-12 30x30 #ff000000 face=0 size=640 glyphs=2 first=128,512
+pop-clip
+fill 0,0 80x1 #ff767676
+fill 0,9 80x1 #ff767676
+fill 0,1 1x8 #ff767676
+fill 79,1 1x8 #ff767676

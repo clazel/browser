@@ -4,7 +4,7 @@ root
   block <html>
     block <body>
       block (anonymous)
-        inline <select>
+        replaced <select> inline Select { rows: 1, chars: 1 }
       table-wrapper <table>
         table <table>
           table-row-group <tbody>
@@ -16,7 +16,7 @@ root
   block <html>
     block <body>
       block (anonymous)
-        inline <select>
+        replaced <select> inline Select { rows: 1, chars: 1 }
       table-wrapper <table>
         table <table>
           table-row-group <tbody>
@@ -33,7 +33,7 @@ root
           table-row-group <tbody>
             table-row <tr>
               table-cell <td>
-                inline <select>
+                replaced <select> inline Select { rows: 1, chars: 1 }
               table-cell <td>
 
 #case 3
@@ -46,7 +46,7 @@ root
           table-row-group <tbody>
             table-row <tr>
               table-cell <th>
-                inline <select>
+                replaced <select> inline Select { rows: 1, chars: 1 }
               table-cell <td>
 
 #case 4
@@ -56,7 +56,7 @@ root
     block <body>
       table-wrapper <table>
         table-caption <caption>
-          inline <select>
+          replaced <select> inline Select { rows: 1, chars: 1 }
         table <table>
           table-row-group <tbody>
             table-row <tr>
@@ -66,49 +66,49 @@ root
 root
   block <html>
     block <body>
-      inline <select>
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 6
 #data "<!doctype html><select><td>"
 root
   block <html>
     block <body>
-      inline <select>
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 7
 #data "<!doctype html><select><th>"
 root
   block <html>
     block <body>
-      inline <select>
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 8
 #data "<!doctype html><select><tbody>"
 root
   block <html>
     block <body>
-      inline <select>
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 9
 #data "<!doctype html><select><thead>"
 root
   block <html>
     block <body>
-      inline <select>
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 10
 #data "<!doctype html><select><tfoot>"
 root
   block <html>
     block <body>
-      inline <select>
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 11
 #data "<!doctype html><select><caption>"
 root
   block <html>
     block <body>
-      inline <select>
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 12
 #data "<!doctype html><table><tr></table>a"

@@ -80,13 +80,11 @@ text -8,-1 136x48 #ff000000 face=0 size=1024 glyphs=12 first=512,1975
 #data "<!doctype html><select><plaintext></plaintext>X"
 scale 1
 fill 0,0 800x600 #ffffffff
-text -8,-1 147x48 #ff000000 face=0 size=1024 glyphs=13 first=512,1975
 
 #case 14
 #data "<!doctype html><table><select><plaintext>a<caption>b"
 scale 1
 fill 0,0 800x600 #ffffffff
-text -8,-1 139x48 #ff000000 face=0 size=1024 glyphs=11 first=512,1975
 
 #case 15
 #data "<!doctype html><template><plaintext>a</template>b"
@@ -160,19 +158,16 @@ text -5,-6 61x48 #ff000000 face=0 size=1024 glyphs=3 first=704,1655
 #data "<!doctype html><select><script></style></script>abc"
 scale 1
 fill 0,0 800x600 #ffffffff
-text -8,-9 61x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
 
 #case 28
 #data "<!doctype html><table><select><script></style></script>abc"
 scale 1
 fill 0,0 800x600 #ffffffff
-text -8,-9 61x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
 
 #case 29
 #data "<!doctype html><table><tr><select><script></style></script>abc"
 scale 1
 fill 0,0 800x600 #ffffffff
-text -8,-9 61x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
 
 #case 30
 #data "<!doctype html><frameset></frameset><noframes>abc"

@@ -239,24 +239,16 @@ root
 root
   block <html>
     block <body>
-      inline <select>
-        inline <option>
-          text "A"
+      replaced <select> inline Select { rows: 1, chars: 1 }
       inline <option>
         text "B"
-        inline <select>
-          inline <option>
-            text "C"
+        replaced <select> inline Select { rows: 1, chars: 1 }
       inline <option>
         text "D"
-        inline <select>
-          inline <option>
-            text "E"
+        replaced <select> inline Select { rows: 1, chars: 1 }
       inline <option>
         text "F"
-        inline <select>
-          inline <option>
-            text "G"
+        replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 32
 #data "<dd><dd><dt><dt><dd><li><li>"
@@ -306,7 +298,7 @@ root
     block <body>
       block (anonymous)
         inline <kbd> first
-          inline <select>
+          replaced <select> inline Select { rows: 1, chars: 1 }
       table-wrapper <table>
         table <table>
           table-column-group <colgroup>
@@ -323,7 +315,7 @@ root
     block <body>
       block (anonymous)
         inline <kbd> first
-          inline <select>
+          replaced <select> inline Select { rows: 1, chars: 1 }
       table-wrapper <table>
         table <table>
           table-column-group <colgroup>

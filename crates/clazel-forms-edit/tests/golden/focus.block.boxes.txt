@@ -1,0 +1,17 @@
+root
+  block <html>
+    block <body>
+      block <form>
+        block <div>
+          block (anonymous)
+            replaced <input> inline Input(Text { chars: 2 })
+            replaced <input> inline Input(Text { chars: 2 })
+            replaced <input> inline Input(Text { chars: 2 })
+            inline <a>
+              text "go"
+            replaced <input> inline Input(Text { chars: 2 })
+            replaced <input> inline Input(Text { chars: 2 })
+          block <div>
+            text "z"
+          block (anonymous)
+            replaced <input> inline Input(Text { chars: 2 })

@@ -36,9 +36,14 @@
 //! - **A `button` element** is not replaced: its content flows as any
 //!   inline-block's, and only its chrome (the face, the border, the ring) is
 //!   drawn, under its content ([`chrome`]).
-//! - **Text** is inset 2px from the border box (1px of border, 1px of
-//!   padding) and clipped to the border box inset by 1px. A one-line field
-//!   centres its line vertically and scrolls horizontally by whole pixels so
+//! - **Text** is inset 2px horizontally from the border box (1px of border,
+//!   1px of padding) and clipped to the border box. HTML sizes a control's
+//!   content box (one line high) and the user agent sheet of item 5.7 gives
+//!   it no padding or border, so a one-line field is exactly one line high:
+//!   its text is centred, may reach the box's edge, and the 1px border is
+//!   drawn over it. (A sheet that pads text controls by 1px and borders
+//!   them by 1px makes room; item 6.20 decides the renderer's.) A one-line
+//!   field scrolls horizontally by whole pixels so
 //!   that the caret stays in view (stateless: the scroll is a function of
 //!   the caret). A `textarea` wraps at the character where the next one
 //!   would overflow, preferring the last space of the line, and scrolls
@@ -437,15 +442,24 @@ fn geo(
             *a = 0;
         }
     }
-    let clip = inset(bb, PX);
+    let clip = bb;
     let inner_w = bb.width.saturating_sub(INSET.saturating_mul(2)).max(0);
     let lines = if multi {
         wrap(&chars, &adv, inner_w)
     } else {
         vec![(0, chars.len())]
     };
-    let inner_h = bb.height.saturating_sub(INSET.saturating_mul(2)).max(0);
-    let fit = usize::try_from(inner_h.checked_div(line_h).unwrap_or(1).max(1)).unwrap_or(1);
+    let inner_h = bb.height.saturating_sub(PX.saturating_mul(2)).max(0);
+    let fit = if multi {
+        // Rounded up: a row that is cut by the border still shows.
+        let rows = inner_h
+            .saturating_add(line_h.saturating_sub(1))
+            .checked_div(line_h)
+            .unwrap_or(1);
+        usize::try_from(rows.max(1)).unwrap_or(1)
+    } else {
+        1
+    };
     let caret = view.caret.min(chars.len());
     let caret_line = line_of(&lines, caret);
     let first = if multi {
@@ -454,9 +468,9 @@ fn geo(
         0
     };
     let top = if multi {
-        bb.y.saturating_add(INSET)
+        bb.y.saturating_add(PX)
     } else {
-        bb.y.saturating_add((bb.height.saturating_sub(line_h) / 2).max(PX))
+        bb.y.saturating_add((bb.height.saturating_sub(line_h) / 2).max(0))
     };
     let scroll = if multi {
         0
@@ -725,7 +739,6 @@ pub fn draw(
                     colours::FACE
                 },
             ));
-            border(bb, PX, line, &mut out);
             let label = push_label(arena, view);
             let sh = shape(style, fonts, &label);
             let w = sh.adv.iter().fold(0i32, |a, &b| a.saturating_add(b));
@@ -737,16 +750,16 @@ pub fn draw(
             let base =
                 bb.y.saturating_add(bb.height.saturating_sub(lh) / 2)
                     .saturating_add(m.ascent);
-            out.push(Draw::Clip(inset(bb, PX)));
+            out.push(Draw::Clip(bb));
             out.extend(text_draw(style, &sh, x, base, ink));
             out.push(Draw::Unclip);
+            border(bb, PX, line, &mut out);
             if ring_on {
                 ring(bb, &mut out);
             }
         }
         Kind::Text { .. } | Kind::TextArea => {
             out.push(Draw::Fill(bb, fill));
-            border(bb, PX, line, &mut out);
             let g = geo(view, kind, style, fonts, bb);
             out.push(Draw::Clip(g.clip));
             let first = g.first;
@@ -807,6 +820,9 @@ pub fn draw(
                 }
             }
             out.push(Draw::Unclip);
+            // The border over the text, which may reach the box's edge (the
+            // module's text choice).
+            border(bb, PX, line, &mut out);
             if ring_on {
                 ring(bb, &mut out);
             }

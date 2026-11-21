@@ -285,19 +285,14 @@ root
 root
   block <html>
     block <body>
-      inline <select>
-        inline <option>
-        inline <optgroup>
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 37
 #data "<!DOCTYPE html><select><optgroup><option></optgroup><option><select><option>"
 root
   block <html>
     block <body>
-      inline <select>
-        inline <optgroup>
-          inline <option>
-        inline <option>
+      replaced <select> inline Select { rows: 2, chars: 1 }
       inline <option>
 
 #case 38
@@ -305,10 +300,7 @@ root
 root
   block <html>
     block <body>
-      inline <select>
-        inline <optgroup>
-          inline <option>
-        inline <optgroup>
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 39
 #data "<!DOCTYPE html><datalist><option>foo</datalist>bar"
@@ -374,8 +366,7 @@ root
 root
   block <html>
     block <body>
-      inline <select>
-        inline <optgroup>
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 49
 #data " \n "

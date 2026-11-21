@@ -303,20 +303,29 @@ root (anonymous) 0,0 800x600
 #case 36
 #data "<!DOCTYPE html><select><option><optgroup>"
 root (anonymous) 0,0 800x600
-  block <html> 0,0 800x8
-    block <body> 8,8 784x0 m=8,8,8,8
+  block <html> 0,0 800x42.421875
+    block <body> 8,8 784x26.421875 m=8,8,8,8
+      line 8,8 784x26.421875 base=30.640625
+        atomic <select>
+      replaced <select> 8,8 38.234375x22.640625
 
 #case 37
 #data "<!DOCTYPE html><select><optgroup><option></optgroup><option><select><option>"
 root (anonymous) 0,0 800x600
-  block <html> 0,0 800x8
-    block <body> 8,8 784x0 m=8,8,8,8
+  block <html> 0,0 800x61.0625
+    block <body> 8,8 784x45.0625 m=8,8,8,8
+      line 8,8 784x45.0625 base=49.28125
+        atomic <select>
+      replaced <select> 8,8 38.234375x41.28125
 
 #case 38
 #data "<!DOCTYPE html><select><optgroup><option><optgroup>"
 root (anonymous) 0,0 800x600
-  block <html> 0,0 800x8
-    block <body> 8,8 784x0 m=8,8,8,8
+  block <html> 0,0 800x42.421875
+    block <body> 8,8 784x26.421875 m=8,8,8,8
+      line 8,8 784x26.421875 base=30.640625
+        atomic <select>
+      replaced <select> 8,8 38.234375x22.640625
 
 #case 39
 #data "<!DOCTYPE html><datalist><option>foo</datalist>bar"
@@ -385,8 +394,11 @@ root (anonymous) 0,0 800x600
 #case 48
 #data "<!DOCTYPE html><select><optgroup></optgroup></select>"
 root (anonymous) 0,0 800x600
-  block <html> 0,0 800x8
-    block <body> 8,8 784x0 m=8,8,8,8
+  block <html> 0,0 800x42.421875
+    block <body> 8,8 784x26.421875 m=8,8,8,8
+      line 8,8 784x26.421875 base=30.640625
+        atomic <select>
+      replaced <select> 8,8 38.234375x22.640625
 
 #case 49
 #data " \n "
