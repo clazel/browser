@@ -18,3 +18,6 @@
 //! `docs/VERIFICATION.md`.
 
 pub mod arena;
+
+#[cfg(kani)]
+mod proofs;
