@@ -318,3 +318,109 @@ fn symbol_key_encoding_any() {
     assert_eq!(encode(PropertyKey::String(Key(big))), None);
     assert_eq!(encode(PropertyKey::Symbol(SymbolId(big))), None);
 }
+
+// ---- Third slice: the collector -----------------------------------------
+//
+// Bounds, stated. `gc_mark_closed_over_roots` proves the real marker
+// (`gc::mark_into`, which `gc::mark` and so `Heap::collect` call) for every
+// graph of `GRAPH` nodes where each node has one strong edge and one
+// ephemeron, each naming any node or no node (a stale reference, or no
+// edge), with any `GRAPH` roots: the marked set contains the roots and is
+// closed under the rules that define reachability (a strong edge of a
+// marked node; an ephemeron value whose map and key are marked).
+// `gc::contract::reachable` is the least set with those two properties, so
+// it is inside the marked set: every reachable node survives (GC1). That
+// is the kernel of "a slot reachable from the roots is never freed".
+//
+// NOT proven by Kani:
+// - GC2 (nothing unreachable is kept), by tests only.
+// - `Heap::collect` as a whole: graph extraction, weak clearing, the sweep
+//   (GC3, GC4, GC6) and the safe-point guard. A harness over a heap of two
+//   objects (one slot value each, a `WeakRef`, any roots) was written and
+//   ran past a 10-minute limit without finishing, as the elements harnesses
+//   through `Vec`s and `BTreeMap` did, and was dropped. A first version of
+//   the marker harness over `Vec`s ran out of memory; `mark_into` takes
+//   slices so that arrays stand in for the vectors. Freeing goes through
+//   `Arena::free`, whose invariants the arena harnesses prove.
+// - Graphs past `GRAPH` nodes, and arbitrary operation sequences. The
+//   property test in `gc::tests` checks GC1 to GC6 on random heaps of up
+//   to 3,000 objects against an independent oracle, which is a test, not a
+//   proof.
+
+use crate::gc::contract::Graph;
+use crate::gc::mark_into;
+
+/// Nodes in the graphs of `gc_mark_closed_over_roots`.
+const GRAPH: usize = 4;
+
+/// A node name, or one that names no node.
+fn any_name(n: usize) -> usize {
+    let i: usize = kani::any();
+    kani::assume(i <= n);
+    i
+}
+
+/// A graph of `GRAPH` nodes as fixed arrays (vectors of vectors made CBMC
+/// run for over ten minutes): each node has one strong edge and one
+/// ephemeron, and a name past the last node (`GRAPH`) is "no node", which
+/// reaches nothing, so it stands for the absence of the edge as well as for
+/// a stale reference.
+struct Fixed {
+    strong: [usize; GRAPH],
+    eph: [(usize, usize); GRAPH],
+}
+
+impl Graph for Fixed {
+    fn len(&self) -> usize {
+        GRAPH
+    }
+    fn strong(&self, i: usize) -> &[usize] {
+        self.strong.get(i..=i).unwrap_or(&[])
+    }
+    fn ephemerons(&self, i: usize) -> &[(usize, usize)] {
+        self.eph.get(i..=i).unwrap_or(&[])
+    }
+}
+
+#[kani::proof]
+#[kani::solver(cadical)]
+#[kani::unwind(10)]
+fn gc_mark_closed_over_roots() {
+    let mut g = Fixed {
+        strong: [0; GRAPH],
+        eph: [(0, 0); GRAPH],
+    };
+    for s in &mut g.strong {
+        *s = any_name(GRAPH);
+    }
+    for e in &mut g.eph {
+        *e = (any_name(GRAPH), any_name(GRAPH));
+    }
+    // Any `GRAPH` roots, each a node or none: any subset of the nodes.
+    let mut roots = [0usize; GRAPH];
+    for r in &mut roots {
+        *r = any_name(GRAPH);
+    }
+    let mut marked = [false; GRAPH];
+    let mut work = [0usize; GRAPH];
+    mark_into(&g, &roots, &mut marked, &mut work);
+    // GC1. `marked` contains the roots, and is closed under the rules that
+    // define reachability (a strong edge of a marked node, an ephemeron
+    // value whose key and map are marked). `contract::reachable` is the
+    // least set with those two properties, so it is inside `marked`: every
+    // reachable node survives. (Equality, GC2, is checked by the unit test
+    // `mark_equals_the_specification_on_random_graphs`, and on heaps by the
+    // property test.)
+    let is = |i: usize| marked.get(i).copied().unwrap_or(false);
+    for &r in &roots {
+        assert!(r >= GRAPH || is(r));
+    }
+    for i in 0..GRAPH {
+        if is(i) {
+            let e = g.strong.get(i).copied().unwrap_or(GRAPH);
+            assert!(e >= GRAPH || is(e));
+            let (k, v) = g.eph.get(i).copied().unwrap_or((GRAPH, GRAPH));
+            assert!(k >= GRAPH || v >= GRAPH || !is(k) || is(v));
+        }
+    }
+}

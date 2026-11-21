@@ -35,7 +35,7 @@ pub mod contract;
 use crate::arena::{self, Arena, Ref};
 use crate::elements::Elements;
 use crate::value::Value;
-use contract::Node;
+use contract::{Graph, Node};
 
 /// What a heap object is, beyond its ordinary properties.
 #[derive(Clone, Debug)]
@@ -455,45 +455,67 @@ fn clear_weak(o: &mut Object, live: &Liveness, cleanups: &mut Vec<Cleanup>) {
 /// Mark the nodes reachable from `roots`: a worklist for the strong edges,
 /// and passes over the ephemerons until none marks anything new.
 /// [`contract::reachable`] is its specification, and the Kani harnesses
-/// prove them equal on every graph of their bound.
+/// prove it closed over the roots and edges (so GC1) on every graph of
+/// their bound.
 #[must_use]
-pub fn mark(graph: &[Node], roots: &[usize]) -> Vec<bool> {
+pub fn mark<G: Graph + ?Sized>(graph: &G, roots: &[usize]) -> Vec<bool> {
     let mut marked = vec![false; graph.len()];
-    let mut work: Vec<usize> = Vec::new();
+    // Each node is queued at most once, so a stack of `len` never overflows.
+    let mut work = vec![0usize; graph.len()];
+    mark_into(graph, roots, &mut marked, &mut work);
+    marked
+}
+
+/// [`mark`] over storage the caller provides: `marked` (one flag per node,
+/// all false) is filled in, and `work` (a stack of at least one slot per
+/// node) is scratch. The Kani harnesses call this with arrays, because
+/// CBMC does not finish with vectors in the model.
+pub fn mark_into<G: Graph + ?Sized>(
+    graph: &G,
+    roots: &[usize],
+    marked: &mut [bool],
+    work: &mut [usize],
+) {
+    let mut top = 0usize;
     for &r in roots {
-        visit(&mut marked, &mut work, r);
+        visit(marked, work, &mut top, r);
     }
     loop {
-        while let Some(i) = work.pop() {
-            if let Some(node) = graph.get(i) {
-                for &e in &node.strong {
-                    visit(&mut marked, &mut work, e);
-                }
+        while top > 0 {
+            top = top.saturating_sub(1);
+            let Some(i) = work.get(top).copied() else {
+                break;
+            };
+            for &e in graph.strong(i) {
+                visit(marked, work, &mut top, e);
             }
         }
         let mut progressed = false;
-        for (i, node) in graph.iter().enumerate() {
+        for i in 0..graph.len() {
             if !marked.get(i).copied().unwrap_or(false) {
                 continue;
             }
-            for &(k, v) in &node.ephemerons {
+            for &(k, v) in graph.ephemerons(i) {
                 if marked.get(k).copied().unwrap_or(false) {
-                    progressed |= visit(&mut marked, &mut work, v);
+                    progressed |= visit(marked, work, &mut top, v);
                 }
             }
         }
         if !progressed {
-            return marked;
+            return;
         }
     }
 }
 
 /// Mark `i` and queue it, if it names a node not yet marked.
-fn visit(marked: &mut [bool], work: &mut Vec<usize>, i: usize) -> bool {
+fn visit(marked: &mut [bool], work: &mut [usize], top: &mut usize, i: usize) -> bool {
     match marked.get_mut(i) {
         Some(m) if !*m => {
             *m = true;
-            work.push(i);
+            if let Some(slot) = work.get_mut(*top) {
+                *slot = i;
+                *top = top.saturating_add(1);
+            }
             true
         }
         _ => false,

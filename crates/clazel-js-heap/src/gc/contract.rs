@@ -36,9 +36,11 @@
 //!
 //! - **GC1 Safety.** A slot reachable from the roots is never freed. It
 //!   keeps its index and generation, so every reference the program holds
-//!   to it still resolves, to the same object. This is the invariant the
-//!   Kani harnesses prove for every heap up to their bound, and the
-//!   property test checks on random heaps of any size ([`safe`]).
+//!   to it still resolves, to the same object. The Kani
+//!   harness proves the marker keeps every reachable node of every graph
+//!   up to its bound (see `src/proofs.rs` for the bound and for what is
+//!   not proven), and the property test checks the whole collector on
+//!   random heaps of any size ([`safe`]).
 //! - **GC2 Precision.** A slot not reachable from the roots is freed in
 //!   that collection, so a collection leaves exactly the reachable slots
 //!   ([`exact`]). Garbage is not a safety matter; this keeps the collector
@@ -90,25 +92,78 @@ pub struct Node {
     pub ephemerons: Vec<(usize, usize)>,
 }
 
+/// A heap graph: what [`reachable`] and the collector's `mark` read. The
+/// provided implementations are for the slices of [`Node`]; the Kani
+/// harnesses give it fixed-size arrays, which CBMC handles far faster than
+/// vectors of vectors.
+pub trait Graph {
+    /// The number of nodes.
+    fn len(&self) -> usize;
+    /// The strong edges of node `i` (none if there is no node `i`).
+    fn strong(&self, i: usize) -> &[usize];
+    /// The ephemerons of node `i` (none if there is no node `i`).
+    fn ephemerons(&self, i: usize) -> &[(usize, usize)];
+    /// Whether there are no nodes.
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+impl Graph for [Node] {
+    fn len(&self) -> usize {
+        <[Node]>::len(self)
+    }
+    fn strong(&self, i: usize) -> &[usize] {
+        self.get(i).map_or(&[], |n| &n.strong)
+    }
+    fn ephemerons(&self, i: usize) -> &[(usize, usize)] {
+        self.get(i).map_or(&[], |n| &n.ephemerons)
+    }
+}
+
+impl Graph for Vec<Node> {
+    fn len(&self) -> usize {
+        Vec::len(self)
+    }
+    fn strong(&self, i: usize) -> &[usize] {
+        self.as_slice().strong(i)
+    }
+    fn ephemerons(&self, i: usize) -> &[(usize, usize)] {
+        self.as_slice().ephemerons(i)
+    }
+}
+
+impl<const N: usize> Graph for [Node; N] {
+    fn len(&self) -> usize {
+        N
+    }
+    fn strong(&self, i: usize) -> &[usize] {
+        self.as_slice().strong(i)
+    }
+    fn ephemerons(&self, i: usize) -> &[(usize, usize)] {
+        self.as_slice().ephemerons(i)
+    }
+}
+
 /// The nodes reachable from `roots` (module header, "Reachability"), as one
 /// flag per node. A root or edge naming no node (a stale or out-of-range
 /// reference) reaches nothing.
 #[must_use]
-pub fn reachable(graph: &[Node], roots: &[usize]) -> Vec<bool> {
+pub fn reachable<G: Graph + ?Sized>(graph: &G, roots: &[usize]) -> Vec<bool> {
     let mut marked = vec![false; graph.len()];
     for &r in roots {
         mark(&mut marked, r);
     }
     loop {
         let mut changed = false;
-        for (i, node) in graph.iter().enumerate() {
+        for i in 0..graph.len() {
             if !marked.get(i).copied().unwrap_or(false) {
                 continue;
             }
-            for &e in &node.strong {
+            for &e in graph.strong(i) {
                 changed |= mark(&mut marked, e);
             }
-            for &(k, v) in &node.ephemerons {
+            for &(k, v) in graph.ephemerons(i) {
                 if marked.get(k).copied().unwrap_or(false) {
                     changed |= mark(&mut marked, v);
                 }
@@ -133,7 +188,7 @@ fn mark(marked: &mut [bool], i: usize) -> bool {
 
 /// GC1: every reachable node survives.
 #[must_use]
-pub fn safe(graph: &[Node], roots: &[usize], survives: &[bool]) -> bool {
+pub fn safe<G: Graph + ?Sized>(graph: &G, roots: &[usize], survives: &[bool]) -> bool {
     survives.len() == graph.len()
         && reachable(graph, roots)
             .iter()
@@ -143,7 +198,7 @@ pub fn safe(graph: &[Node], roots: &[usize], survives: &[bool]) -> bool {
 
 /// GC1 and GC2: exactly the reachable nodes survive.
 #[must_use]
-pub fn exact(graph: &[Node], roots: &[usize], survives: &[bool]) -> bool {
+pub fn exact<G: Graph + ?Sized>(graph: &G, roots: &[usize], survives: &[bool]) -> bool {
     reachable(graph, roots) == survives
 }
 
@@ -152,16 +207,15 @@ pub fn exact(graph: &[Node], roots: &[usize], survives: &[bool]) -> bool {
 /// key of a surviving map may name a freed node only before GC4 clears the
 /// entry, so keys are not checked here.
 #[must_use]
-pub fn closed(graph: &[Node], survives: &[bool]) -> bool {
+pub fn closed<G: Graph + ?Sized>(graph: &G, survives: &[bool]) -> bool {
     let alive = |i: usize| survives.get(i).copied().unwrap_or(false);
-    graph
-        .iter()
-        .enumerate()
-        .filter(|&(i, _)| alive(i))
-        .all(|(_, n)| {
-            n.strong.iter().all(|&e| alive(e))
-                && n.ephemerons.iter().all(|&(k, v)| !alive(k) || alive(v))
-        })
+    (0..graph.len()).filter(|&i| alive(i)).all(|i| {
+        graph.strong(i).iter().all(|&e| alive(e))
+            && graph
+                .ephemerons(i)
+                .iter()
+                .all(|&(k, v)| !alive(k) || alive(v))
+    })
 }
 
 #[cfg(test)]
