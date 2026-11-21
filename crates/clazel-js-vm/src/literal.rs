@@ -148,9 +148,21 @@ fn radix_value(radix: u32, digits: &[u8]) -> Option<f64> {
         top |= 1;
     }
     // `top as f64` rounds on the 64 significant bits, and the sticky bit in
-    // bit 0 breaks ties correctly; the scale is a power of two, so exact.
+    // bit 0 breaks ties correctly; the scale is a power of two, so the
+    // product is exact unless it overflows (to infinity, as §6.1.6.1 rounds).
     let exp = sig.len().saturating_sub(64);
-    Some(top as f64 * 2f64.powi(i32::try_from(exp).ok()?))
+    // 2^exp built from its bits: `powi` is not exact under Miri, which perturbs
+    // it on purpose.
+    let scale = if exp > 1023 {
+        f64::INFINITY
+    } else {
+        f64::from_bits(
+            1023u64
+                .saturating_add(u64::try_from(exp).ok()?)
+                .wrapping_shl(52),
+        )
+    };
+    Some(top as f64 * scale)
 }
 
 #[cfg(test)]
