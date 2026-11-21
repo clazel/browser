@@ -710,6 +710,19 @@ pub open spec fn set_mode(doc: Document, mode: DocumentMode) -> Document {
 //   is a precondition, as the attribute's presence in the list is.
 // - **Attributes' "handle attribute changes"** (queues records, runs
 //   attribute change steps) is not modelled, as in [`append_attribute`].
+// - **Steps 5 and 6 are checked against a second statement.** The checks
+//   of "ensure pre-insertion validity" and "replace" (their steps 5 and 6)
+//   are written as DOM writes them. [`children_rules_hold`] says the same
+//   thing as a property of the tree: only a document has a doctype child,
+//   and a document's children have no `Text`, at most one element, at most
+//   one doctype and no doctype after the element
+//   ([`document_children_ok`]). `ops_lemmas`'s theorems prove, for a node
+//   with no parent (a fragment never has one), that a call passes steps 5
+//   and 6 exactly when the tree after the insertion obeys the rules.
+//   (A node that has a parent is first removed from it by "adopt"; the
+//   theorems do not cover that case, and DOM's checks count such a node
+//   among its new parent's children, so they would refuse some calls the
+//   rules allow.)
 // - **Shallow "clone a node" only.** The clone children flag is never
 //   set: a deep clone's recursion is not specified here (not done).
 // - **A template** is an element whose template contents is non-null (the
@@ -1270,6 +1283,36 @@ pub open spec fn attribute_requires(doc: Document, e: NodeId, i: nat) -> bool {
     &&& valid(doc, e)
     &&& doc.nodes[e as int].kind is Element
     &&& i < doc.nodes[e as int].kind->Element_attributes.len()
+}
+
+// ---------------------------------------------------------------------
+// The children rules, stated on their own (DOM §4.2.3† "ensure
+// pre-insertion validity" steps 5 and 6, "replace" steps 5 and 6)
+
+/// The rules a document's children obey (DOM §4.2.3† steps 5 and 6 of
+/// "ensure pre-insertion validity" keep them true), stated about the
+/// sequence itself, not as checks on an insertion: no `Text` node, at
+/// most one element, at most one doctype, and the doctype is not after the
+/// element. (Comments and processing instructions may be anywhere.)
+pub open spec fn document_children_ok(doc: Document, kids: Seq<NodeId>) -> bool {
+    &&& forall|j: int| 0 <= j < kids.len() ==> !(doc.nodes[#[trigger] kids[j] as int].kind is Text)
+    &&& forall|j: int, k: int| 0 <= j < k < kids.len() ==> !(doc.nodes[#[trigger] kids[j] as int].kind is Element
+        && doc.nodes[#[trigger] kids[k] as int].kind is Element)
+    &&& forall|j: int, k: int| 0 <= j < k < kids.len() ==> !(doc.nodes[#[trigger] kids[j] as int].kind is DocumentType
+        && doc.nodes[#[trigger] kids[k] as int].kind is DocumentType)
+    &&& forall|j: int, k: int| 0 <= j < k < kids.len() ==> !(doc.nodes[#[trigger] kids[j] as int].kind is Element
+        && doc.nodes[#[trigger] kids[k] as int].kind is DocumentType)
+}
+
+/// The children rules hold in the whole arena: only a document has a
+/// doctype child (step 5: "node is a doctype and parent is not a
+/// document"), and the document node's children obey
+/// [`document_children_ok`] (step 6). The document node, `nodes[0]`, is the
+/// only document ([`wf`]).
+pub open spec fn children_rules_hold(doc: Document) -> bool {
+    &&& forall|p: int, j: int| 0 <= p < doc.nodes.len() && !(doc.nodes[p].kind is Document) && 0 <= j < doc.nodes[p].children.len()
+        ==> !(doc.nodes[#[trigger] doc.nodes[p].children[j] as int].kind is DocumentType)
+    &&& 1 <= doc.nodes.len() && document_children_ok(doc, doc.nodes[0].children)
 }
 
 } // verus!
