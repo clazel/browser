@@ -66,8 +66,9 @@ pub proof fn lemma_local_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
                 }
             }
         }
-        if let clazel_ipc::message::spec::Message::FetchStyle { request, url } = m {
-            crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, request, url);
+        if is_sub_request(m) {
+            let (sub, at_once, per_doc, request, url) = sub_request_args(m);
+            crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, sub, at_once, per_doc, request, url);
         }
     } else {
         crate::net_theorems::lemma_closes_of_tab(s.conns, r.tab);
@@ -254,9 +255,11 @@ pub proof fn lemma_local_respect_renderer(rules: Seq<clazel_psl::spec::Rule>, ur
         }
         // Item 5.19: a `FetchStyle` changes only its sender's sub-fetches and
         // counts, of another domain.
-        if let Some(clazel_ipc::message::spec::Message::FetchStyle { request, url }) = accepted_message(r, bytes) {
-            crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s1, r, request, url);
-            crate::subfetch_rel::lemma_fetch_style_other(rules, urls, fetch, d, s1, r, request, url);
+        if accepted_message(r, bytes) is Some && is_sub_request(accepted_message(r, bytes)->Some_0) {
+            let m = accepted_message(r, bytes)->Some_0;
+            let (sub, at_once, per_doc, request, url) = sub_request_args(m);
+            crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s1, r, sub, at_once, per_doc, request, url);
+            crate::subfetch_rel::lemma_fetch_style_other(rules, urls, fetch, d, s1, r, sub, at_once, per_doc, request, url);
         }
         crate::unwinding_d::lemma_rel_same_table(rules, urls, d, s1, s2, s1b, s2);
     }

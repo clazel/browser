@@ -913,3 +913,321 @@ fn a_submit_of_a_large_body_is_sent_whole() {
     let sent = the_send(&out).unwrap_or_default();
     assert!(sent.ends_with(&body));
 }
+
+// ---------------------------------------------------------------------
+// Item 6.17: image sub-fetches (`FetchSub`) and Opaque Response Blocking.
+// ---------------------------------------------------------------------
+
+/// The signature of a PNG, then a few more octets.
+const PNG: &[u8] = &[
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0x0D,
+];
+
+impl Kernel {
+    fn fetch_sub(&mut self, id: u64, request: u64, destination: u64, url: &str) -> Vec<Out> {
+        self.send(
+            id,
+            &Msg::FetchSub {
+                request,
+                destination,
+                url: url.as_bytes().to_vec(),
+            },
+        )
+    }
+
+    /// Fetch `url` as an image (the renderer's sub-fetch number `serial`),
+    /// serve `response` on its first connection and return the frames the
+    /// renderer is sent.
+    fn image_answer(
+        &mut self,
+        id: u64,
+        serial: u64,
+        request: u64,
+        url: &str,
+        response: Vec<u8>,
+    ) -> Vec<Msg> {
+        self.fetch_sub(id, request, 1, url);
+        self.sub_net(id, serial, 1, InputBuf::Connected);
+        let out = self.sub_net(id, serial, 1, InputBuf::Bytes(response));
+        out.into_iter()
+            .filter_map(|o| match o {
+                Out::Frames(to, msgs) if to == id => Some(msgs),
+                Out::To(to, m) if to == id => Some(vec![m]),
+                _ => None,
+            })
+            .flatten()
+            .collect()
+    }
+}
+
+fn png_response(extra: &str) -> Vec<u8> {
+    response_with(extra, PNG)
+}
+
+#[test]
+fn a_same_origin_image_is_fetched_with_cookies_and_answered_in_the_sub_family() {
+    let mut k = Kernel::new();
+    let id = page_with_cookie(&mut k);
+    let out = k.fetch_sub(id, 7, 1, "/i.png");
+    assert_eq!(out, vec![sub_connect(id, 0, 1, "example.test")]);
+    let out = k.sub_net(id, 0, 1, InputBuf::Connected);
+    let ok = matches!(
+        out.as_slice(),
+        [Out::SubSend(_, 0, 1, req)]
+            if req.starts_with(b"GET /i.png HTTP/1.1\r\n") && has(req, b"Cookie: a=b")
+    );
+    assert!(ok, "{out:?}");
+    let out = k.sub_net(
+        id,
+        0,
+        1,
+        InputBuf::Bytes(png_response("Content-Type: image/png")),
+    );
+    assert_eq!(
+        out,
+        vec![
+            Out::SubClose(id, 0, 1),
+            Out::Frames(
+                id,
+                vec![
+                    Msg::SubResponse {
+                        request: 7,
+                        content_type: b"image/png".to_vec()
+                    },
+                    Msg::SubBody {
+                        request: 7,
+                        bytes: PNG.to_vec()
+                    },
+                    Msg::SubEnd { request: 7 },
+                ]
+            )
+        ]
+    );
+}
+
+#[test]
+fn a_cross_origin_image_carries_no_cookies_and_a_png_is_let_through() {
+    let mut k = Kernel::new();
+    let id = page_with_cookie(&mut k);
+    k.fetch_sub(id, 1, 1, "http://other.test/i.png");
+    let out = k.sub_net(id, 0, 1, InputBuf::Connected);
+    let ok = matches!(
+        out.as_slice(),
+        [Out::SubSend(_, 0, 1, req)] if req.starts_with(b"GET /i.png") && !has(req, b"Cookie")
+    );
+    assert!(ok, "{out:?}");
+    let out = k.sub_net(
+        id,
+        0,
+        1,
+        InputBuf::Bytes(png_response("Content-Type: image/png")),
+    );
+    let ok = matches!(
+        out.last(),
+        Some(Out::Frames(_, m)) if matches!(m.first(), Some(Msg::SubResponse { .. }))
+    );
+    assert!(ok, "{out:?}");
+}
+
+#[test]
+fn orb_lets_through_a_cross_origin_png_mislabeled_as_html_and_an_unlabeled_one() {
+    let mut k = Kernel::new();
+    let id = open(&mut k, "http://example.test/");
+    let m = k.image_answer(
+        id,
+        0,
+        1,
+        "http://other.test/a",
+        png_response("Content-Type: text/html"),
+    );
+    assert!(
+        matches!(m.first(), Some(Msg::SubResponse { request: 1, .. })),
+        "{m:?}"
+    );
+    let m = k.image_answer(id, 1, 2, "http://other.test/b", png_response("X-Test: 1"));
+    assert!(
+        matches!(m.first(), Some(Msg::SubResponse { request: 2, .. })),
+        "{m:?}"
+    );
+}
+
+#[test]
+fn orb_blocks_cross_origin_responses_that_are_not_images_and_sends_no_body() {
+    let mut k = Kernel::new();
+    let id = open(&mut k, "http://example.test/");
+    let secret = b"<html>intranet secret</html>";
+    let mut partial = png_response("Content-Type: image/png");
+    partial.splice(9..12, b"206".iter().copied());
+    let cases: Vec<(&str, Vec<u8>)> = vec![
+        ("html", response_with("Content-Type: text/html", secret)),
+        (
+            "html nosniff",
+            response_with(
+                "Content-Type: text/html\r\nX-Content-Type-Options: nosniff",
+                secret,
+            ),
+        ),
+        (
+            "json",
+            response_with("Content-Type: application/json", b"{\"a\":1}"),
+        ),
+        (
+            "pdf with png bytes",
+            png_response("Content-Type: application/pdf"),
+        ),
+        ("no type", response_with("X-Test: 1", secret)),
+        ("plain", response_with("Content-Type: text/plain", secret)),
+        ("partial", partial),
+    ];
+    for (n, (what, response)) in cases.into_iter().enumerate() {
+        let serial = n as u64;
+        let request = 10 + serial;
+        let m = k.image_answer(id, serial, request, "http://other.test/x", response);
+        assert_eq!(m, vec![Msg::SubFailed { request }], "{what}");
+    }
+}
+
+#[test]
+fn orb_does_not_apply_to_a_same_origin_image_whatever_it_is() {
+    let mut k = Kernel::new();
+    let id = open(&mut k, "http://example.test/");
+    let m = k.image_answer(
+        id,
+        0,
+        1,
+        "/x",
+        response_with("Content-Type: text/html", b"<p>"),
+    );
+    let ok = matches!(
+        m.as_slice(),
+        [
+            Msg::SubResponse { request: 1, .. },
+            Msg::SubBody { .. },
+            Msg::SubEnd { request: 1 }
+        ]
+    );
+    assert!(ok, "{m:?}");
+}
+
+#[test]
+fn orb_decides_style_sheet_fetches_too_in_either_family() {
+    let mut k = Kernel::new();
+    let id = open(&mut k, "http://example.test/");
+    // A cross-origin text/css is safelisted, with FetchSub (destination 0) and
+    // with FetchStyle.
+    k.fetch_sub(id, 1, 0, "http://other.test/s.css");
+    k.sub_net(id, 0, 1, InputBuf::Connected);
+    let css = response_with("Content-Type: text/css", b"p{}");
+    let out = k.sub_net(id, 0, 1, InputBuf::Bytes(css.clone()));
+    let ok = matches!(
+        out.last(),
+        Some(Out::Frames(_, m)) if matches!(m.first(), Some(Msg::SubResponse { request: 1, .. }))
+    );
+    assert!(ok, "{out:?}");
+    k.fetch_style(id, 2, "http://other.test/t.css");
+    k.sub_net(id, 1, 1, InputBuf::Connected);
+    let out = k.sub_net(id, 1, 1, InputBuf::Bytes(css));
+    let ok = matches!(
+        out.last(),
+        Some(Out::Frames(_, m)) if matches!(m.first(), Some(Msg::StyleResponse { request: 2, .. }))
+    );
+    assert!(ok, "{out:?}");
+    // A cross-origin response of another type is a StyleFailed.
+    k.fetch_style(id, 3, "http://other.test/u.css");
+    k.sub_net(id, 2, 1, InputBuf::Connected);
+    let out = k.sub_net(
+        id,
+        2,
+        1,
+        InputBuf::Bytes(response_with("Content-Type: text/html", b"<p>")),
+    );
+    assert_eq!(
+        out,
+        vec![
+            Out::SubClose(id, 2, 1),
+            Out::To(id, Msg::StyleFailed { request: 3 })
+        ]
+    );
+}
+
+#[test]
+fn an_image_fetch_has_its_own_limits_and_an_unknown_destination_is_refused() {
+    let mut k = Kernel::new();
+    let id = open(&mut k, "http://example.test/");
+    // Sixteen images in flight; the seventeenth is refused with SubFailed.
+    for n in 0..16u64 {
+        assert_eq!(
+            k.fetch_sub(id, n, 1, "/i.png"),
+            vec![sub_connect(id, n, 1, "example.test")]
+        );
+    }
+    assert_eq!(
+        k.fetch_sub(id, 16, 1, "/i.png"),
+        vec![Out::To(id, Msg::SubFailed { request: 16 })]
+    );
+    // A style sheet request is refused past eight in flight (all kinds count).
+    assert_eq!(
+        k.fetch_style(id, 17, "/s.css"),
+        vec![Out::To(id, Msg::StyleFailed { request: 17 })]
+    );
+    assert_eq!(
+        k.fetch_sub(id, 18, 0, "/s.css"),
+        vec![Out::To(id, Msg::SubFailed { request: 18 })]
+    );
+    // Another renderer's limit is its own, and an unknown destination is
+    // refused.
+    let other = open(&mut k, "http://other.test/");
+    assert_eq!(
+        k.fetch_sub(other, 0, 2, "/i.png"),
+        vec![Out::To(other, Msg::SubFailed { request: 0 })]
+    );
+    assert_eq!(
+        k.fetch_sub(other, 1, 1, "/i.png"),
+        vec![sub_connect(other, 0, 1, "other.test")]
+    );
+}
+
+#[test]
+fn a_document_starts_at_most_4096_image_fetches() {
+    if cfg!(miri) {
+        return;
+    }
+    let mut k = Kernel::new();
+    let id = open(&mut k, "http://example.test/");
+    for n in 0..4096u64 {
+        assert_eq!(
+            k.fetch_sub(id, n, 1, "/i.png"),
+            vec![sub_connect(id, n, 1, "example.test")],
+            "{n}"
+        );
+        // The fetch fails at once, so at most one is ever in flight.
+        k.sub_net(id, n, 1, InputBuf::Closed);
+    }
+    assert_eq!(
+        k.fetch_sub(id, 4096, 1, "/i.png"),
+        vec![Out::To(id, Msg::SubFailed { request: 4096 })]
+    );
+}
+
+#[test]
+fn an_image_asked_for_before_the_first_commit_kills_the_renderer() {
+    let mut k = Kernel::new();
+    open_fetching(&mut k, "http://example.test/");
+    let out = k.fetch_sub(0, 1, 1, "/i.png");
+    assert_eq!(out, vec![Out::Kill(0), Out::Close(0)]);
+}
+
+#[test]
+fn an_image_fetch_past_its_timeout_fails_in_the_sub_family() {
+    let mut k = Kernel::new();
+    k.event(&EventRecord::Tick { time: 1000 });
+    let id = open(&mut k, "http://example.test/");
+    k.fetch_sub(id, 5, 1, "/i.png");
+    assert_eq!(
+        k.event(&EventRecord::Tick { time: 1060 }),
+        vec![
+            Out::SubClose(id, 0, 1),
+            Out::To(id, Msg::SubFailed { request: 5 })
+        ]
+    );
+}

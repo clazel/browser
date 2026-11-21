@@ -148,7 +148,12 @@ impl Kernel {
             .into_iter()
             .map(|o| match o {
                 OutputRecord::ToRenderer { id, bytes } => match split_frames(&bytes) {
-                    Some(msgs) if matches!(msgs.first(), Some(Msg::StyleResponse { .. })) => {
+                    Some(msgs)
+                        if matches!(
+                            msgs.first(),
+                            Some(Msg::StyleResponse { .. } | Msg::SubResponse { .. })
+                        ) =>
+                    {
                         Out::Frames(id, msgs)
                     }
                     Some(msgs)
