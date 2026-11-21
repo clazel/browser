@@ -82,6 +82,8 @@ pub mod a64;
 pub mod agree;
 pub mod alu;
 pub mod api;
+pub mod cfcontract;
+pub mod cfspec;
 pub mod compose;
 pub mod contract;
 pub mod emit;
