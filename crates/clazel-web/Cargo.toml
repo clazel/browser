@@ -10,12 +10,12 @@ description = "The web platform's script-facing APIs: window, document and node 
 # 7.13). The rest of the implementation arrives with the items named in
 # src/lib.rs.
 [dependencies]
-clazel-dom = { path = "../clazel-dom" }
+clazel-dom = { path = "../clazel-dom", version = "=0.0.0" }
 
 # The parser that the serializer's round-trip tests feed
 # (`tests/round_trip.rs`).
 [dev-dependencies]
-clazel-treebuilder = { path = "../clazel-treebuilder" }
+clazel-treebuilder = { path = "../clazel-treebuilder", version = "=0.0.0" }
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
 # the shipped code today (the serializer, tested; nothing else yet); `target-tier` is what
