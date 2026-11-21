@@ -871,7 +871,7 @@ proof fn lemma_frag_child_not_ancestor(d: Document, paths: Seq<Seq<NodeId>>, fra
 
 /// What [`insert_any_requires`] gives about the children of a fragment
 /// being inserted.
-proof fn lemma_frag_facts(d: Document, paths: Seq<Seq<NodeId>>, frag: NodeId, parent: NodeId, child: Option<NodeId>)
+pub proof fn lemma_frag_facts(d: Document, paths: Seq<Seq<NodeId>>, frag: NodeId, parent: NodeId, child: Option<NodeId>)
     requires
         insert_any_requires(d, frag, parent, child),
         wf_with(d, paths),
@@ -1120,12 +1120,102 @@ pub proof fn lemma_insert_fragment(d: Document, frag: NodeId, parent: NodeId, ch
     }
 }
 
+/// What [`fragment_inserted`] keeps of each record.
+proof fn lemma_fragment_frame(d: Document, frag: NodeId, parent: NodeId, child: Option<NodeId>)
+    requires
+        valid(d, frag),
+        valid(d, parent),
+        parent != frag,
+        d.nodes.len() <= max_nodes(),
+    ensures
+        forall|x: int| 0 <= x < d.nodes.len() ==> {
+            &&& (#[trigger] fragment_inserted(d, frag, parent, child)[x]).kind == d.nodes[x].kind
+            &&& fragment_inserted(d, frag, parent, child)[x].wrapper == d.nodes[x].wrapper
+            &&& (x != frag && !d.nodes[frag as int].children.contains(x as NodeId) ==> fragment_inserted(d, frag, parent, child)[x].parent == d.nodes[x].parent)
+        },
+{
+    let f = fragment_inserted(d, frag, parent, child);
+    assert forall|x: int| 0 <= x < d.nodes.len() implies {
+        &&& (#[trigger] f[x]).kind == d.nodes[x].kind
+        &&& f[x].wrapper == d.nodes[x].wrapper
+        &&& (x != frag && !d.nodes[frag as int].children.contains(x as NodeId) ==> f[x].parent == d.nodes[x].parent)
+    } by {
+        if x == frag {
+        } else if x == parent {
+        } else if d.nodes[frag as int].children.contains(x as NodeId) {
+        } else {
+        }
+    }
+}
+
+/// [`theorem_insert_any_wf`] for a fragment.
+#[verifier::rlimit(100)]
+proof fn lemma_insert_any_frag(doc: Document, node: NodeId, parent: NodeId, child: Option<NodeId>)
+    requires
+        insert_any_requires(doc, node, parent, child),
+        doc.nodes[node as int].kind is DocumentFragment,
+    ensures
+        wf(insert_any(doc, node, parent, child)),
+        insert_any(doc, node, parent, child).nodes.len() == doc.nodes.len(),
+        forall|x: int| #![trigger insert_any(doc, node, parent, child).nodes[x]] 0 <= x < doc.nodes.len() ==> {
+            &&& insert_any(doc, node, parent, child).nodes[x].kind == doc.nodes[x].kind
+            &&& insert_any(doc, node, parent, child).nodes[x].wrapper == doc.nodes[x].wrapper
+            &&& (x != node && !(doc.nodes[node as int].kind is DocumentFragment && doc.nodes[node as int].children.contains(x as NodeId))
+                ==> insert_any(doc, node, parent, child).nodes[x].parent == doc.nodes[x].parent)
+        },
+        insert_any(doc, node, parent, child).nodes[parent as int].children == list_kids(
+            doc.nodes[parent as int].children,
+            doc.nodes[node as int].children,
+            child,
+        ),
+        insert_any(doc, node, parent, child).nodes[node as int].children.len() == 0,
+        forall|j: int| 0 <= j < doc.nodes[node as int].children.len() ==>
+            insert_any(doc, node, parent, child).nodes[#[trigger] doc.nodes[node as int].children[j] as int].parent == Some(parent),
+{
+    lemma_insert_fragment(doc, node, parent, child);
+    let r = insert_fragment(doc, node, parent, child);
+    let f = fragment_inserted(doc, node, parent, child);
+    assert(r.nodes == f);
+    lemma_fragment_inserted_parent(doc, node, parent, child);
+    let nodes = doc.nodes[node as int].children;
+    let paths = lemma_wf_witness(doc);
+    lemma_frag_facts(doc, paths, node, parent, child);
+    lemma_wf_split(doc, paths);
+    lemma_fragment_frame(doc, node, parent, child);
+    assert forall|j: int| 0 <= j < nodes.len() implies r.nodes[#[trigger] nodes[j] as int].parent == Some(parent) by {
+        let c = nodes[j];
+        assert(nodes.contains(c));
+    }
+}
+
+/// [`theorem_insert_any_wf`] for a node that is not a fragment.
+#[verifier::rlimit(100)]
+proof fn lemma_insert_any_node(doc: Document, node: NodeId, parent: NodeId, child: Option<NodeId>)
+    requires
+        insert_any_requires(doc, node, parent, child),
+        !(doc.nodes[node as int].kind is DocumentFragment),
+    ensures
+        wf(insert_any(doc, node, parent, child)),
+        insert_any(doc, node, parent, child).nodes.len() == doc.nodes.len(),
+        forall|x: int| #![trigger insert_any(doc, node, parent, child).nodes[x]] 0 <= x < doc.nodes.len() ==> {
+            &&& insert_any(doc, node, parent, child).nodes[x].kind == doc.nodes[x].kind
+            &&& insert_any(doc, node, parent, child).nodes[x].wrapper == doc.nodes[x].wrapper
+            &&& (x != node && !(doc.nodes[node as int].kind is DocumentFragment && doc.nodes[node as int].children.contains(x as NodeId))
+                ==> insert_any(doc, node, parent, child).nodes[x].parent == doc.nodes[x].parent)
+        },
+        insert_any(doc, node, parent, child).nodes[node as int].parent == Some(parent),
+        insert_any(doc, node, parent, child).nodes[parent as int].children == insert_kids(doc, node, parent, child),
+{
+    assert(insert_requires(doc, node, parent, child));
+    theorem_insert_wf(doc, node, parent, child);
+}
+
 /// DOM §4.2.3 "insert", for any node, keeps the arena well formed and does
 /// what its steps say: a node that is not a fragment is `parent`'s new
 /// child (the parser's [`insert`]); a fragment is emptied, and each of its
 /// children has `parent` as its parent. No kind or wrapper changes, and no
 /// other node's parent does.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(100)]
 pub proof fn theorem_insert_any_wf(doc: Document, node: NodeId, parent: NodeId, child: Option<NodeId>)
     requires
         insert_any_requires(doc, node, parent, child),
@@ -1157,30 +1247,26 @@ pub proof fn theorem_insert_any_wf(doc: Document, node: NodeId, parent: NodeId, 
         },
 {
     if doc.nodes[node as int].kind is DocumentFragment {
-        lemma_insert_fragment(doc, node, parent, child);
-        let r = insert_fragment(doc, node, parent, child);
-        let f = fragment_inserted(doc, node, parent, child);
-        assert(r.nodes == f);
-        lemma_fragment_inserted_parent(doc, node, parent, child);
-        let nodes = doc.nodes[node as int].children;
-        assert forall|j: int| 0 <= j < nodes.len() implies r.nodes[#[trigger] nodes[j] as int].parent == Some(parent) by {
-            let c = nodes[j];
-            assert(nodes.contains(c));
-            let paths = lemma_wf_witness(doc);
-            lemma_wf_split(doc, paths);
-            assert(doc.nodes[node as int].children[j] == c);
-            lemma_parent_not_self(doc, paths, c);
-            assert(c != node);
-            lemma_frag_child_not_ancestor(doc, paths, node, parent, c);
-            if c == parent {
-                assert(is_inclusive_ancestor(doc, c, parent));
-            }
-        }
+        lemma_insert_any_frag(doc, node, parent, child);
     } else {
-        let paths = lemma_wf_witness(doc);
-        assert(insert_requires(doc, node, parent, child));
-        theorem_insert_wf(doc, node, parent, child);
+        lemma_insert_any_node(doc, node, parent, child);
     }
+}
+
+/// The children of `parent` after inserting a fragment: the old ones with
+/// the fragment's, in order, at the reference child.
+pub proof fn lemma_insert_fragment_children(doc: Document, node: NodeId, parent: NodeId, child: Option<NodeId>)
+    requires
+        insert_any_requires(doc, node, parent, child),
+        doc.nodes[node as int].kind is DocumentFragment,
+    ensures
+        insert_any(doc, node, parent, child).nodes[parent as int].children == list_kids(
+            doc.nodes[parent as int].children,
+            doc.nodes[node as int].children,
+            child,
+        ),
+{
+    lemma_insert_any_frag(doc, node, parent, child);
 }
 
 // ---------------------------------------------------------------------

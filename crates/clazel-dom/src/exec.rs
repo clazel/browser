@@ -17,6 +17,8 @@
 use super::contract::*;
 #[cfg(verus_only)]
 use super::lemmas::*;
+#[cfg(verus_only)]
+use super::ops_lemmas::*;
 #[allow(unused_imports)]
 use super::spec::*;
 #[allow(unused_imports)]
@@ -491,14 +493,13 @@ impl Arena {
         }
     }
 
-    /// Steps 7.1 of "insert": adopt `node` (remove it from its parent, if
-    /// any).
-    fn adopt(&mut self, node: usize)
+    /// DOM §4.5 "adopt" (step 7.1 of "insert" calls it): remove `node` from
+    /// its parent, if any ([`adopt_ensures`]).
+    pub fn adopt(&mut self, node: usize)
         requires
-            wf(old(self)@),
-            valid(old(self)@, node),
+            adopt_requires(old(self)@, node),
         ensures
-            final(self)@ == adopt(old(self)@, node),
+            adopt_ensures(old(self)@, node, final(self)@),
     {
         if self.node(node).parent.is_some() {
             self.remove(node);
@@ -1024,6 +1025,1058 @@ proof fn lemma_exec_state_done(d0: Document, from: NodeId, to: NodeId)
     assert(f.subrange(len, len) =~= Seq::<NodeId>::empty());
     assert(s.nodes[to as int] == d0.nodes[to as int]);
     assert(s.nodes.update(to as int, Node { children: s.nodes[to as int].children + f, ..s.nodes[to as int] }) =~= r.nodes);
+}
+
+// ---------------------------------------------------------------------
+// Phase 7 item 7.13: the operations scripts call (see `spec.rs`)
+
+/// The records after setting the parent of each of `ids` to `p`.
+pub open spec fn set_parents_spec(s: Seq<Node>, ids: Seq<NodeId>, p: Option<NodeId>) -> Seq<Node> {
+    Seq::new(s.len(), |x: int| if ids.contains(x as NodeId) { Node { parent: p, ..s[x] } } else { s[x] })
+}
+
+/// One iteration of [`Arena::set_parents`]'s loop.
+proof fn lemma_set_parents_step(s: Seq<Node>, ids: Seq<NodeId>, p: Option<NodeId>, i: int)
+    requires
+        s.len() <= max_nodes(),
+        0 <= i < ids.len(),
+        ids[i] < s.len(),
+    ensures
+        ({
+            let c = ids[i];
+            let a = set_parents_spec(s, ids.subrange(0, i), p);
+            a.update(c as int, Node { parent: p, ..a[c as int] }) == set_parents_spec(s, ids.subrange(0, i + 1), p)
+        }),
+{
+    let c = ids[i];
+    let a = set_parents_spec(s, ids.subrange(0, i), p);
+    let b = set_parents_spec(s, ids.subrange(0, i + 1), p);
+    let u = a.update(c as int, Node { parent: p, ..a[c as int] });
+    assert(ids.subrange(0, i + 1)[i] == c);
+    assert forall|x: int| 0 <= x < s.len() implies #[trigger] u[x] == b[x] by {
+        let xn = x as NodeId;
+        if x == c {
+            assert(ids.subrange(0, i + 1).contains(c));
+        } else {
+            assert(xn != c);
+            if ids.subrange(0, i + 1).contains(xn) {
+                let j = choose|j: int| 0 <= j < i + 1 && #[trigger] ids.subrange(0, i + 1)[j] == xn;
+                if j == i {
+                    assert(ids.subrange(0, i + 1)[i] == c);
+                }
+                assert(j < i);
+                assert(ids.subrange(0, i)[j] == xn);
+            }
+            if ids.subrange(0, i).contains(xn) {
+                let j = choose|j: int| 0 <= j < i && #[trigger] ids.subrange(0, i)[j] == xn;
+                assert(ids.subrange(0, i + 1)[j] == xn);
+            }
+        }
+    }
+    assert(u =~= b);
+}
+
+/// A node's children are nodes of the arena that have it as their parent,
+/// without duplicates, and it is not one of them.
+proof fn lemma_children_facts(doc: Document, p: NodeId)
+    requires
+        wf(doc),
+        valid(doc, p),
+    ensures
+        doc.nodes[p as int].children.no_duplicates(),
+        !doc.nodes[p as int].children.contains(p),
+        forall|j: int|
+            0 <= j < doc.nodes[p as int].children.len() ==> (#[trigger] doc.nodes[p as int].children[j]) < doc.nodes.len()
+                && doc.nodes[doc.nodes[p as int].children[j] as int].parent == Some(p),
+{
+    let paths = lemma_wf_witness(doc);
+    lemma_wf_split(doc, paths);
+    let f = doc.nodes[p as int].children;
+    assert forall|j: int| 0 <= j < f.len() implies (#[trigger] f[j]) < doc.nodes.len() && doc.nodes[f[j] as int].parent == Some(p) by {
+        assert(doc.nodes[p as int].children[j] == f[j]);
+    }
+    if f.contains(p) {
+        let j = choose|j: int| 0 <= j < f.len() && f[j] == p;
+        assert(f[j] == p);
+        lemma_parent_not_self(doc, paths, p);
+    }
+}
+
+/// The arena after taking all of `p`'s children and setting their parents
+/// to none is [`removed_prefix`] with everything removed.
+proof fn lemma_remove_children_state(d0: Document, p: NodeId)
+    requires
+        wf(d0),
+        valid(d0, p),
+    ensures
+        set_parents_spec(
+            d0.nodes.update(p as int, Node { children: seq![], ..d0.nodes[p as int] }),
+            d0.nodes[p as int].children,
+            None,
+        ) == removed_prefix(d0, p, d0.nodes[p as int].children.len() as int),
+{
+    lemma_children_facts(d0, p);
+    let kids = d0.nodes[p as int].children;
+    let len = kids.len();
+    let s1 = d0.nodes.update(p as int, Node { children: seq![], ..d0.nodes[p as int] });
+    let a = set_parents_spec(s1, kids, None);
+    let r = removed_prefix(d0, p, len as int);
+    assert(kids.subrange(0, len as int) =~= kids);
+    assert(kids.subrange(len as int, len as int) =~= Seq::<NodeId>::empty());
+    assert forall|x: int| 0 <= x < d0.nodes.len() implies #[trigger] a[x] == r[x] by {
+        if x == p {
+            assert(!kids.contains(p));
+        }
+    }
+    assert(a =~= r);
+}
+
+/// An empty fragment inserts nothing: the arena is [`fragment_inserted`].
+proof fn lemma_fragment_state_empty(d0: Document, frag: NodeId, parent: NodeId, child: Option<NodeId>)
+    requires
+        insert_any_requires(d0, frag, parent, child),
+        d0.nodes[frag as int].kind is DocumentFragment,
+        d0.nodes[frag as int].children.len() == 0,
+    ensures
+        insert_fragment(d0, frag, parent, child) == d0,
+{
+    assert(d0.nodes[frag as int].children =~= Seq::<NodeId>::empty());
+}
+
+/// The arena after steps 4.1 and 7 done in bulk is [`fragment_inserted`].
+proof fn lemma_fragment_state(d0: Document, frag: NodeId, parent: NodeId, child: Option<NodeId>, newkids: Seq<NodeId>)
+    requires
+        insert_any_requires(d0, frag, parent, child),
+        d0.nodes[frag as int].kind is DocumentFragment,
+        d0.nodes[frag as int].children.len() > 0,
+        newkids == list_kids(d0.nodes[parent as int].children, d0.nodes[frag as int].children, child),
+    ensures
+        ({
+            let nodes0 = d0.nodes[frag as int].children;
+            let s1 = d0.nodes.update(frag as int, Node { children: seq![], ..d0.nodes[frag as int] });
+            let s2 = set_parents_spec(s1, nodes0, Some(parent));
+            s2.update(parent as int, Node { children: newkids, ..s2[parent as int] }) == fragment_inserted(d0, frag, parent, child)
+        }),
+{
+    let paths = lemma_wf_witness(d0);
+    lemma_wf_split(d0, paths);
+    lemma_frag_facts(d0, paths, frag, parent, child);
+    let nodes0 = d0.nodes[frag as int].children;
+    let s1 = d0.nodes.update(frag as int, Node { children: seq![], ..d0.nodes[frag as int] });
+    let s2 = set_parents_spec(s1, nodes0, Some(parent));
+    let u = s2.update(parent as int, Node { children: newkids, ..s2[parent as int] });
+    let b = fragment_inserted(d0, frag, parent, child);
+    assert(d0.nodes.len() <= max_nodes());
+    assert(parent != frag);
+    assert(!nodes0.contains(parent));
+    assert(!nodes0.contains(frag));
+    assert forall|x: int| 0 <= x < d0.nodes.len() implies #[trigger] u[x] == b[x] by {
+        if x == frag {
+            assert(s2[x] == s1[x]);
+        } else if x == parent {
+            assert(s2[x] == s1[x]);
+            assert(s1[x] == d0.nodes[x]);
+        } else if nodes0.contains(x as NodeId) {
+            assert(s1[x] == d0.nodes[x]);
+        } else {
+            assert(s1[x] == d0.nodes[x]);
+        }
+    }
+    assert(u =~= b);
+}
+
+/// Whether a kind is an element, as a boolean.
+fn kind_is(k: &ExecKind, t: &NodeTag) -> (r: bool)
+    ensures
+        r == has_tag(k@, *t),
+{
+    match t {
+        NodeTag::Element => match k {
+            ExecKind::Element { .. } => true,
+            _ => false,
+        },
+        NodeTag::Text => match k {
+            ExecKind::Text { .. } => true,
+            _ => false,
+        },
+        NodeTag::DocumentType => match k {
+            ExecKind::DocumentType { .. } => true,
+            _ => false,
+        },
+    }
+}
+
+/// A kind of a node that may have children.
+fn kind_may_have_children(k: &ExecKind) -> (r: bool)
+    ensures
+        r == may_have_children(k@),
+{
+    match k {
+        ExecKind::Document { .. } => true,
+        ExecKind::Element { .. } => true,
+        ExecKind::DocumentFragment { .. } => true,
+        _ => false,
+    }
+}
+
+impl Arena {
+    /// Set the parent of each of `ids` to `p`, in one pass.
+    fn set_parents(&mut self, ids: &[usize], p: Option<usize>)
+        requires
+            old(self)@.nodes.len() <= max_nodes(),
+            forall|j: int| 0 <= j < ids@.len() ==> (#[trigger] ids@[j]) < old(self)@.nodes.len(),
+        ensures
+            final(self)@.nodes == set_parents_spec(old(self)@.nodes, ids@, p),
+    {
+        let ghost s0 = self@.nodes;
+        proof {
+            assert(ids@.subrange(0, 0) =~= Seq::<NodeId>::empty());
+            assert(set_parents_spec(s0, ids@.subrange(0, 0), p) =~= s0) by {
+                assert forall|x: int| 0 <= x < s0.len() implies #[trigger] set_parents_spec(s0, ids@.subrange(0, 0), p)[x] == s0[x] by {}
+            }
+        }
+        let mut i: usize = 0;
+        while i < ids.len()
+            invariant
+                i <= ids.len(),
+                s0.len() <= max_nodes(),
+                s0.len() == self@.nodes.len(),
+                forall|j: int| 0 <= j < ids@.len() ==> (#[trigger] ids@[j]) < s0.len(),
+                self@.nodes == set_parents_spec(s0, ids@.subrange(0, i as int), p),
+            decreases ids.len() - i,
+        {
+            if let Some(c) = ids.get(i) {
+                proof {
+                    lemma_set_parents_step(s0, ids@, p, i as int);
+                }
+                self.set_parent(*c, p);
+                proof {
+                    assert(self@.nodes =~= set_parents_spec(s0, ids@.subrange(0, i as int + 1), p));
+                }
+            }
+            // Never saturates: i < ids.len().
+            i = i.saturating_add(1);
+        }
+        proof {
+            assert(ids@.subrange(0, ids.len() as int) =~= ids@);
+        }
+    }
+
+    /// DOM §4.2.3 "remove all of `p`'s children, in tree order", in one pass.
+    fn remove_children(&mut self, p: usize)
+        requires
+            wf(old(self)@),
+            valid(old(self)@, p),
+        ensures
+            final(self)@ == remove_children(old(self)@, p),
+    {
+        let ghost d0 = self@;
+        let ghost kids0 = d0.nodes[p as int].children;
+        proof {
+            lemma_children_facts(d0, p);
+            lemma_remove_children_n(d0, p, kids0.len());
+            let paths = lemma_wf_witness(d0);
+            lemma_wf_split(d0, paths);
+        }
+        let kids = self.take_children(p);
+        self.set_parents(kids.as_slice(), None);
+        proof {
+            lemma_remove_children_state(d0, p);
+            assert(children(d0, p) == kids0);
+            assert(self@.nodes == removed_prefix(d0, p, kids0.len() as int));
+            assert(self@ == remove_children(d0, p));
+        }
+    }
+
+    /// DOM §4.2 "next sibling".
+    pub fn next_sibling(&self, n: usize) -> (r: Option<usize>)
+        requires
+            wf(self@),
+            valid(self@, n),
+        ensures
+            r == next_sibling(self@, n),
+    {
+        let ghost paths = lemma_wf_witness(self@);
+        proof {
+            lemma_wf_split(self@, paths);
+        }
+        let p = self.node(n).parent?;
+        let kids = self.node(p).children.as_slice();
+        match find(kids, n) {
+            Some(i) => {
+                // Never saturates: i < kids.len().
+                let j = i.saturating_add(1);
+                if j < kids.len() {
+                    Some(kids[j])
+                } else {
+                    None
+                }
+            },
+            None => None,
+        }
+    }
+
+    /// DOM §4.2 "host-including inclusive ancestor": `a` is `x` or one of
+    /// its ancestors, or of its root's host's (and so on). Walks from `x`,
+    /// at most `len` steps.
+    #[verifier::rlimit(50)]
+    pub fn is_host_including_inclusive_ancestor(&self, a: usize, x: usize) -> (r: bool)
+        requires
+            wf(self@),
+            valid(self@, x),
+        ensures
+            r == is_host_including_inclusive_ancestor(self@, a, x),
+    {
+        let ghost paths = lemma_wf_witness(self@);
+        proof {
+            lemma_wf_split(self@, paths);
+        }
+        let fuel = self.nodes.len();
+        let mut cur = x;
+        let mut steps: usize = 0;
+        while steps <= fuel
+            invariant
+                wf_with(self@, paths),
+                fuel == self@.nodes.len(),
+                valid(self@, cur),
+                steps <= fuel,
+                host_including_within(self@, a, x, fuel as nat) == host_including_within(self@, a, cur, (fuel - steps) as nat),
+            decreases fuel - steps,
+        {
+            if cur == a {
+                return true;
+            }
+            if steps == fuel {
+                return false;
+            }
+            match self.node(cur).parent {
+                Some(p) => {
+                    cur = p;
+                },
+                None => match &self.node(cur).kind {
+                    ExecKind::DocumentFragment { host: Some(h) } => {
+                        proof {
+                            assert(self@.nodes[cur as int].kind is DocumentFragment);
+                        }
+                        cur = *h;
+                    },
+                    _ => return false,
+                },
+            }
+            // Never saturates: steps < fuel.
+            steps = steps.saturating_add(1);
+        }
+        false
+    }
+
+    /// How many of `kids[lo..hi]` have the tag `t`, other than `skip`
+    /// ([`count_tag`]).
+    fn count_tag(&self, kids: &[usize], lo: usize, hi: usize, t: NodeTag, skip: Option<usize>) -> (r: usize)
+        requires
+            lo <= hi <= kids@.len(),
+            forall|j: int| 0 <= j < kids@.len() ==> (#[trigger] kids@[j]) < self@.nodes.len(),
+        ensures
+            r as nat == count_tag(self@, kids@.subrange(lo as int, hi as int), t, skip),
+    {
+        let mut count: usize = 0;
+        let mut i: usize = lo;
+        proof {
+            assert(kids@.subrange(lo as int, lo as int) =~= Seq::<NodeId>::empty());
+        }
+        while i < hi
+            invariant
+                lo <= i <= hi,
+                hi <= kids@.len(),
+                forall|j: int| 0 <= j < kids@.len() ==> (#[trigger] kids@[j]) < self@.nodes.len(),
+                count <= i - lo,
+                count as nat == count_tag(self@, kids@.subrange(lo as int, i as int), t, skip),
+            decreases hi - i,
+        {
+            if let Some(c) = kids.get(i) {
+                proof {
+                    let sub = kids@.subrange(lo as int, i as int + 1);
+                    assert(sub.drop_last() =~= kids@.subrange(lo as int, i as int));
+                    assert(sub.last() == kids@[i as int]);
+                }
+                if kind_is(self.kind(*c), &t) && skip != Some(*c) {
+                    // Never saturates: count <= i - lo < hi.
+                    count = count.saturating_add(1);
+                }
+            }
+            // Never saturates: i < hi.
+            i = i.saturating_add(1);
+        }
+        count
+    }
+}
+
+impl Arena {
+    /// The statements of step 6 of "ensure pre-insertion validity" about a
+    /// document `parent` ([`pre_insert_document_violation`]).
+    fn pre_insert_document_violation(&self, node: usize, parent: usize, child: Option<usize>) -> (r: bool)
+        requires
+            wf(self@),
+            valid(self@, node),
+            valid(self@, parent),
+            match child {
+                None => true,
+                Some(c) => valid(self@, c) && self@.nodes[c as int].parent == Some(parent),
+            },
+        ensures
+            r == pre_insert_document_violation(self@, node, parent, child),
+    {
+        let ghost d = self@;
+        proof {
+            lemma_children_facts(d, parent);
+            lemma_children_facts(d, node);
+        }
+        let kids = self.children(parent);
+        let len = kids.len();
+        let mut after: usize = 0;
+        let mut before: usize = 0;
+        let mut child_is_doctype = false;
+        if let Some(c) = child {
+            proof {
+                let paths = lemma_wf_witness(d);
+                lemma_wf_split(d, paths);
+                assert(d.nodes[parent as int].children.contains(c));
+                lemma_index_of(kids@, c);
+            }
+            let i = match find(kids, c) {
+                Some(i) => i,
+                None => {
+                    proof {
+                        assert(false);
+                    }
+                    return false;
+                },
+            };
+            // Never overflows: i < len.
+            let next = i.saturating_add(1);
+            after = self.count_tag(kids, next, len, NodeTag::DocumentType, None);
+            before = self.count_tag(kids, 0, i, NodeTag::Element, None);
+            child_is_doctype = kind_is(self.kind(c), &NodeTag::DocumentType);
+        }
+        proof {
+            assert(kids@.subrange(0, len as int) =~= kids@);
+        }
+        match self.kind(node) {
+            ExecKind::DocumentFragment { .. } => {
+                let nk = self.children(node);
+                let nlen = nk.len();
+                proof {
+                    assert(nk@.subrange(0, nlen as int) =~= nk@);
+                }
+                let elements = self.count_tag(nk, 0, nlen, NodeTag::Element, None);
+                let texts = self.count_tag(nk, 0, nlen, NodeTag::Text, None);
+                if elements > 1 || texts > 0 {
+                    return true;
+                }
+                if elements == 1 {
+                    let pe = self.count_tag(kids, 0, len, NodeTag::Element, None);
+                    return pe > 0 || child_is_doctype || after > 0;
+                }
+                false
+            },
+            ExecKind::Element { .. } => {
+                let pe = self.count_tag(kids, 0, len, NodeTag::Element, None);
+                pe > 0 || child_is_doctype || after > 0
+            },
+            ExecKind::DocumentType { .. } => {
+                let pd = self.count_tag(kids, 0, len, NodeTag::DocumentType, None);
+                if pd > 0 || before > 0 {
+                    return true;
+                }
+                if child.is_none() {
+                    let pe = self.count_tag(kids, 0, len, NodeTag::Element, None);
+                    return pe > 0;
+                }
+                false
+            },
+            _ => false,
+        }
+    }
+
+    /// DOM §4.2.3† "ensure pre-insertion validity"
+    /// ([`ensure_pre_insertion_validity_ensures`]).
+    pub fn ensure_pre_insertion_validity(&self, node: usize, parent: usize, child: Option<usize>) -> (r: Option<DomError>)
+        requires
+            pre_insert_requires(self@, node, parent, child),
+        ensures
+            ensure_pre_insertion_validity_ensures(self@, node, parent, child, r),
+    {
+        let ghost d = self@;
+        let pk = self.kind(parent);
+        // 1.
+        if !kind_may_have_children(pk) {
+            return Some(DomError::HierarchyRequest);
+        }
+        // 2.
+        if self.is_host_including_inclusive_ancestor(node, parent) {
+            return Some(DomError::HierarchyRequest);
+        }
+        // 3.
+        if let Some(c) = child {
+            if self.node(c).parent != Some(parent) {
+                return Some(DomError::NotFound);
+            }
+        }
+        let nk = self.kind(node);
+        // 4.
+        if let ExecKind::Document { .. } = nk {
+            return Some(DomError::HierarchyRequest);
+        }
+        // 5.
+        let parent_is_document = match pk {
+            ExecKind::Document { .. } => true,
+            _ => false,
+        };
+        let node_is_text = kind_is(nk, &NodeTag::Text);
+        let node_is_doctype = kind_is(nk, &NodeTag::DocumentType);
+        if (node_is_text && parent_is_document) || (node_is_doctype && !parent_is_document) {
+            return Some(DomError::HierarchyRequest);
+        }
+        // 6.
+        if parent_is_document && self.pre_insert_document_violation(node, parent, child) {
+            return Some(DomError::HierarchyRequest);
+        }
+        None
+    }
+
+    /// The statements of step 6 of "replace" about a document `parent`
+    /// ([`replace_document_violation`]).
+    fn replace_document_violation(&self, child: usize, node: usize, parent: usize) -> (r: bool)
+        requires
+            wf(self@),
+            valid(self@, node),
+            valid(self@, parent),
+            valid(self@, child),
+            self@.nodes[child as int].parent == Some(parent),
+        ensures
+            r == replace_document_violation(self@, child, node, parent),
+    {
+        let ghost d = self@;
+        proof {
+            lemma_children_facts(d, parent);
+            lemma_children_facts(d, node);
+            let paths = lemma_wf_witness(d);
+            lemma_wf_split(d, paths);
+            assert(d.nodes[parent as int].children.contains(child));
+            lemma_index_of(d.nodes[parent as int].children, child);
+        }
+        let kids = self.children(parent);
+        let len = kids.len();
+        let i = match find(kids, child) {
+            Some(i) => i,
+            None => {
+                proof {
+                    assert(false);
+                }
+                return false;
+            },
+        };
+        // Never overflows: i < len.
+        let next = i.saturating_add(1);
+        let after = self.count_tag(kids, next, len, NodeTag::DocumentType, None);
+        let before = self.count_tag(kids, 0, i, NodeTag::Element, None);
+        proof {
+            assert(kids@.subrange(0, len as int) =~= kids@);
+        }
+        match self.kind(node) {
+            ExecKind::DocumentFragment { .. } => {
+                let nk = self.children(node);
+                let nlen = nk.len();
+                proof {
+                    assert(nk@.subrange(0, nlen as int) =~= nk@);
+                }
+                let elements = self.count_tag(nk, 0, nlen, NodeTag::Element, None);
+                let texts = self.count_tag(nk, 0, nlen, NodeTag::Text, None);
+                if elements > 1 || texts > 0 {
+                    return true;
+                }
+                if elements == 1 {
+                    let pe = self.count_tag(kids, 0, len, NodeTag::Element, Some(child));
+                    return pe > 0 || after > 0;
+                }
+                false
+            },
+            ExecKind::Element { .. } => {
+                let pe = self.count_tag(kids, 0, len, NodeTag::Element, Some(child));
+                pe > 0 || after > 0
+            },
+            ExecKind::DocumentType { .. } => {
+                let pd = self.count_tag(kids, 0, len, NodeTag::DocumentType, Some(child));
+                pd > 0 || before > 0
+            },
+            _ => false,
+        }
+    }
+
+    /// Steps 1 to 6 of DOM §4.2.3† "replace" ([`replace_error`]).
+    fn replace_validity(&self, child: usize, node: usize, parent: usize) -> (r: Option<DomError>)
+        requires
+            replace_requires(self@, child, node, parent),
+        ensures
+            r == replace_error(self@, child, node, parent),
+    {
+        let pk = self.kind(parent);
+        // 1.
+        if !kind_may_have_children(pk) {
+            return Some(DomError::HierarchyRequest);
+        }
+        // 2.
+        if self.is_host_including_inclusive_ancestor(node, parent) {
+            return Some(DomError::HierarchyRequest);
+        }
+        // 3.
+        if self.node(child).parent != Some(parent) {
+            return Some(DomError::NotFound);
+        }
+        let nk = self.kind(node);
+        // 4.
+        if let ExecKind::Document { .. } = nk {
+            return Some(DomError::HierarchyRequest);
+        }
+        // 5.
+        let parent_is_document = match pk {
+            ExecKind::Document { .. } => true,
+            _ => false,
+        };
+        let node_is_text = kind_is(nk, &NodeTag::Text);
+        let node_is_doctype = kind_is(nk, &NodeTag::DocumentType);
+        if (node_is_text && parent_is_document) || (node_is_doctype && !parent_is_document) {
+            return Some(DomError::HierarchyRequest);
+        }
+        // 6.
+        if parent_is_document && self.replace_document_violation(child, node, parent) {
+            return Some(DomError::HierarchyRequest);
+        }
+        None
+    }
+
+    /// DOM §4.2.3 "insert" a `DocumentFragment` ([`insert_fragment`]).
+    /// Linear in the number of moved children.
+    fn insert_fragment(&mut self, frag: usize, parent: usize, child: Option<usize>)
+        requires
+            insert_any_requires(old(self)@, frag, parent, child),
+            old(self)@.nodes[frag as int].kind is DocumentFragment,
+        ensures
+            final(self)@ == insert_fragment(old(self)@, frag, parent, child),
+    {
+        let ghost d0 = self@;
+        let ghost nodes0 = d0.nodes[frag as int].children;
+        let ghost kids0 = d0.nodes[parent as int].children;
+        proof {
+            lemma_insert_fragment(d0, frag, parent, child);
+            lemma_children_facts(d0, frag);
+            let paths = lemma_wf_witness(d0);
+            lemma_wf_split(d0, paths);
+        }
+        // 3.
+        if self.node(frag).children.is_empty() {
+            proof {
+                lemma_fragment_state_empty(d0, frag, parent, child);
+            }
+            return ;
+        }
+        // 4.1 and 7., in bulk.
+        let mut moved = self.take_children(frag);
+        self.set_parents(moved.as_slice(), Some(parent));
+        let mut kids = self.take_children(parent);
+        match child {
+            None => {
+                kids.append(&mut moved);
+            },
+            Some(c) => {
+                proof {
+                    lemma_index_of(kids0, c);
+                }
+                let i = match find(kids.as_slice(), c) {
+                    Some(i) => i,
+                    None => {
+                        proof {
+                            assert(false);
+                        }
+                        return ;
+                    },
+                };
+                let mut tail = kids.split_off(i);
+                kids.append(&mut moved);
+                kids.append(&mut tail);
+            },
+        }
+        proof {
+            match child {
+                None => {
+                    assert(kids@ == kids0 + nodes0);
+                },
+                Some(c) => {
+                    let i = index_of(kids0, c);
+                    assert(kids@ == kids0.subrange(0, i) + nodes0 + kids0.subrange(i, kids0.len() as int));
+                },
+            }
+            assert(kids@ == list_kids(kids0, nodes0, child));
+        }
+        self.set_children(parent, kids);
+        proof {
+            lemma_fragment_state(d0, frag, parent, child, kids@);
+            assert(self@.nodes == fragment_inserted(d0, frag, parent, child));
+            assert(self@ == insert_fragment(d0, frag, parent, child));
+        }
+    }
+
+    /// DOM §4.2.3 "insert" for any node ([`insert_any`]).
+    fn insert_any(&mut self, node: usize, parent: usize, child: Option<usize>)
+        requires
+            insert_any_requires(old(self)@, node, parent, child),
+        ensures
+            final(self)@ == insert_any(old(self)@, node, parent, child),
+    {
+        let is_fragment = match self.kind(node) {
+            ExecKind::DocumentFragment { .. } => true,
+            _ => false,
+        };
+        if is_fragment {
+            self.insert_fragment(node, parent, child);
+        } else {
+            match child {
+                None => self.append(parent, node),
+                Some(c) => self.insert_before(parent, node, c),
+            }
+        }
+    }
+
+    /// DOM §4.2.3† "pre-insert" ([`pre_insert_ensures`]).
+    pub fn pre_insert(&mut self, node: usize, parent: usize, child: Option<usize>) -> (err: Option<DomError>)
+        requires
+            pre_insert_requires(old(self)@, node, parent, child),
+        ensures
+            pre_insert_ensures(old(self)@, node, parent, child, final(self)@, err),
+    {
+        let ghost d0 = self@;
+        // 1.
+        let err = self.ensure_pre_insertion_validity(node, parent, child);
+        if err.is_some() {
+            return err;
+        }
+        proof {
+            lemma_pre_insert_valid(d0, node, parent, child);
+        }
+        // 2. and 3.
+        let reference_child = if child == Some(node) {
+            self.next_sibling(node)
+        } else {
+            child
+        };
+        // 4.
+        self.insert_any(node, parent, reference_child);
+        None
+    }
+
+    /// DOM §4.2.3† "replace" ([`replace_ensures`]).
+    pub fn replace(&mut self, child: usize, node: usize, parent: usize) -> (err: Option<DomError>)
+        requires
+            replace_requires(old(self)@, child, node, parent),
+        ensures
+            replace_ensures(old(self)@, child, node, parent, final(self)@, err),
+    {
+        let ghost d0 = self@;
+        // 1. to 6.
+        let err = self.replace_validity(child, node, parent);
+        if err.is_some() {
+            return err;
+        }
+        proof {
+            lemma_replace_valid(d0, child, node, parent);
+            assert(d0.nodes[child as int].parent == Some(parent));
+        }
+        // 7.
+        let reference0 = self.next_sibling(child);
+        // 8.
+        let reference_child = if reference0 == Some(node) {
+            self.next_sibling(node)
+        } else {
+            reference0
+        };
+        // 11.
+        self.remove(child);
+        // 13.
+        self.insert_any(node, parent, reference_child);
+        None
+    }
+
+    /// DOM §4.2.3† "replace all" ([`replace_all_ensures`]).
+    pub fn replace_all(&mut self, node: Option<usize>, parent: usize)
+        requires
+            replace_all_requires(old(self)@, node, parent),
+        ensures
+            replace_all_ensures(old(self)@, node, parent, final(self)@),
+    {
+        let ghost d0 = self@;
+        proof {
+            lemma_replace_all_valid(d0, node, parent);
+        }
+        // 5.
+        self.remove_children(parent);
+        // 6.
+        if let Some(n) = node {
+            self.insert_any(n, parent, None);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------
+// Copies of kinds (for "clone a node")
+
+/// A copy of a string.
+fn copy_str(s: &Vec<u32>) -> (r: Vec<u32>)
+    ensures
+        r@ == s@,
+{
+    vstd::slice::slice_to_vec(s.as_slice())
+}
+
+/// A copy of an optional string.
+fn copy_opt_str(s: &Option<Vec<u32>>) -> (r: Option<Vec<u32>>)
+    ensures
+        opt_str_view(r) == opt_str_view(*s),
+{
+    match s {
+        Some(v) => Some(copy_str(v)),
+        None => None,
+    }
+}
+
+/// A copy of an optional namespace.
+fn copy_ns(n: &Option<Namespace>) -> (r: Option<Namespace>)
+    ensures
+        r == *n,
+{
+    match n {
+        None => None,
+        Some(Namespace::Html) => Some(Namespace::Html),
+        Some(Namespace::MathMl) => Some(Namespace::MathMl),
+        Some(Namespace::Svg) => Some(Namespace::Svg),
+        Some(Namespace::XLink) => Some(Namespace::XLink),
+        Some(Namespace::Xml) => Some(Namespace::Xml),
+        Some(Namespace::Xmlns) => Some(Namespace::Xmlns),
+    }
+}
+
+/// A copy of a document mode.
+fn copy_mode(m: &DocumentMode) -> (r: DocumentMode)
+    ensures
+        r == *m,
+{
+    match m {
+        DocumentMode::NoQuirks => DocumentMode::NoQuirks,
+        DocumentMode::Quirks => DocumentMode::Quirks,
+        DocumentMode::LimitedQuirks => DocumentMode::LimitedQuirks,
+    }
+}
+
+/// A copy of an attribute ("clone an attribute").
+fn copy_attr(a: &ExecAttr) -> (r: ExecAttr)
+    ensures
+        r@ == a@,
+{
+    ExecAttr { namespace: copy_ns(&a.namespace), prefix: copy_opt_str(&a.prefix), local_name: copy_str(&a.local_name), value: copy_str(&a.value) }
+}
+
+/// A copy of an attribute list.
+fn copy_attrs(v: &Vec<ExecAttr>) -> (r: Vec<ExecAttr>)
+    ensures
+        attrs_view(r@) == attrs_view(v@),
+{
+    let mut out: Vec<ExecAttr> = Vec::new();
+    let mut i: usize = 0;
+    while i < v.len()
+        invariant
+            i <= v.len(),
+            out@.len() == i,
+            forall|j: int| 0 <= j < i ==> (#[trigger] out@[j])@ == v@[j]@,
+        decreases v.len() - i,
+    {
+        if let Some(a) = v.get(i) {
+            out.push(copy_attr(a));
+        }
+        // Never saturates: i < v.len().
+        i = i.saturating_add(1);
+    }
+    proof {
+        assert(attrs_view(out@) =~= attrs_view(v@));
+    }
+    out
+}
+
+/// The kind of the copy "clone a node" makes ([`clone_kind`]).
+fn clone_kind_exec(k: &ExecKind) -> (r: ExecKind)
+    ensures
+        r@ == clone_kind(k@),
+{
+    match k {
+        ExecKind::Document { mode, url, base_url } => ExecKind::Document { mode: copy_mode(mode), url: copy_str(url), base_url: copy_str(base_url) },
+        ExecKind::DocumentType { name, public_id, system_id } => ExecKind::DocumentType {
+            name: copy_str(name),
+            public_id: copy_str(public_id),
+            system_id: copy_str(system_id),
+        },
+        ExecKind::Element { namespace, prefix, local_name, attributes, .. } => ExecKind::Element {
+            namespace: copy_ns(namespace),
+            prefix: copy_opt_str(prefix),
+            local_name: copy_str(local_name),
+            attributes: copy_attrs(attributes),
+            template_contents: None,
+            form_owner: None,
+        },
+        ExecKind::Text { data } => ExecKind::Text { data: copy_str(data) },
+        ExecKind::Comment { data } => ExecKind::Comment { data: copy_str(data) },
+        ExecKind::ProcessingInstruction { target, data } => ExecKind::ProcessingInstruction { target: copy_str(target), data: copy_str(data) },
+        ExecKind::DocumentFragment { .. } => ExecKind::DocumentFragment { host: None },
+    }
+}
+
+/// A template element ([`is_template`]).
+fn is_template_exec(k: &ExecKind) -> (r: bool)
+    ensures
+        r == is_template(k@),
+{
+    match k {
+        ExecKind::Element { template_contents: Some(_), .. } => true,
+        _ => false,
+    }
+}
+
+impl Arena {
+    /// DOM §4.4† "clone a node", shallow ([`clone_node_ensures`]).
+    pub fn clone_node(&mut self, node: usize) -> (r: Option<usize>)
+        requires
+            clone_requires(old(self)@, node),
+        ensures
+            clone_node_ensures(old(self)@, node, final(self)@, r),
+    {
+        let ghost d0 = self@;
+        // 2. and 3.
+        let kind = clone_kind_exec(self.kind(node));
+        let template = is_template_exec(self.kind(node));
+        let count: usize = if template {
+            2
+        } else {
+            1
+        };
+        if self.nodes.len() > MAX_NODES - count {
+            return None;
+        }
+        proof {
+            let k = d0.nodes[node as int].kind;
+            assert(creatable(d0, clone_kind(k)));
+        }
+        let id = match self.create(kind) {
+            Some(id) => id,
+            None => return None,
+        };
+        // 5.
+        if template {
+            proof {
+                let k = d0.nodes[node as int].kind;
+                theorem_create_node_wf(d0, clone_kind(k));
+            }
+            let _contents = self.create_template_contents(id);
+        }
+        Some(id)
+    }
+
+    /// DOM §4.9† "change an attribute" ([`change_attribute_ensures`]).
+    pub fn change_attribute(&mut self, e: usize, i: usize, value: Vec<u32>)
+        requires
+            attribute_requires(old(self)@, e, i as nat),
+        ensures
+            change_attribute_ensures(old(self)@, e, i as nat, value@, final(self)@),
+    {
+        let ghost s0 = self.nodes@;
+        let ghost v = value@;
+        let mut y = self.take(e);
+        let mut kind = ExecKind::DocumentFragment { host: None };
+        core::mem::swap(&mut y.kind, &mut kind);
+        y.kind = match kind {
+            ExecKind::Element { namespace, prefix, local_name, mut attributes, template_contents, form_owner } => {
+                let ghost before = attributes@;
+                let mut old_attr = ExecAttr { namespace: None, prefix: None, local_name: Vec::new(), value: Vec::new() };
+                attributes.set_and_swap(i, &mut old_attr);
+                old_attr.value = value;
+                attributes.set(i, old_attr);
+                proof {
+                    assert(attrs_view(attributes@) =~= attrs_view(before).update(i as int, Attr { value: v, ..attrs_view(before)[i as int] }));
+                }
+                ExecKind::Element { namespace, prefix, local_name, attributes, template_contents, form_owner }
+            },
+            other => other,
+        };
+        self.put(e, y, Ghost(s0));
+        proof {
+            lemma_view_update(s0, e as int, y);
+            assert(self@.nodes =~= change_attribute(old(self)@, e, i as nat, v).nodes);
+        }
+    }
+
+    /// DOM §4.9† "remove an attribute" ([`remove_attribute_ensures`]).
+    pub fn remove_attribute(&mut self, e: usize, i: usize)
+        requires
+            attribute_requires(old(self)@, e, i as nat),
+        ensures
+            remove_attribute_ensures(old(self)@, e, i as nat, final(self)@),
+    {
+        let ghost s0 = self.nodes@;
+        let mut y = self.take(e);
+        let mut kind = ExecKind::DocumentFragment { host: None };
+        core::mem::swap(&mut y.kind, &mut kind);
+        y.kind = match kind {
+            ExecKind::Element { namespace, prefix, local_name, mut attributes, template_contents, form_owner } => {
+                let ghost before = attributes@;
+                let _removed = attributes.remove(i);
+                proof {
+                    assert(attrs_view(attributes@) =~= attrs_view(before).remove(i as int));
+                }
+                ExecKind::Element { namespace, prefix, local_name, attributes, template_contents, form_owner }
+            },
+            other => other,
+        };
+        self.put(e, y, Ghost(s0));
+        proof {
+            lemma_view_update(s0, e as int, y);
+            assert(self@.nodes =~= remove_attribute(old(self)@, e, i as nat).nodes);
+        }
+    }
+
+    /// DOM §4.9† "replace an attribute" ([`replace_attribute_ensures`]).
+    pub fn replace_attribute(&mut self, e: usize, i: usize, new_attr: ExecAttr)
+        requires
+            attribute_requires(old(self)@, e, i as nat),
+        ensures
+            replace_attribute_ensures(old(self)@, e, i as nat, new_attr@, final(self)@),
+    {
+        let ghost s0 = self.nodes@;
+        let ghost a = new_attr@;
+        let mut y = self.take(e);
+        let mut kind = ExecKind::DocumentFragment { host: None };
+        core::mem::swap(&mut y.kind, &mut kind);
+        y.kind = match kind {
+            ExecKind::Element { namespace, prefix, local_name, mut attributes, template_contents, form_owner } => {
+                let ghost before = attributes@;
+                attributes.set(i, new_attr);
+                proof {
+                    assert(attrs_view(attributes@) =~= attrs_view(before).update(i as int, a));
+                }
+                ExecKind::Element { namespace, prefix, local_name, attributes, template_contents, form_owner }
+            },
+            other => other,
+        };
+        self.put(e, y, Ghost(s0));
+        proof {
+            lemma_view_update(s0, e as int, y);
+            assert(self@.nodes =~= replace_attribute(old(self)@, e, i as nat, a).nodes);
+        }
+    }
 }
 
 } // verus!
