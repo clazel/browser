@@ -6,7 +6,7 @@
       "find": "else { 0x8000_0000_0000_0000 } // 4.b.",
       "replace": "else { 0 } // 4.b.",
       "expect": "killed",
-      "reason": "Returns +0 instead of -0 for `-0 × y` with y positive (§6.1.6.1.4 step 4.b): example_multiply_zero_signs is false.",
+      "reason": "Returns +0 instead of -0 for `-0 \u00d7 y` with y positive (\u00a76.1.6.1.4 step 4.b): example_multiply_zero_signs is false.",
       "certificate": {
         "file": "src/lemmas.rs",
         "lemma": "crate::examples::example_multiply_zero_signs()",
@@ -19,7 +19,7 @@
       "find": "else { 0x8000_0000_0000_0000 } // 5.b.",
       "replace": "else { 0 } // 5.b.",
       "expect": "killed",
-      "reason": "Returns +0 instead of -0 for `x × -0` with x positive (§6.1.6.1.4 step 5.b): example_multiply_zero_signs is false.",
+      "reason": "Returns +0 instead of -0 for `x \u00d7 -0` with x positive (\u00a76.1.6.1.4 step 5.b): example_multiply_zero_signs is false.",
       "certificate": {
         "file": "src/lemmas.rs",
         "lemma": "crate::examples::example_multiply_zero_signs()",
@@ -32,11 +32,245 @@
       "find": "(f64_sign(x) ^ f64_sign(y)) << 63",
       "replace": "0",
       "expect": "killed",
-      "reason": "Drops the step 5a erratum's sign, so `+0 × -5` would be +0 where every engine and IEEE 754 give -0: example_multiply_zero_signs is false.",
+      "reason": "Drops the step 5a erratum's sign, so `+0 \u00d7 -5` would be +0 where every engine and IEEE 754 give -0: example_multiply_zero_signs is false.",
       "certificate": {
         "file": "src/lemmas.rs",
         "lemma": "crate::examples::example_multiply_zero_signs()",
         "witness": "number_multiply(0u64, 0xC014_0000_0000_0000u64) == 0u64"
+      }
+    },
+    {
+      "id": "define-prop-key-bound",
+      "file": "src/spec.rs",
+      "find": "Op::DefineProp { obj, key, val } => reg_ok(c, obj) && key < c.consts.len() && reg_ok(c, val),",
+      "replace": "Op::DefineProp { obj, key, val } => reg_ok(c, obj) && key <= c.consts.len() && reg_ok(c, val),",
+      "expect": "killed",
+      "reason": "Accepts a property-name constant one past the pool (CreateDataPropertyOrThrow of consts[key], \u00a77.3.7\u2020): example_new_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_new_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::DefineProp { obj: 0, key: 3, val: 2 })"
+      }
+    },
+    {
+      "id": "define-prop-val-reg",
+      "file": "src/spec.rs",
+      "find": "Op::DefineProp { obj, key, val } => reg_ok(c, obj) && key < c.consts.len() && reg_ok(c, val),",
+      "replace": "Op::DefineProp { obj, key, val } => reg_ok(c, obj) && key < c.consts.len(),",
+      "expect": "killed",
+      "reason": "Accepts a value register outside the frame: example_new_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_new_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::DefineProp { obj: 0, key: 2, val: 3 })"
+      }
+    },
+    {
+      "id": "define-elem-idx-reg",
+      "file": "src/spec.rs",
+      "find": "Op::DefineElem { obj, idx, val } => reg_ok(c, obj) && reg_ok(c, idx) && reg_ok(c, val),",
+      "replace": "Op::DefineElem { obj, idx, val } => reg_ok(c, obj) && reg_ok(c, val),",
+      "expect": "killed",
+      "reason": "Accepts a key register outside the frame: example_new_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_new_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::DefineElem { obj: 0, idx: 3, val: 2 })"
+      }
+    },
+    {
+      "id": "set-literal-proto-val-reg",
+      "file": "src/spec.rs",
+      "find": "Op::SetLiteralProto { obj, val } => reg_ok(c, obj) && reg_ok(c, val),",
+      "replace": "Op::SetLiteralProto { obj, val } => reg_ok(c, obj),",
+      "expect": "killed",
+      "reason": "Accepts a value register outside the frame: example_new_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_new_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::SetLiteralProto { obj: 0, val: 3 })"
+      }
+    },
+    {
+      "id": "get-global-or-undefined-key",
+      "file": "src/spec.rs",
+      "find": "Op::GetGlobalOrUndefined { dst, key } => reg_ok(c, dst) && key < c.consts.len(),",
+      "replace": "Op::GetGlobalOrUndefined { dst, key } => reg_ok(c, dst),",
+      "expect": "killed",
+      "reason": "Accepts a name constant outside the pool: example_new_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_new_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::GetGlobalOrUndefined { dst: 2, key: 3 })"
+      }
+    },
+    {
+      "id": "declare-globals-record-value",
+      "file": "src/spec.rs",
+      "find": "Op::DeclareGlobals { k } => k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "replace": "Op::DeclareGlobals { k } => k < c.consts.len(),",
+      "expect": "killed",
+      "reason": "Accepts a declaration record constant that is not a well-formed value (a heap reference, \u00a716.1.7\u2020): example_new_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_new_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::DeclareGlobals { k: 2 })"
+      }
+    },
+    {
+      "id": "define-prop-handler",
+      "file": "src/ops.rs",
+      "find": "Op::DefineProp { .. } => HandlerId::DefineProp,",
+      "replace": "Op::DefineProp { .. } => HandlerId::DefineElem,",
+      "expect": "killed",
+      "reason": "DefineProp calls the define-element handler (CreateDataPropertyOrThrow with a register key, \u00a77.3.7\u2020): example_new_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_new_ops_classes()",
+        "witness": "op_handler(Op::DefineProp { obj: 0, key: 0, val: 0 }) == HandlerId::DefineElem"
+      }
+    },
+    {
+      "id": "define-elem-handler",
+      "file": "src/ops.rs",
+      "find": "Op::DefineElem { .. } => HandlerId::DefineElem,",
+      "replace": "Op::DefineElem { .. } => HandlerId::DefineProp,",
+      "expect": "killed",
+      "reason": "DefineElem calls the constant-key handler: example_new_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_new_ops_classes()",
+        "witness": "op_handler(Op::DefineElem { obj: 0, idx: 0, val: 0 }) == HandlerId::DefineProp"
+      }
+    },
+    {
+      "id": "set-literal-proto-handler",
+      "file": "src/ops.rs",
+      "find": "Op::SetLiteralProto { .. } => HandlerId::SetLiteralProto,",
+      "replace": "Op::SetLiteralProto { .. } => HandlerId::DefineProp,",
+      "expect": "killed",
+      "reason": "A `__proto__:` literal calls the define-property handler, which would create an own property (\u00a713.2.5.5\u2020 step 7 forbids it): example_new_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_new_ops_classes()",
+        "witness": "op_handler(Op::SetLiteralProto { obj: 0, val: 0 }) == HandlerId::DefineProp"
+      }
+    },
+    {
+      "id": "get-global-or-undefined-handler",
+      "file": "src/ops.rs",
+      "find": "Op::GetGlobalOrUndefined { .. } => HandlerId::GetGlobalOrUndefined,",
+      "replace": "Op::GetGlobalOrUndefined { .. } => HandlerId::GetGlobal,",
+      "expect": "killed",
+      "reason": "typeof of a global calls the throwing global read (\u00a713.5.3.1 step 2.a): example_new_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_new_ops_classes()",
+        "witness": "op_handler(Op::GetGlobalOrUndefined { dst: 0, key: 0 }) == HandlerId::GetGlobal"
+      }
+    },
+    {
+      "id": "declare-globals-handler",
+      "file": "src/ops.rs",
+      "find": "Op::DeclareGlobals { .. } => HandlerId::DeclareGlobals,",
+      "replace": "Op::DeclareGlobals { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "Global declaration instantiation (\u00a716.1.7\u2020) calls the throw handler: example_new_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_new_ops_classes()",
+        "witness": "op_handler(Op::DeclareGlobals { k: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "to-number-handler",
+      "file": "src/ops.rs",
+      "find": "Op::ToNumber { .. } => HandlerId::ToNumber,",
+      "replace": "Op::ToNumber { .. } => HandlerId::ToNumeric,",
+      "expect": "killed",
+      "reason": "Unary + calls ToNumeric, under which a BigInt is not a TypeError (\u00a77.1.4\u2020 step 3): example_new_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_new_ops_classes()",
+        "witness": "op_handler(Op::ToNumber { dst: 0, src: 0 }) == HandlerId::ToNumeric"
+      }
+    },
+    {
+      "id": "define-prop-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::DefineProp { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "Classifies DefineProp as core (never throws or allocates), though CreateDataPropertyOrThrow does both: example_new_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_new_ops_classes()",
+        "witness": "op_class(Op::DefineProp { obj: 0, key: 0, val: 0 }) is Core"
+      }
+    },
+    {
+      "id": "declare-globals-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::DeclareGlobals { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "Classifies DeclareGlobals as core, though \u00a716.1.7\u2020 throws and allocates: example_new_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_new_ops_classes()",
+        "witness": "op_class(Op::DeclareGlobals { k: 0 }) is Core"
+      }
+    },
+    {
+      "id": "get-global-or-undefined-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::GetGlobalOrUndefined { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "Classifies the global read as core, though GetValue can throw and call a getter: example_new_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_new_ops_classes()",
+        "witness": "op_class(Op::GetGlobalOrUndefined { dst: 0, key: 0 }) is Core"
+      }
+    },
+    {
+      "id": "to-number-fast-path-always",
+      "file": "src/spec.rs",
+      "find": "Op::ToNumber { src, .. } => is_number(reg(s, src)),",
+      "replace": "Op::ToNumber { .. } => true,",
+      "expect": "killed",
+      "reason": "ToNumber takes its fast path for any operand, including undefined, which is NaN in the handler (\u00a77.1.4\u2020 step 4): example_to_number is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_to_number()",
+        "witness": "fast_path(crate::examples::example_state(UNDEFINED), Op::ToNumber { dst: 1, src: 0 })"
+      }
+    },
+    {
+      "id": "to-number-result-undefined",
+      "file": "src/spec.rs",
+      "find": "Op::ToNumber { dst, src } => next(set_reg(s, dst, reg(s, src))),",
+      "replace": "Op::ToNumber { dst, src } => next(set_reg(s, dst, UNDEFINED)),",
+      "expect": "killed",
+      "reason": "ToNumber of a Number is not the Number (\u00a77.1.4\u2020 step 1): example_to_number is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_to_number()",
+        "witness": "fast_step(crate::examples::example_state(0xFFF9_0000_0000_0005u64), Op::ToNumber { dst: 1, src: 0 }).region[5] == UNDEFINED"
+      }
+    },
+    {
+      "id": "to-number-no-advance",
+      "file": "src/spec.rs",
+      "find": "Op::ToNumber { dst, src } => next(set_reg(s, dst, reg(s, src))),",
+      "replace": "Op::ToNumber { dst, src } => set_reg(s, dst, reg(s, src)),",
+      "expect": "killed",
+      "reason": "ToNumber does not move to the next op: example_to_number is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_to_number()",
+        "witness": "fast_step(crate::examples::example_state(0xFFF9_0000_0000_0005u64), Op::ToNumber { dst: 1, src: 0 }).pc == 0nat"
       }
     }
   ]
