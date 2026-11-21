@@ -736,135 +736,140 @@ fn properties_of_strings() -> Result<(), String> {
     const F4: &str = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}";
     const KEY: &str = "1\u{fe0f}\u{20e3}";
     const FR: &str = "\u{1F1EB}\u{1F1F7}";
-    run(
-        "matcher: properties of strings",
-        &[
-            ("^\\p{Emoji_Keycap_Sequence}$", "v", KEY, Some(&[Some(KEY)])),
-            ("\\p{Emoji_Keycap_Sequence}", "v", "1", None),
-            (
-                "\\p{Emoji_Keycap_Sequence}",
-                "v",
-                "a1\u{fe0f}\u{20e3}",
-                Some(&[Some(KEY)]),
-            ),
-            (
-                "\\p{Emoji_Keycap_Sequence}{2}",
-                "v",
-                "1\u{fe0f}\u{20e3}1\u{fe0f}\u{20e3}x",
-                Some(&[Some("1\u{fe0f}\u{20e3}1\u{fe0f}\u{20e3}")]),
-            ),
-            (
-                "(?<=\\p{Emoji_Keycap_Sequence})x",
-                "v",
-                "1\u{fe0f}\u{20e3}x",
-                Some(&[Some("x")]),
-            ),
-            ("(?<=\\p{Emoji_Keycap_Sequence})x", "v", "1x", None),
-            // Longest first.
-            (
-                "\\p{RGI_Emoji}",
-                "v",
-                "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}x",
-                Some(&[Some(F4)]),
-            ),
-            ("\\p{RGI_Emoji_ZWJ_Sequence}", "v", F3, Some(&[Some(F3)])),
-            // ... and the next shorter one when the rest of the pattern fails.
-            (
-                "\\p{RGI_Emoji}\u{200D}",
-                "v",
-                F4,
-                Some(&[Some("\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}")]),
-            ),
-            (
-                "\\p{RGI_Emoji}",
-                "v",
-                "\u{1F468}x",
-                Some(&[Some("\u{1F468}")]),
-            ),
-            ("^\\p{RGI_Emoji_Flag_Sequence}$", "v", FR, Some(&[Some(FR)])),
-            (
-                "\\p{RGI_Emoji_Flag_Sequence}",
-                "v",
-                "x\u{1F1EB}\u{1F1F7}",
-                Some(&[Some(FR)]),
-            ),
-            (
-                "\\p{RGI_Emoji_Flag_Sequence}",
-                "v",
-                "\u{1F1EB}\u{1F1EB}",
-                None,
-            ),
-            // Basic_Emoji has one-character members and two-character ones.
-            (
-                "\\p{Basic_Emoji}",
-                "v",
-                "\u{1F600}",
-                Some(&[Some("\u{1F600}")]),
-            ),
-            (
-                "\\p{Basic_Emoji}",
-                "v",
-                "\u{263a}\u{fe0f}",
-                Some(&[Some("\u{263a}\u{fe0f}")]),
-            ),
-            ("\\p{Basic_Emoji}", "v", "\u{263a}", None),
-            (
-                "\\p{RGI_Emoji_Modifier_Sequence}",
-                "v",
-                "\u{261D}\u{1F3FB}",
-                Some(&[Some("\u{261D}\u{1F3FB}")]),
-            ),
-            (
-                "\\p{RGI_Emoji_Tag_Sequence}",
-                "v",
+    let cases: &[Case] = &[
+        ("^\\p{Emoji_Keycap_Sequence}$", "v", KEY, Some(&[Some(KEY)])),
+        ("\\p{Emoji_Keycap_Sequence}", "v", "1", None),
+        (
+            "\\p{Emoji_Keycap_Sequence}",
+            "v",
+            "a1\u{fe0f}\u{20e3}",
+            Some(&[Some(KEY)]),
+        ),
+        (
+            "\\p{Emoji_Keycap_Sequence}{2}",
+            "v",
+            "1\u{fe0f}\u{20e3}1\u{fe0f}\u{20e3}x",
+            Some(&[Some("1\u{fe0f}\u{20e3}1\u{fe0f}\u{20e3}")]),
+        ),
+        (
+            "(?<=\\p{Emoji_Keycap_Sequence})x",
+            "v",
+            "1\u{fe0f}\u{20e3}x",
+            Some(&[Some("x")]),
+        ),
+        ("(?<=\\p{Emoji_Keycap_Sequence})x", "v", "1x", None),
+        // Longest first.
+        (
+            "\\p{RGI_Emoji}",
+            "v",
+            "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}x",
+            Some(&[Some(F4)]),
+        ),
+        ("\\p{RGI_Emoji_ZWJ_Sequence}", "v", F3, Some(&[Some(F3)])),
+        // ... and the next shorter one when the rest of the pattern fails.
+        (
+            "\\p{RGI_Emoji}\u{200D}",
+            "v",
+            F4,
+            Some(&[Some("\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}")]),
+        ),
+        (
+            "\\p{RGI_Emoji}",
+            "v",
+            "\u{1F468}x",
+            Some(&[Some("\u{1F468}")]),
+        ),
+        ("^\\p{RGI_Emoji_Flag_Sequence}$", "v", FR, Some(&[Some(FR)])),
+        (
+            "\\p{RGI_Emoji_Flag_Sequence}",
+            "v",
+            "x\u{1F1EB}\u{1F1F7}",
+            Some(&[Some(FR)]),
+        ),
+        (
+            "\\p{RGI_Emoji_Flag_Sequence}",
+            "v",
+            "\u{1F1EB}\u{1F1EB}",
+            None,
+        ),
+        // Basic_Emoji has one-character members and two-character ones.
+        (
+            "\\p{Basic_Emoji}",
+            "v",
+            "\u{1F600}",
+            Some(&[Some("\u{1F600}")]),
+        ),
+        (
+            "\\p{Basic_Emoji}",
+            "v",
+            "\u{263a}\u{fe0f}",
+            Some(&[Some("\u{263a}\u{fe0f}")]),
+        ),
+        ("\\p{Basic_Emoji}", "v", "\u{263a}", None),
+        (
+            "\\p{RGI_Emoji_Modifier_Sequence}",
+            "v",
+            "\u{261D}\u{1F3FB}",
+            Some(&[Some("\u{261D}\u{1F3FB}")]),
+        ),
+        (
+            "\\p{RGI_Emoji_Tag_Sequence}",
+            "v",
+            "\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}",
+            Some(&[Some(
                 "\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}",
-                Some(&[Some(
-                    "\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}",
-                )]),
-            ),
-            // Set operations on them.
-            ("[\\p{RGI_Emoji}--\\q{\u{1F1EB}\u{1F1F7}}]", "v", FR, None),
-            (
-                "[\\p{RGI_Emoji}--\\q{\u{1F1EB}\u{1F1F7}}]",
-                "v",
-                "\u{1F1E9}\u{1F1EA}",
-                Some(&[Some("\u{1F1E9}\u{1F1EA}")]),
-            ),
-            (
-                "[\\p{RGI_Emoji_Flag_Sequence}&&\\q{\u{1F1EB}\u{1F1F7}|a}]",
-                "v",
-                FR,
-                Some(&[Some(FR)]),
-            ),
-            (
-                "[\\p{RGI_Emoji_Flag_Sequence}&&\\q{\u{1F1EB}\u{1F1F7}|a}]",
-                "v",
-                "a\u{1F1E9}\u{1F1EA}",
-                None,
-            ),
-            (
-                "[\\p{Basic_Emoji}--\\p{Emoji_Keycap_Sequence}]",
-                "v",
-                "\u{1F600}",
-                Some(&[Some("\u{1F600}")]),
-            ),
-            (
-                "[\\p{Emoji_Keycap_Sequence}\\q{ab}x]+",
-                "v",
-                "x1\u{fe0f}\u{20e3}abz",
-                Some(&[Some("x1\u{fe0f}\u{20e3}ab")]),
-            ),
-            // With i.
-            ("\\p{RGI_Emoji}", "iv", KEY, Some(&[Some(KEY)])),
-            // Inside other constructs.
-            (
-                "(\\p{RGI_Emoji})+",
-                "v",
-                "\u{1F600}\u{1F600}",
-                Some(&[Some("\u{1F600}\u{1F600}"), Some("\u{1F600}")]),
-            ),
-        ],
-    )
+            )]),
+        ),
+        // Set operations on them.
+        ("[\\p{RGI_Emoji}--\\q{\u{1F1EB}\u{1F1F7}}]", "v", FR, None),
+        (
+            "[\\p{RGI_Emoji}--\\q{\u{1F1EB}\u{1F1F7}}]",
+            "v",
+            "\u{1F1E9}\u{1F1EA}",
+            Some(&[Some("\u{1F1E9}\u{1F1EA}")]),
+        ),
+        (
+            "[\\p{RGI_Emoji_Flag_Sequence}&&\\q{\u{1F1EB}\u{1F1F7}|a}]",
+            "v",
+            FR,
+            Some(&[Some(FR)]),
+        ),
+        (
+            "[\\p{RGI_Emoji_Flag_Sequence}&&\\q{\u{1F1EB}\u{1F1F7}|a}]",
+            "v",
+            "a\u{1F1E9}\u{1F1EA}",
+            None,
+        ),
+        (
+            "[\\p{Basic_Emoji}--\\p{Emoji_Keycap_Sequence}]",
+            "v",
+            "\u{1F600}",
+            Some(&[Some("\u{1F600}")]),
+        ),
+        (
+            "[\\p{Emoji_Keycap_Sequence}\\q{ab}x]+",
+            "v",
+            "x1\u{fe0f}\u{20e3}abz",
+            Some(&[Some("x1\u{fe0f}\u{20e3}ab")]),
+        ),
+        // With i.
+        ("\\p{RGI_Emoji}", "iv", KEY, Some(&[Some(KEY)])),
+        // Inside other constructs.
+        (
+            "(\\p{RGI_Emoji})+",
+            "v",
+            "\u{1F600}\u{1F600}",
+            Some(&[Some("\u{1F600}\u{1F600}"), Some("\u{1F600}")]),
+        ),
+    ];
+    // Under Miri the union of the six (about 2 800 strings) is too slow to
+    // build and search; the one-type properties stay.
+    let cases: Vec<Case> = cases
+        .iter()
+        .copied()
+        .filter(|c| !(cfg!(miri) && c.0.contains("p{RGI_Emoji}")))
+        .collect();
+    run("matcher: properties of strings", &cases)
 }
 
 #[test]
