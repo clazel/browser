@@ -46,6 +46,11 @@
 //! lemmas that a node of the shape the parser builds is derived by [`spec::d`].
 //! The check assumes the tokens are the lexer specification's, which the
 //! executable lexer does not meet yet, and that inserted `;` are justified.
+//! [`arena_e`] and [`arena_m`] cover the rest of the script grammar and every
+//! `import` and `export` form. [`arena_early`] is the same for the early errors:
+//! a proven check of `spec::early` over the arena for a growing set of rules (the
+//! list is at the top of the module), run by [`exec::parse_checked_early`]; where
+//! both checks say `Verified`, `spec::is_valid_parse` holds, modulo the assumptions.
 //!
 //! Where the parser differs from the specification, on purpose or not:
 //!
@@ -57,6 +62,7 @@
 pub mod api;
 pub mod arena_d;
 pub mod arena_e;
+pub mod arena_early;
 pub mod arena_m;
 pub mod ast;
 pub mod check;

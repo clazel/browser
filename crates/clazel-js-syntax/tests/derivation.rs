@@ -310,6 +310,63 @@ fn leftover_script_gaps_are_verified() {
     }
 }
 
+fn early(s: &str) -> Option<Derivation> {
+    clazel_js_syntax::exec::parse_checked_early(&cps(s), SourceGoal::Script)
+        .ok()
+        .map(|(_, _, e)| e)
+}
+
+/// The early rules the proven check covers.
+#[test]
+fn covered_early_rules_are_verified() {
+    for s in [
+        "",
+        "1 + 2;",
+        "a = b; a.c = d; a[0]++; ++a.b;",
+        "010; '\\07';",
+        "yield = 1; var await = 2; let = 3;",
+        "`a${b}c`; f`\\u{`;",
+        "if (a) b; else c;",
+        "while (a) { b; if (c) break; else continue; }",
+        "do { break; } while (a);",
+        "for (;;) { break; }",
+        "for (var i = 0; i < n; i++) { continue; }",
+        "switch_ = 1; with (a) b;",
+        "a?.b?.[c]?.(d);",
+        "delete a.b; typeof a; void 0; a in b; a instanceof b;",
+        "{ a; { b; } }",
+        "var a; var a;",
+        "new.target",
+    ] {
+        let r = early(s);
+        if s == "new.target" {
+            assert!(r.is_none(), "{s}");
+        } else {
+            assert!(r == Some(Derivation::Verified), "{s}");
+        }
+    }
+}
+
+/// What the proven early-error check leaves alone.
+#[test]
+fn other_early_rules_are_unsupported_not_failed() {
+    for s in [
+        "'use strict'; a = 1;",
+        "let a;",
+        "a: b;",
+        "(function () {})",
+        "class A {}",
+        "for (a in b) ;",
+        "/a/;",
+        "a.#b;",
+        "try {} catch (e) {}",
+        "switch (a) { case 1: }",
+    ] {
+        let r = early(s);
+        assert!(r != Some(Derivation::Verified) && r != Some(Derivation::Failed), "{s}");
+    }
+}
+
 /// Productions only a sloppy-mode `Script` has.
 #[test]
 fn covered_sloppy_programs_are_verified() {

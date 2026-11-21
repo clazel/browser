@@ -55,13 +55,21 @@ pub struct DTok {
     pub nl: bool,
     /// Written with a `UnicodeEscapeSequence`.
     pub escaped: bool,
+    /// A numeric literal that is legacy octal or non-octal decimal, or a string literal with a
+    /// legacy escape sequence (what `early_local` reads for strict mode code).
+    pub legacy: bool,
+    /// A template component with an undefined TV.
+    pub invalid_escape: bool,
+    /// The StringValue of an identifier name, escapes resolved.
+    pub name: Vec<u32>,
 }
 
 /// The executable token `e` is the specification's token `t` of the source `src`.
 pub open spec fn dtok_matches(src: Seq<u32>, e: DTok, t: Tok) -> bool {
     e.kind == t.kind && e.start as int == t.start && e.end as int == t.end && e.start <= e.end
         && e.end <= src.len() && t.text =~= src.subrange(e.start as int, e.end as int)
-        && e.escaped == t.escaped && e.nl == t.nl_before
+        && e.escaped == t.escaped && e.nl == t.nl_before && e.legacy == t.legacy
+        && e.invalid_escape == t.invalid_escape && e.name@ =~= t.name
 }
 
 /// The executable tokens and gaps are the specification's stream `ts`.
@@ -1203,7 +1211,7 @@ pub open spec fn reserved_chars(w: int) -> Seq<u32> {
 }
 
 /// The table of reserved words has the 38 words of the specification, in its order.
-proof fn lemma_reserved_chars(w: int)
+pub(crate) proof fn lemma_reserved_chars(w: int)
     requires
         0 <= w < 38,
     ensures
@@ -1291,7 +1299,7 @@ proof fn lemma_reserved_chars(w: int)
 }
 
 /// The `w`th reserved word, as code points.
-fn reserved_slice(w: usize) -> (r: &'static [u32])
+pub(crate) fn reserved_slice(w: usize) -> (r: &'static [u32])
     requires
         w < 38,
     ensures
@@ -6956,20 +6964,20 @@ pub(crate) fn kids_cx_g(nodes: &[Node], cxs: &[Cx5], m: usize, c: &Cx5, ck: &Cx5
 }
 
 /// The specification's token for an executable one: the fields the check reads, and
-/// the lexer's other fields (`name`, `legacy`, ...) left as the empty or false
-/// default; the productions the check covers read none of them.
+/// `bigint` and `regexp_valid` left false (the executable lexer does not compute
+/// `regexp_valid`; no check reads them).
 pub open spec fn canon_tok(src: Seq<u32>, e: DTok) -> Tok {
     Tok {
         kind: e.kind,
         start: e.start as int,
         end: e.end as int,
         text: src.subrange(e.start as int, e.end as int),
-        name: Seq::empty(),
+        name: e.name@,
         escaped: e.escaped,
         nl_before: e.nl,
-        legacy: false,
+        legacy: e.legacy,
         bigint: false,
-        invalid_escape: false,
+        invalid_escape: e.invalid_escape,
         regexp_valid: false,
     }
 }
@@ -10069,7 +10077,8 @@ pub struct FuncShape {
 }
 
 /// §15.2 and §15.5, §15.8 and §15.6: a function, generator, `async` function or
-/// `async` generator, declaration or expression.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(300)]
 #[verifier::spinoff_prover]
 fn check_function(
     src: &[u32],

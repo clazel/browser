@@ -257,9 +257,10 @@ fn test262_fixtures_parse() -> Result<(), String> {
 #[cfg_attr(miri, ignore = "reads files")]
 fn test262_verified_share() -> Result<(), String> {
     use clazel_js_syntax::arena_d::Derivation;
-    use clazel_js_syntax::exec::parse_checked;
+    use clazel_js_syntax::exec::{parse_checked, parse_checked_early};
     let (mut positives, mut verified) = (0usize, 0usize);
     let (mut mpositives, mut mverified) = (0usize, 0usize);
+    let (mut early, mut both, mut mearly, mut mboth) = (0usize, 0usize, 0usize, 0usize);
     for case in TEST262 {
         if !judged(case) || case.negative.is_some() {
             continue;
@@ -271,13 +272,20 @@ fn test262_verified_share() -> Result<(), String> {
                 s.extend("\"use strict\";\n".chars().map(u32::from));
             }
             s.extend(src.iter().copied());
-            let ok = matches!(parse_checked(&s, goal), Ok((_, Derivation::Verified)));
+            let (ok, eok) = match parse_checked_early(&s, goal) {
+                Ok((_, d, e)) => (d == Derivation::Verified, e == Derivation::Verified),
+                Err(_) => (false, false),
+            };
             if goal == SourceGoal::Module {
                 mpositives += 1;
                 mverified += usize::from(ok);
+                mearly += usize::from(eok);
+                mboth += usize::from(ok && eok);
             } else {
                 positives += 1;
                 verified += usize::from(ok);
+                early += usize::from(eok);
+                both += usize::from(ok && eok);
             }
         }
     }
@@ -307,6 +315,9 @@ fn test262_verified_share() -> Result<(), String> {
             fv += usize::from(d == Derivation::Verified);
         }
     }
+    println!(
+        "Early errors verified: {early} of {positives} script positive runs ({both} with the derivation too), {mearly} of {mpositives} module positive runs ({mboth} with the derivation too)"
+    );
     println!(
         "Verified: {verified} of {positives} script positive runs, {mverified} of {mpositives} module positive runs, {fv} of {fnn} module fixtures, {hv} of {hn} harness files"
     );
