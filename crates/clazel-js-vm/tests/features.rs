@@ -702,20 +702,11 @@ fn optional_chaining() -> Result<(), String> {
 #[test]
 fn out_of_scope_constructs_are_not_yet_compiled() -> Result<(), String> {
     let cases: &[(&str, &str)] = &[
-        ("class C { *m() {} }", "generator or async methods"),
-        ("class C { async m() {} }", "generator or async methods"),
         (
-            "class C { static async *m() {} }",
-            "generator or async methods",
+            "function f({ a = eval(...b) }) {}",
+            "direct eval with spread arguments",
         ),
-        (
-            "class C { x = function* () {}; }",
-            "generators and async functions",
-        ),
-        ("var { a = await 1 } = o;", "generators and async functions"),
-        ("function f({ a = eval('1') }) {}", "direct eval"),
-        ("for (var x of /a/) ;", "regular expression literals"),
-        ("`${/a/}`;", "regular expression literals"),
+        ("delete a?.b;", "delete of an optional chain"),
     ];
     for &(src, feature) in cases {
         let c = cps(src);

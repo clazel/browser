@@ -75,7 +75,7 @@ struct Counts {
     failures: Vec<String>,
 }
 
-/// The constructs of the compiler's second slice that `ast` uses.
+/// The constructs of the compiler's second and third slices that `ast` uses.
 fn constructs_of(ast: &Ast) -> Vec<&'static str> {
     let mut found = std::collections::BTreeSet::new();
     for (i, n) in ast.nodes.iter().enumerate() {
@@ -106,9 +106,30 @@ fn constructs_of(ast: &Ast) -> Vec<&'static str> {
             NodeKind::PrivateIdentifier => "private names",
             NodeKind::NewTarget => "new.target",
             NodeKind::ForInStatement => "for-in",
+            NodeKind::ForOfStatement if n.flag => "for await",
             NodeKind::ForOfStatement => "for-of",
+            NodeKind::RegularExpressionLiteral => "regex literals",
+            NodeKind::GeneratorDeclaration | NodeKind::GeneratorExpression => "generators",
+            NodeKind::AsyncFunctionDeclaration
+            | NodeKind::AsyncFunctionExpression
+            | NodeKind::AsyncArrowFunction => "async functions",
+            NodeKind::AsyncGeneratorDeclaration | NodeKind::AsyncGeneratorExpression => {
+                "async generators"
+            }
+            NodeKind::YieldExpression if n.op == AOp::YieldDelegate => "yield*",
+            NodeKind::YieldExpression => "yield",
+            NodeKind::AwaitExpression => "await",
+            NodeKind::WithStatement => "with",
             NodeKind::OptionalExpression => "optional chaining",
             NodeKind::MethodDefinition if matches!(n.op, AOp::Getter | AOp::Setter) => "accessors",
+            NodeKind::MethodDefinition
+                if matches!(
+                    n.op,
+                    AOp::GeneratorMethod | AOp::AsyncMethod | AOp::AsyncGeneratorMethod
+                ) =>
+            {
+                "generator and async methods"
+            }
             _ => continue,
         };
         found.insert(name);
@@ -143,6 +164,22 @@ impl Counts {
                     if args {
                         let n = self.constructs.entry("arguments object").or_insert(0);
                         *n = n.saturating_add(1);
+                    }
+                    // Direct eval and `delete` of a variable are in the bytecode too.
+                    for (name, pred) in [
+                        (
+                            "direct eval",
+                            (|i: &Instr| matches!(i, Instr::DirectEval { .. }))
+                                as fn(&Instr) -> bool,
+                        ),
+                        ("delete of a variable", |i: &Instr| {
+                            matches!(i, Instr::DeleteGlobal { .. } | Instr::WithDelete { .. })
+                        }),
+                    ] {
+                        if p.functions.iter().any(|f| f.instrs.iter().any(pred)) {
+                            let n = self.constructs.entry(name).or_insert(0);
+                            *n = n.saturating_add(1);
+                        }
                     }
                 }
                 Err(e) => {

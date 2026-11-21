@@ -864,20 +864,7 @@ fn string_values_resolve_escapes() -> Result<(), String> {
 #[test]
 fn not_yet_compiled() -> Result<(), String> {
     let cases: &[(&str, &str)] = &[
-        ("function* g() {}", "generators and async functions"),
-        ("async function g() {}", "generators and async functions"),
-        ("async () => 1;", "generators and async functions"),
-        ("async function* g() {}", "generators and async functions"),
-        ("({ *g() {} });", "generator or async methods"),
-        ("class C { async m() {} }", "generator or async methods"),
-        (
-            "function* g() { yield 1; }",
-            "generators and async functions",
-        ),
-        ("with (o) {}", "with statements"),
-        ("eval('1');", "direct eval"),
-        ("/a/;", "regular expression literals"),
-        ("delete x;", "delete of a variable"),
+        ("eval(...a);", "direct eval with spread arguments"),
         ("delete a?.b;", "delete of an optional chain"),
         (
             "if (a) function f() {}",
