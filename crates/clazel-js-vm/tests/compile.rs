@@ -489,7 +489,12 @@ fn proto_in_an_object_literal() -> Result<(), String> {
         Ok(func(&p, 0)?.instrs.iter().filter(|i| pred(i)).count())
     };
     let setter = |i: &Instr| matches!(i, Instr::SetLiteralProto { .. });
-    let define = |i: &Instr| matches!(i, Instr::DefineProp { .. } | Instr::DefineElem { .. });
+    let define = |i: &Instr| {
+        matches!(
+            i,
+            Instr::DefineProp { .. } | Instr::DefineElem { .. } | Instr::DefineMethod { .. }
+        )
+    };
     assert_eq!(count("({ __proto__: p });", setter)?, 1);
     assert_eq!(count("({ \"__proto__\": p });", setter)?, 1);
     assert_eq!(count("({ __proto__: p });", define)?, 0);
@@ -785,28 +790,21 @@ fn string_values_resolve_escapes() -> Result<(), String> {
 #[test]
 fn not_yet_compiled() -> Result<(), String> {
     let cases: &[(&str, &str)] = &[
-        ("var [a] = b;", "destructuring"),
-        ("({a} = b);", "destructuring"),
-        ("f(...a);", "spread"),
-        ("[...a];", "spread"),
-        ("function f(...a) {}", "rest parameters"),
-        ("function f(a = 1) {}", "default parameter values"),
-        ("class C {}", "classes, super and private names"),
         ("function* g() {}", "generators and async functions"),
         ("async function g() {}", "generators and async functions"),
+        ("async () => 1;", "generators and async functions"),
+        ("async function* g() {}", "generators and async functions"),
+        ("({ *g() {} });", "generator or async methods"),
+        ("class C { async m() {} }", "generator or async methods"),
+        (
+            "function* g() { yield 1; }",
+            "generators and async functions",
+        ),
         ("with (o) {}", "with statements"),
         ("eval('1');", "direct eval"),
-        ("for (var k in o) ;", "for-in and for-of loops"),
-        ("for (var k of o) ;", "for-in and for-of loops"),
-        ("`a${b}`;", "template literals"),
         ("/a/;", "regular expression literals"),
-        ("a?.b;", "optional chaining"),
-        (
-            "({ get a() {} });",
-            "accessors and generator or async methods",
-        ),
-        ("function f() { arguments; }", "the arguments object"),
         ("delete x;", "delete of a variable"),
+        ("delete a?.b;", "delete of an optional chain"),
         (
             "if (a) function f() {}",
             "a function declaration as the body of an if or a label",
