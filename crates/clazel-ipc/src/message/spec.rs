@@ -450,7 +450,8 @@ pub open spec fn destination_image() -> u64 {
 /// Whether `m` is sent by a renderer to the kernel.
 pub open spec fn is_from_renderer(m: Message) -> bool {
     match m {
-        Message::CookieGet
+        Message::FetchSub { .. }
+        | Message::CookieGet
         | Message::CookieSet { .. }
         | Message::StorageGetItem { .. }
         | Message::StorageSetItem { .. }
@@ -462,8 +463,7 @@ pub open spec fn is_from_renderer(m: Message) -> bool {
         | Message::Submit { .. }
         | Message::Display { .. }
         | Message::Title { .. }
-        | Message::FetchStyle { .. }
-        | Message::FetchSub { .. } => true,
+        | Message::FetchStyle { .. } => true,
         _ => false,
     }
 }
