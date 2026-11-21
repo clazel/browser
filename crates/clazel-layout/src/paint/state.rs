@@ -138,6 +138,20 @@ pub enum Item {
         /// The glyphs.
         run: TextItem,
     },
+    /// Draw an image, or one tile of a background (item 6.11): `image` is the display list
+    /// image id the pipeline gave it (item 6.10: below 2^16; [`crate::images::ImageStatus::Ready`]),
+    /// scaled from `src` to `rect`. Item 5.20 or 6.18 converts it to item 6.10's draw image.
+    Image {
+        /// The destination, in device pixels (a tile may reach outside the clip it is drawn
+        /// in: the list clips it).
+        rect: DeviceRect,
+        /// The image's id.
+        image: u32,
+        /// The source rectangle in the image's pixels: left, top, width, height (all of it).
+        src: [u16; 4],
+        /// Linear filtering, or nearest (when `rect` is the image's own size).
+        linear: bool,
+    },
     /// Clip what follows to a rectangle, until the next [`Item::PopClip`]
     /// (never nested: `Clips`).
     PushClip {
@@ -153,7 +167,9 @@ impl Item {
     /// (`None` for [`Item::PopClip`], which 5.20 keeps with its push).
     pub fn bounds(&self) -> Option<DeviceRect> {
         match self {
-            Item::Fill { rect, .. } | Item::PushClip { rect } => Some(*rect),
+            Item::Fill { rect, .. } | Item::PushClip { rect } | Item::Image { rect, .. } => {
+                Some(*rect)
+            }
             Item::Text { bounds, .. } => Some(*bounds),
             Item::PopClip => None,
         }

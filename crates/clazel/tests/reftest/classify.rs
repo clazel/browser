@@ -17,9 +17,11 @@
 //!    type `image`, or `url(` in its CSS;
 //! 5. its CSS uses a feature outside the subset: a property `clazel-style`
 //!    does not know, one it parses with no effect (`transform`,
-//!    `text-overflow`, the background images and their positions, sizes,
-//!    repeats, attachments, origins and clips, `font-variant-caps`,
-//!    `font-stretch`, `text-decoration-thickness`, `resize`), a value its
+//!    `text-overflow`, `background-image` (a gradient paints nothing; `url(` is 4),
+//!    `background-attachment`, `font-variant-caps`, `font-stretch`,
+//!    `text-decoration-thickness`, `resize`; item 6.11 gave `background-position`,
+//!    `-size`, `-repeat`, `-origin` and `-clip` their effect, so they no longer
+//!    count), a value its
 //!    grammar for the property refuses, or an at-rule it ignores
 //!    (`@font-face`, `@supports`, `@import`, …). Custom properties count as
 //!    outside too (`var()` is not in the subset).
@@ -60,12 +62,7 @@ const NO_EFFECT: &[&str] = &[
     "transform",
     "text-overflow",
     "background-image",
-    "background-position",
-    "background-size",
-    "background-repeat",
     "background-attachment",
-    "background-origin",
-    "background-clip",
     "font-variant-caps",
     "font-stretch",
     "text-decoration-thickness",

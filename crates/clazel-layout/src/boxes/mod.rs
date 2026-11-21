@@ -94,6 +94,8 @@ pub use tree::{BoxId, BoxKind, BoxTree, Class, Fragment, LayoutBox, Marker, RowG
 use clazel_dom::exec::Arena;
 use clazel_style::cascade::computed::{ComputedStyle, ComputedTable};
 
+use crate::images::Images;
+
 /// Computed style as box generation reads it: for each node id, the
 /// element's computed values for the subset, or `None` for a node that is
 /// not an element or has no style (an element in a `template`'s contents).
@@ -119,7 +121,13 @@ impl StyleFns for ComputedTable {
 /// The box tree of the document in `arena` with the computed style
 /// `styles` (the module's pipeline).
 pub fn build(arena: &Arena, styles: &impl StyleFns) -> BoxTree {
-    let mut tree = generate::generate(arena, styles);
+    build_with_images(arena, styles, &Images::new())
+}
+
+/// [`build`], knowing the state of each image (item 6.11): a broken `img` with `alt` text
+/// generates a box holding the text (`generate.rs`).
+pub fn build_with_images(arena: &Arena, styles: &impl StyleFns, images: &Images) -> BoxTree {
+    let mut tree = generate::generate_with(arena, styles, images);
     table::anonymous_table_objects(&mut tree);
     anonymous::split_blocks(&mut tree);
     anonymous::text_runs(&mut tree, arena, styles);
