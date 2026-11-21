@@ -25,6 +25,17 @@
 //!   `PropList.txt`, `DerivedCoreProperties.txt`, `DerivedNormalizationProps.txt`,
 //!   `DerivedBinaryProperties.txt` or `emoji-data.txt` (the first that lists it).
 //!
+//! - `SCRIPTS`: for each `Script` value of `PropertyValueAliases.txt` (`sc`
+//!   rows: short name, long name, any further alias), its code points under
+//!   `Script` (`Scripts.txt`; `Unknown` is every code point the file does not
+//!   list) and under `Script_Extensions` (`ScriptExtensions.txt`: the rows
+//!   that name the script, plus the code points of the script that no row
+//!   lists, whose extensions are their script alone).
+//! - `STRING_PROPERTIES`: the properties of strings of UTS #51 (ED-27), from
+//!   `emoji-sequences.txt` and `emoji-zwj-sequences.txt`: the code points a
+//!   property holds as one-character strings (ranges), and its strings of two
+//!   or more (as Rust strings); `RGI_Emoji` is the union of the other six.
+//!
 //! The other tests are independent checks of the committed tables: the
 //! categories against `UnicodeData.txt` (a different file from the one the
 //! table is made from), and spot checks of the case mappings.
@@ -221,6 +232,264 @@ fn category_table() -> Result<Vec<(u32, u32, u8)>, String> {
     Ok(out)
 }
 
+/// `a` without the code points of `b`; both sorted and disjoint.
+fn subtract(a: &[(u32, u32)], b: &[(u32, u32)]) -> Vec<(u32, u32)> {
+    let mut out = Vec::new();
+    for &(lo, hi) in a {
+        let mut cur = lo;
+        let mut done = false;
+        for &(blo, bhi) in b {
+            if bhi < cur {
+                continue;
+            }
+            if blo > hi {
+                break;
+            }
+            if blo > cur {
+                out.push((cur, blo.saturating_sub(1)));
+            }
+            if bhi >= hi {
+                done = true;
+                break;
+            }
+            cur = bhi.saturating_add(1);
+        }
+        if !done {
+            out.push((cur, hi));
+        }
+    }
+    out
+}
+
+/// One `Script` value as the generator sees it.
+struct ScriptData {
+    /// The long name.
+    long: String,
+    /// Short name, long name, further aliases (`PropertyValueAliases.txt`).
+    names: Vec<String>,
+    sc: Vec<(u32, u32)>,
+    scx: Vec<(u32, u32)>,
+}
+
+fn scripts() -> Result<Vec<ScriptData>, String> {
+    // The values: `sc ; Short ; Long [; Alias]`.
+    let mut values: Vec<Vec<String>> = rows(&data("PropertyValueAliases.txt")?)
+        .into_iter()
+        .filter(|r| r.first().is_some_and(|p| p == "sc"))
+        .map(|r| r.into_iter().skip(1).collect())
+        .collect();
+    values.sort_by(|a, b| a.get(1).cmp(&b.get(1)));
+    let long_of_short: BTreeMap<String, String> = values
+        .iter()
+        .filter_map(|v| Some((v.first()?.clone(), v.get(1)?.clone())))
+        .collect();
+    // Scripts.txt: ranges by long name.
+    let mut sc: BTreeMap<String, Vec<(u32, u32)>> = BTreeMap::new();
+    for row in rows(&data("Scripts.txt")?) {
+        if let [r, long, ..] = row.as_slice() {
+            if !long_of_short.values().any(|l| l == long) {
+                return Err(format!("Scripts.txt: {long} is not an sc value"));
+            }
+            sc.entry(long.clone()).or_default().push(range(r)?);
+        }
+    }
+    let sc: BTreeMap<String, Vec<(u32, u32)>> =
+        sc.into_iter().map(|(k, v)| (k, merge(v))).collect();
+    let listed = merge(sc.values().flatten().copied().collect());
+    let unknown = subtract(&[(0, LAST)], &listed);
+    // ScriptExtensions.txt: rows naming scripts by short name.
+    let mut ext: BTreeMap<String, Vec<(u32, u32)>> = BTreeMap::new();
+    let mut ext_listed = Vec::new();
+    for row in rows(&data("ScriptExtensions.txt")?) {
+        if let [r, list, ..] = row.as_slice() {
+            let rg = range(r)?;
+            ext_listed.push(rg);
+            for short in list.split_whitespace() {
+                let long = long_of_short
+                    .get(short)
+                    .ok_or_else(|| format!("ScriptExtensions.txt: {short} is not an sc value"))?;
+                ext.entry(long.clone()).or_default().push(rg);
+            }
+        }
+    }
+    let ext_listed = merge(ext_listed);
+    let mut out = Vec::new();
+    for v in values {
+        let long = v.get(1).ok_or("sc row without a long name")?.clone();
+        let own = if long == "Unknown" {
+            unknown.clone()
+        } else {
+            sc.get(&long).cloned().unwrap_or_default()
+        };
+        let mut x = subtract(&own, &ext_listed);
+        x.extend(ext.get(&long).cloned().unwrap_or_default());
+        // A name that is both short and long (`Ahom`) is listed once.
+        let mut names: Vec<String> = Vec::new();
+        for n in v {
+            if !names.contains(&n) {
+                names.push(n);
+            }
+        }
+        out.push(ScriptData {
+            long,
+            names,
+            scx: merge(x),
+            sc: own,
+        });
+    }
+    Ok(out)
+}
+
+/// The text of the script tables, as rustfmt writes it.
+fn render_scripts(out: &mut String) -> Result<(), String> {
+    let all = scripts()?;
+    for s in &all {
+        let long = &s.long;
+        let up = long.to_ascii_uppercase();
+        pairs(
+            out,
+            &format!("SCRIPT_{up}"),
+            &format!("The code points whose Script is {long}."),
+            &s.sc,
+        );
+        if s.scx != s.sc {
+            pairs(
+                out,
+                &format!("SCRIPT_EXT_{up}"),
+                &format!("The code points whose Script_Extensions include {long}."),
+                &s.scx,
+            );
+        }
+    }
+    out.push_str("/// A value of the `Script` property.\n");
+    out.push_str("#[derive(Debug, Clone, Copy)]\npub struct Script {\n");
+    out.push_str("    /// Every name of the value: short name, long name, further aliases.\n");
+    out.push_str("    pub names: &'static [&'static str],\n");
+    out.push_str("    /// The code points with `Script` this value.\n");
+    out.push_str("    pub sc: &'static [(u32, u32)],\n");
+    out.push_str("    /// The code points whose `Script_Extensions` include this value.\n");
+    out.push_str("    pub scx: &'static [(u32, u32)],\n}\n\n");
+    out.push_str("/// The `Script` values of `PropertyValueAliases.txt`, by long name.\n");
+    out.push_str("pub static SCRIPTS: &[Script] = &[\n");
+    for s in &all {
+        let long = &s.long;
+        let up = long.to_ascii_uppercase();
+        let names: Vec<String> = s.names.iter().map(|n| format!("\"{n}\"")).collect();
+        let ext = if s.scx == s.sc {
+            format!("SCRIPT_{up}")
+        } else {
+            format!("SCRIPT_EXT_{up}")
+        };
+        let _ = writeln!(
+            out,
+            "    Script {{\n        names: &[{}],\n        sc: SCRIPT_{up},\n        scx: {ext},\n    }},",
+            names.join(", ")
+        );
+    }
+    out.push_str("];\n\n");
+    Ok(())
+}
+
+/// The six sequence types and where each is listed.
+const STRING_TYPES: [(&str, &str); 6] = [
+    ("Basic_Emoji", "emoji-sequences.txt"),
+    ("Emoji_Keycap_Sequence", "emoji-sequences.txt"),
+    ("RGI_Emoji_Flag_Sequence", "emoji-sequences.txt"),
+    ("RGI_Emoji_Modifier_Sequence", "emoji-sequences.txt"),
+    ("RGI_Emoji_Tag_Sequence", "emoji-sequences.txt"),
+    ("RGI_Emoji_ZWJ_Sequence", "emoji-zwj-sequences.txt"),
+];
+
+type Strings = (Vec<(u32, u32)>, Vec<Vec<u32>>);
+
+/// A property of strings: its one-character members as ranges, and its
+/// longer strings in file order.
+fn string_property(name: &str, file: &str) -> Result<Strings, String> {
+    let mut chars = Vec::new();
+    let mut strings: Vec<Vec<u32>> = Vec::new();
+    for row in rows(&data(file)?) {
+        if let [cps, ty, ..] = row.as_slice()
+            && ty == name
+        {
+            if cps.contains(' ') {
+                let s: Vec<u32> = cps.split(' ').map(hex).collect::<Result<_, _>>()?;
+                if strings.contains(&s) {
+                    return Err(format!("{name}: {cps} twice"));
+                }
+                strings.push(s);
+            } else {
+                chars.push(range(cps)?);
+            }
+        }
+    }
+    Ok((merge(chars), strings))
+}
+
+fn render_strings(out: &mut String) -> Result<(), String> {
+    let mut with_chars = 0usize;
+    for (name, file) in STRING_TYPES {
+        let (chars, strings) = string_property(name, file)?;
+        if strings.is_empty() {
+            return Err(format!("{name}: no sequences"));
+        }
+        let up = name.to_ascii_uppercase();
+        if !chars.is_empty() {
+            with_chars = with_chars.saturating_add(1);
+            if name != "Basic_Emoji" {
+                return Err(format!("{name}: one-character members"));
+            }
+        }
+        pairs(
+            out,
+            &format!("STRING_CHARS_{up}"),
+            &format!("The one-character members of {name}, as ranges."),
+            &chars,
+        );
+        let _ = writeln!(
+            out,
+            "/// The members of {name} of two or more code points, in the order of the file.\npub static STRINGS_{up}: &[&str] = &["
+        );
+        for s in &strings {
+            let lit: String = s.iter().map(|c| format!("\\u{{{c:X}}}")).collect();
+            let _ = writeln!(out, "    \"{lit}\",");
+        }
+        out.push_str("];\n\n");
+    }
+    if with_chars != 1 {
+        return Err("only Basic_Emoji has one-character members".into());
+    }
+    out.push_str("/// A property of strings (UTS #51 ED-27, for `\\p{..}` with `v`).\n");
+    out.push_str("#[derive(Debug, Clone, Copy)]\npub struct StringProperty {\n");
+    out.push_str("    /// The name (the short name is the same).\n");
+    out.push_str("    pub name: &'static str,\n");
+    out.push_str("    /// Its one-character members.\n");
+    out.push_str("    pub chars: &'static [(u32, u32)],\n");
+    out.push_str("    /// Its longer members, as several lists (their union).\n");
+    out.push_str("    pub strings: &'static [&'static [&'static str]],\n}\n\n");
+    out.push_str(
+        "/// The properties of strings; `RGI_Emoji` is the union of the six sequence types.\n",
+    );
+    out.push_str("pub static STRING_PROPERTIES: &[StringProperty] = &[\n");
+    for (name, _) in STRING_TYPES {
+        let up = name.to_ascii_uppercase();
+        let _ = writeln!(
+            out,
+            "    StringProperty {{\n        name: \"{name}\",\n        chars: STRING_CHARS_{up},\n        strings: &[STRINGS_{up}],\n    }},"
+        );
+    }
+    let all: Vec<String> = STRING_TYPES
+        .iter()
+        .map(|(n, _)| format!("            STRINGS_{},", n.to_ascii_uppercase()))
+        .collect();
+    let _ = writeln!(
+        out,
+        "    StringProperty {{\n        name: \"RGI_Emoji\",\n        chars: STRING_CHARS_BASIC_EMOJI,\n        strings: &[\n{}\n        ],\n    }},",
+        all.join("\n")
+    );
+    out.push_str("];\n");
+    Ok(())
+}
+
 /// The text of `src/tables.rs`.
 fn render() -> Result<String, String> {
     let mut out = String::new();
@@ -316,7 +585,9 @@ fn render() -> Result<String, String> {
             let _ = writeln!(out, "    (\n        \"{n}\",\n        BINARY_{up},\n    ),");
         }
     }
-    out.push_str("];\n");
+    out.push_str("];\n\n");
+    render_scripts(&mut out)?;
+    render_strings(&mut out)?;
     Ok(out)
 }
 
@@ -558,4 +829,229 @@ fn category_groups_are_unions_of_their_members() {
     assert_eq!(general_category(0x41), 0);
     assert_eq!(general_category(0x378), 29);
     assert_eq!(general_category(0x10FFFF), 29);
+}
+
+// ---------------------------------------------------------------------------
+// Script, Script_Extensions and the properties of strings.
+
+#[test]
+fn every_script_name_resolves() -> Result<(), String> {
+    use clazel_js_regexp::props::UcdScripts;
+    use clazel_js_regexp::unicode::script_property;
+    use clazel_js_regexp::{Flags, Names, compile, parse};
+    let u = Flags {
+        unicode: true,
+        ..Flags::default()
+    };
+    // Every name in the generated table, and the table's own consistency.
+    let mut seen = std::collections::BTreeSet::new();
+    for s in tables::SCRIPTS {
+        assert!(!s.names.is_empty(), "{:?}", s.names);
+        for n in s.names {
+            assert!(seen.insert(*n), "{n} names two scripts");
+            for ext in [false, true] {
+                assert!(script_property(n, ext).is_some(), "{n}");
+            }
+            assert!(UcdScripts.is_script(n));
+            for prop in ["sc", "Script", "scx", "Script_Extensions"] {
+                let text: Vec<u16> = format!("\\p{{{prop}={n}}}").encode_utf16().collect();
+                let pat = parse(&text, u).map_err(|e| format!("{prop}={n}: {e}"))?;
+                compile(&pat, u).map_err(|e| format!("{prop}={n}: {e}"))?;
+            }
+        }
+        for table in [s.sc, s.scx] {
+            for w in table.windows(2) {
+                if let [a, b] = w {
+                    assert!(a.1.saturating_add(1) < b.0, "{:?}: {a:?} {b:?}", s.names);
+                }
+            }
+            assert!(table.iter().all(|&(a, b)| a <= b && b <= LAST));
+        }
+    }
+    // Case, spelling and neighbours are not names.
+    for n in ["latin", "LATIN", "Latn ", "Latin_", "Klingon", "Zzzzz", ""] {
+        assert!(script_property(n, false).is_none(), "{n:?}");
+        assert!(!UcdScripts.is_script(n));
+    }
+    // Spot checks of well-known names.
+    for n in [
+        "Latin",
+        "Latn",
+        "Greek",
+        "Grek",
+        "Common",
+        "Zyyy",
+        "Inherited",
+        "Zinh",
+        "Qaai",
+        "Unknown",
+        "Zzzz",
+        "Hrkt",
+        "Han",
+        "Hani",
+        "Nko",
+        "Nkoo",
+    ] {
+        assert!(seen.contains(n), "{n}");
+    }
+    assert!(tables::SCRIPTS.len() > 150);
+    Ok(())
+}
+
+/// The scripts and extensions the files give each code point, read again and
+/// without the generator's helpers: `Script` as a name per code point (a gap
+/// is `Unknown`), `Script_Extensions` as the short names of each row.
+#[test]
+#[cfg_attr(miri, ignore = "reads files")]
+fn scripts_agree_with_the_ucd_for_every_code_point() -> Result<(), String> {
+    use clazel_js_regexp::unicode::script_property;
+    let n = LAST as usize + 1;
+    let mut long_of_short: BTreeMap<String, String> = BTreeMap::new();
+    for line in data("PropertyValueAliases.txt")?.lines() {
+        let body = line.split('#').next().unwrap_or("");
+        let f: Vec<&str> = body.split(';').map(str::trim).collect();
+        if let [kind, short, long, ..] = f.as_slice()
+            && *kind == "sc"
+        {
+            long_of_short.insert((*short).to_string(), (*long).to_string());
+        }
+    }
+    let longs: Vec<&String> = long_of_short.values().collect();
+    let mut sc: Vec<&str> = vec!["Unknown"; n];
+    for line in data("Scripts.txt")?.lines() {
+        let body = line.split('#').next().unwrap_or("");
+        if let Some((r, name)) = body.split_once(';') {
+            let (a, b) = range(r.trim())?;
+            let name = longs
+                .iter()
+                .find(|l| l.as_str() == name.trim())
+                .ok_or_else(|| name.to_string())?;
+            for cp in a..=b {
+                let slot = sc.get_mut(cp as usize).ok_or("range")?;
+                if *slot != "Unknown" {
+                    return Err(format!("{cp:X} listed twice"));
+                }
+                *slot = name.as_str();
+            }
+        }
+    }
+    let mut scx: BTreeMap<usize, Vec<String>> = BTreeMap::new();
+    for line in data("ScriptExtensions.txt")?.lines() {
+        let body = line.split('#').next().unwrap_or("");
+        if let Some((r, names)) = body.split_once(';') {
+            let (a, b) = range(r.trim())?;
+            let list: Vec<String> = names
+                .split_whitespace()
+                .map(|s| long_of_short.get(s).cloned().ok_or_else(|| s.to_string()))
+                .collect::<Result<_, _>>()?;
+            for cp in a..=b {
+                scx.insert(cp as usize, list.clone());
+            }
+        }
+    }
+    // Every code point is in the table of its script and of each of its
+    // extensions; and the tables hold no more than that (their sizes add up
+    // to exactly the code points, and the (code point, script) pairs).
+    let mut pairs_expected = 0usize;
+    for cp in 0..n {
+        let c = u32::try_from(cp).map_err(|e| e.to_string())?;
+        let own = sc.get(cp).copied().unwrap_or("Unknown");
+        let in_sc = script_property(own, false).ok_or_else(|| own.to_string())?;
+        if !in_sc.contains(c) {
+            return Err(format!("{c:X}: not in Script={own}"));
+        }
+        let list = scx
+            .get(&cp)
+            .cloned()
+            .unwrap_or_else(|| vec![own.to_string()]);
+        pairs_expected = pairs_expected.saturating_add(list.len());
+        for l in &list {
+            let p = script_property(l, true).ok_or_else(|| l.clone())?;
+            if !p.contains(c) {
+                return Err(format!("{c:X}: not in Script_Extensions={l}"));
+            }
+        }
+    }
+    let size = |t: &[(u32, u32)]| {
+        t.iter()
+            .map(|&(a, b)| usize::try_from(b.saturating_sub(a)).map_or(0, |d| d.saturating_add(1)))
+            .fold(0usize, usize::saturating_add)
+    };
+    let sc_total: usize = tables::SCRIPTS.iter().map(|s| size(s.sc)).sum();
+    let scx_total: usize = tables::SCRIPTS.iter().map(|s| size(s.scx)).sum();
+    if sc_total != n {
+        return Err(format!(
+            "Script tables hold {sc_total} code points, not {n}"
+        ));
+    }
+    if scx_total != pairs_expected {
+        return Err(format!(
+            "Script_Extensions tables hold {scx_total} pairs, the files give {pairs_expected}"
+        ));
+    }
+    println!(
+        "clazel-conformance: suite=\"UCD scripts per code point\" pass={n} xfail=0 fail=0 total={n}"
+    );
+    Ok(())
+}
+
+/// The sequences of the emoji files, read again, against the tables.
+#[test]
+#[cfg_attr(miri, ignore = "reads files")]
+fn string_properties_agree_with_the_emoji_files() -> Result<(), String> {
+    use clazel_js_regexp::props::STRING_PROPERTIES as NAMES;
+    use clazel_js_regexp::unicode::{StringSet, string_property};
+    use std::collections::BTreeSet;
+    type Members = (BTreeSet<u32>, BTreeSet<Vec<u32>>);
+    let mut by_type: BTreeMap<String, Members> = BTreeMap::new();
+    for file in ["emoji-sequences.txt", "emoji-zwj-sequences.txt"] {
+        for row in rows(&data(file)?) {
+            if let [cps, ty, ..] = row.as_slice() {
+                let e = by_type.entry(ty.clone()).or_default();
+                if cps.contains(' ') {
+                    let s: Vec<u32> = cps.split(' ').map(hex).collect::<Result<_, _>>()?;
+                    e.1.insert(s);
+                } else {
+                    let (a, b) = range(cps)?;
+                    e.0.extend(a..=b);
+                }
+            }
+        }
+    }
+    assert_eq!(by_type.len(), 6, "{:?}", by_type.keys());
+    let members = |set: &StringSet| -> Members {
+        let chars = (0..=LAST).filter(|&c| set.chars.contains(c)).collect();
+        (chars, set.strings.iter().cloned().collect())
+    };
+    let mut union: Members = Members::default();
+    for (ty, want) in &by_type {
+        let set = string_property(ty).ok_or_else(|| ty.clone())?;
+        let got = members(&set);
+        if &got != want {
+            return Err(format!("{ty}: the table differs from the file"));
+        }
+        if set.strings.len() != got.1.len() {
+            return Err(format!("{ty}: a string twice"));
+        }
+        union.0.extend(want.0.iter());
+        union.1.extend(want.1.iter().cloned());
+        assert!(want.1.iter().all(|s| s.len() >= 2));
+    }
+    let all = string_property("RGI_Emoji").ok_or("RGI_Emoji")?;
+    if members(&all) != union {
+        return Err("RGI_Emoji is not the union of the six".into());
+    }
+    assert_eq!(
+        all.strings.len(),
+        union.1.len(),
+        "RGI_Emoji repeats a string"
+    );
+    for name in NAMES {
+        let name = String::from_utf8_lossy(name);
+        assert!(string_property(&name).is_some(), "{name}");
+    }
+    assert!(string_property("Emoji").is_none());
+    assert!(string_property("basic_emoji").is_none());
+    assert!(union.1.len() > 2500, "{}", union.1.len());
+    Ok(())
 }

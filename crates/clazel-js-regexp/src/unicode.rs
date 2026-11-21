@@ -239,3 +239,40 @@ pub fn binary_property(name: &str) -> Option<Prop> {
         .find(|(n, _)| n.as_bytes() == canonical)
         .map(|&(_, r)| Prop::Ranges(r))
 }
+
+/// The set a `Script` (or, with `extensions`, `Script_Extensions`) value
+/// stands for: a long name, a short name or another alias, exactly as in
+/// `PropertyValueAliases.txt`, from [`tables::SCRIPTS`].
+#[must_use]
+pub fn script_property(value: &str, extensions: bool) -> Option<Prop> {
+    tables::SCRIPTS
+        .iter()
+        .find(|s| s.names.contains(&value))
+        .map(|s| Prop::Ranges(if extensions { s.scx } else { s.sc }))
+}
+
+/// A property of strings (`v`): its one-character members as a set, and its
+/// strings of other lengths as code points.
+#[derive(Debug, Clone)]
+pub struct StringSet {
+    /// The members of one code point.
+    pub chars: Prop,
+    /// The members of two or more, in the order of the Unicode files.
+    pub strings: Vec<Vec<u32>>,
+}
+
+/// The property of strings named `name` (UTS #51; `RGI_Emoji` is the union of
+/// the others), from [`tables::STRING_PROPERTIES`].
+#[must_use]
+pub fn string_property(name: &str) -> Option<StringSet> {
+    let p = tables::STRING_PROPERTIES.iter().find(|p| p.name == name)?;
+    Some(StringSet {
+        chars: Prop::Ranges(p.chars),
+        strings: p
+            .strings
+            .iter()
+            .flat_map(|list| list.iter())
+            .map(|s| s.chars().map(u32::from).collect())
+            .collect(),
+    })
+}

@@ -45,5 +45,5 @@ pub use error::{Error, ErrorKind, FlagsError};
 pub use flags::Flags;
 pub use parser::{MAX_DEPTH, parse, parse_with};
 pub use program::Program;
-pub use props::{Names, SyntaxOnly};
+pub use props::{Names, SyntaxOnly, UcdScripts};
 pub use vm::{Limits, Match, MatchError};
