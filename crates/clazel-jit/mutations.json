@@ -225,6 +225,125 @@
         "lemma": "lemma_handler_index_inverse(js::HandlerId::Sub)",
         "witness": "handler_index(js::HandlerId::Sub) == 0nat && handler_of_index(0nat) == Some(js::HandlerId::Add)"
       }
+    },
+    {
+      "id": "front-less-than-lowers-to-less-or-equal",
+      "module": "front::intcmp",
+      "file": "src/front/intcmp.rs",
+      "find": "    if k == 0 {\n        lir::ICmp::LtS\n",
+      "replace": "    if k == 0 {\n        lir::ICmp::LeS\n",
+      "expect": "killed",
+      "reason": "`Lt` would be lowered to a signed `<=` on the sign-extended payloads, so `5 < 5` would store `true`. `intcmp::lemma_cmp_word` (the comparison's word is the encoding of the integers' comparison) is false for the mutant at `Lt` of 5 and 5: the word is `true`'s, the integers' comparison is false.",
+      "certificate": {
+        "file": "src/front/intcmp.rs",
+        "lemma": "lemma_cmp_word(0nat, 0xFFF9_0000_0000_0005u64, 0xFFF9_0000_0000_0005u64)",
+        "witness": "js::is_int32(0xFFF9_0000_0000_0005u64) == true && cmp_word(0nat, super::arith::sext(super::arith::lo32(0xFFF9_0000_0000_0005u64)), super::arith::sext(super::arith::lo32(0xFFF9_0000_0000_0005u64))) == js::TRUE && js::enc_bool(cmp_truth(0nat, js::int32_of(0xFFF9_0000_0000_0005u64) as int, js::int32_of(0xFFF9_0000_0000_0005u64) as int)) == js::FALSE",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "front-strict-equal-lowers-to-not-equal-truth",
+      "module": "front::intcmp",
+      "file": "src/front/intcmp.rs",
+      "find": "    } else if k == 4 {\n        ia == ib\n",
+      "replace": "    } else if k == 4 {\n        ia != ib\n",
+      "expect": "killed",
+      "reason": "The truth value `StrictEq` is compared against would be `!=`, so the lowering's `eq` word (true for `5 === 5`) would disagree with it. `intcmp::lemma_cmp_word` is false for the mutant at `StrictEq` of 5 and 5.",
+      "certificate": {
+        "file": "src/front/intcmp.rs",
+        "lemma": "lemma_cmp_word(4nat, 0xFFF9_0000_0000_0005u64, 0xFFF9_0000_0000_0005u64)",
+        "witness": "js::is_int32(0xFFF9_0000_0000_0005u64) == true && cmp_word(4nat, super::arith::sext(super::arith::lo32(0xFFF9_0000_0000_0005u64)), super::arith::sext(super::arith::lo32(0xFFF9_0000_0000_0005u64))) == js::TRUE && js::enc_bool(cmp_truth(4nat, js::int32_of(0xFFF9_0000_0000_0005u64) as int, js::int32_of(0xFFF9_0000_0000_0005u64) as int)) == js::FALSE",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "front-shift-count-reduced-modulo-64",
+      "module": "front::bitops",
+      "file": "src/front/bitops.rs",
+      "find": "    ((ib as u32) as nat) % 32\n",
+      "replace": "    ((ib as u32) as nat) % 64\n",
+      "expect": "killed",
+      "reason": "The shift count the semantics uses would be reduced modulo 64 instead of 32, so `1 << 32` would be `2^32` (wrapped to 0) while the lowering masks the count to five bits and gives 1. `bitops::lemma_bit_word` (the lowering's word is the encoding of the int32 result) is false for the mutant at `Shl` of 1 and 32.",
+      "certificate": {
+        "file": "src/front/bitops.rs",
+        "lemma": "lemma_bit_word(3nat, 0xFFF9_0000_0000_0001u64, 0xFFF9_0000_0000_0020u64)",
+        "witness": "js::is_int32(0xFFF9_0000_0000_0001u64) == true && js::is_int32(0xFFF9_0000_0000_0020u64) == true && bit_word(3nat, super::arith::sext(super::arith::lo32(0xFFF9_0000_0000_0001u64)), super::arith::sext(super::arith::lo32(0xFFF9_0000_0000_0020u64))) != js::enc_int32(bit_res(3nat, js::int32_of(0xFFF9_0000_0000_0001u64), js::int32_of(0xFFF9_0000_0000_0020u64)))",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "front-truth-flag-tests-the-payload-against-one",
+      "module": "front::truth",
+      "file": "src/front/truth.rs",
+      "find": "lir::bool_i32(lir::bool_i32(super::arith::lo32(va) == 0) == 0),",
+      "replace": "lir::bool_i32(lir::bool_i32(super::arith::lo32(va) == 1) == 0),",
+      "expect": "killed",
+      "reason": "The truth flag of an int32 would test its payload against 1 instead of 0, so the int32 `0` would be truthy. `truth::lemma_tr_t` (the truth flag is non-zero exactly when `to_boolean_fast` is `Some(true)`) is false for the mutant at the int32 0.",
+      "certificate": {
+        "file": "src/front/truth.rs",
+        "lemma": "lemma_tr_t(0xFFF9_0000_0000_0000u64)",
+        "witness": "tr_g(0xFFF9_0000_0000_0000u64) != 0u32 && tr_t(0xFFF9_0000_0000_0000u64) != 0u32 && js::to_boolean_fast(0xFFF9_0000_0000_0000u64) == Some(false)",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "front-inc-guard-excludes-the-wrong-value",
+      "module": "front::unops",
+      "file": "src/front/unops.rs",
+      "find": "        ia != 2147483647\n",
+      "replace": "        ia != 2147483646\n",
+      "expect": "killed",
+      "reason": "The set of int32 operands `Inc` is lowered for would exclude `2^31 - 2` instead of `2^31 - 1`, so the guard (which tests against `2^31 - 1`) would let through a value the semantics says is not covered. `unops::lemma_un_g` (the flag is non-zero exactly for an int32 the fast result covers) is false for the mutant at `Inc` of `2^31 - 2`.",
+      "certificate": {
+        "file": "src/front/unops.rs",
+        "lemma": "lemma_un_g(0nat, 0xFFF9_0000_7FFF_FFFEu64)",
+        "witness": "js::is_int32(0xFFF9_0000_7FFF_FFFEu64) == true && un_g(0nat, 0xFFF9_0000_7FFF_FFFEu64) != 0u32 && un_cond(0nat, js::int32_of(0xFFF9_0000_7FFF_FFFEu64)) == false",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "front-decrement-result-is-an-increment",
+      "module": "front::unops",
+      "file": "src/front/unops.rs",
+      "find": "    } else if k == 1 {\n        ((ia as int) - 1) as i32\n",
+      "replace": "    } else if k == 1 {\n        ((ia as int) + 1) as i32\n",
+      "expect": "killed",
+      "reason": "The int32 `Dec` is specified to give would be `a + 1`, so the lowering's word (`a - 1`, tagged) would disagree. `unops::lemma_un_word` (the value block's word is the encoding of the int32 result) is false for the mutant at `Dec` of 5: the word is 4, the result 6.",
+      "certificate": {
+        "file": "src/front/unops.rs",
+        "lemma": "lemma_un_word(1nat, 0xFFF9_0000_0000_0005u64)",
+        "witness": "js::is_int32(0xFFF9_0000_0000_0005u64) == true && un_word(1nat, super::arith::sext(super::arith::lo32(0xFFF9_0000_0000_0005u64))) != js::enc_int32(un_res(1nat, js::int32_of(0xFFF9_0000_0000_0005u64)))",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "front-negative-key-has-the-wrong-sign",
+      "module": "front::numord",
+      "file": "src/front/numord.rs",
+      "find": "        -pos_bits((-n) as nat)\n",
+      "replace": "        pos_bits((-n) as nat)\n",
+      "expect": "killed",
+      "reason": "The sign-magnitude key of the double a negative integer stands for would be positive, so `-1` and `1` would have the same key. `numord::lemma_korder_mono` (the key is strictly increasing) is false for the mutant at -1 and 1.",
+      "certificate": {
+        "file": "src/front/numord.rs",
+        "lemma": "lemma_korder_mono(-1int, 1int)",
+        "witness": "korder(-1int) == korder(1int)",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
     }
   ]
 }
