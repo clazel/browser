@@ -48,15 +48,16 @@
 //! # Modelling choices
 //!
 //! - **The accesses are [`mem_access`]'s**, the validator's own account of
-//!   what an instruction touches; the proof ties it to the semantics for
-//!   writes (a write changes memory only inside the access it names, see
-//!   [`writes_confined`]). It does not prove that a *read* touches nothing
-//!   else: the read-frame of `effect` is not proven here (see the PR).
+//!   what an instruction touches ([`loads_ok`], [`stores_ok`]); the proof
+//!   ties it to the semantics: a write changes memory only inside the access
+//!   it names ([`writes_confined`]), and a step's outcome depends only on the
+//!   bytes of the read area ([`reads_confined`]).
 //! - **`ret` reads the stack**: `[rsp, rsp + 8)`, the stub's slot. It is the
 //!   only instruction of an accepted blob that touches anything but the
 //!   context and the regions, and it is accepted only in the exit sequence.
 //!   [`mem_access`] has no entry for it; the invariant says `rsp = sp` and
 //!   the slot holds `ret_raw`, so the step returns to `logext(64, ret_raw)`.
+//!   [`reads_confined`] counts the slot as readable.
 //! - **The next instruction is found by offset**: [`next_instr`] looks RIP's
 //!   offset up among the instruction starts; [`inv`] has RIP at one.
 //! - **No system instruction**: [`is_system`] is false for every
@@ -429,6 +430,43 @@ pub open spec fn stores_ok(c: Cfg, s: State, i: Instr) -> bool {
     }
 }
 
+/// The byte at `a` may be observed by a step: it is readable, or in the
+/// stub's return slot (which `ret` reads).
+pub open spec fn read_area(c: Cfg, a: int) -> bool {
+    readable(c, a, 1) || (c.sp <= a && a < c.sp + 8)
+}
+
+/// The memories `m` and `m2` agree (on which bytes are mapped, and on their
+/// values) at every byte of the read area.
+pub open spec fn agree_on_read_area(c: Cfg, m: Map<int, u8>, m2: Map<int, u8>) -> bool {
+    forall|a: int|
+        read_area(c, a) ==> (#[trigger] m2.dom().contains(a) == m.dom().contains(a) && (
+        m.dom().contains(a) ==> m2[a] == m[a]))
+}
+
+/// The states agree on everything but memory.
+pub open spec fn eq_mod_mem(t: State, t2: State) -> bool {
+    t.rgf == t2.rgf && t.rip == t2.rip && t.rflags == t2.rflags && t.undef == t2.undef && t.xmm
+        == t2.xmm
+}
+
+/// Two outcomes of a step agree but for memory: both fault, or neither does
+/// and the states agree apart from memory.
+pub open spec fn same_outcome(o: Option<State>, o2: Option<State>) -> bool {
+    (o is Some == o2 is Some) && (o is Some ==> eq_mod_mem(o->Some_0, o2->Some_0))
+}
+
+/// **Reads are confined**: from every state that differs from `s` only in
+/// memory outside the read area, the step of `i` has the same outcome (apart
+/// from memory).
+pub open spec fn reads_confined(c: Cfg, e: spec_fn(nat) -> nat, s: State, i: Instr) -> bool {
+    forall|m2: Map<int, u8>|
+        agree_on_read_area(c, s.mem, m2) ==> #[trigger] same_outcome(
+            step(e, s, i),
+            step(e, State { mem: m2, ..s }, i),
+        )
+}
+
 /// Memory is the same in `s` and `s2` at every byte that is not writable
 /// (mapped or not).
 pub open spec fn writes_confined(c: Cfg, s: State, s2: State) -> bool {
@@ -496,6 +534,10 @@ impl Machine for X64 {
 
     open spec fn stores_ok(c: Cfg, s: State, i: Instr) -> bool {
         stores_ok(c, s, i)
+    }
+
+    open spec fn reads_confined(c: Cfg, e: spec_fn(nat) -> nat, s: State, i: Instr) -> bool {
+        reads_confined(c, e, s, i)
     }
 
     open spec fn writes_confined(c: Cfg, s: State, s2: State) -> bool {

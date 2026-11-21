@@ -29,6 +29,13 @@
 //!   ([`Machine::loads_ok`]) and **a store only inside the context's exit area
 //!   or a handed region** ([`Machine::stores_ok`]), whether or not the access
 //!   faults;
+//! - **blind to every other byte of memory**: what the step does (whether it
+//!   faults, and what it leaves in the registers) does not depend on memory
+//!   outside the readable areas and the stub's return slot
+//!   ([`Machine::reads_confined`]). This is the machine-level reading of
+//!   "only loads inside the regions": [`Machine::loads_ok`] is the
+//!   validator's own account of the access, and this ties it to the
+//!   semantics;
 //!
 //! and, if the step does not fault, it
 //!
@@ -97,6 +104,14 @@ pub trait Machine: Sized {
     /// handed region.
     spec fn stores_ok(c: Self::Cfg, s: Self::St, i: Self::Ins) -> bool;
 
+    /// **Reads are confined**: the step of `i` from `s` is the same, apart
+    /// from memory, from every state that differs from `s` only in memory
+    /// outside the readable areas (the context, the handed regions) and the
+    /// stub's return slot: it faults in one if and only if in the other, and
+    /// leaves the same registers, flags and program counter. The step reads
+    /// nothing else.
+    spec fn reads_confined(c: Self::Cfg, e: Self::Env, s: Self::St, i: Self::Ins) -> bool;
+
     /// Going from `s` to `s2` changed no memory outside the writable areas
     /// (the exit area and the handed regions).
     spec fn writes_confined(c: Self::Cfg, s: Self::St, s2: Self::St) -> bool;
@@ -124,7 +139,7 @@ pub open spec fn confined_step<M: Machine>(c: M::Cfg, e: M::Env, s: M::St) -> bo
             c,
             s,
             i,
-        ) && match M::step(e, s, i) {
+        ) && M::reads_confined(c, e, s, i) && match M::step(e, s, i) {
             None => true,
             Some(s2) => M::writes_confined(c, s, s2) && if M::is_exit(c, s, i) {
                 M::exited(c, s2) && M::next_instr(c, s2) is None
