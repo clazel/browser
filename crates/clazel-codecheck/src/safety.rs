@@ -1,7 +1,8 @@
 //! **The safety theorem of the x86-64 validator** (jit.md exit criterion 2),
-//! *statement only*: what an execution of an accepted blob may do, over
-//! `clazel_x64::spec::step`. The proof is later work (CLAUDE.md rule 3: the
-//! statement is committed first, and it is the part humans review).
+//! what an execution of an accepted blob may do, over
+//! `clazel_x64::spec::step`. The statement is here, and it is the part humans
+//! review (CLAUDE.md rule 3: it was committed before the proof). The proof is
+//! in [`proof`] (`safety_theorem`, `safety_holds`).
 //!
 //! # The theorem, in words
 //!
