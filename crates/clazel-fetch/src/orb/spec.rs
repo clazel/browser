@@ -61,7 +61,7 @@
 //!   Fetch's text (collect an HTTP quoted string, remove HTTP tab or space)
 //!   splits at the same commas. Isomorphic decoding of the pieces is done by
 //!   `parse_a_mime_type_from_bytes`.
-//! - **A MIME type is a [`MimeTypeRecord`]**, whose parser has already
+//! - **A MIME type is a [`clazel_mime::mime_type::spec::MimeTypeRecord`]**, whose parser has already
 //!   lowercased its type and subtype, so "essence is one of" is code point
 //!   equality, and "essence starts with `audio/`" is "type is `audio`".
 //! - **"Is a JavaScript MIME type"** is MIME Sniffing §4.6's, through
@@ -78,14 +78,6 @@
 //!   `fetch()` initiators (the renderer's sub-fetches are image and style
 //!   requests; Phase 7 adds `script`).
 
-#[allow(unused_imports)]
-use clazel_http::field::spec as http_field;
-#[allow(unused_imports)]
-use clazel_http::message::spec as http_message;
-#[allow(unused_imports)]
-use clazel_mime::mime_type::spec as mime;
-#[allow(unused_imports)]
-use clazel_mime::sniff::spec as sniff;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
@@ -125,9 +117,9 @@ pub open spec fn first_bytes_len() -> nat {
 
 /// "get, decode, and split" `name` from the header list: the combined value
 /// split at commas; `None` is "null".
-pub open spec fn get_decode_split(fields: Seq<http_field::FieldLine>, name: Seq<u8>) -> Option<Seq<Seq<u8>>> {
-    match http_field::combined_field_value(fields, name) {
-        Some(v) => Some(http_field::split_values(v)),
+pub open spec fn get_decode_split(fields: Seq<clazel_http::field::spec::FieldLine>, name: Seq<u8>) -> Option<Seq<Seq<u8>>> {
+    match clazel_http::field::spec::combined_field_value(fields, name) {
+        Some(v) => Some(clazel_http::field::spec::split_values(v)),
         None => None,
     }
 }
@@ -147,15 +139,15 @@ pub open spec fn x_content_type_options_name() -> Seq<u8> {
 /// value. If temporaryMimeType is failure or its essence is "*/*", then
 /// continue. Set mimeType to temporaryMimeType." (the charset steps are not
 /// transcribed.)
-pub open spec fn extract_from(values: Seq<Seq<u8>>, mime_type: Option<mime::MimeTypeRecord>) -> Option<mime::MimeTypeRecord>
+pub open spec fn extract_from(values: Seq<Seq<u8>>, mime_type: Option<clazel_mime::mime_type::spec::MimeTypeRecord>) -> Option<clazel_mime::mime_type::spec::MimeTypeRecord>
     decreases values.len(),
 {
     if values.len() == 0 {
         mime_type
     } else {
-        let temporary = mime::parse_a_mime_type_from_bytes(values[0]);
+        let temporary = clazel_mime::mime_type::spec::parse_a_mime_type_from_bytes(values[0]);
         let next = match temporary {
-            Some(t) => if mime::essence(t) == lit_star_slash_star() { mime_type } else { temporary },
+            Some(t) => if clazel_mime::mime_type::spec::essence(t) == lit_star_slash_star() { mime_type } else { temporary },
             None => mime_type,
         };
         extract_from(values.drop_first(), next)
@@ -166,7 +158,7 @@ pub open spec fn extract_from(values: Seq<Seq<u8>>, mime_type: Option<mime::Mime
 /// getting, decoding, and splitting `Content-Type`. If values is null, then
 /// return failure." (`None` is failure; "If mimeType is null, then return
 /// failure" is `extract_from`'s `None`.)
-pub open spec fn extract_mime_type(fields: Seq<http_field::FieldLine>) -> Option<mime::MimeTypeRecord> {
+pub open spec fn extract_mime_type(fields: Seq<clazel_http::field::spec::FieldLine>) -> Option<clazel_mime::mime_type::spec::MimeTypeRecord> {
     match get_decode_split(fields, content_type_name()) {
         Some(values) => extract_from(values, None),
         None => None,
@@ -178,9 +170,9 @@ pub open spec fn extract_mime_type(fields: Seq<http_field::FieldLine>) -> Option
 /// return false. If values[0] is an ASCII case-insensitive match for
 /// "nosniff", then return true. Return false." (`split_values` always has a
 /// first piece.)
-pub open spec fn determine_nosniff(fields: Seq<http_field::FieldLine>) -> bool {
+pub open spec fn determine_nosniff(fields: Seq<clazel_http::field::spec::FieldLine>) -> bool {
     match get_decode_split(fields, x_content_type_options_name()) {
-        Some(values) => values.len() > 0 && mime::ascii_lowercase(mime::isomorphic_decode(values[0])) == lit_nosniff(),
+        Some(values) => values.len() > 0 && clazel_mime::mime_type::spec::ascii_lowercase(clazel_mime::mime_type::spec::isomorphic_decode(values[0])) == lit_nosniff(),
         None => false,
     }
 }
@@ -191,20 +183,20 @@ pub open spec fn determine_nosniff(fields: Seq<http_field::FieldLine>) -> bool {
 
 /// "An opaque-response-safelisted MIME type is a JavaScript MIME type or a
 /// MIME type whose essence is one of" the list.
-pub open spec fn is_opaque_response_safelisted(m: mime::MimeTypeRecord) -> bool {
-    mime::is_javascript_mime_type(m) || mime::is_one_of(mime::essence(m), opaque_response_safelisted_essences())
+pub open spec fn is_opaque_response_safelisted(m: clazel_mime::mime_type::spec::MimeTypeRecord) -> bool {
+    clazel_mime::mime_type::spec::is_javascript_mime_type(m) || clazel_mime::mime_type::spec::is_one_of(clazel_mime::mime_type::spec::essence(m), opaque_response_safelisted_essences())
 }
 
 /// "An opaque-response-blocklisted MIME type is an HTML MIME type, JSON MIME
 /// type, or XML MIME type."
-pub open spec fn is_opaque_response_blocklisted(m: mime::MimeTypeRecord) -> bool {
-    mime::is_html_mime_type(m) || mime::is_json_mime_type(m) || mime::is_xml_mime_type(m)
+pub open spec fn is_opaque_response_blocklisted(m: clazel_mime::mime_type::spec::MimeTypeRecord) -> bool {
+    clazel_mime::mime_type::spec::is_html_mime_type(m) || clazel_mime::mime_type::spec::is_json_mime_type(m) || clazel_mime::mime_type::spec::is_xml_mime_type(m)
 }
 
 /// "An opaque-response-blocklisted-never-sniffed MIME type is a MIME type
 /// whose essence is one of" the list.
-pub open spec fn is_opaque_response_blocklisted_never_sniffed(m: mime::MimeTypeRecord) -> bool {
-    mime::is_one_of(mime::essence(m), opaque_response_blocklisted_never_sniffed_essences())
+pub open spec fn is_opaque_response_blocklisted_never_sniffed(m: clazel_mime::mime_type::spec::MimeTypeRecord) -> bool {
+    clazel_mime::mime_type::spec::is_one_of(clazel_mime::mime_type::spec::essence(m), opaque_response_blocklisted_never_sniffed_essences())
 }
 
 // ===========================================================================
@@ -224,7 +216,7 @@ pub open spec fn is_ok_status(status: nat) -> bool {
 /// The opaque-response-safelist check, given a request (an image or style
 /// request: see the modelling choices) and a response, as `model` decides
 /// steps 13 and 15.
-pub open spec fn opaque_response_safelist_check(model: Model, status: nat, fields: Seq<http_field::FieldLine>, body: Seq<u8>) -> bool {
+pub open spec fn opaque_response_safelist_check(model: Model, status: nat, fields: Seq<clazel_http::field::spec::FieldLine>, body: Seq<u8>) -> bool {
     // 1. "Let mimeType be the result of extracting a MIME type from
     //    response's header list."
     let mime_type = extract_mime_type(fields);
@@ -244,7 +236,7 @@ pub open spec fn opaque_response_safelist_check(model: Model, status: nat, field
         // 3.3. "If response's status is 206 and mimeType is an
         //       opaque-response-blocklisted MIME type, then return false."
         false
-    } else if mime_type is Some && nosniff && (is_opaque_response_blocklisted(mime_type->Some_0) || mime::essence(mime_type->Some_0) == lit_text_plain()) {
+    } else if mime_type is Some && nosniff && (is_opaque_response_blocklisted(mime_type->Some_0) || clazel_mime::mime_type::spec::essence(mime_type->Some_0) == lit_text_plain()) {
         // 3.4. "If nosniff is true and mimeType is an
         //       opaque-response-blocklisted MIME type or its essence is
         //       "text/plain", then return false."
@@ -263,12 +255,12 @@ pub open spec fn opaque_response_safelist_check(model: Model, status: nat, field
         let bytes = first_bytes(body);
         // 7. "If bytes is failure, then return false." (Never: see the
         //    modelling choices.)
-        if sniff::audio_or_video_type_pattern_matching(bytes) is Some {
+        if clazel_mime::sniff::spec::audio_or_video_type_pattern_matching(bytes) is Some {
             // 8. "If the audio or video type pattern matching algorithm given
             //    bytes does not return undefined, then: ... Return true." (The
             //    "initial" branch, 8.1, is not taken: the state is "none".)
             true
-        } else if sniff::image_type_pattern_matching(bytes) is Some {
+        } else if clazel_mime::sniff::spec::image_type_pattern_matching(bytes) is Some {
             // 9. "If the image type pattern matching algorithm given bytes
             //    does not return undefined, then return true."
             true
@@ -306,12 +298,12 @@ pub open spec fn orb_applies(lock: clazel_origin::spec::Origin, response_origin:
 /// ORB does not apply or the check (with [`kernel_model`]) returns true. A
 /// response for which this is false is a network error (Main fetch: "return
 /// a network error").
-pub open spec fn orb_allows(lock: clazel_origin::spec::Origin, response_origin: clazel_origin::spec::Origin, response: http_message::Response) -> bool {
+pub open spec fn orb_allows(lock: clazel_origin::spec::Origin, response_origin: clazel_origin::spec::Origin, response: clazel_http::message::spec::Response) -> bool {
     orb_allows_given(orb_applies(lock, response_origin), response)
 }
 
 /// [`orb_allows`], given whether ORB applies.
-pub open spec fn orb_allows_given(applies: bool, response: http_message::Response) -> bool {
+pub open spec fn orb_allows_given(applies: bool, response: clazel_http::message::spec::Response) -> bool {
     !applies || opaque_response_safelist_check(kernel_model(), response.status_line.status, response.fields, response.body)
 }
 

@@ -37,6 +37,7 @@ mod wpt_idna;
 mod wpt_mediaqueries;
 mod wpt_mime_types;
 mod wpt_mimesniff;
+mod wpt_orb;
 mod wpt_quirks;
 mod wpt_url_hosts;
 mod wpt_url_percent;
@@ -150,6 +151,7 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         wpt_form_encodings::convert,
         wpt_form_encodings::FILES,
     ),
+    ("wpt-orb", wpt_orb::convert, wpt_orb::FILES),
     ("wpt-url-idna", wpt_idna::convert, wpt_idna::FILES),
     (
         "wpt-mime-types",

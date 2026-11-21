@@ -57,6 +57,8 @@ theorems = [
     "theorem_redirect_method",
     "theorem_post_cookies",
     "theorem_sends_have_valid_req",
+    # Item 6.17: Opaque Response Blocking (src/orb/lemmas.rs).
+    "theorem_orb",
 ]
 
 [package.metadata.verus]
