@@ -888,9 +888,17 @@ fn live_refs(h: &Heap) -> Vec<Ref> {
 }
 
 /// The names of the property keys of the property test: enough that one
-/// object can pass the dictionary cutoff.
+/// object can pass the dictionary cutoff. Under Miri, 16: a chain of 128
+/// shapes made the specification's fixpoint and the oracle's walks too slow
+/// (the first version of this test took 837 s), and the dictionary is
+/// covered by its own unit test there.
 fn pool_strings() -> R<Vec<JsString>> {
-    (0..MAX_FAST_PROPERTIES + 12)
+    let n = if cfg!(miri) {
+        16
+    } else {
+        MAX_FAST_PROPERTIES + 12
+    };
+    (0..n)
         .map(|i| JsString::from_rust_str(&format!("key{i}")).map_err(|_| Error::Intern))
         .collect()
 }
@@ -904,9 +912,8 @@ fn intern_pool(h: &mut Heap, pool: &[JsString]) -> R<Vec<Key>> {
 fn random_heaps_of_any_size_keep_what_the_roots_reach() -> R<()> {
     let mut rng = Lcg(0x005E_ED6C);
     let mut cases = 0;
-    // Under Miri, the first 2 cases of the same sequence (one large heap
-    // among them, at a thirtieth of its size); the normal test job runs all
-    // 240.
+    // Under Miri, the first 2 cases of the same sequence (at a fraction of
+    // their size); the normal test job runs all 240.
     let count: usize = if cfg!(miri) { 2 } else { 240 };
     for case in 0..count {
         // Mostly small heaps, a few large ones.
@@ -914,6 +921,9 @@ fn random_heaps_of_any_size_keep_what_the_roots_reach() -> R<()> {
             // Under Miri, a thirtieth of the size, from the same draw.
             0 if cfg!(miri) => 50 + rng.below(50),
             0 => 1500 + rng.below(1500),
+            // Under Miri, a heap of 20 to 80: the checks are quadratic, and
+            // 300 objects took 570 s.
+            1..=4 if cfg!(miri) => 20 + rng.below(60),
             1..=4 => 50 + rng.below(250),
             _ => rng.below(30),
         };
@@ -937,7 +947,7 @@ fn random_heaps_of_any_size_keep_what_the_roots_reach() -> R<()> {
         )?;
         // In two cases of the twenty, one object has so many properties that
         // its shape is a dictionary of its own.
-        if let (true, Some(&big)) = (case % 20 < 2, live.first()) {
+        if let (true, Some(&big)) = (case % 20 < 2 && !cfg!(miri), live.first()) {
             for &k in &keys {
                 match h.add_property(big, k, Attrs::ALL, Value::int32(1)) {
                     Ok(_) | Err(Error::Shape(shape::Error::Exists)) => {}
