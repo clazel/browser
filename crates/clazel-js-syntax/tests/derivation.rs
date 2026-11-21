@@ -338,6 +338,8 @@ fn covered_early_rules_are_verified() {
         "var a; var a;",
         "'use strict'; a = 1;",
         "let a; const b = 1; { let a; var c; function f() {} function f() {} }",
+        "try {} catch (e) { var e; } finally { let z; }",
+        "try {} catch ([a, b]) { let c; }",
         "for (let i = 0; i < 1; i++) { var j; }",
         "function f(a) { let b; { let a; } }",
         "x = { m(a) { return a; }, get g() { return 1; }, __proto__: null, ['__proto__']: 1 };",
@@ -367,7 +369,6 @@ fn other_early_rules_are_unsupported_not_failed() {
         "for (a in b) ;",
         "/a/;",
         "a.#b;",
-        "try {} catch (e) {}",
         "switch (a) { case 1: }",
     ] {
         let r = early(s);

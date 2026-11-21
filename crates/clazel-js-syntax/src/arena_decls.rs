@@ -1571,4 +1571,137 @@ pub proof fn lemma_lex_body(a: AstV, ts: Stream, tk: &Tk, nodes: Seq<Node>, b: i
     lemma_lex_cat(a, ts, tk.toks@, tk.nm.lt@, true, n, ks, 0);
 }
 
+/// The lexically and var declared names of the statements of block `b` (not top-level).
+proof fn lemma_block_names(a: AstV, ts: Stream, tk: &Tk, nodes: Seq<Node>, b: int)
+    requires
+        names_inv(tk, nodes, ts),
+        a == arena_of(nodes),
+        ast_wf(a),
+        0 <= b < nodes.len(),
+    ensures
+        decl_ok(tk.toks@, cat_d(tk.nm.lf@, a.nodes[b].children, 0)),
+        decl_ok(tk.toks@, cat_d(tk.nm.vf@, a.nodes[b].children, 0)),
+        decls_of(tk.toks@, cat_d(tk.nm.lf@, a.nodes[b].children, 0)) =~= lex_names_list(
+            a,
+            ts,
+            a.nodes.len() as int,
+            a.nodes[b].children,
+            0,
+            false,
+        ),
+        dn(tk.toks@, cat_d(tk.nm.vf@, a.nodes[b].children, 0)) =~= var_names_list(
+            a,
+            ts,
+            a.nodes.len() as int,
+            a.nodes[b].children,
+            0,
+        ),
+{
+    let ks = a.nodes[b].children;
+    let n = nodes.len() as int;
+    lemma_kids_before(a, b);
+    assert forall|q: int| 0 <= q < ks.len() implies 0 <= #[trigger] ks[q] < n by {
+        assert(0 <= ks[q] < b);
+    }
+    assert(arr_ok(tk.toks@, tk.nm.lf@, n));
+    assert(arr_ok(tk.toks@, tk.nm.vf@, n));
+    lemma_cat_ok(tk.toks@, tk.nm.lf@, ks, 0, n);
+    lemma_cat_ok(tk.toks@, tk.nm.vf@, ks, 0, n);
+    lemma_lex_cat(a, ts, tk.toks@, tk.nm.lf@, false, n, ks, 0);
+    lemma_var_cat(a, ts, tk.toks@, tk.nm.vf@, false, n, ks, 0);
+}
+
+/// The `Catch` node `m`: its parameter has no name twice, no name that its block declares lexically,
+/// and, unless a plain identifier, none that it var-declares (`early_local`, §14.15.1, Annex B.3.4).
+#[verifier::rlimit(400)]
+pub fn catch_exec(tk: &Tk, nodes: &[Node], m: usize, Ghost(ts): Ghost<Stream>) -> (r: bool)
+    requires
+        names_pre(tk, nodes@, ts, m as int),
+        names_inv(tk, nodes@, ts),
+    ensures
+        r ==> ({
+            let a = arena_of(nodes@);
+            let ks = a.nodes[m as int].children;
+            let bn = bound_names(a, ts, kid(ks, 0));
+            let bk = kids(a, kid(ks, 1));
+            let nb = a.nodes.len() as int;
+            !has_duplicate(bn) && !intersects(bn, plain_names(lex_names_list(a, ts, nb, bk, 0, false)))
+                && (kd(a, kid(ks, 0)) != NodeKind::BindingIdentifier ==> !intersects(
+                bn,
+                var_names_list(a, ts, nb, bk, 0),
+            ))
+        }),
+{
+    let ghost a = arena_of(nodes@);
+    let toks = tk.toks;
+    let nd = match nodes.get(m) {
+        Some(x) => x,
+        None => {
+            return false;
+        },
+    };
+    proof {
+        assert(a.nodes[m as int] == nodes@[m as int]@);
+        assert(nd == &nodes@[m as int]);
+        assert(a.nodes[m as int].children.len() == nd.children.len());
+        lemma_kids_before(a, m as int);
+    }
+    let (c0, c1) = match (nd.children.as_slice().get(ZERO), nd.children.as_slice().get(1)) {
+        (Some(x), Some(y)) => (*x as usize, *y as usize),
+        _ => {
+            return false;
+        },
+    };
+    proof {
+        assert(a.nodes[m as int].children[0] == c0 as int);
+        assert(a.nodes[m as int].children[1] == c1 as int);
+        lemma_child_before(a, m as int, 0);
+        lemma_child_before(a, m as int, 1);
+    }
+    let k0 = match kid_kind(nodes, m, 0) {
+        Some(k) => k,
+        None => {
+            return false;
+        },
+    };
+    let names = match tk.bn.get(c0) {
+        Some(v) => v,
+        None => {
+            return false;
+        },
+    };
+    let lex = match cat_exec(nodes, tk.nm.lf.as_slice(), c1, 0) {
+        Some(v) => v,
+        None => {
+            return false;
+        },
+    };
+    let vars = match cat_exec(nodes, tk.nm.vf.as_slice(), c1, 0) {
+        Some(v) => v,
+        None => {
+            return false;
+        },
+    };
+    let dd = decls_from_names(names.as_slice());
+    proof {
+        assert(tk.bn@[c0 as int] == names);
+        lemma_decl_ok_names(toks@, names@);
+        lemma_block_names(a, ts, tk, nodes@, c1 as int);
+        lemma_dn_plain(toks@, lex@);
+        assert(bound_names(a, ts, c0 as int) =~= dn(toks@, dd@));
+        assert(kids(a, c1 as int) == a.nodes[c1 as int].children);
+    }
+    if !no_dup_exec(toks, names.as_slice()) {
+        return false;
+    }
+    if !no_intersect_dd(toks, dd.as_slice(), lex.as_slice()) {
+        return false;
+    }
+    let ok_vars = no_intersect_dd(toks, dd.as_slice(), vars.as_slice());
+    if !matches!(k0, NodeKind::BindingIdentifier) && !ok_vars {
+        return false;
+    }
+    true
+}
+
 } // verus!

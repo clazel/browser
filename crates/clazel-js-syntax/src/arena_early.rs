@@ -1339,6 +1339,7 @@ fn early_local_exec(
         NodeKind::ObjectLiteral => object_literal_exec(tk, nodes, m, Ghost(ts)),
         NodeKind::FunctionBody => list_early_exec(tk, nodes, m, e.strict, true, Ghost(ts)),
         NodeKind::LexicalDeclaration => lexical_decl_exec(tk, nodes, m, Ghost(ts)),
+        NodeKind::Catch => catch_exec(tk, nodes, m, Ghost(ts)),
         NodeKind::FunctionDeclaration | NodeKind::FunctionExpression | NodeKind::GeneratorDeclaration
         | NodeKind::GeneratorExpression | NodeKind::AsyncFunctionDeclaration
         | NodeKind::AsyncFunctionExpression | NodeKind::AsyncGeneratorDeclaration
