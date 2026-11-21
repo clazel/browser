@@ -89,6 +89,7 @@ pub mod frame;
 pub mod intops;
 pub mod lirmem;
 pub mod lower;
+pub mod numord;
 pub mod proofs;
 pub mod run;
 pub mod spec;
