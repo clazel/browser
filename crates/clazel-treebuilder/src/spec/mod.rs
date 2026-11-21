@@ -106,8 +106,13 @@
 //!   Its four cases (`webkit02.dat` 44 to 47) are listed as expected
 //!   failures in `tests/conformance_tree_construction.rs`.
 //! - **The fragment case** (§13.4) builds its own arena: the document node,
-//!   the context element (no parent, so step 19 finds a form only if the
-//!   context is one), the `html` root appended to the document, and the
+//!   the context element (no parent, so step 19's "nearest node to context
+//!   that is a form element" is found from the context itself, or from the
+//!   caller's `Context::in_form`, which says that an ancestor is one: the
+//!   form element pointer then names the context element, a stand-in for
+//!   the ancestor, since the parser only tests the pointer for null and
+//!   the fragment case never sets a form owner), the `html` root appended
+//!   to the document, and the
 //!   `DocumentFragment` the redirection map sends root's insertions to.
 //!   Step 22's "adopt fragment into target's node document" changes nothing
 //!   in one arena.
