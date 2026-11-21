@@ -44,6 +44,9 @@ pub enum Error {
 /// the last index is kept out so that `len` fits one too.
 pub const MAX_SLOTS: usize = u32::MAX as usize;
 
+/// Slots an arena reserves room for up front.
+const INITIAL_CAPACITY: usize = 16;
+
 #[derive(Debug)]
 enum Entry<T> {
     Live(T),
@@ -88,19 +91,22 @@ impl<T> Default for Arena<T> {
 impl<T> Arena<T> {
     /// An empty arena that may grow to [`MAX_SLOTS`].
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self::with_limit(MAX_SLOTS)
     }
 
     /// An empty arena that may hold at most `limit` slots (capped at
     /// [`MAX_SLOTS`]): the heap's memory limit, and the harnesses' bound.
     #[must_use]
-    pub const fn with_limit(limit: usize) -> Self {
+    pub fn with_limit(limit: usize) -> Self {
+        let limit = limit.min(MAX_SLOTS);
         Self {
-            slots: Vec::new(),
+            // Room for the first slots, so the common small arena never
+            // reallocates (and a bounded harness's growth is not a path).
+            slots: Vec::with_capacity(limit.min(INITIAL_CAPACITY)),
             head: None,
             live: 0,
-            limit: if limit < MAX_SLOTS { limit } else { MAX_SLOTS },
+            limit,
         }
     }
 
