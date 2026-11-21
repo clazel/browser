@@ -11,7 +11,7 @@ use clazel_js_syntax::spec::SourceGoal;
 use clazel_js_vm::bytecode::{
     Const, ErrorKind, FunctionCode, FunctionKind, Handler, Instr, Program, check_program,
 };
-use clazel_js_vm::compile::{CompileError, compile_script};
+use clazel_js_vm::compile::compile_script;
 
 fn cps(src: &str) -> Vec<u32> {
     src.chars().map(u32::from).collect()
@@ -697,27 +697,19 @@ fn optional_chaining() -> Result<(), String> {
     Ok(())
 }
 
-/// Constructs that stay out of scope are still reported, never a panic, also
-/// inside the constructs of this slice.
+/// Constructs the second slice left out, inside the constructs of this slice,
+/// compile since the fourth (`tests/modules.rs` has their expectations).
 #[test]
-fn out_of_scope_constructs_are_not_yet_compiled() -> Result<(), String> {
-    let cases: &[(&str, &str)] = &[
-        (
-            "function f({ a = eval(...b) }) {}",
-            "direct eval with spread arguments",
-        ),
-        ("delete a?.b;", "delete of an optional chain"),
-    ];
-    for &(src, feature) in cases {
+fn formerly_out_of_scope_constructs_compile() -> Result<(), String> {
+    for src in [
+        "function f({ a = eval(...b) }) {}",
+        "delete a?.b;",
+        "if (a) function f() {}",
+    ] {
         let c = cps(src);
-        let Ok(ast) = parse(&c, SourceGoal::Script) else {
-            // `await` outside an async function is not a script the parser accepts.
-            continue;
-        };
-        match compile_script(&ast, &c) {
-            Err(CompileError::NotYetCompiled { feature: f, .. }) => assert_eq!(f, feature, "{src}"),
-            other => return Err(format!("{src}: expected not yet compiled, got {other:?}")),
-        }
+        let ast = parse(&c, SourceGoal::Script).map_err(|_| format!("does not parse: {src}"))?;
+        let p = compile_script(&ast, &c).map_err(|e| format!("{src}: {e}"))?;
+        check_program(&p).map_err(|e| format!("{src}: {e}"))?;
     }
     Ok(())
 }

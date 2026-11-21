@@ -22,7 +22,8 @@ use clazel_js_syntax::ast::{Ast, NodeKind, Op as AOp};
 use clazel_js_syntax::exec::parse;
 use clazel_js_syntax::spec::SourceGoal;
 use clazel_js_vm::bytecode::{Instr, check_program};
-use clazel_js_vm::compile::{CompileError, compile_script};
+use clazel_js_vm::compile::{CompileError, compile_module, compile_script};
+use clazel_js_vm::module::check_module;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
@@ -69,6 +70,8 @@ struct Counts {
     not_yet: usize,
     failed: usize,
     no_parse: usize,
+    /// Of the compiled sources, the modules.
+    modules: usize,
     features: BTreeMap<&'static str, usize>,
     /// For each construct, the number of compiled sources that use it.
     constructs: BTreeMap<&'static str, usize>,
@@ -143,7 +146,16 @@ impl Counts {
             self.no_parse = self.no_parse.saturating_add(1);
             return;
         };
-        match compile_script(&ast, src) {
+        let compiled = if goal == SourceGoal::Module {
+            compile_module(&ast, src).and_then(|m| {
+                check_module(&m).map_err(CompileError::Internal)?;
+                self.modules = self.modules.saturating_add(1);
+                Ok(m.program)
+            })
+        } else {
+            compile_script(&ast, src)
+        };
+        match compiled {
             Ok(p) => match check_program(&p) {
                 Ok(()) => {
                     self.compiled = self.compiled.saturating_add(1);
@@ -276,6 +288,7 @@ fn test262_compiles() -> Result<(), String> {
     for (feature, n) in by_count {
         println!("  not yet: {n:6}  {feature}");
     }
+    println!("  of the compiled sources, {} are modules", counts.modules);
     for (construct, n) in &counts.constructs {
         println!("  compiled with: {n:6}  {construct}");
     }
