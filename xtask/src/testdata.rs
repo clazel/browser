@@ -26,6 +26,7 @@ mod isa;
 mod js;
 mod llhttp;
 mod nist_cavp_sigver;
+mod pngsuite;
 mod test262;
 mod wpt_base64;
 mod wpt_cookies;
@@ -46,6 +47,7 @@ mod wpt_url_percent;
 mod wpt_url_setters;
 mod wpt_urltestdata;
 mod wpt_webstorage;
+mod wuffs_deflate;
 mod wuffs_gif;
 mod wycheproof_ecdsa;
 mod wycheproof_rsa;
@@ -207,6 +209,17 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         wuffs_gif::convert,
         wuffs_gif::FILES_ARTIFICIAL,
     ),
+    (
+        "wuffs-deflate",
+        wuffs_deflate::convert,
+        wuffs_deflate::FILES_MAIN,
+    ),
+    (
+        "wuffs-deflate-artificial",
+        wuffs_deflate::convert,
+        wuffs_deflate::FILES_ARTIFICIAL,
+    ),
+    ("pngsuite", pngsuite::convert, pngsuite::FILES),
     // Phase 7 item 7.1: files later items read as files; each converts to an
     // inventory of paths, sizes and hashes (see inventory.rs).
     ("wpt-web", inventory::convert_wpt_web, &[]),

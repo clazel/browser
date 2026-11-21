@@ -1,0 +1,1227 @@
+{
+  "mutations": [
+    {
+      "id": "len-base-257",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 257 {\n        3\n",
+      "replace": "if code == 257 {\n        4\n",
+      "expect": "killed",
+      "reason": "Length code 257 starts one too high, so the length table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_len_ends is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_ends()",
+        "witness": "len_base(257) == 4"
+      }
+    },
+    {
+      "id": "len-base-258",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 258 {\n        4\n",
+      "replace": "if code == 258 {\n        5\n",
+      "expect": "killed",
+      "reason": "Length code 258 starts one too high, so the length table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(257)",
+        "witness": "len_base(258) == 5"
+      }
+    },
+    {
+      "id": "len-base-259",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 259 {\n        5\n",
+      "replace": "if code == 259 {\n        6\n",
+      "expect": "killed",
+      "reason": "Length code 259 starts one too high, so the length table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(258)",
+        "witness": "len_base(259) == 6"
+      }
+    },
+    {
+      "id": "len-base-260",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 260 {\n        6\n",
+      "replace": "if code == 260 {\n        7\n",
+      "expect": "killed",
+      "reason": "Length code 260 starts one too high, so the length table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(259)",
+        "witness": "len_base(260) == 7"
+      }
+    },
+    {
+      "id": "len-base-261",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 261 {\n        7\n",
+      "replace": "if code == 261 {\n        8\n",
+      "expect": "killed",
+      "reason": "Length code 261 starts one too high, so the length table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(260)",
+        "witness": "len_base(261) == 8"
+      }
+    },
+    {
+      "id": "len-base-262",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 262 {\n        8\n",
+      "replace": "if code == 262 {\n        9\n",
+      "expect": "killed",
+      "reason": "Length code 262 starts one too high, so the length table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(261)",
+        "witness": "len_base(262) == 9"
+      }
+    },
+    {
+      "id": "len-base-263",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 263 {\n        9\n",
+      "replace": "if code == 263 {\n        10\n",
+      "expect": "killed",
+      "reason": "Length code 263 starts one too high, so the length table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(262)",
+        "witness": "len_base(263) == 10"
+      }
+    },
+    {
+      "id": "len-base-264",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 264 {\n        10\n",
+      "replace": "if code == 264 {\n        11\n",
+      "expect": "killed",
+      "reason": "Length code 264 starts one too high, so the length table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(263)",
+        "witness": "len_base(264) == 11"
+      }
+    },
+    {
+      "id": "len-base-265",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 265 {\n        11\n",
+      "replace": "if code == 265 {\n        12\n",
+      "expect": "killed",
+      "reason": "Length code 265 starts one too high, so the length table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(264)",
+        "witness": "len_base(265) == 12"
+      }
+    },
+    {
+      "id": "len-base-266",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 266 {\n        13\n",
+      "replace": "if code == 266 {\n        14\n",
+      "expect": "killed",
+      "reason": "Length code 266 starts one too high, so the length table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(265)",
+        "witness": "len_base(266) == 14"
+      }
+    },
+    {
+      "id": "len-base-267",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 267 {\n        15\n",
+      "replace": "if code == 267 {\n        16\n",
+      "expect": "killed",
+      "reason": "Length code 267 starts one too high, so the length table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(266)",
+        "witness": "len_base(267) == 16"
+      }
+    },
+    {
+      "id": "len-base-268",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 268 {\n        17\n",
+      "replace": "if code == 268 {\n        18\n",
+      "expect": "killed",
+      "reason": "Length code 268 starts one too high, so the length table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(267)",
+        "witness": "len_base(268) == 18"
+      }
+    },
+    {
+      "id": "len-base-269",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 269 {\n        19\n",
+      "replace": "if code == 269 {\n        20\n",
+      "expect": "killed",
+      "reason": "Length code 269 starts one too high, so the length table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(268)",
+        "witness": "len_base(269) == 20"
+      }
+    },
+    {
+      "id": "len-base-270",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 270 {\n        23\n",
+      "replace": "if code == 270 {\n        24\n",
+      "expect": "killed",
+      "reason": "Length code 270 starts one too high, so the length table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(269)",
+        "witness": "len_base(270) == 24"
+      }
+    },
+    {
+      "id": "len-base-271",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 271 {\n        27\n",
+      "replace": "if code == 271 {\n        28\n",
+      "expect": "killed",
+      "reason": "Length code 271 starts one too high, so the length table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(270)",
+        "witness": "len_base(271) == 28"
+      }
+    },
+    {
+      "id": "len-base-272",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 272 {\n        31\n",
+      "replace": "if code == 272 {\n        32\n",
+      "expect": "killed",
+      "reason": "Length code 272 starts one too high, so the length table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(271)",
+        "witness": "len_base(272) == 32"
+      }
+    },
+    {
+      "id": "len-base-273",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 273 {\n        35\n",
+      "replace": "if code == 273 {\n        36\n",
+      "expect": "killed",
+      "reason": "Length code 273 starts one too high, so the length table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(272)",
+        "witness": "len_base(273) == 36"
+      }
+    },
+    {
+      "id": "len-base-274",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 274 {\n        43\n",
+      "replace": "if code == 274 {\n        44\n",
+      "expect": "killed",
+      "reason": "Length code 274 starts one too high, so the length table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(273)",
+        "witness": "len_base(274) == 44"
+      }
+    },
+    {
+      "id": "len-base-275",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 275 {\n        51\n",
+      "replace": "if code == 275 {\n        52\n",
+      "expect": "killed",
+      "reason": "Length code 275 starts one too high, so the length table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(274)",
+        "witness": "len_base(275) == 52"
+      }
+    },
+    {
+      "id": "len-base-276",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 276 {\n        59\n",
+      "replace": "if code == 276 {\n        60\n",
+      "expect": "killed",
+      "reason": "Length code 276 starts one too high, so the length table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(275)",
+        "witness": "len_base(276) == 60"
+      }
+    },
+    {
+      "id": "len-base-277",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 277 {\n        67\n",
+      "replace": "if code == 277 {\n        68\n",
+      "expect": "killed",
+      "reason": "Length code 277 starts one too high, so the length table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(276)",
+        "witness": "len_base(277) == 68"
+      }
+    },
+    {
+      "id": "len-base-278",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 278 {\n        83\n",
+      "replace": "if code == 278 {\n        84\n",
+      "expect": "killed",
+      "reason": "Length code 278 starts one too high, so the length table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(277)",
+        "witness": "len_base(278) == 84"
+      }
+    },
+    {
+      "id": "len-base-279",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 279 {\n        99\n",
+      "replace": "if code == 279 {\n        100\n",
+      "expect": "killed",
+      "reason": "Length code 279 starts one too high, so the length table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(278)",
+        "witness": "len_base(279) == 100"
+      }
+    },
+    {
+      "id": "len-base-280",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 280 {\n        115\n",
+      "replace": "if code == 280 {\n        116\n",
+      "expect": "killed",
+      "reason": "Length code 280 starts one too high, so the length table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(279)",
+        "witness": "len_base(280) == 116"
+      }
+    },
+    {
+      "id": "len-base-281",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 281 {\n        131\n",
+      "replace": "if code == 281 {\n        132\n",
+      "expect": "killed",
+      "reason": "Length code 281 starts one too high, so the length table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(280)",
+        "witness": "len_base(281) == 132"
+      }
+    },
+    {
+      "id": "len-base-282",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 282 {\n        163\n",
+      "replace": "if code == 282 {\n        164\n",
+      "expect": "killed",
+      "reason": "Length code 282 starts one too high, so the length table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(281)",
+        "witness": "len_base(282) == 164"
+      }
+    },
+    {
+      "id": "len-base-283",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 283 {\n        195\n",
+      "replace": "if code == 283 {\n        196\n",
+      "expect": "killed",
+      "reason": "Length code 283 starts one too high, so the length table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(282)",
+        "witness": "len_base(283) == 196"
+      }
+    },
+    {
+      "id": "len-base-284",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 284 {\n        227\n",
+      "replace": "if code == 284 {\n        228\n",
+      "expect": "killed",
+      "reason": "Length code 284 starts one too high, so the length table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(283)",
+        "witness": "len_base(284) == 228"
+      }
+    },
+    {
+      "id": "len-base-285",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 285 {\n        258\n",
+      "replace": "if code == 285 {\n        259\n",
+      "expect": "killed",
+      "reason": "Length code 285 starts one too high, so the length table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_len_ends is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_ends()",
+        "witness": "len_base(285) == 259"
+      }
+    },
+    {
+      "id": "dist-base-0",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 0 {\n        1\n",
+      "replace": "if code == 0 {\n        2\n",
+      "expect": "killed",
+      "reason": "Distance code 0 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_ends is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_ends()",
+        "witness": "dist_base(0) == 2"
+      }
+    },
+    {
+      "id": "dist-base-1",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 1 {\n        2\n",
+      "replace": "if code == 1 {\n        3\n",
+      "expect": "killed",
+      "reason": "Distance code 1 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(0)",
+        "witness": "dist_base(1) == 3"
+      }
+    },
+    {
+      "id": "dist-base-2",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 2 {\n        3\n",
+      "replace": "if code == 2 {\n        4\n",
+      "expect": "killed",
+      "reason": "Distance code 2 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(1)",
+        "witness": "dist_base(2) == 4"
+      }
+    },
+    {
+      "id": "dist-base-3",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 3 {\n        4\n",
+      "replace": "if code == 3 {\n        5\n",
+      "expect": "killed",
+      "reason": "Distance code 3 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(2)",
+        "witness": "dist_base(3) == 5"
+      }
+    },
+    {
+      "id": "dist-base-4",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 4 {\n        5\n",
+      "replace": "if code == 4 {\n        6\n",
+      "expect": "killed",
+      "reason": "Distance code 4 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(3)",
+        "witness": "dist_base(4) == 6"
+      }
+    },
+    {
+      "id": "dist-base-5",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 5 {\n        7\n",
+      "replace": "if code == 5 {\n        8\n",
+      "expect": "killed",
+      "reason": "Distance code 5 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(4)",
+        "witness": "dist_base(5) == 8"
+      }
+    },
+    {
+      "id": "dist-base-6",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 6 {\n        9\n",
+      "replace": "if code == 6 {\n        10\n",
+      "expect": "killed",
+      "reason": "Distance code 6 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(5)",
+        "witness": "dist_base(6) == 10"
+      }
+    },
+    {
+      "id": "dist-base-7",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 7 {\n        13\n",
+      "replace": "if code == 7 {\n        14\n",
+      "expect": "killed",
+      "reason": "Distance code 7 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(6)",
+        "witness": "dist_base(7) == 14"
+      }
+    },
+    {
+      "id": "dist-base-8",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 8 {\n        17\n",
+      "replace": "if code == 8 {\n        18\n",
+      "expect": "killed",
+      "reason": "Distance code 8 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(7)",
+        "witness": "dist_base(8) == 18"
+      }
+    },
+    {
+      "id": "dist-base-9",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 9 {\n        25\n",
+      "replace": "if code == 9 {\n        26\n",
+      "expect": "killed",
+      "reason": "Distance code 9 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(8)",
+        "witness": "dist_base(9) == 26"
+      }
+    },
+    {
+      "id": "dist-base-10",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 10 {\n        33\n",
+      "replace": "if code == 10 {\n        34\n",
+      "expect": "killed",
+      "reason": "Distance code 10 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(9)",
+        "witness": "dist_base(10) == 34"
+      }
+    },
+    {
+      "id": "dist-base-11",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 11 {\n        49\n",
+      "replace": "if code == 11 {\n        50\n",
+      "expect": "killed",
+      "reason": "Distance code 11 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(10)",
+        "witness": "dist_base(11) == 50"
+      }
+    },
+    {
+      "id": "dist-base-12",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 12 {\n        65\n",
+      "replace": "if code == 12 {\n        66\n",
+      "expect": "killed",
+      "reason": "Distance code 12 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(11)",
+        "witness": "dist_base(12) == 66"
+      }
+    },
+    {
+      "id": "dist-base-13",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 13 {\n        97\n",
+      "replace": "if code == 13 {\n        98\n",
+      "expect": "killed",
+      "reason": "Distance code 13 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(12)",
+        "witness": "dist_base(13) == 98"
+      }
+    },
+    {
+      "id": "dist-base-14",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 14 {\n        129\n",
+      "replace": "if code == 14 {\n        130\n",
+      "expect": "killed",
+      "reason": "Distance code 14 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(13)",
+        "witness": "dist_base(14) == 130"
+      }
+    },
+    {
+      "id": "dist-base-15",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 15 {\n        193\n",
+      "replace": "if code == 15 {\n        194\n",
+      "expect": "killed",
+      "reason": "Distance code 15 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(14)",
+        "witness": "dist_base(15) == 194"
+      }
+    },
+    {
+      "id": "dist-base-16",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 16 {\n        257\n",
+      "replace": "if code == 16 {\n        258\n",
+      "expect": "killed",
+      "reason": "Distance code 16 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(15)",
+        "witness": "dist_base(16) == 258"
+      }
+    },
+    {
+      "id": "dist-base-17",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 17 {\n        385\n",
+      "replace": "if code == 17 {\n        386\n",
+      "expect": "killed",
+      "reason": "Distance code 17 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(16)",
+        "witness": "dist_base(17) == 386"
+      }
+    },
+    {
+      "id": "dist-base-18",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 18 {\n        513\n",
+      "replace": "if code == 18 {\n        514\n",
+      "expect": "killed",
+      "reason": "Distance code 18 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(17)",
+        "witness": "dist_base(18) == 514"
+      }
+    },
+    {
+      "id": "dist-base-19",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 19 {\n        769\n",
+      "replace": "if code == 19 {\n        770\n",
+      "expect": "killed",
+      "reason": "Distance code 19 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(18)",
+        "witness": "dist_base(19) == 770"
+      }
+    },
+    {
+      "id": "dist-base-20",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 20 {\n        1025\n",
+      "replace": "if code == 20 {\n        1026\n",
+      "expect": "killed",
+      "reason": "Distance code 20 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(19)",
+        "witness": "dist_base(20) == 1026"
+      }
+    },
+    {
+      "id": "dist-base-21",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 21 {\n        1537\n",
+      "replace": "if code == 21 {\n        1538\n",
+      "expect": "killed",
+      "reason": "Distance code 21 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(20)",
+        "witness": "dist_base(21) == 1538"
+      }
+    },
+    {
+      "id": "dist-base-22",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 22 {\n        2049\n",
+      "replace": "if code == 22 {\n        2050\n",
+      "expect": "killed",
+      "reason": "Distance code 22 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(21)",
+        "witness": "dist_base(22) == 2050"
+      }
+    },
+    {
+      "id": "dist-base-23",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 23 {\n        3073\n",
+      "replace": "if code == 23 {\n        3074\n",
+      "expect": "killed",
+      "reason": "Distance code 23 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(22)",
+        "witness": "dist_base(23) == 3074"
+      }
+    },
+    {
+      "id": "dist-base-24",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 24 {\n        4097\n",
+      "replace": "if code == 24 {\n        4098\n",
+      "expect": "killed",
+      "reason": "Distance code 24 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(23)",
+        "witness": "dist_base(24) == 4098"
+      }
+    },
+    {
+      "id": "dist-base-25",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 25 {\n        6145\n",
+      "replace": "if code == 25 {\n        6146\n",
+      "expect": "killed",
+      "reason": "Distance code 25 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(24)",
+        "witness": "dist_base(25) == 6146"
+      }
+    },
+    {
+      "id": "dist-base-26",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 26 {\n        8193\n",
+      "replace": "if code == 26 {\n        8194\n",
+      "expect": "killed",
+      "reason": "Distance code 26 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(25)",
+        "witness": "dist_base(26) == 8194"
+      }
+    },
+    {
+      "id": "dist-base-27",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 27 {\n        12289\n",
+      "replace": "if code == 27 {\n        12290\n",
+      "expect": "killed",
+      "reason": "Distance code 27 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(26)",
+        "witness": "dist_base(27) == 12290"
+      }
+    },
+    {
+      "id": "dist-base-28",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 28 {\n        16385\n",
+      "replace": "if code == 28 {\n        16386\n",
+      "expect": "killed",
+      "reason": "Distance code 28 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(27)",
+        "witness": "dist_base(28) == 16386"
+      }
+    },
+    {
+      "id": "dist-base-29",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code == 29 {\n        24577\n",
+      "replace": "if code == 29 {\n        24578\n",
+      "expect": "killed",
+      "reason": "Distance code 29 starts one too high, so the distance table is no longer a chain of consecutive ranges (RFC 1951 3.2.5): lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(28)",
+        "witness": "dist_base(29) == 24578"
+      }
+    },
+    {
+      "id": "len-extra-257",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if 257 <= code && code <= 264 {\n        0\n",
+      "replace": "if 257 <= code && code <= 264 {\n        1\n",
+      "expect": "killed",
+      "reason": "Length codes from 257 take one extra bit too many, so the next code no longer starts where this one's range ends: lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(257)",
+        "witness": "len_extra(257) == 1"
+      }
+    },
+    {
+      "id": "len-extra-265",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if 265 <= code && code <= 268 {\n        1\n",
+      "replace": "if 265 <= code && code <= 268 {\n        2\n",
+      "expect": "killed",
+      "reason": "Length codes from 265 take one extra bit too many, so the next code no longer starts where this one's range ends: lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(265)",
+        "witness": "len_extra(265) == 2"
+      }
+    },
+    {
+      "id": "len-extra-269",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if 269 <= code && code <= 272 {\n        2\n",
+      "replace": "if 269 <= code && code <= 272 {\n        3\n",
+      "expect": "killed",
+      "reason": "Length codes from 269 take one extra bit too many, so the next code no longer starts where this one's range ends: lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(269)",
+        "witness": "len_extra(269) == 3"
+      }
+    },
+    {
+      "id": "len-extra-273",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if 273 <= code && code <= 276 {\n        3\n",
+      "replace": "if 273 <= code && code <= 276 {\n        4\n",
+      "expect": "killed",
+      "reason": "Length codes from 273 take one extra bit too many, so the next code no longer starts where this one's range ends: lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(273)",
+        "witness": "len_extra(273) == 4"
+      }
+    },
+    {
+      "id": "len-extra-277",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if 277 <= code && code <= 280 {\n        4\n",
+      "replace": "if 277 <= code && code <= 280 {\n        5\n",
+      "expect": "killed",
+      "reason": "Length codes from 277 take one extra bit too many, so the next code no longer starts where this one's range ends: lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(277)",
+        "witness": "len_extra(277) == 5"
+      }
+    },
+    {
+      "id": "len-extra-281",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if 281 <= code && code <= 284 {\n        5\n",
+      "replace": "if 281 <= code && code <= 284 {\n        6\n",
+      "expect": "killed",
+      "reason": "Length codes from 281 take one extra bit too many, so the next code no longer starts where this one's range ends: lemma_len_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_len_chain(281)",
+        "witness": "len_extra(281) == 6"
+      }
+    },
+    {
+      "id": "dist-extra-0",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "if code <= 3 {\n        0\n",
+      "replace": "if code <= 3 {\n        1\n",
+      "expect": "killed",
+      "reason": "Distance codes from 0 take one extra bit too many, so the next code no longer starts where this one's range ends: lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(0)",
+        "witness": "dist_extra(0) == 1"
+      }
+    },
+    {
+      "id": "dist-extra-4",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "} else if code <= 5 {\n        1\n",
+      "replace": "} else if code <= 5 {\n        2\n",
+      "expect": "killed",
+      "reason": "Distance codes from 4 take one extra bit too many, so the next code no longer starts where this one's range ends: lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(4)",
+        "witness": "dist_extra(4) == 2"
+      }
+    },
+    {
+      "id": "dist-extra-6",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "} else if code <= 7 {\n        2\n",
+      "replace": "} else if code <= 7 {\n        3\n",
+      "expect": "killed",
+      "reason": "Distance codes from 6 take one extra bit too many, so the next code no longer starts where this one's range ends: lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(6)",
+        "witness": "dist_extra(6) == 3"
+      }
+    },
+    {
+      "id": "dist-extra-8",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "} else if code <= 9 {\n        3\n",
+      "replace": "} else if code <= 9 {\n        4\n",
+      "expect": "killed",
+      "reason": "Distance codes from 8 take one extra bit too many, so the next code no longer starts where this one's range ends: lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(8)",
+        "witness": "dist_extra(8) == 4"
+      }
+    },
+    {
+      "id": "dist-extra-10",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "} else if code <= 11 {\n        4\n",
+      "replace": "} else if code <= 11 {\n        5\n",
+      "expect": "killed",
+      "reason": "Distance codes from 10 take one extra bit too many, so the next code no longer starts where this one's range ends: lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(10)",
+        "witness": "dist_extra(10) == 5"
+      }
+    },
+    {
+      "id": "dist-extra-12",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "} else if code <= 13 {\n        5\n",
+      "replace": "} else if code <= 13 {\n        6\n",
+      "expect": "killed",
+      "reason": "Distance codes from 12 take one extra bit too many, so the next code no longer starts where this one's range ends: lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(12)",
+        "witness": "dist_extra(12) == 6"
+      }
+    },
+    {
+      "id": "dist-extra-14",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "} else if code <= 15 {\n        6\n",
+      "replace": "} else if code <= 15 {\n        7\n",
+      "expect": "killed",
+      "reason": "Distance codes from 14 take one extra bit too many, so the next code no longer starts where this one's range ends: lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(14)",
+        "witness": "dist_extra(14) == 7"
+      }
+    },
+    {
+      "id": "dist-extra-16",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "} else if code <= 17 {\n        7\n",
+      "replace": "} else if code <= 17 {\n        8\n",
+      "expect": "killed",
+      "reason": "Distance codes from 16 take one extra bit too many, so the next code no longer starts where this one's range ends: lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(16)",
+        "witness": "dist_extra(16) == 8"
+      }
+    },
+    {
+      "id": "dist-extra-18",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "} else if code <= 19 {\n        8\n",
+      "replace": "} else if code <= 19 {\n        9\n",
+      "expect": "killed",
+      "reason": "Distance codes from 18 take one extra bit too many, so the next code no longer starts where this one's range ends: lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(18)",
+        "witness": "dist_extra(18) == 9"
+      }
+    },
+    {
+      "id": "dist-extra-20",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "} else if code <= 21 {\n        9\n",
+      "replace": "} else if code <= 21 {\n        10\n",
+      "expect": "killed",
+      "reason": "Distance codes from 20 take one extra bit too many, so the next code no longer starts where this one's range ends: lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(20)",
+        "witness": "dist_extra(20) == 10"
+      }
+    },
+    {
+      "id": "dist-extra-22",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "} else if code <= 23 {\n        10\n",
+      "replace": "} else if code <= 23 {\n        11\n",
+      "expect": "killed",
+      "reason": "Distance codes from 22 take one extra bit too many, so the next code no longer starts where this one's range ends: lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(22)",
+        "witness": "dist_extra(22) == 11"
+      }
+    },
+    {
+      "id": "dist-extra-24",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "} else if code <= 25 {\n        11\n",
+      "replace": "} else if code <= 25 {\n        12\n",
+      "expect": "killed",
+      "reason": "Distance codes from 24 take one extra bit too many, so the next code no longer starts where this one's range ends: lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(24)",
+        "witness": "dist_extra(24) == 12"
+      }
+    },
+    {
+      "id": "dist-extra-26",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "} else if code <= 27 {\n        12\n",
+      "replace": "} else if code <= 27 {\n        13\n",
+      "expect": "killed",
+      "reason": "Distance codes from 26 take one extra bit too many, so the next code no longer starts where this one's range ends: lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(26)",
+        "witness": "dist_extra(26) == 13"
+      }
+    },
+    {
+      "id": "dist-extra-28",
+      "module": "lemmas",
+      "file": "src/spec.rs",
+      "find": "} else if code <= 29 {\n        13\n",
+      "replace": "} else if code <= 29 {\n        14\n",
+      "expect": "killed",
+      "reason": "Distance codes from 28 take one extra bit too many, so the next code no longer starts where this one's range ends: lemma_dist_chain is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_dist_chain(28)",
+        "witness": "dist_extra(28) == 14"
+      }
+    },
+    {
+      "id": "usable-complete-is-le",
+      "file": "src/spec.rs",
+      "find": "kraft(lens, 15) == pow2(15)",
+      "replace": "kraft(lens, 15) <= pow2(15)",
+      "expect": "killed",
+      "reason": "A complete code is any code that does not over-subscribe, so an incomplete one (a single code of length 2) is usable for the code length code: lemma_code_usable_cases is false.",
+      "certificate": {
+        "file": "src/certs.rs",
+        "lemma": "super::lemmas_usable::lemma_code_usable_cases()",
+        "witness": "code_usable(seq![2nat], false)"
+      }
+    },
+    {
+      "id": "usable-single-any-length",
+      "file": "src/spec.rs",
+      "find": "used(lens)\n        == 1 && bl_count(lens, 1) == 1",
+      "replace": "used(lens)\n        == 1",
+      "expect": "killed",
+      "reason": "The one-code exception drops \"of length 1\": a single code of length 2 is usable, against RFC 1951 3.2.7's 'one code length of one'.",
+      "certificate": {
+        "file": "src/certs.rs",
+        "lemma": "super::lemmas_usable::lemma_code_usable_cases()",
+        "witness": "code_usable(seq![2nat], true)"
+      }
+    },
+    {
+      "id": "usable-empty-refused",
+      "file": "src/spec.rs",
+      "find": "(used(lens) == 0 ||",
+      "replace": "(false ||",
+      "expect": "killed",
+      "reason": "A code with no symbols is refused, but 3.2.7 allows it for the distance code ('the data is all literals').",
+      "certificate": {
+        "file": "src/certs.rs",
+        "lemma": "super::lemmas_usable::lemma_code_usable_cases()",
+        "witness": "!code_usable(seq![0nat, 0nat], true)"
+      }
+    },
+    {
+      "id": "usable-incomplete-everywhere",
+      "file": "src/spec.rs",
+      "find": "(allow_incomplete && (",
+      "replace": "(true && (",
+      "expect": "killed",
+      "reason": "The one-code exception applies to the code length code too: a single code of length 1 is usable there.",
+      "certificate": {
+        "file": "src/certs.rs",
+        "lemma": "super::lemmas_usable::lemma_code_usable_cases()",
+        "witness": "code_usable(seq![1nat], false)"
+      }
+    },
+    {
+      "id": "usable-length-16",
+      "file": "src/spec.rs",
+      "find": "lengths_ok(lens) && (is_complete",
+      "replace": "true && (is_complete",
+      "expect": "killed",
+      "reason": "Lengths above 15 are accepted (RFC 1951 3.2.2's MAX_BITS).",
+      "certificate": {
+        "file": "src/certs.rs",
+        "lemma": "super::lemmas_usable::lemma_code_usable_cases()",
+        "witness": "code_usable(seq![1nat, 1nat, 16nat], false)"
+      }
+    },
+    {
+      "id": "zlib-fcheck",
+      "file": "src/spec.rs",
+      "find": "(cmf * 256 + flg) % 31 != 0",
+      "replace": "(cmf * 256 + flg) % 32 != 0",
+      "expect": "killed",
+      "reason": "FCHECK is checked modulo 32, not 31 (RFC 1950 2.2: a multiple of 31): the header 78 00 is no longer refused.",
+      "certificate": {
+        "file": "src/certs.rs",
+        "lemma": "super::examples::lemma_example_zlib()",
+        "witness": "zlib_decompress(seq![0x78u8, 0x00], 10) == Err::<(Seq<u8>, nat), Error>(Error::Truncated)"
+      }
+    },
+    {
+      "id": "zlib-cinfo",
+      "file": "src/spec.rs",
+      "find": "cmf / 16 > 7",
+      "replace": "cmf / 16 > 8",
+      "expect": "killed",
+      "reason": "CINFO 8 is allowed (RFC 1950 2.2: Values of CINFO above 7 are not allowed).",
+      "certificate": {
+        "file": "src/certs.rs",
+        "lemma": "super::examples::lemma_example_zlib()",
+        "witness": "zlib_decompress(seq![0x88u8, 0x1C], 10) == Err::<(Seq<u8>, nat), Error>(Error::Truncated)"
+      }
+    },
+    {
+      "id": "zlib-fdict",
+      "file": "src/spec.rs",
+      "find": "(flg / 32) % 2 == 1",
+      "replace": "(flg / 32) % 2 == 7",
+      "expect": "killed",
+      "reason": "A preset dictionary is never refused (phase-6.md: FDICT refused).",
+      "certificate": {
+        "file": "src/certs.rs",
+        "lemma": "super::examples::lemma_example_zlib()",
+        "witness": "zlib_decompress(seq![0x78u8, 0x20], 10) == Err::<(Seq<u8>, nat), Error>(Error::Truncated)"
+      }
+    },
+    {
+      "id": "zlib-method",
+      "file": "src/spec.rs",
+      "find": "cmf % 16 != 8",
+      "replace": "cmf % 16 != 9",
+      "expect": "killed",
+      "reason": "CM 9 is the accepted method and 8 is refused (RFC 1950 2.3: only the value 8 is permitted).",
+      "certificate": {
+        "file": "src/certs.rs",
+        "lemma": "super::examples::lemma_example_zlib()",
+        "witness": "zlib_decompress(seq![0x79u8, 0x18], 10) == Err::<(Seq<u8>, nat), Error>(Error::Truncated)"
+      }
+    }
+  ]
+}
