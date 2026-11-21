@@ -104,10 +104,13 @@
 //!     about 11.6 kB (colour cache, code lengths, colour table) plus 12 bytes
 //!     per block of 4 by 4 pixels (the three sub-images), plus 6.4 kB per
 //!     prefix code group held (at most 1,024), plus, for an animation, a
-//!     frame buffer as large as the canvas, plus **for every file, lossless
-//!     too** (the config cannot say which codec a `VP8X` file uses) 1 byte per
-//!     pixel for the alpha plane and about 1.5 bytes per pixel (macroblock
-//!     aligned) and 1 kB for the lossy planes (`work.rs`, `vp8/mod.rs`).
+//!     frame buffer as large as the canvas, plus, **for a file whose config says
+//!     `Coding::Lossy`** (a simple `VP8 ` file, or any `VP8X` file, since its
+//!     first bytes do not show which codec its images use), 1 byte per pixel
+//!     for the alpha plane and about 1.5 bytes per pixel (macroblock aligned)
+//!     and 1 kB for the lossy planes (`work.rs`, `vp8/mod.rs`). A simple
+//!     `VP8L` file is `Coding::Base` and has neither; a `VP8 ` chunk under
+//!     such a config is `Malformed`, and an `ALPH` chunk is skipped.
 //! 13. **Lossy decoding** (`vp8/mod.rs` lists its choices 1 to 10): key frames
 //!     only; a frame not shown, of version over 3, or of another size than
 //!     the container's is `Malformed`; `color_space` and `clamping_type` are

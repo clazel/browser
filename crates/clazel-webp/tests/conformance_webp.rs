@@ -38,7 +38,7 @@ mod common;
 mod handmade;
 mod lossy;
 
-use clazel_image_shape::{Buffers, ConfigStatus, Decoder, Error, Status};
+use clazel_image_shape::{Buffers, Coding, ConfigStatus, Decoder, Error, Status};
 use clazel_webp::Webp;
 use common::{End, Rng, decode, mutate, reference};
 
@@ -327,4 +327,61 @@ fn lossy_written_frames_agree_with_the_reference() {
         bad.len()
     );
     assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
+/// The config's coding: a simple lossless file is `Base` and gets no lossy
+/// work space; a simple lossy or an extended file is `Lossy`. A `VP8 ` chunk
+/// under a lossless config is refused, so it never runs without the lossy
+/// parts.
+#[test]
+fn coding_sizes_the_work_buffer() -> Result<(), String> {
+    let config_of = |bytes: &[u8]| match Webp::decode_config(bytes.get(..64).unwrap_or(bytes)) {
+        Ok(ConfigStatus::Ready(c)) => Ok(c),
+        other => Err(format!("{other:?}")),
+    };
+    let mut seen = (false, false);
+    for (file, bytes) in all_files() {
+        let Ok(config) = config_of(bytes) else {
+            continue;
+        };
+        let simple_lossless = bytes.get(12..16) == Some(b"VP8L");
+        let expect = if simple_lossless {
+            Coding::Base
+        } else {
+            Coding::Lossy
+        };
+        assert_eq!(config.coding(), expect, "{file}");
+        if bytes.get(12..16) != Some(b"VP8 ") {
+            continue;
+        }
+        seen.0 = true;
+        // The same lossy file under a lossless config.
+        let base = config
+            .with_coding(Coding::Base)
+            .map_err(|e| format!("{e:?}"))?;
+        let (plen, wlen) = (
+            base.rgba_len().map_err(|e| format!("{e:?}"))?,
+            Webp::work_len(&base).map_err(|e| format!("{e:?}"))?,
+        );
+        if Webp::work_len(&config).map_err(|e| format!("{e:?}"))? <= wlen {
+            return Err(format!("{file}: the lossless work space is not smaller"));
+        }
+        let (mut pixels, mut work) = (vec![0u8; plen], vec![0u8; wlen]);
+        let mut buffers =
+            Buffers::new(&base, wlen, &mut pixels, &mut work).map_err(|e| format!("{e:?}"))?;
+        let mut state = Webp::start(&base).map_err(|e| format!("{e:?}"))?;
+        assert_eq!(
+            state.step(bytes, &mut buffers),
+            Err(Error::Malformed(
+                "a VP8 chunk in a file whose config is lossless"
+            )),
+            "{file}"
+        );
+        seen.1 = true;
+    }
+    if cfg!(miri) || seen == (true, true) {
+        Ok(())
+    } else {
+        Err("no simple lossy file was tried".into())
+    }
 }

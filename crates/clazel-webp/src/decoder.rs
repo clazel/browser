@@ -5,7 +5,7 @@
 //! Citations are to RFC 9649 by section; the listed choices are in `lib.rs`.
 
 use clazel_image_shape::{
-    Buffers, Config, ConfigStatus, Decoder, Error, Format, FrameCount, Status, Step,
+    Buffers, Coding, Config, ConfigStatus, Decoder, Error, Format, FrameCount, Status, Step,
 };
 
 use crate::alpha::{self, AlphaHeader};
@@ -135,6 +135,9 @@ pub struct Webp {
     /// The file is an animation (the config says its frame count is not
     /// known): the work buffer has a frame buffer.
     animated: bool,
+    /// The file has or may have lossy images (the config says
+    /// [`Coding::Lossy`]): the work buffer has the alpha and lossy parts.
+    lossy: bool,
     phase: Phase,
     hold: [u8; 16],
     have: u8,
@@ -388,6 +391,10 @@ impl Webp {
                 Err(bad("image data outside a frame in an animation"))
             }
             b"VP8 " => {
+                // The work buffer was sized without the lossy parts.
+                if !self.lossy {
+                    return Err(bad("a VP8 chunk in a file whose config is lossless"));
+                }
                 if self.have_image {
                     return Err(bad("two bitstreams in one frame"));
                 }
@@ -465,7 +472,9 @@ impl Webp {
             b"ALPH" if self.animated && !self.in_anmf => {
                 Err(bad("an ALPH chunk outside a frame in an animation"))
             }
-            b"ALPH" if size > 0 && !self.have_image && self.alpha == AlphaState::None => {
+            b"ALPH"
+                if self.lossy && size > 0 && !self.have_image && self.alpha == AlphaState::None =>
+            {
                 self.alpha = AlphaState::Start;
                 self.phase = Phase::Alpha;
                 Ok(Event::Continue)
@@ -866,6 +875,8 @@ impl Webp {
                         }
                     })
                 && (!self.in_anmf || self.anmf_left <= self.riff_left)
+                // The lossy phases run only with the lossy parts.
+                && (self.lossy || !matches!(self.phase, Phase::Alpha | Phase::Vp8))
                 // Between chunks no chunk is open.
                 && (!matches!(self.phase, Phase::ChunkHdr | Phase::Pad)
                     || (self.chunk_left == 0 && !self.padded))
@@ -956,13 +967,17 @@ impl Decoder for Webp {
         else {
             return more;
         };
+        // The coding: an extended file may hold `VP8 ` images, which the
+        // first bytes do not show, so it is given the lossy work space too.
         let ready = |w: u32, h: u32, frames: FrameCount| -> Result<ConfigStatus, Error> {
-            Ok(ConfigStatus::Ready(Config::new(
-                Format::Webp,
-                w,
-                h,
-                frames,
-            )?))
+            let coding = if kind == b'L' {
+                Coding::Base
+            } else {
+                Coding::Lossy
+            };
+            Ok(ConfigStatus::Ready(
+                Config::new(Format::Webp, w, h, frames)?.with_coding(coding)?,
+            ))
         };
         match kind {
             // Section 2.7, Figure 7: flags, 3 reserved bytes, canvas width
@@ -1031,7 +1046,9 @@ impl Decoder for Webp {
 
     fn work_len(config: &Config) -> Result<usize, Error> {
         let animated = matches!(config.frames(), FrameCount::Unknown);
-        work_len(config.width(), config.height(), animated).ok_or(bad("work buffer size overflow"))
+        let lossy = config.coding() == Coding::Lossy;
+        work_len(config.width(), config.height(), animated, lossy)
+            .ok_or(bad("work buffer size overflow"))
     }
 
     fn start(config: &Config) -> Result<Webp, Error> {
@@ -1051,6 +1068,7 @@ impl Decoder for Webp {
         Ok(Webp {
             config: *config,
             animated: matches!(config.frames(), FrameCount::Unknown),
+            lossy: config.coding() == Coding::Lossy,
             phase: Phase::Riff,
             hold: [0; 16],
             have: 0,
@@ -1099,6 +1117,7 @@ impl Decoder for Webp {
             cw,
             ch,
             self.animated,
+            self.lossy,
         ) else {
             return Err(self.fail(Error::Buffers));
         };
@@ -1125,7 +1144,12 @@ impl Decoder for Webp {
         let Ok(plen) = self.config.rgba_len() else {
             return false;
         };
-        let Some(wlen) = work_len(self.config.width(), self.config.height(), self.animated) else {
+        let Some(wlen) = work_len(
+            self.config.width(),
+            self.config.height(),
+            self.animated,
+            self.lossy,
+        ) else {
             return false;
         };
         let groups = crate::work::group_cap(self.config.width(), self.config.height())
@@ -1146,7 +1170,15 @@ pub(crate) fn any_webp(phase: Phase) -> Option<Webp> {
     } else {
         FrameCount::Known(1)
     };
-    let config = Config::new(Format::Webp, 2, 2, frames).ok()?;
+    let coding = if kani::any() {
+        Coding::Lossy
+    } else {
+        Coding::Base
+    };
+    let config = Config::new(Format::Webp, 2, 2, frames)
+        .ok()?
+        .with_coding(coding)
+        .ok()?;
     let mut w = Webp::start(&config).ok()?;
     w.phase = phase;
     w.hold = kani::any();

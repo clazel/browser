@@ -1,7 +1,10 @@
 //! The layout of the work buffer, and the bounds that fix it.
 //!
-//! `work_len(width, height, animated)` is the sum of these parts, in this
-//! order:
+//! `work_len(width, height, animated, lossy)` is the sum of these parts, in
+//! this order (`lossy` is the config's [`Coding::Lossy`]: a lossless file
+//! has no `alpha` or `lossy` part):
+//!
+//! [`Coding::Lossy`]: clazel_image_shape::Coding::Lossy
 //!
 //! | part | bytes | holds |
 //! |------|-------|-------|
@@ -16,8 +19,8 @@
 //! | `meta` | `sub` | the entropy image (meta prefix codes) |
 //! | `groups` | `cap * GROUP_BYTES` | the prefix code groups |
 //! | `frame` | the canvas, if animated, else 0 | a frame before it is composited |
-//! | `alpha` | `width * height` | the alpha plane of a lossy image (`ALPH`, item 6.9) |
-//! | `lossy` | `vp8::lossy_len` | the planes and contexts of the lossy decoder (item 6.9) |
+//! | `alpha` | `width * height`, if lossy, else 0 | the alpha plane of a lossy image (`ALPH`, item 6.9) |
+//! | `lossy` | `vp8::lossy_len`, if lossy, else 0 | the planes and contexts of the lossy decoder (item 6.9) |
 //!
 //! `sub` is 4 bytes for each block of 4 by 4 pixels of the image (the
 //! sub-resolution images' blocks are at least 4 by 4: RFC 9649 sections
@@ -85,7 +88,7 @@ pub(crate) fn group_cap(width: u32, height: u32) -> Option<usize> {
 }
 
 /// The bytes of the work buffer for a canvas of `width` by `height`.
-pub(crate) fn work_len(width: u32, height: u32, animated: bool) -> Option<usize> {
+pub(crate) fn work_len(width: u32, height: u32, animated: bool, lossy: bool) -> Option<usize> {
     let sub = sub_len(width, height)?;
     let canvas = if animated {
         usize::try_from(width)
@@ -95,9 +98,14 @@ pub(crate) fn work_len(width: u32, height: u32, animated: bool) -> Option<usize>
     } else {
         0
     };
-    let pixels = usize::try_from(width)
-        .ok()?
-        .checked_mul(usize::try_from(height).ok()?)?;
+    let (alpha, planes) = if lossy {
+        let pixels = usize::try_from(width)
+            .ok()?
+            .checked_mul(usize::try_from(height).ok()?)?;
+        (pixels, crate::vp8::lossy_len(width, height)?)
+    } else {
+        (0, 0)
+    };
     CACHE_ENTRIES
         .checked_mul(4)?
         .checked_add(MAX_GREEN)?
@@ -108,8 +116,8 @@ pub(crate) fn work_len(width: u32, height: u32, animated: bool) -> Option<usize>
         .checked_add(sub.checked_mul(3)?)?
         .checked_add(group_cap(width, height)?.checked_mul(GROUP_BYTES)?)?
         .checked_add(canvas)?
-        .checked_add(pixels)?
-        .checked_add(crate::vp8::lossy_len(width, height)?)
+        .checked_add(alpha)?
+        .checked_add(planes)
 }
 
 /// The scratch regions of the lossless decoder, cut from the work buffer.
@@ -153,16 +161,17 @@ pub(crate) struct Parts<'a> {
 }
 
 impl<'a> Parts<'a> {
-    /// Cuts `work` (exactly `work_len(width, height, animated)` bytes) into
-    /// its parts; `None` if it has another length.
+    /// Cuts `work` (exactly `work_len(width, height, animated, lossy)`
+    /// bytes) into its parts; `None` if it has another length.
     pub(crate) fn new(
         pixels: &'a mut [u8],
         work: &'a mut [u8],
         width: u32,
         height: u32,
         animated: bool,
+        lossy: bool,
     ) -> Option<Parts<'a>> {
-        if work.len() != work_len(width, height, animated)? {
+        if work.len() != work_len(width, height, animated, lossy)? {
             return None;
         }
         let sub = sub_len(width, height)?;
@@ -182,7 +191,7 @@ impl<'a> Parts<'a> {
             .checked_mul(usize::try_from(height).ok()?)?;
         let canvas = if animated { npix.checked_mul(4)? } else { 0 };
         let (frame, rest) = rest.split_at_mut_checked(canvas)?;
-        let (alpha, lossy) = rest.split_at_mut_checked(npix)?;
+        let (alpha, lossy) = rest.split_at_mut_checked(if lossy { npix } else { 0 })?;
         Some(Parts {
             pixels,
             scratch: Scratch {
@@ -211,16 +220,27 @@ mod tests {
     #[test]
     fn cuts_exactly() {
         for (w, h, animated) in [(1u32, 1u32, false), (5, 3, true), (64, 64, false)] {
-            let wl = work_len(w, h, animated).unwrap_or(0);
-            assert!(wl > 0);
-            let mut pixels = vec![0u8; usize::try_from(w * h * 4).unwrap_or(0)];
-            let mut work = vec![0u8; wl];
-            let parts = Parts::new(&mut pixels, &mut work, w, h, animated);
-            assert!(
-                parts.is_some_and(|p| p.frame.len() == if animated { p.pixels.len() } else { 0 })
-            );
-            let mut work = vec![0u8; wl.saturating_add(1)];
-            assert!(Parts::new(&mut pixels, &mut work, w, h, animated).is_none());
+            for lossy in [false, true] {
+                let wl = work_len(w, h, animated, lossy).unwrap_or(0);
+                assert!(wl > 0);
+                let mut pixels = vec![0u8; usize::try_from(w * h * 4).unwrap_or(0)];
+                let mut work = vec![0u8; wl];
+                let parts = Parts::new(&mut pixels, &mut work, w, h, animated, lossy);
+                assert!(parts.is_some_and(|p| {
+                    p.frame.len() == if animated { p.pixels.len() } else { 0 }
+                        && p.alpha.len() == if lossy { p.pixels.len() / 4 } else { 0 }
+                        && p.lossy.len()
+                            == if lossy {
+                                crate::vp8::lossy_len(w, h).unwrap_or(0)
+                            } else {
+                                0
+                            }
+                }));
+                let mut work = vec![0u8; wl.saturating_add(1)];
+                assert!(Parts::new(&mut pixels, &mut work, w, h, animated, lossy).is_none());
+            }
+            // A lossless file does without the lossy parts.
+            assert!(work_len(w, h, animated, false) < work_len(w, h, animated, true));
         }
     }
 

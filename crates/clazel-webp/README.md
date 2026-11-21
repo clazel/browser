@@ -160,8 +160,11 @@ choices): `bool_decoder.rs` (§7), `header.rs` (§9, 19), `quant.rs` (§9.6,
 `src/alpha.rs` is `ALPH` (RFC 9649 §2.7.1.2). The whole `VP8 ` chunk is kept
 (in the frame's RGBA buffer, or 1 kB of work space if small) and the frame is
 decoded, filtered and converted in the `step` that gives its last byte. **The
-work buffer grew** by about 2.6 bytes per pixel for every WebP, lossless too
-(alpha plane and lossy planes: the config cannot say which codec a file uses).
+work buffer grew** by about 2.6 bytes per pixel (alpha plane and lossy planes)
+for a file whose config says `Coding::Lossy`: a simple `VP8 ` file, and every
+extended (`VP8X`) one, since its first bytes do not show which codec its
+images use. A simple lossless (`VP8L`) file is `Coding::Base` and keeps the
+6.8 size; a `VP8 ` chunk under a lossless config is refused.
 
 State, honestly: **built; tier unchanged at 0; Kani not run locally.** Eight new
 harnesses are written in `src/proofs.rs` (boolean decoder, every subblock mode,
