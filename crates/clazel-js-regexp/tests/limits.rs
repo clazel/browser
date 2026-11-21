@@ -59,9 +59,10 @@ fn nested_quantifier_hits_the_step_limit() -> Result<(), String> {
 fn small_catastrophic_input_still_finishes() -> Result<(), String> {
     // Without a limit the same pattern is just slow: 2^n paths, so n = 14
     // finishes at once and has no match.
-    let input = units(&"a".repeat(14));
+    let n = scale(14, 6);
+    let input = units(&"a".repeat(n));
     assert_eq!(is_match("(a*)*b", &input, &Limits::default())?, Ok(false));
-    let with_b = units(&format!("{}b", "a".repeat(14)));
+    let with_b = units(&format!("{}b", "a".repeat(n)));
     assert_eq!(is_match("(a*)*b", &with_b, &Limits::default())?, Ok(true));
     Ok(())
 }

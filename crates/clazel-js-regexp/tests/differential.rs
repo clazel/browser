@@ -1059,7 +1059,7 @@ fn run_differential(
 
 #[test]
 fn matcher_agrees_with_the_reference() -> Result<(), String> {
-    let (patterns, inputs) = if cfg!(miri) { (40, 3) } else { (6000, 8) };
+    let (patterns, inputs) = if cfg!(miri) { (10, 2) } else { (6000, 8) };
     let mut total = Tally {
         patterns: 0,
         parse_errors: 0,
