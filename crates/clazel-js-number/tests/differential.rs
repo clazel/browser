@@ -36,10 +36,12 @@ impl Rng {
     }
 }
 
-/// How many cases a randomised test runs.
+/// How many cases a randomised test runs. Miri runs a ten-thousandth: it
+/// is about 1000 times slower than a debug build, and is there to find
+/// undefined behaviour in the paths the tests exercise, not to repeat them.
 fn count(normal: usize) -> usize {
     if cfg!(miri) {
-        (normal / 500).saturating_add(4)
+        (normal / 10_000).saturating_add(2)
     } else {
         normal
     }
@@ -208,7 +210,7 @@ fn f32_stride() -> u64 {
         return s.max(1);
     }
     if cfg!(miri) {
-        1 << 22
+        1 << 25
     } else if cfg!(debug_assertions) {
         2039
     } else {
