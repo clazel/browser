@@ -318,6 +318,21 @@ impl Vp8l {
         }
     }
 
+    /// A decoder for the stream of an `ALPH` chunk (RFC 9649 section
+    /// 2.7.1.2): "a compressed image-stream (as described in Section 3) of
+    /// implicit dimensions width x height. That is, this image-stream does
+    /// NOT contain any headers describing the image dimensions": it starts at
+    /// the transforms of section 3.5, as if the 5 bytes of section 3.4 had
+    /// been read.
+    pub(crate) fn new_headerless(w: u32, h: u32) -> Vp8l {
+        let mut v = Vp8l::new(w, h);
+        v.width = w;
+        v.height = h;
+        v.xsize = w;
+        v.phase = P::TransformFlag;
+        v
+    }
+
     /// The invariant: every counter is in its range, so that the indexes the
     /// actions compute are in the regions (`groups` is the byte length of the
     /// groups region).
