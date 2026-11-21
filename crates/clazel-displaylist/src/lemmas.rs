@@ -184,6 +184,9 @@ pub proof fn lemma_encode_item_len(item: Item)
             Item::UploadMask { coverage, .. } => 9 + coverage.len(),
             Item::DrawMask { .. } => 17,
             Item::FreeMask { .. } => 5,
+            Item::UploadImage { pixels, .. } => 9 + pixels.len(),
+            Item::DrawImage { .. } => 30,
+            Item::FreeImage { .. } => 5,
         },
         encode_item(item).len() >= 1,
 {
@@ -214,6 +217,25 @@ pub proof fn lemma_encode_item_len(item: Item)
             lemma_le_bytes_len(colour as nat, 4);
         },
         Item::FreeMask { id } => {
+            lemma_le_bytes_len(id as nat, 4);
+        },
+        Item::UploadImage { id, image_width: width, image_height: height, pixels } => {
+            lemma_le_bytes_len(id as nat, 4);
+            lemma_le_bytes_len(width as nat, 2);
+            lemma_le_bytes_len(height as nat, 2);
+        },
+        Item::DrawImage { id, x, y, width, height, src_x, src_y, src_width, src_height, linear } => {
+            lemma_le_bytes_len(id as nat, 4);
+            lemma_le_bytes_len(bits_of(x), 4);
+            lemma_le_bytes_len(bits_of(y), 4);
+            lemma_le_bytes_len(width as nat, 4);
+            lemma_le_bytes_len(height as nat, 4);
+            lemma_le_bytes_len(src_x as nat, 2);
+            lemma_le_bytes_len(src_y as nat, 2);
+            lemma_le_bytes_len(src_width as nat, 2);
+            lemma_le_bytes_len(src_height as nat, 2);
+        },
+        Item::FreeImage { id } => {
             lemma_le_bytes_len(id as nat, 4);
         },
     }
@@ -290,6 +312,45 @@ pub proof fn lemma_decode_item_encode(item: Item, rest: Seq<u8>)
             assert(s[0] == 6u8);
             lemma_field4_is(s, 1, id as nat);
         },
+        Item::UploadImage { id, image_width: width, image_height: height, pixels } => {
+            lemma_le_bytes_len(id as nat, 4);
+            lemma_le_bytes_len(width as nat, 2);
+            lemma_le_bytes_len(height as nat, 2);
+            assert(s[0] == 7u8);
+            lemma_field4_is(s, 1, id as nat);
+            lemma_field2_is(s, 5, width as nat);
+            lemma_field2_is(s, 7, height as nat);
+            assert(s.subrange(9, 9 + pixels.len() as int) =~= pixels);
+        },
+        Item::DrawImage { id, x, y, width, height, src_x, src_y, src_width, src_height, linear } => {
+            lemma_i32_of_bits(x);
+            lemma_i32_of_bits(y);
+            lemma_le_bytes_len(id as nat, 4);
+            lemma_le_bytes_len(bits_of(x), 4);
+            lemma_le_bytes_len(bits_of(y), 4);
+            lemma_le_bytes_len(width as nat, 4);
+            lemma_le_bytes_len(height as nat, 4);
+            lemma_le_bytes_len(src_x as nat, 2);
+            lemma_le_bytes_len(src_y as nat, 2);
+            lemma_le_bytes_len(src_width as nat, 2);
+            lemma_le_bytes_len(src_height as nat, 2);
+            assert(s[0] == 8u8);
+            lemma_field4_is(s, 1, id as nat);
+            lemma_field4_is(s, 5, bits_of(x));
+            lemma_field4_is(s, 9, bits_of(y));
+            lemma_field4_is(s, 13, width as nat);
+            lemma_field4_is(s, 17, height as nat);
+            lemma_field2_is(s, 21, src_x as nat);
+            lemma_field2_is(s, 23, src_y as nat);
+            lemma_field2_is(s, 25, src_width as nat);
+            lemma_field2_is(s, 27, src_height as nat);
+            assert(s[29] == (if linear { 1u8 } else { 0u8 }));
+        },
+        Item::FreeImage { id } => {
+            lemma_le_bytes_len(id as nat, 4);
+            assert(s[0] == 9u8);
+            lemma_field4_is(s, 1, id as nat);
+        },
     }
 }
 
@@ -353,7 +414,7 @@ pub proof fn lemma_decode_item_sound(s: Seq<u8>)
 {
     lemma_pow256_values();
     let (item, taken) = decode_item(s)->Some_0;
-    if s[0] == 1u8 || s[0] == 2u8 || s[0] == 5u8 || s[0] == 6u8 {
+    if s[0] == 1u8 || s[0] == 2u8 || s[0] == 5u8 || s[0] == 6u8 || s[0] == 8u8 || s[0] == 9u8 {
         // Every four-byte field round-trips, as a signed or unsigned number.
         assert forall|a: int| 0 <= a && a + 4 <= s.len() implies {
             &&& #[trigger] field4(s, a) < 0x1_0000_0000nat
@@ -364,6 +425,17 @@ pub proof fn lemma_decode_item_sound(s: Seq<u8>)
             lemma_le_value_bound(s.subrange(a, a + 4));
             lemma_le_bytes_of_value(s.subrange(a, a + 4));
             lemma_bits_of_i32(field4(s, a));
+        }
+    }
+    if s[0] == 8u8 {
+        // Every two-byte field round-trips as an unsigned 16-bit number.
+        assert forall|a: int| 0 <= a && a + 2 <= s.len() implies {
+            &&& #[trigger] field2(s, a) < 65536nat
+            &&& le_bytes(field2(s, a), 2) =~= s.subrange(a, a + 2)
+            &&& (field2(s, a) as u16) as nat == field2(s, a)
+        } by {
+            lemma_le_value_bound(s.subrange(a, a + 2));
+            lemma_le_bytes_of_value(s.subrange(a, a + 2));
         }
     }
     if s[0] == 1u8 {
@@ -390,6 +462,24 @@ pub proof fn lemma_decode_item_sound(s: Seq<u8>)
         lemma_encode_item_len(item);
         assert(encode_item(item) =~= s.subrange(0, 17));
     } else if s[0] == 6u8 {
+        lemma_encode_item_len(item);
+        assert(encode_item(item) =~= s.subrange(0, 5));
+    } else if s[0] == 7u8 {
+        let a = s.subrange(1, 5);
+        let b = s.subrange(5, 7);
+        let c = s.subrange(7, 9);
+        lemma_le_value_bound(a);
+        lemma_le_value_bound(b);
+        lemma_le_value_bound(c);
+        lemma_le_bytes_of_value(a);
+        lemma_le_bytes_of_value(b);
+        lemma_le_bytes_of_value(c);
+        lemma_encode_item_len(item);
+        assert(encode_item(item) =~= s.subrange(0, taken as int));
+    } else if s[0] == 8u8 {
+        lemma_encode_item_len(item);
+        assert(encode_item(item) =~= s.subrange(0, 30));
+    } else if s[0] == 9u8 {
         lemma_encode_item_len(item);
         assert(encode_item(item) =~= s.subrange(0, 5));
     }
@@ -504,12 +594,58 @@ pub proof fn lemma_live_bytes_none(table: Seq<Option<MaskSize>>)
     }
 }
 
+/// What one table entry of images costs.
+pub open spec fn image_entry_bytes(entry: Option<ImageSize>) -> nat {
+    match entry {
+        None => 0,
+        Some(size) => size.width * size.height * 4,
+    }
+}
+
+/// Changing one entry of the images changes the total by that entry's cost.
+pub proof fn lemma_live_image_bytes_update(images: Seq<Option<ImageSize>>, i: int, entry: Option<ImageSize>)
+    requires
+        0 <= i < images.len(),
+    ensures
+        live_image_bytes(images.update(i, entry)) + image_entry_bytes(images[i]) == live_image_bytes(images)
+            + image_entry_bytes(entry),
+    decreases images.len(),
+{
+    let updated = images.update(i, entry);
+    let tail = images.subrange(1, images.len() as int);
+    if i == 0 {
+        assert(updated.subrange(1, updated.len() as int) =~= tail);
+    } else {
+        assert(updated.subrange(1, updated.len() as int) =~= tail.update(i - 1, entry));
+        lemma_live_image_bytes_update(tail, i - 1, entry);
+        assert(tail[i - 1] == images[i]);
+    }
+}
+
+/// A table of images with none live costs nothing.
+pub proof fn lemma_live_image_bytes_none(images: Seq<Option<ImageSize>>)
+    requires
+        forall|i: int| 0 <= i < images.len() ==> images[i] is None,
+    ensures
+        live_image_bytes(images) == 0,
+    decreases images.len(),
+{
+    if images.len() > 0 {
+        let tail = images.subrange(1, images.len() as int);
+        assert forall|i: int| 0 <= i < tail.len() implies tail[i] is None by {
+            assert(tail[i] == images[i + 1]);
+        }
+        lemma_live_image_bytes_none(tail);
+    }
+}
+
 /// `theorem_no_masks_ok`.
 pub proof fn theorem_no_masks_ok()
     ensures
         super::contract::no_masks_are_ok(),
 {
     lemma_live_bytes_none(no_masks().table);
+    lemma_live_image_bytes_none(no_masks().images);
 }
 
 /// One item keeps a table sound and is in range.
@@ -525,6 +661,10 @@ pub proof fn lemma_masks_after_sound(masks: Masks, item: Item)
         Item::FreeMask { id } => {
             let i = id as int;
             lemma_live_bytes_update(masks.table, i, None);
+        },
+        Item::FreeImage { id } => {
+            let i = id as int;
+            lemma_live_image_bytes_update(masks.images, i, None);
         },
         _ => {},
     }
@@ -602,19 +742,6 @@ pub proof fn lemma_walk_sound(masks: Masks, depth: nat, items: Seq<Item>)
     }
 }
 
-/// `theorem_validated_bounds`.
-pub proof fn theorem_validated_bounds()
-    ensures
-        super::contract::validated_bounds(),
-{
-    assert forall|before: Masks, items: Seq<Item>|
-        masks_ok(before) && (#[trigger] validate(before, items)) is Some implies super::contract::list_is_sound(
-        items,
-        validate(before, items)->Some_0,
-    ) by {
-        lemma_walk_sound(before, 0, items);
-    }
-}
 
 /// Dropping the first item, once it has applied, moves [`masks_at`] along by one.
 pub proof fn lemma_masks_at_tail(masks: Masks, items: Seq<Item>, next: Masks, n: nat)
@@ -669,6 +796,62 @@ pub proof fn theorem_draws_are_live()
             && 0 <= i < items.len()
             && items[i] is DrawMask implies is_live(super::contract::masks_at(before, items, i as nat), items[i]->DrawMask_id) by {
         lemma_walk_draws(before, 0, items, i);
+    }
+}
+
+/// Every image drawn in a walk that succeeds lies inside the image it names, as that
+/// image is at that point.
+pub proof fn lemma_walk_image_draws(masks: Masks, depth: nat, items: Seq<Item>, i: int)
+    requires
+        walk(masks, depth, items) is Some,
+        0 <= i < items.len(),
+        items[i] is DrawImage,
+    ensures
+        draw_source_ok(
+            super::contract::masks_at(masks, items, i as nat),
+            items[i]->DrawImage_id,
+            items[i]->DrawImage_src_x,
+            items[i]->DrawImage_src_y,
+            items[i]->DrawImage_src_width,
+            items[i]->DrawImage_src_height,
+        ),
+    decreases items.len(),
+{
+    let tail = items.subrange(1, items.len() as int);
+    let next = masks_after(masks, items[0])->Some_0;
+    let next_depth = clip_after(depth, items[0])->Some_0;
+    if i == 0 {
+        assert(super::contract::masks_at(masks, items, 0) == masks);
+    } else {
+        assert(tail[i - 1] == items[i]);
+        lemma_walk_image_draws(next, next_depth, tail, i - 1);
+        lemma_masks_at_tail(masks, items, next, (i - 1) as nat);
+    }
+}
+
+/// `theorem_validated_bounds`: the list is sound, and its image draws are inside their
+/// images (6.10).
+pub proof fn theorem_validated_bounds()
+    ensures
+        super::contract::validated_bounds(),
+{
+    assert forall|before: Masks, items: Seq<Item>|
+        masks_ok(before) && (#[trigger] validate(before, items)) is Some implies super::contract::list_is_sound(
+        items,
+        validate(before, items)->Some_0,
+    ) && super::contract::image_sources_inside(before, items) by {
+        lemma_walk_sound(before, 0, items);
+        assert forall|i: int|
+            0 <= i < items.len() && #[trigger] items[i] is DrawImage implies draw_source_ok(
+            super::contract::masks_at(before, items, i as nat),
+            items[i]->DrawImage_id,
+            items[i]->DrawImage_src_x,
+            items[i]->DrawImage_src_y,
+            items[i]->DrawImage_src_width,
+            items[i]->DrawImage_src_height,
+        ) by {
+            lemma_walk_image_draws(before, 0, items, i);
+        }
     }
 }
 
