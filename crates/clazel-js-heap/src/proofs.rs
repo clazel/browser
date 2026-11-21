@@ -323,14 +323,29 @@ fn symbol_key_encoding_any() {
 //
 // Bounds, stated. `gc_mark_closed_over_roots` proves the real marker
 // (`gc::mark_into`, which `gc::mark` and so `Heap::collect` call) for every
-// graph of `GRAPH` nodes where each node has one strong edge and one
-// ephemeron, each naming any node or no node (a stale reference, or no
-// edge), with any `GRAPH` roots: the marked set contains the roots and is
-// closed under the rules that define reachability (a strong edge of a
-// marked node; an ephemeron value whose map and key are marked).
-// `gc::contract::reachable` is the least set with those two properties, so
-// it is inside the marked set: every reachable node survives (GC1). That
-// is the kernel of "a slot reachable from the roots is never freed".
+// graph of `GRAPH` (3) nodes where each node has one strong edge and the
+// first `EPH` (2) nodes have one ephemeron each, each edge naming any node
+// or no node (a stale reference, or no edge), with any `GRAPH` roots: the
+// marked set contains the roots and is closed under the rules that define
+// reachability (a strong edge of a marked node; an ephemeron value whose
+// map and key are marked). `gc::contract::reachable` is the least set with
+// those two properties, so it is inside the marked set: every reachable
+// node survives (GC1). That is the kernel of "a slot reachable from the
+// roots is never freed". It takes about 5 minutes.
+//
+// This is a smaller bound than the quadratic marker's (4 nodes, an
+// ephemeron on each, about 2 minutes): the marker now indexes pending
+// ephemerons by key, in linked lists CBMC handles badly. These did not
+// finish: 4 nodes with 4 ephemerons (over 13 CPU minutes), 4 nodes with 2
+// ephemerons (over 10), 3 nodes with 3 ephemerons and the work counter
+// (over 9), so none was kept. Two ephemerons cover a chain of two entries,
+// the key marked before and after its entry is examined.
+//
+// GC5's work bound (`gc::contract::work_bound`) is NOT proven: the
+// harness with the counter did not finish (above). It is tested:
+// `gc::tests` counts the work on chains of thousands of entries in either
+// order and on random graphs, and the bound is read off the loops (no node or
+// entry is handled twice), which is not a proof.
 //
 // NOT proven by Kani:
 // - GC2 (nothing unreachable is kept), by tests only.
@@ -351,7 +366,10 @@ use crate::gc::contract::Graph;
 use crate::gc::mark_into;
 
 /// Nodes in the graphs of `gc_mark_closed_over_roots`.
-const GRAPH: usize = 4;
+const GRAPH: usize = 3;
+
+/// How many of them (the first ones) have an ephemeron (see the header).
+const EPH: usize = 2;
 
 /// A node name, or one that names no node.
 fn any_name(n: usize) -> usize {
@@ -361,13 +379,13 @@ fn any_name(n: usize) -> usize {
 }
 
 /// A graph of `GRAPH` nodes as fixed arrays (vectors of vectors made CBMC
-/// run for over ten minutes): each node has one strong edge and one
-/// ephemeron, and a name past the last node (`GRAPH`) is "no node", which
+/// run for over ten minutes): each node has one strong edge, the first
+/// `EPH` have an ephemeron, and a name past the last node (`GRAPH`) is "no node", which
 /// reaches nothing, so it stands for the absence of the edge as well as for
 /// a stale reference.
 struct Fixed {
     strong: [usize; GRAPH],
-    eph: [(usize, usize); GRAPH],
+    eph: [(usize, usize); EPH],
 }
 
 impl Graph for Fixed {
@@ -384,11 +402,11 @@ impl Graph for Fixed {
 
 #[kani::proof]
 #[kani::solver(cadical)]
-#[kani::unwind(10)]
+#[kani::unwind(5)]
 fn gc_mark_closed_over_roots() {
     let mut g = Fixed {
         strong: [0; GRAPH],
-        eph: [(0, 0); GRAPH],
+        eph: [(0, 0); EPH],
     };
     for s in &mut g.strong {
         *s = any_name(GRAPH);
@@ -403,7 +421,9 @@ fn gc_mark_closed_over_roots() {
     }
     let mut marked = [false; GRAPH];
     let mut work = [0usize; GRAPH];
-    mark_into(&g, &roots, &mut marked, &mut work);
+    let mut head = [usize::MAX; GRAPH];
+    let mut link = [(0usize, usize::MAX); EPH];
+    let _ = mark_into(&g, &roots, &mut marked, &mut work, &mut head, &mut link);
     // GC1. `marked` contains the roots, and is closed under the rules that
     // define reachability (a strong edge of a marked node, an ephemeron
     // value whose key and map are marked). `contract::reachable` is the
@@ -421,6 +441,117 @@ fn gc_mark_closed_over_roots() {
             assert!(e >= GRAPH || is(e));
             let (k, v) = g.eph.get(i).copied().unwrap_or((GRAPH, GRAPH));
             assert!(k >= GRAPH || v >= GRAPH || !is(k) || is(v));
+        }
+    }
+}
+
+// ---- Fourth slice: strings and shapes --------------------------------------
+//
+// `gc_mark_shapes_is_the_least_closed_set` proves the real marker
+// (`gc::mark_shapes`, which `Heap::collect` calls) on every table of `TABLE`
+// shape entries and `TABLE` keys: each entry may exist or not, have any
+// parent (an entry, or none, cycles included) and name any key or none, with
+// any `TABLE` root shapes and `TABLE` root keys (an entry or key, or none).
+// It proves both halves of `gc::contract::live_shapes`:
+// - safety (GC10, GC11): every root shape that exists, every parent of a
+//   marked shape that exists, every key of a marked shape and every root key
+//   is marked;
+// - precision (GC12): a marked shape is a root or the parent of a marked
+//   shape, and a marked key is a root key or the key of a marked shape.
+// A closed set that is also supported by the roots is the least one, so the
+// marked sets are exactly `live_shapes`.
+//
+// NOT proven by Kani, for want of a harness that finishes: `Shapes::sweep`
+// and `Interner::sweep` and the transition clean-up (they walk `HashMap`s,
+// which CBMC models as paths, as the elements harnesses' `BTreeMap`s did);
+// `Heap::collect_with` as a whole; and a table past `TABLE` entries. Those
+// are tested (`gc::tests`, `shape::tests`, `string::tests`), against an
+// independent oracle in the property test.
+
+use crate::gc::contract::ShapeGraph;
+use crate::gc::mark_shapes;
+
+/// Entries and keys in the tables of `gc_mark_shapes_is_the_least_closed_set`.
+const TABLE: usize = 4;
+
+/// A shape table as arrays: each entry has at most one parent and one key,
+/// and a name past `TABLE` is none.
+struct FixedShapes {
+    exists: [bool; TABLE],
+    parent: [usize; TABLE],
+    key: [usize; TABLE],
+}
+
+impl ShapeGraph for FixedShapes {
+    fn len(&self) -> usize {
+        TABLE
+    }
+    fn exists(&self, i: usize) -> bool {
+        self.exists.get(i).copied().unwrap_or(false)
+    }
+    fn parent(&self, i: usize) -> Option<usize> {
+        self.parent.get(i).copied().filter(|&p| p < TABLE)
+    }
+    fn each_key(&self, i: usize, f: &mut dyn FnMut(usize)) {
+        if let Some(k) = self.key.get(i).copied().filter(|&k| k < TABLE) {
+            f(k);
+        }
+    }
+}
+
+#[kani::proof]
+#[kani::solver(cadical)]
+#[kani::unwind(8)]
+fn gc_mark_shapes_is_the_least_closed_set() {
+    let mut g = FixedShapes {
+        exists: [false; TABLE],
+        parent: [0; TABLE],
+        key: [0; TABLE],
+    };
+    for i in 0..TABLE {
+        g.exists[i] = kani::any();
+        g.parent[i] = any_name(TABLE);
+        g.key[i] = any_name(TABLE);
+    }
+    let mut roots = [0usize; TABLE];
+    let mut root_keys = [0usize; TABLE];
+    for i in 0..TABLE {
+        roots[i] = any_name(TABLE);
+        root_keys[i] = any_name(TABLE);
+    }
+    let mut shapes = [false; TABLE];
+    let mut keys = [false; TABLE];
+    mark_shapes(&g, &roots, &root_keys, &mut shapes, &mut keys);
+    let sh = |i: usize| shapes.get(i).copied().unwrap_or(false);
+    let ky = |i: usize| keys.get(i).copied().unwrap_or(false);
+    // Safety.
+    for &r in &roots {
+        assert!(!g.exists(r) || sh(r));
+    }
+    for &k in &root_keys {
+        assert!(k >= TABLE || ky(k));
+    }
+    for i in 0..TABLE {
+        if sh(i) {
+            assert!(g.exists(i));
+            if let Some(p) = g.parent(i) {
+                assert!(!g.exists(p) || sh(p));
+            }
+            g.each_key(i, &mut |k| assert!(ky(k)));
+        }
+    }
+    // Precision: every marked shape is a root, or the parent of a marked
+    // shape; every marked key is a root key, or a marked shape's.
+    for i in 0..TABLE {
+        if sh(i) {
+            let supported =
+                roots.contains(&i) || (0..TABLE).any(|j| sh(j) && g.parent(j) == Some(i));
+            assert!(supported);
+        }
+        if ky(i) {
+            let supported = root_keys.contains(&i)
+                || (0..TABLE).any(|j| sh(j) && g.key.get(j).copied() == Some(i));
+            assert!(supported);
         }
     }
 }

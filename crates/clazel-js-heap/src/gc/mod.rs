@@ -12,7 +12,9 @@
 //! 4. clears weak references to unmarked slots and takes the finalization
 //!    cleanups (GC4, GC6);
 //! 5. frees every unmarked slot through [`Arena::free`], which bumps its
-//!    generation (GC2; the arena's invariant 3).
+//!    generation (GC2; the arena's invariant 3);
+//! 6. marks and sweeps the shapes and interned keys from the survivors
+//!    (below).
 //!
 //! # What an embedder reports
 //!
@@ -25,17 +27,39 @@
 //! callback and held values are alive after the collection, and the
 //! embedder must report them as roots until it has run them.
 //!
+//! # Strings and shapes (GC10 to GC13)
+//!
+//! The heap owns the property-key [`Interner`] and the [`Shapes`] table,
+//! and a collection also frees what no live thing reaches (step 6):
+//!
+//! - the shapes of the *surviving* objects, their parents, and the shapes the
+//!   embedder reports ([`RootSet::shapes`]) are kept, and so is
+//!   [`ROOT`];
+//! - the keys those shapes name, and the keys the embedder reports
+//!   ([`RootSet::keys`]), are kept;
+//! - everything else is freed ([`Shapes::sweep`], [`Interner::sweep`]), and
+//!   its id is never issued again.
+//!
+//! Shapes and keys hold no reference into the arena, so they are marked
+//! after the objects, from the survivors. [`mark_shapes`] is the marker,
+//! proven closed over its roots by Kani (`src/proofs.rs`).
+//!
 //! # What is not here
 //!
-//! Strings in the property-key interner and shapes live outside the arena
-//! and are not collected in this slice; neither holds a reference into it.
+//! Symbols are not collected. A key or shape id the embedder keeps outside
+//! the heap (a bytecode constant, an inline cache's shape) is the
+//! embedder's to report; one it forgot to report is a defined miss after
+//! the collection (GC13), not another property. Compacting the tombstones
+//! of the two tables is later, and must flush the inline caches.
 
 pub mod contract;
 
 use crate::arena::{self, Arena, Ref};
 use crate::elements::Elements;
+use crate::shape::{self, Attrs, ROOT, ShapeId, Shapes};
+use crate::string::{Interner, JsString, Key};
 use crate::value::Value;
-use contract::{Graph, Node};
+use contract::{Graph, Node, ShapeGraph};
 
 /// What a heap object is, beyond its ordinary properties.
 #[derive(Clone, Debug)]
@@ -78,6 +102,9 @@ pub struct Cell {
 pub struct Object {
     /// The prototype, a strong reference.
     pub proto: Option<Ref>,
+    /// The shape: which keys the property slots below belong to. A live
+    /// object's shape is live (GC10).
+    pub shape: ShapeId,
     /// Property values (a shape maps keys to these indices), all strong.
     pub slots: Vec<Value>,
     /// Indexed properties, all strong.
@@ -98,6 +125,7 @@ impl Object {
     pub const fn of(kind: Kind) -> Self {
         Self {
             proto: None,
+            shape: ROOT,
             slots: Vec::new(),
             elements: Elements::new(),
             kind,
@@ -124,6 +152,10 @@ pub struct Collection {
     pub survivors: usize,
     /// Cleanups for the embedder to run as tasks.
     pub cleanups: Vec<Cleanup>,
+    /// Shapes freed (GC12).
+    pub freed_shapes: usize,
+    /// Interned keys freed (GC12).
+    pub freed_keys: usize,
 }
 
 /// Why a heap operation failed.
@@ -141,12 +173,37 @@ pub enum Error {
     ScopeMismatch,
     /// The reference does not name a live `WeakRef`.
     NotAWeakRef,
+    /// A shape operation failed ([`shape::Error`]); `Unknown` also when an
+    /// object is allocated with a shape that is not live.
+    Shape(shape::Error),
+    /// The key is not live: never issued, or freed by a collection (GC13).
+    StaleKey,
+    /// The interner is full, or the string is too long.
+    Intern,
 }
 
 impl From<arena::Error> for Error {
     fn from(e: arena::Error) -> Self {
         Self::Arena(e)
     }
+}
+
+impl From<shape::Error> for Error {
+    fn from(e: shape::Error) -> Self {
+        Self::Shape(e)
+    }
+}
+
+/// What the embedder reports to a collection besides the heap's own roots
+/// (the handle stack and the job's kept targets).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct RootSet<'a> {
+    /// The value stack, DOM wrappers, task queues and pending cleanups.
+    pub values: &'a [Value],
+    /// Keys held outside the heap, such as bytecode constants.
+    pub keys: &'a [Key],
+    /// Shapes held outside the heap, such as an inline cache's.
+    pub shapes: &'a [ShapeId],
 }
 
 /// An open handle scope; closing it unroots the handles made in it.
@@ -164,6 +221,8 @@ pub struct Heap {
     scope_marks: Vec<usize>,
     kept: Vec<Ref>,
     op_depth: u32,
+    shapes: Shapes,
+    keys: Interner,
 }
 
 impl Default for Heap {
@@ -208,6 +267,8 @@ impl Heap {
             scope_marks: Vec::new(),
             kept: Vec::new(),
             op_depth: 0,
+            shapes: Shapes::new(),
+            keys: Interner::new(),
         }
     }
 
@@ -215,9 +276,67 @@ impl Heap {
     /// embedder collects at its next safe point.
     ///
     /// # Errors
-    /// [`arena::Error::Full`] as [`Error::Arena`].
+    /// [`arena::Error::Full`] as [`Error::Arena`]; [`shape::Error::Unknown`]
+    /// as [`Error::Shape`] if the object's shape is not live.
     pub fn alloc(&mut self, object: Object) -> Result<Ref, Error> {
+        if !self.shapes.is_live(object.shape) {
+            return Err(Error::Shape(shape::Error::Unknown));
+        }
         Ok(self.arena.alloc(object)?)
+    }
+
+    /// The key for `s`, interning it if no live key has its string.
+    ///
+    /// # Errors
+    /// [`Error::Intern`] if the table is full.
+    pub fn intern(&mut self, s: &JsString) -> Result<Key, Error> {
+        self.keys.intern(s).map_err(|_| Error::Intern)
+    }
+
+    /// The string a live key stands for.
+    #[must_use]
+    pub fn key_string(&self, k: Key) -> Option<&JsString> {
+        self.keys.resolve(k)
+    }
+
+    /// The interner, for its invariants' checks.
+    #[must_use]
+    pub const fn keys(&self) -> &Interner {
+        &self.keys
+    }
+
+    /// The shape table, for lookups and its invariants' checks.
+    #[must_use]
+    pub const fn shapes(&self) -> &Shapes {
+        &self.shapes
+    }
+
+    /// Give object `r` the property `key` with `attrs` and the value `v`:
+    /// its shape becomes the transition on `(key, attrs)` (shared with every
+    /// object that gains the same properties in the same order), and the
+    /// slot the shape assigns holds `v` (earlier slots missing from the
+    /// object read as `undefined`). Returns the slot.
+    ///
+    /// # Errors
+    /// [`Error::StaleKey`] if `key` is not live; [`Error::Arena`] for a bad
+    /// `r`; [`Error::Shape`] as [`Shapes::add_property`] (`Exists` if the
+    /// object's shape has the key already).
+    pub fn add_property(&mut self, r: Ref, key: Key, attrs: Attrs, v: Value) -> Result<u32, Error> {
+        if self.keys.resolve(key).is_none() {
+            return Err(Error::StaleKey);
+        }
+        let from = self.arena.get(r)?.shape;
+        let (to, slot) = self.shapes.add_property(from, key, attrs)?;
+        let o = self.arena.get_mut(r)?;
+        let at = usize::try_from(slot).map_err(|_| Error::Shape(shape::Error::TooMany))?;
+        if o.slots.len() <= at {
+            o.slots.resize(at.saturating_add(1), Value::UNDEFINED);
+        }
+        if let Some(cell) = o.slots.get_mut(at) {
+            *cell = v;
+        }
+        o.shape = to;
+        Ok(slot)
     }
 
     /// The object `r` names.
@@ -381,18 +500,31 @@ impl Heap {
     }
 
     /// Collect garbage (module header). `roots` are the embedder's:
-    /// the value stack, DOM wrappers, task queues and pending cleanups.
+    /// the value stack, DOM wrappers, task queues and pending cleanups. No
+    /// key or shape is reported (see [`Heap::collect_with`]).
+    ///
+    /// # Errors
+    /// As [`Heap::collect_with`].
+    pub fn collect(&mut self, roots: &[Value]) -> Result<Collection, Error> {
+        self.collect_with(&RootSet {
+            values: roots,
+            ..RootSet::default()
+        })
+    }
+
+    /// Collect garbage (module header), with the keys and shapes the
+    /// embedder holds as well as its values.
     ///
     /// # Errors
     /// [`Error::InOperation`] during an operation (GC7); nothing changes.
     /// [`Error::Arena`] if the arena reports corruption while freeing
     /// (unreachable by construction).
-    pub fn collect(&mut self, roots: &[Value]) -> Result<Collection, Error> {
+    pub fn collect_with(&mut self, roots: &RootSet<'_>) -> Result<Collection, Error> {
         if self.op_depth != 0 {
             return Err(Error::InOperation);
         }
         let graph = self.graph();
-        let marked = mark(&graph, &self.root_indices(roots));
+        let marked = mark(&graph, &self.root_indices(roots.values));
         let mut generation = vec![None; self.arena.slots()];
         let live: Vec<Ref> = self.arena.iter().map(|(r, _)| r).collect();
         for r in &live {
@@ -405,9 +537,15 @@ impl Heap {
         }
         let liveness = Liveness { generation, marked };
         let mut out = Collection::default();
+        // The shapes of the survivors, and the embedder's, are the roots of
+        // the shape table (entry 0 is `ROOT`).
+        let mut shape_roots: Vec<usize> = vec![0];
+        let entry = |id: ShapeId| usize::try_from(id.0).ok().and_then(|i| i.checked_sub(1));
+        shape_roots.extend(roots.shapes.iter().copied().filter_map(entry));
         for &r in &live {
             if liveness.survives(r) {
                 out.survivors = out.survivors.saturating_add(1);
+                shape_roots.extend(self.arena.get(r).ok().and_then(|o| entry(o.shape)));
                 if let Ok(o) = self.arena.get_mut(r) {
                     clear_weak(o, &liveness, &mut out.cleanups);
                 }
@@ -416,6 +554,22 @@ impl Heap {
                 out.freed = out.freed.saturating_add(1);
             }
         }
+        let key_roots: Vec<usize> = roots
+            .keys
+            .iter()
+            .filter_map(|k| usize::try_from(k.0).ok())
+            .collect();
+        let mut shape_marks = vec![false; self.shapes.issued()];
+        let mut key_marks = vec![false; self.keys.issued()];
+        mark_shapes(
+            &self.shapes,
+            &shape_roots,
+            &key_roots,
+            &mut shape_marks,
+            &mut key_marks,
+        );
+        out.freed_shapes = self.shapes.sweep(&shape_marks);
+        out.freed_keys = self.keys.sweep(&key_marks);
         Ok(out)
     }
 }
@@ -452,59 +606,131 @@ fn clear_weak(o: &mut Object, live: &Liveness, cleanups: &mut Vec<Cleanup>) {
     }
 }
 
-/// Mark the nodes reachable from `roots`: a worklist for the strong edges,
-/// and passes over the ephemerons until none marks anything new.
-/// [`contract::reachable`] is its specification, and the Kani harnesses
-/// prove it closed over the roots and edges (so GC1) on every graph of
-/// their bound.
-#[must_use]
-pub fn mark<G: Graph + ?Sized>(graph: &G, roots: &[usize]) -> Vec<bool> {
-    let mut marked = vec![false; graph.len()];
-    // Each node is queued at most once, so a stack of `len` never overflows.
-    let mut work = vec![0usize; graph.len()];
-    mark_into(graph, roots, &mut marked, &mut work);
-    marked
+/// Mark the shapes and keys that `roots` (shape table entries) and
+/// `root_keys` reach (GC10 to GC12): each root shape, its parents, and every
+/// key any of them names. `shapes` (one flag per table entry) and `keys`
+/// (one per key issued) are all false on entry. Each shape is marked once,
+/// so the work is linear in the table. [`contract::live_shapes`] is its
+/// specification. A root naming no live shape, or a key past `keys`, is
+/// ignored; a parent that is not live ends a chain.
+pub fn mark_shapes<G: ShapeGraph + ?Sized>(
+    graph: &G,
+    roots: &[usize],
+    root_keys: &[usize],
+    shapes: &mut [bool],
+    keys: &mut [bool],
+) {
+    for &root in roots {
+        let mut at = Some(root);
+        while let Some(i) = at {
+            if !graph.exists(i) {
+                break;
+            }
+            match shapes.get_mut(i) {
+                Some(m) if !*m => *m = true,
+                _ => break,
+            }
+            graph.each_key(i, &mut |k| {
+                if let Some(m) = keys.get_mut(k) {
+                    *m = true;
+                }
+            });
+            at = graph.parent(i);
+        }
+    }
+    for &k in root_keys {
+        if let Some(m) = keys.get_mut(k) {
+            *m = true;
+        }
+    }
 }
 
-/// [`mark`] over storage the caller provides: `marked` (one flag per node,
-/// all false) is filled in, and `work` (a stack of at least one slot per
-/// node) is scratch. The Kani harnesses call this with arrays, because
-/// CBMC does not finish with vectors in the model.
+/// Marking's end of a list of pending ephemerons, and of an empty head.
+const NONE: usize = usize::MAX;
+
+/// Mark the nodes reachable from `roots`: a worklist for the strong edges,
+/// and a pending list per key for the ephemerons, so that every edge and
+/// every ephemeron is looked at a bounded number of times (GC5's work
+/// bound). [`contract::reachable`] is its specification, and the Kani
+/// harnesses prove it closed over the roots and edges (so GC1) on every
+/// graph of their bound.
+#[must_use]
+pub fn mark<G: Graph + ?Sized>(graph: &G, roots: &[usize]) -> Vec<bool> {
+    mark_counted(graph, roots).0
+}
+
+/// [`mark`], and the units of work it did (GC5, [`contract::work_bound`]).
+#[must_use]
+pub fn mark_counted<G: Graph + ?Sized>(graph: &G, roots: &[usize]) -> (Vec<bool>, usize) {
+    let n = graph.len();
+    let (_, _, ephemerons) = contract::totals(graph);
+    let mut marked = vec![false; n];
+    // Each node is queued at most once, so a stack of `n` never overflows.
+    let mut work = vec![0usize; n];
+    let mut head = vec![NONE; n];
+    // Each ephemeron is listed at most once: when its map is processed.
+    let mut link = vec![(0usize, NONE); ephemerons];
+    let units = mark_into(graph, roots, &mut marked, &mut work, &mut head, &mut link);
+    (marked, units)
+}
+
+/// [`mark`] over storage the caller provides, returning the units of work:
+/// - `marked`: one flag per node, all false, filled in;
+/// - `work`: a stack of at least one slot per node;
+/// - `head`: one entry per node, all `usize::MAX`;
+/// - `link`: at least one entry per ephemeron in the graph.
+///
+/// The Kani harnesses call this with arrays, because CBMC does not finish
+/// with vectors in the model.
+///
+/// An ephemeron `(k, v)` of a marked node is examined once. If `k` is marked
+/// then, `v` is marked; otherwise the entry goes on `k`'s pending list
+/// (`head[k]`, then `link`, newest first), and marking `k` marks every `v`
+/// on it. So a key marked later still reaches its values, and no pass over
+/// the ephemerons repeats.
 pub fn mark_into<G: Graph + ?Sized>(
     graph: &G,
     roots: &[usize],
     marked: &mut [bool],
     work: &mut [usize],
-) {
+    head: &mut [usize],
+    link: &mut [(usize, usize)],
+) -> usize {
     let mut top = 0usize;
+    let mut used = 0usize;
+    let mut units = 0usize;
     for &r in roots {
         visit(marked, work, &mut top, r);
     }
-    loop {
-        while top > 0 {
-            top = top.saturating_sub(1);
-            let Some(i) = work.get(top).copied() else {
-                break;
-            };
-            for &e in graph.strong(i) {
-                visit(marked, work, &mut top, e);
-            }
+    while top > 0 {
+        top = top.saturating_sub(1);
+        let Some(i) = work.get(top).copied() else {
+            break;
+        };
+        units = units.saturating_add(1);
+        // `i` is marked, as a key too: fire what waited for it.
+        let mut at = head.get(i).copied().unwrap_or(NONE);
+        while let Some(&(v, next)) = link.get(at) {
+            units = units.saturating_add(1);
+            visit(marked, work, &mut top, v);
+            at = next;
         }
-        let mut progressed = false;
-        for i in 0..graph.len() {
-            if !marked.get(i).copied().unwrap_or(false) {
-                continue;
-            }
-            for &(k, v) in graph.ephemerons(i) {
-                if marked.get(k).copied().unwrap_or(false) {
-                    progressed |= visit(marked, work, &mut top, v);
-                }
-            }
+        for &e in graph.strong(i) {
+            units = units.saturating_add(1);
+            visit(marked, work, &mut top, e);
         }
-        if !progressed {
-            return;
+        for &(k, v) in graph.ephemerons(i) {
+            units = units.saturating_add(1);
+            if marked.get(k).copied().unwrap_or(false) {
+                visit(marked, work, &mut top, v);
+            } else if let (Some(h), Some(slot)) = (head.get_mut(k), link.get_mut(used)) {
+                *slot = (v, *h);
+                *h = used;
+                used = used.saturating_add(1);
+            }
         }
     }
+    units
 }
 
 /// Mark `i` and queue it, if it names a node not yet marked.

@@ -149,7 +149,7 @@ impl PropertyKeys {
         if let Some(k) = self.strings.find(s) {
             return Ok(k);
         }
-        if self.strings.len() >= usize::try_from(SYMBOL_BIT).unwrap_or(usize::MAX) {
+        if self.strings.issued() >= usize::try_from(SYMBOL_BIT).unwrap_or(usize::MAX) {
             return Err(Error::TooMany);
         }
         let k = self.strings.intern(s)?;

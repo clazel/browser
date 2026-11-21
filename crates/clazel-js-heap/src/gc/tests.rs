@@ -4,6 +4,7 @@
 use super::contract::{self, Node};
 use super::*;
 use crate::arena::Error as ArenaError;
+use crate::shape::MAX_FAST_PROPERTIES;
 use std::collections::HashSet;
 
 type R<T> = Result<T, Error>;
@@ -229,10 +230,9 @@ fn a_weakmap_does_not_keep_its_keys_and_an_unreachable_map_is_freed() -> R<()> {
 fn ephemeron_chains_resolve_in_any_entry_order() -> R<()> {
     // Entries (k[i] -> k[i+1]) listed from the end of the chain to the start.
     let mut h = Heap::new();
-    // Listed backwards, the chain resolves one link per pass, so the work
-    // grows with the square of its length: 2000 keys took 2999 s under Miri,
-    // so it builds 200 there. The normal test job builds 2000.
-    let length: usize = if cfg!(miri) { 200 } else { 2000 };
+    // Marking is linear (GC5): a chain listed backwards used to resolve one
+    // link per pass, and 2000 keys took 2999 s under Miri.
+    let length: usize = if cfg!(miri) { 400 } else { 2000 };
     let ks: Vec<Ref> = (0..length).map(|_| obj(&mut h)).collect::<R<_>>()?;
     let entries: Vec<(Ref, Value)> = ks
         .windows(2)
@@ -463,6 +463,7 @@ impl Lcg {
 #[derive(Clone, Debug, PartialEq)]
 struct Snap {
     proto: Option<Ref>,
+    shape: ShapeId,
     slots: Vec<Value>,
     elements: Vec<Value>,
     entries: Vec<(Ref, Value)>,
@@ -475,6 +476,7 @@ struct Snap {
 fn snap(o: &Object) -> Snap {
     let mut s = Snap {
         proto: o.proto,
+        shape: o.shape,
         slots: o.slots.clone(),
         elements: o.elements.values().collect(),
         entries: vec![],
@@ -518,10 +520,21 @@ fn random_object(rng: &mut Lcg) -> Object {
 }
 
 /// Add random edges, all to live objects, from the live objects.
-fn wire(h: &mut Heap, rng: &mut Lcg, live: &[Ref], density: usize) -> R<()> {
+fn wire(h: &mut Heap, rng: &mut Lcg, live: &[Ref], keys: &[Key], density: usize) -> R<()> {
     for &r in live {
         if !rng.chance(density) {
             continue;
+        }
+        // Properties through the shape table: few distinct keys, so shapes
+        // are shared and have parents.
+        for _ in 0..rng.below(4) {
+            let (key, v) = (keys.get(rng.below(keys.len())).copied(), rng.value(live));
+            if let Some(key) = key {
+                match h.add_property(r, key, Attrs::ALL, v) {
+                    Ok(_) | Err(Error::Shape(shape::Error::Exists)) => {}
+                    Err(e) => return Err(e),
+                }
+            }
         }
         let proto = if rng.chance(30) { rng.pick(live) } else { None };
         let slots: Vec<Value> = (0..rng.below(4)).map(|_| rng.value(live)).collect();
@@ -587,10 +600,173 @@ fn oracle(before: &[(Ref, Snap)], roots: &[Ref]) -> HashSet<Ref> {
     }
 }
 
-/// GC1 to GC6, checked for one collection of `h` against the world before.
-/// `held` are the references the caller made roots other than through
-/// `roots`: its open handles and the targets it kept for the job.
-fn collect_and_check(h: &mut Heap, roots: &[Value], held: &[Ref]) -> R<()> {
+/// A shape's properties: key, slot, attributes.
+type Props = Vec<(Key, u32, Attrs)>;
+
+/// The live shapes and keys, as plain data from the public accessors.
+struct Tables {
+    shapes: Vec<(ShapeId, Props)>,
+    keys: Vec<(Key, JsString)>,
+    issued_shapes: usize,
+    issued_keys: usize,
+}
+
+fn tables(h: &Heap) -> Tables {
+    let issued_shapes = h.shapes().issued();
+    let issued_keys = h.keys().issued();
+    let shapes = (1..=issued_shapes)
+        .filter_map(|i| u32::try_from(i).ok().map(ShapeId))
+        .filter(|&id| h.shapes().is_live(id))
+        .map(|id| (id, h.shapes().properties(id)))
+        .collect();
+    let keys = (0..issued_keys)
+        .filter_map(|i| u32::try_from(i).ok().map(Key))
+        .filter_map(|k| h.key_string(k).map(|s| (k, s.clone())))
+        .collect();
+    Tables {
+        shapes,
+        keys,
+        issued_shapes,
+        issued_keys,
+    }
+}
+
+/// GC10 to GC12's oracle: the shapes and keys that must survive, by an
+/// independent walk over the public accessors (`Shapes::parent`,
+/// `Shapes::properties`) and the snapshot, not `mark_shapes` or the table's
+/// `ShapeGraph`. `objects` are the shapes of the objects that survive.
+fn table_oracle(
+    h: &Heap,
+    objects: &[ShapeId],
+    ekeys: &[Key],
+    eshapes: &[ShapeId],
+) -> (HashSet<ShapeId>, HashSet<Key>) {
+    let mut shapes: HashSet<ShapeId> = HashSet::from([ROOT]);
+    let mut stack: Vec<ShapeId> = objects.iter().chain(eshapes).copied().collect();
+    while let Some(id) = stack.pop() {
+        if h.shapes().is_live(id) && shapes.insert(id) {
+            stack.extend(h.shapes().parent(id));
+        }
+    }
+    let mut keys: HashSet<Key> = ekeys
+        .iter()
+        .copied()
+        .filter(|&k| h.key_string(k).is_some())
+        .collect();
+    for &id in &shapes {
+        keys.extend(h.shapes().properties(id).into_iter().map(|(k, _, _)| k));
+    }
+    (shapes, keys)
+}
+
+/// What a collection must do to the shape and key tables.
+struct TableWant {
+    before: Tables,
+    shapes: HashSet<ShapeId>,
+    keys: HashSet<Key>,
+    spec_shapes: Vec<bool>,
+    spec_keys: Vec<bool>,
+}
+
+fn entry(id: &ShapeId) -> Option<usize> {
+    usize::try_from(id.0).ok().and_then(|i| i.checked_sub(1))
+}
+
+/// The oracle's and the specification's sets, computed before a collection.
+fn table_want(
+    h: &Heap,
+    survivors_shapes: &[ShapeId],
+    ekeys: &[Key],
+    eshapes: &[ShapeId],
+) -> TableWant {
+    let before = tables(h);
+    let (shapes, keys) = table_oracle(h, survivors_shapes, ekeys, eshapes);
+    // The specification's sets, over the same table (GC10 to GC12).
+    let spec_roots: Vec<usize> = std::iter::once(0)
+        .chain(survivors_shapes.iter().filter_map(entry))
+        .chain(eshapes.iter().filter_map(entry))
+        .collect();
+    let spec_root_keys: Vec<usize> = ekeys
+        .iter()
+        .filter(|&&k| h.key_string(k).is_some())
+        .filter_map(|k| usize::try_from(k.0).ok())
+        .collect();
+    let (spec_shapes, spec_keys) =
+        contract::live_shapes(h.shapes(), &spec_roots, &spec_root_keys, before.issued_keys);
+    TableWant {
+        before,
+        shapes,
+        keys,
+        spec_shapes,
+        spec_keys,
+    }
+}
+
+/// GC10 to GC13 after a collection; returns the freed shape ids and keys.
+fn check_tables(h: &Heap, want: &TableWant, out: &Collection) -> R<(Vec<ShapeId>, Vec<Key>)> {
+    let mut freed_shapes = vec![];
+    for (id, props) in &want.before.shapes {
+        let live = h.shapes().is_live(*id);
+        assert_eq!(live, want.shapes.contains(id), "GC10/GC12 shape {id:?}");
+        let i = entry(id).ok_or(Error::NoScope)?;
+        assert_eq!(live, want.spec_shapes.get(i).copied().unwrap_or(false));
+        if live {
+            assert_eq!(
+                &h.shapes().properties(*id),
+                props,
+                "a live shape is as it was"
+            );
+        } else {
+            freed_shapes.push(*id);
+            assert_eq!(h.shapes().slot_count(*id), None, "GC13");
+        }
+    }
+    let mut freed_keys = vec![];
+    for (k, string) in &want.before.keys {
+        let live = h.key_string(*k).is_some();
+        assert_eq!(live, want.keys.contains(k), "GC11/GC12 key {k:?}");
+        let i = usize::try_from(k.0).map_err(|_| Error::NoScope)?;
+        assert_eq!(live, want.spec_keys.get(i).copied().unwrap_or(false));
+        if live {
+            assert_eq!(h.key_string(*k), Some(string), "GC11: the same string");
+            assert_eq!(h.keys().find(string), Some(*k));
+        } else {
+            freed_keys.push(*k);
+            assert_eq!(h.keys().find(string), None);
+        }
+    }
+    assert_eq!(out.freed_shapes, freed_shapes.len());
+    assert_eq!(out.freed_keys, freed_keys.len());
+    let after = tables(h);
+    assert_eq!(h.shapes().len(), after.shapes.len());
+    assert_eq!(h.keys().len(), after.keys.len());
+    // GC13: nothing was issued or renumbered.
+    assert_eq!(after.issued_shapes, want.before.issued_shapes);
+    assert_eq!(after.issued_keys, want.before.issued_keys);
+    assert!(h.shapes().is_live(ROOT), "ROOT is never freed");
+    // GC10: every live object's shape, and every parent, is live.
+    for (_, o) in h.arena().iter() {
+        let mut at = Some(o.shape);
+        while let Some(id) = at {
+            assert!(h.shapes().is_live(id), "GC10");
+            at = h.shapes().parent(id);
+        }
+    }
+    Ok((freed_shapes, freed_keys))
+}
+
+/// GC1 to GC6 and GC10 to GC13, checked for one collection of `h` against
+/// the world before. `held` are the references the caller made roots other
+/// than through `roots`: its open handles and the targets it kept for the
+/// job. `ekeys` and `eshapes` are the keys and shapes it reports. Returns
+/// the shape ids and keys that were freed.
+fn collect_and_check(
+    h: &mut Heap,
+    roots: &[Value],
+    held: &[Ref],
+    ekeys: &[Key],
+    eshapes: &[ShapeId],
+) -> R<(Vec<ShapeId>, Vec<Key>)> {
     let graph = h.graph();
     let root_idx = h.root_indices(roots);
     let before = snapshot(h);
@@ -600,7 +776,18 @@ fn collect_and_check(h: &mut Heap, roots: &[Value], held: &[Ref]) -> R<()> {
         .chain(held.iter().copied())
         .collect();
     let want = oracle(&before, &all_roots);
-    let out = h.collect(roots)?;
+    let survivors_shapes: Vec<ShapeId> = before
+        .iter()
+        .filter(|(r, _)| want.contains(r))
+        .map(|(_, s)| s.shape)
+        .collect();
+    let table_want = table_want(h, &survivors_shapes, ekeys, eshapes);
+    let out = h.collect_with(&RootSet {
+        values: roots,
+        keys: ekeys,
+        shapes: eshapes,
+    })?;
+    let freed = check_tables(h, &table_want, &out)?;
     for (r, _) in &before {
         assert_eq!(
             want.contains(r),
@@ -693,11 +880,24 @@ fn collect_and_check(h: &mut Heap, roots: &[Value], held: &[Ref]) -> R<()> {
         }
     }
     assert!(h.arena().is_well_formed());
-    Ok(())
+    Ok(freed)
 }
 
 fn live_refs(h: &Heap) -> Vec<Ref> {
     h.arena().iter().map(|(r, _)| r).collect()
+}
+
+/// The names of the property keys of the property test: enough that one
+/// object can pass the dictionary cutoff.
+fn pool_strings() -> R<Vec<JsString>> {
+    (0..MAX_FAST_PROPERTIES + 12)
+        .map(|i| JsString::from_rust_str(&format!("key{i}")).map_err(|_| Error::Intern))
+        .collect()
+}
+
+/// The pool's keys, interned again (a freed one gets a new key, GC13).
+fn intern_pool(h: &mut Heap, pool: &[JsString]) -> R<Vec<Key>> {
+    pool.iter().map(|s| h.intern(s)).collect()
 }
 
 #[test]
@@ -723,13 +923,41 @@ fn random_heaps_of_any_size_keep_what_the_roots_reach() -> R<()> {
             live.push(h.alloc(random_object(&mut rng))?);
         }
         let density = 20 + rng.below(80);
-        wire(&mut h, &mut rng, &live, density)?;
+        let pool = pool_strings()?;
+        let mut keys = intern_pool(&mut h, &pool)?;
+        // Ids freed so far: they must stay freed, whatever is added later.
+        let mut dead_shapes: Vec<ShapeId> = vec![];
+        let mut dead_keys: Vec<Key> = vec![];
+        wire(
+            &mut h,
+            &mut rng,
+            &live,
+            keys.get(..12).unwrap_or(&[]),
+            density,
+        )?;
+        // In two cases of the twenty, one object has so many properties that
+        // its shape is a dictionary of its own.
+        if let (true, Some(&big)) = (case % 20 < 2, live.first()) {
+            for &k in &keys {
+                match h.add_property(big, k, Attrs::ALL, Value::int32(1)) {
+                    Ok(_) | Err(Error::Shape(shape::Error::Exists)) => {}
+                    Err(e) => return Err(e),
+                }
+            }
+            assert!(h.shapes().is_dictionary(h.get(big)?.shape));
+        }
         // Several rounds: collect with random roots, then mutate the
         // survivors, reuse freed slots, and collect again.
         for _ in 0..4 {
             let live = live_refs(&h);
             let mut roots: Vec<Value> = (0..rng.below(1 + live.len() / 4))
                 .map(|_| rng.value(&live))
+                .collect();
+            // The embedder reports some keys and shapes it holds.
+            let ekeys: Vec<Key> = keys.iter().copied().filter(|_| rng.chance(3)).collect();
+            let eshapes: Vec<ShapeId> = (1..=h.shapes().issued())
+                .filter_map(|i| u32::try_from(i).ok().map(ShapeId))
+                .filter(|&id| h.shapes().is_live(id) && rng.chance(2))
                 .collect();
             // Some roots are handles; some targets are kept for the job.
             if rng.chance(50) {
@@ -744,10 +972,14 @@ fn random_heaps_of_any_size_keep_what_the_roots_reach() -> R<()> {
                         held.extend(h.deref_weak(r).ok().flatten());
                     }
                 }
-                collect_and_check(&mut h, &roots, &held)?;
+                let freed = collect_and_check(&mut h, &roots, &held, &ekeys, &eshapes)?;
+                dead_shapes.extend(freed.0);
+                dead_keys.extend(freed.1);
                 h.close_scope(scope)?;
             } else {
-                collect_and_check(&mut h, &roots, &[])?;
+                let freed = collect_and_check(&mut h, &roots, &[], &ekeys, &eshapes)?;
+                dead_shapes.extend(freed.0);
+                dead_keys.extend(freed.1);
             }
             h.end_job();
             cases += 1;
@@ -766,8 +998,22 @@ fn random_heaps_of_any_size_keep_what_the_roots_reach() -> R<()> {
                 .copied()
                 .filter(|r| !survivors.contains(r))
                 .collect();
-            wire(&mut h, &mut rng, &some, 60)?;
-            wire(&mut h, &mut rng, &fresh, 100)?;
+            // The interned strings come back with new keys when freed, and a
+            // stale key is refused.
+            let old = keys;
+            keys = intern_pool(&mut h, &pool)?;
+            for (a, b) in old.iter().zip(&keys) {
+                assert_eq!(a == b, h.key_string(*a).is_some());
+            }
+            if let (Some(&k), Some(&r)) = (dead_keys.first(), some.first()) {
+                let stale = h.add_property(r, k, Attrs::ALL, Value::int32(0));
+                assert_eq!(stale, Err(Error::StaleKey));
+            }
+            wire(&mut h, &mut rng, &some, keys.get(..12).unwrap_or(&[]), 60)?;
+            wire(&mut h, &mut rng, &fresh, keys.get(..12).unwrap_or(&[]), 100)?;
+            // GC13: nothing freed has come back, under its old id.
+            assert!(dead_shapes.iter().all(|&id| !h.shapes().is_live(id)));
+            assert!(dead_keys.iter().all(|&k| h.key_string(k).is_none()));
         }
     }
     assert_eq!(cases, count * 4);
@@ -793,6 +1039,270 @@ fn mark_equals_the_specification_on_random_graphs() {
             })
             .collect();
         let roots: Vec<usize> = (0..rng.below(4)).map(|_| name(&mut rng)).collect();
-        assert_eq!(mark(&graph, &roots), contract::reachable(&graph, &roots));
+        let (marked, units) = mark_counted(&graph, &roots);
+        assert_eq!(marked, contract::reachable(&graph, &roots));
+        let (nodes, strong, eph) = contract::totals(&graph);
+        assert!(units <= contract::work_bound(nodes, strong, eph), "GC5");
+    }
+}
+
+/// A map (node 0) of the chain `1 -> 2 -> ... -> n` (entry `(i, i + 1)`),
+/// listed forwards or backwards, and the work of marking from the map and
+/// the first key.
+fn chain_work(n: usize, backwards: bool) -> (usize, usize) {
+    let mut entries: Vec<(usize, usize)> = (1..n).map(|i| (i, i.saturating_add(1))).collect();
+    if backwards {
+        entries.reverse();
+    }
+    let mut graph = vec![Node::default(); n.saturating_add(1)];
+    if let Some(map) = graph.first_mut() {
+        map.ephemerons = entries;
+    }
+    let (marked, units) = mark_counted(&graph, &[0, 1]);
+    assert!(marked.iter().all(|&m| m), "the whole chain is marked");
+    let (nodes, strong, eph) = contract::totals(&graph);
+    assert!(units <= contract::work_bound(nodes, strong, eph), "GC5");
+    (units, nodes.saturating_add(strong).saturating_add(eph))
+}
+
+/// GC5, counted rather than timed: the work on a chain listed in either
+/// order is a bounded number of units per element, and doubling the length
+/// doubles it (a quadratic marker would quadruple it).
+#[test]
+fn ephemeron_marking_work_is_linear_in_either_order() {
+    let sizes: &[usize] = if cfg!(miri) {
+        &[50, 100, 200]
+    } else {
+        &[500, 1000, 2000, 4000]
+    };
+    let mut last: Option<usize> = None;
+    for &n in sizes {
+        let (fwd, _) = chain_work(n, false);
+        let (back, size) = chain_work(n, true);
+        // Listed forwards, each key is marked before its entry is examined;
+        // backwards, each entry waits on its key and is fired: at most two
+        // units more per entry, in either order.
+        assert!(fwd <= back, "waiting costs, at most, a firing per entry");
+        assert!(back <= 4 * size, "a bounded number of units per element");
+        if let Some(prev) = last {
+            assert!(back <= 2 * prev + 8, "doubling the chain doubles the work");
+        }
+        last = Some(back);
+    }
+}
+
+/// Many entries waiting on one key, and one value kept by many keys: each
+/// entry is still handled once.
+#[test]
+fn many_entries_on_one_key_and_many_keys_for_one_value_are_linear() {
+    let n = if cfg!(miri) { 100 } else { 3000 };
+    // Node 0: the map. 1: the shared key. 2: the shared value. Nodes 3..:
+    // keys that are marked last, each with an entry to node 2, and an entry
+    // (1, i) from the shared key to each of them.
+    let mut graph = vec![Node::default(); n + 3];
+    let mut entries: Vec<(usize, usize)> = (3..n + 3).map(|i| (1, i)).collect();
+    entries.extend((3..n + 3).map(|i| (i, 2)));
+    if let Some(map) = graph.first_mut() {
+        map.ephemerons = entries;
+    }
+    let (marked, units) = mark_counted(&graph, &[0, 1]);
+    assert!(marked.iter().all(|&m| m));
+    let (nodes, strong, eph) = contract::totals(&graph);
+    assert!(units <= contract::work_bound(nodes, strong, eph));
+    // And without the shared key, nothing else is marked.
+    let (marked, _) = mark_counted(&graph, &[0]);
+    assert_eq!(marked.iter().filter(|&&m| m).count(), 1);
+}
+
+// ---- Strings and shapes ----------------------------------------------------
+
+fn key(h: &mut Heap, s: &str) -> R<Key> {
+    h.intern(&JsString::from_rust_str(s).map_err(|_| Error::Intern)?)
+}
+
+fn shape_of(h: &Heap, r: Ref) -> R<ShapeId> {
+    Ok(h.get(r)?.shape)
+}
+
+#[test]
+fn a_live_objects_shape_and_keys_survive_and_the_rest_are_freed() -> R<()> {
+    let mut h = Heap::new();
+    let (a, b, c) = (key(&mut h, "a")?, key(&mut h, "b")?, key(&mut h, "c")?);
+    let keep = obj(&mut h)?;
+    let drop = obj(&mut h)?;
+    h.add_property(keep, a, Attrs::ALL, int(1))?;
+    h.add_property(drop, b, Attrs::ALL, int(2))?;
+    let kept_shape = shape_of(&h, keep)?;
+    let dropped_shape = shape_of(&h, drop)?;
+    // `c` is interned and used by nothing.
+    let out = h.collect(&[val(keep)])?;
+    assert_eq!((out.freed_shapes, out.freed_keys), (1, 2));
+    assert!(h.shapes().is_live(kept_shape) && h.shapes().is_live(ROOT));
+    assert!(!h.shapes().is_live(dropped_shape));
+    assert_eq!(h.shapes().lookup(kept_shape, a), Some((0, Attrs::ALL)));
+    assert!(h.key_string(a).is_some());
+    assert!(h.key_string(b).is_none() && h.key_string(c).is_none());
+    assert_eq!(h.keys().len(), 1);
+    Ok(())
+}
+
+#[test]
+fn a_shape_keeps_its_parents_but_a_parent_does_not_keep_its_children() -> R<()> {
+    let mut h = Heap::new();
+    let (a, b) = (key(&mut h, "a")?, key(&mut h, "b")?);
+    let o = obj(&mut h)?;
+    h.add_property(o, a, Attrs::ALL, int(1))?;
+    let s1 = shape_of(&h, o)?;
+    h.add_property(o, b, Attrs::ALL, int(2))?;
+    let s2 = shape_of(&h, o)?;
+    // A second object stays at {a}, and the first dies: the child {a, b}
+    // goes, its parent {a} stays, and so does the key `a`, not `b`.
+    let other = obj(&mut h)?;
+    h.add_property(other, a, Attrs::ALL, int(1))?;
+    assert_eq!(shape_of(&h, other)?, s1, "shared");
+    h.collect(&[val(other)])?;
+    assert!(h.shapes().is_live(s1) && !h.shapes().is_live(s2));
+    assert!(h.key_string(a).is_some() && h.key_string(b).is_none());
+    // The transition to the freed child is gone: the same property added
+    // again is a new shape, never the old id, and a stale key is refused.
+    assert_eq!(
+        h.add_property(other, b, Attrs::ALL, int(3)),
+        Err(Error::StaleKey)
+    );
+    let b2 = key(&mut h, "b")?;
+    assert_ne!(b2, b, "a freed key id is not reused");
+    h.add_property(other, b2, Attrs::ALL, int(3))?;
+    let s3 = shape_of(&h, other)?;
+    assert!(s3.0 > s2.0, "a freed shape id is not reused");
+    assert_eq!(h.shapes().lookup(s3, a), Some((0, Attrs::ALL)));
+    // With the object gone, so is everything but the root.
+    h.collect(&[])?;
+    assert!(!h.shapes().is_live(s1) && !h.shapes().is_live(s3));
+    assert_eq!(h.shapes().len(), 1);
+    assert_eq!(h.keys().len(), 0);
+    Ok(())
+}
+
+#[test]
+fn a_dictionary_shape_dies_with_its_object_and_its_keys_with_it() -> R<()> {
+    let mut h = Heap::new();
+    let o = obj(&mut h)?;
+    let mut keys = vec![];
+    for i in 0..=MAX_FAST_PROPERTIES {
+        let k = key(&mut h, &format!("p{i}"))?;
+        keys.push(k);
+        h.add_property(o, k, Attrs::ALL, int(1))?;
+    }
+    let dict = shape_of(&h, o)?;
+    assert!(h.shapes().is_dictionary(dict));
+    let out = h.collect(&[val(o)])?;
+    // A dictionary has no parent: the shared chain below it is garbage, but
+    // the dictionary holds every key.
+    assert_eq!(out.freed_shapes, MAX_FAST_PROPERTIES);
+    assert_eq!(out.freed_keys, 0);
+    assert!(keys.iter().all(|&k| h.key_string(k).is_some()));
+    let out = h.collect(&[])?;
+    assert!(!h.shapes().is_live(dict));
+    assert_eq!(out.freed_keys, MAX_FAST_PROPERTIES + 1);
+    assert_eq!((h.shapes().len(), h.keys().len()), (1, 0));
+    Ok(())
+}
+
+#[test]
+fn the_embedder_keeps_keys_and_shapes_it_reports() -> R<()> {
+    let mut h = Heap::new();
+    let (a, b) = (key(&mut h, "a")?, key(&mut h, "b")?);
+    let o = obj(&mut h)?;
+    h.add_property(o, a, Attrs::ALL, int(1))?;
+    let s1 = shape_of(&h, o)?;
+    // `o` dies, but its shape is an inline cache's, and `b` a constant's.
+    let out = h.collect_with(&RootSet {
+        values: &[],
+        keys: &[b],
+        shapes: &[s1],
+    })?;
+    assert_eq!(out.freed_shapes, 0);
+    assert!(h.shapes().is_live(s1));
+    assert!(h.key_string(a).is_some(), "the reported shape names `a`");
+    assert!(h.key_string(b).is_some());
+    // A stale or made-up root is ignored.
+    let out = h.collect_with(&RootSet {
+        values: &[],
+        keys: &[Key(77)],
+        shapes: &[ShapeId(0), ShapeId(500)],
+    })?;
+    assert_eq!((out.freed_shapes, out.freed_keys), (1, 2));
+    assert_eq!(h.shapes().len(), 1);
+    Ok(())
+}
+
+#[test]
+fn an_object_needs_a_live_shape_and_a_refused_collection_frees_nothing() -> R<()> {
+    let mut h = Heap::new();
+    let mut o = Object::ordinary();
+    o.shape = ShapeId(40);
+    assert_eq!(
+        h.alloc(o).map(|_| ()),
+        Err(Error::Shape(shape::Error::Unknown))
+    );
+    let k = key(&mut h, "k")?;
+    h.enter_op();
+    assert_eq!(h.collect(&[]).map(|_| ()), Err(Error::InOperation));
+    assert!(h.key_string(k).is_some(), "nothing changed");
+    h.exit_op()?;
+    Ok(())
+}
+
+/// A shape table for the marker's agreement with the specification:
+/// `(exists, parent, keys)` per entry.
+struct Table(Vec<(bool, Option<usize>, Vec<usize>)>);
+
+impl contract::ShapeGraph for Table {
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+    fn exists(&self, i: usize) -> bool {
+        self.0.get(i).is_some_and(|e| e.0)
+    }
+    fn parent(&self, i: usize) -> Option<usize> {
+        self.0.get(i).and_then(|e| e.1)
+    }
+    fn each_key(&self, i: usize, f: &mut dyn FnMut(usize)) {
+        for &k in self.0.get(i).map_or(&[][..], |e| &e.2) {
+            f(k);
+        }
+    }
+}
+
+/// `mark_shapes` equals the specification on random tables, including wild
+/// ones a real table never has (cycles, parents that do not exist, keys out
+/// of range, roots naming nothing).
+#[test]
+fn mark_shapes_equals_the_specification_on_random_tables() {
+    let mut rng = Lcg(0x5AA5E);
+    let tables = if cfg!(miri) { 100 } else { 3000 };
+    for _ in 0..tables {
+        let n = rng.below(14);
+        let key_count = rng.below(8);
+        let table: Vec<(bool, Option<usize>, Vec<usize>)> = (0..n)
+            .map(|_| {
+                let parent = rng.chance(70).then(|| rng.below(n + 2));
+                let keys = (0..rng.below(3))
+                    .map(|_| rng.below(key_count + 2))
+                    .collect();
+                (rng.chance(85), parent, keys)
+            })
+            .collect();
+        let g = Table(table);
+        let roots: Vec<usize> = (0..rng.below(4)).map(|_| rng.below(n + 2)).collect();
+        let root_keys: Vec<usize> = (0..rng.below(3))
+            .map(|_| rng.below(key_count + 2))
+            .collect();
+        let mut shapes = vec![false; n];
+        let mut keys = vec![false; key_count];
+        mark_shapes(&g, &roots, &root_keys, &mut shapes, &mut keys);
+        assert!(contract::shapes_exact(
+            &g, &roots, &root_keys, &shapes, &keys
+        ));
     }
 }
