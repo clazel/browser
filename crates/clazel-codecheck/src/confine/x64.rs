@@ -65,8 +65,6 @@
 //!   decision.
 
 #[allow(unused_imports)]
-use super::machine::*;
-#[allow(unused_imports)]
 use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
