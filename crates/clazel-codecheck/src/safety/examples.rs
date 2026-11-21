@@ -1,19 +1,13 @@
-//! Examples for the safety theorem's definitions ([`super::safety`]),
+//! Examples for the safety theorem's definitions ([`super`]),
 //! proven by evaluating them: which layouts the host may hand over, which
 //! accesses the theorem allows, and what an index fact says. Each refused
 //! example is one that a weakened definition would accept, so the theorem
 //! would stop being true (`mutations.json` cites the lemmas of
-//! [`super::safety_lemmas`] for the same data).
+//! [`super::lemmas`] for the same data).
 //!
 //! The last example, [`example_handed_satisfiable`], shows that the theorem's
 //! hypothesis [`handed_ok`] can be met: a layout of sixteen regions.
 
-#[allow(unused_imports)]
-use super::safety::*;
-#[allow(unused_imports)]
-use super::safety_inv::*;
-#[allow(unused_imports)]
-use super::safety_lemmas::*;
 #[allow(unused_imports)]
 use super::spec::*;
 #[allow(unused_imports)]

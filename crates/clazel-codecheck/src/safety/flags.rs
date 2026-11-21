@@ -9,8 +9,6 @@
 //! solver does not have to find them.)
 
 #[allow(unused_imports)]
-use super::safety_sem::*;
-#[allow(unused_imports)]
 use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
@@ -23,7 +21,8 @@ pub open spec fn flag_pos(k: nat) -> bool {
 }
 
 /// Clearing bit 0 and setting it to `c` does not change bit 2.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_0_2(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,
@@ -49,7 +48,8 @@ proof fn int_0_2(x: int, c: int)
 }
 
 /// Clearing bit 0 and setting it to `c` does not change bit 4.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_0_4(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,
@@ -75,7 +75,8 @@ proof fn int_0_4(x: int, c: int)
 }
 
 /// Clearing bit 0 and setting it to `c` does not change bit 6.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_0_6(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,
@@ -101,7 +102,8 @@ proof fn int_0_6(x: int, c: int)
 }
 
 /// Clearing bit 0 and setting it to `c` does not change bit 7.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_0_7(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,
@@ -127,7 +129,8 @@ proof fn int_0_7(x: int, c: int)
 }
 
 /// Clearing bit 0 and setting it to `c` does not change bit 11.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_0_11(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,
@@ -182,7 +185,8 @@ proof fn lemma_set_bit_0(w: u32, v: int)
 }
 
 /// Clearing bit 2 and setting it to `c` does not change bit 0.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_2_0(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,
@@ -208,7 +212,8 @@ proof fn int_2_0(x: int, c: int)
 }
 
 /// Clearing bit 2 and setting it to `c` does not change bit 4.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_2_4(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,
@@ -234,7 +239,8 @@ proof fn int_2_4(x: int, c: int)
 }
 
 /// Clearing bit 2 and setting it to `c` does not change bit 6.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_2_6(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,
@@ -260,7 +266,8 @@ proof fn int_2_6(x: int, c: int)
 }
 
 /// Clearing bit 2 and setting it to `c` does not change bit 7.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_2_7(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,
@@ -286,7 +293,8 @@ proof fn int_2_7(x: int, c: int)
 }
 
 /// Clearing bit 2 and setting it to `c` does not change bit 11.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_2_11(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,
@@ -341,7 +349,8 @@ proof fn lemma_set_bit_2(w: u32, v: int)
 }
 
 /// Clearing bit 4 and setting it to `c` does not change bit 0.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_4_0(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,
@@ -367,7 +376,8 @@ proof fn int_4_0(x: int, c: int)
 }
 
 /// Clearing bit 4 and setting it to `c` does not change bit 2.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_4_2(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,
@@ -393,7 +403,8 @@ proof fn int_4_2(x: int, c: int)
 }
 
 /// Clearing bit 4 and setting it to `c` does not change bit 6.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_4_6(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,
@@ -419,7 +430,8 @@ proof fn int_4_6(x: int, c: int)
 }
 
 /// Clearing bit 4 and setting it to `c` does not change bit 7.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_4_7(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,
@@ -445,7 +457,8 @@ proof fn int_4_7(x: int, c: int)
 }
 
 /// Clearing bit 4 and setting it to `c` does not change bit 11.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_4_11(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,
@@ -500,7 +513,8 @@ proof fn lemma_set_bit_4(w: u32, v: int)
 }
 
 /// Clearing bit 6 and setting it to `c` does not change bit 0.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_6_0(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,
@@ -526,7 +540,8 @@ proof fn int_6_0(x: int, c: int)
 }
 
 /// Clearing bit 6 and setting it to `c` does not change bit 2.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_6_2(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,
@@ -552,7 +567,8 @@ proof fn int_6_2(x: int, c: int)
 }
 
 /// Clearing bit 6 and setting it to `c` does not change bit 4.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_6_4(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,
@@ -578,7 +594,8 @@ proof fn int_6_4(x: int, c: int)
 }
 
 /// Clearing bit 6 and setting it to `c` does not change bit 7.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_6_7(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,
@@ -604,7 +621,8 @@ proof fn int_6_7(x: int, c: int)
 }
 
 /// Clearing bit 6 and setting it to `c` does not change bit 11.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_6_11(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,
@@ -659,7 +677,8 @@ proof fn lemma_set_bit_6(w: u32, v: int)
 }
 
 /// Clearing bit 7 and setting it to `c` does not change bit 0.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_7_0(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,
@@ -685,7 +704,8 @@ proof fn int_7_0(x: int, c: int)
 }
 
 /// Clearing bit 7 and setting it to `c` does not change bit 2.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_7_2(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,
@@ -711,7 +731,8 @@ proof fn int_7_2(x: int, c: int)
 }
 
 /// Clearing bit 7 and setting it to `c` does not change bit 4.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_7_4(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,
@@ -737,7 +758,8 @@ proof fn int_7_4(x: int, c: int)
 }
 
 /// Clearing bit 7 and setting it to `c` does not change bit 6.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_7_6(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,
@@ -763,7 +785,8 @@ proof fn int_7_6(x: int, c: int)
 }
 
 /// Clearing bit 7 and setting it to `c` does not change bit 11.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_7_11(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,
@@ -818,7 +841,8 @@ proof fn lemma_set_bit_7(w: u32, v: int)
 }
 
 /// Clearing bit 11 and setting it to `c` does not change bit 0.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_11_0(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,
@@ -844,7 +868,8 @@ proof fn int_11_0(x: int, c: int)
 }
 
 /// Clearing bit 11 and setting it to `c` does not change bit 2.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_11_2(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,
@@ -870,7 +895,8 @@ proof fn int_11_2(x: int, c: int)
 }
 
 /// Clearing bit 11 and setting it to `c` does not change bit 4.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_11_4(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,
@@ -896,7 +922,8 @@ proof fn int_11_4(x: int, c: int)
 }
 
 /// Clearing bit 11 and setting it to `c` does not change bit 6.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_11_6(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,
@@ -922,7 +949,8 @@ proof fn int_11_6(x: int, c: int)
 }
 
 /// Clearing bit 11 and setting it to `c` does not change bit 7.
-#[verifier::rlimit(200)]
+#[verifier::rlimit(800)]
+#[verifier::spinoff_prover]
 proof fn int_11_7(x: int, c: int)
     requires
         0 <= x < 0x1_0000_0000,

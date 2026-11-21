@@ -5,14 +5,6 @@
 //! safe and leads to the invariant at the next position.
 
 #[allow(unused_imports)]
-use super::safety::*;
-#[allow(unused_imports)]
-use super::safety_chk::*;
-#[allow(unused_imports)]
-use super::safety_inv::*;
-#[allow(unused_imports)]
-use super::safety_sem::*;
-#[allow(unused_imports)]
 use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;

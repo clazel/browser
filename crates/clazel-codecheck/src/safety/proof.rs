@@ -1,28 +1,16 @@
-//! **The proof of the safety theorem** ([`super::safety`]): the machine
+//! **The proof of the safety theorem** ([`super`]): the machine
 //! invariant [`pos_inv`] holds at every position an execution reaches, by
 //! induction on the number of steps, and each step is safe.
 //!
 //! The invariant says: the machine is at instruction `m` of the unit that the
-//! scan found at instruction `j` ([`super::safety_unit::mid_ok`]); `rip` is
+//! scan found at instruction `j` ([`super::unit::mid_ok`]); `rip` is
 //! that instruction's address; the context invariant holds; and the scan, run
 //! from `j` with the facts `fs`, is accepted. A step from such a state is one
-//! of [`super::safety_unit::lemma_unit_step`]'s cases; the next position is the
+//! of [`super::unit::lemma_unit_step`]'s cases; the next position is the
 //! next instruction of the unit, the start of the next unit (the scan found it),
 //! or a jump target (the policy made every target a unit start, where nothing
 //! is known).
 
-#[allow(unused_imports)]
-use super::acc_lemmas::*;
-#[allow(unused_imports)]
-use super::safety::*;
-#[allow(unused_imports)]
-use super::safety_chk::*;
-#[allow(unused_imports)]
-use super::safety_inv::*;
-#[allow(unused_imports)]
-use super::safety_sem::*;
-#[allow(unused_imports)]
-use super::safety_unit::*;
 #[allow(unused_imports)]
 use super::spec::*;
 #[allow(unused_imports)]
@@ -140,7 +128,7 @@ proof fn lemma_jt_has(ins: Seq<Instr>, j0: int, j: int, r: int)
         seq_has(jump_targets(ins, j0), start_of(ins, j + 1) + r),
     decreases j - j0,
 {
-    super::validate::lemma_jump_targets_step(ins, j0);
+    crate::validate::lemma_jump_targets_step(ins, j0);
     let here: Seq<int> = match jump_rel(ins[j0]) {
         Some(r0) => seq![start_of(ins, j0 + 1) + r0],
         None => Seq::empty(),
@@ -224,8 +212,8 @@ proof fn lemma_fetch_is(
         i == ins[p],
 {
     clazel_x64::decoder_proofs::lemma_canonical_prefix_free();
-    super::validate::lemma_enc_all_len(ins);
-    super::uniq::lemma_enc_all_index(ins, p);
+    crate::validate::lemma_enc_all_len(ins);
+    crate::uniq::lemma_enc_all_index(ins, p);
     assert(blob == enc_all(ins));
     let e = encode(ins[p]);
     let st = start_of(ins, p);
@@ -241,7 +229,7 @@ proof fn lemma_fetch_is(
         0u8
     });
     assert(bytes.subrange(0, encode(i).len() as int) =~= encode(i));
-    super::validate::lemma_start_of_ge(ins, p);
+    crate::validate::lemma_start_of_ge(ins, p);
     assert forall|x: int| 0 <= x < e.len() implies bytes.subrange(0, e.len() as int)[x] == e[x] by {
         assert(0 <= st + x < blob.len());
         assert(s.mem.dom().contains(h.code + (st + x)));
@@ -463,7 +451,7 @@ pub proof fn safety_theorem(
     }
 }
 
-/// The theorem as [`super::safety::safety_statement`] states it.
+/// The theorem as [`super::safety_statement`] states it.
 pub proof fn safety_holds(
     u: spec_fn(nat) -> nat,
     blob: Seq<u8>,

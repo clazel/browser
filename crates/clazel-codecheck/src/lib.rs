@@ -33,9 +33,13 @@
 //! (each unit check equal to its spec function) and [`scan_exec`] (the scan
 //! equal to the spec's recursive `scan`). The tier stays 0 until CI's full
 //! verification runs (CLAUDE.md rule 7). The theorem of jit.md exit criterion 2
-//! (an accepted blob
-//! is confined) is not stated or proven here; see the end of [`spec`]'s
-//! header.
+//! (an accepted blob is confined) is stated in [`safety`] and proven in
+//! [`safety::proof::safety_theorem`], over `clazel_x64::spec::step`, with
+//! [`safety::sem`] (what a step changes), [`safety::inv`] (what the register
+//! facts mean), [`safety::flags`] and [`safety::alu`] (the flag bits of `add`
+//! and `cmp`), [`safety::chk`] and [`safety::unit`] (the steps of a unit). Its
+//! examples are [`safety::examples`] and the lemmas of its mutation
+//! certificates [`safety::lemmas`].
 //!
 //! Tier: see `[package.metadata.clazel]` in `Cargo.toml` and
 //! `docs/VERIFICATION.md`.
@@ -47,15 +51,6 @@ pub mod decode_all;
 pub mod examples;
 pub mod lemmas;
 pub mod safety;
-pub mod safety_alu;
-pub mod safety_chk;
-pub mod safety_examples;
-pub mod safety_flags;
-pub mod safety_lemmas;
-pub mod safety_inv;
-pub mod safety_proof;
-pub mod safety_sem;
-pub mod safety_unit;
 pub mod scan_exec;
 pub mod spec;
 pub mod uniq;

@@ -7,16 +7,6 @@
 //! [`chk_mid`] is the invariant after `m` instructions of the sequence.
 
 #[allow(unused_imports)]
-use super::safety::*;
-#[allow(unused_imports)]
-use super::safety_alu::*;
-#[allow(unused_imports)]
-use super::safety_flags::*;
-#[allow(unused_imports)]
-use super::safety_inv::*;
-#[allow(unused_imports)]
-use super::safety_sem::*;
-#[allow(unused_imports)]
 use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;

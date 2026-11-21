@@ -1,4 +1,4 @@
-//! The machine-level invariant of the safety theorem ([`super::safety`]):
+//! The machine-level invariant of the safety theorem ([`super`]):
 //! what the validator's register facts mean about a machine state, and the
 //! preservation of the context invariant and of those facts by one ordinary
 //! instruction.
@@ -14,10 +14,6 @@
 //! - [`lemma_plain_step`]: one instruction the scan takes alone is safe, keeps
 //!   the invariant and keeps the facts the scan derives for what follows.
 
-#[allow(unused_imports)]
-use super::safety::*;
-#[allow(unused_imports)]
-use super::safety_sem::*;
 #[allow(unused_imports)]
 use super::spec::*;
 #[allow(unused_imports)]
@@ -352,7 +348,7 @@ pub proof fn lemma_plain_step(
         },
         s2.rgf.len() == 16,
 {
-    super::lemmas::lemma_plain_ok_safe(fs, i);
+    crate::lemmas::lemma_plain_ok_safe(fs, i);
     assert(!(i is Ret));
     lemma_step_frame(u, s, i, s2);
     lemma_mem_access_valid(i);

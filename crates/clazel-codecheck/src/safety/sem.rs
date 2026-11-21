@@ -1,5 +1,5 @@
 //! Frame lemmas for `clazel_x64::spec::step`, used by the safety theorem
-//! ([`super::safety`]): what one instruction can change. They say nothing
+//! ([`super`]): what one instruction can change. They say nothing
 //! about the validator; they are facts about the machine model.
 //!
 //! - which general registers a step may write (only [`written_gpr`], and `rsp`

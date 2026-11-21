@@ -58,6 +58,17 @@
 //! - **No termination claim**: a prefix may be of any length, a loop may go
 //!   on for ever (see [`super::spec`]).
 
+pub mod alu;
+pub mod chk;
+pub mod examples;
+pub mod flags;
+pub mod inv;
+pub mod lemmas;
+pub mod proof;
+pub mod sem;
+pub mod spec;
+pub mod unit;
+
 #[allow(unused_imports)]
 use super::spec::*;
 #[allow(unused_imports)]

@@ -125,7 +125,7 @@
       "expect": "killed",
       "reason": "Weakens what the host must hand over: a region may lie on the context's region table, so a store through that region could rewrite a base or a bound and the invariant that the table is what the host said is not preserved. region_ok of a region on the table is true, so lemma_region_avoids_table (and example_region_on_table_refused) is false.",
       "certificate": {
-        "file": "src/safety_lemmas.rs",
+        "file": "src/safety/lemmas.rs",
         "lemma": "lemma_region_avoids_table(cx_h(), cx_region_on_table())",
         "witness": "region_ok(cx_h(), cx_region_on_table())"
       }
@@ -138,7 +138,7 @@
       "expect": "killed",
       "reason": "Weakens what the host must hand over: a region may lie on the code, so a store through it could rewrite the instructions the validator checked and the executed instruction is no longer the decoded one. lemma_region_avoids_code (and example_region_on_code_refused) is false.",
       "certificate": {
-        "file": "src/safety_lemmas.rs",
+        "file": "src/safety/lemmas.rs",
         "lemma": "lemma_region_avoids_code(cx_h(), cx_region_on_code())",
         "witness": "region_ok(cx_h(), cx_region_on_code())"
       }
@@ -151,7 +151,7 @@
       "expect": "killed",
       "reason": "Lets a region extend past 2^63, where the machine's address arithmetic (taken modulo 2^64 and read as signed) no longer gives base + index, so an access the checks allow could land elsewhere. lemma_region_no_wrap (and example_region_wrap_refused) is false.",
       "certificate": {
-        "file": "src/safety_lemmas.rs",
+        "file": "src/safety/lemmas.rs",
         "lemma": "lemma_region_no_wrap(cx_h(), cx_region_wraps())",
         "witness": "region_ok(cx_h(), cx_region_wraps())"
       }
@@ -164,20 +164,20 @@
       "expect": "killed",
       "reason": "Weakens what a store may touch in the context to the whole context, so the theorem would allow a store to the region table. lemma_ctx_store_avoids_table (and example_store_table_refused) is false.",
       "certificate": {
-        "file": "src/safety_lemmas.rs",
+        "file": "src/safety/lemmas.rs",
         "lemma": "lemma_ctx_store_avoids_table(cx_h(), 0x1000int, cx_store8())",
         "witness": "ctx_access_ok(cx_h(), 0x1000int, cx_store8())"
       }
     },
     {
       "id": "safety-index-fact-ignores-size",
-      "file": "src/safety_inv.rs",
+      "file": "src/safety/inv.rs",
       "find": "v + n <= bound",
       "replace": "v <= bound",
       "expect": "killed",
       "reason": "Weakens what an index fact says of a register to the index alone being within the bound, without the n bytes of the access after it: the last bytes of an access could lie outside the region. lemma_idx_fits_room (and example_idx_fits) is false.",
       "certificate": {
-        "file": "src/safety_lemmas.rs",
+        "file": "src/safety/lemmas.rs",
         "lemma": "lemma_idx_fits_room(5, 8, 10)",
         "witness": "idx_fits(5, 8, 10)"
       }

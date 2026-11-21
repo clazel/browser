@@ -4,10 +4,6 @@
 //! `cmp t, [bound]` the carry and zero flags say how `t` and the bound compare.
 
 #[allow(unused_imports)]
-use super::safety_flags::*;
-#[allow(unused_imports)]
-use super::safety_sem::*;
-#[allow(unused_imports)]
 use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;

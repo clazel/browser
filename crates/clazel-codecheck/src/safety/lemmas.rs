@@ -1,19 +1,15 @@
-//! Facts proven about the safety theorem's definitions ([`super::safety`],
-//! [`super::safety_inv`]), and the concrete data of the kill certificates of
+//! Facts proven about the safety theorem's definitions ([`super`],
+//! [`super::inv`]), and the concrete data of the kill certificates of
 //! `mutations.json` that mutate them. Each lemma restates a rule of the
 //! theorem's side (what the host must hand over, what an access may touch,
 //! what an index fact says) in a form that does not mention how it is
 //! computed; a certificate evaluates the definition on one concrete input and
 //! the lemma contradicts it.
 //!
-//! The examples in [`super::safety_examples`] are kept apart, so that a mutant
+//! The examples in [`super::examples`] are kept apart, so that a mutant
 //! that breaks one of them does not stop Verus before it checks a certificate
 //! here.
 
-#[allow(unused_imports)]
-use super::safety::*;
-#[allow(unused_imports)]
-use super::safety_inv::*;
 #[allow(unused_imports)]
 use super::spec::*;
 #[allow(unused_imports)]
