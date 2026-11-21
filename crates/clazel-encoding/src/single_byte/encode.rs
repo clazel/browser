@@ -40,8 +40,10 @@ fn index_pointer_exec(e: Encoding, code_point: u32) -> (r: Option<u8>)
     None
 }
 
-/// The encoder handler's result for a scalar value.
-fn run_encoder_handler(e: Encoding, code_point: u32) -> (r: EncoderResult)
+/// The encoder handler's result for a scalar value (public so that form
+/// submission, whose URL serializer needs the handler's error per code
+/// point, can call it).
+pub fn run_encoder_handler(e: Encoding, code_point: u32) -> (r: EncoderResult)
     ensures
         r == encoder_handler(e, crate::utf8::spec::ScalarItem::ScalarValue(code_point)),
 {

@@ -32,6 +32,7 @@ mod wpt_css_syntax;
 mod wpt_css_values;
 mod wpt_encoding;
 mod wpt_encoding_legacy;
+mod wpt_form_encodings;
 mod wpt_idna;
 mod wpt_mediaqueries;
 mod wpt_mime_types;
@@ -143,6 +144,11 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         "wpt-encoding-legacy",
         wpt_encoding_legacy::convert,
         wpt_encoding_legacy::FILES,
+    ),
+    (
+        "wpt-form-encodings",
+        wpt_form_encodings::convert,
+        wpt_form_encodings::FILES,
     ),
     ("wpt-url-idna", wpt_idna::convert, wpt_idna::FILES),
     (

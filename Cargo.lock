@@ -309,7 +309,11 @@ name = "clazel-forms"
 version = "0.0.0"
 dependencies = [
  "clazel-dom",
+ "clazel-encoding",
+ "clazel-percent",
  "clazel-treebuilder",
+ "clazel-url",
+ "form_urlencoded",
  "vstd",
 ]
 
