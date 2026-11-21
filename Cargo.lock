@@ -221,6 +221,7 @@ dependencies = [
 name = "clazel-codecheck"
 version = "0.0.0"
 dependencies = [
+ "clazel-a64",
  "clazel-x64",
  "vstd",
 ]
