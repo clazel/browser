@@ -5,6 +5,7 @@
 //! does not write the reserved registers.
 //!
 //! - [`machine`]: the statement, once, over an abstract [`machine::Machine`].
+//! - [`a64`]: the A64 instance of the same statement (its own module tree).
 //! - [`x64`]: the x86-64 instance: configuration, machine-level invariant,
 //!   observations. Statement only.
 //! - The x86-64 proof, [`x64proof`], from: [`frame`] (what `effect` leaves
@@ -50,6 +51,7 @@ pub mod spec {
     pub use crate::spec::*;
 }
 
+pub mod a64;
 pub mod chain;
 pub mod check;
 pub mod flags;
