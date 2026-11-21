@@ -14,8 +14,13 @@
 //! - [`lemmas`]: general facts proven about the spec. They are what the kill
 //!   certificates of `mutations.json` cite.
 
+pub mod acc_lemmas;
 pub mod api;
 pub mod contract;
+pub mod decode;
 pub mod examples;
 pub mod lemmas;
+pub mod scan_exec;
 pub mod spec;
+pub mod unit_exec;
+pub mod validate;

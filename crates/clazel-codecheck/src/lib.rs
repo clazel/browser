@@ -1,6 +1,6 @@
-//! The JIT's code validators (docs/phases/jit.md item J.6), the x86-64 one
-//! first. The A64 validator and the second, independent x86-64 validator are
-//! later work.
+//! The JIT's code validators (docs/phases/jit.md item J.6): the x86-64 one
+//! in this module's root, and the A64 one in [`a64`]. The second, independent
+//! validators (dataflow analyses) and the confinement theorem are later work.
 //!
 //! This is the first part of item J.6: the specification of what the
 //! validator accepts and the contract of its entry point, written before any
@@ -36,6 +36,12 @@
 //! (an accepted blob
 //! is confined) is not stated or proven here; see the end of [`spec`]'s
 //! header.
+//!
+//! The A64 validator ([`a64`]) has the same shape and the same status: a spec
+//! and contract committed first, then [`a64::validate::validate`], proven sound
+//! and complete against [`a64::spec::accepted`], using `clazel-a64`'s proven
+//! decoder. Its completeness needs no prefix lemma (A64 words have a fixed
+//! size).
 //!
 //! Tier: see `[package.metadata.clazel]` in `Cargo.toml` and
 //! `docs/VERIFICATION.md`.
