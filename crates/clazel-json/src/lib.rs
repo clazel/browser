@@ -12,10 +12,15 @@
 //! - [`tree`]: the executable value tree and its mathematical meaning.
 //! - [`contract`]: what the executable parser and quoter are proven to
 //!   satisfy.
-//! - [`examples`]: a few cases evaluated on the spec.
+//! - [`parse`] and [`quote`]: the executable parser and quoter, and their
+//!   proofs.
+//! - [`examples`]: a few cases evaluated on the spec; [`lemmas`]: facts
+//!   about the spec (and the home of the mutation certificates).
 
 pub mod contract;
 pub mod examples;
 pub mod lemmas;
+pub mod parse;
+pub mod quote;
 pub mod spec;
 pub mod tree;

@@ -20,16 +20,23 @@ standard, which sets no bound.
 
 ## Status
 
-**Tier 0 today; target tier 2.** This change adds the spec, the contracts
-and the examples, with the mutations certified. The executable parser and
-quoter and their proofs come next, then the independent transcription from
-RFC 8259 and the conformance tests. Nothing here is verified against the
-standard's text yet: the spec was written without access to ECMA-404 or
-ECMA-262, and its header says so (the † mark is the convention in
-`docs/phases/phase-7.md`).
+**Tier 0 today; target tier 2.** The spec, the contracts, the examples and
+the certified mutations were committed first; then the executable parser
+(`parse::parse`) and quoter (`quote::quote`), each proven by Verus to equal
+the spec on every input (no precondition), and so free of panics and
+overflow. Still to do before the tier is raised: the independent
+transcription from RFC 8259 proven equal to the spec, conformance tests
+against official suites (JSONTestSuite, Test262's `built-ins/JSON`), and a
+full `cargo xtask verify` in CI. `tests/behaviour.rs` is a hand-written
+check of the spec's reading, not a conformance suite.
+
+Nothing here is verified against the standard's text yet: the spec was
+written without access to ECMA-404 or ECMA-262, and its header says so (the
+† mark is the convention in `docs/phases/phase-7.md`).
 
 ## Layout
 
 `src/spec.rs` (the transcription), `src/tree.rs` (the executable tree and
-its meaning), `src/contract.rs`, `src/examples.rs`, `src/lemmas.rs` and
+its meaning), `src/contract.rs`, `src/parse.rs` and `src/quote.rs` (the
+executable code and its proofs), `src/examples.rs`, `src/lemmas.rs` and
 `mutations.json`, as in `clazel-base64`.
