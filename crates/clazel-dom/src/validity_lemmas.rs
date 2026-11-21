@@ -573,7 +573,7 @@ proof fn lemma_pre_insert_doctypes_from(doc: Document, parent: NodeId, child: Op
 /// Step 6 of "ensure pre-insertion validity" is [`rules_violation`] with
 /// the children split at `child`.
 #[verifier::spinoff_prover]
-#[verifier::rlimit(200)]
+#[verifier::rlimit(40)]
 pub proof fn lemma_pre_insert_violation(doc: Document, node: NodeId, parent: NodeId, child: Option<NodeId>)
     requires
         wf(doc),
