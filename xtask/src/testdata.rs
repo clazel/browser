@@ -50,6 +50,7 @@ mod wpt_urltestdata;
 mod wpt_webstorage;
 mod wuffs_deflate;
 mod wuffs_gif;
+mod wuffs_webp;
 mod wycheproof_ecdsa;
 mod wycheproof_rsa;
 mod x509_limbo;
@@ -227,6 +228,7 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         jpeg::FILES_TESTIMAGES,
     ),
     ("jpeg-corpus", jpeg::convert, jpeg::FILES_CORPUS),
+    ("wuffs-webp", wuffs_webp::convert, wuffs_webp::FILES),
     // Phase 7 item 7.1: files later items read as files; each converts to an
     // inventory of paths, sizes and hashes (see inventory.rs).
     ("wpt-web", inventory::convert_wpt_web, &[]),
