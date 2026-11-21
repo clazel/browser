@@ -201,17 +201,35 @@ fn temporal_dead_zone_checks() -> Result<(), String> {
             .iter()
             .any(|i| matches!(i, Instr::ThrowIfHole { .. }))
     );
-    // Its own initializer reads it before it exists: checked (§14.3.1.2).
+    // Its own initializer reads it before it exists: checked (§14.3.1.2). At the
+    // top level of a script the binding is the global declarative record's: the
+    // read is a global read, which throws for an uninitialized binding
+    // (§9.1.1.1.6 step 2), and the declaration initializes it
+    // (InitializeReferencedBinding).
     let p = compile("let b = b;")?;
+    let f = func(&p, 0)?;
     assert_eq!(
-        func(&p, 0)?.instrs,
+        f.instrs,
         vec![
             Instr::LoadUndefined { dst: 0 },
-            Instr::LoadHole { dst: 1 },
-            Instr::ThrowIfHole { src: 1 },
-            Instr::LoadUndefined { dst: 2 },
-            Instr::Return { src: 2 },
+            Instr::DeclareGlobals { k: 0 },
+            Instr::GetGlobal {
+                dst: 1,
+                key: 1,
+                ic: 0
+            },
+            Instr::InitGlobalLexical { key: 1, src: 1 },
+            Instr::LoadUndefined { dst: 1 },
+            Instr::Return { src: 1 },
         ]
+    );
+    // In a function it is a register, checked.
+    let p = compile("function f() { let b = b; }")?;
+    assert!(
+        func(&p, 1)?
+            .instrs
+            .iter()
+            .any(|i| matches!(i, Instr::ThrowIfHole { .. }))
     );
     // A `switch` clause can skip a declaration: checked even after it.
     let p = compile("switch (0) { case 0: let s = 1; case 1: s; }")?;
@@ -234,13 +252,28 @@ fn temporal_dead_zone_checks() -> Result<(), String> {
 
 #[test]
 fn const_assignment_throws_a_type_error() -> Result<(), String> {
-    let p = compile("const c = 1; c = 2;")?;
-    let f = func(&p, 0)?;
+    let p = compile("function f() { const c = 1; c = 2; }")?;
+    let f = func(&p, 1)?;
     assert!(f.instrs.contains(&Instr::ThrowError {
         kind: ErrorKind::TypeError,
         msg: 0
     }));
     assert_eq!(f.consts, vec![text("Assignment to constant variable.")]);
+    // At the top level of a script the constant is in the global declarative
+    // record, and the write is a global write (SetMutableBinding §9.1.1.1.5
+    // step 5 throws).
+    let p = compile("const c = 1; c = 2;")?;
+    let f = func(&p, 0)?;
+    assert!(
+        f.instrs
+            .iter()
+            .any(|i| matches!(i, Instr::InitGlobalLexical { .. }))
+    );
+    assert!(
+        f.instrs
+            .iter()
+            .any(|i| matches!(i, Instr::SetGlobal { .. }))
+    );
     Ok(())
 }
 
@@ -562,6 +595,37 @@ fn global_declaration_record() -> Result<(), String> {
     };
     assert!(d.lexical.is_empty());
     assert_eq!(d.annexb, vec![name("g")]);
+    // The top-level `let`, `const` and `class` names are in the record, with
+    // whether each is a constant (§16.1.7† step 13), and nothing else is.
+    let p =
+        compile("let x = 1; const y = 2, z = 3; class C {} { let w; } function g() { let v; }")?;
+    let Some(Const::GlobalDeclarations(d)) = func(&p, 0)?
+        .consts
+        .iter()
+        .find(|c| matches!(c, Const::GlobalDeclarations(_)))
+    else {
+        return Err("no record".to_string());
+    };
+    assert_eq!(
+        d.lexical,
+        vec![
+            (name("x"), false),
+            (name("y"), true),
+            (name("z"), true),
+            (name("C"), false)
+        ]
+    );
+    let p = compile(
+        "var a; function f() { var inner; } { function g() {} } if (a) { var b, c; } var a;",
+    )?;
+    let f = func(&p, 0)?;
+    let Some(Const::GlobalDeclarations(d)) = f
+        .consts
+        .iter()
+        .find(|c| matches!(c, Const::GlobalDeclarations(_)))
+    else {
+        return Err("no record".to_string());
+    };
     let names: Vec<(bool, Vec<u16>)> = d
         .var_scoped
         .iter()
@@ -580,13 +644,23 @@ fn global_declaration_record() -> Result<(), String> {
             (false, name("a")),
         ]
     );
-    for src in ["1 + 2;", "let x = 1;", "function f() { var y; }"] {
+    for src in [
+        "1 + 2;",
+        "let x = 1;",
+        "function f() { var y; }",
+        "{ let x = 1; }",
+        "function f() { let x; }",
+    ] {
         let p = compile(src)?;
         let has = func(&p, 0)?
             .instrs
             .iter()
             .any(|i| matches!(i, Instr::DeclareGlobals { .. }));
-        assert_eq!(has, src.starts_with("function"), "{src}");
+        assert_eq!(
+            has,
+            src.starts_with("function") || src.starts_with("let"),
+            "{src}"
+        );
     }
     Ok(())
 }

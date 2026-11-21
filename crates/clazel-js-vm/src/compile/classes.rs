@@ -31,9 +31,8 @@ impl<'a> Cg<'a> {
         let m = self.mark();
         let t = self.alloc()?;
         self.class_definition(n, t)?;
-        let b = self.res(name_node);
-        if b != NONE {
-            self.init_binding(b, t, sp)?;
+        if self.node(name_node)?.kind == NodeKind::BindingIdentifier {
+            self.init_ident(name_node, t, sp)?;
         }
         self.release(m);
         Ok(())

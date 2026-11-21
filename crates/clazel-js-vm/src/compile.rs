@@ -39,9 +39,6 @@
 //!
 //! # Known gaps in what it compiles
 //!
-//! - A script's top-level `let`, `const` and `class` are locals of the script
-//!   function, not bindings of the global declarative record (`DeclareGlobals`'s
-//!   record lists none).
 //! - A function with a non-simple parameter list has one scope for its
 //!   parameters and its body, where §10.2.11† step 28 has a separate
 //!   environment for the body's `var`s: a closure in a default value sees
@@ -823,6 +820,20 @@ impl<'a> Cg<'a> {
         }
     }
 
+    /// Initializes the binding that declaration target `n` (a `BindingIdentifier`)
+    /// names: a scope's binding, or, for a top-level `let`, `const` or `class`
+    /// of a script, the global declarative record's
+    /// ([`Instr::InitGlobalLexical`]).
+    pub(super) fn init_ident(&mut self, n: u32, src: Reg, sp: Span) -> R<()> {
+        let b = self.res(n);
+        if b != NONE {
+            return self.init_binding(b, src, sp);
+        }
+        let name = self.name_of(n);
+        let key = self.konst(Const::String(self.name_units(name)?))?;
+        self.emit(Instr::InitGlobalLexical { key, src }, sp)
+    }
+
     /// Throws if binding `b` currently holds the hole.
     fn check_hole(&mut self, b: u32, sp: Span) -> R<()> {
         let bd = self.binding(b)?;
@@ -1209,11 +1220,12 @@ impl<'a> Cg<'a> {
     /// §16.1.7† GlobalDeclarationInstantiation, as the script's first op:
     /// `DeclareGlobals` over a record of the script's `var`s (the
     /// VarScopedDeclarations, step 5), its top-level functions (compiled here,
-    /// to templates) and the functions Annex B.3.2.2† hoists out of blocks
-    /// (step 12). No op when the script declares none of them. The record's
-    /// `lexical` list is empty: the script's top-level `let`, `const` and
-    /// `class` are still locals of the script function, not bindings of the
-    /// global declarative record (they would need an op that initializes one).
+    /// to templates), the functions Annex B.3.2.2† hoists out of blocks (step
+    /// 12) and its top-level `let`, `const` and `class` names (the
+    /// LexicallyScopedDeclarations, step 13: bindings of the global declarative
+    /// record, read and written as globals and initialized by
+    /// [`Instr::InitGlobalLexical`]). No op when the script declares none of
+    /// them.
     fn declare_globals(&mut self, sc_id: u32, sp: Span) -> R<()> {
         let sc = self.scope(sc_id)?;
         let mut entries: Vec<(usize, VarScoped)> = Vec::new();
@@ -1237,12 +1249,16 @@ impl<'a> Cg<'a> {
             }
         }
         annexb.sort_by_key(|e| e.0);
+        let mut lexical = Vec::new();
+        for &(name, is_const) in &self.an.global_lexicals {
+            lexical.push((self.name_units(name)?, is_const));
+        }
         let decls = GlobalDecls {
-            lexical: Vec::new(),
+            lexical,
             var_scoped: entries.into_iter().map(|e| e.1).collect(),
             annexb: annexb.into_iter().map(|e| e.1).collect(),
         };
-        if decls.var_scoped.is_empty() && decls.annexb.is_empty() {
+        if decls.var_scoped.is_empty() && decls.annexb.is_empty() && decls.lexical.is_empty() {
             return Ok(());
         }
         let k = self.konst(Const::GlobalDeclarations(decls))?;
@@ -1465,11 +1481,10 @@ impl<'a> Cg<'a> {
         let (target, init) = (self.child(nd, 0)?, self.child(nd, 1)?);
         if self.node(init)?.kind == NodeKind::Absent {
             // `let a;` initializes to undefined (§14.3.1.2 step 3.b).
-            let b = self.res(target);
             let m = self.mark();
             let t = self.alloc()?;
             self.emit(Instr::LoadUndefined { dst: t }, self.sp(d))?;
-            self.init_binding(b, t, self.sp(d))?;
+            self.init_ident(target, t, self.sp(d))?;
             self.release(m);
             return Ok(());
         }
@@ -1494,7 +1509,7 @@ impl<'a> Cg<'a> {
         let m = self.mark();
         let v = self.expr_any(init)?;
         if is_init {
-            self.init_binding(b, v, sp)?;
+            self.init_ident(target, v, sp)?;
         } else {
             self.write_ident(target, v)?;
         }

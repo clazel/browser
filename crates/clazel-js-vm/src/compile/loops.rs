@@ -177,9 +177,8 @@ impl<'a> Cg<'a> {
         let tn = self.node(t)?;
         match tn.kind {
             NodeKind::BindingIdentifier | NodeKind::IdentifierReference => {
-                let b = self.res(t);
-                if mode == Mode::Init && b != NONE {
-                    self.init_binding(b, val, sp)
+                if mode == Mode::Init {
+                    self.init_ident(t, val, sp)
                 } else {
                     self.write_ident(t, val)
                 }

@@ -240,6 +240,10 @@ pub struct Analysis {
     /// For a class element (a field with a computed name, a private method or
     /// accessor), the binding that keeps its key or function.
     pub hidden: HashMap<u32, u32>,
+    /// The script's top-level `let`, `const` and `class` names (interned), each
+    /// with whether it is a constant, in source order: bindings of the global
+    /// declarative record, not of a scope (§16.1.7† step 13).
+    pub global_lexicals: Vec<(u32, bool)>,
 }
 
 /// The node at `i`.
@@ -538,6 +542,7 @@ pub fn analyze(ast: &Ast, src: &[u32]) -> Result<Analysis, CompileError> {
             classes: HashMap::new(),
             special: HashMap::new(),
             hidden: HashMap::new(),
+            global_lexicals: Vec::new(),
         },
         intern: HashMap::new(),
     };
@@ -874,8 +879,16 @@ fn declare_pass(b: &mut Builder<'_>, parent: &[u32]) -> Result<(), CompileError>
                     Some(p) if p != NONE => node(ast, p as usize)?.op == AOp::Const,
                     _ => false,
                 };
+                let at_top = b.scope(owner)?.kind == SKind::Script;
                 for id in bound_idents(ast, target)? {
                     let name = b.a.name_of.get(id as usize).copied().unwrap_or(NONE);
+                    if at_top {
+                        // A top-level lexical declaration binds in the global
+                        // declarative record (§16.1.7† step 13), which references
+                        // reach as a global.
+                        b.a.global_lexicals.push((name, is_const));
+                        continue;
+                    }
                     let bid = b.declare(
                         owner,
                         name,
@@ -944,8 +957,12 @@ fn declare_pass(b: &mut Builder<'_>, parent: &[u32]) -> Result<(), CompileError>
                 if let Some(name) = first_name {
                     if nd.kind == NodeKind::ClassDeclaration {
                         // The declaration's own binding, like a `let`.
-                        let bid = b.declare(owner, name, BKind::Let)?;
-                        b.binding_mut(bid)?.init_end = nd.end;
+                        if b.scope(owner)?.kind == SKind::Script {
+                            b.a.global_lexicals.push((name, false));
+                        } else {
+                            let bid = b.declare(owner, name, BKind::Let)?;
+                            b.binding_mut(bid)?.init_end = nd.end;
+                        }
                     }
                     // The class's inner name: immutable, in its dead zone until
                     // the class is defined (§15.7.14† step 27).

@@ -192,6 +192,7 @@ instrs! {
     CreateMappedArguments { dst: Reg, env: Reg, k: u32 },
     CreateRestArray { dst: Reg, from: u32 },
     ForInIterator { dst: Reg, src: Reg },
+    InitGlobalLexical { key: u32, src: Reg },
 }
 
 impl Instr {
@@ -531,6 +532,7 @@ pub fn check_function(f: &FunctionCode, nfuncs: usize) -> Result<(), &'static st
                 reg_ok(f, src) && reg_ok(f, value) && reg_ok(f, mode)
             }
             Instr::ThrowError { msg, .. } => konst(msg),
+            Instr::InitGlobalLexical { key, src } => konst(key) && reg_ok(f, src),
             Instr::ToPropertyKey { dst, src }
             | Instr::ToString { dst, src }
             | Instr::ForInIterator { dst, src }

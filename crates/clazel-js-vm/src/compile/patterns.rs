@@ -33,8 +33,9 @@ pub(super) enum Mode {
 enum Target {
     /// An identifier: the node.
     Ident(u32),
-    /// A property reference: the object register and the key.
-    Place(Reg, Prop),
+    /// A property reference: the object register, the key and the span of the
+    /// target.
+    Place(Reg, Prop, Span),
     /// A nested pattern: the node.
     Pattern(u32),
 }
@@ -85,7 +86,7 @@ impl<'a> Cg<'a> {
                     }
                     k => k,
                 };
-                Ok(Target::Place(oc, key))
+                Ok(Target::Place(oc, key, self.sp(t)))
             }
             _ => self.not_yet("this kind of destructuring target", t),
         }
@@ -95,18 +96,13 @@ impl<'a> Cg<'a> {
     fn store_target(&mut self, t: &Target, val: Reg, mode: Mode) -> R<()> {
         match *t {
             Target::Ident(n) => {
-                let b = self.res(n);
-                if mode == Mode::Init && b != NONE {
-                    self.init_binding(b, val, self.sp(n))
+                if mode == Mode::Init {
+                    self.init_ident(n, val, self.sp(n))
                 } else {
                     self.write_ident(n, val)
                 }
             }
-            Target::Place(o, ref key) => {
-                let sp = self.sp(o.min(self.f.max_reg));
-                let _ = sp;
-                self.store_prop(o, key, val, Span { start: 0, end: 0 })
-            }
+            Target::Place(o, ref key, sp) => self.store_prop(o, key, val, sp),
             Target::Pattern(p) => self.destructure(p, val, mode),
         }
     }

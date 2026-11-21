@@ -763,3 +763,28 @@ fn corpus_with_the_new_constructs_is_well_formed() -> Result<(), String> {
     }
     Ok(())
 }
+
+/// A script's top-level `let`, `const` and `class` are bindings of the global
+/// declarative record: listed in the `DeclareGlobals` record, initialized by
+/// `InitGlobalLexical`, read and written as globals (§16.1.7† step 13); a name in
+/// a block or a function is an ordinary binding.
+#[test]
+fn top_level_lexical_declarations_are_global() -> Result<(), String> {
+    let p = compile("let x = 1; class C {} x; { let y = 2; }")?;
+    let f = func(&p, 0)?;
+    assert_eq!(
+        count(f, |i| matches!(i, Instr::InitGlobalLexical { .. })),
+        2
+    );
+    assert!(has(f, |i| matches!(i, Instr::DeclareGlobals { .. })));
+    assert!(has(f, |i| matches!(i, Instr::GetGlobal { .. })));
+    let p = compile("let [a, b] = c; const { d } = e;")?;
+    assert_eq!(
+        count(func(&p, 0)?, |i| matches!(
+            i,
+            Instr::InitGlobalLexical { .. }
+        )),
+        3
+    );
+    Ok(())
+}

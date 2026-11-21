@@ -250,7 +250,7 @@ impl<'a> Cg<'a> {
         if spread {
             let arr = self.alloc()?;
             self.emit(Instr::NewArray { dst: arr, len: 0 }, self.sp(args))?;
-            self.elements_into_array(arr, &an.children)?;
+            self.elements_into_array(arr, &an.children, self.sp(args))?;
             return Ok(ArgList::Spread(arr));
         }
         let argc =
@@ -270,7 +270,7 @@ impl<'a> Cg<'a> {
     /// ArgumentListEvaluation): a spread element iterates its operand
     /// (§13.2.4.1† SpreadElement: GetIterator, then IteratorStepValue and
     /// CreateDataPropertyOrThrow until done).
-    fn elements_into_array(&mut self, arr: Reg, elements: &[u32]) -> R<()> {
+    fn elements_into_array(&mut self, arr: Reg, elements: &[u32], sp: Span) -> R<()> {
         let idx = self.alloc()?;
         self.load_int(idx, 0, self.sp(elements.first().copied().unwrap_or(0)))?;
         let mut last_elision = false;
@@ -349,7 +349,7 @@ impl<'a> Cg<'a> {
                     val: idx,
                     ic,
                 },
-                Span { start: 0, end: 0 },
+                sp,
             )?;
         }
         Ok(())
@@ -456,7 +456,7 @@ impl<'a> Cg<'a> {
             }
         }
         if spread {
-            return self.elements_into_array(d, &nd.children);
+            return self.elements_into_array(d, &nd.children, sp);
         }
         for (i, &e) in nd.children.iter().enumerate() {
             let m = self.mark();
