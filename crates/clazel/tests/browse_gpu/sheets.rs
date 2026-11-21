@@ -100,6 +100,7 @@ fn linked_sheets_apply_with_the_cookie_only_same_origin() {
     if !runs() {
         return;
     }
+    let _one = crate::one_at_a_time();
     let f = fixture("sheets-apply");
     assert!(f.is_ok(), "{:?}", f.as_ref().err());
     let Ok(f) = f else { return };
@@ -142,6 +143,7 @@ fn a_sheet_that_never_answers_times_out_and_the_page_renders() {
     if !runs() {
         return;
     }
+    let _one = crate::one_at_a_time();
     let f = fixture("sheets-timeout");
     assert!(f.is_ok(), "{:?}", f.as_ref().err());
     let Ok(f) = f else { return };
@@ -160,7 +162,7 @@ fn a_sheet_that_never_answers_times_out_and_the_page_renders() {
     let mut host = host(&f, &server, NOW);
     let tab = open(&mut host, "http://pages.test/", (40, 20));
     // Until the renderer has asked for the sheet: render-blocking, so no Paint.
-    let end = Instant::now().checked_add(Duration::from_secs(20));
+    let end = Instant::now().checked_add(crate::PUMP_LIMIT);
     while end.is_some_and(|e| Instant::now() < e)
         && !host
             .log
@@ -197,6 +199,7 @@ fn the_hn_shaped_fixture_is_served_with_its_sheet() {
     if !runs() {
         return;
     }
+    let _one = crate::one_at_a_time();
     let f = fixture("sheets-fixture");
     assert!(f.is_ok(), "{:?}", f.as_ref().err());
     let Ok(f) = f else { return };
