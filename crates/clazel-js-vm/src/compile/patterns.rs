@@ -535,7 +535,7 @@ impl<'a> Cg<'a> {
             self.release(m);
         }
         let fp = match nd.kind {
-            NodeKind::Script | NodeKind::ClassStaticBlock => return Ok(()),
+            NodeKind::Script | NodeKind::Module | NodeKind::ClassStaticBlock => return Ok(()),
             k if scope::is_arrow_kind(k) => self.child(nd, 0)?,
             _ => self.child(nd, 1)?,
         };

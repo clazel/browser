@@ -208,6 +208,10 @@ instrs! {
     WithDelete { dst: Reg, obj: Reg, key: u32 },
     DeleteGlobal { dst: Reg, key: u32 },
     DirectEval { dst: Reg, callee: Reg, this: Reg, args: Reg, argc: u32, env: Reg, k: u32 },
+    GetImportBinding { dst: Reg, env: Reg, idx: u32 },
+    ImportCall { dst: Reg, specifier: Reg, options: Reg },
+    ImportMeta { dst: Reg },
+    DirectEvalSpread { dst: Reg, callee: Reg, this: Reg, args: Reg, env: Reg, k: u32 },
 }
 
 impl Instr {
@@ -329,6 +333,8 @@ pub struct EvalScope {
 pub enum EvalScopeKind {
     /// The script's.
     Script,
+    /// A module's: every binding of the module scope.
+    Module,
     /// A function's: its parameters, `var`s and top-level declarations.
     Function,
     /// A block, `for`, `switch` or `catch` scope.
@@ -377,6 +383,9 @@ pub enum EvalBinding {
     Callee,
     /// A private name of a class.
     PrivateName,
+    /// A named or default import: an indirect binding, read with
+    /// [`Instr::GetImportBinding`].
+    Import,
 }
 
 /// The source text and the flags of one regular expression literal
@@ -444,6 +453,9 @@ pub struct Handler {
 pub enum FunctionKind {
     /// The script's own code.
     Script,
+    /// A module's body (see [`crate::module`]): run with the module
+    /// environment as its callee environment and `this` undefined.
+    Module,
     /// A function declaration or expression.
     Normal,
     /// An arrow function.
@@ -802,6 +814,28 @@ pub fn check_function(f: &FunctionCode, nfuncs: usize) -> Result<(), &'static st
                     && reg_ok(f, callee)
                     && reg_ok(f, this)
                     && regs_ok(f, args, argc)
+                    && reg_ok(f, env)
+                    && matches!(f.consts.get(k as usize), Some(Const::EvalScope(_)))
+            }
+            Instr::GetImportBinding { dst, env, .. } => reg_ok(f, dst) && reg_ok(f, env),
+            Instr::ImportCall {
+                dst,
+                specifier,
+                options,
+            } => reg_ok(f, dst) && reg_ok(f, specifier) && reg_ok(f, options),
+            Instr::ImportMeta { dst } => reg_ok(f, dst),
+            Instr::DirectEvalSpread {
+                dst,
+                callee,
+                this,
+                args,
+                env,
+                k,
+            } => {
+                reg_ok(f, dst)
+                    && reg_ok(f, callee)
+                    && reg_ok(f, this)
+                    && reg_ok(f, args)
                     && reg_ok(f, env)
                     && matches!(f.consts.get(k as usize), Some(Const::EvalScope(_)))
             }

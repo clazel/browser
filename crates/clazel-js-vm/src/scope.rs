@@ -88,6 +88,10 @@ pub enum BKind {
     /// A value the compiler keeps for a class: the key of a computed field name
     /// and a private method's function.
     Hidden,
+    /// A named or default import (`import { x } from "m"`): an indirect
+    /// binding that [`crate::bytecode::Instr::GetImportBinding`] reads and
+    /// that cannot be assigned (§9.1.1.5.5† CreateImportBinding).
+    Import,
     /// The binding object of a `with` statement's object environment, in slot 0
     /// of the environment object its scope creates (§14.11.2† step 4:
     /// NewObjectEnvironment(obj, true, oldEnv)).
@@ -126,6 +130,10 @@ pub struct Binding {
 pub enum SKind {
     /// The script's.
     Script,
+    /// A module's (§16.2.1.6.4† InitializeEnvironment): like a function's, but
+    /// every binding is in the module environment object, which the runtime
+    /// creates when it links the module and the body runs in.
+    Module,
     /// A function's.
     Function,
     /// A block's.
@@ -276,6 +284,12 @@ pub struct Analysis {
     pub dyn_binding: HashMap<u32, u32>,
     /// The direct eval calls (`CallExpression` nodes), in arena order.
     pub eval_calls: Vec<u32>,
+    /// For a function declaration that is the body of an `if` clause (Annex
+    /// B.3.4†), the block scope it is treated as being in.
+    pub implicit_blocks: HashMap<u32, u32>,
+    /// The binding `*default*` of an `export default` of an expression, an
+    /// anonymous function or an anonymous class, or [`NONE`].
+    pub default_binding: u32,
 }
 
 /// The node at `i`.
@@ -404,53 +418,6 @@ pub fn is_simple_params(ast: &Ast, fp: u32) -> Result<bool, CompileError> {
     Ok(true)
 }
 
-/// The first construct of the AST this slice of the compiler does not compile,
-/// as a "not yet compiled" error; `Ok` if there is none. Checked before
-/// anything else, so that a program with such a construct is reported as
-/// not yet compiled, never as an internal failure of what follows.
-pub fn check_supported(ast: &Ast) -> Result<(), CompileError> {
-    for (i, n) in ast.nodes.iter().enumerate() {
-        let feature: Option<&'static str> = match n.kind {
-            NodeKind::Module
-            | NodeKind::ImportDeclaration
-            | NodeKind::ImportClause
-            | NodeKind::NameSpaceImport
-            | NodeKind::NamedImports
-            | NodeKind::ImportSpecifier
-            | NodeKind::WithClause
-            | NodeKind::ImportAttribute
-            | NodeKind::ExportDeclaration
-            | NodeKind::NamedExports
-            | NodeKind::ExportSpecifier
-            | NodeKind::ImportMeta => Some("modules"),
-            NodeKind::ImportCall => Some("dynamic import"),
-            NodeKind::IfStatement | NodeKind::LabelledStatement => {
-                // Annex B.3.2: a function declaration as the body of an `if` or a
-                // label.
-                let mut found = false;
-                for &c in &n.children {
-                    if node(ast, c as usize)?.kind == NodeKind::FunctionDeclaration {
-                        found = true;
-                    }
-                }
-                if found {
-                    Some("a function declaration as the body of an if or a label")
-                } else {
-                    None
-                }
-            }
-            _ => None,
-        };
-        if let Some(feature) = feature {
-            return Err(CompileError::NotYetCompiled {
-                feature,
-                span: span_of(ast, i),
-            });
-        }
-    }
-    Ok(())
-}
-
 /// Whether `stmts` start with a Use Strict Directive (§11.2.1): an expression
 /// statement that is a string literal written exactly `"use strict"` or
 /// `'use strict'`, among the directives that start the list.
@@ -520,7 +487,10 @@ impl Builder<'_> {
     fn fn_scope(&self, mut s: u32) -> Result<u32, CompileError> {
         loop {
             let sc = self.scope(s)?;
-            if matches!(sc.kind, SKind::Function | SKind::Script | SKind::Body) {
+            if matches!(
+                sc.kind,
+                SKind::Function | SKind::Script | SKind::Body | SKind::Module
+            ) {
                 return Ok(s);
             }
             s = sc.parent;
@@ -600,6 +570,8 @@ pub fn analyze(ast: &Ast, src: &[u32]) -> Result<Analysis, CompileError> {
             global_lexicals: Vec::new(),
             dyn_binding: HashMap::new(),
             eval_calls: Vec::new(),
+            implicit_blocks: HashMap::new(),
+            default_binding: NONE,
         },
         intern: HashMap::new(),
     };
@@ -689,11 +661,40 @@ fn scopes_pass(b: &mut Builder<'_>, src: &[u32], parent: &[u32]) -> Result<(), C
             }
             o
         };
+        // Annex B.3.4†: a function declaration as the body of an `if` is treated
+        // as if it were in a block of its own.
+        let owner = if nd.kind == NodeKind::FunctionDeclaration
+            && p != NONE
+            && node(ast, p as usize)?.kind == NodeKind::IfStatement
+            && owner != NONE
+        {
+            let sid =
+                u32::try_from(b.a.scopes.len()).map_err(|_| CompileError::TooLarge("scopes"))?;
+            let (func, strict) = {
+                let os = b.scope(owner)?;
+                (os.func, os.strict)
+            };
+            b.a.scopes.push(Scope {
+                parent: owner,
+                func,
+                kind: SKind::Block,
+                strict,
+                bindings: Vec::new(),
+                names: HashMap::new(),
+                funcs: Vec::new(),
+                env_size: 0,
+            });
+            b.a.implicit_blocks.insert(i32_, sid);
+            sid
+        } else {
+            owner
+        };
         if let Some(o) = b.a.owner_scope.get_mut(i) {
             *o = owner;
         }
         let kind = match nd.kind {
             NodeKind::Script => Some(SKind::Script),
+            NodeKind::Module => Some(SKind::Module),
             k if is_function(k) => Some(SKind::Function),
             NodeKind::BlockStatement => Some(SKind::Block),
             NodeKind::ForStatement => {
@@ -758,6 +759,18 @@ fn scopes_pass(b: &mut Builder<'_>, src: &[u32], parent: &[u32]) -> Result<(), C
                         derived_ctor: false,
                     });
                     (fid, strict)
+                }
+                SKind::Module => {
+                    let fid = u32::try_from(b.a.funcs.len())
+                        .map_err(|_| CompileError::TooLarge("functions"))?;
+                    b.a.funcs.push(Func {
+                        node: i32_,
+                        scope: sid,
+                        arrow: false,
+                        parent_scope: owner,
+                        derived_ctor: false,
+                    });
+                    (fid, true)
                 }
                 SKind::Class => (b.scope(owner)?.func, true),
                 _ => (b.scope(owner)?.func, inherited_strict),
@@ -894,6 +907,41 @@ fn declare_pass(b: &mut Builder<'_>, parent: &[u32]) -> Result<(), CompileError>
             _ => None,
         };
         match nd.kind {
+            NodeKind::BindingIdentifier => {
+                // The local names of an import declaration (§16.2.1.6.4†
+                // InitializeEnvironment steps 7 and 8).
+                let p = parent.get(i).copied().unwrap_or(NONE);
+                if p != NONE {
+                    let kind = match node(ast, p as usize)?.kind {
+                        NodeKind::ImportClause | NodeKind::ImportSpecifier => Some(BKind::Import),
+                        NodeKind::NameSpaceImport => Some(BKind::Const),
+                        _ => None,
+                    };
+                    if let (Some(kind), Some(&name)) = (kind, b.a.name_of.get(i)) {
+                        b.declare(owner, name, kind)?;
+                    }
+                }
+            }
+            NodeKind::ExportDeclaration => {
+                // `export default` of an expression or an anonymous class binds
+                // `*default*` (§16.2.3.7† ExportDeclaration evaluation).
+                let anonymous_class = nd.op == AOp::ExportDefaultClass
+                    && match nd.children.first() {
+                        Some(&c) => match node(ast, c as usize)?.children.first() {
+                            Some(&nm) => {
+                                node(ast, nm as usize)?.kind != NodeKind::BindingIdentifier
+                            }
+                            None => false,
+                        },
+                        None => false,
+                    };
+                if nd.op == AOp::ExportDefaultExpression || anonymous_class {
+                    let name = b.intern("*default*".chars().map(u32::from).collect())?;
+                    let bid = b.declare(owner, name, BKind::Let)?;
+                    b.binding_mut(bid)?.init_end = nd.end;
+                    b.a.default_binding = bid;
+                }
+            }
             NodeKind::VariableDeclaration => {
                 let Some(&target) = nd.children.first() else {
                     return Err(CompileError::Internal("var declaration has no target"));
@@ -959,16 +1007,21 @@ fn declare_pass(b: &mut Builder<'_>, parent: &[u32]) -> Result<(), CompileError>
                 }
             }
             k if is_decl_kind(k) => {
-                let Some(name) = first_name else {
-                    return Err(CompileError::Internal("function declaration has no name"));
+                // `export default function () {}` binds `*default*`.
+                let name = match first_name {
+                    Some(n) => n,
+                    None => b.intern("*default*".chars().map(u32::from).collect())?,
                 };
                 let owner_kind = b.scope(owner)?.kind;
                 b.scope_mut(owner)?.funcs.push(node_id);
                 match owner_kind {
                     SKind::Script => {}
-                    SKind::Function | SKind::Body => {
+                    SKind::Function | SKind::Body | SKind::Module => {
                         let bid = b.declare(owner, name, BKind::Var)?;
                         b.binding_mut(bid)?.decl_fn = node_id;
+                        if first_name.is_none() {
+                            b.a.default_binding = bid;
+                        }
                     }
                     _ => {
                         let bid = b.declare(owner, name, BKind::Let)?;
@@ -1049,7 +1102,10 @@ fn declare_vars(b: &mut Builder<'_>, owner: u32, target: u32) -> Result<(), Comp
     let fs = b.fn_scope(owner)?;
     for id in bound_idents(b.ast, target)? {
         let name = b.a.name_of.get(id as usize).copied().unwrap_or(NONE);
-        if matches!(b.scope(fs)?.kind, SKind::Function | SKind::Body) {
+        if matches!(
+            b.scope(fs)?.kind,
+            SKind::Function | SKind::Body | SKind::Module
+        ) {
             b.declare(fs, name, BKind::Var)?;
         } else {
             b.a.global_vars.push(id);
@@ -1105,7 +1161,11 @@ fn annexb_pass(b: &mut Builder<'_>) -> Result<(), CompileError> {
         }
         let owner = b.a.owner_scope.get(i).copied().unwrap_or(NONE);
         let osc = b.scope(owner)?;
-        if matches!(osc.kind, SKind::Script | SKind::Function | SKind::Body) || osc.strict {
+        if matches!(
+            osc.kind,
+            SKind::Script | SKind::Function | SKind::Body | SKind::Module
+        ) || osc.strict
+        {
             continue;
         }
         let Some(&nm) = nd.children.first() else {
@@ -1629,6 +1689,13 @@ fn finish_pass(b: &mut Builder<'_>) -> Result<(), CompileError> {
                 .get(s)
                 .map(|sc| sc.bindings.clone())
                 .unwrap_or_default();
+        // Every binding of a module's scope has a slot of the module
+        // environment, so that other modules can reach an export.
+        if b.a.scopes.get(s).map(|sc| sc.kind) == Some(SKind::Module) {
+            for &bid in &ids {
+                b.binding_mut(bid)?.captured = true;
+            }
+        }
         let mut size: u32 = 0;
         for bid in ids {
             let bd = b.binding_mut(bid)?;

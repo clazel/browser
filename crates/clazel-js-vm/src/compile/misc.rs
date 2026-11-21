@@ -323,8 +323,21 @@ impl<'a> Cg<'a> {
                     sp,
                 )?;
             }
-            ArgList::Spread(_) => {
-                return self.not_yet("direct eval with spread arguments", cn_id);
+            ArgList::Spread(arr) => {
+                let info = self.eval_scope_info()?;
+                let k = self.konst(Const::EvalScope(info))?;
+                let env = self.current_env_reg()?;
+                self.emit(
+                    Instr::DirectEvalSpread {
+                        dst: d,
+                        callee: fr,
+                        this,
+                        args: arr,
+                        env,
+                        k,
+                    },
+                    sp,
+                )?;
             }
         }
         self.release(m);
@@ -367,6 +380,7 @@ impl<'a> Cg<'a> {
                         BKind::FuncName => (EvalBinding::FuncName, true),
                         BKind::Arguments => (EvalBinding::Arguments, true),
                         BKind::PrivateName => (EvalBinding::PrivateName, true),
+                        BKind::Import => (EvalBinding::Import, true),
                         BKind::This => (EvalBinding::This, false),
                         BKind::DerivedThis => (EvalBinding::DerivedThis, false),
                         BKind::NewTarget => (EvalBinding::NewTarget, false),
@@ -385,6 +399,7 @@ impl<'a> Cg<'a> {
                 }
                 let kind = match sc.kind {
                     SKind::Script => EvalScopeKind::Script,
+                    SKind::Module => EvalScopeKind::Module,
                     SKind::Function | SKind::Body => EvalScopeKind::Function,
                     SKind::Class => EvalScopeKind::Class,
                     SKind::With => EvalScopeKind::With,
@@ -901,6 +916,22 @@ impl<'a> Cg<'a> {
         this_out: Option<Reg>,
         sp: Span,
     ) -> R<()> {
+        self.optional_chain_impl(n, d, this_out, false, sp)
+    }
+
+    /// [`Self::optional_chain`], or with `del` the `delete` of the chain
+    /// (§13.5.1.2†: `delete` of an OptionalExpression evaluates the chain as a
+    /// reference; a chain that ends early is `true`, a chain that ends in a
+    /// property reference deletes it, and one that ends in a call is a value, so
+    /// `true`).
+    pub(super) fn optional_chain_impl(
+        &mut self,
+        n: u32,
+        d: Reg,
+        this_out: Option<Reg>,
+        del: bool,
+        sp: Span,
+    ) -> R<()> {
         let nd = self.node(n)?;
         let m = self.mark();
         let (cur, this) = (self.alloc()?, self.alloc()?);
@@ -910,7 +941,8 @@ impl<'a> Cg<'a> {
         let base = self.child(nd, 0)?;
         let base = self.unparen(base)?;
         self.callee_and_this(base, cur, this, sp)?;
-        for &lk in nd.children.iter().skip(1) {
+        let last = nd.children.len().saturating_sub(1);
+        for (li, &lk) in nd.children.iter().enumerate().skip(1) {
             let ln = self.node(lk)?;
             let lsp = self.sp(lk);
             if ln.flag {
@@ -923,6 +955,34 @@ impl<'a> Cg<'a> {
                 )?;
             }
             let m2 = self.mark();
+            if del && li == last && matches!(ln.op, AOp::ChainDot | AOp::ChainBracket) {
+                let prop = self.child(ln, 0)?;
+                let idx = if ln.op == AOp::ChainDot {
+                    let pn = self.node(prop)?;
+                    let units = literal::name_units_at(self.src, pn.start)?;
+                    let k = self.konst(Const::String(units))?;
+                    let r = self.alloc()?;
+                    self.emit(Instr::LoadConst { dst: r, k }, lsp)?;
+                    r
+                } else {
+                    self.expr_any(prop)?
+                };
+                self.emit(
+                    Instr::DeleteProp {
+                        dst: d,
+                        obj: cur,
+                        idx,
+                    },
+                    lsp,
+                )?;
+                self.release(m2);
+                self.jump(end, sp)?;
+                self.bind(undef)?;
+                self.emit(Instr::LoadBool { dst: d, flag: true }, sp)?;
+                self.bind(end)?;
+                self.release(m);
+                return Ok(());
+            }
             match ln.op {
                 AOp::ChainDot | AOp::ChainBracket | AOp::ChainPrivateDot => {
                     self.emit(
@@ -977,13 +1037,23 @@ impl<'a> Cg<'a> {
             }
             self.release(m2);
         }
-        self.emit(Instr::Move { dst: d, src: cur }, sp)?;
+        if del {
+            // The chain ended in a call, or in a `?.` that was the whole
+            // chain: not a property reference, so `delete` is true.
+            self.emit(Instr::LoadBool { dst: d, flag: true }, sp)?;
+        } else {
+            self.emit(Instr::Move { dst: d, src: cur }, sp)?;
+        }
         if let Some(t) = this_out {
             self.emit(Instr::Move { dst: t, src: this }, sp)?;
         }
         self.jump(end, sp)?;
         self.bind(undef)?;
-        self.emit(Instr::LoadUndefined { dst: d }, sp)?;
+        if del {
+            self.emit(Instr::LoadBool { dst: d, flag: true }, sp)?;
+        } else {
+            self.emit(Instr::LoadUndefined { dst: d }, sp)?;
+        }
         self.bind(end)?;
         self.release(m);
         Ok(())
@@ -1067,7 +1137,7 @@ impl<'a> Cg<'a> {
                 self.release(m);
                 Ok(())
             }
-            NodeKind::OptionalExpression => self.not_yet("delete of an optional chain", inner),
+            NodeKind::OptionalExpression => self.optional_chain_impl(inner, d, None, true, sp),
             _ => {
                 // §13.5.1.2 step 5: `delete` of a non-reference is true,
                 // after evaluating the operand.
