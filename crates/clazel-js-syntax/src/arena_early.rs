@@ -6,9 +6,14 @@
 //!
 //! **Covered.** The environment: every node kind whose `child_env` arm is the default
 //! (`[~Tagged]`) or one of the loop, `switch`, object literal, tagged template and
-//! template arms; the `labels` and `privates` of the environment are empty, so a labelled
-//! statement, a class, a function or an arrow function (whose `child_env` arms need
-//! `has_use_strict`, `env_fn` and class bodies) makes the result `Unsupported`.
+//! template arms, and the function declarations and expressions of every kind, arrow
+//! functions and methods of object literals (`env_fn`, and `has_use_strict` of the body,
+//! [`crate::arena_names::use_strict_exec`]); the `labels` and `privates` of the
+//! environment are empty, so a labelled statement or a class makes the result `Unsupported`.
+//! Function code: `function_early` ([`crate::arena_names::function_early_exec`]: Use Strict
+//! Directive with non-simple parameters, duplicate parameters, from the BoundNames of
+//! [`crate::arena_names::bound_names_all`]) and the statement list of a `FunctionBody`
+//! that declares nothing lexically.
 //! The rules of `early_local`: every kind with no rule (the `_ => true` arm);
 //! `NumericLiteral` and `StringLiteral` (strict mode legacy forms); the three identifier
 //! kinds (§13.1.1: strict reserved words, `eval`, `arguments`, `yield`, `await`, the
@@ -24,8 +29,8 @@
 //! of a block and a script whose items declare nothing lexically (so
 //! `LexicallyDeclaredNames` is empty).
 //!
-//! **Not covered** (the result is `Unsupported`): everything else, notably function
-//! and class code, labels, lexical declarations, `for`-`in`/`of`, `switch`, `try`
+//! **Not covered** (the result is `Unsupported`): everything else, notably
+//! class code, labels, lexical declarations, `for`-`in`/`of`, `switch`, `try`
 //! (`catch` parameters), regular expression literals (`regexp_valid` is item 7.10's),
 //! private names, a Use Strict Directive in a script, and `Module` roots.
 //!
@@ -34,6 +39,7 @@
 //! and `name`, the lexer's contract of item 7.2).
 
 use crate::arena_d::*;
+use crate::arena_names::*;
 use crate::ast::*;
 use crate::spec::*;
 use vstd::prelude::*;
@@ -53,7 +59,7 @@ pub open spec fn starts_inc(ts: Stream) -> bool {
 }
 
 /// The first token of node `n` is `ts.toks[x]`.
-proof fn lemma_node_tok_at(a: AstV, ts: Stream, n: int, x: int)
+pub(crate) proof fn lemma_node_tok_at(a: AstV, ts: Stream, n: int, x: int)
     requires
         starts_inc(ts),
         0 <= n < a.nodes.len(),
@@ -115,7 +121,7 @@ proof fn lemma_words_early()
 }
 
 /// Two slices of code points are the same.
-fn seq_eq(a: &[u32], b: &[u32]) -> (r: bool)
+pub(crate) fn seq_eq(a: &[u32], b: &[u32]) -> (r: bool)
     ensures
         r == (a@ =~= b@),
 {
@@ -237,13 +243,436 @@ fn eenv_eq(p: &EEnv, q: &EEnv) -> (r: bool)
         == q.tagged && p.derived == q.derived
 }
 
-/// `spec::child_env` for the node kinds whose arm is simple: child `k` of node `n`.
+/// The arguments of `spec::env_fn` that say what the function code allows.
+pub struct FnFlags {
+    /// `[Yield]`.
+    pub y: bool,
+    /// `[Await]`.
+    pub aw: bool,
+    /// `SuperProperty` is allowed.
+    pub sp: bool,
+    /// `SuperCall` is allowed.
+    pub sc: bool,
+    /// `new.target` is allowed.
+    pub nt: bool,
+    /// `arguments` is not allowed.
+    pub na: bool,
+    /// `yield` and `await` expressions are not allowed.
+    pub nya: bool,
+}
+
+/// `spec::env_fn`.
+fn env_fn_exec(e: &EEnv, strict: bool, f: FnFlags) -> (r: EEnv)
+    ensures
+        eenv_of(r) == env_fn(eenv_of(*e), strict, f.y, f.aw, f.sp, f.sc, f.nt, f.na, f.nya),
+{
+    EEnv {
+        strict,
+        module: e.module,
+        yield_: f.y,
+        await_: f.aw,
+        in_loop: false,
+        in_breakable: false,
+        super_prop: f.sp,
+        super_call: f.sc,
+        new_target: f.nt,
+        no_arguments: f.na,
+        no_yield_await: f.nya,
+        tagged: false,
+        derived: e.derived,
+    }
+}
+
+/// `IsStrict` of the code of the function-like node `n` whose body is its third child:
+/// the enclosing code's, or a Use Strict Directive of the body.
 #[verifier::rlimit(400)]
-fn child_env_exec(nodes: &[Node], n: usize, k: usize, e: &EEnv, Ghost(ts): Ghost<Stream>) -> (r: Option<EEnv>)
+fn fn_strict_exec(
+    src: &[u32],
+    nodes: &[Node],
+    toks: &[DTok],
+    by_start: &[usize],
+    n: usize,
+    env_strict: bool,
+    Ghost(ts): Ghost<Stream>,
+) -> (r: Option<bool>)
+    requires
+        n < nodes.len(),
+        ast_wf(arena_of(nodes@)),
+        toks_match(src@, toks@, ts),
+        starts_inc(ts),
+    ensures
+        match r {
+            Some(v) => {
+                let a = arena_of(nodes@);
+                v == (env_strict || has_use_strict(a, ts, kids(a, kid(a.nodes[n as int].children, 2))))
+            },
+            None => true,
+        },
+{
+    if env_strict {
+        return Some(true);
+    }
+    let ghost a = arena_of(nodes@);
+    let nd = match nodes.get(n) {
+        Some(x) => x,
+        None => {
+            return None;
+        },
+    };
+    proof {
+        assert(a.nodes[n as int] == nodes@[n as int]@);
+        assert(nd == &nodes@[n as int]);
+        assert(a.nodes[n as int].children.len() == nd.children.len());
+    }
+    match nd.children.as_slice().get(2) {
+        Some(b) => {
+            let b = *b as usize;
+            proof {
+                assert(a.nodes[n as int].children[2] == b as int);
+                lemma_child_before(a, n as int, 2);
+            }
+            use_strict_exec(src, nodes, toks, by_start, b, Ghost(ts))
+        },
+        None => {
+            proof {
+                assert(kid(a.nodes[n as int].children, 2) == -1int);
+                assert(kids(a, -1int) =~= Seq::<int>::empty());
+            }
+            Some(false)
+        },
+    }
+}
+
+/// `IsStrict` of the code of the arrow function `n`.
+#[verifier::rlimit(400)]
+fn arrow_strict_exec(
+    src: &[u32],
+    nodes: &[Node],
+    toks: &[DTok],
+    by_start: &[usize],
+    n: usize,
+    env_strict: bool,
+    Ghost(ts): Ghost<Stream>,
+) -> (r: Option<bool>)
+    requires
+        n < nodes.len(),
+        ast_wf(arena_of(nodes@)),
+        toks_match(src@, toks@, ts),
+        starts_inc(ts),
+    ensures
+        match r {
+            Some(v) => {
+                let a = arena_of(nodes@);
+                let k1 = kid(a.nodes[n as int].children, 1);
+                v == (env_strict || (kd(a, k1) == NodeKind::FunctionBody && has_use_strict(
+                    a,
+                    ts,
+                    kids(a, k1),
+                )))
+            },
+            None => true,
+        },
+{
+    if env_strict {
+        return Some(true);
+    }
+    let ghost a = arena_of(nodes@);
+    let nd = match nodes.get(n) {
+        Some(x) => x,
+        None => {
+            return None;
+        },
+    };
+    proof {
+        assert(a.nodes[n as int] == nodes@[n as int]@);
+        assert(nd == &nodes@[n as int]);
+        assert(a.nodes[n as int].children.len() == nd.children.len());
+    }
+    match kid_kind(nodes, n, 1) {
+        Some(NodeKind::FunctionBody) => {
+            let b = match nd.children.as_slice().get(1) {
+                Some(b) => *b as usize,
+                None => {
+                    return None;
+                },
+            };
+            proof {
+                assert(a.nodes[n as int].children[1] == b as int);
+                lemma_child_before(a, n as int, 1);
+            }
+            use_strict_exec(src, nodes, toks, by_start, b, Ghost(ts))
+        },
+        Some(_) => Some(false),
+        None => None,
+    }
+}
+
+/// A function declaration or expression of any kind.
+pub open spec fn is_function_kind(k: NodeKind) -> bool {
+    k == NodeKind::FunctionDeclaration || k == NodeKind::FunctionExpression || k
+        == NodeKind::GeneratorDeclaration || k == NodeKind::GeneratorExpression || k
+        == NodeKind::AsyncFunctionDeclaration || k == NodeKind::AsyncFunctionExpression || k
+        == NodeKind::AsyncGeneratorDeclaration || k == NodeKind::AsyncGeneratorExpression
+}
+
+/// `spec::child_env` for a function declaration or expression of any kind.
+#[verifier::rlimit(400)]
+fn child_env_function(
+    tk: &Tk,
+    nodes: &[Node],
+    n: usize,
+    k: usize,
+    e: &EEnv,
+    Ghost(ts): Ghost<Stream>,
+) -> (r: Option<EEnv>)
     requires
         n < nodes.len(),
         ast_wf(arena_of(nodes@)),
         k < nodes@[n as int].children.len(),
+        toks_match(tk.src@, tk.toks@, ts),
+        starts_inc(ts),
+        is_function_kind(nodes@[n as int].kind),
+    ensures
+        match r {
+            Some(c) => eenv_of(c) == child_env(arena_of(nodes@), ts, n as int, k as int, eenv_of(*e)),
+            None => true,
+        },
+{
+    let src = tk.src;
+    let toks = tk.toks;
+    let by_start = tk.by_start;
+    let ghost a = arena_of(nodes@);
+    let kind = match nodes.get(n) {
+        Some(x) => x.kind,
+        None => {
+            return None;
+        },
+    };
+    proof {
+        assert(a.nodes[n as int] == nodes@[n as int]@);
+        assert(a.nodes[n as int].kind == kind);
+    }
+    let strict = match fn_strict_exec(src, nodes, toks, by_start, n, e.strict, Ghost(ts)) {
+        Some(v) => v,
+        None => {
+            return None;
+        },
+    };
+    let g = matches!(
+        kind,
+        NodeKind::GeneratorDeclaration | NodeKind::GeneratorExpression
+            | NodeKind::AsyncGeneratorDeclaration | NodeKind::AsyncGeneratorExpression
+    );
+    let aw = matches!(
+        kind,
+        NodeKind::AsyncFunctionDeclaration | NodeKind::AsyncFunctionExpression
+            | NodeKind::AsyncGeneratorDeclaration | NodeKind::AsyncGeneratorExpression
+    );
+    let expr = matches!(
+        kind,
+        NodeKind::FunctionExpression | NodeKind::GeneratorExpression
+            | NodeKind::AsyncFunctionExpression | NodeKind::AsyncGeneratorExpression
+    );
+    if k == 0 {
+        Some(
+            EEnv {
+                strict,
+                yield_: if expr {
+                    g
+                } else {
+                    e.yield_
+                },
+                await_: if expr {
+                    aw
+                } else {
+                    e.await_
+                },
+                ..*e
+            },
+        )
+    } else {
+        Some(env_fn_exec(e, strict, FnFlags { y: g, aw, sp: false, sc: false, nt: true, na: false, nya: k == 1 }))
+    }
+}
+
+/// `spec::child_env` for a method of an object literal.
+#[verifier::rlimit(400)]
+fn child_env_method(
+    tk: &Tk,
+    nodes: &[Node],
+    n: usize,
+    k: usize,
+    e: &EEnv,
+    Ghost(ts): Ghost<Stream>,
+) -> (r: Option<EEnv>)
+    requires
+        n < nodes.len(),
+        ast_wf(arena_of(nodes@)),
+        k < nodes@[n as int].children.len(),
+        toks_match(tk.src@, tk.toks@, ts),
+        starts_inc(ts),
+        nodes@[n as int].kind == NodeKind::MethodDefinition,
+    ensures
+        match r {
+            Some(c) => eenv_of(c) == child_env(arena_of(nodes@), ts, n as int, k as int, eenv_of(*e)),
+            None => true,
+        },
+{
+    let src = tk.src;
+    let toks = tk.toks;
+    let by_start = tk.by_start;
+    let ghost a = arena_of(nodes@);
+    let op = match nodes.get(n) {
+        Some(x) => x.op,
+        None => {
+            return None;
+        },
+    };
+    proof {
+        assert(a.nodes[n as int] == nodes@[n as int]@);
+        assert(a.nodes[n as int].op == op);
+    }
+    if k == 0 {
+        return Some(*e);
+    }
+    // A constructor of a derived class may `super()`: classes are not covered.
+    if e.derived {
+        return None;
+    }
+    let strict = match fn_strict_exec(src, nodes, toks, by_start, n, e.strict, Ghost(ts)) {
+        Some(v) => v,
+        None => {
+            return None;
+        },
+    };
+    let mg = matches!(op, Op::GeneratorMethod | Op::AsyncGeneratorMethod);
+    let ma = matches!(op, Op::AsyncMethod | Op::AsyncGeneratorMethod);
+    Some(env_fn_exec(e, strict, FnFlags { y: mg, aw: ma, sp: true, sc: false, nt: true, na: false, nya: k == 1 }))
+}
+
+/// `spec::child_env` for an arrow function.
+#[verifier::rlimit(400)]
+fn child_env_arrow(
+    tk: &Tk,
+    nodes: &[Node],
+    n: usize,
+    k: usize,
+    e: &EEnv,
+    Ghost(ts): Ghost<Stream>,
+) -> (r: Option<EEnv>)
+    requires
+        n < nodes.len(),
+        ast_wf(arena_of(nodes@)),
+        k < nodes@[n as int].children.len(),
+        toks_match(tk.src@, tk.toks@, ts),
+        starts_inc(ts),
+        nodes@[n as int].kind == NodeKind::ArrowFunction || nodes@[n as int].kind
+            == NodeKind::AsyncArrowFunction,
+    ensures
+        match r {
+            Some(c) => eenv_of(c) == child_env(arena_of(nodes@), ts, n as int, k as int, eenv_of(*e)),
+            None => true,
+        },
+{
+    let src = tk.src;
+    let toks = tk.toks;
+    let by_start = tk.by_start;
+    let ghost a = arena_of(nodes@);
+    let kind = match nodes.get(n) {
+        Some(x) => x.kind,
+        None => {
+            return None;
+        },
+    };
+    proof {
+        assert(a.nodes[n as int] == nodes@[n as int]@);
+        assert(a.nodes[n as int].kind == kind);
+    }
+    let strict = match arrow_strict_exec(src, nodes, toks, by_start, n, e.strict, Ghost(ts)) {
+        Some(v) => v,
+        None => {
+            return None;
+        },
+    };
+    if matches!(kind, NodeKind::ArrowFunction) {
+        if k == 0 {
+            Some(env_fn_exec(e, strict, FnFlags { y: e.yield_, aw: e.await_, sp: e.super_prop, sc: e.super_call, nt: e.new_target, na: e.no_arguments, nya: true }))
+        } else {
+            Some(env_fn_exec(e, strict, FnFlags { y: false, aw: false, sp: e.super_prop, sc: e.super_call, nt: e.new_target, na: e.no_arguments, nya: false }))
+        }
+    } else if k == 0 {
+        let y = match kid_kind(nodes, n, 0) {
+            Some(NodeKind::BindingIdentifier) => e.yield_,
+            Some(_) => false,
+            None => {
+                return None;
+            },
+        };
+        Some(env_fn_exec(e, strict, FnFlags { y, aw: true, sp: e.super_prop, sc: e.super_call, nt: e.new_target, na: e.no_arguments, nya: true }))
+    } else {
+        Some(env_fn_exec(e, strict, FnFlags { y: false, aw: true, sp: e.super_prop, sc: e.super_call, nt: e.new_target, na: e.no_arguments, nya: false }))
+    }
+}
+
+/// `spec::child_env` for the function-like nodes: child `k` of node `n`.
+fn child_env_fnlike(
+    tk: &Tk,
+    nodes: &[Node],
+    n: usize,
+    k: usize,
+    e: &EEnv,
+    Ghost(ts): Ghost<Stream>,
+) -> (r: Option<EEnv>)
+    requires
+        n < nodes.len(),
+        ast_wf(arena_of(nodes@)),
+        k < nodes@[n as int].children.len(),
+        toks_match(tk.src@, tk.toks@, ts),
+        starts_inc(ts),
+    ensures
+        match r {
+            Some(c) => eenv_of(c) == child_env(arena_of(nodes@), ts, n as int, k as int, eenv_of(*e)),
+            None => true,
+        },
+{
+    let kind = match nodes.get(n) {
+        Some(x) => x.kind,
+        None => {
+            return None;
+        },
+    };
+    proof {
+        let a = arena_of(nodes@);
+        assert(a.nodes[n as int] == nodes@[n as int]@);
+    }
+    match kind {
+        NodeKind::FunctionDeclaration | NodeKind::FunctionExpression | NodeKind::GeneratorDeclaration
+        | NodeKind::GeneratorExpression | NodeKind::AsyncFunctionDeclaration
+        | NodeKind::AsyncFunctionExpression | NodeKind::AsyncGeneratorDeclaration
+        | NodeKind::AsyncGeneratorExpression => child_env_function(tk, nodes, n, k, e, Ghost(ts)),
+        NodeKind::MethodDefinition => child_env_method(tk, nodes, n, k, e, Ghost(ts)),
+        NodeKind::ArrowFunction | NodeKind::AsyncArrowFunction => child_env_arrow(tk, nodes, n, k, e, Ghost(ts)),
+        _ => None,
+    }
+}
+
+
+/// `spec::child_env` for the node kinds whose arm is simple: child `k` of node `n`.
+#[verifier::rlimit(400)]
+fn child_env_exec(
+    tk: &Tk,
+    nodes: &[Node],
+    n: usize,
+    k: usize,
+    e: &EEnv,
+    Ghost(ts): Ghost<Stream>,
+) -> (r: Option<EEnv>)
+    requires
+        n < nodes.len(),
+        ast_wf(arena_of(nodes@)),
+        k < nodes@[n as int].children.len(),
+        toks_match(tk.src@, tk.toks@, ts),
+        starts_inc(ts),
     ensures
         match r {
             Some(c) => eenv_of(c) == child_env(arena_of(nodes@), ts, n as int, k as int, eenv_of(*e)),
@@ -275,9 +704,9 @@ fn child_env_exec(nodes: &[Node], n: usize, k: usize, e: &EEnv, Ghost(ts): Ghost
         | NodeKind::GeneratorExpression | NodeKind::AsyncFunctionDeclaration
         | NodeKind::AsyncFunctionExpression | NodeKind::AsyncGeneratorDeclaration
         | NodeKind::AsyncGeneratorExpression | NodeKind::ArrowFunction | NodeKind::AsyncArrowFunction
-        | NodeKind::MethodDefinition | NodeKind::FieldDefinition | NodeKind::ClassStaticBlock
-        | NodeKind::ClassDeclaration | NodeKind::ClassExpression | NodeKind::ClassBody
-        | NodeKind::LabelledStatement => None,
+        | NodeKind::MethodDefinition => child_env_fnlike(tk, nodes, n, k, e, Ghost(ts)),
+        NodeKind::FieldDefinition | NodeKind::ClassStaticBlock | NodeKind::ClassDeclaration
+        | NodeKind::ClassExpression | NodeKind::ClassBody | NodeKind::LabelledStatement => None,
         NodeKind::ObjectLiteral => Some(EEnv { derived: false, ..*e }),
         NodeKind::DoWhileStatement => if k == 0 {
             Some(EEnv { in_loop: true, in_breakable: true, ..*e })
@@ -420,7 +849,7 @@ fn not_labelled(nodes: &[Node], c: usize) -> (r: bool)
 }
 
 /// The token a node starts at, found from its start.
-fn node_token(nodes: &[Node], toks: &[DTok], by_start: &[usize], m: usize) -> (r: Option<usize>)
+pub(crate) fn node_token(nodes: &[Node], toks: &[DTok], by_start: &[usize], m: usize) -> (r: Option<usize>)
     requires
         m < nodes.len(),
     ensures
@@ -619,7 +1048,7 @@ pub open spec fn lex_empty_kind(k: NodeKind, top: bool) -> bool {
 }
 
 /// The lexically declared names of a list of such items are none.
-proof fn lemma_lex_list_empty(a: AstV, ts: Stream, n: int, ks: Seq<int>, k: int, top: bool)
+pub(crate) proof fn lemma_lex_list_empty(a: AstV, ts: Stream, n: int, ks: Seq<int>, k: int, top: bool)
     requires
         forall|j: int| 0 <= j < ks.len() ==> lex_empty_kind(kd(a, #[trigger] ks[j]), top),
     ensures
@@ -636,7 +1065,7 @@ proof fn lemma_lex_list_empty(a: AstV, ts: Stream, n: int, ks: Seq<int>, k: int,
 }
 
 /// `list_early` of a list whose items declare nothing lexically.
-proof fn lemma_list_early_empty(a: AstV, ts: Stream, n: int, ks: Seq<int>, strict: bool, top: bool)
+pub(crate) proof fn lemma_list_early_empty(a: AstV, ts: Stream, n: int, ks: Seq<int>, strict: bool, top: bool)
     requires
         forall|j: int| 0 <= j < ks.len() ==> lex_empty_kind(kd(a, #[trigger] ks[j]), top),
     ensures
@@ -655,7 +1084,7 @@ proof fn lemma_list_early_empty(a: AstV, ts: Stream, n: int, ks: Seq<int>, stric
 }
 
 /// The items of node `m` declare nothing lexically.
-fn items_lex_empty(nodes: &[Node], m: usize, top: bool) -> (r: bool)
+pub(crate) fn items_lex_empty(nodes: &[Node], m: usize, top: bool) -> (r: bool)
     requires
         m < nodes.len(),
         ast_wf(arena_of(nodes@)),
@@ -732,7 +1161,7 @@ fn items_lex_empty(nodes: &[Node], m: usize, top: bool) -> (r: bool)
 }
 
 /// The kind of child `i` of node `m`, `Script` where there is none (`spec::kd(a, kid(ks, i))`).
-fn kid_kind(nodes: &[Node], m: usize, i: usize) -> (r: Option<NodeKind>)
+pub(crate) fn kid_kind(nodes: &[Node], m: usize, i: usize) -> (r: Option<NodeKind>)
     requires
         m < nodes.len(),
         ast_wf(arena_of(nodes@)),
@@ -782,10 +1211,8 @@ fn kid_kind(nodes: &[Node], m: usize, i: usize) -> (r: Option<NodeKind>)
 /// `early_local` of node `m` in `e`, for the rules this module covers (`false` otherwise).
 #[verifier::rlimit(400)]
 fn early_local_exec(
-    src: &[u32],
+    tk: &Tk,
     nodes: &[Node],
-    toks: &[DTok],
-    by_start: &[usize],
     m: usize,
     e: &EEnv,
     Ghost(ts): Ghost<Stream>,
@@ -793,11 +1220,16 @@ fn early_local_exec(
     requires
         m < nodes.len(),
         ast_wf(arena_of(nodes@)),
-        toks_match(src@, toks@, ts),
+        toks_match(tk.src@, tk.toks@, ts),
         starts_inc(ts),
+        tk.bn.len() == nodes.len(),
+        bn_inv(arena_of(nodes@), ts, tk.toks@, tk.bn@, nodes.len() as int),
     ensures
         r ==> early_local(arena_of(nodes@), ts, m as int, eenv_of(*e)),
 {
+    let src = tk.src;
+    let toks = tk.toks;
+    let by_start = tk.by_start;
     let ghost a = arena_of(nodes@);
     let nd = match nodes.get(m) {
         Some(x) => x,
@@ -1000,6 +1432,74 @@ fn early_local_exec(
                 }
             }
             ok
+        },
+        NodeKind::FunctionBody => {
+            let ok = items_lex_empty(nodes, m, true);
+            proof {
+                if ok {
+                    lemma_list_early_empty(a, ts, m as int, a.nodes[m as int].children, e.strict, true);
+                }
+            }
+            ok
+        },
+        NodeKind::FunctionDeclaration | NodeKind::FunctionExpression | NodeKind::GeneratorDeclaration
+        | NodeKind::GeneratorExpression | NodeKind::AsyncFunctionDeclaration
+        | NodeKind::AsyncFunctionExpression | NodeKind::AsyncGeneratorDeclaration
+        | NodeKind::AsyncGeneratorExpression | NodeKind::MethodDefinition => {
+            let (p, b) = match (nd.children.as_slice().get(1), nd.children.as_slice().get(2)) {
+                (Some(p), Some(b)) => (*p as usize, *b as usize),
+                _ => {
+                    return false;
+                },
+            };
+            proof {
+                assert(a.nodes[m as int].children[1] == p as int);
+                assert(a.nodes[m as int].children[2] == b as int);
+                lemma_child_before(a, m as int, 1);
+                lemma_child_before(a, m as int, 2);
+            }
+            function_early_exec(
+                tk,
+                nodes,
+                p,
+                Some(b),
+                matches!(kind, NodeKind::MethodDefinition),
+                e.strict,
+                Ghost(ts),
+            )
+        },
+        NodeKind::ArrowFunction | NodeKind::AsyncArrowFunction => {
+            let (p, b) = match (nd.children.as_slice().get(ZERO), nd.children.as_slice().get(1)) {
+                (Some(p), Some(b)) => (*p as usize, *b as usize),
+                _ => {
+                    return false;
+                },
+            };
+            proof {
+                assert(a.nodes[m as int].children[0] == p as int);
+                assert(a.nodes[m as int].children[1] == b as int);
+                lemma_child_before(a, m as int, 0);
+                lemma_child_before(a, m as int, 1);
+            }
+            let bk = match kid_kind(nodes, m, 1) {
+                Some(k) => k,
+                None => {
+                    return false;
+                },
+            };
+            function_early_exec(
+                tk,
+                nodes,
+                p,
+                if matches!(bk, NodeKind::FunctionBody) {
+                    Some(b)
+                } else {
+                    None
+                },
+                true,
+                e.strict,
+                Ghost(ts),
+            )
         },
         _ => false,
     }
@@ -1219,6 +1719,14 @@ pub fn check_early(
         }
         x = x.saturating_add(1);
     }
+    // The names the declarations bind.
+    let bn = match bound_names_all(src, nodes, toks, &by_start, Ghost(ts)) {
+        Some(bn) => bn,
+        None => {
+            return Derivation::Unsupported;
+        },
+    };
+    let tk = Tk { src, toks, by_start: by_start.as_slice(), bn: bn.as_slice() };
     // The root's environment: a script without a Use Strict Directive.
     if !root_has_no_directive(nodes, last) {
         return Derivation::Unsupported;
@@ -1262,6 +1770,10 @@ pub fn check_early(
             envs.len() == n,
             ast_wf(a),
             a == arena_of(nodes@),
+            toks_match(src@, toks@, ts),
+            tk.src@ == src@,
+            tk.toks@ == toks@,
+            starts_inc(ts),
         decreases i,
     {
         i = i.saturating_sub(1);
@@ -1289,11 +1801,15 @@ pub fn check_early(
                 nd == &nodes@[i as int],
                 ast_wf(a),
                 a == arena_of(nodes@),
+                toks_match(src@, toks@, ts),
+                tk.src@ == src@,
+                tk.toks@ == toks@,
+                starts_inc(ts),
                 len == nodes@[i as int].children.len(),
             decreases len - kk,
         {
             if let (Some(ce), Some(c)) = (
-                child_env_exec(nodes, i, kk, &env_i, Ghost(ts)),
+                child_env_exec(&tk, nodes, i, kk, &env_i, Ghost(ts)),
                 nd.children.as_slice().get(kk),
             ) {
                 let c = *c as usize;
@@ -1315,7 +1831,12 @@ pub fn check_early(
             ast_wf(a),
             a == arena_of(nodes@),
             toks_match(src@, toks@, ts),
+            tk.src@ == src@,
+            tk.toks@ == toks@,
+            tk.bn@ == bn@,
             starts_inc(ts),
+            bn.len() == n,
+            bn_inv(a, ts, toks@, bn@, n as int),
             forall|j: int| 0 <= j < m ==> early(a, ts, j, eenv_of(envs@[j])),
         decreases n - m,
     {
@@ -1331,7 +1852,7 @@ pub fn check_early(
                 return Derivation::Unsupported;
             },
         };
-        if !early_local_exec(src, nodes, toks, &by_start, m, &env_m, Ghost(ts)) {
+        if !early_local_exec(&tk, nodes, m, &env_m, Ghost(ts)) {
             return Derivation::Unsupported;
         }
         let len = nd.children.len();
@@ -1352,6 +1873,11 @@ pub fn check_early(
                 len == a.nodes[m as int].children.len(),
                 ast_wf(a),
                 a == arena_of(nodes@),
+                toks_match(src@, toks@, ts),
+                tk.src@ == src@,
+                tk.toks@ == toks@,
+                tk.bn@ == bn@,
+                starts_inc(ts),
                 forall|j: int| 0 <= j < m ==> early(a, ts, j, eenv_of(envs@[j])),
                 forall|q: int|
                     0 <= q < kk ==> {
@@ -1370,7 +1896,7 @@ pub fn check_early(
                 assert(a.nodes[m as int].children[kk as int] == c as int);
                 lemma_child_before(a, m as int, kk as int);
             }
-            let ce = match child_env_exec(nodes, m, kk, &env_m, Ghost(ts)) {
+            let ce = match child_env_exec(&tk, nodes, m, kk, &env_m, Ghost(ts)) {
                 Some(ce) => ce,
                 None => {
                     return Derivation::Unsupported;

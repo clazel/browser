@@ -336,6 +336,12 @@ fn covered_early_rules_are_verified() {
         "delete a.b; typeof a; void 0; a in b; a instanceof b;",
         "{ a; { b; } }",
         "var a; var a;",
+        "(function () {})",
+        "function f(a, [b], {c}, ...d) { return a; }",
+        "function f(a, a) { }",
+        "(a, b) => a + b;",
+        "function* g(x) { yield x; } async function h() { await 1; }",
+        "function f() { 'use strict'; return 1; }",
         "new.target",
     ] {
         let r = early(s);
@@ -354,7 +360,6 @@ fn other_early_rules_are_unsupported_not_failed() {
         "'use strict'; a = 1;",
         "let a;",
         "a: b;",
-        "(function () {})",
         "class A {}",
         "for (a in b) ;",
         "/a/;",
