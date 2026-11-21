@@ -73,6 +73,7 @@
 //! Tier: see `[package.metadata.clazel]` in `Cargo.toml` and
 //! `docs/VERIFICATION.md`.
 
+pub mod a64;
 pub mod agree;
 pub mod alu;
 pub mod api;
