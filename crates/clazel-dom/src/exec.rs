@@ -16,6 +16,8 @@
 #[cfg(verus_only)]
 use super::contract::*;
 #[cfg(verus_only)]
+use super::deep_clone_lemmas::*;
+#[cfg(verus_only)]
 use super::lemmas::*;
 #[cfg(verus_only)]
 use super::ops_lemmas::*;
@@ -1927,7 +1929,178 @@ fn is_template_exec(k: &ExecKind) -> (r: bool)
     matches!(k, ExecKind::Element { template_contents: Some(_), .. })
 }
 
+/// A template's contents, if `k` is a template ([`is_template`]).
+fn template_contents_exec(k: &ExecKind) -> (r: Option<usize>)
+    ensures
+        is_template(k@) ==> r == Some(k@->Element_template_contents->Some_0),
+        !is_template(k@) ==> r is None,
+{
+    match k {
+        ExecKind::Element { template_contents: Some(f), .. } => Some(*f),
+        _ => None,
+    }
+}
+
 impl Arena {
+    /// Cut the arena back to its first `len` nodes (a clone that does not
+    /// fit is rolled back with it).
+    fn truncate(&mut self, len: usize)
+        requires
+            len <= old(self)@.nodes.len(),
+        ensures
+            final(self)@ == (Document { nodes: old(self)@.nodes.take(len as int) }),
+    {
+        let ghost s0 = self.nodes@;
+        self.nodes.truncate(len);
+        proof {
+            assert(self.nodes@ =~= s0.take(len as int));
+            assert(nodes_view(self.nodes@) =~= nodes_view(s0).take(len as int));
+        }
+    }
+
+    /// One step of [`Arena::clone_deep`]: clone the `j`th child of
+    /// `order[i]`, append the copy to node `base + i`, and list the source
+    /// (and a template's contents). If the copy does not fit, the arena is
+    /// cut back to its old length and the result is false.
+    #[verifier::rlimit(100)]
+    fn deep_step(&mut self, order: &mut Vec<usize>, base: usize, i: usize, j: usize, Ghost(d0): Ghost<Document>, Ghost(node): Ghost<NodeId>) -> (ok: bool)
+        requires
+            base == d0.nodes.len(),
+            deep_inv(d0, node, old(self)@, old(order)@, i as int, j as int),
+            i < old(order).len(),
+            j < d0.nodes[old(order)@[i as int] as int].children.len(),
+        ensures
+            ok ==> deep_inv(d0, node, final(self)@, final(order)@, i as int, j as int + 1),
+            ok ==> final(self)@.nodes.len() == base + final(order).len(),
+            ok ==> forall|k: int| 0 <= k < old(order).len() ==> #[trigger] final(order)@[k] == old(order)@[k],
+            !ok ==> final(self)@ == d0,
+    {
+        let ghost a = self@;
+        let ghost order0 = order@;
+        proof {
+            lemma_inv_facts(d0, node, a, order0, i as int, j as int);
+            assert(a.nodes[order0[i as int] as int] == d0.nodes[order0[i as int] as int]);
+        }
+        let s = order[i];
+        let ch = self.children(s)[j];
+        proof {
+            lemma_child_requires(d0, node, a, order0, i as int, j as int, ch);
+        }
+        match self.clone_node(ch) {
+            None => {
+                proof {
+                    lemma_deep_rollback(d0, node, self@, order0, i as int, j as int);
+                }
+                self.truncate(base);
+                false
+            },
+            Some(cc) => {
+                proof {
+                    assert(can_create(a, clone_count(a, ch)));
+                    lemma_step_requires(d0, node, a, order0, i as int, j as int, ch);
+                    lemma_step_inv(d0, node, a, order0, i as int, j as int, ch);
+                }
+                self.append(base + i, cc);
+                proof {
+                    assert(self@.nodes[ch as int] == a.nodes[ch as int]);
+                }
+                order.push(ch);
+                if let Some(f) = template_contents_exec(self.kind(ch)) {
+                    order.push(f);
+                }
+                proof {
+                    assert(order@ =~= order_after(d0, order0, ch));
+                }
+                true
+            },
+        }
+    }
+
+    /// DOM §4.4† "clone a node" with the clone children flag set
+    /// ([`clone_deep_ensures`]): a worklist over the source's host-including
+    /// subtree. Node `base + i` is the copy of `order[i]`; the cursor `(i,
+    /// j)` is at the `j`th child of `order[i]`, which is cloned (shallowly,
+    /// with its template contents) and appended to node `base + i`, and
+    /// listed. Nothing recurses. If a clone does not fit, the arena is cut
+    /// back to its old length.
+    #[verifier::rlimit(20)]
+    pub fn clone_deep(&mut self, node: usize) -> (r: Option<usize>)
+        requires
+            clone_requires(old(self)@, node),
+        ensures
+            clone_deep_ensures(old(self)@, node, final(self)@, r),
+    {
+        let ghost d0 = self@;
+        let base = self.nodes.len();
+        let root = self.clone_node(node)?;
+        proof {
+            assert(can_create(d0, clone_count(d0, node)));
+            assert(root == d0.nodes.len());
+            lemma_deep_init(d0, node);
+            lemma_inv_facts(d0, node, self@, order_after(d0, Seq::empty(), node), 0, 0);
+            lemma_wf_bound(self@);
+        }
+        let mut order: Vec<usize> = Vec::new();
+        order.push(node);
+        if let Some(f) = template_contents_exec(self.kind(node)) {
+            order.push(f);
+        }
+        proof {
+            assert(order@ =~= order_after(d0, Seq::empty(), node));
+            lemma_inv_facts(d0, node, self@, order@, 0, 0);
+            assert(self@.nodes[node as int] == d0.nodes[node as int]);
+        }
+        let mut i: usize = 0;
+        let mut j: usize = 0;
+        let mut nch: usize = self.children(node).len();
+        while i < order.len()
+            invariant
+                d0 == old(self)@,
+                base == d0.nodes.len(),
+                deep_inv(d0, node, self@, order@, i as int, j as int),
+                i < order.len() ==> nch == d0.nodes[order@[i as int] as int].children.len(),
+                i < order.len() ==> j <= nch,
+                i <= order.len(),
+                self@.nodes.len() == base + order.len(),
+                self@.nodes.len() <= MAX_NODES,
+            decreases MAX_NODES - i, nch - j,
+        {
+            if j < nch {
+                if !self.deep_step(&mut order, base, i, j, Ghost(d0), Ghost(node)) {
+                    proof {
+                        assert(self@ == d0);
+                        assert(d0 == old(self)@);
+                    }
+                    return None;
+                }
+                j += 1;
+            } else {
+                proof {
+                    lemma_advance(d0, node, self@, order@, i as int, j as int);
+                }
+                i += 1;
+                j = 0;
+                if i < order.len() {
+                    proof {
+                        lemma_inv_facts(d0, node, self@, order@, i as int, 0);
+                        assert(self@.nodes[order@[i as int] as int] == d0.nodes[order@[i as int] as int]);
+                    }
+                    nch = self.children(order[i]).len();
+                } else {
+                    nch = 0;
+                }
+            }
+            proof {
+                lemma_inv_facts(d0, node, self@, order@, i as int, j as int);
+                lemma_wf_bound(self@);
+            }
+        }
+        proof {
+            lemma_deep_done(d0, node, self@, order@, i as int, j as int);
+        }
+        Some(root)
+    }
+
     /// DOM §4.4† "clone a node", shallow ([`clone_node_ensures`]).
     pub fn clone_node(&mut self, node: usize) -> (r: Option<usize>)
         requires

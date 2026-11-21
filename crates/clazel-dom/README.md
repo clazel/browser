@@ -32,8 +32,11 @@ carry machine-checked proofs.
   `replace_attribute`). The named hooks "insertion steps" and "removing
   steps" are called from "insert" and "remove" and change nothing here.
   Section and step numbers marked † were written from memory, not read at
-  the pinned DOM commit. Not done: a deep "clone a node" (the clone children
-  flag; its recursion has no verified implementation yet). Document-children
+  the pinned DOM commit. Deep "clone a node" (`clone_deep`, the clone
+  children flag) is specified as a relation (the copy is an isomorphic
+  fresh subtree of the host-including subtree, template contents included)
+  and implemented as a worklist, not a recursion; a clone that does not fit
+  the node limit leaves the arena as it was. Document-children
   rules (step 6 of validity) and the Text/doctype rule (step 5) are covered
   by `tests/operations.rs` only: no theorem says them, so no mutation of
   them is certified.

@@ -577,3 +577,159 @@ fn cloning_a_template_gives_the_copy_contents_of_its_own() {
     assert_eq!(a.children(contents), &[p]);
     check(&a);
 }
+
+/// `copy` is a fresh copy of the host-including subtree at `src`: the same
+/// shape, kinds and data, template contents included, and every node of it
+/// is a new node (id >= `old_len`).
+fn same_shape(a: &Arena, src: usize, copy: usize, old_len: usize) {
+    assert!(copy >= old_len, "{copy} is not a new node");
+    match (a.kind(src), a.kind(copy)) {
+        (ExecKind::Text { data: x }, ExecKind::Text { data: y }) => assert_eq!(x, y),
+        (ExecKind::Comment { data: x }, ExecKind::Comment { data: y }) => assert_eq!(x, y),
+        (
+            ExecKind::Element {
+                local_name: x,
+                template_contents: tx,
+                ..
+            },
+            ExecKind::Element {
+                local_name: y,
+                template_contents: ty,
+                form_owner,
+                ..
+            },
+        ) => {
+            assert_eq!(x, y);
+            assert!(form_owner.is_none());
+            assert_eq!(tx.is_some(), ty.is_some());
+            if let (Some(sx), Some(sy)) = (tx, ty) {
+                same_shape(a, *sx, *sy, old_len);
+            }
+            assert_eq!(attrs(a, src), attrs(a, copy));
+        }
+        (x, y) => assert!(
+            std::mem::discriminant(x) == std::mem::discriminant(y),
+            "kinds differ"
+        ),
+    }
+    let (ks, kc) = (a.children(src), a.children(copy));
+    assert_eq!(ks.len(), kc.len());
+    for (s, c) in ks.iter().zip(kc) {
+        assert_eq!(a.parent(*c), Some(copy));
+        same_shape(a, *s, *c, old_len);
+    }
+}
+
+#[test]
+fn deep_clone_copies_the_whole_subtree() {
+    let mut a = new_doc();
+    let root = create(&mut a, element("div"));
+    a.append(0, root);
+    let p = create(&mut a, element("p"));
+    let t = create(&mut a, text("hello"));
+    let c = create(&mut a, ExecKind::Comment { data: s("note") });
+    let q = create(&mut a, element("q"));
+    let t2 = create(&mut a, text("deep"));
+    a.append(root, p);
+    a.append(p, t);
+    a.append(root, c);
+    a.append(root, q);
+    a.append(q, t2);
+    let before: Vec<Vec<usize>> = (0..a.len()).map(|n| a.children(n).to_vec()).collect();
+    let n = a.len();
+    let copy = a.clone_deep(root);
+    assert_eq!(copy, Some(n));
+    let copy = copy.unwrap_or_default();
+    assert_eq!(a.len(), n + 6);
+    assert_eq!(a.parent(copy), None);
+    same_shape(&a, root, copy, n);
+    // The source is untouched.
+    for (i, kids) in before.iter().enumerate() {
+        assert_eq!(a.children(i), kids.as_slice());
+    }
+    check(&a);
+    // A leaf's deep clone is its shallow clone.
+    let leaf = a.clone_deep(t2).unwrap_or_default();
+    assert!(matches!(a.kind(leaf), ExecKind::Text { data } if *data == s("deep")));
+    assert!(a.children(leaf).is_empty());
+    check(&a);
+}
+
+#[test]
+fn deep_clone_clones_template_contents_and_nests() {
+    let mut a = new_doc();
+    let outer = create(&mut a, element("template"));
+    let oc = a.create_template_contents(outer).unwrap_or_default();
+    let inner = create(&mut a, element("template"));
+    let ic = a.create_template_contents(inner).unwrap_or_default();
+    let span = create(&mut a, element("span"));
+    let tx = create(&mut a, text("x"));
+    a.append(oc, inner);
+    a.append(ic, span);
+    a.append(span, tx);
+    // A template with ordinary children too.
+    let kid = create(&mut a, element("b"));
+    a.append(outer, kid);
+    let n = a.len();
+    let copy = a.clone_deep(outer).unwrap_or_default();
+    assert_eq!(a.len(), n + 7);
+    same_shape(&a, outer, copy, n);
+    // The copy's contents is hosted by the copy; the source's is as it was.
+    match a.kind(copy) {
+        ExecKind::Element {
+            template_contents: Some(c),
+            ..
+        } => {
+            assert!(
+                matches!(a.kind(*c), ExecKind::DocumentFragment { host: Some(h) } if *h == copy)
+            );
+            assert_ne!(*c, oc);
+        }
+        other => assert!(
+            matches!(other, ExecKind::Element { .. }),
+            "a template element"
+        ),
+    }
+    assert_eq!(a.children(oc), &[inner]);
+    check(&a);
+    // Cloning a template's contents directly gives a fragment with no host.
+    let f = a.clone_deep(oc).unwrap_or_default();
+    assert!(matches!(
+        a.kind(f),
+        ExecKind::DocumentFragment { host: None }
+    ));
+    assert_eq!(a.children(f).len(), 1);
+    same_shape(&a, oc, f, n);
+    check(&a);
+}
+
+/// A deep clone that does not fit leaves the arena exactly as it was. The
+/// arena is filled to the node limit, which Miri would take minutes to do.
+#[test]
+#[cfg_attr(miri, ignore = "creating four million nodes takes minutes under Miri")]
+fn deep_clone_that_does_not_fit_changes_nothing() {
+    let mut a = new_doc();
+    let root = create(&mut a, element("div"));
+    a.append(0, root);
+    for _ in 0..4 {
+        let k = create(&mut a, element("i"));
+        a.append(root, k);
+    }
+    // Leave room for the copy of the root and two of its four children.
+    while a.len() < clazel_dom::exec::MAX_NODES - 3 {
+        assert!(a.create(text("filler")).is_some());
+    }
+    let n = a.len();
+    let kids = a.children(root).to_vec();
+    assert_eq!(a.clone_deep(root), None);
+    assert_eq!(a.len(), n);
+    assert_eq!(a.children(root), kids.as_slice());
+    assert_eq!(a.parent(root), Some(0));
+    for c in &kids {
+        assert!(a.children(*c).is_empty());
+        assert_eq!(a.parent(*c), Some(root));
+    }
+    // One that does fit still works.
+    assert!(a.clone_deep(kids[0]).is_some());
+    assert_eq!(a.len(), n + 1);
+}

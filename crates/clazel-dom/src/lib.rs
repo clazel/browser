@@ -14,6 +14,8 @@
 //!   pre-insert, replace, replace all, clone, attribute changes).
 //! - [`validity_lemmas`]: steps 5 and 6 of the validity checks enforce the
 //!   children rules exactly.
+//! - [`deep_clone_lemmas`]: deep "clone a node" (a worklist) meets its
+//!   relational spec; what the relation says.
 //! - [`ops_mutation_lemmas`]: the kill certificates of the mutations of those.
 //! - [`mutation_lemmas`]: the theorems on small concrete arenas, the kill
 //!   certificates of `mutations.json`.
@@ -22,6 +24,8 @@
 //!   spec's on the parser's calls.
 
 pub mod contract;
+pub mod deep_clone_lemmas;
+pub mod deep_clone_mutation_lemmas;
 pub mod exec;
 pub mod independent;
 pub mod independent_equivalence;
