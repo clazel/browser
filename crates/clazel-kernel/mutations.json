@@ -532,7 +532,7 @@
       "certificate": {
         "file": "src/mutation_lemmas.rs",
         "lemma": "ml_begin_closes(Seq::<clazel_psl::spec::Rule>::empty(), crate::counterexamples::ce_urls(), ml_fetch_unparsed(), ml_s_conn(), 0, Seq::<u32>::empty(), 0)",
-        "witness": "find_by_tab(ml_s_conn().renderers, 0, 0) == Some(0int) && 0int < ml_s_conn().renderers.len() && lock_of_url(crate::counterexamples::ce_urls(), Seq::<u32>::empty(), ml_s_conn().next_id) is Some && closes_of_tab(ml_s_conn().conns, 0).len() > 0 && begin_navigation(Seq::<clazel_psl::spec::Rule>::empty(), crate::counterexamples::ce_urls(), ml_fetch_unparsed(), ml_s_conn(), 0, Seq::<u32>::empty()).1[0] != closes_of_tab(ml_s_conn().conns, 0)[0]"
+        "witness": "find_by_tab(ml_s_conn().renderers, 0, 0) == Some(0int) && 0int < ml_s_conn().renderers.len() && lock_of_url(crate::counterexamples::ce_urls(), Seq::<u32>::empty(), ml_s_conn().next_id) is Some && closes_of_tab(ml_s_conn().conns, 0).len() > 0 && begin_navigation(Seq::<clazel_psl::spec::Rule>::empty(), crate::counterexamples::ce_urls(), ml_fetch_unparsed(), ml_s_conn(), 0, Seq::<u32>::empty(), clazel_fetch::request::spec::get_req()).1[0] != closes_of_tab(ml_s_conn().conns, 0)[0]"
       },
       "module": "mutation_lemmas"
     },
@@ -629,7 +629,7 @@
     {
       "id": "display-before-commit",
       "file": "src/spec.rs",
-      "find": "Some(m) => if (m is Display || m is Title || m is FetchStyle) && !r.committed { None } else { Some(m) },",
+      "find": "Some(m) => if (m is Display || m is Title || m is FetchStyle || m is Submit) && !r.committed { None } else { Some(m) },",
       "replace": "Some(m) => Some(m),",
       "expect": "killed",
       "module": "mutation_lemmas",
