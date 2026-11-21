@@ -272,6 +272,1605 @@
         "lemma": "crate::examples::example_to_number()",
         "witness": "fast_step(crate::examples::example_state(0xFFF9_0000_0000_0005u64), Op::ToNumber { dst: 1, src: 0 }).pc == 0nat"
       }
+    },
+    {
+      "id": "to-property-key-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::ToPropertyKey { dst, src, .. } => reg_ok(c, dst) && reg_ok(c, src),",
+      "replace": "Op::ToPropertyKey { dst, src, .. } => reg_ok(c, src),",
+      "expect": "killed",
+      "reason": "ToPropertyKey accepts a register outside the frame (operand `dst`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::ToPropertyKey { dst: 3, src: 0 })"
+      }
+    },
+    {
+      "id": "to-property-key-src-wf",
+      "file": "src/spec.rs",
+      "find": "Op::ToPropertyKey { dst, src, .. } => reg_ok(c, dst) && reg_ok(c, src),",
+      "replace": "Op::ToPropertyKey { dst, src, .. } => reg_ok(c, dst),",
+      "expect": "killed",
+      "reason": "ToPropertyKey accepts a register outside the frame (operand `src`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::ToPropertyKey { dst: 0, src: 3 })"
+      }
+    },
+    {
+      "id": "to-property-key-handler",
+      "file": "src/ops.rs",
+      "find": "Op::ToPropertyKey { .. } => HandlerId::ToPropertyKey,",
+      "replace": "Op::ToPropertyKey { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "ToPropertyKey calls the throw handler instead of its own: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_handler(Op::ToPropertyKey { dst: 0, src: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "to-property-key-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::ToPropertyKey { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "ToPropertyKey is a core op, which never calls out: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_class(Op::ToPropertyKey { dst: 0, src: 0 }) is Core"
+      }
+    },
+    {
+      "id": "to-string-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::ToString { dst, src, .. } => reg_ok(c, dst) && reg_ok(c, src),",
+      "replace": "Op::ToString { dst, src, .. } => reg_ok(c, src),",
+      "expect": "killed",
+      "reason": "ToString accepts a register outside the frame (operand `dst`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::ToString { dst: 3, src: 0 })"
+      }
+    },
+    {
+      "id": "to-string-src-wf",
+      "file": "src/spec.rs",
+      "find": "Op::ToString { dst, src, .. } => reg_ok(c, dst) && reg_ok(c, src),",
+      "replace": "Op::ToString { dst, src, .. } => reg_ok(c, dst),",
+      "expect": "killed",
+      "reason": "ToString accepts a register outside the frame (operand `src`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::ToString { dst: 0, src: 3 })"
+      }
+    },
+    {
+      "id": "to-string-handler",
+      "file": "src/ops.rs",
+      "find": "Op::ToString { .. } => HandlerId::ToString,",
+      "replace": "Op::ToString { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "ToString calls the throw handler instead of its own: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_handler(Op::ToString { dst: 0, src: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "to-string-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::ToString { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "ToString is a core op, which never calls out: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_class(Op::ToString { dst: 0, src: 0 }) is Core"
+      }
+    },
+    {
+      "id": "copy-data-properties-obj-wf",
+      "file": "src/spec.rs",
+      "find": "Op::CopyDataProperties { obj, src, excl, nexcl, .. } => reg_ok(c, obj) && reg_ok(c, src) && regs_ok(c, excl, nexcl),",
+      "replace": "Op::CopyDataProperties { obj, src, excl, nexcl, .. } => reg_ok(c, src) && regs_ok(c, excl, nexcl),",
+      "expect": "killed",
+      "reason": "CopyDataProperties accepts a register outside the frame (operand `obj`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::CopyDataProperties { obj: 3, src: 0, excl: 0, nexcl: 3 })"
+      }
+    },
+    {
+      "id": "copy-data-properties-src-wf",
+      "file": "src/spec.rs",
+      "find": "Op::CopyDataProperties { obj, src, excl, nexcl, .. } => reg_ok(c, obj) && reg_ok(c, src) && regs_ok(c, excl, nexcl),",
+      "replace": "Op::CopyDataProperties { obj, src, excl, nexcl, .. } => reg_ok(c, obj) && regs_ok(c, excl, nexcl),",
+      "expect": "killed",
+      "reason": "CopyDataProperties accepts a register outside the frame (operand `src`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::CopyDataProperties { obj: 0, src: 3, excl: 0, nexcl: 3 })"
+      }
+    },
+    {
+      "id": "copy-data-properties-excl-wf",
+      "file": "src/spec.rs",
+      "find": "Op::CopyDataProperties { obj, src, excl, nexcl, .. } => reg_ok(c, obj) && reg_ok(c, src) && regs_ok(c, excl, nexcl),",
+      "replace": "Op::CopyDataProperties { obj, src, excl, nexcl, .. } => reg_ok(c, obj) && reg_ok(c, src),",
+      "expect": "killed",
+      "reason": "CopyDataProperties accepts a register range that runs past the frame (operand `excl`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::CopyDataProperties { obj: 0, src: 0, excl: 1, nexcl: 3 })"
+      }
+    },
+    {
+      "id": "copy-data-properties-handler",
+      "file": "src/ops.rs",
+      "find": "Op::CopyDataProperties { .. } => HandlerId::CopyDataProperties,",
+      "replace": "Op::CopyDataProperties { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "CopyDataProperties calls the throw handler instead of its own: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_handler(Op::CopyDataProperties { obj: 0, src: 0, excl: 0, nexcl: 3 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "copy-data-properties-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::CopyDataProperties { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "CopyDataProperties is a core op, which never calls out: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_class(Op::CopyDataProperties { obj: 0, src: 0, excl: 0, nexcl: 3 }) is Core"
+      }
+    },
+    {
+      "id": "get-template-object-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::GetTemplateObject { dst, k, .. } => reg_ok(c, dst) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "replace": "Op::GetTemplateObject { dst, k, .. } => k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "expect": "killed",
+      "reason": "GetTemplateObject accepts a register outside the frame (operand `dst`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::GetTemplateObject { dst: 3, k: 0 })"
+      }
+    },
+    {
+      "id": "get-template-object-k-wf",
+      "file": "src/spec.rs",
+      "find": "Op::GetTemplateObject { dst, k, .. } => reg_ok(c, dst) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "replace": "Op::GetTemplateObject { dst, k, .. } => reg_ok(c, dst) && k < c.consts.len(),",
+      "expect": "killed",
+      "reason": "GetTemplateObject accepts a record constant that is not a value (operand `k`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::GetTemplateObject { dst: 0, k: 2 })"
+      }
+    },
+    {
+      "id": "get-template-object-handler",
+      "file": "src/ops.rs",
+      "find": "Op::GetTemplateObject { .. } => HandlerId::GetTemplateObject,",
+      "replace": "Op::GetTemplateObject { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "GetTemplateObject calls the throw handler instead of its own: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_handler(Op::GetTemplateObject { dst: 0, k: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "get-template-object-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::GetTemplateObject { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "GetTemplateObject is a core op, which never calls out: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_class(Op::GetTemplateObject { dst: 0, k: 0 }) is Core"
+      }
+    },
+    {
+      "id": "new-spread-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::NewSpread { dst, callee, args, .. } => reg_ok(c, dst) && reg_ok(c, callee) && reg_ok(c, args),",
+      "replace": "Op::NewSpread { dst, callee, args, .. } => reg_ok(c, callee) && reg_ok(c, args),",
+      "expect": "killed",
+      "reason": "NewSpread accepts a register outside the frame (operand `dst`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::NewSpread { dst: 3, callee: 0, args: 0 })"
+      }
+    },
+    {
+      "id": "new-spread-callee-wf",
+      "file": "src/spec.rs",
+      "find": "Op::NewSpread { dst, callee, args, .. } => reg_ok(c, dst) && reg_ok(c, callee) && reg_ok(c, args),",
+      "replace": "Op::NewSpread { dst, callee, args, .. } => reg_ok(c, dst) && reg_ok(c, args),",
+      "expect": "killed",
+      "reason": "NewSpread accepts a register outside the frame (operand `callee`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::NewSpread { dst: 0, callee: 3, args: 0 })"
+      }
+    },
+    {
+      "id": "new-spread-args-wf",
+      "file": "src/spec.rs",
+      "find": "Op::NewSpread { dst, callee, args, .. } => reg_ok(c, dst) && reg_ok(c, callee) && reg_ok(c, args),",
+      "replace": "Op::NewSpread { dst, callee, args, .. } => reg_ok(c, dst) && reg_ok(c, callee),",
+      "expect": "killed",
+      "reason": "NewSpread accepts a register outside the frame (operand `args`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::NewSpread { dst: 0, callee: 0, args: 3 })"
+      }
+    },
+    {
+      "id": "new-spread-handler",
+      "file": "src/ops.rs",
+      "find": "Op::NewSpread { .. } => HandlerId::NewSpread,",
+      "replace": "Op::NewSpread { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "NewSpread calls the throw handler instead of its own: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_handler(Op::NewSpread { dst: 0, callee: 0, args: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "new-spread-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::NewSpread { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "NewSpread is a core op, which never calls out: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_class(Op::NewSpread { dst: 0, callee: 0, args: 0 }) is Core"
+      }
+    },
+    {
+      "id": "super-call-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::SuperCall { dst, func, newtarget, this, args, argc, .. } => reg_ok(c, dst) && reg_ok(c, func) && reg_ok(c, newtarget) && reg_ok(c, this) && regs_ok(c, args, argc),",
+      "replace": "Op::SuperCall { dst, func, newtarget, this, args, argc, .. } => reg_ok(c, func) && reg_ok(c, newtarget) && reg_ok(c, this) && regs_ok(c, args, argc),",
+      "expect": "killed",
+      "reason": "SuperCall accepts a register outside the frame (operand `dst`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::SuperCall { dst: 3, func: 0, newtarget: 0, this: 0, args: 0, argc: 3 })"
+      }
+    },
+    {
+      "id": "super-call-func-wf",
+      "file": "src/spec.rs",
+      "find": "Op::SuperCall { dst, func, newtarget, this, args, argc, .. } => reg_ok(c, dst) && reg_ok(c, func) && reg_ok(c, newtarget) && reg_ok(c, this) && regs_ok(c, args, argc),",
+      "replace": "Op::SuperCall { dst, func, newtarget, this, args, argc, .. } => reg_ok(c, dst) && reg_ok(c, newtarget) && reg_ok(c, this) && regs_ok(c, args, argc),",
+      "expect": "killed",
+      "reason": "SuperCall accepts a register outside the frame (operand `func`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::SuperCall { dst: 0, func: 3, newtarget: 0, this: 0, args: 0, argc: 3 })"
+      }
+    },
+    {
+      "id": "super-call-newtarget-wf",
+      "file": "src/spec.rs",
+      "find": "Op::SuperCall { dst, func, newtarget, this, args, argc, .. } => reg_ok(c, dst) && reg_ok(c, func) && reg_ok(c, newtarget) && reg_ok(c, this) && regs_ok(c, args, argc),",
+      "replace": "Op::SuperCall { dst, func, newtarget, this, args, argc, .. } => reg_ok(c, dst) && reg_ok(c, func) && reg_ok(c, this) && regs_ok(c, args, argc),",
+      "expect": "killed",
+      "reason": "SuperCall accepts a register outside the frame (operand `newtarget`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::SuperCall { dst: 0, func: 0, newtarget: 3, this: 0, args: 0, argc: 3 })"
+      }
+    },
+    {
+      "id": "super-call-this-wf",
+      "file": "src/spec.rs",
+      "find": "Op::SuperCall { dst, func, newtarget, this, args, argc, .. } => reg_ok(c, dst) && reg_ok(c, func) && reg_ok(c, newtarget) && reg_ok(c, this) && regs_ok(c, args, argc),",
+      "replace": "Op::SuperCall { dst, func, newtarget, this, args, argc, .. } => reg_ok(c, dst) && reg_ok(c, func) && reg_ok(c, newtarget) && regs_ok(c, args, argc),",
+      "expect": "killed",
+      "reason": "SuperCall accepts a register outside the frame (operand `this`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::SuperCall { dst: 0, func: 0, newtarget: 0, this: 3, args: 0, argc: 3 })"
+      }
+    },
+    {
+      "id": "super-call-args-wf",
+      "file": "src/spec.rs",
+      "find": "Op::SuperCall { dst, func, newtarget, this, args, argc, .. } => reg_ok(c, dst) && reg_ok(c, func) && reg_ok(c, newtarget) && reg_ok(c, this) && regs_ok(c, args, argc),",
+      "replace": "Op::SuperCall { dst, func, newtarget, this, args, argc, .. } => reg_ok(c, dst) && reg_ok(c, func) && reg_ok(c, newtarget) && reg_ok(c, this),",
+      "expect": "killed",
+      "reason": "SuperCall accepts a register range that runs past the frame (operand `args`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::SuperCall { dst: 0, func: 0, newtarget: 0, this: 0, args: 1, argc: 3 })"
+      }
+    },
+    {
+      "id": "super-call-handler",
+      "file": "src/ops.rs",
+      "find": "Op::SuperCall { .. } => HandlerId::SuperCall,",
+      "replace": "Op::SuperCall { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "SuperCall calls the throw handler instead of its own: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_handler(Op::SuperCall { dst: 0, func: 0, newtarget: 0, this: 0, args: 0, argc: 3 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "super-call-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::SuperCall { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "SuperCall is a core op, which never calls out: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_class(Op::SuperCall { dst: 0, func: 0, newtarget: 0, this: 0, args: 0, argc: 3 }) is Core"
+      }
+    },
+    {
+      "id": "super-call-spread-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::SuperCallSpread { dst, func, newtarget, this, args, .. } => reg_ok(c, dst) && reg_ok(c, func) && reg_ok(c, newtarget) && reg_ok(c, this) && reg_ok(c, args),",
+      "replace": "Op::SuperCallSpread { dst, func, newtarget, this, args, .. } => reg_ok(c, func) && reg_ok(c, newtarget) && reg_ok(c, this) && reg_ok(c, args),",
+      "expect": "killed",
+      "reason": "SuperCallSpread accepts a register outside the frame (operand `dst`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::SuperCallSpread { dst: 3, func: 0, newtarget: 0, this: 0, args: 0 })"
+      }
+    },
+    {
+      "id": "super-call-spread-func-wf",
+      "file": "src/spec.rs",
+      "find": "Op::SuperCallSpread { dst, func, newtarget, this, args, .. } => reg_ok(c, dst) && reg_ok(c, func) && reg_ok(c, newtarget) && reg_ok(c, this) && reg_ok(c, args),",
+      "replace": "Op::SuperCallSpread { dst, func, newtarget, this, args, .. } => reg_ok(c, dst) && reg_ok(c, newtarget) && reg_ok(c, this) && reg_ok(c, args),",
+      "expect": "killed",
+      "reason": "SuperCallSpread accepts a register outside the frame (operand `func`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::SuperCallSpread { dst: 0, func: 3, newtarget: 0, this: 0, args: 0 })"
+      }
+    },
+    {
+      "id": "super-call-spread-newtarget-wf",
+      "file": "src/spec.rs",
+      "find": "Op::SuperCallSpread { dst, func, newtarget, this, args, .. } => reg_ok(c, dst) && reg_ok(c, func) && reg_ok(c, newtarget) && reg_ok(c, this) && reg_ok(c, args),",
+      "replace": "Op::SuperCallSpread { dst, func, newtarget, this, args, .. } => reg_ok(c, dst) && reg_ok(c, func) && reg_ok(c, this) && reg_ok(c, args),",
+      "expect": "killed",
+      "reason": "SuperCallSpread accepts a register outside the frame (operand `newtarget`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::SuperCallSpread { dst: 0, func: 0, newtarget: 3, this: 0, args: 0 })"
+      }
+    },
+    {
+      "id": "super-call-spread-this-wf",
+      "file": "src/spec.rs",
+      "find": "Op::SuperCallSpread { dst, func, newtarget, this, args, .. } => reg_ok(c, dst) && reg_ok(c, func) && reg_ok(c, newtarget) && reg_ok(c, this) && reg_ok(c, args),",
+      "replace": "Op::SuperCallSpread { dst, func, newtarget, this, args, .. } => reg_ok(c, dst) && reg_ok(c, func) && reg_ok(c, newtarget) && reg_ok(c, args),",
+      "expect": "killed",
+      "reason": "SuperCallSpread accepts a register outside the frame (operand `this`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::SuperCallSpread { dst: 0, func: 0, newtarget: 0, this: 3, args: 0 })"
+      }
+    },
+    {
+      "id": "super-call-spread-args-wf",
+      "file": "src/spec.rs",
+      "find": "Op::SuperCallSpread { dst, func, newtarget, this, args, .. } => reg_ok(c, dst) && reg_ok(c, func) && reg_ok(c, newtarget) && reg_ok(c, this) && reg_ok(c, args),",
+      "replace": "Op::SuperCallSpread { dst, func, newtarget, this, args, .. } => reg_ok(c, dst) && reg_ok(c, func) && reg_ok(c, newtarget) && reg_ok(c, this),",
+      "expect": "killed",
+      "reason": "SuperCallSpread accepts a register outside the frame (operand `args`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::SuperCallSpread { dst: 0, func: 0, newtarget: 0, this: 0, args: 3 })"
+      }
+    },
+    {
+      "id": "super-call-spread-handler",
+      "file": "src/ops.rs",
+      "find": "Op::SuperCallSpread { .. } => HandlerId::SuperCallSpread,",
+      "replace": "Op::SuperCallSpread { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "SuperCallSpread calls the throw handler instead of its own: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_handler(Op::SuperCallSpread { dst: 0, func: 0, newtarget: 0, this: 0, args: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "super-call-spread-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::SuperCallSpread { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "SuperCallSpread is a core op, which never calls out: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_class(Op::SuperCallSpread { dst: 0, func: 0, newtarget: 0, this: 0, args: 0 }) is Core"
+      }
+    },
+    {
+      "id": "init-instance-obj-wf",
+      "file": "src/spec.rs",
+      "find": "Op::InitInstance { obj, func, .. } => reg_ok(c, obj) && reg_ok(c, func),",
+      "replace": "Op::InitInstance { obj, func, .. } => reg_ok(c, func),",
+      "expect": "killed",
+      "reason": "InitInstance accepts a register outside the frame (operand `obj`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::InitInstance { obj: 3, func: 0 })"
+      }
+    },
+    {
+      "id": "init-instance-func-wf",
+      "file": "src/spec.rs",
+      "find": "Op::InitInstance { obj, func, .. } => reg_ok(c, obj) && reg_ok(c, func),",
+      "replace": "Op::InitInstance { obj, func, .. } => reg_ok(c, obj),",
+      "expect": "killed",
+      "reason": "InitInstance accepts a register outside the frame (operand `func`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::InitInstance { obj: 0, func: 3 })"
+      }
+    },
+    {
+      "id": "init-instance-handler",
+      "file": "src/ops.rs",
+      "find": "Op::InitInstance { .. } => HandlerId::InitInstance,",
+      "replace": "Op::InitInstance { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "InitInstance calls the throw handler instead of its own: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_handler(Op::InitInstance { obj: 0, func: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "init-instance-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::InitInstance { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "InitInstance is a core op, which never calls out: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_class(Op::InitInstance { obj: 0, func: 0 }) is Core"
+      }
+    },
+    {
+      "id": "class-setup-ctor-wf",
+      "file": "src/spec.rs",
+      "find": "Op::ClassSetup { ctor, proto, heritage, .. } => reg_ok(c, ctor) && reg_ok(c, proto) && reg_ok(c, heritage),",
+      "replace": "Op::ClassSetup { ctor, proto, heritage, .. } => reg_ok(c, proto) && reg_ok(c, heritage),",
+      "expect": "killed",
+      "reason": "ClassSetup accepts a register outside the frame (operand `ctor`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::ClassSetup { ctor: 3, proto: 0, heritage: 0, derived: true })"
+      }
+    },
+    {
+      "id": "class-setup-proto-wf",
+      "file": "src/spec.rs",
+      "find": "Op::ClassSetup { ctor, proto, heritage, .. } => reg_ok(c, ctor) && reg_ok(c, proto) && reg_ok(c, heritage),",
+      "replace": "Op::ClassSetup { ctor, proto, heritage, .. } => reg_ok(c, ctor) && reg_ok(c, heritage),",
+      "expect": "killed",
+      "reason": "ClassSetup accepts a register outside the frame (operand `proto`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::ClassSetup { ctor: 0, proto: 3, heritage: 0, derived: true })"
+      }
+    },
+    {
+      "id": "class-setup-heritage-wf",
+      "file": "src/spec.rs",
+      "find": "Op::ClassSetup { ctor, proto, heritage, .. } => reg_ok(c, ctor) && reg_ok(c, proto) && reg_ok(c, heritage),",
+      "replace": "Op::ClassSetup { ctor, proto, heritage, .. } => reg_ok(c, ctor) && reg_ok(c, proto),",
+      "expect": "killed",
+      "reason": "ClassSetup accepts a register outside the frame (operand `heritage`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::ClassSetup { ctor: 0, proto: 0, heritage: 3, derived: true })"
+      }
+    },
+    {
+      "id": "class-setup-handler",
+      "file": "src/ops.rs",
+      "find": "Op::ClassSetup { .. } => HandlerId::ClassSetup,",
+      "replace": "Op::ClassSetup { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "ClassSetup calls the throw handler instead of its own: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_handler(Op::ClassSetup { ctor: 0, proto: 0, heritage: 0, derived: true }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "class-setup-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::ClassSetup { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "ClassSetup is a core op, which never calls out: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_class(Op::ClassSetup { ctor: 0, proto: 0, heritage: 0, derived: true }) is Core"
+      }
+    },
+    {
+      "id": "define-method-obj-wf",
+      "file": "src/spec.rs",
+      "find": "Op::DefineMethod { obj, key, func, form, .. } => reg_ok(c, obj) && reg_ok(c, key) && reg_ok(c, func) && form < 3,",
+      "replace": "Op::DefineMethod { obj, key, func, form, .. } => reg_ok(c, key) && reg_ok(c, func) && form < 3,",
+      "expect": "killed",
+      "reason": "DefineMethod accepts a register outside the frame (operand `obj`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::DefineMethod { obj: 3, key: 0, func: 0, form: 2, enumerable: true })"
+      }
+    },
+    {
+      "id": "define-method-key-wf",
+      "file": "src/spec.rs",
+      "find": "Op::DefineMethod { obj, key, func, form, .. } => reg_ok(c, obj) && reg_ok(c, key) && reg_ok(c, func) && form < 3,",
+      "replace": "Op::DefineMethod { obj, key, func, form, .. } => reg_ok(c, obj) && reg_ok(c, func) && form < 3,",
+      "expect": "killed",
+      "reason": "DefineMethod accepts a register outside the frame (operand `key`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::DefineMethod { obj: 0, key: 3, func: 0, form: 2, enumerable: true })"
+      }
+    },
+    {
+      "id": "define-method-func-wf",
+      "file": "src/spec.rs",
+      "find": "Op::DefineMethod { obj, key, func, form, .. } => reg_ok(c, obj) && reg_ok(c, key) && reg_ok(c, func) && form < 3,",
+      "replace": "Op::DefineMethod { obj, key, func, form, .. } => reg_ok(c, obj) && reg_ok(c, key) && form < 3,",
+      "expect": "killed",
+      "reason": "DefineMethod accepts a register outside the frame (operand `func`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::DefineMethod { obj: 0, key: 0, func: 3, form: 2, enumerable: true })"
+      }
+    },
+    {
+      "id": "define-method-form-wf",
+      "file": "src/spec.rs",
+      "find": "Op::DefineMethod { obj, key, func, form, .. } => reg_ok(c, obj) && reg_ok(c, key) && reg_ok(c, func) && form < 3,",
+      "replace": "Op::DefineMethod { obj, key, func, form, .. } => reg_ok(c, obj) && reg_ok(c, key) && reg_ok(c, func) && form <= 3,",
+      "expect": "killed",
+      "reason": "DefineMethod accepts an operand one past its bound (operand `form`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::DefineMethod { obj: 0, key: 0, func: 0, form: 3, enumerable: true })"
+      }
+    },
+    {
+      "id": "define-method-handler",
+      "file": "src/ops.rs",
+      "find": "Op::DefineMethod { .. } => HandlerId::DefineMethod,",
+      "replace": "Op::DefineMethod { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "DefineMethod calls the throw handler instead of its own: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_handler(Op::DefineMethod { obj: 0, key: 0, func: 0, form: 2, enumerable: true }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "define-method-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::DefineMethod { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "DefineMethod is a core op, which never calls out: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_class(Op::DefineMethod { obj: 0, key: 0, func: 0, form: 2, enumerable: true }) is Core"
+      }
+    },
+    {
+      "id": "set-home-object-func-wf",
+      "file": "src/spec.rs",
+      "find": "Op::SetHomeObject { func, obj, .. } => reg_ok(c, func) && reg_ok(c, obj),",
+      "replace": "Op::SetHomeObject { func, obj, .. } => reg_ok(c, obj),",
+      "expect": "killed",
+      "reason": "SetHomeObject accepts a register outside the frame (operand `func`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::SetHomeObject { func: 3, obj: 0 })"
+      }
+    },
+    {
+      "id": "set-home-object-obj-wf",
+      "file": "src/spec.rs",
+      "find": "Op::SetHomeObject { func, obj, .. } => reg_ok(c, func) && reg_ok(c, obj),",
+      "replace": "Op::SetHomeObject { func, obj, .. } => reg_ok(c, func),",
+      "expect": "killed",
+      "reason": "SetHomeObject accepts a register outside the frame (operand `obj`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::SetHomeObject { func: 0, obj: 3 })"
+      }
+    },
+    {
+      "id": "set-home-object-handler",
+      "file": "src/ops.rs",
+      "find": "Op::SetHomeObject { .. } => HandlerId::SetHomeObject,",
+      "replace": "Op::SetHomeObject { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "SetHomeObject calls the throw handler instead of its own: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_handler(Op::SetHomeObject { func: 0, obj: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "set-home-object-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::SetHomeObject { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "SetHomeObject is a core op, which never calls out: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_class(Op::SetHomeObject { func: 0, obj: 0 }) is Core"
+      }
+    },
+    {
+      "id": "set-instance-init-ctor-wf",
+      "file": "src/spec.rs",
+      "find": "Op::SetInstanceInit { ctor, init, .. } => reg_ok(c, ctor) && reg_ok(c, init),",
+      "replace": "Op::SetInstanceInit { ctor, init, .. } => reg_ok(c, init),",
+      "expect": "killed",
+      "reason": "SetInstanceInit accepts a register outside the frame (operand `ctor`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::SetInstanceInit { ctor: 3, init: 0 })"
+      }
+    },
+    {
+      "id": "set-instance-init-init-wf",
+      "file": "src/spec.rs",
+      "find": "Op::SetInstanceInit { ctor, init, .. } => reg_ok(c, ctor) && reg_ok(c, init),",
+      "replace": "Op::SetInstanceInit { ctor, init, .. } => reg_ok(c, ctor),",
+      "expect": "killed",
+      "reason": "SetInstanceInit accepts a register outside the frame (operand `init`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::SetInstanceInit { ctor: 0, init: 3 })"
+      }
+    },
+    {
+      "id": "set-instance-init-handler",
+      "file": "src/ops.rs",
+      "find": "Op::SetInstanceInit { .. } => HandlerId::SetInstanceInit,",
+      "replace": "Op::SetInstanceInit { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "SetInstanceInit calls the throw handler instead of its own: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_handler(Op::SetInstanceInit { ctor: 0, init: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "set-instance-init-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::SetInstanceInit { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "SetInstanceInit is a core op, which never calls out: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_class(Op::SetInstanceInit { ctor: 0, init: 0 }) is Core"
+      }
+    },
+    {
+      "id": "new-private-name-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::NewPrivateName { dst, k, .. } => reg_ok(c, dst) && k < c.consts.len(),",
+      "replace": "Op::NewPrivateName { dst, k, .. } => k < c.consts.len(),",
+      "expect": "killed",
+      "reason": "NewPrivateName accepts a register outside the frame (operand `dst`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::NewPrivateName { dst: 3, k: 2 })"
+      }
+    },
+    {
+      "id": "new-private-name-k-wf",
+      "file": "src/spec.rs",
+      "find": "Op::NewPrivateName { dst, k, .. } => reg_ok(c, dst) && k < c.consts.len(),",
+      "replace": "Op::NewPrivateName { dst, k, .. } => reg_ok(c, dst) && k <= c.consts.len(),",
+      "expect": "killed",
+      "reason": "NewPrivateName accepts a constant index one past the pool (operand `k`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::NewPrivateName { dst: 0, k: 3 })"
+      }
+    },
+    {
+      "id": "new-private-name-handler",
+      "file": "src/ops.rs",
+      "find": "Op::NewPrivateName { .. } => HandlerId::NewPrivateName,",
+      "replace": "Op::NewPrivateName { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "NewPrivateName calls the throw handler instead of its own: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_handler(Op::NewPrivateName { dst: 0, k: 2 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "new-private-name-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::NewPrivateName { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "NewPrivateName is a core op, which never calls out: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_class(Op::NewPrivateName { dst: 0, k: 2 }) is Core"
+      }
+    },
+    {
+      "id": "get-private-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::GetPrivate { dst, obj, name, .. } => reg_ok(c, dst) && reg_ok(c, obj) && reg_ok(c, name),",
+      "replace": "Op::GetPrivate { dst, obj, name, .. } => reg_ok(c, obj) && reg_ok(c, name),",
+      "expect": "killed",
+      "reason": "GetPrivate accepts a register outside the frame (operand `dst`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::GetPrivate { dst: 3, obj: 0, name: 0 })"
+      }
+    },
+    {
+      "id": "get-private-obj-wf",
+      "file": "src/spec.rs",
+      "find": "Op::GetPrivate { dst, obj, name, .. } => reg_ok(c, dst) && reg_ok(c, obj) && reg_ok(c, name),",
+      "replace": "Op::GetPrivate { dst, obj, name, .. } => reg_ok(c, dst) && reg_ok(c, name),",
+      "expect": "killed",
+      "reason": "GetPrivate accepts a register outside the frame (operand `obj`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::GetPrivate { dst: 0, obj: 3, name: 0 })"
+      }
+    },
+    {
+      "id": "get-private-name-wf",
+      "file": "src/spec.rs",
+      "find": "Op::GetPrivate { dst, obj, name, .. } => reg_ok(c, dst) && reg_ok(c, obj) && reg_ok(c, name),",
+      "replace": "Op::GetPrivate { dst, obj, name, .. } => reg_ok(c, dst) && reg_ok(c, obj),",
+      "expect": "killed",
+      "reason": "GetPrivate accepts a register outside the frame (operand `name`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::GetPrivate { dst: 0, obj: 0, name: 3 })"
+      }
+    },
+    {
+      "id": "get-private-handler",
+      "file": "src/ops.rs",
+      "find": "Op::GetPrivate { .. } => HandlerId::GetPrivate,",
+      "replace": "Op::GetPrivate { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "GetPrivate calls the throw handler instead of its own: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_handler(Op::GetPrivate { dst: 0, obj: 0, name: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "get-private-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::GetPrivate { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "GetPrivate is a core op, which never calls out: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_class(Op::GetPrivate { dst: 0, obj: 0, name: 0 }) is Core"
+      }
+    },
+    {
+      "id": "set-private-obj-wf",
+      "file": "src/spec.rs",
+      "find": "Op::SetPrivate { obj, name, val, .. } => reg_ok(c, obj) && reg_ok(c, name) && reg_ok(c, val),",
+      "replace": "Op::SetPrivate { obj, name, val, .. } => reg_ok(c, name) && reg_ok(c, val),",
+      "expect": "killed",
+      "reason": "SetPrivate accepts a register outside the frame (operand `obj`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::SetPrivate { obj: 3, name: 0, val: 0 })"
+      }
+    },
+    {
+      "id": "set-private-name-wf",
+      "file": "src/spec.rs",
+      "find": "Op::SetPrivate { obj, name, val, .. } => reg_ok(c, obj) && reg_ok(c, name) && reg_ok(c, val),",
+      "replace": "Op::SetPrivate { obj, name, val, .. } => reg_ok(c, obj) && reg_ok(c, val),",
+      "expect": "killed",
+      "reason": "SetPrivate accepts a register outside the frame (operand `name`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::SetPrivate { obj: 0, name: 3, val: 0 })"
+      }
+    },
+    {
+      "id": "set-private-val-wf",
+      "file": "src/spec.rs",
+      "find": "Op::SetPrivate { obj, name, val, .. } => reg_ok(c, obj) && reg_ok(c, name) && reg_ok(c, val),",
+      "replace": "Op::SetPrivate { obj, name, val, .. } => reg_ok(c, obj) && reg_ok(c, name),",
+      "expect": "killed",
+      "reason": "SetPrivate accepts a register outside the frame (operand `val`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::SetPrivate { obj: 0, name: 0, val: 3 })"
+      }
+    },
+    {
+      "id": "set-private-handler",
+      "file": "src/ops.rs",
+      "find": "Op::SetPrivate { .. } => HandlerId::SetPrivate,",
+      "replace": "Op::SetPrivate { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "SetPrivate calls the throw handler instead of its own: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_handler(Op::SetPrivate { obj: 0, name: 0, val: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "set-private-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::SetPrivate { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "SetPrivate is a core op, which never calls out: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_class(Op::SetPrivate { obj: 0, name: 0, val: 0 }) is Core"
+      }
+    },
+    {
+      "id": "define-private-obj-wf",
+      "file": "src/spec.rs",
+      "find": "Op::DefinePrivate { obj, name, val, form, .. } => reg_ok(c, obj) && reg_ok(c, name) && reg_ok(c, val) && form < 4,",
+      "replace": "Op::DefinePrivate { obj, name, val, form, .. } => reg_ok(c, name) && reg_ok(c, val) && form < 4,",
+      "expect": "killed",
+      "reason": "DefinePrivate accepts a register outside the frame (operand `obj`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::DefinePrivate { obj: 3, name: 0, val: 0, form: 3 })"
+      }
+    },
+    {
+      "id": "define-private-name-wf",
+      "file": "src/spec.rs",
+      "find": "Op::DefinePrivate { obj, name, val, form, .. } => reg_ok(c, obj) && reg_ok(c, name) && reg_ok(c, val) && form < 4,",
+      "replace": "Op::DefinePrivate { obj, name, val, form, .. } => reg_ok(c, obj) && reg_ok(c, val) && form < 4,",
+      "expect": "killed",
+      "reason": "DefinePrivate accepts a register outside the frame (operand `name`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::DefinePrivate { obj: 0, name: 3, val: 0, form: 3 })"
+      }
+    },
+    {
+      "id": "define-private-val-wf",
+      "file": "src/spec.rs",
+      "find": "Op::DefinePrivate { obj, name, val, form, .. } => reg_ok(c, obj) && reg_ok(c, name) && reg_ok(c, val) && form < 4,",
+      "replace": "Op::DefinePrivate { obj, name, val, form, .. } => reg_ok(c, obj) && reg_ok(c, name) && form < 4,",
+      "expect": "killed",
+      "reason": "DefinePrivate accepts a register outside the frame (operand `val`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::DefinePrivate { obj: 0, name: 0, val: 3, form: 3 })"
+      }
+    },
+    {
+      "id": "define-private-form-wf",
+      "file": "src/spec.rs",
+      "find": "Op::DefinePrivate { obj, name, val, form, .. } => reg_ok(c, obj) && reg_ok(c, name) && reg_ok(c, val) && form < 4,",
+      "replace": "Op::DefinePrivate { obj, name, val, form, .. } => reg_ok(c, obj) && reg_ok(c, name) && reg_ok(c, val) && form <= 4,",
+      "expect": "killed",
+      "reason": "DefinePrivate accepts an operand one past its bound (operand `form`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::DefinePrivate { obj: 0, name: 0, val: 0, form: 4 })"
+      }
+    },
+    {
+      "id": "define-private-handler",
+      "file": "src/ops.rs",
+      "find": "Op::DefinePrivate { .. } => HandlerId::DefinePrivate,",
+      "replace": "Op::DefinePrivate { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "DefinePrivate calls the throw handler instead of its own: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_handler(Op::DefinePrivate { obj: 0, name: 0, val: 0, form: 3 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "define-private-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::DefinePrivate { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "DefinePrivate is a core op, which never calls out: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_class(Op::DefinePrivate { obj: 0, name: 0, val: 0, form: 3 }) is Core"
+      }
+    },
+    {
+      "id": "has-private-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::HasPrivate { dst, name, obj, .. } => reg_ok(c, dst) && reg_ok(c, name) && reg_ok(c, obj),",
+      "replace": "Op::HasPrivate { dst, name, obj, .. } => reg_ok(c, name) && reg_ok(c, obj),",
+      "expect": "killed",
+      "reason": "HasPrivate accepts a register outside the frame (operand `dst`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::HasPrivate { dst: 3, name: 0, obj: 0 })"
+      }
+    },
+    {
+      "id": "has-private-name-wf",
+      "file": "src/spec.rs",
+      "find": "Op::HasPrivate { dst, name, obj, .. } => reg_ok(c, dst) && reg_ok(c, name) && reg_ok(c, obj),",
+      "replace": "Op::HasPrivate { dst, name, obj, .. } => reg_ok(c, dst) && reg_ok(c, obj),",
+      "expect": "killed",
+      "reason": "HasPrivate accepts a register outside the frame (operand `name`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::HasPrivate { dst: 0, name: 3, obj: 0 })"
+      }
+    },
+    {
+      "id": "has-private-obj-wf",
+      "file": "src/spec.rs",
+      "find": "Op::HasPrivate { dst, name, obj, .. } => reg_ok(c, dst) && reg_ok(c, name) && reg_ok(c, obj),",
+      "replace": "Op::HasPrivate { dst, name, obj, .. } => reg_ok(c, dst) && reg_ok(c, name),",
+      "expect": "killed",
+      "reason": "HasPrivate accepts a register outside the frame (operand `obj`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::HasPrivate { dst: 0, name: 0, obj: 3 })"
+      }
+    },
+    {
+      "id": "has-private-handler",
+      "file": "src/ops.rs",
+      "find": "Op::HasPrivate { .. } => HandlerId::HasPrivate,",
+      "replace": "Op::HasPrivate { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "HasPrivate calls the throw handler instead of its own: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_handler(Op::HasPrivate { dst: 0, name: 0, obj: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "has-private-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::HasPrivate { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "HasPrivate is a core op, which never calls out: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_class(Op::HasPrivate { dst: 0, name: 0, obj: 0 }) is Core"
+      }
+    },
+    {
+      "id": "get-super-base-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::GetSuperBase { dst, func, .. } => reg_ok(c, dst) && reg_ok(c, func),",
+      "replace": "Op::GetSuperBase { dst, func, .. } => reg_ok(c, func),",
+      "expect": "killed",
+      "reason": "GetSuperBase accepts a register outside the frame (operand `dst`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::GetSuperBase { dst: 3, func: 0 })"
+      }
+    },
+    {
+      "id": "get-super-base-func-wf",
+      "file": "src/spec.rs",
+      "find": "Op::GetSuperBase { dst, func, .. } => reg_ok(c, dst) && reg_ok(c, func),",
+      "replace": "Op::GetSuperBase { dst, func, .. } => reg_ok(c, dst),",
+      "expect": "killed",
+      "reason": "GetSuperBase accepts a register outside the frame (operand `func`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::GetSuperBase { dst: 0, func: 3 })"
+      }
+    },
+    {
+      "id": "get-super-base-handler",
+      "file": "src/ops.rs",
+      "find": "Op::GetSuperBase { .. } => HandlerId::GetSuperBase,",
+      "replace": "Op::GetSuperBase { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "GetSuperBase calls the throw handler instead of its own: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_handler(Op::GetSuperBase { dst: 0, func: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "get-super-base-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::GetSuperBase { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "GetSuperBase is a core op, which never calls out: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_class(Op::GetSuperBase { dst: 0, func: 0 }) is Core"
+      }
+    },
+    {
+      "id": "get-super-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::GetSuper { dst, base, key, this, .. } => reg_ok(c, dst) && reg_ok(c, base) && reg_ok(c, key) && reg_ok(c, this),",
+      "replace": "Op::GetSuper { dst, base, key, this, .. } => reg_ok(c, base) && reg_ok(c, key) && reg_ok(c, this),",
+      "expect": "killed",
+      "reason": "GetSuper accepts a register outside the frame (operand `dst`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::GetSuper { dst: 3, base: 0, key: 0, this: 0 })"
+      }
+    },
+    {
+      "id": "get-super-base-wf",
+      "file": "src/spec.rs",
+      "find": "Op::GetSuper { dst, base, key, this, .. } => reg_ok(c, dst) && reg_ok(c, base) && reg_ok(c, key) && reg_ok(c, this),",
+      "replace": "Op::GetSuper { dst, base, key, this, .. } => reg_ok(c, dst) && reg_ok(c, key) && reg_ok(c, this),",
+      "expect": "killed",
+      "reason": "GetSuper accepts a register outside the frame (operand `base`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::GetSuper { dst: 0, base: 3, key: 0, this: 0 })"
+      }
+    },
+    {
+      "id": "get-super-key-wf",
+      "file": "src/spec.rs",
+      "find": "Op::GetSuper { dst, base, key, this, .. } => reg_ok(c, dst) && reg_ok(c, base) && reg_ok(c, key) && reg_ok(c, this),",
+      "replace": "Op::GetSuper { dst, base, key, this, .. } => reg_ok(c, dst) && reg_ok(c, base) && reg_ok(c, this),",
+      "expect": "killed",
+      "reason": "GetSuper accepts a register outside the frame (operand `key`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::GetSuper { dst: 0, base: 0, key: 3, this: 0 })"
+      }
+    },
+    {
+      "id": "get-super-this-wf",
+      "file": "src/spec.rs",
+      "find": "Op::GetSuper { dst, base, key, this, .. } => reg_ok(c, dst) && reg_ok(c, base) && reg_ok(c, key) && reg_ok(c, this),",
+      "replace": "Op::GetSuper { dst, base, key, this, .. } => reg_ok(c, dst) && reg_ok(c, base) && reg_ok(c, key),",
+      "expect": "killed",
+      "reason": "GetSuper accepts a register outside the frame (operand `this`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::GetSuper { dst: 0, base: 0, key: 0, this: 3 })"
+      }
+    },
+    {
+      "id": "get-super-handler",
+      "file": "src/ops.rs",
+      "find": "Op::GetSuper { .. } => HandlerId::GetSuper,",
+      "replace": "Op::GetSuper { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "GetSuper calls the throw handler instead of its own: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_handler(Op::GetSuper { dst: 0, base: 0, key: 0, this: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "get-super-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::GetSuper { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "GetSuper is a core op, which never calls out: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_class(Op::GetSuper { dst: 0, base: 0, key: 0, this: 0 }) is Core"
+      }
+    },
+    {
+      "id": "set-super-base-wf",
+      "file": "src/spec.rs",
+      "find": "Op::SetSuper { base, key, val, this, .. } => reg_ok(c, base) && reg_ok(c, key) && reg_ok(c, val) && reg_ok(c, this),",
+      "replace": "Op::SetSuper { base, key, val, this, .. } => reg_ok(c, key) && reg_ok(c, val) && reg_ok(c, this),",
+      "expect": "killed",
+      "reason": "SetSuper accepts a register outside the frame (operand `base`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::SetSuper { base: 3, key: 0, val: 0, this: 0 })"
+      }
+    },
+    {
+      "id": "set-super-key-wf",
+      "file": "src/spec.rs",
+      "find": "Op::SetSuper { base, key, val, this, .. } => reg_ok(c, base) && reg_ok(c, key) && reg_ok(c, val) && reg_ok(c, this),",
+      "replace": "Op::SetSuper { base, key, val, this, .. } => reg_ok(c, base) && reg_ok(c, val) && reg_ok(c, this),",
+      "expect": "killed",
+      "reason": "SetSuper accepts a register outside the frame (operand `key`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::SetSuper { base: 0, key: 3, val: 0, this: 0 })"
+      }
+    },
+    {
+      "id": "set-super-val-wf",
+      "file": "src/spec.rs",
+      "find": "Op::SetSuper { base, key, val, this, .. } => reg_ok(c, base) && reg_ok(c, key) && reg_ok(c, val) && reg_ok(c, this),",
+      "replace": "Op::SetSuper { base, key, val, this, .. } => reg_ok(c, base) && reg_ok(c, key) && reg_ok(c, this),",
+      "expect": "killed",
+      "reason": "SetSuper accepts a register outside the frame (operand `val`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::SetSuper { base: 0, key: 0, val: 3, this: 0 })"
+      }
+    },
+    {
+      "id": "set-super-this-wf",
+      "file": "src/spec.rs",
+      "find": "Op::SetSuper { base, key, val, this, .. } => reg_ok(c, base) && reg_ok(c, key) && reg_ok(c, val) && reg_ok(c, this),",
+      "replace": "Op::SetSuper { base, key, val, this, .. } => reg_ok(c, base) && reg_ok(c, key) && reg_ok(c, val),",
+      "expect": "killed",
+      "reason": "SetSuper accepts a register outside the frame (operand `this`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::SetSuper { base: 0, key: 0, val: 0, this: 3 })"
+      }
+    },
+    {
+      "id": "set-super-handler",
+      "file": "src/ops.rs",
+      "find": "Op::SetSuper { .. } => HandlerId::SetSuper,",
+      "replace": "Op::SetSuper { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "SetSuper calls the throw handler instead of its own: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_handler(Op::SetSuper { base: 0, key: 0, val: 0, this: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "set-super-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::SetSuper { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "SetSuper is a core op, which never calls out: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_class(Op::SetSuper { base: 0, key: 0, val: 0, this: 0 }) is Core"
+      }
+    },
+    {
+      "id": "get-new-target-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::GetNewTarget { dst, .. } => reg_ok(c, dst),",
+      "replace": "Op::GetNewTarget { dst, .. } => true,",
+      "expect": "killed",
+      "reason": "GetNewTarget accepts a register outside the frame (operand `dst`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::GetNewTarget { dst: 3 })"
+      }
+    },
+    {
+      "id": "get-new-target-handler",
+      "file": "src/ops.rs",
+      "find": "Op::GetNewTarget { .. } => HandlerId::GetNewTarget,",
+      "replace": "Op::GetNewTarget { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "GetNewTarget calls the throw handler instead of its own: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_handler(Op::GetNewTarget { dst: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "get-new-target-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::GetNewTarget { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "GetNewTarget is a core op, which never calls out: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_class(Op::GetNewTarget { dst: 0 }) is Core"
+      }
+    },
+    {
+      "id": "construct-result-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::ConstructResult { dst, val, this, .. } => reg_ok(c, dst) && reg_ok(c, val) && reg_ok(c, this),",
+      "replace": "Op::ConstructResult { dst, val, this, .. } => reg_ok(c, val) && reg_ok(c, this),",
+      "expect": "killed",
+      "reason": "ConstructResult accepts a register outside the frame (operand `dst`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::ConstructResult { dst: 3, val: 0, this: 0 })"
+      }
+    },
+    {
+      "id": "construct-result-val-wf",
+      "file": "src/spec.rs",
+      "find": "Op::ConstructResult { dst, val, this, .. } => reg_ok(c, dst) && reg_ok(c, val) && reg_ok(c, this),",
+      "replace": "Op::ConstructResult { dst, val, this, .. } => reg_ok(c, dst) && reg_ok(c, this),",
+      "expect": "killed",
+      "reason": "ConstructResult accepts a register outside the frame (operand `val`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::ConstructResult { dst: 0, val: 3, this: 0 })"
+      }
+    },
+    {
+      "id": "construct-result-this-wf",
+      "file": "src/spec.rs",
+      "find": "Op::ConstructResult { dst, val, this, .. } => reg_ok(c, dst) && reg_ok(c, val) && reg_ok(c, this),",
+      "replace": "Op::ConstructResult { dst, val, this, .. } => reg_ok(c, dst) && reg_ok(c, val),",
+      "expect": "killed",
+      "reason": "ConstructResult accepts a register outside the frame (operand `this`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::ConstructResult { dst: 0, val: 0, this: 3 })"
+      }
+    },
+    {
+      "id": "construct-result-handler",
+      "file": "src/ops.rs",
+      "find": "Op::ConstructResult { .. } => HandlerId::ConstructResult,",
+      "replace": "Op::ConstructResult { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "ConstructResult calls the throw handler instead of its own: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_handler(Op::ConstructResult { dst: 0, val: 0, this: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "construct-result-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::ConstructResult { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "ConstructResult is a core op, which never calls out: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_class(Op::ConstructResult { dst: 0, val: 0, this: 0 }) is Core"
+      }
+    },
+    {
+      "id": "create-unmapped-arguments-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::CreateUnmappedArguments { dst, .. } => reg_ok(c, dst),",
+      "replace": "Op::CreateUnmappedArguments { dst, .. } => true,",
+      "expect": "killed",
+      "reason": "CreateUnmappedArguments accepts a register outside the frame (operand `dst`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::CreateUnmappedArguments { dst: 3 })"
+      }
+    },
+    {
+      "id": "create-unmapped-arguments-handler",
+      "file": "src/ops.rs",
+      "find": "Op::CreateUnmappedArguments { .. } => HandlerId::CreateUnmappedArguments,",
+      "replace": "Op::CreateUnmappedArguments { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "CreateUnmappedArguments calls the throw handler instead of its own: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_handler(Op::CreateUnmappedArguments { dst: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "create-unmapped-arguments-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::CreateUnmappedArguments { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "CreateUnmappedArguments is a core op, which never calls out: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_class(Op::CreateUnmappedArguments { dst: 0 }) is Core"
+      }
+    },
+    {
+      "id": "create-mapped-arguments-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::CreateMappedArguments { dst, env, k, .. } => reg_ok(c, dst) && reg_ok(c, env) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "replace": "Op::CreateMappedArguments { dst, env, k, .. } => reg_ok(c, env) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "expect": "killed",
+      "reason": "CreateMappedArguments accepts a register outside the frame (operand `dst`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::CreateMappedArguments { dst: 3, env: 0, k: 0 })"
+      }
+    },
+    {
+      "id": "create-mapped-arguments-env-wf",
+      "file": "src/spec.rs",
+      "find": "Op::CreateMappedArguments { dst, env, k, .. } => reg_ok(c, dst) && reg_ok(c, env) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "replace": "Op::CreateMappedArguments { dst, env, k, .. } => reg_ok(c, dst) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "expect": "killed",
+      "reason": "CreateMappedArguments accepts a register outside the frame (operand `env`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::CreateMappedArguments { dst: 0, env: 3, k: 0 })"
+      }
+    },
+    {
+      "id": "create-mapped-arguments-k-wf",
+      "file": "src/spec.rs",
+      "find": "Op::CreateMappedArguments { dst, env, k, .. } => reg_ok(c, dst) && reg_ok(c, env) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "replace": "Op::CreateMappedArguments { dst, env, k, .. } => reg_ok(c, dst) && reg_ok(c, env) && k < c.consts.len(),",
+      "expect": "killed",
+      "reason": "CreateMappedArguments accepts a record constant that is not a value (operand `k`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::CreateMappedArguments { dst: 0, env: 0, k: 2 })"
+      }
+    },
+    {
+      "id": "create-mapped-arguments-handler",
+      "file": "src/ops.rs",
+      "find": "Op::CreateMappedArguments { .. } => HandlerId::CreateMappedArguments,",
+      "replace": "Op::CreateMappedArguments { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "CreateMappedArguments calls the throw handler instead of its own: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_handler(Op::CreateMappedArguments { dst: 0, env: 0, k: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "create-mapped-arguments-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::CreateMappedArguments { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "CreateMappedArguments is a core op, which never calls out: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_class(Op::CreateMappedArguments { dst: 0, env: 0, k: 0 }) is Core"
+      }
+    },
+    {
+      "id": "create-rest-array-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::CreateRestArray { dst, .. } => reg_ok(c, dst),",
+      "replace": "Op::CreateRestArray { dst, .. } => true,",
+      "expect": "killed",
+      "reason": "CreateRestArray accepts a register outside the frame (operand `dst`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::CreateRestArray { dst: 3, from: 0 })"
+      }
+    },
+    {
+      "id": "create-rest-array-handler",
+      "file": "src/ops.rs",
+      "find": "Op::CreateRestArray { .. } => HandlerId::CreateRestArray,",
+      "replace": "Op::CreateRestArray { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "CreateRestArray calls the throw handler instead of its own: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_handler(Op::CreateRestArray { dst: 0, from: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "create-rest-array-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::CreateRestArray { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "CreateRestArray is a core op, which never calls out: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_class(Op::CreateRestArray { dst: 0, from: 0 }) is Core"
+      }
+    },
+    {
+      "id": "for-in-iterator-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::ForInIterator { dst, src, .. } => reg_ok(c, dst) && reg_ok(c, src),",
+      "replace": "Op::ForInIterator { dst, src, .. } => reg_ok(c, src),",
+      "expect": "killed",
+      "reason": "ForInIterator accepts a register outside the frame (operand `dst`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::ForInIterator { dst: 3, src: 0 })"
+      }
+    },
+    {
+      "id": "for-in-iterator-src-wf",
+      "file": "src/spec.rs",
+      "find": "Op::ForInIterator { dst, src, .. } => reg_ok(c, dst) && reg_ok(c, src),",
+      "replace": "Op::ForInIterator { dst, src, .. } => reg_ok(c, dst),",
+      "expect": "killed",
+      "reason": "ForInIterator accepts a register outside the frame (operand `src`): example_compiler_ops_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::ForInIterator { dst: 0, src: 3 })"
+      }
+    },
+    {
+      "id": "for-in-iterator-handler",
+      "file": "src/ops.rs",
+      "find": "Op::ForInIterator { .. } => HandlerId::ForInIterator,",
+      "replace": "Op::ForInIterator { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "ForInIterator calls the throw handler instead of its own: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_handler(Op::ForInIterator { dst: 0, src: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "for-in-iterator-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::ForInIterator { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "ForInIterator is a core op, which never calls out: example_compiler_ops_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_compiler_ops_classes()",
+        "witness": "op_class(Op::ForInIterator { dst: 0, src: 0 }) is Core"
+      }
     }
   ]
 }
