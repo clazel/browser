@@ -131,6 +131,7 @@ mod tests {
 
     /// Every vendored file parses on its own, and all of them resolve.
     #[test]
+    #[cfg_attr(miri, ignore = "reads files")]
     fn every_vendored_file_parses() {
         let dir = data_dir();
         let mut count = 0usize;
