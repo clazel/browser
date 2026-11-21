@@ -1,0 +1,44 @@
+{
+  "mutations": [
+    {
+      "id": "setcc-less-than-uses-wrong-condition",
+      "file": "src/templates.rs",
+      "find": "lir::ICmp::LtS => 12,",
+      "replace": "lir::ICmp::LtS => 13,",
+      "expect": "killed-incidentally",
+      "reason": "The signed less-than comparison would read condition code 13 (`ge`) instead of 12 (`l`). The refinement of the comparison template fails (`flags::lemma_cc_icmp`, then `mid::lemma_mid_cmp`), because the code would compute the opposite of LIR's `lt_s`. It is not labelled `killed`: that needs a certificate, a concrete witness evaluated with `compute_only`, and the refinement statement is quantified over states, which `compute_only` cannot evaluate. So this claims no coverage, though the proof does catch the bug."
+    },
+    {
+      "id": "select-takes-the-wrong-arm",
+      "file": "src/templates.rs",
+      "find": "x64::Instr::Cmovcc { cc: 4, sz: x64::Size::W64, dst: rax(), src: rcx() },",
+      "replace": "x64::Instr::Cmovcc { cc: 5, sz: x64::Size::W64, dst: rax(), src: rcx() },",
+      "expect": "killed-incidentally",
+      "reason": "`select` would take its second value when the condition is nonzero (`cmovne` for `cmove`). `mid::lemma_mid_select` fails, and with it the refinement of `select`. No certificate, for the reason of the first mutation, so no coverage is claimed."
+    },
+    {
+      "id": "frame-overlaps-the-exit-code-word",
+      "file": "src/spec.rs",
+      "find": "    abi::exit_code_off() + 8\n}",
+      "replace": "    abi::exit_code_off()\n}",
+      "expect": "killed-incidentally",
+      "reason": "Frame slot 0 would be the exit-code word, so an exit sequence would overwrite a local. `steps::lemma_abi_consts` (which pins the frame to bytes 264 and up, and 31 slots) fails, and so do the proofs that rest on it. No certificate: the theorem that fails is about the constants, and `compute_only` would need a witness that is itself the mutated constant; no coverage is claimed."
+    },
+    {
+      "id": "regions-may-overlap-the-frame",
+      "file": "src/spec.rs",
+      "find": "    forall|a: nat| #[trigger] in_regions(lay, a) ==> !in_exit_area(ctxb, a as int)",
+      "replace": "    true",
+      "expect": "killed-incidentally",
+      "reason": "A region may then overlap the context's exit area, where the frame is, so a store to a slot could change a byte LIR's memory holds. `rel::lemma_store_finish` fails (it needs the region bytes outside the exit area to be unchanged by the store). No certificate (the statement is quantified), so no coverage is claimed."
+    },
+    {
+      "id": "preserved-forgets-the-stack-pointer",
+      "file": "src/spec.rs",
+      "find": "    preserved_mem(m, m2) && m2.rgf[abi::sp_reg() as int] == m.rgf[abi::sp_reg() as int]\n}",
+      "replace": "    preserved_mem(m, m2)\n}",
+      "expect": "survives",
+      "reason": "Drops the claim that a template leaves `rsp` as it was. The clause is a claim the real proofs establish (from `mid_post`'s preservation of `rsp`), but nothing downstream uses it: the templates never name `rsp` (`scratch` excludes it), and the exit sequence's `ret`, the one instruction that changes it, is stated by `exit_refines` against `preserved_mem` and its own statement of the new `rsp`. So removing the clause breaks no proof: a known gap in how much the proofs depend on it. Closing it needs a consumer, for example the validator's confinement theorem (jit.md exit criterion 2), which assumes `rsp` is never written by the code between exits."
+    }
+  ]
+}

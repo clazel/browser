@@ -225,10 +225,11 @@ pub open spec fn un_supported(u: lir::UnOp) -> bool {
 }
 
 /// The instruction has a template, and is well formed at a stack of height
-/// `h` with `nl` locals: its operands exist, its local index is in range,
-/// and everything it reads or writes is one of the 31 frame slots.
+/// `h` with `nl` locals: the frame holds the stack as it is (`nl + h` slots)
+/// and as it will be, its operands exist, its local index is in range, and so
+/// everything it reads or writes is one of the 31 frame slots.
 pub open spec fn op_ok(op: Op, nl: nat, h: nat) -> bool {
-    pops(op) <= h && nl + height_after_op(op, h) <= max_slots() && match op {
+    nl + h <= max_slots() && pops(op) <= h && nl + height_after_op(op, h) <= max_slots() && match op {
         Op::LocalGet(x) => x < nl,
         Op::LocalSet(x) => x < nl,
         Op::LocalTee(x) => x < nl,
