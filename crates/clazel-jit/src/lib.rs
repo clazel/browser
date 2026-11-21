@@ -87,6 +87,7 @@ pub mod contract;
 pub mod emit;
 pub mod exit;
 pub mod flags;
+pub mod front;
 pub mod memlemmas;
 pub mod mid;
 pub mod proofs;

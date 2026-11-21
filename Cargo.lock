@@ -395,6 +395,7 @@ version = "0.0.0"
 dependencies = [
  "clazel-a64",
  "clazel-codecheck",
+ "clazel-js-vm",
  "clazel-lir",
  "clazel-x64",
  "vstd",

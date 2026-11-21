@@ -11,6 +11,8 @@ vstd = "=0.0.0-2026-10-04-0306"
 # The source language, the target instruction subset, and the validator whose
 # ABI (context register, region table, exit sequence) the templates follow.
 clazel-lir = { path = "../clazel-lir" }
+# The source of the front end: the bytecode and its semantics (`step`).
+clazel-js-vm = { path = "../clazel-js-vm" }
 clazel-x64 = { path = "../clazel-x64" }
 clazel-a64 = { path = "../clazel-a64" }
 clazel-codecheck = { path = "../clazel-codecheck" }
