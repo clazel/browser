@@ -1335,7 +1335,7 @@ fn properties_and_strings_agree_with_the_reference() -> Result<(), String> {
         "\u{1F600}",
         "\u{263a}\u{fe0f}",
     ];
-    let len = if cfg!(miri) { 1 } else { 3 };
+    let len = if cfg!(miri) { 0 } else { 3 };
     let mut rng = Rng(0x2545_F491_4F6C_DD1D);
     let mut tally = Tally {
         patterns: 0,
@@ -1377,7 +1377,14 @@ fn properties_and_strings_agree_with_the_reference() -> Result<(), String> {
         layer = next;
     }
     let mut idle = Vec::new();
-    for &(pattern, flag_text) in cases {
+    for (i, &(pattern, flag_text)) in cases.iter().enumerate() {
+        // Under Miri every fourth case, and not those that search the big
+        // string tables (about 2 800 strings): the run must stay short.
+        if cfg!(miri)
+            && (i % 4 != 0 || pattern.contains("RGI_Emoji") || pattern.contains("Basic_Emoji"))
+        {
+            continue;
+        }
         let flags = Flags::parse(&units(flag_text)).map_err(|e| format!("{e:?}"))?;
         let pat = parse(&units(pattern), flags).map_err(|e| format!("/{pattern}/: {e}"))?;
         let prog = compile(&pat, flags).map_err(|e| format!("/{pattern}/: {e}"))?;
