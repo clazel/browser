@@ -36,19 +36,19 @@ CMYK and YCCK), EXIF Orientation only.
 | `src/progressive.rs` | Annex G: the four scan kinds one bit at a time, the coefficient plane in the work buffer, the in-place inverse DCT |
 | `src/proofs.rs` | the Kani harnesses (and two in `src/idct.rs`) |
 
-The work buffer is the worst case for the config, `6 * (w + 31) * (h + 35)`
-bytes, because `work_len` is a function of the config alone and neither the
-sampling factors nor whether the frame is progressive are known from it. A
-baseline frame uses four planes of `(w + 31) * (h + 31)` of it; a progressive
-frame keeps every coefficient as 2 bytes plus one block row per component and
-runs the inverse DCT into the same memory at EOI (the argument is on
-`progressive::finish_plane`, and a unit test checks it against a separate
-plane). **Item 6.6 raised the work buffer of every JPEG from 4 to 6 bytes per
-padded pixel**: about 387 MiB at the largest image (2^13 by 2^13 pixels) on top
-of its 256 MiB pixel buffer, which is over 6.0(j)'s 512 MiB for that one image
-while it decodes; a caller bounding memory counts it. A config that said
-"progressive" would let a baseline image keep the smaller buffer (a change to
-`clazel-image-shape`, not made here). Not benchmarked or optimised: entropy
+The work buffer is the worst case for the config, because `work_len` is a
+function of the config alone and the sampling factors are not known from it.
+The config's coding (`Coding`, set by `decode_config` from the frame marker)
+says whether the frame is progressive. A sequential frame gets four planes of
+`(w + 31) * (h + 31)` bytes, as in 6.5. A progressive frame gets
+`6 * (w + 31) * (h + 35)` bytes: it keeps every coefficient as 2 bytes plus
+one block row per component and runs the inverse DCT into the same memory at
+EOI (the argument is on `progressive::finish_plane`, and a unit test checks it
+against a separate plane). A frame whose marker is not the config's coding is
+refused at its header. **A progressive image takes about 387 MiB of work
+space at the largest size (2^13 by 2^13 pixels)** on top of its 256 MiB pixel
+buffer, which is over 6.0(j)'s 512 MiB for that one image while it decodes; a
+caller bounding memory counts it. Not benchmarked or optimised: entropy
 decoding is one bit per call, and a block of a progressive scan is copied out
 of and back into the plane.
 

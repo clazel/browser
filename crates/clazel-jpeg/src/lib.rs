@@ -73,15 +73,15 @@
 //! 8. **The work buffer** holds the decoded planes of every component, padded
 //!    to whole MCUs, and its size is a function of the config alone, so it
 //!    is the worst case whatever the frame header turns out to say; the
-//!    decoder uses what it needs. It is `6 * (w + 31) * (h + 35)` bytes
-//!    (item 6.6 raised it from four planes of `(w + 31) * (h + 31)`, the
-//!    baseline need, to what a progressive frame needs, see 11). A caller
-//!    bounding memory counts it: about 387 MiB at the largest image
-//!    (2^13 by 2^13), besides the 256 MiB pixel buffer. (A decoder that
-//!    keeps only a few MCU rows would need far less; the context rows of
-//!    fancy upsampling make that a larger program, left for later; and the
-//!    config cannot say "baseline", so a baseline image is given the
-//!    progressive size too.)
+//!    decoder uses what it needs. The config's coding says which: four
+//!    planes of `(w + 31) * (h + 31)` bytes for a sequential frame, and
+//!    `6 * (w + 31) * (h + 35)` for a progressive one (see 11), which is
+//!    refused at its frame header if the config says sequential, and the
+//!    other way round. A caller bounding memory counts it: about 387 MiB for
+//!    a progressive image at the largest size (2^13 by 2^13), besides the
+//!    256 MiB pixel buffer. (A decoder that keeps only a few MCU rows would
+//!    need far less; the context rows of fancy upsampling make that a larger
+//!    program, left for later.)
 //! 9. **One frame**: after EOI `step` says `FrameDone`, then
 //!    `NoMoreFrames`.
 //! 10. **Progressive scans** (`progressive.rs`): the scan header's `Ss`,

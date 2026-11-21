@@ -6,7 +6,7 @@
 //! `lib.rs`'s header; the listed choices are there too.
 
 use clazel_image_shape::{
-    Buffers, Config, ConfigStatus, Decoder, Error, Format, FrameCount, Status, Step,
+    Buffers, Coding, Config, ConfigStatus, Decoder, Error, Format, FrameCount, Status, Step,
 };
 
 use crate::bits::BitReader;
@@ -243,20 +243,29 @@ fn ceil_div(a: usize, b: usize) -> Option<usize> {
     a.checked_add(b.checked_sub(1)?)?.checked_div(b)
 }
 
-/// The most the work buffer can need for a `w` by `h` image: `6 * (w + 31) *
-/// (h + 35)` bytes. A baseline frame needs four planes of `(w + 31) *
-/// (h + 31)` samples (the planes are padded to whole MCUs, at most 32
-/// samples at sampling factors of 4), under it. A progressive frame keeps
-/// every coefficient as 2 bytes plus one block row of samples per component
-/// (`progressive::region_len`, at most `2 * (w + 31) * (h + 35)` bytes), so
-/// it fits when its planes do not add up to more than three full ones (every
-/// frame of 1 or 3 components does; one of 4 does when it is subsampled).
-fn plane_bound(w: u32, h: u32) -> Result<usize, Error> {
+/// The most the work buffer can need for a `w` by `h` image of the coding
+/// the config states.
+///
+/// - Sequential ([`Coding::Base`]): four planes of `(w + 31) * (h + 31)`
+///   samples (the planes are padded to whole MCUs, at most 32 samples at
+///   sampling factors of 4).
+/// - Progressive ([`Coding::Progressive`]): `6 * (w + 31) * (h + 35)` bytes.
+///   A progressive frame keeps every coefficient as 2 bytes plus one block
+///   row of samples per component (`progressive::region_len`, at most
+///   `2 * (w + 31) * (h + 35)` bytes), so it fits when its planes do not add
+///   up to more than three full ones (every frame of 1 or 3 components does;
+///   one of 4 does when it is subsampled).
+fn plane_bound(w: u32, h: u32, coding: Coding) -> Result<usize, Error> {
+    let (pad_h, per) = if coding == Coding::Progressive {
+        (35, 6)
+    } else {
+        (31, MAX_COMPONENTS)
+    };
     let pad = |s: u32, by: u32| s.checked_add(by).and_then(|v| usize::try_from(v).ok());
     pad(w, 31)
-        .zip(pad(h, 35))
+        .zip(pad(h, pad_h))
         .and_then(|(a, b)| a.checked_mul(b))
-        .and_then(|p| p.checked_mul(6))
+        .and_then(|p| p.checked_mul(per))
         .ok_or(Error::Malformed("work buffer size overflow"))
 }
 
@@ -598,6 +607,12 @@ impl Jpeg {
         );
         // SOF2 (B.2.2, Table B.1): progressive DCT, Huffman coding.
         let progressive = self.marker == 0xC2;
+        // The work buffer was sized for the coding `decode_config` read from
+        // the same frame header; a stream fed after another's config could
+        // differ.
+        if progressive != (self.config.coding() == Coding::Progressive) {
+            return bad("frame coding differs from the config");
+        }
         if p != 8 {
             return Err(Error::Unsupported("a sample precision other than 8 bits"));
         }
@@ -1277,7 +1292,7 @@ impl Decoder for Jpeg {
     }
 
     fn work_len(config: &Config) -> Result<usize, Error> {
-        plane_bound(config.width(), config.height())
+        plane_bound(config.width(), config.height(), config.coding())
     }
 
     fn start(config: &Config) -> Result<Jpeg, Error> {

@@ -45,7 +45,7 @@
 //! (the chunking test took 397 s), and the chunking stride was cut to fit.
 
 use clazel_image_shape::{
-    Buffers, Config, ConfigStatus, Decoder, Error, Format, FrameCount, Status,
+    Buffers, Coding, Config, ConfigStatus, Decoder, Error, Format, FrameCount, Status,
 };
 use clazel_jpeg::Jpeg;
 
@@ -1073,7 +1073,9 @@ fn interface_edges() -> Result<(), Error> {
     assert!(matches!(Jpeg::start(&config), Err(Error::Unsupported(_))));
     let config = Config::new(Format::Jpeg, 8, 8, FrameCount::Known(1))?;
     let wlen = Jpeg::work_len(&config)?;
-    assert_eq!(wlen, 6 * 39 * 43);
+    assert_eq!(wlen, 4 * 39 * 39);
+    let prog = config.with_coding(Coding::Progressive)?;
+    assert_eq!(Jpeg::work_len(&prog)?, 6 * 39 * 43);
     let mut s = Jpeg::start(&config)?;
     let (mut p, mut w) = (vec![0u8; 256], vec![0u8; 10]);
     let mut b = Buffers {
@@ -1519,4 +1521,30 @@ fn progressive_sizes_are_bounded() {
     v.extend(dc_table());
     v.extend(sos_p(&[(1, 0)], 0, 0, 0, 0));
     assert_eq!(expect_err(&v), Error::Truncated);
+}
+
+/// A frame whose coding is not the config's is refused at its header, so a
+/// progressive frame never runs in a sequential frame's smaller work buffer.
+#[test]
+fn coding_must_match_config() -> Result<(), Error> {
+    // SOI, then SOF2 (or SOF0): 8 bits, 8 by 8, one component.
+    let stream = |sof: u8| [0xFF, 0xD8, 0xFF, sof, 0, 11, 8, 0, 8, 0, 8, 1, 1, 0x11, 0];
+    let base = Config::new(Format::Jpeg, 8, 8, FrameCount::Known(1))?;
+    let prog = base.with_coding(Coding::Progressive)?;
+    for (config, sof) in [(base, 0xC2), (prog, 0xC0)] {
+        let mut s = Jpeg::start(&config)?;
+        let (mut p, mut w) = (
+            vec![0u8; config.rgba_len()?],
+            vec![0u8; Jpeg::work_len(&config)?],
+        );
+        let mut b = Buffers {
+            pixels: &mut p,
+            work: &mut w,
+        };
+        assert_eq!(
+            s.step(&stream(sof), &mut b),
+            Err(Error::Malformed("frame coding differs from the config"))
+        );
+    }
+    Ok(())
 }
