@@ -21,6 +21,7 @@ pub mod arena;
 pub mod elements;
 pub mod shape;
 pub mod string;
+pub mod symbol;
 pub mod value;
 
 #[cfg(kani)]
