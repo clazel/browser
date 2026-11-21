@@ -24,7 +24,8 @@
 //! 1. [`Decoder::decode_config`] reads the first bytes of the stream (a
 //!    prefix, re-presented whole each time) and says
 //!    [`ConfigStatus::NeedMore`] or gives the [`Config`]: format, width,
-//!    height, frame count if known. Its sizes obey [`MAX_SIDE`] and
+//!    height, frame count if known, and the [`Coding`] where a format has
+//!    codings whose work space differs. Its sizes obey [`MAX_SIDE`] and
 //!    [`MAX_PIXELS`] ([`Config::new`] refuses others).
 //! 2. The caller allocates [`Config::rgba_len`] bytes for the frame and
 //!    [`Decoder::work_len`] bytes of work space, a function of the config
@@ -119,6 +120,23 @@ pub enum FrameCount {
     Unknown,
 }
 
+/// How a stream is coded, where one format has codings whose work space
+/// differs (items 6.6 and 6.9). `decode_config` sets it from the first bytes
+/// and `work_len` reads it, so a stream pays only for the work space of its
+/// own coding. [`Config::new`] gives [`Coding::Base`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Coding {
+    /// The format's plain coding: sequential JPEG, lossless WebP, and every
+    /// other format.
+    Base,
+    /// Progressive JPEG (SOF2): every coefficient is kept until the end.
+    Progressive,
+    /// A WebP that has, or may have, lossy (VP8) frames: a simple `VP8 `
+    /// file, or an extended one, whose image chunks the first bytes do not
+    /// show.
+    Lossy,
+}
+
 /// What `decode_config` reads from the first bytes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Config {
@@ -126,6 +144,7 @@ pub struct Config {
     width: u32,
     height: u32,
     frames: FrameCount,
+    coding: Coding,
 }
 
 impl Config {
@@ -146,7 +165,25 @@ impl Config {
             width,
             height,
             frames,
+            coding: Coding::Base,
         })
+    }
+
+    /// The same config with another coding, if the format has it:
+    /// [`Coding::Progressive`] only for JPEG, [`Coding::Lossy`] only for
+    /// WebP, [`Coding::Base`] for every format.
+    pub fn with_coding(self, coding: Coding) -> Result<Config, Error> {
+        match (coding, self.format) {
+            (Coding::Base, _)
+            | (Coding::Progressive, Format::Jpeg)
+            | (Coding::Lossy, Format::Webp) => Ok(Config { coding, ..self }),
+            _ => Err(Error::Unsupported("a coding this format does not have")),
+        }
+    }
+
+    /// The coding (see [`Coding`]).
+    pub fn coding(&self) -> Coding {
+        self.coding
     }
 
     /// The format.
@@ -275,4 +312,38 @@ pub trait Decoder: Sized {
     /// this state's config (which [`Buffers::new`] gives), and whatever
     /// else `step` needs for its indices and counters.
     fn inv(&self, buffers: &Buffers<'_>) -> bool;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cfg(f: Format) -> Result<Config, Error> {
+        Config::new(f, 2, 2, FrameCount::Known(1))
+    }
+
+    #[test]
+    fn coding_only_where_the_format_has_it() -> Result<(), Error> {
+        let (jpeg, webp) = (cfg(Format::Jpeg)?, cfg(Format::Webp)?);
+        assert_eq!(jpeg.coding(), Coding::Base);
+        assert_eq!(
+            jpeg.with_coding(Coding::Progressive)?.coding(),
+            Coding::Progressive
+        );
+        assert_eq!(webp.with_coding(Coding::Lossy)?.coding(), Coding::Lossy);
+        assert!(jpeg.with_coding(Coding::Lossy).is_err());
+        assert!(webp.with_coding(Coding::Progressive).is_err());
+        assert!(cfg(Format::Png)?.with_coding(Coding::Progressive).is_err());
+        for f in [
+            Format::Png,
+            Format::Jpeg,
+            Format::Gif,
+            Format::Webp,
+            Format::Svg,
+            Format::Raw,
+        ] {
+            assert_eq!(cfg(f)?.with_coding(Coding::Base)?, cfg(f)?);
+        }
+        Ok(())
+    }
 }
