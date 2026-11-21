@@ -523,8 +523,57 @@ pub open spec fn split_index(kids: Seq<NodeId>, child: Option<NodeId>) -> int {
     }
 }
 
+/// The doctypes of `parent`'s children from `child` on, as step 6 counts
+/// them: `child` itself and the siblings after it.
+proof fn lemma_pre_insert_doctypes_from(doc: Document, parent: NodeId, child: Option<NodeId>)
+    requires
+        wf(doc),
+        valid(doc, parent),
+        match child {
+            None => true,
+            Some(c) => valid(doc, c) && doc.nodes[c as int].parent == Some(parent),
+        },
+    ensures
+        ({
+            let kids = children(doc, parent);
+            let k = split_index(kids, child);
+            &&& 0 <= k <= kids.len()
+            &&& kids.subrange(0, k) + kids.subrange(k, kids.len() as int) == kids
+            &&& (count_tag(doc, kids.subrange(k, kids.len() as int), NodeTag::DocumentType, None) > 0) == (match child {
+                Some(c) => doc.nodes[c as int].kind is DocumentType || count_tag(
+                    doc,
+                    kids.subrange(index_of(kids, c) + 1, kids.len() as int),
+                    NodeTag::DocumentType,
+                    None,
+                ) > 0,
+                None => false,
+            })
+        }),
+{
+    let kids = children(doc, parent);
+    let k = split_index(kids, child);
+    if let Some(c) = child {
+        assert(kids.contains(c));
+        lemma_index_of(kids, c);
+    }
+    let p = kids.subrange(0, k);
+    let s = kids.subrange(k, kids.len() as int);
+    assert(p + s =~= kids);
+    if let Some(c) = child {
+        let after_s = kids.subrange(k + 1, kids.len() as int);
+        assert(s =~= seq![c] + after_s);
+        lemma_count_add(doc, seq![c], after_s, NodeTag::DocumentType, None);
+        lemma_count_single(doc, c, NodeTag::DocumentType, None);
+    } else {
+        assert(s =~= Seq::<NodeId>::empty());
+        assert(count_tag(doc, Seq::<NodeId>::empty(), NodeTag::DocumentType, None) == 0);
+    }
+}
+
 /// Step 6 of "ensure pre-insertion validity" is [`rules_violation`] with
 /// the children split at `child`.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(200)]
 pub proof fn lemma_pre_insert_violation(doc: Document, node: NodeId, parent: NodeId, child: Option<NodeId>)
     requires
         wf(doc),
@@ -548,27 +597,13 @@ pub proof fn lemma_pre_insert_violation(doc: Document, node: NodeId, parent: Nod
             )
         }),
 {
+    lemma_pre_insert_doctypes_from(doc, parent, child);
     let kids = children(doc, parent);
     let k = split_index(kids, child);
-    if let Some(c) = child {
-        assert(kids.contains(c));
-        lemma_index_of(kids, c);
-    }
     let p = kids.subrange(0, k);
     let s = kids.subrange(k, kids.len() as int);
-    assert(p + s =~= kids);
     lemma_count_add(doc, p, s, NodeTag::Element, None);
     lemma_count_add(doc, p, s, NodeTag::DocumentType, None);
-    if let Some(c) = child {
-        // s is child, then the siblings after it.
-        let after_s = kids.subrange(k + 1, kids.len() as int);
-        assert(s =~= seq![c] + after_s);
-        lemma_count_add(doc, seq![c], after_s, NodeTag::DocumentType, None);
-        lemma_count_single(doc, c, NodeTag::DocumentType, None);
-    } else {
-        assert(s =~= Seq::<NodeId>::empty());
-    }
-    assert(count_tag(doc, Seq::<NodeId>::empty(), NodeTag::DocumentType, None) == 0);
 }
 
 /// Step 6 of "replace" is [`rules_violation`] with the children split at
@@ -788,8 +823,31 @@ pub open spec fn insert_shape(doc: Document, node: NodeId, parent: NodeId, child
         0 <= x < doc.nodes.len() && x != parent ==> (#[trigger] d2.nodes[x]).children == doc.nodes[x].children || d2.nodes[x].children.len() == 0
 }
 
+/// Inserting a fragment changes the children of no node but `parent` and
+/// the fragment, which is emptied.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(300)]
+proof fn lemma_frag_other_children(doc: Document, node: NodeId, parent: NodeId, child: Option<NodeId>)
+    requires
+        insert_any_requires(doc, node, parent, child),
+        doc.nodes[node as int].kind is DocumentFragment,
+    ensures
+        forall|x: int|
+            0 <= x < doc.nodes.len() && x != parent ==> (#[trigger] insert_any(doc, node, parent, child).nodes[x]).children == doc.nodes[x].children
+                || insert_any(doc, node, parent, child).nodes[x].children.len() == 0,
+{
+    lemma_insert_fragment(doc, node, parent, child);
+    let d2 = insert_any(doc, node, parent, child);
+    assert(d2.nodes == fragment_inserted(doc, node, parent, child));
+    assert forall|x: int| 0 <= x < doc.nodes.len() && x != parent implies (#[trigger] d2.nodes[x]).children == doc.nodes[x].children
+        || d2.nodes[x].children.len() == 0 by {
+        assert(d2.nodes[x] == fragment_inserted(doc, node, parent, child)[x]);
+    }
+}
+
 /// [`lemma_insert_any_shape`] for a fragment.
-#[verifier::rlimit(100)]
+#[verifier::spinoff_prover]
+#[verifier::rlimit(300)]
 proof fn lemma_insert_any_shape_frag(doc: Document, node: NodeId, parent: NodeId, child: Option<NodeId>)
     requires
         insert_any_requires(doc, node, parent, child),
@@ -798,7 +856,7 @@ proof fn lemma_insert_any_shape_frag(doc: Document, node: NodeId, parent: NodeId
         insert_shape(doc, node, parent, child),
 {
     theorem_insert_any_wf(doc, node, parent, child);
-    let d2 = insert_any(doc, node, parent, child);
+    lemma_frag_other_children(doc, node, parent, child);
     let kids = children(doc, parent);
     let k = split_index(kids, child);
     if let Some(c) = child {
@@ -806,12 +864,6 @@ proof fn lemma_insert_any_shape_frag(doc: Document, node: NodeId, parent: NodeId
         lemma_wf_split(doc, paths);
         assert(kids.contains(c));
         lemma_index_of(kids, c);
-    }
-    lemma_insert_fragment(doc, node, parent, child);
-    assert(d2.nodes == fragment_inserted(doc, node, parent, child));
-    assert forall|x: int| 0 <= x < doc.nodes.len() && x != parent implies (#[trigger] d2.nodes[x]).children == doc.nodes[x].children
-        || d2.nodes[x].children.len() == 0 by {
-        assert(d2.nodes[x] == fragment_inserted(doc, node, parent, child)[x]);
     }
     match child {
         None => {
@@ -824,7 +876,7 @@ proof fn lemma_insert_any_shape_frag(doc: Document, node: NodeId, parent: NodeId
 }
 
 /// [`lemma_insert_any_shape`] for a node that is not a fragment.
-#[verifier::rlimit(100)]
+#[verifier::rlimit(400)]
 proof fn lemma_insert_any_shape_node(doc: Document, node: NodeId, parent: NodeId, child: Option<NodeId>)
     requires
         insert_any_requires(doc, node, parent, child),
@@ -927,7 +979,7 @@ pub open spec fn pre_insert_condition(doc: Document, node: NodeId, parent: NodeI
 /// the rules hold, leaves the rules true exactly when
 /// [`pre_insert_condition`] holds. (This says nothing of the checks of
 /// "ensure pre-insertion validity".)
-#[verifier::rlimit(100)]
+#[verifier::rlimit(400)]
 pub proof fn lemma_insert_rules_iff(doc: Document, node: NodeId, parent: NodeId, child: Option<NodeId>)
     requires
         insert_any_requires(doc, node, parent, child),
@@ -1087,7 +1139,7 @@ pub open spec fn replace_shape(doc: Document, child: NodeId, node: NodeId, paren
 /// "Replace" of `child` by a node that has no parent changes only
 /// `parent`'s children, to `child`'s place taken by the node's, and, for a
 /// fragment, empties the fragment.
-#[verifier::rlimit(100)]
+#[verifier::rlimit(400)]
 pub proof fn lemma_replace_shape(doc: Document, child: NodeId, node: NodeId, parent: NodeId)
     requires
         replace_requires(doc, child, node, parent),
@@ -1166,7 +1218,7 @@ pub open spec fn replace_condition(doc: Document, child: NodeId, node: NodeId, p
 /// arena where the rules hold, leaves the rules true exactly when
 /// [`replace_condition`] holds. (This says nothing of the checks of
 /// "replace".)
-#[verifier::rlimit(100)]
+#[verifier::rlimit(400)]
 pub proof fn lemma_replace_rules_iff(doc: Document, child: NodeId, node: NodeId, parent: NodeId)
     requires
         replace_requires(doc, child, node, parent),
@@ -1293,7 +1345,7 @@ pub proof fn lemma_children_valid(doc: Document)
 
 /// Creating a node keeps the rules true: it has no children and no
 /// existing node changes.
-#[verifier::rlimit(100)]
+#[verifier::rlimit(400)]
 pub proof fn lemma_create_keeps_rules(doc: Document, k: NodeKind)
     requires
         wf(doc),
