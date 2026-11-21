@@ -1975,6 +1975,383 @@
         "lemma": "crate::examples::example_regex_classes()",
         "witness": "op_class(Op::NewRegExp { dst: 0, k: 0 }) is Core"
       }
+    },
+    {
+      "id": "yield-delegate-src-wf",
+      "file": "src/spec.rs",
+      "find": "Op::YieldDelegate { src, value, mode, .. } => reg_ok(c, src) && reg_ok(c, value) && reg_ok(c, mode),",
+      "replace": "Op::YieldDelegate { src, value, mode, .. } => reg_ok(c, value) && reg_ok(c, mode),",
+      "expect": "killed",
+      "reason": "YieldDelegate accepts a register outside the frame (operand `src`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::YieldDelegate { src: 3, value: 0, mode: 0 })"
+      }
+    },
+    {
+      "id": "yield-delegate-value-wf",
+      "file": "src/spec.rs",
+      "find": "Op::YieldDelegate { src, value, mode, .. } => reg_ok(c, src) && reg_ok(c, value) && reg_ok(c, mode),",
+      "replace": "Op::YieldDelegate { src, value, mode, .. } => reg_ok(c, src) && reg_ok(c, mode),",
+      "expect": "killed",
+      "reason": "YieldDelegate accepts a register outside the frame (operand `value`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::YieldDelegate { src: 0, value: 3, mode: 0 })"
+      }
+    },
+    {
+      "id": "yield-delegate-mode-wf",
+      "file": "src/spec.rs",
+      "find": "Op::YieldDelegate { src, value, mode, .. } => reg_ok(c, src) && reg_ok(c, value) && reg_ok(c, mode),",
+      "replace": "Op::YieldDelegate { src, value, mode, .. } => reg_ok(c, src) && reg_ok(c, value),",
+      "expect": "killed",
+      "reason": "YieldDelegate accepts a register outside the frame (operand `mode`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::YieldDelegate { src: 0, value: 0, mode: 3 })"
+      }
+    },
+    {
+      "id": "get-async-iterator-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::GetAsyncIterator { dst, src, .. } => reg_ok(c, dst) && reg_ok(c, src),",
+      "replace": "Op::GetAsyncIterator { dst, src, .. } => reg_ok(c, src),",
+      "expect": "killed",
+      "reason": "GetAsyncIterator accepts a register outside the frame (operand `dst`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::GetAsyncIterator { dst: 3, src: 0 })"
+      }
+    },
+    {
+      "id": "get-async-iterator-src-wf",
+      "file": "src/spec.rs",
+      "find": "Op::GetAsyncIterator { dst, src, .. } => reg_ok(c, dst) && reg_ok(c, src),",
+      "replace": "Op::GetAsyncIterator { dst, src, .. } => reg_ok(c, dst),",
+      "expect": "killed",
+      "reason": "GetAsyncIterator accepts a register outside the frame (operand `src`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::GetAsyncIterator { dst: 0, src: 3 })"
+      }
+    },
+    {
+      "id": "iter-call-method-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::IterCallMethod { dst, found, iter, arg, which, .. } => reg_ok(c, dst) && reg_ok(c, found) && reg_ok(c, iter) && reg_ok(c, arg) && which < 5,",
+      "replace": "Op::IterCallMethod { dst, found, iter, arg, which, .. } => reg_ok(c, found) && reg_ok(c, iter) && reg_ok(c, arg) && which < 5,",
+      "expect": "killed",
+      "reason": "IterCallMethod accepts a register outside the frame (operand `dst`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::IterCallMethod { dst: 3, found: 0, iter: 0, arg: 0, which: 0 })"
+      }
+    },
+    {
+      "id": "iter-call-method-found-wf",
+      "file": "src/spec.rs",
+      "find": "Op::IterCallMethod { dst, found, iter, arg, which, .. } => reg_ok(c, dst) && reg_ok(c, found) && reg_ok(c, iter) && reg_ok(c, arg) && which < 5,",
+      "replace": "Op::IterCallMethod { dst, found, iter, arg, which, .. } => reg_ok(c, dst) && reg_ok(c, iter) && reg_ok(c, arg) && which < 5,",
+      "expect": "killed",
+      "reason": "IterCallMethod accepts a register outside the frame (operand `found`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::IterCallMethod { dst: 0, found: 3, iter: 0, arg: 0, which: 0 })"
+      }
+    },
+    {
+      "id": "iter-call-method-iter-wf",
+      "file": "src/spec.rs",
+      "find": "Op::IterCallMethod { dst, found, iter, arg, which, .. } => reg_ok(c, dst) && reg_ok(c, found) && reg_ok(c, iter) && reg_ok(c, arg) && which < 5,",
+      "replace": "Op::IterCallMethod { dst, found, iter, arg, which, .. } => reg_ok(c, dst) && reg_ok(c, found) && reg_ok(c, arg) && which < 5,",
+      "expect": "killed",
+      "reason": "IterCallMethod accepts a register outside the frame (operand `iter`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::IterCallMethod { dst: 0, found: 0, iter: 3, arg: 0, which: 0 })"
+      }
+    },
+    {
+      "id": "iter-call-method-arg-wf",
+      "file": "src/spec.rs",
+      "find": "Op::IterCallMethod { dst, found, iter, arg, which, .. } => reg_ok(c, dst) && reg_ok(c, found) && reg_ok(c, iter) && reg_ok(c, arg) && which < 5,",
+      "replace": "Op::IterCallMethod { dst, found, iter, arg, which, .. } => reg_ok(c, dst) && reg_ok(c, found) && reg_ok(c, iter) && which < 5,",
+      "expect": "killed",
+      "reason": "IterCallMethod accepts a register outside the frame (operand `arg`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::IterCallMethod { dst: 0, found: 0, iter: 0, arg: 3, which: 0 })"
+      }
+    },
+    {
+      "id": "iter-call-method-which-wf",
+      "file": "src/spec.rs",
+      "find": "Op::IterCallMethod { dst, found, iter, arg, which, .. } => reg_ok(c, dst) && reg_ok(c, found) && reg_ok(c, iter) && reg_ok(c, arg) && which < 5,",
+      "replace": "Op::IterCallMethod { dst, found, iter, arg, which, .. } => reg_ok(c, dst) && reg_ok(c, found) && reg_ok(c, iter) && reg_ok(c, arg) && which < 6,",
+      "expect": "killed",
+      "reason": "IterCallMethod accepts an enumerated operand one past its bound (operand `which`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::IterCallMethod { dst: 0, found: 0, iter: 0, arg: 0, which: 5 })"
+      }
+    },
+    {
+      "id": "iter-complete-done-wf",
+      "file": "src/spec.rs",
+      "find": "Op::IterComplete { done, result, .. } => reg_ok(c, done) && reg_ok(c, result),",
+      "replace": "Op::IterComplete { done, result, .. } => reg_ok(c, result),",
+      "expect": "killed",
+      "reason": "IterComplete accepts a register outside the frame (operand `done`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::IterComplete { done: 3, result: 0 })"
+      }
+    },
+    {
+      "id": "iter-complete-result-wf",
+      "file": "src/spec.rs",
+      "find": "Op::IterComplete { done, result, .. } => reg_ok(c, done) && reg_ok(c, result),",
+      "replace": "Op::IterComplete { done, result, .. } => reg_ok(c, done),",
+      "expect": "killed",
+      "reason": "IterComplete accepts a register outside the frame (operand `result`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::IterComplete { done: 0, result: 3 })"
+      }
+    },
+    {
+      "id": "iter-value-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::IterValue { dst, result, .. } => reg_ok(c, dst) && reg_ok(c, result),",
+      "replace": "Op::IterValue { dst, result, .. } => reg_ok(c, result),",
+      "expect": "killed",
+      "reason": "IterValue accepts a register outside the frame (operand `dst`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::IterValue { dst: 3, result: 0 })"
+      }
+    },
+    {
+      "id": "iter-value-result-wf",
+      "file": "src/spec.rs",
+      "find": "Op::IterValue { dst, result, .. } => reg_ok(c, dst) && reg_ok(c, result),",
+      "replace": "Op::IterValue { dst, result, .. } => reg_ok(c, dst),",
+      "expect": "killed",
+      "reason": "IterValue accepts a register outside the frame (operand `result`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::IterValue { dst: 0, result: 3 })"
+      }
+    },
+    {
+      "id": "throw-if-not-object-src-wf",
+      "file": "src/spec.rs",
+      "find": "Op::ThrowIfNotObject { src, .. } => reg_ok(c, src),",
+      "replace": "Op::ThrowIfNotObject { src, .. } => true,",
+      "expect": "killed",
+      "reason": "ThrowIfNotObject accepts a register outside the frame (operand `src`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::ThrowIfNotObject { src: 3 })"
+      }
+    },
+    {
+      "id": "generator-start-handler",
+      "file": "src/ops.rs",
+      "find": "Op::GeneratorStart => HandlerId::GeneratorStart,",
+      "replace": "Op::GeneratorStart => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "GeneratorStart calls the throw handler instead of its own: example_generators_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_classes()",
+        "witness": "op_handler(Op::GeneratorStart) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "generator-start-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::GeneratorStart => OpClass::Core,",
+      "expect": "killed",
+      "reason": "GeneratorStart is a core op, which never calls out: example_generators_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_classes()",
+        "witness": "op_class(Op::GeneratorStart) is Core"
+      }
+    },
+    {
+      "id": "yield-delegate-handler",
+      "file": "src/ops.rs",
+      "find": "Op::YieldDelegate { .. } => HandlerId::YieldDelegate,",
+      "replace": "Op::YieldDelegate { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "YieldDelegate calls the throw handler instead of its own: example_generators_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_classes()",
+        "witness": "op_handler(Op::YieldDelegate { src: 0, value: 0, mode: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "yield-delegate-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::YieldDelegate { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "YieldDelegate is a core op, which never calls out: example_generators_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_classes()",
+        "witness": "op_class(Op::YieldDelegate { src: 0, value: 0, mode: 0 }) is Core"
+      }
+    },
+    {
+      "id": "get-async-iterator-handler",
+      "file": "src/ops.rs",
+      "find": "Op::GetAsyncIterator { .. } => HandlerId::GetAsyncIterator,",
+      "replace": "Op::GetAsyncIterator { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "GetAsyncIterator calls the throw handler instead of its own: example_generators_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_classes()",
+        "witness": "op_handler(Op::GetAsyncIterator { dst: 0, src: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "get-async-iterator-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::GetAsyncIterator { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "GetAsyncIterator is a core op, which never calls out: example_generators_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_classes()",
+        "witness": "op_class(Op::GetAsyncIterator { dst: 0, src: 0 }) is Core"
+      }
+    },
+    {
+      "id": "iter-call-method-handler",
+      "file": "src/ops.rs",
+      "find": "Op::IterCallMethod { .. } => HandlerId::IterCallMethod,",
+      "replace": "Op::IterCallMethod { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "IterCallMethod calls the throw handler instead of its own: example_generators_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_classes()",
+        "witness": "op_handler(Op::IterCallMethod { dst: 0, found: 0, iter: 0, arg: 0, which: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "iter-call-method-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::IterCallMethod { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "IterCallMethod is a core op, which never calls out: example_generators_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_classes()",
+        "witness": "op_class(Op::IterCallMethod { dst: 0, found: 0, iter: 0, arg: 0, which: 0 }) is Core"
+      }
+    },
+    {
+      "id": "iter-complete-handler",
+      "file": "src/ops.rs",
+      "find": "Op::IterComplete { .. } => HandlerId::IterComplete,",
+      "replace": "Op::IterComplete { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "IterComplete calls the throw handler instead of its own: example_generators_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_classes()",
+        "witness": "op_handler(Op::IterComplete { done: 0, result: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "iter-complete-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::IterComplete { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "IterComplete is a core op, which never calls out: example_generators_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_classes()",
+        "witness": "op_class(Op::IterComplete { done: 0, result: 0 }) is Core"
+      }
+    },
+    {
+      "id": "iter-value-handler",
+      "file": "src/ops.rs",
+      "find": "Op::IterValue { .. } => HandlerId::IterValue,",
+      "replace": "Op::IterValue { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "IterValue calls the throw handler instead of its own: example_generators_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_classes()",
+        "witness": "op_handler(Op::IterValue { dst: 0, result: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "iter-value-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::IterValue { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "IterValue is a core op, which never calls out: example_generators_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_classes()",
+        "witness": "op_class(Op::IterValue { dst: 0, result: 0 }) is Core"
+      }
+    },
+    {
+      "id": "throw-if-not-object-handler",
+      "file": "src/ops.rs",
+      "find": "Op::ThrowIfNotObject { .. } => HandlerId::ThrowIfNotObject,",
+      "replace": "Op::ThrowIfNotObject { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "ThrowIfNotObject calls the throw handler instead of its own: example_generators_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_classes()",
+        "witness": "op_handler(Op::ThrowIfNotObject { src: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "throw-if-not-object-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::ThrowIfNotObject { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "ThrowIfNotObject is a core op, which never calls out: example_generators_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_classes()",
+        "witness": "op_class(Op::ThrowIfNotObject { src: 0 }) is Core"
+      }
     }
   ]
 }

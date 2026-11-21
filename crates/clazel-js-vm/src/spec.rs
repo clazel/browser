@@ -1220,6 +1220,13 @@ pub open spec fn op_wf(c: Code, op: Op) -> bool {
         Op::CreateMappedArguments { dst, env, k, .. } => reg_ok(c, dst) && reg_ok(c, env) && k < c.consts.len() && value_wf(c.consts[k as int]),
         Op::CreateRestArray { dst, .. } => reg_ok(c, dst),
         Op::ForInIterator { dst, src, .. } => reg_ok(c, dst) && reg_ok(c, src),
+        Op::GeneratorStart => true,
+        Op::YieldDelegate { src, value, mode, .. } => reg_ok(c, src) && reg_ok(c, value) && reg_ok(c, mode),
+        Op::GetAsyncIterator { dst, src, .. } => reg_ok(c, dst) && reg_ok(c, src),
+        Op::IterCallMethod { dst, found, iter, arg, which, .. } => reg_ok(c, dst) && reg_ok(c, found) && reg_ok(c, iter) && reg_ok(c, arg) && which < 5,
+        Op::IterComplete { done, result, .. } => reg_ok(c, done) && reg_ok(c, result),
+        Op::IterValue { dst, result, .. } => reg_ok(c, dst) && reg_ok(c, result),
+        Op::ThrowIfNotObject { src, .. } => reg_ok(c, src),
         Op::NewRegExp { dst, k, .. } => reg_ok(c, dst) && k < c.consts.len() && value_wf(c.consts[k as int]),
     }
 }

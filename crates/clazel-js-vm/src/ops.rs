@@ -249,6 +249,23 @@ pub enum HandlerId {
     InitGlobalLexical,
     /// RegExpCreate §22.2.3.1†, for a regular expression literal (§13.2.7.3†).
     NewRegExp,
+    /// EvaluateGeneratorBody §15.5.2† steps 2 to 4 and GeneratorStart §27.5.3.1†, and the same for
+    /// async generators (§15.6.2†).
+    GeneratorStart,
+    /// GeneratorYield §27.5.3.6† of an iterator result object that exists already, for `yield*`
+    /// (§15.5.5†).
+    YieldDelegate,
+    /// GetIterator §7.4.4† with the hint async, and CreateAsyncFromSyncIterator §27.1.4.1†.
+    GetAsyncIterator,
+    /// A call of an iterator's `next`, `throw` or `return` (§15.5.5†, §7.4.6†, §7.4.11†, §7.4.13†).
+    IterCallMethod,
+    /// The checks and IteratorComplete §7.4.7† of an iterator result, as `yield*` and `for await`
+    /// make them.
+    IterComplete,
+    /// IteratorValue §7.4.8†.
+    IterValue,
+    /// The check of the result of an iterator's `return`, §7.4.11† and §7.4.13†.
+    ThrowIfNotObject,
 }
 
 /// The error constructors a compiler-known throw can name.
@@ -1351,6 +1368,112 @@ pub enum Op {
         /// The constant-pool index of the literal's record (pattern text and flags).
         k: nat,
     },
+    /// The end of FunctionDeclarationInstantiation in a generator or async generator function,
+    /// where the function returns its generator object and its body is left to the first `next()`.
+    /// EvaluateGeneratorBody (§15.5.2†) is: "Perform ?
+    /// FunctionDeclarationInstantiation(functionObject, argumentsList)" (step 1), "Let G be ?
+    /// OrdinaryCreateFromConstructor(functionObject, "%GeneratorFunction.prototype.prototype%",
+    /// ...)" (step 2), "Perform GeneratorStart(G, FunctionBody)" (step 3), "Return Completion
+    /// Record { [[Type]]: return, [[Value]]: G }" (step 4); EvaluateAsyncGeneratorBody (§15.6.2†)
+    /// is the same with the async generator intrinsics and AsyncGeneratorStart (§27.6.3.1†), whose
+    /// queue starts empty. The ops before this one (the parameters and the declarations of the
+    /// function) are step 1, so an error in them is thrown to the caller. The handler creates G
+    /// with the prototype `functionObject.prototype` when that is an Object and the realm's
+    /// intrinsic otherwise, copies the frame to G (phase-7.md 7.7: frames are copied to a heap
+    /// object on suspend and back on resume) in the state suspended-start, and returns G as the
+    /// call's result. The next op is the first of the body and runs on the first resumption
+    /// (GeneratorResume §27.5.3.3†, whose sent value of a first `next(v)` is dropped). `return()`
+    /// and `throw()` of a generator in suspended-start complete it without running the frame
+    /// (GeneratorResumeAbrupt §27.5.3.4† step 3.a), so this suspension is never resumed with a
+    /// mode. An async function has no such op: its body runs at once in the frame of the call
+    /// (AsyncFunctionStart §27.7.5.1†), and its promise is settled when the function returns or
+    /// throws (§27.7.5.2†); the handler of a call knows to do that from the function's kind.
+    GeneratorStart,
+    /// As [`Op::Yield`], but `src` is already an iterator result object, and the consumer of the
+    /// generator receives that object as it is instead of a new one holding a value. It is the
+    /// suspension of `yield*` in a generator: "Set received to
+    /// Completion(GeneratorYield(innerResult))" (YieldExpression : `yield *` AssignmentExpression
+    /// evaluation, §15.5.5† step 7.a.vi), where GeneratorYield (§27.5.3.6†) takes the iterator
+    /// result object itself and Yield (§27.5.3.7†) is what wraps a value in CreateIterResultObject.
+    /// In an async generator `yield*` gives `IteratorValue(innerResult)` to [`Op::Yield`] (step
+    /// 7.a.vii: AsyncGeneratorYield) instead. `value` and `mode` are as for [`Op::Yield`]: the
+    /// resumption's value and its mode (0 next, 1 throw, 2 return).
+    YieldDelegate {
+        /// The register holding the iterator result object.
+        src: nat,
+        /// The register receiving the value of the resumption.
+        value: nat,
+        /// The register receiving the resume mode, an int32.
+        mode: nat,
+    },
+    /// `dst := GetIterator(src, async)`, §7.4.4†: "Let method be ? GetMethod(obj, @@asyncIterator)"
+    /// (step 1.a.i); if that is undefined, "Let syncMethod be ? GetMethod(obj, @@iterator)" (step
+    /// 1.a.ii), "Let syncIteratorRecord be ? GetIteratorFromMethod(obj, syncMethod)" and "Return
+    /// CreateAsyncFromSyncIterator(syncIteratorRecord)" (§27.1.4.1†, step 1.a.ii.3); an object
+    /// without either method is a TypeError. The result is an Iterator Record, as
+    /// [`Op::GetIterator`]'s, for the ops of a `for await` loop and of `yield*` in an async
+    /// generator ([`Op::IterCallMethod`], [`Op::IterComplete`], [`Op::IterValue`]).
+    GetAsyncIterator {
+        /// The register written.
+        dst: nat,
+        /// The register read.
+        src: nat,
+    },
+    /// Calls a method of the Iterator Record in `iter` on its iterator object, and gives the result
+    /// as it is: it does not check it and does not await it (the compiler follows with `Await` in
+    /// an async loop, then with [`Op::IterComplete`] or [`Op::ThrowIfNotObject`]). `which` 0 is the
+    /// stored `next` method called with `arg` (`yield*`, §15.5.5† step 7.a.i:
+    /// "Call(iteratorRecord.[[NextMethod]], iteratorRecord.[[Iterator]], « received.[[Value]] »)");
+    /// `which` 4 is the same with no arguments (IteratorNext §7.4.6† step 1: "If value is not
+    /// present, Call(...)", as a `for`-`of` loop does, which `arg` is then ignored for). `which` 1
+    /// is `GetMethod(iterator, "throw")` (§7.3.10†) and, if it is not undefined, a call with `arg`
+    /// (step 7.b.i to 7.b.ii.1); `which` 2 is `GetMethod(iterator, "return")` and a call with `arg`
+    /// (step 7.c.ii and 7.c.iv); `which` 3 is the same `return` call with no arguments
+    /// (IteratorClose §7.4.11† steps 4 to 6 and AsyncIteratorClose §7.4.13†). `found` receives
+    /// true, and `dst` the call's result; but for `which` 1 to 3 when GetMethod gives undefined (it
+    /// gives undefined for null as well), `found` receives false and `dst` is not written. A next
+    /// method that is not callable is a TypeError of the call; a throw of the call or of GetMethod
+    /// is the op's.
+    IterCallMethod {
+        /// The register receiving the call's result.
+        dst: nat,
+        /// The register receiving whether the method was there.
+        found: nat,
+        /// The register holding the iterator record.
+        iter: nat,
+        /// The register holding the argument.
+        arg: nat,
+        /// The method: 0 `next` with an argument, 1 `throw`, 2 `return` with an argument, 3
+        /// `return` without, 4 `next` without.
+        which: nat,
+    },
+    /// `done := IteratorComplete(result)`, §7.4.7†, after the check that `result` is an Object: "If
+    /// innerResult is not an Object, throw a TypeError exception" (`yield*`, §15.5.5† step 7.a.iv)
+    /// and "If nextResult is not an Object, throw a TypeError exception" (ForIn/OfBodyEvaluation
+    /// §14.7.5.7† step 6.c.iii), then ToBoolean(? Get(result, "done")). It reads `done` and nothing
+    /// else: `value` is read by [`Op::IterValue`], only when the loop uses it.
+    IterComplete {
+        /// The register receiving the flag, a boolean.
+        done: nat,
+        /// The register holding the iterator result.
+        result: nat,
+    },
+    /// `dst := IteratorValue(result)`, §7.4.8†: `Get(result, "value")`. `result` is an Object
+    /// already, which [`Op::IterComplete`] checked.
+    IterValue {
+        /// The register written.
+        dst: nat,
+        /// The register holding the iterator result.
+        result: nat,
+    },
+    /// Throws a TypeError if `src` is not an Object: the check of what an iterator's `return`
+    /// method gave, "If innerResult.[[Value]] is not an Object, throw a TypeError exception"
+    /// (IteratorClose §7.4.11† step 9, AsyncIteratorClose §7.4.13† step 7), which reads none of its
+    /// properties. It throws, so it is a handler op.
+    ThrowIfNotObject {
+        /// The register read.
+        src: nat,
+    },
 }
 
 /// The class of an op (see the file header).
@@ -1465,6 +1588,13 @@ pub open spec fn op_class(op: Op) -> OpClass {
         | Op::ForInIterator { .. }
         | Op::InitGlobalLexical { .. }
         | Op::NewRegExp { .. }
+        | Op::GeneratorStart
+        | Op::YieldDelegate { .. }
+        | Op::GetAsyncIterator { .. }
+        | Op::IterCallMethod { .. }
+        | Op::IterComplete { .. }
+        | Op::IterValue { .. }
+        | Op::ThrowIfNotObject { .. }
         | Op::ThrowError { .. } => OpClass::Handler,
     }
 }
@@ -1536,6 +1666,13 @@ pub open spec fn op_handler(op: Op) -> HandlerId {
         Op::Await { .. } => HandlerId::Await,
         Op::Throw { .. } | Op::Nop => HandlerId::Throw,
         Op::ThrowError { .. } => HandlerId::ThrowError,
+        Op::GeneratorStart => HandlerId::GeneratorStart,
+        Op::YieldDelegate { .. } => HandlerId::YieldDelegate,
+        Op::GetAsyncIterator { .. } => HandlerId::GetAsyncIterator,
+        Op::IterCallMethod { .. } => HandlerId::IterCallMethod,
+        Op::IterComplete { .. } => HandlerId::IterComplete,
+        Op::IterValue { .. } => HandlerId::IterValue,
+        Op::ThrowIfNotObject { .. } => HandlerId::ThrowIfNotObject,
         Op::NewRegExp { .. } => HandlerId::NewRegExp,
         Op::InitGlobalLexical { .. } => HandlerId::InitGlobalLexical,
         Op::ToPropertyKey { .. } => HandlerId::ToPropertyKey,

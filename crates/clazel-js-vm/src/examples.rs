@@ -537,4 +537,94 @@ pub proof fn example_regex_classes()
     assert(op_handler(Op::NewRegExp { dst: 0, k: 0 }) == HandlerId::NewRegExp) by (compute_only);
 }
 
+/// The operands `op_wf` accepts of the ops added for generators, async functions and `for await`
+/// (`GeneratorStart`, `YieldDelegate`, `GetAsyncIterator`, `IterCallMethod`, `IterComplete`,
+/// `IterValue`, `ThrowIfNotObject`): every register inside the frame (registers 0 to 2), every
+/// register range inside it, every constant index inside the pool (0 to 2), a record constant that
+/// is a value (constant 2 is not), and each small enumerated operand below its bound.
+pub proof fn example_generators_wf()
+    ensures
+        op_wf(example_code(), Op::GeneratorStart),
+        op_wf(example_code(), Op::YieldDelegate { src: 0, value: 0, mode: 0 }),
+        !op_wf(example_code(), Op::YieldDelegate { src: 3, value: 0, mode: 0 }),
+        !op_wf(example_code(), Op::YieldDelegate { src: 0, value: 3, mode: 0 }),
+        !op_wf(example_code(), Op::YieldDelegate { src: 0, value: 0, mode: 3 }),
+        op_wf(example_code(), Op::GetAsyncIterator { dst: 0, src: 0 }),
+        !op_wf(example_code(), Op::GetAsyncIterator { dst: 3, src: 0 }),
+        !op_wf(example_code(), Op::GetAsyncIterator { dst: 0, src: 3 }),
+        op_wf(example_code(), Op::IterCallMethod { dst: 0, found: 0, iter: 0, arg: 0, which: 0 }),
+        !op_wf(example_code(), Op::IterCallMethod { dst: 3, found: 0, iter: 0, arg: 0, which: 0 }),
+        !op_wf(example_code(), Op::IterCallMethod { dst: 0, found: 3, iter: 0, arg: 0, which: 0 }),
+        !op_wf(example_code(), Op::IterCallMethod { dst: 0, found: 0, iter: 3, arg: 0, which: 0 }),
+        !op_wf(example_code(), Op::IterCallMethod { dst: 0, found: 0, iter: 0, arg: 3, which: 0 }),
+        !op_wf(example_code(), Op::IterCallMethod { dst: 0, found: 0, iter: 0, arg: 0, which: 5 }),
+        op_wf(example_code(), Op::IterComplete { done: 0, result: 0 }),
+        !op_wf(example_code(), Op::IterComplete { done: 3, result: 0 }),
+        !op_wf(example_code(), Op::IterComplete { done: 0, result: 3 }),
+        op_wf(example_code(), Op::IterValue { dst: 0, result: 0 }),
+        !op_wf(example_code(), Op::IterValue { dst: 3, result: 0 }),
+        !op_wf(example_code(), Op::IterValue { dst: 0, result: 3 }),
+        op_wf(example_code(), Op::ThrowIfNotObject { src: 0 }),
+        !op_wf(example_code(), Op::ThrowIfNotObject { src: 3 }),
+{
+    assert(op_wf(example_code(), Op::GeneratorStart)) by (compute_only);
+    assert(op_wf(example_code(), Op::YieldDelegate { src: 0, value: 0, mode: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::YieldDelegate { src: 3, value: 0, mode: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::YieldDelegate { src: 0, value: 3, mode: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::YieldDelegate { src: 0, value: 0, mode: 3 })) by (compute_only);
+    assert(op_wf(example_code(), Op::GetAsyncIterator { dst: 0, src: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::GetAsyncIterator { dst: 3, src: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::GetAsyncIterator { dst: 0, src: 3 })) by (compute_only);
+    assert(op_wf(example_code(), Op::IterCallMethod { dst: 0, found: 0, iter: 0, arg: 0, which: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::IterCallMethod { dst: 3, found: 0, iter: 0, arg: 0, which: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::IterCallMethod { dst: 0, found: 3, iter: 0, arg: 0, which: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::IterCallMethod { dst: 0, found: 0, iter: 3, arg: 0, which: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::IterCallMethod { dst: 0, found: 0, iter: 0, arg: 3, which: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::IterCallMethod { dst: 0, found: 0, iter: 0, arg: 0, which: 5 })) by (compute_only);
+    assert(op_wf(example_code(), Op::IterComplete { done: 0, result: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::IterComplete { done: 3, result: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::IterComplete { done: 0, result: 3 })) by (compute_only);
+    assert(op_wf(example_code(), Op::IterValue { dst: 0, result: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::IterValue { dst: 3, result: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::IterValue { dst: 0, result: 3 })) by (compute_only);
+    assert(op_wf(example_code(), Op::ThrowIfNotObject { src: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::ThrowIfNotObject { src: 3 })) by (compute_only);
+}
+
+/// The class and the handler of each op added for generators, async functions and `for await`: each
+/// always calls out (it can allocate, call user code or throw), so each is a handler op, which the
+/// JIT lowers to an exit, with its own handler.
+pub proof fn example_generators_classes()
+    ensures
+        op_class(Op::GeneratorStart) is Handler,
+        op_handler(Op::GeneratorStart) == HandlerId::GeneratorStart,
+        op_class(Op::YieldDelegate { src: 0, value: 0, mode: 0 }) is Handler,
+        op_handler(Op::YieldDelegate { src: 0, value: 0, mode: 0 }) == HandlerId::YieldDelegate,
+        op_class(Op::GetAsyncIterator { dst: 0, src: 0 }) is Handler,
+        op_handler(Op::GetAsyncIterator { dst: 0, src: 0 }) == HandlerId::GetAsyncIterator,
+        op_class(Op::IterCallMethod { dst: 0, found: 0, iter: 0, arg: 0, which: 0 }) is Handler,
+        op_handler(Op::IterCallMethod { dst: 0, found: 0, iter: 0, arg: 0, which: 0 }) == HandlerId::IterCallMethod,
+        op_class(Op::IterComplete { done: 0, result: 0 }) is Handler,
+        op_handler(Op::IterComplete { done: 0, result: 0 }) == HandlerId::IterComplete,
+        op_class(Op::IterValue { dst: 0, result: 0 }) is Handler,
+        op_handler(Op::IterValue { dst: 0, result: 0 }) == HandlerId::IterValue,
+        op_class(Op::ThrowIfNotObject { src: 0 }) is Handler,
+        op_handler(Op::ThrowIfNotObject { src: 0 }) == HandlerId::ThrowIfNotObject,
+{
+    assert(op_class(Op::GeneratorStart) is Handler) by (compute_only);
+    assert(op_handler(Op::GeneratorStart) == HandlerId::GeneratorStart) by (compute_only);
+    assert(op_class(Op::YieldDelegate { src: 0, value: 0, mode: 0 }) is Handler) by (compute_only);
+    assert(op_handler(Op::YieldDelegate { src: 0, value: 0, mode: 0 }) == HandlerId::YieldDelegate) by (compute_only);
+    assert(op_class(Op::GetAsyncIterator { dst: 0, src: 0 }) is Handler) by (compute_only);
+    assert(op_handler(Op::GetAsyncIterator { dst: 0, src: 0 }) == HandlerId::GetAsyncIterator) by (compute_only);
+    assert(op_class(Op::IterCallMethod { dst: 0, found: 0, iter: 0, arg: 0, which: 0 }) is Handler) by (compute_only);
+    assert(op_handler(Op::IterCallMethod { dst: 0, found: 0, iter: 0, arg: 0, which: 0 }) == HandlerId::IterCallMethod) by (compute_only);
+    assert(op_class(Op::IterComplete { done: 0, result: 0 }) is Handler) by (compute_only);
+    assert(op_handler(Op::IterComplete { done: 0, result: 0 }) == HandlerId::IterComplete) by (compute_only);
+    assert(op_class(Op::IterValue { dst: 0, result: 0 }) is Handler) by (compute_only);
+    assert(op_handler(Op::IterValue { dst: 0, result: 0 }) == HandlerId::IterValue) by (compute_only);
+    assert(op_class(Op::ThrowIfNotObject { src: 0 }) is Handler) by (compute_only);
+    assert(op_handler(Op::ThrowIfNotObject { src: 0 }) == HandlerId::ThrowIfNotObject) by (compute_only);
+}
+
 } // verus!
