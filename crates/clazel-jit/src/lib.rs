@@ -87,6 +87,7 @@ pub mod cfblock;
 pub mod cfcompose;
 pub mod cfcontract;
 pub mod cfheight;
+pub mod cfleaf;
 pub mod cflens;
 pub mod cfspec;
 pub mod cfsteps;
