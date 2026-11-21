@@ -351,6 +351,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "clazel-image-shape"
+version = "0.0.0"
+
+[[package]]
 name = "clazel-ipc"
 version = "0.0.0"
 dependencies = [
