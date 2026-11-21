@@ -6,7 +6,7 @@
 //! with a valid Orientation precedes the frame header (a later one is
 //! ignored, and so is it by the step function).
 
-use clazel_image_shape::{Config, ConfigStatus, Error, Format};
+use clazel_image_shape::{Coding, Config, ConfigStatus, Error, Format};
 
 use crate::exif;
 use crate::markers::{Kind, kind};
@@ -96,12 +96,19 @@ pub(crate) fn config(prefix: &[u8]) -> Result<ConfigStatus, Error> {
             } else {
                 (x, y)
             };
-            return Ok(ConfigStatus::Ready(Config::new(
+            let config = Config::new(
                 Format::Jpeg,
                 u32::from(w),
                 u32::from(h),
                 crate::decoder::FRAMES,
-            )?));
+            )?;
+            // SOF2 (Table B.1): progressive, whose work space is larger.
+            let coding = if m == 0xC2 {
+                Coding::Progressive
+            } else {
+                Coding::Base
+            };
+            return Ok(ConfigStatus::Ready(config.with_coding(coding)?));
         }
         if m == 0xE1 && orientation.is_none() {
             // Only the first bytes of the segment are looked at.

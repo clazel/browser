@@ -197,6 +197,7 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         jpeg::FILES_TESTIMAGES,
     ),
     ("jpeg-corpus", jpeg::convert, jpeg::FILES_CORPUS),
+    ("jpeg-progressive", jpeg::convert, jpeg::FILES_PROGRESSIVE),
 ];
 
 /// A converter for a binary artefact written beside a suite's Rust table.

@@ -4,7 +4,7 @@ version = "0.0.0"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "A baseline JPEG decoder (Phase 6 item 6.5): ITU-T T.81 sequential Huffman, the integer IDCT and fancy upsampling of libjpeg-turbo, JFIF and Adobe colour, EXIF orientation. A resumable step function over caller-owned buffers, implementing clazel-image-shape's Decoder."
+description = "A baseline and progressive JPEG decoder (Phase 6 items 6.5 and 6.6): ITU-T T.81 sequential and progressive (Annex G) Huffman, the integer IDCT and fancy upsampling of libjpeg-turbo, JFIF and Adobe colour, EXIF orientation. A resumable step function over caller-owned buffers, implementing clazel-image-shape's Decoder."
 
 [dependencies]
 # The decoder interface (item 6.3), our own crate with no dependencies, so no
