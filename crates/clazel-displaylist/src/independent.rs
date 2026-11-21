@@ -27,14 +27,15 @@
 //! - [`theorem_read_equals_decode`]: on every byte string, [`i_read`] is `decode` with
 //!   [`cmd_of`] applied to each item, and [`lemma_cmd_of_injective`] shows that mapping
 //!   loses nothing.
-//! - [`theorem_check_equals_validate`]: on every list and every table of masks of the
-//!   spec's fixed length 2^16, [`i_check`] refuses when `validate` does, and otherwise
-//!   leaves the masks `validate` leaves, under [`costs_of`]. The length is a hypothesis
-//!   because the spec indexes the table by id. `masks_ok`'s bound on the bytes is not
-//!   needed.
+//! - [`theorem_check_equals_validate`]: on every list and every pair of tables, of masks
+//!   and of images, of the spec's fixed length 2^16, [`i_check`] refuses when `validate`
+//!   does, and otherwise leaves the masks and images `validate` leaves, under
+//!   [`costs_of`] and [`dims_of`]. The length is a hypothesis because the spec indexes
+//!   the tables by id. `masks_ok`'s bounds on the bytes are not needed.
 //! - The masks compare by id and cost. The paragraph's rules use nothing else, so this
 //!   file keeps nothing else, and the width and height the spec stores for each mask
-//!   are not compared: they are the one thing these theorems say nothing about.
+//!   are not compared: they are the one thing these theorems say nothing about. The
+//!   images compare by id and size, since a draw's source rectangle needs the size.
 //!
 //! The paragraph and the spec did not differ anywhere: no definition had to change for
 //! a proof to go through. Being written by the same session, they could still share a
@@ -55,12 +56,33 @@
 //! - The check is a left fold of one step over the items ([`i_check`]), with a stack
 //!   depth and a table of live masks as its state. It refuses by the fold's state
 //!   becoming `None`. What it gives back on success is the table later lists start from.
+//! - Tags 7 to 9, from the 6.10 extension, are in the same forms: [`i_end`] and
+//!   [`i_cmd`] by position, [`i_step`] as one more case of the fold, and the images a
+//!   second map in the fold's state, by id, holding each live image's width and height.
 //! - A live mask in the table is its id and its cost, columns × rows, which is all the
 //!   paragraph's rules use. Live coverage is not a counter: it is the sum of the table
 //!   over every id below 2^16 ([`i_live_coverage`]), since no other id can be live.
 //! - "Stays at most 2^26" is checked when an upload would add to it, the only step
 //!   that can raise it, on the table with the new mask in it.
 //! - "Within ±2^23" includes both ends, and "at most" and "1 to 2048" include theirs.
+//!
+//! ## The extension for item 6.10 (images), and how it was written
+//!
+//! The image items (tags 7 to 9) were added **by the same session that extended
+//! `spec.rs` for them**, working from the paragraph of item 6.10 in `docs/phases/phase-6.md`
+//! (the tags and fields, "image ids are a separate space below 2^16", "an upload's id is
+//! not live and its sides are 1 to 2^14", "live image bytes stay at most ... 2^28", "a
+//! draw names a live image and a source rectangle inside it") and the unchanged
+//! definitions above, and it wrote the spec's side first. This part is therefore **not
+//! blind**: it is a second statement of the same rules in a different form (a fold over a
+//! map of images by id, positions rather than a recursion on what is left), by the same
+//! author, so a misreading of 6.10 could be in both. What it adds as evidence is that the
+//! two forms agree on every list and every table, which catches a slip in either form.
+//!
+//! The choices 6.10 leaves open, as this file takes them (the spec's are the same): a
+//! source rectangle may be empty; the filter is one byte, 0 nearest and 1 linear, any
+//! other byte being no item; the source rectangle's four fields are 16 bits; an image's
+//! sides are 16 bits; the byte limit is 2^27 + 2^28.
 
 #[allow(unused_imports)]
 use super::spec::*;
@@ -126,6 +148,47 @@ pub ghost enum Cmd {
         /// Unsigned, 32 bits.
         id: nat,
     },
+    /// Tag 7: "upload image (id, width, height, then width × height × 4 bytes of
+    /// premultiplied RGBA8)": the id 32 bits, the sides 16 bits.
+    ImageIn {
+        /// Unsigned, 32 bits.
+        id: nat,
+        /// Unsigned, 16 bits.
+        width: nat,
+        /// Unsigned, 16 bits.
+        height: nat,
+        /// Width × height × 4 bytes.
+        pixels: Seq<u8>,
+    },
+    /// Tag 8: "draw image (id, destination x, y, width, height, as tag 1; source rectangle
+    /// in the image's pixels; a filter flag, nearest or linear)".
+    Blit {
+        /// Unsigned, 32 bits.
+        id: nat,
+        /// Destination, signed, 32 bits.
+        x: int,
+        /// Destination, signed, 32 bits.
+        y: int,
+        /// Destination, unsigned, 32 bits.
+        w: nat,
+        /// Destination, unsigned, 32 bits.
+        h: nat,
+        /// Source, unsigned, 16 bits.
+        sx: nat,
+        /// Source, unsigned, 16 bits.
+        sy: nat,
+        /// Source, unsigned, 16 bits.
+        sw: nat,
+        /// Source, unsigned, 16 bits.
+        sh: nat,
+        /// One byte: 1 linear, 0 nearest.
+        linear: bool,
+    },
+    /// Tag 9: "free image (id)".
+    ImageOut {
+        /// Unsigned, 32 bits.
+        id: nat,
+    },
 }
 
 // ------------------------------------------------------------------------------------
@@ -160,7 +223,8 @@ pub open spec fn i_s32(b: Seq<u8>, p: int) -> int {
 // ------------------------------------------------------------------------------------
 
 /// Where the item starting at byte `p` ends: `None` when there is no item there, the
-/// tag being past the bytes, not one of the six, or the item "cut short".
+/// tag being past the bytes, not one of the nine, or the item "cut short", or a draw
+/// image whose filter byte is neither 0 nor 1.
 pub open spec fn i_end(b: Seq<u8>, p: int) -> Option<int> {
     if p < 0 || p >= b.len() {
         None
@@ -182,6 +246,22 @@ pub open spec fn i_end(b: Seq<u8>, p: int) -> Option<int> {
         } else if b[p] == 5 {
             Some(p + 17)
         } else if b[p] == 6 {
+            Some(p + 5)
+        } else if b[p] == 7 {
+            // 4 + 2 + 2, and the pixels, four to each of width × height.
+            if p + 9 <= b.len() {
+                Some(p + 9 + i_u16(b, p + 5) * i_u16(b, p + 7) * 4)
+            } else {
+                None
+            }
+        } else if b[p] == 8 {
+            // 4, then 4 × 4, then 4 × 2, then one byte: 29 bytes of fields.
+            if p + 30 <= b.len() && (b[p + 29] == 0 || b[p + 29] == 1) {
+                Some(p + 30)
+            } else {
+                None
+            }
+        } else if b[p] == 9 {
             Some(p + 5)
         } else {
             None
@@ -243,8 +323,32 @@ pub open spec fn i_cmd(b: Seq<u8>, p: int) -> Cmd {
             y: i_s32(b, p + 9),
             colour: i_u32(b, p + 13),
         }
-    } else {
+    } else if b[p] == 6 {
         Cmd::MaskOut { id: i_u32(b, p + 1) }
+    } else if b[p] == 7 {
+        let width = i_u16(b, p + 5);
+        let height = i_u16(b, p + 7);
+        Cmd::ImageIn {
+            id: i_u32(b, p + 1),
+            width,
+            height,
+            pixels: b.subrange(p + 9, p + 9 + width * height * 4),
+        }
+    } else if b[p] == 8 {
+        Cmd::Blit {
+            id: i_u32(b, p + 1),
+            x: i_s32(b, p + 5),
+            y: i_s32(b, p + 9),
+            w: i_u32(b, p + 13),
+            h: i_u32(b, p + 17),
+            sx: i_u16(b, p + 21),
+            sy: i_u16(b, p + 23),
+            sw: i_u16(b, p + 25),
+            sh: i_u16(b, p + 27),
+            linear: b[p + 29] == 1,
+        }
+    } else {
+        Cmd::ImageOut { id: i_u32(b, p + 1) }
     }
 }
 
@@ -255,9 +359,10 @@ pub open spec fn i_is_run(b: Seq<u8>, k: nat) -> bool {
 }
 
 /// Reading a list. `None`: "any other tag, an item cut short, or more than 2^27 bytes
-/// in all is not a list".
+/// in all is not a list", the limit grown by 2^28 for image uploads (6.10), so 2^27 +
+/// 2^28 = 0x18000000.
 pub open spec fn i_read(b: Seq<u8>) -> Option<Seq<Cmd>> {
-    if b.len() > 0x8000000 {
+    if b.len() > 0x18000000 {
         None
     } else if exists|k: nat| i_is_run(b, k) {
         let k = choose|k: nat| i_is_run(b, k);
@@ -303,13 +408,36 @@ pub open spec fn i_live_coverage(live: Map<nat, nat>) -> nat {
     i_coverage_below(live, 0x10000)
 }
 
-/// The state of the fold: how deep the clip stack is, and the live masks by id with
-/// their costs.
+/// The sum of four times width × height of the live images with an id below `n`.
+pub open spec fn i_pixels_below(images: Map<nat, (nat, nat)>, n: nat) -> nat
+    decreases n,
+{
+    if n == 0 {
+        0
+    } else {
+        let id = (n - 1) as nat;
+        i_pixels_below(images, id) + if images.contains_key(id) {
+            images[id].0 * images[id].1 * 4
+        } else {
+            0
+        }
+    }
+}
+
+/// 6.10's "live image bytes": each image costing width × height × 4.
+pub open spec fn i_live_pixels(images: Map<nat, (nat, nat)>) -> nat {
+    i_pixels_below(images, 0x10000)
+}
+
+/// The state of the fold: how deep the clip stack is, the live masks by id with their
+/// costs, and the live images by id with their width and height.
 pub ghost struct Walk {
     /// How many clips are pushed.
     pub depth: nat,
     /// The cost of each live mask, by id.
     pub live: Map<nat, nat>,
+    /// The width and height of each live image, by id.
+    pub images: Map<nat, (nat, nat)>,
 }
 
 /// One item against the state: the next state, or `None` when the item breaks a rule.
@@ -328,7 +456,7 @@ pub open spec fn i_step(w: Walk, c: Cmd) -> Option<Walk> {
             // As for fills, and the stack "never passes 256".
             if i_position_ok(x) && i_position_ok(y) && i_extent_ok(width) && i_extent_ok(height)
                 && w.depth + 1 <= 256 {
-                Some(Walk { depth: w.depth + 1, live: w.live })
+                Some(Walk { depth: w.depth + 1, live: w.live, images: w.images })
             } else {
                 None
             }
@@ -336,7 +464,7 @@ pub open spec fn i_step(w: Walk, c: Cmd) -> Option<Walk> {
         Cmd::ClipOut => {
             // "A clip stack never pops when empty".
             if w.depth > 0 {
-                Some(Walk { depth: (w.depth - 1) as nat, live: w.live })
+                Some(Walk { depth: (w.depth - 1) as nat, live: w.live, images: w.images })
             } else {
                 None
             }
@@ -347,7 +475,7 @@ pub open spec fn i_step(w: Walk, c: Cmd) -> Option<Walk> {
             let after = w.live.insert(id, columns * rows);
             if i_id_ok(id) && !w.live.contains_key(id) && 1 <= columns <= 2048 && 1 <= rows <= 2048
                 && i_live_coverage(after) <= 0x4000000 {
-                Some(Walk { depth: w.depth, live: after })
+                Some(Walk { depth: w.depth, live: after, images: w.images })
             } else {
                 None
             }
@@ -363,7 +491,37 @@ pub open spec fn i_step(w: Walk, c: Cmd) -> Option<Walk> {
         Cmd::MaskOut { id } => {
             // "A draw or a free names a live mask, and a free ends it."
             if i_id_ok(id) && w.live.contains_key(id) {
-                Some(Walk { depth: w.depth, live: w.live.remove(id) })
+                Some(Walk { depth: w.depth, live: w.live.remove(id), images: w.images })
+            } else {
+                None
+            }
+        },
+        Cmd::ImageIn { id, width, height, pixels: _ } => {
+            // "An upload's id is not live and its sides are 1 to 2^14; live image bytes,
+            // each image costing width × height × 4, stay at most 2^28." The id is below
+            // 2^16, "a separate space" from the masks'.
+            let after = w.images.insert(id, (width, height));
+            if i_id_ok(id) && !w.images.contains_key(id) && 1 <= width <= 0x4000 && 1 <= height <= 0x4000
+                && i_live_pixels(after) <= 0x10000000 {
+                Some(Walk { depth: w.depth, live: w.live, images: after })
+            } else {
+                None
+            }
+        },
+        Cmd::Blit { id, x, y, w: dw, h: dh, sx, sy, sw, sh, linear: _ } => {
+            // "A draw names a live image and a source rectangle inside it", and the
+            // destination "as tag 1", so as for fills.
+            if i_id_ok(id) && w.images.contains_key(id) && i_position_ok(x) && i_position_ok(y)
+                && i_extent_ok(dw) && i_extent_ok(dh) && sx + sw <= w.images[id].0 && sy + sh <= w.images[id].1 {
+                Some(w)
+            } else {
+                None
+            }
+        },
+        Cmd::ImageOut { id } => {
+            // A free names a live image, and ends it.
+            if i_id_ok(id) && w.images.contains_key(id) {
+                Some(Walk { depth: w.depth, live: w.live, images: w.images.remove(id) })
             } else {
                 None
             }
@@ -383,14 +541,17 @@ pub open spec fn i_walk(items: Seq<Cmd>, start: Walk) -> Option<Walk> {
     )
 }
 
-/// A list checked "against the masks earlier lists left": the masks it leaves, or `None`
-/// when it is refused. "At most 2^20 items"; the clip stack starts empty and "ends empty".
-pub open spec fn i_check(items: Seq<Cmd>, earlier: Map<nat, nat>) -> Option<Map<nat, nat>> {
+/// A list checked "against the masks earlier lists left", and the images: the masks and
+/// images it leaves, or `None` when it is refused. "At most 2^20 items"; the clip stack
+/// starts empty and "ends empty".
+pub open spec fn i_check(items: Seq<Cmd>, earlier: Map<nat, nat>, earlier_images: Map<nat, (nat, nat)>) -> Option<
+    (Map<nat, nat>, Map<nat, (nat, nat)>),
+> {
     if items.len() > 0x100000 {
         None
     } else {
-        match i_walk(items, Walk { depth: 0, live: earlier }) {
-            Some(w) => if w.depth == 0 { Some(w.live) } else { None },
+        match i_walk(items, Walk { depth: 0, live: earlier, images: earlier_images }) {
+            Some(w) => if w.depth == 0 { Some((w.live, w.images)) } else { None },
             None => None,
         }
     }
@@ -430,6 +591,25 @@ pub open spec fn cmd_of(item: Item) -> Cmd {
             colour: colour as nat,
         },
         Item::FreeMask { id } => Cmd::MaskOut { id: id as nat },
+        Item::UploadImage { id, image_width, image_height, pixels } => Cmd::ImageIn {
+            id: id as nat,
+            width: image_width as nat,
+            height: image_height as nat,
+            pixels,
+        },
+        Item::DrawImage { id, x, y, width, height, src_x, src_y, src_width, src_height, linear } => Cmd::Blit {
+            id: id as nat,
+            x: x as int,
+            y: y as int,
+            w: width as nat,
+            h: height as nat,
+            sx: src_x as nat,
+            sy: src_y as nat,
+            sw: src_width as nat,
+            sh: src_height as nat,
+            linear,
+        },
+        Item::FreeImage { id } => Cmd::ImageOut { id: id as nat },
     }
 }
 
@@ -456,6 +636,64 @@ pub open spec fn costs_below(table: Seq<Option<MaskSize>>, n: nat) -> Map<nat, n
             None => costs_below(table, id),
         }
     }
+}
+
+/// The spec's table of images as this file's: each live image's id and its size.
+pub open spec fn dims_of(masks: Masks) -> Map<nat, (nat, nat)> {
+    dims_below(masks.images, masks.images.len())
+}
+
+/// The entries of a table of images with an id below `n`, as a map.
+pub open spec fn dims_below(images: Seq<Option<ImageSize>>, n: nat) -> Map<nat, (nat, nat)>
+    decreases n,
+{
+    if n == 0 {
+        Map::empty()
+    } else {
+        let id = (n - 1) as nat;
+        match images[id as int] {
+            Some(size) => dims_below(images, id).insert(id, (size.width, size.height)),
+            None => dims_below(images, id),
+        }
+    }
+}
+
+proof fn lemma_dims_below(images: Seq<Option<ImageSize>>, n: nat)
+    requires
+        n <= images.len(),
+    ensures
+        forall|id: nat| #[trigger]
+            dims_below(images, n).dom().contains(id) == (id < n && images[id as int] is Some),
+        forall|id: nat| #[trigger]
+            dims_below(images, n).dom().contains(id) ==> dims_below(images, n)[id]
+                == (images[id as int].unwrap().width, images[id as int].unwrap().height),
+    decreases n,
+{
+    if n > 0 {
+        let below = (n - 1) as nat;
+        lemma_dims_below(images, below);
+        let all = dims_below(images, n);
+        let prior = dims_below(images, below);
+        assert forall|id: nat| #[trigger] all.dom().contains(id) == (id < n && images[id as int] is Some) by {
+            assert(prior.dom().contains(id) == (id < below && images[id as int] is Some));
+        }
+        assert forall|id: nat| #[trigger] all.dom().contains(id) implies all[id]
+            == (images[id as int].unwrap().width, images[id as int].unwrap().height) by {
+            assert(prior.dom().contains(id) == (id < below && images[id as int] is Some));
+        }
+    }
+}
+
+/// What the map holds: the live images of the table and their sizes.
+proof fn lemma_dims(m: Masks)
+    ensures
+        forall|id: nat| #[trigger]
+            dims_of(m).dom().contains(id) == (id < m.images.len() && m.images[id as int] is Some),
+        forall|id: nat| #[trigger]
+            dims_of(m).dom().contains(id) ==> dims_of(m)[id]
+                == (m.images[id as int].unwrap().width, m.images[id as int].unwrap().height),
+{
+    lemma_dims_below(m.images, m.images.len());
 }
 
 proof fn lemma_costs_below(table: Seq<Option<MaskSize>>, n: nat)
@@ -626,6 +864,39 @@ proof fn lemma_item_at(b: Seq<u8>, p: int)
         if t.len() >= 5 {
             lemma_field4(b, p, 1);
         }
+    } else if b[p] == 7 {
+        if t.len() >= 9 {
+            lemma_field4(b, p, 1);
+            lemma_field2(b, p, 5);
+            lemma_field2(b, p, 7);
+            let size = (i_u16(b, p + 5) * i_u16(b, p + 7) * 4) as int;
+            assert(size >= 0) by (nonlinear_arith)
+                requires
+                    i_u16(b, p + 5) >= 0,
+                    i_u16(b, p + 7) >= 0,
+                    size == i_u16(b, p + 5) * i_u16(b, p + 7) * 4,
+            ;
+            if t.len() >= 9 + size {
+                assert(t.subrange(9, 9 + size) =~= b.subrange(p + 9, p + 9 + size));
+            }
+        }
+    } else if b[p] == 8 {
+        if t.len() >= 30 {
+            lemma_field4(b, p, 1);
+            lemma_field4(b, p, 5);
+            lemma_field4(b, p, 9);
+            lemma_field4(b, p, 13);
+            lemma_field4(b, p, 17);
+            lemma_field2(b, p, 21);
+            lemma_field2(b, p, 23);
+            lemma_field2(b, p, 25);
+            lemma_field2(b, p, 27);
+            assert(t[29] == b[p + 29]);
+        }
+    } else if b[p] == 9 {
+        if t.len() >= 5 {
+            lemma_field4(b, p, 1);
+        }
     }
 }
 
@@ -734,7 +1005,7 @@ pub proof fn theorem_read_equals_decode(b: Seq<u8>)
             Some(items) => Some(cmds_of(items)),
         },
 {
-    if b.len() <= 0x8000000 {
+    if b.len() <= 0x18000000 {
         assert(i_start(b, 0) == Some(0int));
         lemma_run(b, 0, 0);
         assert(b.subrange(0, b.len() as int) =~= b);
@@ -824,29 +1095,98 @@ proof fn lemma_live_coverage(m: Masks)
     assert(m.table.subrange(0, 0x10000) =~= m.table);
 }
 
+// ---- Live pixels: the same, for the images
+
+proof fn lemma_live_image_bytes_last(t: Seq<Option<ImageSize>>)
+    requires
+        t.len() > 0,
+    ensures
+        live_image_bytes(t) == live_image_bytes(t.drop_last()) + match t.last() {
+            None => 0nat,
+            Some(size) => size.width * size.height * 4,
+        },
+    decreases t.len(),
+{
+    let tail = t.subrange(1, t.len() as int);
+    let front = t.drop_last();
+    if t.len() == 1 {
+        assert(live_image_bytes(tail) == 0);
+        assert(live_image_bytes(front) == 0);
+        assert(t.last() == t[0]);
+    } else {
+        lemma_live_image_bytes_last(tail);
+        assert(tail.drop_last() =~= front.subrange(1, front.len() as int));
+        assert(front[0] == t[0]);
+        assert(tail.last() == t.last());
+        assert(live_image_bytes(front) == live_image_bytes(tail.drop_last()) + match front[0] {
+            None => 0nat,
+            Some(size) => size.width * size.height * 4,
+        });
+        assert(live_image_bytes(t) == live_image_bytes(tail) + match t[0] {
+            None => 0nat,
+            Some(size) => size.width * size.height * 4,
+        });
+    }
+}
+
+proof fn lemma_pixels_below(m: Masks, n: nat)
+    requires
+        n <= m.images.len(),
+    ensures
+        i_pixels_below(dims_of(m), n) == live_image_bytes(m.images.subrange(0, n as int)),
+    decreases n,
+{
+    let t = m.images.subrange(0, n as int);
+    if n == 0 {
+        assert(t.len() == 0);
+    } else {
+        let id = (n - 1) as nat;
+        lemma_pixels_below(m, id);
+        lemma_live_image_bytes_last(t);
+        lemma_dims(m);
+        assert(t.drop_last() =~= m.images.subrange(0, id as int));
+        assert(t.last() == m.images[id as int]);
+        assert(dims_of(m).contains_key(id) == (m.images[id as int] is Some));
+    }
+}
+
+/// The two sums of a table of images agree.
+proof fn lemma_live_pixels(m: Masks)
+    requires
+        m.images.len() == 0x10000,
+    ensures
+        i_live_pixels(dims_of(m)) == live_image_bytes(m.images),
+{
+    lemma_pixels_below(m, 0x10000);
+    assert(m.images.subrange(0, 0x10000) =~= m.images);
+}
+
 // ---- Checking
 
 /// One item: this file's step does what the spec's two steps do.
 proof fn lemma_step(m: Masks, d: nat, item: Item)
     requires
         m.table.len() == 0x10000,
+        m.images.len() == 0x10000,
     ensures
         match (masks_after(m, item), clip_after(d, item)) {
             (Some(next_masks), Some(next_depth)) => {
                 &&& next_masks.table.len() == 0x10000
-                &&& i_step(Walk { depth: d, live: costs_of(m) }, cmd_of(item)) == Some(
-                    Walk { depth: next_depth, live: costs_of(next_masks) },
+                &&& next_masks.images.len() == 0x10000
+                &&& i_step(Walk { depth: d, live: costs_of(m), images: dims_of(m) }, cmd_of(item)) == Some(
+                    Walk { depth: next_depth, live: costs_of(next_masks), images: dims_of(next_masks) },
                 )
             },
-            _ => i_step(Walk { depth: d, live: costs_of(m) }, cmd_of(item)) is None,
+            _ => i_step(Walk { depth: d, live: costs_of(m), images: dims_of(m) }, cmd_of(item)) is None,
         },
 {
     lemma_costs(m);
+    lemma_dims(m);
     match item {
         Item::UploadMask { id, columns, rows, .. } => {
             if (id as nat) < 0x10000 {
                 let size = MaskSize { width: columns as nat, height: rows as nat };
-                let updated = Masks { table: m.table.update(id as int, Some(size)) };
+                let updated = Masks { table: m.table.update(id as int, Some(size)), images: m.images };
                 lemma_costs(updated);
                 assert(costs_of(m).contains_key(id as nat) == (m.table[id as int] is Some));
                 let inserted = costs_of(m).insert(id as nat, columns as nat * rows as nat);
@@ -876,7 +1216,7 @@ proof fn lemma_step(m: Masks, d: nat, item: Item)
         Item::FreeMask { id } => {
             if (id as nat) < 0x10000 {
                 assert(costs_of(m).contains_key(id as nat) == (m.table[id as int] is Some));
-                let updated = Masks { table: m.table.update(id as int, None) };
+                let updated = Masks { table: m.table.update(id as int, None), images: m.images };
                 lemma_costs(updated);
                 let removed = costs_of(m).remove(id as nat);
                 assert forall|k: nat| #[trigger] costs_of(updated).dom().contains(k) == removed.dom().contains(k) by {
@@ -890,6 +1230,55 @@ proof fn lemma_step(m: Masks, d: nat, item: Item)
                     assert(updated.table[k as int] == m.table[k as int]);
                 }
                 assert(costs_of(updated) =~= removed);
+            }
+        },
+        Item::UploadImage { id, image_width, image_height, .. } => {
+            if (id as nat) < 0x10000 {
+                let size = ImageSize { width: image_width as nat, height: image_height as nat };
+                let updated = Masks { table: m.table, images: m.images.update(id as int, Some(size)) };
+                lemma_dims(updated);
+                assert(dims_of(m).contains_key(id as nat) == (m.images[id as int] is Some));
+                let inserted = dims_of(m).insert(id as nat, (image_width as nat, image_height as nat));
+                assert forall|k: nat| #[trigger] dims_of(updated).dom().contains(k) == inserted.dom().contains(k) by {
+                    if k < m.images.len() && k != id as nat {
+                        assert(updated.images[k as int] == m.images[k as int]);
+                    }
+                }
+                assert(dims_of(updated).dom() =~= inserted.dom());
+                assert forall|k: nat| #[trigger] dims_of(updated).dom().contains(k) implies dims_of(updated)[k]
+                    == inserted[k] by {
+                    if k == id as nat {
+                        assert(updated.images[k as int] == Some(size));
+                    } else {
+                        assert(updated.images[k as int] == m.images[k as int]);
+                    }
+                }
+                assert(dims_of(updated) =~= inserted);
+                lemma_live_pixels(updated);
+            }
+        },
+        Item::DrawImage { id, src_x, src_y, src_width, src_height, .. } => {
+            if (id as nat) < 0x10000 {
+                assert(dims_of(m).contains_key(id as nat) == (m.images[id as int] is Some));
+            }
+        },
+        Item::FreeImage { id } => {
+            if (id as nat) < 0x10000 {
+                assert(dims_of(m).contains_key(id as nat) == (m.images[id as int] is Some));
+                let updated = Masks { table: m.table, images: m.images.update(id as int, None) };
+                lemma_dims(updated);
+                let removed = dims_of(m).remove(id as nat);
+                assert forall|k: nat| #[trigger] dims_of(updated).dom().contains(k) == removed.dom().contains(k) by {
+                    if k < m.images.len() && k != id as nat {
+                        assert(updated.images[k as int] == m.images[k as int]);
+                    }
+                }
+                assert(dims_of(updated).dom() =~= removed.dom());
+                assert forall|k: nat| #[trigger] dims_of(updated).dom().contains(k) implies dims_of(updated)[k]
+                    == removed[k] by {
+                    assert(updated.images[k as int] == m.images[k as int]);
+                }
+                assert(dims_of(updated) =~= removed);
             }
         },
         _ => {},
@@ -920,11 +1309,15 @@ proof fn lemma_refused_stays(cs: Seq<Cmd>)
 proof fn lemma_walk(m: Masks, d: nat, items: Seq<Item>)
     requires
         m.table.len() == 0x10000,
+        m.images.len() == 0x10000,
     ensures
         ({
-            let out = cmds_of(items).fold_left_alt(Some(Walk { depth: d, live: costs_of(m) }), fold_step());
+            let out = cmds_of(items).fold_left_alt(
+                Some(Walk { depth: d, live: costs_of(m), images: dims_of(m) }),
+                fold_step(),
+            );
             match walk(m, d, items) {
-                Some(r) => out == Some(Walk { depth: 0, live: costs_of(r) }),
+                Some(r) => out == Some(Walk { depth: 0, live: costs_of(r), images: dims_of(r) }),
                 None => out is None || out.unwrap().depth != 0,
             }
         }),
@@ -947,19 +1340,20 @@ proof fn lemma_walk(m: Masks, d: nat, items: Seq<Item>)
     }
 }
 
-/// The checker as a fold is the spec's `validate`, for every list and every table of the
-/// spec's fixed length. The spec indexes that table by id, so it says nothing of use for
-/// another length; `masks_ok` asks for that length too.
+/// The checker as a fold is the spec's `validate`, for every list and every pair of
+/// tables of the spec's fixed length. The spec indexes those tables by id, so it says
+/// nothing of use for another length; `masks_ok` asks for that length too.
 pub proof fn theorem_check_equals_validate(masks: Masks, items: Seq<Item>)
     requires
         masks.table.len() == MAX_MASKS as nat,
+        masks.images.len() == MAX_IMAGES as nat,
     ensures
-        i_check(cmds_of(items), costs_of(masks)) == match validate(masks, items) {
+        i_check(cmds_of(items), costs_of(masks), dims_of(masks)) == match validate(masks, items) {
             None => None,
-            Some(after) => Some(costs_of(after)),
+            Some(after) => Some((costs_of(after), dims_of(after))),
         },
 {
-    let start = Walk { depth: 0, live: costs_of(masks) };
+    let start = Walk { depth: 0, live: costs_of(masks), images: dims_of(masks) };
     let cs = cmds_of(items);
     cs.lemma_fold_left_alt(Some(start), fold_step());
     assert(fold_step() =~= (|s: Option<Walk>, c: Cmd|

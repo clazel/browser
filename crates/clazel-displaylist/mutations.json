@@ -302,8 +302,8 @@
     {
       "id": "upload-read-rows",
       "file": "src/spec.rs",
-      "find": "let height = field2(s, 7);",
-      "replace": "let height = field2(s, 5);",
+      "find": "let height = field2(s, 7);\n            let size = width * height;",
+      "replace": "let height = field2(s, 5);\n            let size = width * height;",
       "expect": "killed",
       "reason": "The rows read from where the columns are.",
       "certificate": {
@@ -341,8 +341,8 @@
     {
       "id": "upload-taken",
       "file": "src/spec.rs",
-      "find": "                    9 + size,",
-      "replace": "                    10 + size,",
+      "find": "coverage: s.subrange(9, 9 + size as int),\n                    },\n                    9 + size,",
+      "replace": "coverage: s.subrange(9, 9 + size as int),\n                    },\n                    10 + size,",
       "expect": "killed",
       "reason": "One byte too many taken.",
       "certificate": {
@@ -406,8 +406,8 @@
     {
       "id": "free-too-strict",
       "file": "src/spec.rs",
-      "find": "if s.len() < 5 {",
-      "replace": "if s.len() < 6 {",
+      "find": "} else if s[0] == 6u8 {\n        if s.len() < 5 {",
+      "replace": "} else if s[0] == 6u8 {\n        if s.len() < 6 {",
       "expect": "killed",
       "reason": "A free at the end of a list refused.",
       "certificate": {
@@ -432,8 +432,8 @@
     {
       "id": "write-upload-swap",
       "file": "src/spec.rs",
-      "find": "+ le_bytes(width as nat, 2)\n            + le_bytes(height as nat, 2)",
-      "replace": "+ le_bytes(height as nat, 2)\n            + le_bytes(width as nat, 2)",
+      "find": "+ le_bytes(width as nat, 2)\n            + le_bytes(height as nat, 2)\n            + coverage,",
+      "replace": "+ le_bytes(height as nat, 2)\n            + le_bytes(width as nat, 2)\n            + coverage,",
       "expect": "killed",
       "reason": "Columns and rows written the wrong way round.",
       "certificate": {
@@ -458,14 +458,14 @@
     {
       "id": "limit-list",
       "file": "src/spec.rs",
-      "find": "pub const MAX_LIST_BYTES: usize = 134_217_728;",
-      "replace": "pub const MAX_LIST_BYTES: usize = 134_217_729;",
+      "find": "pub const MAX_LIST_BYTES: usize = 402_653_184;",
+      "replace": "pub const MAX_LIST_BYTES: usize = 402_653_185;",
       "expect": "killed",
       "reason": "The limit is stated.",
       "certificate": {
         "file": "src/lemmas.rs",
         "lemma": "crate::examples::lemma_limits()",
-        "witness": "MAX_LIST_BYTES != 134_217_728usize"
+        "witness": "MAX_LIST_BYTES != 402_653_184usize"
       }
     },
     {
@@ -556,7 +556,7 @@
       "certificate": {
         "file": "src/lemmas.rs",
         "lemma": "crate::examples::lemma_limits()",
-        "witness": "list_length_ok(134_217_729)"
+        "witness": "list_length_ok(402_653_185)"
       }
     },
     {
@@ -770,8 +770,8 @@
     {
       "id": "free-dead",
       "file": "src/spec.rs",
-      "find": "if is_live(masks, id) {\n                Some(Masks { table: masks.table.update(id as int, None) })",
-      "replace": "if id_ok(id) {\n                Some(Masks { table: masks.table.update(id as int, None) })",
+      "find": "if is_live(masks, id) {\n                Some(Masks { table: masks.table.update(id as int, None), images: masks.images })",
+      "replace": "if id_ok(id) {\n                Some(Masks { table: masks.table.update(id as int, None), images: masks.images })",
       "expect": "killed",
       "reason": "A dead mask freed.",
       "certificate": {
@@ -783,7 +783,7 @@
     {
       "id": "free-keeps",
       "file": "src/spec.rs",
-      "find": "Some(Masks { table: masks.table.update(id as int, None) })",
+      "find": "Some(Masks { table: masks.table.update(id as int, None), images: masks.images })",
       "replace": "Some(masks)",
       "expect": "killed",
       "reason": "A freed mask still live.",
@@ -809,8 +809,8 @@
     {
       "id": "upload-no-columns",
       "file": "src/spec.rs",
-      "find": "else if width == 0 || height == 0 {",
-      "replace": "else if height == 0 {",
+      "find": "else if width == 0 || height == 0 {\n                None\n            } else if width as nat > (MAX_MASK_SIDE",
+      "replace": "else if height == 0 {\n                None\n            } else if width as nat > (MAX_MASK_SIDE",
       "expect": "killed",
       "reason": "A mask with no columns accepted.",
       "certificate": {
@@ -822,8 +822,8 @@
     {
       "id": "upload-no-rows",
       "file": "src/spec.rs",
-      "find": "else if width == 0 || height == 0 {",
-      "replace": "else if width == 0 {",
+      "find": "else if width == 0 || height == 0 {\n                None\n            } else if width as nat > (MAX_MASK_SIDE",
+      "replace": "else if width == 0 {\n                None\n            } else if width as nat > (MAX_MASK_SIDE",
       "expect": "killed",
       "reason": "A mask with no rows accepted.",
       "certificate": {
@@ -874,7 +874,7 @@
     {
       "id": "upload-forgets",
       "file": "src/spec.rs",
-      "find": "let updated = Masks { table: masks.table.update(id as int, Some(size)) };",
+      "find": "let updated = Masks { table: masks.table.update(id as int, Some(size)), images: masks.images };",
       "replace": "let updated = masks;",
       "expect": "killed",
       "reason": "An uploaded mask not recorded.",
@@ -913,8 +913,8 @@
     {
       "id": "no-masks-live",
       "file": "src/spec.rs",
-      "find": "|i: int| None)",
-      "replace": "|i: int| Some(MaskSize { width: 1, height: 1 }))",
+      "find": "table: Seq::new((MAX_MASKS as nat), |i: int| None)",
+      "replace": "table: Seq::new((MAX_MASKS as nat), |i: int| Some(MaskSize { width: 1, height: 1 }))",
       "expect": "killed",
       "reason": "A new process has no masks.",
       "certificate": {
@@ -1025,6 +1025,669 @@
         "file": "src/lemmas.rs",
         "lemma": "crate::examples::lemma_example_walk()",
         "witness": "walk(crate::examples::sample(), 0, seq![Item::PushClip { x: 0, y: 0, width: 0, height: 0 }, Item::PopClip]) is None"
+      }
+    },
+    {
+      "id": "read-tag-upload-image",
+      "file": "src/spec.rs",
+      "find": "else if s[0] == 7u8 {",
+      "replace": "else if s[0] == 10u8 {",
+      "expect": "killed",
+      "reason": "An image upload would not read back.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_image_upload()",
+        "witness": "decode_item(encode_item(crate::examples::sample_image())) != Some((crate::examples::sample_image(), 17nat))"
+      }
+    },
+    {
+      "id": "read-tag-draw-image",
+      "file": "src/spec.rs",
+      "find": "else if s[0] == 8u8 {",
+      "replace": "else if s[0] == 10u8 {",
+      "expect": "killed",
+      "reason": "An image draw would not read back.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_image_draw_reads()",
+        "witness": "decode_item(crate::examples::sample_draw_bytes()) != Some((crate::examples::sample_draw(), 30nat))"
+      }
+    },
+    {
+      "id": "read-tag-free-image",
+      "file": "src/spec.rs",
+      "find": "else if s[0] == 9u8 {",
+      "replace": "else if s[0] == 10u8 {",
+      "expect": "killed",
+      "reason": "An image free would not read back.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::FreeImage { id: 1 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::FreeImage { id: 1 }) + Seq::<u8>::empty()) != Some((Item::FreeImage { id: 1 }, encode_item(Item::FreeImage { id: 1 }).len()))"
+      }
+    },
+    {
+      "id": "write-tag-upload-image",
+      "file": "src/spec.rs",
+      "find": "seq![7u8]",
+      "replace": "seq![10u8]",
+      "expect": "killed",
+      "reason": "An image upload would not read back.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_image_upload()",
+        "witness": "encode_item(crate::examples::sample_image()) != seq![7u8, 1, 0, 0, 0, 2, 0, 1, 0, 1, 2, 3, 4, 5, 6, 7, 8]"
+      }
+    },
+    {
+      "id": "write-tag-draw-image",
+      "file": "src/spec.rs",
+      "find": "seq![8u8]",
+      "replace": "seq![10u8]",
+      "expect": "killed",
+      "reason": "An image draw would not read back.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_image_draw_bytes()",
+        "witness": "encode_item(crate::examples::sample_draw()) != crate::examples::sample_draw_bytes()"
+      }
+    },
+    {
+      "id": "write-tag-free-image",
+      "file": "src/spec.rs",
+      "find": "seq![9u8] + le_bytes(id as nat, 4)",
+      "replace": "seq![10u8] + le_bytes(id as nat, 4)",
+      "expect": "killed",
+      "reason": "An image free would not read back.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::FreeImage { id: 1 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::FreeImage { id: 1 }) + Seq::<u8>::empty()) != Some((Item::FreeImage { id: 1 }, encode_item(Item::FreeImage { id: 1 }).len()))"
+      }
+    },
+    {
+      "id": "upload-image-size",
+      "file": "src/spec.rs",
+      "find": "let size = width * height * 4;",
+      "replace": "let size = width * height;",
+      "expect": "killed",
+      "reason": "The pixels are four bytes each.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_image_upload()",
+        "witness": "decode_item(encode_item(crate::examples::sample_image())) != Some((crate::examples::sample_image(), 17nat))"
+      }
+    },
+    {
+      "id": "upload-image-offset",
+      "file": "src/spec.rs",
+      "find": "pixels: s.subrange(9, 9 + size as int),",
+      "replace": "pixels: s.subrange(8, 8 + size as int),",
+      "expect": "killed",
+      "reason": "The pixels start after the header.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_image_upload()",
+        "witness": "decode_item(encode_item(crate::examples::sample_image())) != Some((crate::examples::sample_image(), 17nat))"
+      }
+    },
+    {
+      "id": "upload-image-taken",
+      "file": "src/spec.rs",
+      "find": "pixels: s.subrange(9, 9 + size as int),\n                    },\n                    9 + size,",
+      "replace": "pixels: s.subrange(9, 9 + size as int),\n                    },\n                    10 + size,",
+      "expect": "killed",
+      "reason": "One byte too many taken.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_image_upload()",
+        "witness": "decode_item(encode_item(crate::examples::sample_image())) != Some((crate::examples::sample_image(), 17nat))"
+      }
+    },
+    {
+      "id": "draw-image-read-height",
+      "file": "src/spec.rs",
+      "find": "height: field4(s, 17) as u32,\n                    src_x",
+      "replace": "height: field4(s, 13) as u32,\n                    src_x",
+      "expect": "killed",
+      "reason": "The destination height read from where its width is.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_image_draw_reads()",
+        "witness": "decode_item(crate::examples::sample_draw_bytes()) != Some((crate::examples::sample_draw(), 30nat))"
+      }
+    },
+    {
+      "id": "draw-image-read-src-x",
+      "file": "src/spec.rs",
+      "find": "src_x: field2(s, 21) as u16,",
+      "replace": "src_x: field2(s, 23) as u16,",
+      "expect": "killed",
+      "reason": "The source x read from where its y is.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_image_draw_reads()",
+        "witness": "decode_item(crate::examples::sample_draw_bytes()) != Some((crate::examples::sample_draw(), 30nat))"
+      }
+    },
+    {
+      "id": "draw-image-read-src-y",
+      "file": "src/spec.rs",
+      "find": "src_y: field2(s, 23) as u16,",
+      "replace": "src_y: field2(s, 21) as u16,",
+      "expect": "killed",
+      "reason": "The source y read from where its x is.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_image_draw_reads()",
+        "witness": "decode_item(crate::examples::sample_draw_bytes()) != Some((crate::examples::sample_draw(), 30nat))"
+      }
+    },
+    {
+      "id": "draw-image-read-src-width",
+      "file": "src/spec.rs",
+      "find": "src_width: field2(s, 25) as u16,",
+      "replace": "src_width: field2(s, 27) as u16,",
+      "expect": "killed",
+      "reason": "The source width read from where its height is.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_image_draw_reads()",
+        "witness": "decode_item(crate::examples::sample_draw_bytes()) != Some((crate::examples::sample_draw(), 30nat))"
+      }
+    },
+    {
+      "id": "draw-image-read-src-height",
+      "file": "src/spec.rs",
+      "find": "src_height: field2(s, 27) as u16,",
+      "replace": "src_height: field2(s, 25) as u16,",
+      "expect": "killed",
+      "reason": "The source height read from where its width is.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_image_draw_reads()",
+        "witness": "decode_item(crate::examples::sample_draw_bytes()) != Some((crate::examples::sample_draw(), 30nat))"
+      }
+    },
+    {
+      "id": "draw-image-read-filter",
+      "file": "src/spec.rs",
+      "find": "linear: s[29] == 1u8,",
+      "replace": "linear: s[29] == 0u8,",
+      "expect": "killed",
+      "reason": "The filter flag read backwards.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_image_draw_reads()",
+        "witness": "decode_item(crate::examples::sample_draw_bytes()) != Some((crate::examples::sample_draw(), 30nat))"
+      }
+    },
+    {
+      "id": "draw-image-filter-check",
+      "file": "src/spec.rs",
+      "find": "} else if s[29] != 0u8 && s[29] != 1u8 {",
+      "replace": "} else if false {",
+      "expect": "killed",
+      "reason": "A filter byte that is neither 0 nor 1 read as an item.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_image_filter_byte()",
+        "witness": "decode_item(crate::examples::sample_draw_bytes().update(29, 2u8)) is Some"
+      }
+    },
+    {
+      "id": "draw-image-taken",
+      "file": "src/spec.rs",
+      "find": "linear: s[29] == 1u8,\n                },\n                30,",
+      "replace": "linear: s[29] == 1u8,\n                },\n                29,",
+      "expect": "killed",
+      "reason": "The filter byte left over.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_image_draw_reads()",
+        "witness": "decode_item(crate::examples::sample_draw_bytes()) != Some((crate::examples::sample_draw(), 30nat))"
+      }
+    },
+    {
+      "id": "free-image-taken",
+      "file": "src/spec.rs",
+      "find": "Some((Item::FreeImage { id: field4(s, 1) as u32 }, 5))",
+      "replace": "Some((Item::FreeImage { id: field4(s, 1) as u32 }, 4))",
+      "expect": "killed",
+      "reason": "A byte of the id left over.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::FreeImage { id: 1 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::FreeImage { id: 1 }) + Seq::<u8>::empty()) != Some((Item::FreeImage { id: 1 }, encode_item(Item::FreeImage { id: 1 }).len()))"
+      }
+    },
+    {
+      "id": "free-image-too-strict",
+      "file": "src/spec.rs",
+      "find": "} else if s[0] == 9u8 {\n        if s.len() < 5 {",
+      "replace": "} else if s[0] == 9u8 {\n        if s.len() < 6 {",
+      "expect": "killed",
+      "reason": "An image free at the end of a list refused.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::FreeImage { id: 1 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::FreeImage { id: 1 }) + Seq::<u8>::empty()) != Some((Item::FreeImage { id: 1 }, encode_item(Item::FreeImage { id: 1 }).len()))"
+      }
+    },
+    {
+      "id": "write-upload-image-swap",
+      "file": "src/spec.rs",
+      "find": "+ le_bytes(width as nat, 2)\n            + le_bytes(height as nat, 2)\n            + pixels,",
+      "replace": "+ le_bytes(height as nat, 2)\n            + le_bytes(width as nat, 2)\n            + pixels,",
+      "expect": "killed",
+      "reason": "The sides of an upload written the wrong way round.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_image_upload()",
+        "witness": "encode_item(crate::examples::sample_image()) != seq![7u8, 1, 0, 0, 0, 2, 0, 1, 0, 1, 2, 3, 4, 5, 6, 7, 8]"
+      }
+    },
+    {
+      "id": "write-draw-image-size-swap",
+      "file": "src/spec.rs",
+      "find": "+ le_bytes(width as nat, 4)\n            + le_bytes(height as nat, 4)\n            + le_bytes(src_x as nat, 2)",
+      "replace": "+ le_bytes(height as nat, 4)\n            + le_bytes(width as nat, 4)\n            + le_bytes(src_x as nat, 2)",
+      "expect": "killed",
+      "reason": "The destination sides written the wrong way round.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_image_draw_bytes()",
+        "witness": "encode_item(crate::examples::sample_draw()) != crate::examples::sample_draw_bytes()"
+      }
+    },
+    {
+      "id": "write-draw-image-src-swap",
+      "file": "src/spec.rs",
+      "find": "+ le_bytes(src_x as nat, 2)\n            + le_bytes(src_y as nat, 2)",
+      "replace": "+ le_bytes(src_y as nat, 2)\n            + le_bytes(src_x as nat, 2)",
+      "expect": "killed",
+      "reason": "The source position written the wrong way round.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_image_draw_bytes()",
+        "witness": "encode_item(crate::examples::sample_draw()) != crate::examples::sample_draw_bytes()"
+      }
+    },
+    {
+      "id": "write-draw-image-filter",
+      "file": "src/spec.rs",
+      "find": "seq![if linear { 1u8 } else { 0u8 }]",
+      "replace": "seq![0u8]",
+      "expect": "killed",
+      "reason": "The filter flag not written.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_image_draw_bytes()",
+        "witness": "encode_item(crate::examples::sample_draw()) != crate::examples::sample_draw_bytes()"
+      }
+    },
+    {
+      "id": "limit-images",
+      "file": "src/spec.rs",
+      "find": "pub const MAX_IMAGES: usize = 65_536;",
+      "replace": "pub const MAX_IMAGES: usize = 65_537;",
+      "expect": "killed",
+      "reason": "The limit is stated.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_limits()",
+        "witness": "MAX_IMAGES != 65_536usize"
+      }
+    },
+    {
+      "id": "limit-image-side",
+      "file": "src/spec.rs",
+      "find": "pub const MAX_IMAGE_SIDE: usize = 16_384;",
+      "replace": "pub const MAX_IMAGE_SIDE: usize = 16_385;",
+      "expect": "killed",
+      "reason": "The limit is stated.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_limits()",
+        "witness": "MAX_IMAGE_SIDE != 16_384usize"
+      }
+    },
+    {
+      "id": "limit-image-bytes",
+      "file": "src/spec.rs",
+      "find": "pub const MAX_IMAGE_BYTES: usize = 268_435_456;",
+      "replace": "pub const MAX_IMAGE_BYTES: usize = 268_435_457;",
+      "expect": "killed",
+      "reason": "The limit is stated.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_limits()",
+        "witness": "MAX_IMAGE_BYTES != 268_435_456usize"
+      }
+    },
+    {
+      "id": "image-id-test",
+      "file": "src/spec.rs",
+      "find": "(id as nat) < (MAX_IMAGES as nat)",
+      "replace": "(id as nat) <= (MAX_IMAGES as nat)",
+      "expect": "killed",
+      "reason": "An image id past the table accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_limits()",
+        "witness": "image_id_ok(65_536)"
+      }
+    },
+    {
+      "id": "upload-image-replaces",
+      "file": "src/spec.rs",
+      "find": "if !image_id_ok(id) || masks.images[id as int] is Some {",
+      "replace": "if !image_id_ok(id) {",
+      "expect": "killed",
+      "reason": "A live image replaced.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_images()",
+        "witness": "masks_after(crate::examples::sample(), crate::examples::upload_image(1, 1, 1)) is Some"
+      }
+    },
+    {
+      "id": "upload-image-no-width",
+      "file": "src/spec.rs",
+      "find": "else if width == 0 || height == 0 {\n                None\n            } else if width as nat > (MAX_IMAGE_SIDE",
+      "replace": "else if height == 0 {\n                None\n            } else if width as nat > (MAX_IMAGE_SIDE",
+      "expect": "killed",
+      "reason": "An image with no width accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_images()",
+        "witness": "masks_after(crate::examples::sample(), crate::examples::upload_image(0, 0, 1)) is Some"
+      }
+    },
+    {
+      "id": "upload-image-no-height",
+      "file": "src/spec.rs",
+      "find": "else if width == 0 || height == 0 {\n                None\n            } else if width as nat > (MAX_IMAGE_SIDE",
+      "replace": "else if width == 0 {\n                None\n            } else if width as nat > (MAX_IMAGE_SIDE",
+      "expect": "killed",
+      "reason": "An image with no height accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_images()",
+        "witness": "masks_after(crate::examples::sample(), crate::examples::upload_image(0, 1, 0)) is Some"
+      }
+    },
+    {
+      "id": "upload-image-side-width",
+      "file": "src/spec.rs",
+      "find": "else if width as nat > (MAX_IMAGE_SIDE as nat) || height as nat > (MAX_IMAGE_SIDE as nat) {",
+      "replace": "else if height as nat > (MAX_IMAGE_SIDE as nat) {",
+      "expect": "killed",
+      "reason": "An image too wide accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_images()",
+        "witness": "masks_after(crate::examples::sample(), crate::examples::upload_image(0, 16385, 1)) is Some"
+      }
+    },
+    {
+      "id": "upload-image-side-height",
+      "file": "src/spec.rs",
+      "find": "else if width as nat > (MAX_IMAGE_SIDE as nat) || height as nat > (MAX_IMAGE_SIDE as nat) {",
+      "replace": "else if width as nat > (MAX_IMAGE_SIDE as nat) {",
+      "expect": "killed",
+      "reason": "An image too tall accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_images()",
+        "witness": "masks_after(crate::examples::sample(), crate::examples::upload_image(0, 1, 16385)) is Some"
+      }
+    },
+    {
+      "id": "upload-image-budget",
+      "file": "src/spec.rs",
+      "find": "else if live_image_bytes(updated.images) > (MAX_IMAGE_BYTES as nat) {",
+      "replace": "else if false {",
+      "expect": "killed",
+      "reason": "An image past the budget accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_images()",
+        "witness": "masks_after(crate::examples::full(), crate::examples::upload_image(0, 1, 1)) is Some"
+      }
+    },
+    {
+      "id": "upload-image-forgets",
+      "file": "src/spec.rs",
+      "find": "let updated = Masks { table: masks.table, images: masks.images.update(id as int, Some(size)) };",
+      "replace": "let updated = masks;",
+      "expect": "killed",
+      "reason": "An uploaded image not recorded.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_images()",
+        "witness": "masks_after(crate::examples::sample(), crate::examples::upload_image(0, 1, 1))->Some_0.images[0] is None"
+      }
+    },
+    {
+      "id": "upload-image-size-swapped",
+      "file": "src/spec.rs",
+      "find": "let size = ImageSize { width: width as nat, height: height as nat };",
+      "replace": "let size = ImageSize { width: height as nat, height: width as nat };",
+      "expect": "killed",
+      "reason": "An image recorded with its sides the wrong way round.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_images()",
+        "witness": "masks_after(crate::examples::sample(), crate::examples::upload_image(0, 7, 5))->Some_0.images[0] != Some(ImageSize { width: 7, height: 5 })"
+      }
+    },
+    {
+      "id": "free-image-dead",
+      "file": "src/spec.rs",
+      "find": "if is_image_live(masks, id) {\n                Some(Masks { table: masks.table, images: masks.images.update(id as int, None) })",
+      "replace": "if image_id_ok(id) {\n                Some(Masks { table: masks.table, images: masks.images.update(id as int, None) })",
+      "expect": "killed",
+      "reason": "A dead image freed.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_images()",
+        "witness": "masks_after(crate::examples::sample(), Item::FreeImage { id: 0 }) is Some"
+      }
+    },
+    {
+      "id": "free-image-keeps",
+      "file": "src/spec.rs",
+      "find": "Some(Masks { table: masks.table, images: masks.images.update(id as int, None) })",
+      "replace": "Some(masks)",
+      "expect": "killed",
+      "reason": "A freed image still live.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_images()",
+        "witness": "masks_after(crate::examples::sample(), Item::FreeImage { id: 1 })->Some_0.images[1] is Some"
+      }
+    },
+    {
+      "id": "draw-image-dead",
+      "file": "src/spec.rs",
+      "find": "size_ok(height) && draw_source_ok(\n                masks,\n                id,\n                src_x,\n                src_y,\n                src_width,\n                src_height,\n            ) {",
+      "replace": "size_ok(height) && image_id_ok(id) {",
+      "expect": "killed",
+      "reason": "A dead image drawn.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_images()",
+        "witness": "masks_after(crate::examples::sample(), crate::examples::draw_image(0, 0, 0, 0, 0)) is Some"
+      }
+    },
+    {
+      "id": "draw-image-source-right",
+      "file": "src/spec.rs",
+      "find": "src_x as nat + src_width as nat <= size.width && src_y as nat + src_height as nat <= size.height",
+      "replace": "src_x as nat <= size.width && src_y as nat + src_height as nat <= size.height",
+      "expect": "killed",
+      "reason": "A source past the right edge accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_images()",
+        "witness": "masks_after(crate::examples::sample(), crate::examples::draw_image(1, 0, 0, 5, 3)) is Some"
+      }
+    },
+    {
+      "id": "draw-image-source-bottom",
+      "file": "src/spec.rs",
+      "find": "src_x as nat + src_width as nat <= size.width && src_y as nat + src_height as nat <= size.height",
+      "replace": "src_x as nat + src_width as nat <= size.width && src_y as nat <= size.height",
+      "expect": "killed",
+      "reason": "A source past the bottom edge accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_images()",
+        "witness": "masks_after(crate::examples::sample(), crate::examples::draw_image(1, 0, 0, 4, 4)) is Some"
+      }
+    },
+    {
+      "id": "draw-image-source-x",
+      "file": "src/spec.rs",
+      "find": "src_x as nat + src_width as nat <= size.width && src_y as nat + src_height as nat <= size.height",
+      "replace": "src_width as nat <= size.width && src_y as nat + src_height as nat <= size.height",
+      "expect": "killed",
+      "reason": "A source whose x pushes it past the right edge accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_images()",
+        "witness": "masks_after(crate::examples::sample(), crate::examples::draw_image(1, 1, 0, 4, 3)) is Some"
+      }
+    },
+    {
+      "id": "draw-image-source-y",
+      "file": "src/spec.rs",
+      "find": "src_x as nat + src_width as nat <= size.width && src_y as nat + src_height as nat <= size.height",
+      "replace": "src_x as nat + src_width as nat <= size.width && src_height as nat <= size.height",
+      "expect": "killed",
+      "reason": "A source whose y pushes it past the bottom edge accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_images()",
+        "witness": "masks_after(crate::examples::sample(), crate::examples::draw_image(1, 0, 1, 4, 3)) is Some"
+      }
+    },
+    {
+      "id": "draw-image-source-strict",
+      "file": "src/spec.rs",
+      "find": "src_x as nat + src_width as nat <= size.width && src_y as nat + src_height as nat <= size.height",
+      "replace": "(src_x as nat + src_width as nat) < size.width && src_y as nat + src_height as nat <= size.height",
+      "expect": "killed",
+      "reason": "A source touching the right edge refused.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_images()",
+        "witness": "masks_after(crate::examples::sample(), crate::examples::draw_image(1, 0, 0, 4, 3)) is None"
+      }
+    },
+    {
+      "id": "draw-image-source-strict-bottom",
+      "file": "src/spec.rs",
+      "find": "src_x as nat + src_width as nat <= size.width && src_y as nat + src_height as nat <= size.height",
+      "replace": "src_x as nat + src_width as nat <= size.width && (src_y as nat + src_height as nat) < size.height",
+      "expect": "killed",
+      "reason": "A source touching the bottom edge refused.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_images()",
+        "witness": "masks_after(crate::examples::sample(), crate::examples::draw_image(1, 0, 0, 4, 3)) is None"
+      }
+    },
+    {
+      "id": "draw-image-unchecked-x",
+      "file": "src/spec.rs",
+      "find": "if position_ok(x) && position_ok(y) && size_ok(width) && size_ok(height) && draw_source_ok(",
+      "replace": "if position_ok(y) && size_ok(width) && size_ok(height) && draw_source_ok(",
+      "expect": "killed",
+      "reason": "An image draw whose destination x is out of range accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_image_fields()",
+        "witness": "masks_after(crate::examples::sample(), Item::DrawImage { id: 1, x: 8_388_609, y: 0, width: 0, height: 0, src_x: 0, src_y: 0, src_width: 0, src_height: 0, linear: false }) is Some"
+      }
+    },
+    {
+      "id": "draw-image-unchecked-y",
+      "file": "src/spec.rs",
+      "find": "if position_ok(x) && position_ok(y) && size_ok(width) && size_ok(height) && draw_source_ok(",
+      "replace": "if position_ok(x) && size_ok(width) && size_ok(height) && draw_source_ok(",
+      "expect": "killed",
+      "reason": "An image draw whose destination y is out of range accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_image_fields()",
+        "witness": "masks_after(crate::examples::sample(), Item::DrawImage { id: 1, x: 0, y: 8_388_609, width: 0, height: 0, src_x: 0, src_y: 0, src_width: 0, src_height: 0, linear: false }) is Some"
+      }
+    },
+    {
+      "id": "draw-image-unchecked-width",
+      "file": "src/spec.rs",
+      "find": "if position_ok(x) && position_ok(y) && size_ok(width) && size_ok(height) && draw_source_ok(",
+      "replace": "if position_ok(x) && position_ok(y) && size_ok(height) && draw_source_ok(",
+      "expect": "killed",
+      "reason": "An image draw whose destination width is out of range accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_image_fields()",
+        "witness": "masks_after(crate::examples::sample(), Item::DrawImage { id: 1, x: 0, y: 0, width: 8_388_609, height: 0, src_x: 0, src_y: 0, src_width: 0, src_height: 0, linear: false }) is Some"
+      }
+    },
+    {
+      "id": "draw-image-unchecked-height",
+      "file": "src/spec.rs",
+      "find": "if position_ok(x) && position_ok(y) && size_ok(width) && size_ok(height) && draw_source_ok(",
+      "replace": "if position_ok(x) && position_ok(y) && size_ok(width) && draw_source_ok(",
+      "expect": "killed",
+      "reason": "An image draw whose destination height is out of range accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_image_fields()",
+        "witness": "masks_after(crate::examples::sample(), Item::DrawImage { id: 1, x: 0, y: 0, width: 0, height: 8_388_609, src_x: 0, src_y: 0, src_width: 0, src_height: 0, linear: false }) is Some"
+      }
+    },
+    {
+      "id": "live-image-bytes-skips",
+      "file": "src/spec.rs",
+      "find": "Some(size) => size.width * size.height * 4 + rest,",
+      "replace": "Some(size) => rest,",
+      "expect": "killed",
+      "reason": "Live image bytes not counted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_images()",
+        "witness": "live_image_bytes(seq![Some(ImageSize { width: 3, height: 4 }), None, Some(ImageSize { width: 1, height: 4 })]) != 64"
+      }
+    },
+    {
+      "id": "live-image-bytes-factor",
+      "file": "src/spec.rs",
+      "find": "Some(size) => size.width * size.height * 4 + rest,",
+      "replace": "Some(size) => size.width * size.height + rest,",
+      "expect": "killed",
+      "reason": "An image pixel is four bytes.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_images()",
+        "witness": "live_image_bytes(seq![Some(ImageSize { width: 3, height: 4 }), None, Some(ImageSize { width: 1, height: 4 })]) != 64"
+      }
+    },
+    {
+      "id": "no-images-live",
+      "file": "src/spec.rs",
+      "find": "images: Seq::new((MAX_IMAGES as nat), |i: int| None),",
+      "replace": "images: Seq::new((MAX_IMAGES as nat), |i: int| Some(ImageSize { width: 1, height: 1 })),",
+      "expect": "killed",
+      "reason": "A new process has no images.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_walk()",
+        "witness": "no_masks().images[0] is Some"
       }
     }
   ]

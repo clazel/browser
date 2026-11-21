@@ -20,9 +20,32 @@
 //!   reads, so this bound, the batching that sets the counts, and their tests are
 //!   the evidence.
 //! - **Operations run in order**: an atlas upload or replacement between two draws
-//!   is seen by the later draw and not by the earlier one.
+//!   is seen by the later draw and not by the earlier one. So is an image's.
+//! - **An image draw is a quad too** (item 6.12). Its quad has `columns`
+//!   [`IMAGE_COLUMNS`] (`u32::MAX`, which no mask has: masks are at most 2048 wide) and
+//!   its `offset` is the index of an [`ImageDraw`] in [`Frame::image_draws`], 12 words
+//!   ([`IMAGE_DRAW_WORDS`]) holding what a draw needs beyond a rectangle: the whole
+//!   destination, the source, where the image is in the image store and its size, and
+//!   the filter. The quad's rectangle is the destination cut to the viewport, as for
+//!   every quad. So the quad format, the vertex shader and the one pipeline are the
+//!   same for fills, masks and images; the fragment shader tells them apart by
+//!   `columns`, and reads the image store and the draw table as two more storage
+//!   buffers. Images are 32-bit words of premultiplied RGBA8 in the image store,
+//!   filtered in the shader (`crate::images` states why there is no sampler).
+//! - **The filter is defined in integers, so that it means the same everywhere.** For
+//!   the destination pixel `i, j` (0-based inside the destination `w × h`) and a
+//!   source rectangle `sx, sy, sw, sh`, the sample position is `sx + (2i + 1) · sw /
+//!   (2w)` (the pixel's centre mapped into the source), likewise in y. *Nearest* takes
+//!   the source pixel containing it. *Linear* takes the four pixels around it (the
+//!   position less a half, rounded down, and the next), weighted by the fractions,
+//!   **clamping to the source rectangle**, so a draw never reads a pixel outside its
+//!   source rectangle, which is what makes a sprite sheet usable. The software
+//!   reference computes it exactly and rounds once; the shaders compute it in floating
+//!   point and may differ by a level.
 //! - **Each frame starts from transparent black** (0, 0, 0, 0); the list paints the
 //!   canvas.
+
+use std::sync::Arc;
 
 use crate::blocklist::Adapter;
 use crate::geom::{Rect, Viewport};
@@ -32,6 +55,15 @@ pub const QUAD_WORDS: usize = 9;
 
 /// Bytes in a [`Quad`].
 pub const QUAD_BYTES: usize = QUAD_WORDS * 4;
+
+/// The `columns` of a quad that draws an image: no mask is this wide.
+pub const IMAGE_COLUMNS: u32 = u32::MAX;
+
+/// Words in an [`ImageDraw`].
+pub const IMAGE_DRAW_WORDS: usize = 12;
+
+/// Bytes in an [`ImageDraw`].
+pub const IMAGE_DRAW_BYTES: usize = IMAGE_DRAW_WORDS * 4;
 
 /// One rectangle to fill or one mask to draw, as the shaders read it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,6 +98,68 @@ impl Quad {
             self.colour,
         ]
     }
+}
+
+/// What an image draw needs beyond its quad's rectangle (item 6.12).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ImageDraw {
+    /// The destination's top left pixel in the target, before any cutting.
+    pub x: i32,
+    /// See `x`.
+    pub y: i32,
+    /// The destination's size, at least 1.
+    pub width: u32,
+    /// See `width`.
+    pub height: u32,
+    /// The source rectangle's top left pixel in the image, inside it.
+    pub src_x: u32,
+    /// See `src_x`.
+    pub src_y: u32,
+    /// The source's size, at least 1.
+    pub src_width: u32,
+    /// See `src_width`.
+    pub src_height: u32,
+    /// The image's first byte in the image store.
+    pub offset: u32,
+    /// The image's width in pixels.
+    pub image_width: u32,
+    /// The image's height in pixels.
+    pub image_height: u32,
+    /// Bilinear if true, nearest if false.
+    pub linear: bool,
+}
+
+impl ImageDraw {
+    /// The words the shaders read, in order: `x, y, width, height, src_x, src_y,
+    /// src_width, src_height, offset, image_width, image_height, linear`, the signed
+    /// ones in two's complement.
+    pub fn words(&self) -> [u32; IMAGE_DRAW_WORDS] {
+        [
+            self.x.cast_unsigned(),
+            self.y.cast_unsigned(),
+            self.width,
+            self.height,
+            self.src_x,
+            self.src_y,
+            self.src_width,
+            self.src_height,
+            self.offset,
+            self.image_width,
+            self.image_height,
+            u32::from(self.linear),
+        ]
+    }
+}
+
+/// Every image draw as little-endian bytes, as the shaders read them.
+pub fn image_draw_bytes(draws: &[ImageDraw]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(draws.len().saturating_mul(IMAGE_DRAW_BYTES));
+    for d in draws {
+        for w in d.words() {
+            out.extend_from_slice(&w.to_le_bytes());
+        }
+    }
+    out
 }
 
 /// Every quad as little-endian bytes, as the shaders read them.
@@ -112,6 +206,19 @@ pub enum Op {
         /// How many bytes.
         len: usize,
     },
+    /// Replace the image store with a new one of `capacity` bytes, contents
+    /// undefined. Draws already recorded keep reading the old store.
+    Images {
+        /// Bytes, a power of two.
+        capacity: u32,
+    },
+    /// Copy these pixels into the image store at `offset`. Both are multiples of 4.
+    ImageUpload {
+        /// The first image-store byte written.
+        offset: u32,
+        /// The pixels, shared with the image store's CPU copy.
+        pixels: Arc<[u8]>,
+    },
     /// Draw `Frame::quads[first .. first + count]` with this scissor rectangle.
     Draw {
         /// Inside the viewport and not empty.
@@ -134,6 +241,8 @@ pub struct Frame {
     pub quads: Vec<Quad>,
     /// The coverage the uploads name.
     pub bytes: Vec<u8>,
+    /// What the quads with `columns` [`IMAGE_COLUMNS`] draw, by their `offset`.
+    pub image_draws: Vec<ImageDraw>,
 }
 
 /// A foreign call failed, the device was lost, or memory ran out. The GPU process
