@@ -199,6 +199,17 @@ pub open spec fn clone_node_ensures(doc: Document, node: NodeId, out: Document, 
     }
 }
 
+/// Contract for `Arena::clone_deep(node) -> Option<usize>`, under
+/// [`clone_requires`]: refused (`None`) leaves the arena exactly as it was,
+/// and otherwise the arena is well formed and holds [`deep_clone`] of
+/// `node`, whose copy is the id returned.
+pub open spec fn clone_deep_ensures(doc: Document, node: NodeId, out: Document, id: Option<NodeId>) -> bool {
+    match id {
+        Some(copy) => wf(out) && deep_clone(doc, node, out, copy),
+        None => out == doc,
+    }
+}
+
 /// Contract for `Arena::change_attribute(e, i, value)`, under
 /// [`attribute_requires`].
 pub open spec fn change_attribute_ensures(doc: Document, e: NodeId, i: nat, value: Seq<u32>, out: Document) -> bool {

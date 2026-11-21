@@ -723,8 +723,9 @@ pub open spec fn set_mode(doc: Document, mode: DocumentMode) -> Document {
 //   theorems do not cover that case, and DOM's checks count such a node
 //   among its new parent's children, so they would refuse some calls the
 //   rules allow.)
-// - **Shallow "clone a node" only.** The clone children flag is never
-//   set: a deep clone's recursion is not specified here (not done).
+// - **"Clone a node" is shallow in [`clone_node`]**, with the clone children
+//   flag unset. The flag set is [`deep_clone`], a relation (see "Deep
+//   cloning" below).
 // - **A template** is an element whose template contents is non-null (the
 //   parser creates the contents of every `template` it creates). Its clone
 //   gets contents of its own (HTML §4.12.3 "when a template element is
@@ -1225,6 +1226,130 @@ pub open spec fn clone_requires(doc: Document, node: NodeId) -> bool {
     &&& wf(doc)
     &&& valid(doc, node)
     &&& !(doc.nodes[node as int].kind is Document)
+}
+
+// ---------------------------------------------------------------------
+// Deep cloning (DOM §4.4† "clone a node" with the clone children flag)
+//
+// Modelling choices of this part:
+// - **The spec is a relation, not a function.** DOM's step 6 recurses, and
+//   the order of its recursion does not fix which node id each copy gets.
+//   What it fixes is the shape: the copy is a fresh tree that is the
+//   "unfolding" of the host-including subtree of `node` (children, and a
+//   template's contents), each copied node carrying its source's kind. So
+//   the spec says exactly that: the new nodes are `base .. base + m`, and a
+//   map `src` from each new node (by offset) to the node it copies is
+//   consistent at every edge ([`deep_clone_src`]). A new node other than the
+//   copy has a parent or a host, so no node outside the copy is made. Any
+//   assignment of ids that satisfies it is a correct clone.
+// - **Template contents are cloned by HTML §4.12.3's cloning steps:** "1. If
+//   the clone children flag is not set in the calling clone algorithm,
+//   return. 2. Let copied contents be the result of cloning all the children
+//   of node's template contents, with document set to copy's template
+//   contents's node document, and the clone children flag set. 3. Append
+//   copied contents to copy's template contents." The copy's contents is the
+//   fragment "create an element" made ([`clone_node`], shallow); its source
+//   is the source's contents, and its children are copies of that
+//   fragment's children, which is how every node is related to its source.
+// - **A refusal changes nothing** (`contract::clone_deep_ensures`): the arena is
+//   rolled back to what it was. The contract states the rollback, and that
+//   a clone that succeeds is within the node limit (it is [`wf`]). It does
+//   not state that the clone cannot fit whenever it refuses (an
+//   implementation that always refused would meet it; the conformance test
+//   shows ours clones).
+// - **A fragment that is cloned directly** (a template's contents is the
+//   only kind) gets no host: "any other node: do nothing" (§4.4† step 3).
+
+/// Node `b + t` of `out` is the copy of `src[t]`, where `b` is the arena's
+/// length before the clone and `m` the number of new nodes. This is the
+/// local meaning of §4.4† steps 2 and 3 (the copy's kind: [`clone_kind`]
+/// with its template contents linked as HTML §4.12.3's cloning steps say),
+/// of step 6 ("for each child of node's children, in tree order: let
+/// childCopy be the result of cloning child …, and append childCopy to
+/// copy": the copy's children are copies of the source's, in order), and
+/// of HTML's steps 2 and 3 (the contents' children are copies).
+pub open spec fn deep_copy_kind(doc: Document, out: Document, src: Seq<NodeId>, t: int) -> bool {
+    let b = doc.nodes.len();
+    let m = src.len();
+    let s = doc.nodes[src[t] as int];
+    let n = out.nodes[b + t];
+    // The copy is a new node: no wrapper, and but for the root a parent or
+    // a host (the root has no parent).
+    &&& n.wrapper is None
+    &&& t == 0 ==> n.parent is None
+    &&& t > 0 ==> (n.parent is Some || (n.kind is DocumentFragment && n.kind->DocumentFragment_host is Some))
+    // 2. and 3.: the copy's kind.
+    &&& match s.kind {
+        NodeKind::Document { .. } => false,
+        NodeKind::Element { namespace, prefix, local_name, attributes, template_contents, .. } => {
+            &&& n.kind is Element
+            &&& n.kind->Element_namespace == namespace
+            &&& n.kind->Element_prefix == prefix
+            &&& n.kind->Element_local_name == local_name
+            &&& n.kind->Element_attributes == attributes
+            &&& n.kind->Element_form_owner is None
+            // HTML §4.12.3: a template's copy has contents, which copy its
+            // source's.
+            &&& (template_contents is None) == (n.kind->Element_template_contents is None)
+            &&& template_contents is Some ==> {
+                let c = n.kind->Element_template_contents->Some_0 as int;
+                &&& b <= c < b + m
+                &&& src[c - b] == template_contents->Some_0
+            }
+        },
+        NodeKind::DocumentFragment { .. } => {
+            &&& n.kind is DocumentFragment
+            &&& t == 0 ==> n.kind->DocumentFragment_host is None
+        },
+        other => n.kind == other,
+    }
+}
+
+/// The children of node `b + t` of `out` are copies of those of `src[t]`, in
+/// order (§4.4† step 6, and HTML §4.12.3's step 2 for a template's
+/// contents): "for each child of node's children, in tree order: let
+/// childCopy be the result of cloning child …, and append childCopy to
+/// copy".
+pub open spec fn deep_copy_children(doc: Document, out: Document, src: Seq<NodeId>, t: int) -> bool {
+    let b = doc.nodes.len();
+    let m = src.len();
+    let s = doc.nodes[src[t] as int];
+    let n = out.nodes[b + t];
+    &&& n.children.len() == s.children.len()
+    &&& forall|j: int| 0 <= j < s.children.len() ==> {
+        let c = #[trigger] n.children[j] as int;
+        &&& b <= c < b + m
+        &&& src[c - b] == s.children[j]
+    }
+}
+
+/// Node `b + t` of `out` is the copy of `src[t]`: its own fields
+/// ([`deep_copy_kind`]) and its children ([`deep_copy_children`]).
+pub open spec fn deep_copy_node(doc: Document, out: Document, src: Seq<NodeId>, t: int) -> bool {
+    &&& deep_copy_kind(doc, out, src, t)
+    &&& deep_copy_children(doc, out, src, t)
+}
+
+/// `out` is `doc` with a copy of `node`'s host-including subtree added, as
+/// the nodes `doc.nodes.len() ..`, the first being the copy of `node`, and
+/// `src[t]` the node that the new node `doc.nodes.len() + t` copies.
+pub open spec fn deep_clone_src(doc: Document, node: NodeId, out: Document, src: Seq<NodeId>) -> bool {
+    let b = doc.nodes.len();
+    &&& src.len() >= 1
+    &&& out.nodes.len() == b + src.len()
+    // No existing node changes: the copy is attached to nothing.
+    &&& forall|i: int| 0 <= i < b ==> #[trigger] out.nodes[i] == doc.nodes[i]
+    &&& src[0] == node
+    &&& forall|t: int| 0 <= t < src.len() ==> valid(doc, #[trigger] src[t])
+    &&& forall|t: int| 0 <= t < src.len() ==> #[trigger] deep_copy_node(doc, out, src, t)
+}
+
+/// DOM §4.4† "clone a node" `node` with the clone children flag set:
+/// `out` is the arena after it, and `copy` the copy (the first new node).
+/// ("7. Return copy.") The copy is the id `doc.nodes.len()`.
+pub open spec fn deep_clone(doc: Document, node: NodeId, out: Document, copy: NodeId) -> bool {
+    &&& copy == doc.nodes.len()
+    &&& exists|src: Seq<NodeId>| deep_clone_src(doc, node, out, src)
 }
 
 // ---------------------------------------------------------------------
