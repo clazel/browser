@@ -282,6 +282,15 @@ pub enum HandlerId {
     /// A call of `eval` that may be a direct eval: EvaluateCall §13.3.6.2†, PerformEval §19.2.1.1†
     /// and EvalDeclarationInstantiation §19.2.1.3†, through the host's compile path.
     DirectEval,
+    /// GetBindingValue of a Module Environment Record's indirect binding, §9.1.1.5.1†.
+    GetImportBinding,
+    /// EvaluateImportCall §13.3.10.1†: `import(specifier, options)`, handing the request to
+    /// HostLoadImportedModule §16.2.1.8†.
+    ImportCall,
+    /// `import.meta`, §13.3.12.1†, with HostGetImportMetaProperties and HostFinalizeImportMeta.
+    ImportMeta,
+    /// As [`HandlerId::DirectEval`], for a call whose arguments were spread into an array.
+    DirectEvalSpread,
 }
 
 /// The error constructors a compiler-known throw can name.
@@ -1641,6 +1650,88 @@ pub enum Op {
         /// The constant-pool index of the record of the call's scopes and strictness.
         k: nat,
     },
+    /// `dst := ` the value of the indirect binding that slot `idx` of the module environment
+    /// object in `env` holds: an `import { x } from "m"` binding. GetBindingValue(N, S) of a Module
+    /// Environment Record (§9.1.1.5.1†): "If the binding for N is an indirect binding, then Let M
+    /// and N2 be the indirection values provided when this binding for N was created" (step 3),
+    /// "Let targetEnv be M.[[Environment]]" (step 3.b), "If targetEnv is empty, throw a
+    /// ReferenceError exception" (step 3.c), "Return ? targetEnv.GetBindingValue(N2, true)" (step
+    /// 3.d), which throws a ReferenceError while the binding of the target module is still
+    /// uninitialized (§9.1.1.1.6† step 2: its temporal dead zone, which a cyclic import or an
+    /// asynchronous module can reach). The slot holds the indirection (M and N2, the module and the
+    /// binding name that ResolveExport found) because linking put it there: InitializeEnvironment
+    /// (§16.2.1.6.4†) step 8, "Perform env.CreateImportBinding(in.[[LocalName]],
+    /// resolution.[[Module]], resolution.[[BindingName]])" (§9.1.1.5.5†). A namespace import
+    /// (`import * as ns`) is not an indirect binding: step 7 initializes an ordinary immutable
+    /// binding with the module namespace object, which an ordinary [`Op::GetEnvSlot`] reads. The
+    /// op always reads another module's environment, so it is a handler call.
+    GetImportBinding {
+        /// The register written.
+        dst: nat,
+        /// The register holding the module environment object.
+        env: nat,
+        /// The slot of the indirect binding in that environment object.
+        idx: nat,
+    },
+    /// `dst := ` the Promise of `import(specifier, options)`: EvaluateImportCall (§13.3.10.1†)
+    /// after its operands are evaluated and read ("Let specifier be ? GetValue(specifierRef)",
+    /// step 4; "Let options be ? GetValue(optionsRef)", step 5.b, or undefined, step 6, which the
+    /// compiler loads when the call has no second argument): "Let promiseCapability be !
+    /// NewPromiseCapability(%Promise%)" (step 7), "Let specifierString be Completion(ToString(
+    /// specifier))" and "IfAbruptRejectPromise(specifierString, promiseCapability)" (steps 8 and
+    /// 9), then, if options is not undefined, the checks that reject the promise with a TypeError
+    /// (options is not an Object, its `with` property is not an Object, a value of it is not a
+    /// String, an attribute key is one the host does not support: steps 11.a to 11.e) and the
+    /// attribute list sorted by key (step 11.f), "Let moduleRequest be a new ModuleRequest Record
+    /// { [[Specifier]]: specifierString, [[Attributes]]: attributes }" (step 12), "Perform
+    /// HostLoadImportedModule(referrer, moduleRequest, empty, promiseCapability)" (step 13) and
+    /// "Return promiseCapability.[[Promise]]" (step 14). `referrer` (step 1: GetActiveScriptOrModule
+    /// §9.4.1†, or the current Realm Record if there is none, step 2) is the script or module of
+    /// the running function, which the handler reads from the function (the function template
+    /// belongs to the one that compiled it), so the op has no operand for it. Whatever goes wrong
+    /// after the operands is a rejection, so the op never throws; it allocates and calls the host.
+    ImportCall {
+        /// The register written.
+        dst: nat,
+        /// The register holding the specifier.
+        specifier: nat,
+        /// The register holding the options (undefined if the call has none).
+        options: nat,
+    },
+    /// `dst := ` `import.meta` of the running module: MetaProperty : `import . meta` (§13.3.12.1†):
+    /// "Let module be GetActiveScriptOrModule()" (step 1), "Let importMeta be module.[[ImportMeta]]"
+    /// (step 3); "If importMeta is empty, then Set importMeta to OrdinaryObjectCreate(null)"
+    /// (step 4.a), "Let importMetaValues be HostGetImportMetaProperties(module)" (step 4.b), "For
+    /// each Record { [[Key]], [[Value]] } p of importMetaValues, Perform !
+    /// CreateDataPropertyOrThrow(importMeta, p.[[Key]], p.[[Value]])" (step 4.c), "Perform
+    /// HostFinalizeImportMeta(importMeta, module)" (step 4.d), "Set module.[[ImportMeta]] to
+    /// importMeta" (step 4.e) and return it (step 4.f); otherwise return the object that is there
+    /// (step 5). The module is the one that the running function belongs to, as for
+    /// [`Op::ImportCall`]; the parser allows `import.meta` only in a module, so there is one. The
+    /// first evaluation allocates and calls the host, so the op is a handler call.
+    ImportMeta {
+        /// The register written.
+        dst: nat,
+    },
+    /// As [`Op::DirectEval`], for a call with a spread argument: `args` holds not the first of
+    /// the argument registers but an Array that ArgumentListEvaluation (§13.3.8.1†) filled, in
+    /// order, with the argument values, spread elements iterated (`eval(...a, b)`). The handler does
+    /// what [`Op::DirectEval`] does with the elements of the array as the argument list; the array
+    /// is the compiler's own and is not visible to the program, so reading it is not observable.
+    DirectEvalSpread {
+        /// The register written.
+        dst: nat,
+        /// The register holding the value of the name `eval`.
+        callee: nat,
+        /// The register holding the call's `this` value.
+        this: nat,
+        /// The register holding the array of arguments.
+        args: nat,
+        /// The register holding the current environment object.
+        env: nat,
+        /// The constant-pool index of the record of the call's scopes and strictness.
+        k: nat,
+    },
 }
 
 /// The class of an op (see the file header).
@@ -1769,6 +1860,10 @@ pub open spec fn op_class(op: Op) -> OpClass {
         | Op::WithDelete { .. }
         | Op::DeleteGlobal { .. }
         | Op::DirectEval { .. }
+        | Op::GetImportBinding { .. }
+        | Op::ImportCall { .. }
+        | Op::ImportMeta { .. }
+        | Op::DirectEvalSpread { .. }
         | Op::ThrowError { .. } => OpClass::Handler,
     }
 }
@@ -1847,6 +1942,10 @@ pub open spec fn op_handler(op: Op) -> HandlerId {
         Op::WithDelete { .. } => HandlerId::WithDelete,
         Op::DeleteGlobal { .. } => HandlerId::DeleteGlobal,
         Op::DirectEval { .. } => HandlerId::DirectEval,
+        Op::GetImportBinding { .. } => HandlerId::GetImportBinding,
+        Op::ImportCall { .. } => HandlerId::ImportCall,
+        Op::ImportMeta { .. } => HandlerId::ImportMeta,
+        Op::DirectEvalSpread { .. } => HandlerId::DirectEvalSpread,
         Op::GeneratorStart => HandlerId::GeneratorStart,
         Op::YieldDelegate { .. } => HandlerId::YieldDelegate,
         Op::GetAsyncIterator { .. } => HandlerId::GetAsyncIterator,

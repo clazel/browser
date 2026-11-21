@@ -1235,6 +1235,10 @@ pub open spec fn op_wf(c: Code, op: Op) -> bool {
         Op::IterValue { dst, result, .. } => reg_ok(c, dst) && reg_ok(c, result),
         Op::ThrowIfNotObject { src, .. } => reg_ok(c, src),
         Op::NewRegExp { dst, k, .. } => reg_ok(c, dst) && k < c.consts.len() && value_wf(c.consts[k as int]),
+        Op::GetImportBinding { dst, env, .. } => reg_ok(c, dst) && reg_ok(c, env),
+        Op::ImportCall { dst, specifier, options, .. } => reg_ok(c, dst) && reg_ok(c, specifier) && reg_ok(c, options),
+        Op::ImportMeta { dst, .. } => reg_ok(c, dst),
+        Op::DirectEvalSpread { dst, callee, this, args, env, k, .. } => reg_ok(c, dst) && reg_ok(c, callee) && reg_ok(c, this) && reg_ok(c, args) && reg_ok(c, env) && k < c.consts.len() && value_wf(c.consts[k as int]),
     }
 }
 

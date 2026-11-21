@@ -731,4 +731,69 @@ pub proof fn example_withs_classes()
     assert(op_handler(Op::DirectEval { dst: 0, callee: 0, this: 0, args: 0, argc: 3, env: 0, k: 0 }) == HandlerId::DirectEval) by (compute_only);
 }
 
+/// The operands `op_wf` accepts of the ops added for modules and `import()` (`GetImportBinding`,
+/// `ImportCall`, `ImportMeta`) and for direct `eval` with a spread argument (`DirectEvalSpread`):
+/// every register inside the frame (registers 0 to 2), every constant index inside the pool (0 to
+/// 2), and a record constant that is a value (constant 2 is not).
+pub proof fn example_imports_wf()
+    ensures
+        op_wf(example_code(), Op::GetImportBinding { dst: 0, env: 0, idx: 0 }),
+        !op_wf(example_code(), Op::GetImportBinding { dst: 3, env: 0, idx: 0 }),
+        !op_wf(example_code(), Op::GetImportBinding { dst: 0, env: 3, idx: 0 }),
+        op_wf(example_code(), Op::ImportCall { dst: 0, specifier: 0, options: 0 }),
+        !op_wf(example_code(), Op::ImportCall { dst: 3, specifier: 0, options: 0 }),
+        !op_wf(example_code(), Op::ImportCall { dst: 0, specifier: 3, options: 0 }),
+        !op_wf(example_code(), Op::ImportCall { dst: 0, specifier: 0, options: 3 }),
+        op_wf(example_code(), Op::ImportMeta { dst: 0 }),
+        !op_wf(example_code(), Op::ImportMeta { dst: 3 }),
+        op_wf(example_code(), Op::DirectEvalSpread { dst: 0, callee: 0, this: 0, args: 0, env: 0, k: 0 }),
+        !op_wf(example_code(), Op::DirectEvalSpread { dst: 3, callee: 0, this: 0, args: 0, env: 0, k: 0 }),
+        !op_wf(example_code(), Op::DirectEvalSpread { dst: 0, callee: 3, this: 0, args: 0, env: 0, k: 0 }),
+        !op_wf(example_code(), Op::DirectEvalSpread { dst: 0, callee: 0, this: 3, args: 0, env: 0, k: 0 }),
+        !op_wf(example_code(), Op::DirectEvalSpread { dst: 0, callee: 0, this: 0, args: 3, env: 0, k: 0 }),
+        !op_wf(example_code(), Op::DirectEvalSpread { dst: 0, callee: 0, this: 0, args: 0, env: 3, k: 0 }),
+        !op_wf(example_code(), Op::DirectEvalSpread { dst: 0, callee: 0, this: 0, args: 0, env: 0, k: 2 }),
+{
+    assert(op_wf(example_code(), Op::GetImportBinding { dst: 0, env: 0, idx: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::GetImportBinding { dst: 3, env: 0, idx: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::GetImportBinding { dst: 0, env: 3, idx: 0 })) by (compute_only);
+    assert(op_wf(example_code(), Op::ImportCall { dst: 0, specifier: 0, options: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::ImportCall { dst: 3, specifier: 0, options: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::ImportCall { dst: 0, specifier: 3, options: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::ImportCall { dst: 0, specifier: 0, options: 3 })) by (compute_only);
+    assert(op_wf(example_code(), Op::ImportMeta { dst: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::ImportMeta { dst: 3 })) by (compute_only);
+    assert(op_wf(example_code(), Op::DirectEvalSpread { dst: 0, callee: 0, this: 0, args: 0, env: 0, k: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::DirectEvalSpread { dst: 3, callee: 0, this: 0, args: 0, env: 0, k: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::DirectEvalSpread { dst: 0, callee: 3, this: 0, args: 0, env: 0, k: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::DirectEvalSpread { dst: 0, callee: 0, this: 3, args: 0, env: 0, k: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::DirectEvalSpread { dst: 0, callee: 0, this: 0, args: 3, env: 0, k: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::DirectEvalSpread { dst: 0, callee: 0, this: 0, args: 0, env: 3, k: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::DirectEvalSpread { dst: 0, callee: 0, this: 0, args: 0, env: 0, k: 2 })) by (compute_only);
+}
+
+/// The class and the handler of each op added for modules and `import()`, and for direct `eval`
+/// with a spread argument: each always calls out (it can allocate, call user code, call the host
+/// or throw), so each is a handler op, which the JIT lowers to an exit, with its own handler.
+pub proof fn example_imports_classes()
+    ensures
+        op_class(Op::GetImportBinding { dst: 0, env: 0, idx: 0 }) is Handler,
+        op_handler(Op::GetImportBinding { dst: 0, env: 0, idx: 0 }) == HandlerId::GetImportBinding,
+        op_class(Op::ImportCall { dst: 0, specifier: 0, options: 0 }) is Handler,
+        op_handler(Op::ImportCall { dst: 0, specifier: 0, options: 0 }) == HandlerId::ImportCall,
+        op_class(Op::ImportMeta { dst: 0 }) is Handler,
+        op_handler(Op::ImportMeta { dst: 0 }) == HandlerId::ImportMeta,
+        op_class(Op::DirectEvalSpread { dst: 0, callee: 0, this: 0, args: 0, env: 0, k: 0 }) is Handler,
+        op_handler(Op::DirectEvalSpread { dst: 0, callee: 0, this: 0, args: 0, env: 0, k: 0 }) == HandlerId::DirectEvalSpread,
+{
+    assert(op_class(Op::GetImportBinding { dst: 0, env: 0, idx: 0 }) is Handler) by (compute_only);
+    assert(op_handler(Op::GetImportBinding { dst: 0, env: 0, idx: 0 }) == HandlerId::GetImportBinding) by (compute_only);
+    assert(op_class(Op::ImportCall { dst: 0, specifier: 0, options: 0 }) is Handler) by (compute_only);
+    assert(op_handler(Op::ImportCall { dst: 0, specifier: 0, options: 0 }) == HandlerId::ImportCall) by (compute_only);
+    assert(op_class(Op::ImportMeta { dst: 0 }) is Handler) by (compute_only);
+    assert(op_handler(Op::ImportMeta { dst: 0 }) == HandlerId::ImportMeta) by (compute_only);
+    assert(op_class(Op::DirectEvalSpread { dst: 0, callee: 0, this: 0, args: 0, env: 0, k: 0 }) is Handler) by (compute_only);
+    assert(op_handler(Op::DirectEvalSpread { dst: 0, callee: 0, this: 0, args: 0, env: 0, k: 0 }) == HandlerId::DirectEvalSpread) by (compute_only);
+}
+
 } // verus!
