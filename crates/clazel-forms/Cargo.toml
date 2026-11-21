@@ -1,0 +1,32 @@
+[package]
+name = "clazel-forms"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Forms (Phase 6 items 6.13, 6.14): HTML's form owner and \"constructing the entry list\" over a clazel-dom arena, with the control state in a side table."
+
+[dependencies]
+vstd = "=0.0.0-2026-10-04-0306"
+# The node tree the entry list is read from (Phase 4 item 4.8).
+clazel-dom = { path = "../clazel-dom" }
+
+# The HTML parser that builds the DOMs the tests read entry lists from
+# (ours: Phase 4), used by tests/*.rs only.
+[dev-dependencies]
+clazel-treebuilder = { path = "../clazel-treebuilder", version = "=0.0.0" }
+
+# Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
+# shipped code today; `target-tier` is what the policy requires (phase-6.md
+# item 6.0(b)): the form data set is Tier 2. The tier stays 0 until CI's full
+# verification is green on a pull request that also carries the mutations,
+# the independent transcription and the conformance suite.
+[package.metadata.clazel]
+tier = 0
+target-tier = 2
+
+[package.metadata.verus]
+verify = true
+
+[lints]
+workspace = true

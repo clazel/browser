@@ -1,0 +1,214 @@
+{
+  "mutations": [
+    {
+      "id": "lower-boundary",
+      "file": "src/spec.rs",
+      "find": "if 0x41 <= c <= 0x5A {",
+      "replace": "if 0x41 <= c < 0x5A {",
+      "expect": "killed",
+      "reason": "Leaves Z uppercase: ASCII case-insensitive matching of \"Z\" fails, so lemma_examples' ascii_lower row is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_examples()",
+        "witness": "ascii_lower(seq![0x5Au32, 0x41, 0x40, 0x5B])[0] == 0x5Au32"
+      }
+    },
+    {
+      "id": "whitespace-no-form-feed",
+      "file": "src/spec.rs",
+      "find": "c == 0x09 || c == 0x0A || c == 0x0C || c == 0x0D || c == 0x20",
+      "replace": "c == 0x09 || c == 0x0A || c == 0x0D || c == 0x20",
+      "expect": "killed",
+      "reason": "Form feed is not ASCII whitespace: strip_whitespace keeps it, so lemma_examples' strip_whitespace row is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_examples()",
+        "witness": "strip_whitespace(seq![0x0Cu32, 0x61, 0x0C])[0] == 0x0Cu32"
+      }
+    },
+    {
+      "id": "strip-newlines-keeps-cr",
+      "file": "src/spec.rs",
+      "find": "} else if s[0] == 0x0A || s[0] == 0x0D {",
+      "replace": "} else if s[0] == 0x0A {",
+      "expect": "killed",
+      "reason": "Keeps CR: strip_newlines of \"a CR LF b\" is \"a CR b\", so lemma_examples' strip_newlines row is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_examples()",
+        "witness": "strip_newlines(seq![0x61u32, 0x0D, 0x0A, 0x62])[1] == 0x0Du32"
+      }
+    },
+    {
+      "id": "crlf-becomes-two-lf",
+      "file": "src/spec.rs",
+      "find": "seq![0x0Au32] + normalize_newlines(s.skip(2))",
+      "replace": "seq![0x0Au32] + normalize_newlines(s.skip(1))",
+      "expect": "killed",
+      "reason": "CR LF becomes two LF (the LF is kept after the CR's LF), so lemma_examples' normalize_newlines row is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_examples()",
+        "witness": "normalize_newlines(seq![0x61u32, 0x0D, 0x0A, 0x62, 0x0D, 0x63])[2] == 0x0Au32"
+      }
+    },
+    {
+      "id": "negative-zero-is-an-error",
+      "file": "src/spec.rs",
+      "find": "if negative && v != 0 {",
+      "replace": "if negative {",
+      "expect": "killed",
+      "reason": "\"-0\" is an error: lemma_examples says it parses to 0 (the rules for parsing integers give 0 for \"-0\").",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_examples()",
+        "witness": "parse_non_negative(seq![0x2Du32, 0x30]) is None"
+      }
+    },
+    {
+      "id": "decimal-digit-offset",
+      "file": "src/spec.rs",
+      "find": "seq![(0x30 + n % 10) as u32]",
+      "replace": "seq![(0x31 + n % 10) as u32]",
+      "expect": "killed",
+      "reason": "Every digit after the first is one too high, so lemma_examples' decimal(345) row is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_examples()",
+        "witness": "decimal(345)[2] == 0x36u32"
+      }
+    },
+    {
+      "id": "decimal-single-digit-offset",
+      "file": "src/spec.rs",
+      "find": "seq![(0x30 + n) as u32]",
+      "replace": "seq![(0x31 + n) as u32]",
+      "expect": "killed",
+      "reason": "A single digit is one too high, so lemma_examples' decimal(9) row is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_examples()",
+        "witness": "decimal(9)[0] == 0x3Au32"
+      }
+    },
+    {
+      "id": "width-zero-is-zero",
+      "file": "src/spec.rs",
+      "find": "Some(w) => if w > 0 {",
+      "replace": "Some(w) => if w >= 0 {",
+      "expect": "killed",
+      "reason": "cols=\"0\" gives character width 0 instead of the default 20, so lemma_examples' width_of row is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_examples()",
+        "witness": "width_of(Some(seq![0x30u32])) == 0nat"
+      }
+    },
+    {
+      "id": "wrap-one-late",
+      "file": "src/spec.rs",
+      "find": "} else if col >= cols {",
+      "replace": "} else if col > cols {",
+      "expect": "killed",
+      "reason": "Lines are broken after cols + 1 characters, so lemma_examples' wrap_from row is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_examples()",
+        "witness": "wrap_from(seq![0x61u32, 0x62, 0x63, 0x64, 0x65], 2, 0)[2] == 0x63u32"
+      }
+    },
+    {
+      "id": "email-keeps-whitespace",
+      "file": "src/spec.rs",
+      "find": "InputType::Url | InputType::Email => strip_whitespace(strip_newlines(v)),",
+      "replace": "InputType::Url | InputType::Email => strip_newlines(v),",
+      "expect": "killed",
+      "reason": "Email values keep their surrounding whitespace, so lemma_examples' sanitize(Email) row is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_examples()",
+        "witness": "sanitize(InputType::Email, seq![0x20u32, 0x61, 0x0A, 0x20])[0] == 0x20u32"
+      }
+    },
+    {
+      "id": "entry-skips-disabled-check",
+      "file": "src/spec.rs",
+      "find": "has_datalist_ancestor(doc, field) || is_disabled(doc, field) || (is_button(doc, field) && submitter != Some(field))",
+      "replace": "has_datalist_ancestor(doc, field) || (is_button(doc, field) && submitter != Some(field))",
+      "expect": "killed-incidentally",
+      "reason": "Step 5.1 forgets disabled controls. No lemma about the spec is false (an entry's name stays non-empty), so only the proof script breaks: exec/fields.rs's lemma_field_cases and field_entries_exec no longer equal the spec. A certificate needs a concrete document, which is left."
+    },
+    {
+      "id": "entry-skips-datalist-check",
+      "file": "src/spec.rs",
+      "find": "has_datalist_ancestor(doc, field) || is_disabled(doc, field) ||",
+      "replace": "is_disabled(doc, field) ||",
+      "expect": "killed-incidentally",
+      "reason": "Step 5.1 forgets the datalist ancestor. Same as entry-skips-disabled-check: the exec proofs break, no spec lemma does."
+    },
+    {
+      "id": "button-without-submitter",
+      "file": "src/spec.rs",
+      "find": "(is_button(doc, field) && submitter != Some(field))",
+      "replace": "(is_button(doc, field) && false)",
+      "expect": "killed-incidentally",
+      "reason": "Every button is included, not only the submitter. Same as entry-skips-disabled-check."
+    },
+    {
+      "id": "image-x-as-dot-y",
+      "file": "src/spec.rs",
+      "find": "create_entry(name + seq![0x78u32], decimal(control(st, field).x))",
+      "replace": "create_entry(name + seq![0x78u32], decimal(control(st, field).y))",
+      "expect": "killed-incidentally",
+      "reason": "The x entry carries y. Same as entry-skips-disabled-check."
+    },
+    {
+      "id": "image-name-without-dot",
+      "file": "src/spec.rs",
+      "find": "v + seq![0x2Eu32]",
+      "replace": "v",
+      "expect": "killed-incidentally",
+      "reason": "An image button's name has no \".\" before x and y. Same as entry-skips-disabled-check."
+    },
+    {
+      "id": "dirname-for-any-control",
+      "file": "src/spec.rs",
+      "find": "Some(d) => if d.len() > 0 && is_auto_directionality(doc, field) {",
+      "replace": "Some(d) => if d.len() > 0 {",
+      "expect": "killed-incidentally",
+      "reason": "The dirname entry is added for every control, not only the auto-directionality ones. Same as entry-skips-disabled-check."
+    },
+    {
+      "id": "fieldset-ignores-legend",
+      "file": "src/spec.rs",
+      "find": "&& first_legend_child(doc, p)\n            != Some(child) {",
+      "replace": "{",
+      "expect": "killed-incidentally",
+      "reason": "A control under a disabled fieldset's first legend is disabled too. Same as entry-skips-disabled-check."
+    },
+    {
+      "id": "option-disabled-ignores-attribute",
+      "file": "src/spec.rs",
+      "find": "    if has_attr(doc, o, b\"disabled\"@) {\n        true",
+      "replace": "    if false {\n        true",
+      "expect": "killed-incidentally",
+      "reason": "An option's own disabled attribute is ignored. Same as entry-skips-disabled-check."
+    },
+    {
+      "id": "owner-ignores-form-attribute",
+      "file": "src/spec.rs",
+      "find": "if is_listed(doc, e) && has_attr(doc, e, b\"form\"@) && dom::connected(doc, e) {",
+      "replace": "if false {",
+      "expect": "killed-incidentally",
+      "reason": "The form attribute is ignored: the nearest ancestor form is always the owner. Same as entry-skips-disabled-check."
+    },
+    {
+      "id": "selected-ignores-option-disabled",
+      "file": "src/spec.rs",
+      "find": "if control(st, o).selected && !option_disabled(doc, o) {",
+      "replace": "if control(st, o).selected {",
+      "expect": "killed-incidentally",
+      "reason": "A disabled option that is selected is submitted. Same as entry-skips-disabled-check."
+    }
+  ]
+}
