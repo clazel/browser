@@ -178,3 +178,143 @@ fn value_roundtrip_any() {
         None => assert!(p > 0xFFFF_FFFF_FFFF),
     }
 }
+
+// ---- Second slice: elements and symbols -------------------------------
+//
+// Bounds, stated. The dense operations (`elements::dense`) are proven for
+// one operation on a three-slot vector with indices below 5 (`dense_one_op`)
+// and two sets from empty with indices below 6 (`dense_set_pair`). The fallback rule (E3) is
+// proven for every `u32` index as the pure function `choose`. NOT proven:
+// the sparse representation, the switch from dense to sparse, and
+// `Elements` as a whole. Harnesses through `Elements::set` (which reaches
+// `BTreeMap`) ran for over eight minutes without finishing and were
+// dropped; those paths are covered by unit tests, including random
+// sequences against the abstract array (`elements::contract::Spec`), which
+// is a test, not a proof. Symbol harnesses cover the key encoding (Y4) for
+// all `u32`; the table's construction (Y1 to Y3) formats strings and is
+// covered by unit tests only.
+
+use crate::elements::Elements;
+use crate::elements::contract::{HOLE_BITS, MAX_DENSE, MAX_GAP, Mode, choose};
+use crate::elements::dense;
+use crate::string::Key;
+use crate::symbol::contract::{PropertyKey, SYMBOL_BIT, SymbolId, decode, encode};
+
+/// E3's rule is total and keeps dense storage within E4's bound.
+#[kani::proof]
+fn elements_choose_any() {
+    let slots: u32 = kani::any();
+    let index: u32 = kani::any();
+    kani::assume(slots <= MAX_DENSE);
+    let m = choose(Mode::Dense, slots, index);
+    if m == Mode::Dense {
+        // Either in range of the slots, or a write of at most MAX_GAP holes
+        // below MAX_DENSE: the slot count after is at most MAX_DENSE.
+        assert!(index < slots || (index < MAX_DENSE && index.saturating_sub(slots) <= MAX_GAP));
+        assert!(index < MAX_DENSE);
+    } else {
+        assert!(index >= slots);
+    }
+    assert_eq!(choose(Mode::Sparse, slots, index), Mode::Sparse);
+}
+
+/// One operation (set, delete or truncate) on a dense vector of three
+/// slots holding any bit patterns, against a three-cell model: reads, the
+/// slot count's bound by the length (E2) and by `MAX_DENSE` (E4).
+#[kani::proof]
+#[kani::unwind(6)]
+fn dense_one_op() {
+    let a: u64 = kani::any();
+    let b: u64 = kani::any();
+    let c: u64 = kani::any();
+    let mut v: Vec<u64> = vec![a, b, c];
+    let mut cells = [a, b, c];
+    let i: u32 = kani::any();
+    kani::assume(i < 5);
+    let mut length: u32 = 3;
+    match kani::any::<u8>() % 3 {
+        0 => {
+            let x: u64 = kani::any();
+            kani::assume(x != HOLE_BITS);
+            assert!(dense::set(&mut v, i, x).is_ok());
+            if let Some(cell) = usize::try_from(i).ok().and_then(|i| cells.get_mut(i)) {
+                *cell = x;
+            }
+            length = length.max(i.saturating_add(1));
+        }
+        1 => {
+            let idx = usize::try_from(i).ok();
+            let had = idx
+                .and_then(|i| cells.get(i))
+                .is_some_and(|&x| x != HOLE_BITS);
+            assert_eq!(dense::delete(&mut v, i), had);
+            if let Some(cell) = idx.and_then(|i| cells.get_mut(i)) {
+                *cell = HOLE_BITS;
+            }
+        }
+        _ => {
+            dense::truncate(&mut v, i);
+            length = i;
+        }
+    }
+    assert!(u32::try_from(v.len()).is_ok_and(|n| n <= length && n <= MAX_DENSE));
+    // Slots the model has (those below the vector's length) read back.
+    for k in 0..3u32 {
+        let kept = usize::try_from(k).ok().is_some_and(|k| k < v.len());
+        let want = cells.get(usize::try_from(k).unwrap_or(0)).copied();
+        if kept {
+            assert_eq!(dense::get(&v, k), want);
+        } else {
+            assert_eq!(dense::get(&v, k), None);
+        }
+    }
+}
+
+/// `dense::set` at any index of the small range, after one set at 0:
+/// both elements read back, nothing else appears (E1 for the dense case).
+#[kani::proof]
+#[kani::unwind(8)]
+fn dense_set_pair() {
+    let mut v: Vec<u64> = Vec::new();
+    assert!(dense::set(&mut v, 0, 1).is_ok());
+    let index: u32 = kani::any();
+    kani::assume(index < 6);
+    assert!(dense::set(&mut v, index, 2).is_ok());
+    assert_eq!(dense::get(&v, index), Some(2));
+    if index != 0 {
+        assert_eq!(dense::get(&v, 0), Some(1));
+    }
+    let want_len = index.saturating_add(1).max(1);
+    assert_eq!(u32::try_from(v.len()), Ok(want_len));
+    assert_eq!(dense::get(&v, want_len), None);
+}
+
+/// An empty array has no element at any index.
+#[kani::proof]
+fn elements_empty_get_any() {
+    let e = Elements::new();
+    let i: u32 = kani::any();
+    assert_eq!(e.get(i), None);
+    assert_eq!(e.len(), 0);
+}
+
+/// Y4: for every `u32` key, decoding then encoding gives it back, and a
+/// string and a symbol with the same number never share a key.
+#[kani::proof]
+fn symbol_key_encoding_any() {
+    let k: u32 = kani::any();
+    assert_eq!(encode(decode(Key(k))), Some(Key(k)));
+    let n: u32 = kani::any();
+    kani::assume(n < SYMBOL_BIT);
+    let s = encode(PropertyKey::String(Key(n)));
+    let y = encode(PropertyKey::Symbol(SymbolId(n)));
+    assert!(s.is_some() && y.is_some());
+    assert_ne!(s, y);
+    assert_eq!(s.map(decode), Some(PropertyKey::String(Key(n))));
+    assert_eq!(y.map(decode), Some(PropertyKey::Symbol(SymbolId(n))));
+    // Numbers at or above 2^31 are refused, never wrapped (Y5).
+    let big: u32 = kani::any();
+    kani::assume(big >= SYMBOL_BIT);
+    assert_eq!(encode(PropertyKey::String(Key(big))), None);
+    assert_eq!(encode(PropertyKey::Symbol(SymbolId(big))), None);
+}

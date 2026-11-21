@@ -11,6 +11,11 @@
 //!   is under 256, and an interner for property keys.
 //! - [`shape`]: hidden classes with transitions and a dictionary-mode cutoff.
 //!
+//! - [`elements`]: an array's indexed properties, dense with a stated
+//!   fallback to sparse; [`elements::contract`] is the spec.
+//! - [`symbol`]: symbols (well-known ones at fixed ids) and the property key
+//!   that is a string or a symbol; [`symbol::contract`] is the spec.
+//!
 //! The collector (item 7.6) is not here. The arena leaves room for it: it
 //! can enumerate live slots, and freeing is one call.
 //!
@@ -18,8 +23,10 @@
 //! `docs/VERIFICATION.md`.
 
 pub mod arena;
+pub mod elements;
 pub mod shape;
 pub mod string;
+pub mod symbol;
 pub mod value;
 
 #[cfg(kani)]
