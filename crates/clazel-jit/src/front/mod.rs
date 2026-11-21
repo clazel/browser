@@ -97,4 +97,5 @@ pub mod proofs;
 pub mod run;
 pub mod spec;
 pub mod trace;
+pub mod truth;
 pub mod unops;

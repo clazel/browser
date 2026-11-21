@@ -100,6 +100,9 @@ pub open spec fn lowered(op: js::Op) -> bool {
             js::Op::Dec { .. } => true,
             js::Op::Neg { .. } => true,
             js::Op::BitNot { .. } => true,
+            js::Op::Not { .. } => true,
+            js::Op::JumpIfTrue { .. } => true,
+            js::Op::JumpIfFalse { .. } => true,
             _ => false,
         }
     }
@@ -309,6 +312,9 @@ pub open spec fn lower(c: js::Code, op: js::Op, pc: nat, lbl: nat) -> lir::Instr
             js::Op::Dec { dst, src } => super::unops::lower_unary(1, dst, src, op, pc),
             js::Op::Neg { dst, src } => super::unops::lower_unary(2, dst, src, op, pc),
             js::Op::BitNot { dst, src } => super::unops::lower_unary(3, dst, src, op, pc),
+            js::Op::Not { dst, src } => super::truth::lower_not(dst, src, op, pc),
+            js::Op::JumpIfTrue { cond, .. } => super::truth::lower_jump(false, cond, lbl, op, pc),
+            js::Op::JumpIfFalse { cond, .. } => super::truth::lower_jump(true, cond, lbl, op, pc),
             _ => lir::Instr::Nop,
         }
     }

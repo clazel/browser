@@ -170,6 +170,16 @@ pub proof fn lemma_op_case(
                 assert(jump_target(op) is None);
                 super::unops::lemma_un_op_k(c, op, pc, lbl, lay, s, st, fuel, 3, dst, src);
             },
+            js::Op::Not { dst, src } => {
+                assert(jump_target(op) is None);
+                super::truth::lemma_not_op(c, op, pc, lbl, lay, s, st, fuel, dst, src);
+            },
+            js::Op::JumpIfTrue { cond, target } => {
+                super::truth::lemma_jump_op(c, op, pc, lbl, lay, s, st, fuel, false, cond, target);
+            },
+            js::Op::JumpIfFalse { cond, target } => {
+                super::truth::lemma_jump_op(c, op, pc, lbl, lay, s, st, fuel, true, cond, target);
+            },
             _ => {
                 assert(false);
             },
