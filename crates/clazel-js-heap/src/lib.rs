@@ -16,14 +16,16 @@
 //! - [`symbol`]: symbols (well-known ones at fixed ids) and the property key
 //!   that is a string or a symbol; [`symbol::contract`] is the spec.
 //!
-//! The collector (item 7.6) is not here. The arena leaves room for it: it
-//! can enumerate live slots, and freeing is one call.
+//! - [`gc`]: the collector (item 7.6): stop-the-world mark and sweep over
+//!   the arena, with ephemerons, `WeakRef` and `FinalizationRegistry`;
+//!   [`gc::contract`] is the spec.
 //!
 //! Tier: see `[package.metadata.clazel]` in `Cargo.toml` and
 //! `docs/VERIFICATION.md`.
 
 pub mod arena;
 pub mod elements;
+pub mod gc;
 pub mod shape;
 pub mod string;
 pub mod symbol;
