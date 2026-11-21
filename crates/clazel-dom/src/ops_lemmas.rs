@@ -1346,7 +1346,7 @@ pub open spec fn replace_reference(doc: Document, child: NodeId, node: NodeId) -
 
 /// The reference child of "replace" is a child of `parent` that is neither
 /// `node` nor `child`, so it is still one after `child` is removed.
-proof fn lemma_replace_reference(doc: Document, child: NodeId, node: NodeId, parent: NodeId)
+pub proof fn lemma_replace_reference(doc: Document, child: NodeId, node: NodeId, parent: NodeId)
     requires
         wf(doc),
         valid(doc, child),

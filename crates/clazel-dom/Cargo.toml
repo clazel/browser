@@ -56,6 +56,9 @@ theorems = [
     "theorem_pre_insert_wf",
     "theorem_replace_wf",
     "theorem_replace_all_wf",
+    # The children rules of steps 5 and 6 (src/validity_lemmas.rs).
+    "theorem_pre_insert_children_rules",
+    "theorem_replace_children_rules",
 ]
 
 [package.metadata.verus]
