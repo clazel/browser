@@ -1,5 +1,12 @@
 //! The web platform APIs for scripts (phase-7.md items 7.13 to 7.17).
 //!
-//! Empty: item 7.1 vendors the WPT `testharness.js` tests and the TodoMVC
-//! implementations that later items run. The APIs arrive with items 7.13 to
-//! 7.17.
+//! So far only the engine-independent core of item 7.13's `innerHTML` and
+//! `outerHTML`: [`serialize`], the HTML serialization algorithm (HTML
+//! §13.3†). The fragment parsing half is `clazel-treebuilder`'s
+//! `exec::driver::parse_fragment_real`. The rest arrives with items 7.13 to
+//! 7.17; item 7.1 vendored the WPT `testharness.js` tests and the TodoMVC
+//! implementations that later items run.
+//!
+//! Tier 0 (`Cargo.toml`): safe Rust, tested, nothing proven.
+
+pub mod serialize;

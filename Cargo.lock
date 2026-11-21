@@ -646,6 +646,10 @@ dependencies = [
 [[package]]
 name = "clazel-web"
 version = "0.0.0"
+dependencies = [
+ "clazel-dom",
+ "clazel-treebuilder",
+]
 
 [[package]]
 name = "clazel-webidl"
