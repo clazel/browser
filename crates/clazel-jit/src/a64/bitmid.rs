@@ -77,6 +77,16 @@ pub proof fn lemma_step_movz(s: isa::State, sf: isa::Width, d: u8, imm16: u16, h
     assert(0 <= chunk_val(imm16, hw) < isa::p2(n));
     super::alu::lemma_trunc_small(n, chunk_val(imm16, hw));
     assert(chunk_val(imm16, hw) == imm16 as int * pp);
+    // the instruction's result: the shifted immediate (the old word is zeros)
+    let i = isa::Instr::MoveWide { sf, opcode: isa::MoveWideOp::Z, d, imm16, hw };
+    let v = chunk_val(imm16, hw);
+    let q = (0int / pp) % 0x1_0000;
+    assert(q == 0);
+    vstd::arithmetic::mul::lemma_mul_by_zero_is_zero(pp);
+    assert(q * pp == 0);
+    assert(0int - q * pp + imm16 as int * pp == v);
+    assert(isa::execute(s, i) == Some(isa::x_set(s, d, n, v)));
+    assert(isa::x_set(s, d, n, v) == isa::State { r: s.r.update(d as int, v as u64), ..s });
 }
 
 /// `movk x0, #imm16, lsl #(16 hw)` (`hw` from 1) at width `sf`, when `x0` is
@@ -137,6 +147,18 @@ pub proof fn lemma_step_movk(s: isa::State, sf: isa::Width, d: u8, imm16: u16, h
         }
     }
     super::alu::lemma_trunc_small(n, old + chunk_val(imm16, hw));
+    // the instruction's result: the old word with chunk `hw` replaced, which is
+    // `old + imm16 * 2^pos` because that chunk of `old` is 0
+    let i = isa::Instr::MoveWide { sf, opcode: isa::MoveWideOp::K, d, imm16, hw };
+    let v = old + chunk_val(imm16, hw);
+    assert(isa::x_read(s, d, n) == old);
+    let q = (old / pp) % 0x1_0000;
+    assert(q == 0);
+    vstd::arithmetic::mul::lemma_mul_by_zero_is_zero(pp);
+    assert(q * pp == 0);
+    assert(old - q * pp + imm16 as int * pp == v);
+    assert(isa::execute(s, i) == Some(isa::x_set(s, d, n, v)));
+    assert(isa::x_set(s, d, n, v) == isa::State { r: s.r.update(d as int, v as u64), ..s });
 }
 
 /// The four chunks of a 64-bit word add up to it.
@@ -276,6 +298,22 @@ pub proof fn lemma_const64(s: isa::State, c: u64)
     assert(s4.r[0] as nat == c as nat);
 }
 
+/// The `movz` of the `f64.neg` template loads the sign bit into `x1`: its
+/// immediate shifted by its `hw` is `2^63`, and its destination is `x1`.
+pub proof fn lemma_neg_template_mask()
+    ensures
+        ({
+            match super::templates::neg_mid()[0] {
+                isa::Instr::MoveWide { sf, opcode, d, imm16, hw } => hw <= 3 && d == 1 && chunk_val(
+                    imm16,
+                    hw,
+                ) == 0x8000_0000_0000_0000int,
+                _ => false,
+            }
+        }),
+{
+}
+
 /// **`f64.neg`**: `movz x1, #0x8000, lsl #48; eor x0, x0, x1` flips the sign bit.
 #[verifier::rlimit(300)]
 pub proof fn lemma_mid_neg(s: isa::State, x: u64)
@@ -298,8 +336,21 @@ pub proof fn lemma_mid_neg(s: isa::State, x: u64)
     let i2 = super::templates::neg_mid()[1];
     assert(super::templates::neg_mid() == seq![i1, i2]);
     assert(super::alu::bits(isa::Width::W64) == 64);
-    lemma_step_movz(s, isa::Width::W64, 1, 0x8000, 3);
-    assert(chunk_val(0x8000, 3) == 0x8000_0000_0000_0000int);
+    // the template's `movz` immediate and shift (not literals of this proof)
+    lemma_neg_template_mask();
+    let (imm16, hw) = match i1 {
+        isa::Instr::MoveWide { imm16, hw, .. } => (imm16, hw),
+        _ => (0, 0),
+    };
+    assert(i1 == isa::Instr::MoveWide {
+        sf: isa::Width::W64,
+        opcode: isa::MoveWideOp::Z,
+        d: 1,
+        imm16,
+        hw,
+    });
+    lemma_step_movz(s, isa::Width::W64, 1, imm16, hw);
+    assert(chunk_val(imm16, hw) == 0x8000_0000_0000_0000int);
     let s1 = isa::State { r: s.r.update(1, 0x8000_0000_0000_0000u64), pc: (s.pc + 4) as u64, ..s };
     assert(isa::step(s, i1) == Some(s1));
     super::alu::lemma_pc4(s.pc);

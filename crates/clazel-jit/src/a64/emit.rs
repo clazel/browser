@@ -10,7 +10,7 @@
 use super::api::Backend;
 #[allow(unused_imports)]
 use super::spec::*;
-use clazel_a64::inverse::encode_bytes;
+use clazel_a64::encoder::encode_instr;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
@@ -964,19 +964,24 @@ fn emit_blob_impl(ops: &[Op], nl: usize, exit_code: u16) -> (r: Option<Vec<u8>>)
                         return None;
                     },
                 };
-                let b = encode_bytes(ins);
+                let w = encode_instr(ins);
                 let ghost old_bytes = bytes@;
-                bytes.extend_from_slice(b.as_slice());
+                bytes.push((w % 256) as u8);
+                bytes.push(((w / 0x100) % 256) as u8);
+                bytes.push(((w / 0x1_0000) % 256) as u8);
+                bytes.push((w / 0x100_0000) as u8);
                 proof {
                     assert(ins == &code@[k as int]);
-                    assert(b@ =~= isa::word_bytes(isa::encode(code@[k as int])));
-                    assert(bytes@ =~= old_bytes + b@);
+                    assert(w as int == isa::encode(code@[k as int]));
+                    assert(w as int / 0x100_0000 < 0x100);
+                    let b = isa::word_bytes(isa::encode(code@[k as int]));
+                    assert(bytes@ =~= old_bytes + b);
                     assert forall|j: int| 0 <= j < k + 1 implies #[trigger] bytes@.subrange(4 * j, 4 * j + 4)
                         == isa::word_bytes(isa::encode(code@[j])) by {
                         if j < k {
                             assert(bytes@.subrange(4 * j, 4 * j + 4) =~= old_bytes.subrange(4 * j, 4 * j + 4));
                         } else {
-                            assert(bytes@.subrange(4 * j, 4 * j + 4) =~= b@);
+                            assert(bytes@.subrange(4 * j, 4 * j + 4) =~= b);
                         }
                     }
                 }

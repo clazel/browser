@@ -160,7 +160,7 @@ pub proof fn lemma_rip_between(s: x64::State, ip: int, end: int)
 
 /// `mov eax, 0; cmp rcx, rdx; setcc al` leaves 0 or 1 in `rax`: LIR's
 /// comparison result.
-#[verifier::rlimit(100)]
+#[verifier::rlimit(400)]
 pub proof fn lemma_mid_cmp(
     cu: spec_fn(nat) -> nat,
     s: x64::State,

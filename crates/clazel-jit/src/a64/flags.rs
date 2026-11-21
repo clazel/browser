@@ -217,6 +217,55 @@ pub proof fn lemma_cc_icmp(s: isa::State, c: lir::ICmp, n: nat, x: int, y: int)
     }
 }
 
+/// A machine state with nothing in it. `ConditionHolds` reads only the flags,
+/// so statements about conditions can be made of this one (and a concrete
+/// witness can compute them).
+pub open spec fn blank() -> isa::State {
+    isa::State {
+        r: Seq::empty(),
+        sp: 0,
+        pc: 0,
+        flag_n: false,
+        flag_z: false,
+        flag_c: false,
+        flag_v: false,
+        vreg: Seq::empty(),
+        mem: Map::empty(),
+    }
+}
+
+/// [`lemma_cc_icmp`] for the blank state: the instance a kill certificate
+/// (`mutations.json`) names, with no state to build.
+pub proof fn lemma_cc_icmp_blank(c: lir::ICmp, n: nat, x: int, y: int)
+    requires
+        n == 32 || n == 64,
+        0 <= x < isa::p2(n),
+        0 <= y < isa::p2(n),
+    ensures
+        !isa::condition_holds(
+            isa::set_nzcv(blank(), cmp_nzcv(n, x, y)),
+            super::templates::cset_cond(c),
+        ) == lir::icmp(c, n, x, y),
+{
+    lemma_cc_icmp(blank(), c, n, x, y);
+}
+
+/// [`lemma_cc_icmp_blank`] at 32 bits, with the bounds written as numbers so a
+/// kill certificate can call it at concrete operands.
+pub proof fn lemma_cc_icmp_blank32(c: lir::ICmp, x: int, y: int)
+    requires
+        0 <= x < 0x1_0000_0000,
+        0 <= y < 0x1_0000_0000,
+    ensures
+        !isa::condition_holds(
+            isa::set_nzcv(blank(), cmp_nzcv(32, x, y)),
+            super::templates::cset_cond(c),
+        ) == lir::icmp(c, 32, x, y),
+{
+    super::memlemmas::lemma_p2_consts();
+    lemma_cc_icmp_blank(c, 32, x, y);
+}
+
 /// `cmp x0, x1` at width `sf` (flags only): the state after it is the state with
 /// the flags of `x - y` and `pc` advanced by 4.
 pub proof fn lemma_step_cmp(s: isa::State, sf: isa::Width, x: u64, y: u64)

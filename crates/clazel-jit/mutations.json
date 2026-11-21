@@ -39,6 +39,116 @@
       "replace": "    preserved_mem(m, m2)\n}",
       "expect": "survives",
       "reason": "Drops the claim that a template leaves `rsp` as it was. The clause is a claim the real proofs establish (from `mid_post`'s preservation of `rsp`), but nothing downstream uses it: the templates never name `rsp` (`scratch` excludes it), and the exit sequence's `ret`, the one instruction that changes it, is stated by `exit_refines` against `preserved_mem` and its own statement of the new `rsp`. So removing the clause breaks no proof: a known gap in how much the proofs depend on it. Closing it needs a consumer, for example the validator's confinement theorem (jit.md exit criterion 2), which assumes `rsp` is never written by the code between exits."
+    },
+    {
+      "id": "a64-cset-signed-less-than-uses-wrong-condition",
+      "module": "a64::flags",
+      "file": "src/a64/templates.rs",
+      "find": "        lir::ICmp::LtS => 10,",
+      "replace": "        lir::ICmp::LtS => 11,",
+      "expect": "killed",
+      "reason": "The A64 template for a signed less-than comparison would give `cset` the condition `lt` (11) instead of its inverse `ge` (10) (a `cset` is `csinc` on the inverse of the condition that sets the result), so it would return 0 where LIR's `lt_s` is 1: after `cmp 1, 2` the `N` and `V` flags differ, so `lt` holds. `flags::lemma_cc_icmp_blank32` is false for the mutant at `lt_s`, 32 bits, 1 and 2.",
+      "certificate": {
+        "file": "src/a64/flags.rs",
+        "lemma": "lemma_cc_icmp_blank32(lir::ICmp::LtS, 1, 2)",
+        "witness": "isa::condition_holds(isa::set_nzcv(blank(), cmp_nzcv(32, 1, 2)), super::templates::cset_cond(lir::ICmp::LtS)) == true && lir::icmp(lir::ICmp::LtS, 32, 1, 2) == true",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "a64-cset-equal-uses-wrong-condition",
+      "module": "a64::flags",
+      "file": "src/a64/templates.rs",
+      "find": "        lir::ICmp::Eq => 1,",
+      "replace": "        lir::ICmp::Eq => 0,",
+      "expect": "killed",
+      "reason": "The A64 template for `eq` would give `cset` the condition `eq` (0) instead of its inverse `ne` (1), so it would return 0 where LIR's `eq` is 1: after `cmp 1, 1` the `Z` flag is set. `flags::lemma_cc_icmp_blank32` is false for the mutant at `eq`, 32 bits, 1 and 1.",
+      "certificate": {
+        "file": "src/a64/flags.rs",
+        "lemma": "lemma_cc_icmp_blank32(lir::ICmp::Eq, 1, 1)",
+        "witness": "isa::condition_holds(isa::set_nzcv(blank(), cmp_nzcv(32, 1, 1)), super::templates::cset_cond(lir::ICmp::Eq)) == true && lir::icmp(lir::ICmp::Eq, 32, 1, 1) == true",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "a64-cset-unsigned-less-than-uses-wrong-condition",
+      "module": "a64::flags",
+      "file": "src/a64/templates.rs",
+      "find": "        lir::ICmp::LtU => 2,",
+      "replace": "        lir::ICmp::LtU => 3,",
+      "expect": "killed",
+      "reason": "The A64 template for an unsigned less-than comparison would give `cset` the condition `lo` (3) instead of its inverse `hs` (2), so it would return 0 where LIR's `lt_u` is 1: after `cmp 1, 2` the carry is clear, so `lo` holds. `flags::lemma_cc_icmp_blank32` is false for the mutant at `lt_u`, 32 bits, 1 and 2.",
+      "certificate": {
+        "file": "src/a64/flags.rs",
+        "lemma": "lemma_cc_icmp_blank32(lir::ICmp::LtU, 1, 2)",
+        "witness": "isa::condition_holds(isa::set_nzcv(blank(), cmp_nzcv(32, 1, 2)), super::templates::cset_cond(lir::ICmp::LtU)) == true && lir::icmp(lir::ICmp::LtU, 32, 1, 2) == true",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "a64-cset-unsigned-greater-than-uses-wrong-condition",
+      "module": "a64::flags",
+      "file": "src/a64/templates.rs",
+      "find": "        lir::ICmp::GtU => 9,",
+      "replace": "        lir::ICmp::GtU => 8,",
+      "expect": "killed",
+      "reason": "The A64 template for an unsigned greater-than comparison would give `cset` the condition `hi` (8) instead of its inverse `ls` (9), so it would return 0 where LIR's `gt_u` is 1: after `cmp 2, 1` the carry is set and `Z` clear, so `hi` holds. `flags::lemma_cc_icmp_blank32` is false for the mutant at `gt_u`, 32 bits, 2 and 1.",
+      "certificate": {
+        "file": "src/a64/flags.rs",
+        "lemma": "lemma_cc_icmp_blank32(lir::ICmp::GtU, 2, 1)",
+        "witness": "isa::condition_holds(isa::set_nzcv(blank(), cmp_nzcv(32, 2, 1)), super::templates::cset_cond(lir::ICmp::GtU)) == true && lir::icmp(lir::ICmp::GtU, 32, 2, 1) == true",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "a64-chunk-one-uses-the-wrong-divisor",
+      "module": "a64::bitmid",
+      "file": "src/a64/templates.rs",
+      "find": "        ((v / 0x1_0000) % 0x1_0000) as u16",
+      "replace": "        ((v / 0x2_0000) % 0x1_0000) as u16",
+      "expect": "killed",
+      "reason": "The second 16-bit chunk of a constant (the `movk ..., lsl #16` immediate) would be taken from bit 17 instead of bit 16, so the four chunks no longer add up to the word: for 0x10000 the chunks would all be 0. `bitmid::lemma_chunks` is false for the mutant at 0x10000.",
+      "certificate": {
+        "file": "src/a64/bitmid.rs",
+        "lemma": "lemma_chunks(0x1_0000u64)",
+        "witness": "super::templates::chunk(0x1_0000u64, 1) == 0u16"
+      }
+    },
+    {
+      "id": "a64-neg-loads-the-wrong-mask",
+      "module": "a64::bitmid",
+      "file": "src/a64/templates.rs",
+      "find": "            imm16: 0x8000,",
+      "replace": "            imm16: 0x4000,",
+      "expect": "killed",
+      "reason": "The `movz` of the `f64.neg` template would load 2^62 instead of the sign bit 2^63 into `x1`, so `eor` would flip the wrong bit. `bitmid::lemma_neg_template_mask` (which `lemma_mid_neg` rests on) is false for the mutant.",
+      "certificate": {
+        "file": "src/a64/bitmid.rs",
+        "lemma": "lemma_neg_template_mask()",
+        "witness": "(match super::templates::neg_mid()[0] { isa::Instr::MoveWide { sf, opcode, d, imm16, hw } => chunk_val(imm16, hw) == 0x4000_0000_0000_0000int, _ => false }) == true"
+      }
+    },
+    {
+      "id": "a64-slot-immediate-scaled-by-four",
+      "module": "a64::steps",
+      "file": "src/a64/spec.rs",
+      "find": "    (slot_disp(j) / 8) as u16",
+      "replace": "    (slot_disp(j) / 4) as u16",
+      "expect": "killed",
+      "reason": "The `imm12` of a frame slot's `ldr`/`str` is the displacement divided by the access size, 8; divided by 4 every slot access would land at twice the offset (slot 0 at 528, outside the context). `steps::lemma_slot_imm` is false for the mutant at slot 0.",
+      "certificate": {
+        "file": "src/a64/steps.rs",
+        "lemma": "lemma_slot_imm(0)",
+        "witness": "slot_imm(0) == 66u16"
+      }
     }
   ]
 }

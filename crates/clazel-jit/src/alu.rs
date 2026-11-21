@@ -370,6 +370,7 @@ pub proof fn lemma_val32_shift(o: lir::IBin, x: u32, y: u32, fl: u32)
 
 /// `shl`, `shr` and `sar` by `cl` on 64-bit operands compute LIR's shift: the
 /// count is the low bits of `cl`, which is the count modulo the width.
+#[verifier::rlimit(100)]
 pub proof fn lemma_val64_shift(o: lir::IBin, x: u64, y: u64, fl: u32)
     requires
         super::templates::shift_of(o) is Some,
