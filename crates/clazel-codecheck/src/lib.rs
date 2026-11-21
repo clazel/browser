@@ -51,6 +51,7 @@
 pub mod a64;
 pub mod acc_lemmas;
 pub mod api;
+pub mod confine;
 pub mod contract;
 pub mod dataflow;
 pub mod decode_all;
