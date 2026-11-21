@@ -92,15 +92,18 @@ fn a_long_chain_does_not_recurse() -> R<()> {
     let mut h = Heap::new();
     let head = obj(&mut h)?;
     let mut tail = head;
-    for _ in 0..100_000 {
+    // Miri interprets every step, so it builds a shorter chain; the normal
+    // test job builds the full one.
+    let length = if cfg!(miri) { 2_000 } else { 100_000 };
+    for _ in 0..length {
         let n = obj(&mut h)?;
         add_slot(&mut h, tail, val(n))?;
         tail = n;
     }
     let out = h.collect(&[val(head)])?;
-    assert_eq!((out.freed, out.survivors), (0, 100_001));
+    assert_eq!((out.freed, out.survivors), (0, length + 1));
     let out = h.collect(&[])?;
-    assert_eq!(out.freed, 100_001);
+    assert_eq!(out.freed, length + 1);
     Ok(())
 }
 
@@ -226,7 +229,11 @@ fn a_weakmap_does_not_keep_its_keys_and_an_unreachable_map_is_freed() -> R<()> {
 fn ephemeron_chains_resolve_in_any_entry_order() -> R<()> {
     // Entries (k[i] -> k[i+1]) listed from the end of the chain to the start.
     let mut h = Heap::new();
-    let ks: Vec<Ref> = (0..2000).map(|_| obj(&mut h)).collect::<R<_>>()?;
+    // Listed backwards, the chain resolves one link per pass, so the work
+    // grows with the square of its length: 2000 keys took 2999 s under Miri,
+    // so it builds 200 there. The normal test job builds 2000.
+    let length: usize = if cfg!(miri) { 200 } else { 2000 };
+    let ks: Vec<Ref> = (0..length).map(|_| obj(&mut h)).collect::<R<_>>()?;
     let entries: Vec<(Ref, Value)> = ks
         .windows(2)
         .rev()
@@ -235,7 +242,7 @@ fn ephemeron_chains_resolve_in_any_entry_order() -> R<()> {
     let m = weak_map(&mut h, &entries)?;
     let first = *ks.first().ok_or(Error::NoScope)?;
     h.collect(&[val(m), val(first)])?;
-    assert_eq!(h.live(), 2001, "the whole chain, and the map");
+    assert_eq!(h.live(), length + 1, "the whole chain, and the map");
     h.collect(&[val(m)])?;
     assert_eq!(h.live(), 1, "the map alone");
     Ok(())
@@ -697,9 +704,15 @@ fn live_refs(h: &Heap) -> Vec<Ref> {
 fn random_heaps_of_any_size_keep_what_the_roots_reach() -> R<()> {
     let mut rng = Lcg(0x005E_ED6C);
     let mut cases = 0;
-    for case in 0..240usize {
+    // Under Miri, the first 2 cases of the same sequence (one large heap
+    // among them, at a thirtieth of its size); the normal test job runs all
+    // 240.
+    let count: usize = if cfg!(miri) { 2 } else { 240 };
+    for case in 0..count {
         // Mostly small heaps, a few large ones.
         let n = match case % 20 {
+            // Under Miri, a thirtieth of the size, from the same draw.
+            0 if cfg!(miri) => 50 + rng.below(50),
             0 => 1500 + rng.below(1500),
             1..=4 => 50 + rng.below(250),
             _ => rng.below(30),
@@ -757,7 +770,7 @@ fn random_heaps_of_any_size_keep_what_the_roots_reach() -> R<()> {
             wire(&mut h, &mut rng, &fresh, 100)?;
         }
     }
-    assert_eq!(cases, 960);
+    assert_eq!(cases, count * 4);
     Ok(())
 }
 
@@ -766,7 +779,9 @@ fn random_heaps_of_any_size_keep_what_the_roots_reach() -> R<()> {
 #[test]
 fn mark_equals_the_specification_on_random_graphs() {
     let mut rng = Lcg(0xA11CE);
-    for _ in 0..2000 {
+    // Under Miri, the first 100 graphs of the same sequence.
+    let graphs = if cfg!(miri) { 100 } else { 2000 };
+    for _ in 0..graphs {
         let n = rng.below(12);
         let name = |rng: &mut Lcg| rng.below(n + 2);
         let graph: Vec<Node> = (0..n)
