@@ -15,4 +15,9 @@
 //! - [`contract`]: the refinement statement, [`contract::lowers`].
 
 pub mod contract;
+pub mod frame;
+pub mod lirmem;
+pub mod lower;
+pub mod proofs;
+pub mod run;
 pub mod spec;
