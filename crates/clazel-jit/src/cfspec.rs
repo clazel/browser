@@ -376,19 +376,22 @@ pub open spec fn cf_prog_ok(n: Node, nl: nat) -> bool {
 
 /// The context's region table holds LIR's layout: at most 16 regions, and for
 /// each, `base` at `r15 + 16 k` and `bound` at `r15 + 16 k + 8`, as 64-bit
-/// words (choice 12).
+/// words (choice 12). No region overlaps the table, so a store to a region
+/// never changes it (the exit area is already clear: [`rel`]).
 pub open spec fn table_ok(lay: lir::Layout, m: x64::State) -> bool {
-    lay.len() <= abi::num_regions() && forall|k: int|
+    lay.len() <= abi::num_regions() && (forall|k: int|
         0 <= k < lay.len() ==> {
             &&& x64::read_mem(m.mem, ctx_of(m) + abi::base_off(k), 8) == Some(
                 (#[trigger] lay[k]).base as int,
             )
             &&& x64::read_mem(m.mem, ctx_of(m) + abi::bound_off(k), 8) == Some(lay[k].bound as int)
-        }
+        }) && forall|b: int|
+        ctx_of(m) <= b < ctx_of(m) + abi::table_end() ==> !#[trigger] in_regions_i(lay, b)
 }
 
 /// The machine `m` represents the LIR state `a` on top of the values `base`
 /// (choice 13), and the region table is as LIR's layout.
+#[verifier::opaque]
 pub open spec fn rel_base(
     lay: lir::Layout,
     base: Seq<lir::Val>,

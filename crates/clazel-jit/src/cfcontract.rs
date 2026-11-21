@@ -58,12 +58,6 @@ pub open spec fn cf_canon(rip: int, offs: Seq<int>, code: Seq<x64::Instr>) -> bo
         0 <= l < offs.len() ==> x64::canonical(rip + #[trigger] offs[l])
 }
 
-/// The machine's unspecified-flag function applied to the state's counter: a
-/// term that names `cu` and `m` for the statement's quantifier.
-pub open spec fn undef_of(cu: spec_fn(nat) -> nat, m: x64::State) -> nat {
-    cu(m.undef)
-}
-
 /// What the machine is at after an exit sequence for `c` from a state with a
 /// stack as the enter stub leaves it, as [`exit_refines`] says: the exit-code
 /// word holds `c`, `rsp` is popped, `rip` is the return address.
@@ -75,6 +69,61 @@ pub open spec fn exit_done(m: x64::State, m2: x64::State, c: nat) -> bool {
         Some(raw) => m2.rip == x64::logext(64, raw),
         None => false,
     }
+}
+
+/// The operands `vals` of an exit are in the frame, in the slots after the
+/// first `n0` stack slots (`nl` locals, then the stack): value `i` in slot
+/// `nl + n0 + i`.
+pub open spec fn ops_in_frame(
+    mm: Map<int, u8>,
+    ctxb: int,
+    nl: nat,
+    n0: nat,
+    vals: Seq<lir::Val>,
+) -> bool {
+    forall|i: int|
+        0 <= i < vals.len() ==> #[trigger] slot_holds(
+            mm,
+            ctxb,
+            (nl + n0 + i) as nat,
+            lir::val_bits(vals[i]),
+        )
+}
+
+/// The machine represents `s` on top of `base` and **some extra values**
+/// (the bases that nested bodies added: see [`crate::cfspec`], choice 13).
+pub open spec fn rel_ext(
+    lay: lir::Layout,
+    base: Seq<lir::Val>,
+    s: lir::St,
+    m2: x64::State,
+    nl: nat,
+) -> bool {
+    exists|extra: Seq<lir::Val>|
+        #![trigger rel_base(lay, base + extra, s, m2, nl)]
+        rel_base(lay, base + extra, s, m2, nl)
+}
+
+/// [`rel_ext`], and the operands `vals` of an exit are in the frame above the
+/// stack (`ctxb` is the context's address).
+pub open spec fn exit_rel(
+    lay: lir::Layout,
+    base: Seq<lir::Val>,
+    s: lir::St,
+    m2: x64::State,
+    nl: nat,
+    ctxb: int,
+    vals: Seq<lir::Val>,
+) -> bool {
+    exists|extra: Seq<lir::Val>|
+        #![trigger rel_base(lay, base + extra, s, m2, nl)]
+        rel_base(lay, base + extra, s, m2, nl) && ops_in_frame(
+            m2.mem,
+            ctxb,
+            nl,
+            (base + extra).len() + s.stack.len(),
+            vals,
+        )
 }
 
 /// What must hold after `code` ran from `m`, for LIR's outcome `o` (see the
@@ -99,30 +148,26 @@ pub open spec fn cf_post(
                 m2,
                 nl,
             ) && preserved_r(lay, m, m2),
-        lir::Outcome::Branch(l, s) => l < offs.len() && exists|m2: x64::State, extra: Seq<lir::Val>|
-            #![trigger reaches(cu, code, m.rip, m, m2), rel_base(lay, base + extra, s, m2, nl)]
-            reaches(cu, code, m.rip, m, m2) && m2.rip == m.rip + offs[l as int] && rel_base(
+        lir::Outcome::Branch(l, s) => l < offs.len() && exists|m2: x64::State|
+            #![trigger reaches(cu, code, m.rip, m, m2)]
+            reaches(cu, code, m.rip, m, m2) && m2.rip == m.rip + offs[l as int] && rel_ext(
                 lay,
-                base + extra,
+                base,
                 s,
                 m2,
                 nl,
             ) && preserved_r(lay, m, m2),
-        lir::Outcome::Exit(c, vals, s) => exists|m2: x64::State, extra: Seq<lir::Val>|
-            #![trigger reaches(cu, code, m.rip, m, m2), rel_base(lay, base + extra, s, m2, nl)]
-            reaches(cu, code, m.rip, m, m2) && exit_done(m, m2, c) && rel_base(
+        lir::Outcome::Exit(c, vals, s) => exists|m2: x64::State|
+            #![trigger reaches(cu, code, m.rip, m, m2)]
+            reaches(cu, code, m.rip, m, m2) && exit_done(m, m2, c) && exit_rel(
                 lay,
-                base + extra,
+                base,
                 s,
                 m2,
                 nl,
-            ) && preserved_mem_r(lay, m, m2) && forall|i: int|
-                0 <= i < vals.len() ==> #[trigger] slot_holds(
-                    m2.mem,
-                    ctx_of(m),
-                    (nl + (base + extra).len() + s.stack.len() + i) as nat,
-                    lir::val_bits(vals[i]),
-                ),
+                ctx_of(m),
+                vals,
+            ) && preserved_mem_r(lay, m, m2),
         _ => true,
     }
 }
@@ -145,7 +190,7 @@ pub open spec fn cf_refines(
         m: x64::State,
         fuel: nat,
     |
-        #![trigger lir::eval(lay, i, a, fuel), rel_base(lay, base, a, m, nl), undef_of(cu, m)]
+        #![trigger cf_post(lay, base, nl, offs, code, cu, m, lir::eval(lay, i, a, fuel))]
         base.len() + a.stack.len() == h && rel_base(lay, base, a, m, nl) && stack_ok_r(lay, m)
             && cf_canon(m.rip, offs, code) ==> cf_post(
             lay,
