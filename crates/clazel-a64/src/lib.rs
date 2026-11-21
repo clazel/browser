@@ -35,4 +35,5 @@ pub mod contract;
 pub mod decoder;
 pub mod encoder;
 pub mod examples;
+pub mod inverse;
 pub mod spec;
