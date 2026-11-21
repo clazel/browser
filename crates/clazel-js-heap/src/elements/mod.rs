@@ -23,6 +23,50 @@ use std::collections::BTreeMap;
 
 pub use contract::{INDEX_LIMIT, MAX_GAP};
 
+/// The dense representation's operations, free functions over the slots so
+/// that the Kani harnesses can prove them without the sparse map (CBMC does
+/// not finish with `BTreeMap` in the model).
+pub(crate) mod dense {
+    use super::contract::{Error, HOLE_BITS};
+
+    /// The slot's bits, which may be [`HOLE_BITS`]; `None` past the slots.
+    pub(crate) fn get(v: &[u64], index: u32) -> Option<u64> {
+        let i = usize::try_from(index).ok()?;
+        v.get(i).copied()
+    }
+
+    /// Write `bits` at `index`, padding with holes. The caller has checked
+    /// the fallback rule (contract `choose`), so the gap is small.
+    pub(crate) fn set(v: &mut Vec<u64>, index: u32, bits: u64) -> Result<(), Error> {
+        let i = usize::try_from(index).map_err(|_| Error::NotAnIndex)?;
+        if let Some(slot) = v.get_mut(i) {
+            *slot = bits;
+        } else {
+            let need = i.saturating_add(1).saturating_sub(v.len());
+            v.try_reserve(need).map_err(|_| Error::OutOfMemory)?;
+            v.resize(i, HOLE_BITS);
+            v.push(bits);
+        }
+        Ok(())
+    }
+
+    /// Make the slot a hole; whether it held an element.
+    pub(crate) fn delete(v: &mut [u64], index: u32) -> bool {
+        let Some(slot) = usize::try_from(index).ok().and_then(|i| v.get_mut(i)) else {
+            return false;
+        };
+        let was = *slot != HOLE_BITS;
+        *slot = HOLE_BITS;
+        was
+    }
+
+    /// Drop the slots at or past `new_length`.
+    pub(crate) fn truncate(v: &mut Vec<u64>, new_length: u32) {
+        let keep = usize::try_from(new_length).unwrap_or(usize::MAX);
+        v.truncate(keep);
+    }
+}
+
 /// The elements of one array.
 #[derive(Clone, Debug)]
 pub struct Elements {
@@ -83,10 +127,7 @@ impl Elements {
     #[must_use]
     pub fn get(&self, index: u32) -> Option<Value> {
         let bits = match &self.repr {
-            Repr::Dense(v) => {
-                let i = usize::try_from(index).ok()?;
-                *v.get(i)?
-            }
+            Repr::Dense(v) => dense::get(v, index)?,
             Repr::Sparse(m) => *m.get(&index)?,
         };
         if bits == contract::HOLE_BITS {
@@ -125,20 +166,10 @@ impl Elements {
             self.make_sparse();
         }
         match &mut self.repr {
-            Repr::Dense(v) => {
-                let i = usize::try_from(index).map_err(|_| Error::NotAnIndex)?;
-                if let Some(slot) = v.get_mut(i) {
-                    *slot = bits;
-                } else {
-                    // `choose` kept it dense: the gap is at most MAX_GAP and
-                    // `index < MAX_DENSE`, so this reserves at most MAX_DENSE
-                    // slots in all (E4).
-                    let need = i.saturating_add(1).saturating_sub(v.len());
-                    v.try_reserve(need).map_err(|_| Error::OutOfMemory)?;
-                    v.resize(i, contract::HOLE_BITS);
-                    v.push(bits);
-                }
-            }
+            // `choose` kept it dense: the gap is at most MAX_GAP and
+            // `index < MAX_DENSE`, so dense storage holds at most MAX_DENSE
+            // slots in all (E4).
+            Repr::Dense(v) => dense::set(v, index, bits)?,
             Repr::Sparse(m) => {
                 m.insert(index, bits);
             }
@@ -153,14 +184,7 @@ impl Elements {
     /// Returns whether an element was there.
     pub fn delete(&mut self, index: u32) -> bool {
         match &mut self.repr {
-            Repr::Dense(v) => {
-                let Some(slot) = usize::try_from(index).ok().and_then(|i| v.get_mut(i)) else {
-                    return false;
-                };
-                let was = *slot != contract::HOLE_BITS;
-                *slot = contract::HOLE_BITS;
-                was
-            }
+            Repr::Dense(v) => dense::delete(v, index),
             Repr::Sparse(m) => m.remove(&index).is_some(),
         }
     }
@@ -170,10 +194,7 @@ impl Elements {
     /// representation (E3, E4).
     pub fn set_length(&mut self, new_length: u32) {
         match &mut self.repr {
-            Repr::Dense(v) => {
-                let keep = usize::try_from(new_length).unwrap_or(usize::MAX);
-                v.truncate(keep);
-            }
+            Repr::Dense(v) => dense::truncate(v, new_length),
             Repr::Sparse(m) => {
                 // `split_off` keeps keys below the bound in `m`.
                 drop(m.split_off(&new_length));
