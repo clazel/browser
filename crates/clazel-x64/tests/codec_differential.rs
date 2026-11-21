@@ -39,29 +39,29 @@ fn size(w64: bool) -> Size {
     if w64 { Size::W64 } else { Size::W32 }
 }
 fn alu(k: usize) -> AluOp {
-    [
-        AluOp::Add,
-        AluOp::Or,
-        AluOp::And,
-        AluOp::Sub,
-        AluOp::Xor,
-        AluOp::Cmp,
-    ]
-    .into_iter()
-    .nth(k)
-    .unwrap()
+    match k {
+        0 => AluOp::Add,
+        1 => AluOp::Or,
+        2 => AluOp::And,
+        3 => AluOp::Sub,
+        4 => AluOp::Xor,
+        _ => AluOp::Cmp,
+    }
 }
 fn shift(k: usize) -> ShiftOp {
-    [ShiftOp::Shl, ShiftOp::Shr, ShiftOp::Sar]
-        .into_iter()
-        .nth(k)
-        .unwrap()
+    match k {
+        0 => ShiftOp::Shl,
+        1 => ShiftOp::Shr,
+        _ => ShiftOp::Sar,
+    }
 }
 fn fop(k: usize) -> BinOp {
-    [BinOp::Add, BinOp::Sub, BinOp::Mul, BinOp::Div]
-        .into_iter()
-        .nth(k)
-        .unwrap()
+    match k {
+        0 => BinOp::Add,
+        1 => BinOp::Sub,
+        2 => BinOp::Mul,
+        _ => BinOp::Div,
+    }
 }
 
 /// A memory operand: base, optional (index, scale), displacement.
@@ -260,40 +260,57 @@ fn instrs() -> Vec<Instr> {
     v
 }
 
+/// Miri is slow: under it, each test runs a fixed stride of the cases
+/// (docs/VERIFICATION.md, Miri).
+fn stride(native: usize) -> usize {
+    if cfg!(miri) {
+        native.saturating_mul(150)
+    } else {
+        native
+    }
+}
+
 #[test]
 fn encoder_decoder_and_reference_agree() {
     let all = instrs();
     assert!(all.len() > 3000);
-    for i in &all {
+    for i in all.iter().step_by(stride(1)) {
         let enc = X64::encode_instr(i);
         // 1. The decoder reads back the instruction, whatever follows.
         for tail in [&[][..], &[0x90][..], &[0xc3, 0x00, 0xff][..]] {
             let mut bytes = enc.clone();
             bytes.extend_from_slice(tail);
-            let (j, n) = X64::decode_instr(&bytes).expect("canonical encoding refused");
-            assert_eq!(n, enc.len());
-            assert_eq!(X64::encode_instr(&j), enc);
+            let r = X64::decode_instr(&bytes);
+            assert!(r.is_some(), "canonical encoding refused: {enc:02x?}");
+            if let Some((j, n)) = r {
+                assert_eq!(n, enc.len());
+                assert_eq!(X64::encode_instr(&j), enc);
+            }
         }
         // 2. The reference reads the same length.
         assert_eq!(reference_len(&enc), Some(enc.len() as u64), "{enc:02x?}");
         // 3. Truncations are refused.
         for cut in 0..enc.len() {
-            assert!(X64::decode_instr(&enc[..cut]).is_none(), "{enc:02x?}");
+            let prefix = enc.get(..cut).unwrap_or(&[]);
+            assert!(X64::decode_instr(prefix).is_none(), "{enc:02x?}");
         }
     }
 }
 
 #[test]
 fn accepted_mutations_are_canonical_and_real() {
-    for i in instrs().iter().step_by(13) {
+    for i in instrs().iter().step_by(stride(13)) {
         let enc = X64::encode_instr(i);
         for k in 0..enc.len() {
             for flip in [0x01u8, 0x40, 0x80, 0xff] {
                 let mut bytes = enc.clone();
-                bytes[k] ^= flip;
+                if let Some(b) = bytes.get_mut(k) {
+                    *b ^= flip;
+                }
                 if let Some((j, n)) = X64::decode_instr(&bytes) {
-                    assert_eq!(X64::encode_instr(&j), bytes[..n], "{bytes:02x?}");
-                    assert_eq!(reference_len(&bytes[..n]), Some(n as u64), "{bytes:02x?}");
+                    let used = bytes.get(..n).unwrap_or(&[]);
+                    assert_eq!(X64::encode_instr(&j), used, "{bytes:02x?}");
+                    assert_eq!(reference_len(used), Some(n as u64), "{bytes:02x?}");
                 }
             }
         }
