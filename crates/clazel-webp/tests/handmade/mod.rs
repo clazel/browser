@@ -1453,12 +1453,12 @@ fn malformed_files_are_errors() -> Result<(), String> {
         ("truncated data", riff(&[chunk(b"VP8L", short)]), "ends"),
         ("a chunk past the RIFF end", cut, "past"),
         (
-            "lossy",
+            "lossy with an empty first partition",
             riff(&[chunk(
                 b"VP8 ",
                 &[0x10, 0, 0, 0x9D, 0x01, 0x2A, 4, 0, 3, 0, 0, 0],
             )]),
-            "Unsupported",
+            "first partition",
         ),
         (
             "VP8X canvas disagrees",

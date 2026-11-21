@@ -36,6 +36,7 @@ mod files {
 }
 mod common;
 mod handmade;
+mod lossy;
 
 use clazel_image_shape::{Buffers, ConfigStatus, Decoder, Error, Status};
 use clazel_webp::Webp;
@@ -57,20 +58,10 @@ fn all_files() -> Vec<(&'static str, &'static [u8])> {
 /// Files whose outcome legitimately differs from the reference's, with the
 /// reason. Each is checked to differ (a file listed here that starts to agree
 /// fails the suite, so the list stays true).
-const XFAIL: &[(&str, &str)] = &[
-    (
-        "animated-red-blue.webp",
-        "alpha-blended frames: image-webp rounds the blend more precisely than libwebp's integer formula, which we follow (listed choice 2); checked to agree within 1 per channel, and frame 0 exactly",
-    ),
-    (
-        "pjw-thumbnail.lossy.webp",
-        "lossy (VP8): refused as unsupported, decoding it is item 6.9",
-    ),
-    (
-        "mona-lisa.21x32.q0.lossy.webp",
-        "lossy (VP8): refused as unsupported, decoding it is item 6.9",
-    ),
-];
+const XFAIL: &[(&str, &str)] = &[(
+    "animated-red-blue.webp",
+    "alpha-blended frames: image-webp rounds the blend more precisely than libwebp's integer formula, which we follow (listed choice 2); checked to agree within 1 per channel, and frame 0 exactly",
+)];
 
 fn xfail_reason(file: &str) -> Option<&'static str> {
     XFAIL.iter().find(|(f, _)| *f == file).map(|(_, r)| *r)
@@ -156,37 +147,6 @@ fn differential_wuffs_webp() {
 }
 
 #[test]
-fn lossy_is_refused_not_misread() -> Result<(), String> {
-    for c in files::FILES {
-        let (file, bytes) = (c.file, c.bytes);
-        let wanted = if cfg!(miri) {
-            file == "pjw-thumbnail.lossy.webp"
-        } else {
-            file.contains("lossy")
-        };
-        if !wanted {
-            continue;
-        }
-        // The config is read (the size of the VP8 frame)...
-        let head = bytes.get(..bytes.len().min(64)).unwrap_or(bytes);
-        let Ok(ConfigStatus::Ready(config)) = Webp::decode_config(head) else {
-            return Err(format!("{file}: no config"));
-        };
-        assert!(config.width() > 0 && config.height() > 0);
-        // ... and decoding says unsupported.
-        match decode(bytes, usize::MAX, false) {
-            Ok(d) => assert!(
-                matches!(&d.end, End::Error(e) if e.contains("Unsupported")),
-                "{file}: {:?}",
-                d.end
-            ),
-            Err(e) => return Err(format!("{file}: {e}")),
-        }
-    }
-    Ok(())
-}
-
-#[test]
 fn chunking_changes_nothing() {
     let sizes: &[usize] = if cfg!(miri) {
         &[1]
@@ -228,9 +188,17 @@ fn chunking_changes_nothing() {
 
 #[test]
 fn mutants_never_panic() {
-    let per_file = if cfg!(miri) { 2 } else { 60 };
     let (mut total, mut errors) = (0usize, 0usize);
     for (file, bytes) in all_files() {
+        // A mutant of a file of tens of kilobytes costs a tenth of a second
+        // in an unoptimised build: fewer of those.
+        let per_file = if cfg!(miri) {
+            2
+        } else if bytes.len() > 10_000 {
+            10
+        } else {
+            60
+        };
         // Mutating a megabyte file hundreds of times is not what is tested.
         if !cfg!(miri) && bytes.len() > 30_000 {
             continue;
@@ -310,4 +278,53 @@ fn near_agreement(file: &str, bytes: &[u8]) -> bool {
                         },
                     )
             })
+}
+
+/// Random lossy frames from the writer of `tests/lossy`, of sizes that are
+/// and are not multiples of 16, against `image-webp`: every pixel equal.
+#[test]
+fn lossy_written_frames_agree_with_the_reference() {
+    const SIZES: [u32; 14] = [1, 2, 9, 15, 16, 17, 21, 31, 32, 33, 47, 48, 70, 100];
+    let count: u64 = if cfg!(miri) { 1 } else { 400 };
+    let mut bad = Vec::new();
+    let mut refused = 0usize;
+    for seed in 0..count {
+        let mut rng = Rng(0x1234_5678_9ABC_DEF1 ^ seed.wrapping_mul(0x9E37_79B9_7F4A_7C15));
+        let (w, h) = if cfg!(miri) {
+            (20, 17)
+        } else {
+            (
+                SIZES.get(rng.below(SIZES.len())).copied().unwrap_or(16),
+                SIZES.get(rng.below(SIZES.len())).copied().unwrap_or(16),
+            )
+        };
+        let frame = lossy::random_frame(&mut rng, w, h);
+        let payload = lossy::encode(&frame, &mut rng);
+        let file = lossy::riff(&payload);
+        // The decoder keeps a `VP8 ` chunk in 4 bytes to the pixel of its
+        // frame, or in 1,024 bytes: a thin frame of noise can need more (a
+        // listed choice), and is refused as unsupported.
+        let room = usize::try_from(w.saturating_mul(h).saturating_mul(4))
+            .unwrap_or(0)
+            .max(1024);
+        if payload.len() > room {
+            match decode(&file, usize::MAX, false) {
+                Ok(d) if matches!(&d.end, End::Error(e) if e.contains("Unsupported")) => {
+                    refused += 1;
+                }
+                other => bad.push(format!("seed {seed}: {other:?} for a chunk over {room}")),
+            }
+        } else if let Some(d) = lossy::differs(&format!("seed {seed} {w}x{h}"), &file) {
+            bad.push(format!("{d}\n  {frame:?}"));
+        }
+    }
+    println!(
+        "clazel-conformance: suite=\"lossy frames written by tests/lossy vs image-webp 0.2.4\" pass={} refused={refused} fail={} total={count}",
+        usize::try_from(count)
+            .unwrap_or(0)
+            .saturating_sub(bad.len())
+            .saturating_sub(refused),
+        bad.len()
+    );
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
 }

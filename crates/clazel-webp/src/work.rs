@@ -16,6 +16,8 @@
 //! | `meta` | `sub` | the entropy image (meta prefix codes) |
 //! | `groups` | `cap * GROUP_BYTES` | the prefix code groups |
 //! | `frame` | the canvas, if animated, else 0 | a frame before it is composited |
+//! | `alpha` | `width * height` | the alpha plane of a lossy image (`ALPH`, item 6.9) |
+//! | `lossy` | `vp8::lossy_len` | the planes and contexts of the lossy decoder (item 6.9) |
 //!
 //! `sub` is 4 bytes for each block of 4 by 4 pixels of the image (the
 //! sub-resolution images' blocks are at least 4 by 4: RFC 9649 sections
@@ -93,6 +95,9 @@ pub(crate) fn work_len(width: u32, height: u32, animated: bool) -> Option<usize>
     } else {
         0
     };
+    let pixels = usize::try_from(width)
+        .ok()?
+        .checked_mul(usize::try_from(height).ok()?)?;
     CACHE_ENTRIES
         .checked_mul(4)?
         .checked_add(MAX_GREEN)?
@@ -102,7 +107,9 @@ pub(crate) fn work_len(width: u32, height: u32, animated: bool) -> Option<usize>
         .checked_add(PALETTE_BYTES)?
         .checked_add(sub.checked_mul(3)?)?
         .checked_add(group_cap(width, height)?.checked_mul(GROUP_BYTES)?)?
-        .checked_add(canvas)
+        .checked_add(canvas)?
+        .checked_add(pixels)?
+        .checked_add(crate::vp8::lossy_len(width, height)?)
 }
 
 /// The scratch regions of the lossless decoder, cut from the work buffer.
@@ -139,6 +146,10 @@ pub(crate) struct Parts<'a> {
     pub scratch: Scratch<'a>,
     /// A frame as decoded, before compositing (empty unless animated).
     pub frame: &'a mut [u8],
+    /// The alpha plane of a lossy image, `width * height` bytes.
+    pub alpha: &'a mut [u8],
+    /// The lossy decoder's planes and contexts (`vp8::lossy_len` bytes).
+    pub lossy: &'a mut [u8],
 }
 
 impl<'a> Parts<'a> {
@@ -164,8 +175,14 @@ impl<'a> Parts<'a> {
         let (pred, rest) = rest.split_at_mut_checked(sub)?;
         let (color, rest) = rest.split_at_mut_checked(sub)?;
         let (meta, rest) = rest.split_at_mut_checked(sub)?;
-        let (groups, frame) =
+        let (groups, rest) =
             rest.split_at_mut_checked(group_cap(width, height)?.checked_mul(GROUP_BYTES)?)?;
+        let npix = usize::try_from(width)
+            .ok()?
+            .checked_mul(usize::try_from(height).ok()?)?;
+        let canvas = if animated { npix.checked_mul(4)? } else { 0 };
+        let (frame, rest) = rest.split_at_mut_checked(canvas)?;
+        let (alpha, lossy) = rest.split_at_mut_checked(npix)?;
         Some(Parts {
             pixels,
             scratch: Scratch {
@@ -181,6 +198,8 @@ impl<'a> Parts<'a> {
                 groups,
             },
             frame,
+            alpha,
+            lossy,
         })
     }
 }
