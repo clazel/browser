@@ -204,7 +204,7 @@ pub proof fn lemma_tr_guard_trace(lay: lir::Layout, va: u64)
         tr_guard(),
         st1,
     ) == lir::Outcome::Normal(st1.with_stack(st1.stack.push(lir::Val::I32(tr_g(va))))) by {
-        broadcast use super::blocks::stack_shape;
+        broadcast use super::blocks::lemma_below_push1, super::blocks::lemma_below_push2, super::blocks::lemma_drop_last_push;
 
         super::trace::lemma_exec_tag_test(lay, st1, 1, va);
         let s1 = st1.with_stack(st1.stack.push(lir::Val::I32(isint)));
@@ -229,7 +229,7 @@ pub proof fn lemma_tflag_trace(lay: lir::Layout, va: u64)
         tflag(),
         st1,
     ) == lir::Outcome::Normal(st1.with_stack(st1.stack.push(lir::Val::I32(tr_t(va))))) by {
-        broadcast use super::blocks::stack_shape;
+        broadcast use super::blocks::lemma_below_push1, super::blocks::lemma_below_push2, super::blocks::lemma_drop_last_push;
 
         super::trace::lemma_exec_tag_test(lay, st1, 1, va);
         let s1 = st1.with_stack(st1.stack.push(lir::Val::I32(isint)));
@@ -260,7 +260,7 @@ pub proof fn lemma_not_val_trace(lay: lir::Layout, va: u64)
         not_val(),
         st1,
     ) == lir::Outcome::Normal(st1.with_stack(st1.stack.push(lir::Val::I64(not_word(va))))) by {
-        broadcast use super::blocks::stack_shape;
+        broadcast use super::blocks::lemma_below_push1, super::blocks::lemma_below_push2, super::blocks::lemma_drop_last_push;
 
         let t = tr_t(va);
         assert(super::run::exec(lay, tflag(), st1) == lir::Outcome::Normal(
@@ -442,7 +442,7 @@ pub proof fn lemma_jump_rest(lay: lir::Layout, st: lir::St, va: u64, jf: bool, l
             })
         }),
 {
-    broadcast use super::blocks::stack_shape;
+    broadcast use super::blocks::lemma_below_push1, super::blocks::lemma_below_push2, super::blocks::lemma_drop_last_push;
 
     lemma_tr_simple();
     lemma_tflag_trace(lay, va);

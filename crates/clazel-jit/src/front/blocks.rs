@@ -43,13 +43,6 @@ pub broadcast proof fn lemma_drop_last_push<A>(s: Seq<A>, x: A)
     assert(s.push(x).drop_last() =~= s);
 }
 
-/// The stack facts a straight-line block's proof needs.
-pub broadcast group stack_shape {
-    lemma_below_push1,
-    lemma_below_push2,
-    lemma_drop_last_push,
-}
-
 /// The guard's exit: fall through (`Nop`) when the flag on the stack is
 /// non-zero, exit to the handler of `op` (from the op at `pc`) otherwise.
 pub open spec fn gx(op: js::Op, pc: nat) -> lir::Instr {
@@ -423,7 +416,7 @@ pub proof fn lemma_pre_un(
             &&& st3.locals[1] == lir::Val::I64(v)
         }),
 {
-    broadcast use stack_shape;
+    broadcast use lemma_below_push1, lemma_below_push2, lemma_drop_last_push;
 
     let v = js::reg(s, src);
     super::proofs::lemma_reg_slot_ok(s, src);
@@ -508,6 +501,147 @@ pub proof fn lemma_un_op(
         assert(sa.locals == st3.locals);
         assert(sa.locals.len() == nlocals());
         assert(sa.locals[1] == lir::Val::I64(v));
+        assert(super::run::exec(lay, val, sa) == lir::Outcome::Normal(
+            sa.with_stack(sa.stack.push(lir::Val::I64(w))),
+        ));
+        lemma_store_outcome(op, lbl, lay, s, st4, (fuel - 2) as nat, dst, val, w);
+    }
+}
+
+/// An extra flag block of a binary lowering: from the stack `base` + the
+/// first guard's flag `g1`, and the operand words in locals 1 and 2, it leaves
+/// `base` + `g1 & f`.
+pub open spec fn flag_and_computes(lay: lir::Layout, ex: Seq<lir::Instr>, va: u64, vb: u64, f: u32) -> bool {
+    forall|st1: lir::St, base: Seq<lir::Val>, g1: u32|
+        #![trigger super::run::exec(lay, ex, st1), base.push(lir::Val::I32(g1))]
+        st1.stack == base.push(lir::Val::I32(g1)) && st1.locals.len() == nlocals() && st1.locals[1]
+            == lir::Val::I64(va) && st1.locals[2] == lir::Val::I64(vb) ==> super::run::exec(lay, ex, st1)
+            == lir::Outcome::Normal(
+            st1.with_stack(base.push(lir::Val::I32(lir::ibin32(lir::IBin::And, g1, f)))),
+        )
+}
+
+/// A binary lowering with a second flag: the operands, the int32 tests, the
+/// extra flag block `ex` (which `and`s its flag in), the guard exit, then a
+/// store of the value block's word in `dst`.
+pub open spec fn lower_bin2(
+    ex: Seq<lir::Instr>,
+    val: Seq<lir::Instr>,
+    dst: nat,
+    a: nat,
+    b: nat,
+    op: js::Op,
+    pc: nat,
+) -> lir::Instr {
+    guarded(
+        super::lower::operands_ins(a, b) + (super::lower::guard1_ins() + ex),
+        op,
+        pc,
+        super::run::chain(super::lower::store_ins(reg_off(dst), val)),
+    )
+}
+
+/// [`lemma_bin_op`] with a second flag: a zero flag (an operand that is not
+/// an int32, or the extra flag clear) exits; otherwise the fast path holds
+/// and the result is `w`.
+pub proof fn lemma_bin_op2(
+    op: js::Op,
+    pc: nat,
+    lbl: nat,
+    lay: lir::Layout,
+    s: js::State,
+    st: lir::St,
+    fuel: nat,
+    dst: nat,
+    a: nat,
+    b: nat,
+    ex: Seq<lir::Instr>,
+    val: Seq<lir::Instr>,
+    f: u32,
+    w: u64,
+)
+    requires
+        fuel >= 100,
+        rel(lay, s, st),
+        st.stack == Seq::<lir::Val>::empty(),
+        js::state_wf(s),
+        s.pc == pc,
+        handler_complete(s, op),
+        js::reg_ok(js::cur_code(s), dst),
+        js::reg_ok(js::cur_code(s), a),
+        js::reg_ok(js::cur_code(s), b),
+        super::run::all_simple(ex),
+        ex.len() < 30,
+        super::run::all_simple(val),
+        val.len() < 40,
+        flag_and_computes(lay, ex, js::reg(s, a), js::reg(s, b), f),
+        js::is_int32(js::reg(s, a)) && js::is_int32(js::reg(s, b)) && f != 0 ==> js::fast_path(s, op)
+            && js::fast_step(s, op) == js::next(js::set_reg(s, dst, w)),
+        js::is_int32(js::reg(s, a)) && js::is_int32(js::reg(s, b)) && f != 0 ==> val_computes(
+            lay,
+            val,
+            js::reg(s, a),
+            js::reg(s, b),
+            w,
+        ),
+        f == 0 || f == 1,
+    ensures
+        outcome_refines(lay, s, op, lbl, lir::eval(lay, lower_bin2(ex, val, dst, a, b, op, pc), st, fuel)),
+{
+    lemma_pre1(lay, s, st, a, b);
+    let va = js::reg(s, a);
+    let vb = js::reg(s, b);
+    let pre1 = super::lower::operands_ins(a, b) + super::lower::guard1_ins();
+    let g1 = lir::ibin32(
+        lir::IBin::And,
+        lir::bool_i32((va >> 32u64) == super::arith::tag_hi()),
+        lir::bool_i32((vb >> 32u64) == super::arith::tag_hi()),
+    );
+    let st3 = lir::St {
+        stack: seq![lir::Val::I32(g1)],
+        locals: st.locals.update(1, lir::Val::I64(va)).update(2, lir::Val::I64(vb)),
+        mem: st.mem,
+    };
+    let o = super::lower::operands_ins(a, b);
+    let g1i = super::lower::guard1_ins();
+    let pre = o + (g1i + ex);
+    assert(pre =~= pre1 + ex);
+    super::intops::lemma_simple_concat(pre1, ex);
+    super::trace::lemma_exec_app(lay, pre1, ex, st, st3);
+    let g = lir::ibin32(lir::IBin::And, g1, f);
+    let st5 = st3.with_stack(Seq::<lir::Val>::empty().push(lir::Val::I32(g)));
+    let b0 = Seq::<lir::Val>::empty();
+    assert(st3.stack == b0.push(lir::Val::I32(g1)));
+    assert(super::run::exec(lay, ex, st3) == lir::Outcome::Normal(st5));
+    assert(st5.stack =~= seq![lir::Val::I32(g)]);
+    assert(super::run::exec(lay, pre, st) == lir::Outcome::Normal(st5));
+    assert(rel(lay, s, st5));
+    let rest = super::run::chain(super::lower::store_ins(reg_off(dst), val));
+    assert(pre.len() == 23 + ex.len());
+    lemma_guarded(op, pc, lbl, lay, s, st, st5, pre, rest, g, fuel);
+    if g != 0 {
+        let st4 = st5.with_stack(Seq::<lir::Val>::empty());
+        assert(rel(lay, s, st4));
+        super::trace::lemma_guard1_trace(lay, st3.with_stack(Seq::<lir::Val>::empty()), va, vb);
+        assert((g1 != 0) <==> (js::is_int32(va) && js::is_int32(vb)));
+        let e1 = g1;
+        assert(e1 == 0 || e1 == 1) by {
+            let t1 = lir::bool_i32((va >> 32u64) == super::arith::tag_hi());
+            let t2 = lir::bool_i32((vb >> 32u64) == super::arith::tag_hi());
+            assert((t1 & t2) == 0 || (t1 & t2) == 1) by (bit_vector)
+                requires
+                    t1 == 0 || t1 == 1,
+                    t2 == 0 || t2 == 1,
+            ;
+        }
+        assert(((e1 & f) != 0) ==> (e1 != 0 && f != 0)) by (bit_vector);
+        assert(js::is_int32(va) && js::is_int32(vb) && f != 0);
+        super::proofs::lemma_reg_slot_ok(s, dst);
+        let sa = st4.with_stack(st4.stack.push(lir::Val::I64((8 * s.fp + reg_off(dst)) as u64)));
+        assert(sa.locals == st3.locals);
+        assert(sa.locals.len() == nlocals());
+        assert(sa.locals[1] == lir::Val::I64(va));
+        assert(sa.locals[2] == lir::Val::I64(vb));
         assert(super::run::exec(lay, val, sa) == lir::Outcome::Normal(
             sa.with_stack(sa.stack.push(lir::Val::I64(w))),
         ));

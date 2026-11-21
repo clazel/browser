@@ -20,15 +20,6 @@ use vstd::prelude::*;
 
 verus! {
 
-use vstd::arithmetic::power2::{
-    lemma2_to64,
-    lemma2_to64_rest,
-    lemma_pow2_adds,
-    lemma_pow2_pos,
-    lemma_pow2_strictly_increases,
-    pow2,
-};
-
 /// `2^52`.
 pub open spec fn t52() -> int {
     4503599627370496
@@ -36,7 +27,7 @@ pub open spec fn t52() -> int {
 
 /// The fraction field of `f64_of_int(±m)`.
 pub open spec fn mag_frac(m: nat) -> int {
-    (m * pow2((52 - js::ilog2(m)) as nat)) as int - pow2(52) as int
+    (m * vstd::arithmetic::power2::pow2((52 - js::ilog2(m)) as nat)) as int - vstd::arithmetic::power2::pow2(52) as int
 }
 
 /// The magnitude bits (exponent and fraction) of `f64_of_int(±m)`.
@@ -60,11 +51,11 @@ pub proof fn lemma_ilog2_bounds(n: nat)
     requires
         n >= 1,
     ensures
-        pow2(js::ilog2(n)) <= n,
-        n < pow2(js::ilog2(n) + 1),
+        vstd::arithmetic::power2::pow2(js::ilog2(n)) <= n,
+        n < vstd::arithmetic::power2::pow2(js::ilog2(n) + 1),
     decreases n,
 {
-    lemma2_to64();
+    vstd::arithmetic::power2::lemma2_to64();
     if n <= 1 {
         assert(n == 1);
     } else {
@@ -72,10 +63,10 @@ pub proof fn lemma_ilog2_bounds(n: nat)
         lemma_ilog2_bounds(h);
         let l = js::ilog2(h);
         assert(js::ilog2(n) == 1 + l);
-        lemma_pow2_adds(1, l);
-        lemma_pow2_adds(1, l + 1);
-        assert(pow2(1 + l) == 2 * pow2(l));
-        assert(pow2(l + 2) == 2 * pow2(l + 1));
+        vstd::arithmetic::power2::lemma_pow2_adds(1, l);
+        vstd::arithmetic::power2::lemma_pow2_adds(1, l + 1);
+        assert(vstd::arithmetic::power2::pow2(1 + l) == 2 * vstd::arithmetic::power2::pow2(l));
+        assert(vstd::arithmetic::power2::pow2(l + 2) == 2 * vstd::arithmetic::power2::pow2(l + 1));
     }
 }
 
@@ -91,9 +82,9 @@ pub proof fn lemma_ilog2_mono(a: nat, b: nat)
     if js::ilog2(a) > js::ilog2(b) {
         let lb = js::ilog2(b);
         if js::ilog2(a) > lb + 1 {
-            lemma_pow2_strictly_increases(lb + 1, js::ilog2(a));
+            vstd::arithmetic::power2::lemma_pow2_strictly_increases(lb + 1, js::ilog2(a));
         }
-        assert(pow2(js::ilog2(a)) >= pow2(lb + 1));
+        assert(vstd::arithmetic::power2::pow2(js::ilog2(a)) >= vstd::arithmetic::power2::pow2(lb + 1));
         assert(false);
     }
 }
@@ -108,21 +99,21 @@ pub proof fn lemma_frac_bounds(m: nat)
         0 <= mag_frac(m) < t52(),
 {
     lemma_ilog2_bounds(m);
-    lemma2_to64();
+    vstd::arithmetic::power2::lemma2_to64();
     let k = js::ilog2(m);
     if k > 31 {
-        lemma_pow2_strictly_increases(32, k);
+        vstd::arithmetic::power2::lemma_pow2_strictly_increases(32, k);
         assert(false);
     }
-    let p = pow2(k);
-    let q = pow2((52 - k) as nat);
-    lemma_pow2_adds(k, (52 - k) as nat);
-    lemma_pow2_adds(k, 1);
-    lemma_pow2_pos(k);
-    lemma_pow2_pos((52 - k) as nat);
-    assert(p * q == pow2(52));
-    lemma2_to64_rest();
-    assert(pow2(52) == t52());
+    let p = vstd::arithmetic::power2::pow2(k);
+    let q = vstd::arithmetic::power2::pow2((52 - k) as nat);
+    vstd::arithmetic::power2::lemma_pow2_adds(k, (52 - k) as nat);
+    vstd::arithmetic::power2::lemma_pow2_adds(k, 1);
+    vstd::arithmetic::power2::lemma_pow2_pos(k);
+    vstd::arithmetic::power2::lemma_pow2_pos((52 - k) as nat);
+    assert(p * q == vstd::arithmetic::power2::pow2(52));
+    vstd::arithmetic::power2::lemma2_to64_rest();
+    assert(vstd::arithmetic::power2::pow2(52) == t52());
     assert(m * q >= p * q) by (nonlinear_arith)
         requires
             m >= p,
@@ -160,8 +151,8 @@ pub proof fn lemma_pos_mono(m1: nat, m2: nat)
     let k1 = js::ilog2(m1);
     let k2 = js::ilog2(m2);
     if k1 == k2 {
-        let q = pow2((52 - k1) as nat);
-        lemma_pow2_pos((52 - k1) as nat);
+        let q = vstd::arithmetic::power2::pow2((52 - k1) as nat);
+        vstd::arithmetic::power2::lemma_pow2_pos((52 - k1) as nat);
         assert((m2 - m1) * q > 0) by (nonlinear_arith)
             requires
                 m2 > m1,
@@ -264,9 +255,9 @@ pub proof fn lemma_fields(n: int)
 {
     let m = (if n < 0 { -n } else { n }) as nat;
     lemma_frac_bounds(m);
-    lemma2_to64();
-    lemma2_to64_rest();
-    assert(pow2(52) == t52());
+    vstd::arithmetic::power2::lemma2_to64();
+    vstd::arithmetic::power2::lemma2_to64_rest();
+    assert(vstd::arithmetic::power2::pow2(52) == t52());
     let k = js::ilog2(m);
     let sg: u64 = if n < 0 { 1 } else { 0 };
     let e: u64 = (k + 1023) as u64;
@@ -393,15 +384,15 @@ pub proof fn lemma_trunc_abs(n: int)
     let b = js::f64_of_int(n);
     let m = (if n < 0 { -n } else { n }) as nat;
     lemma_frac_bounds(m);
-    lemma2_to64();
+    vstd::arithmetic::power2::lemma2_to64();
     let k = js::ilog2(m);
-    let q = pow2((52 - k) as nat);
-    lemma_pow2_pos((52 - k) as nat);
+    let q = vstd::arithmetic::power2::pow2((52 - k) as nat);
+    vstd::arithmetic::power2::lemma_pow2_pos((52 - k) as nat);
     let e: int = js::f64_exp(b) as int;
     assert(e == k + 1023);
-    let mm: int = pow2(52) as int + js::f64_frac(b) as int;
-    lemma2_to64_rest();
-    assert(pow2(52) == t52());
+    let mm: int = vstd::arithmetic::power2::pow2(52) as int + js::f64_frac(b) as int;
+    vstd::arithmetic::power2::lemma2_to64_rest();
+    assert(vstd::arithmetic::power2::pow2(52) == t52());
     assert(mm == m * q);
     let kk: int = e - 1075;
     assert(kk < 0);

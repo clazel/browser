@@ -180,6 +180,10 @@ pub proof fn lemma_op_case(
             js::Op::JumpIfFalse { cond, target } => {
                 super::truth::lemma_jump_op(c, op, pc, lbl, lay, s, st, fuel, true, cond, target);
             },
+            js::Op::UShr { dst, a, b } => {
+                assert(jump_target(op) is None);
+                super::ushr::lemma_ushr_op(c, op, pc, lbl, lay, s, st, fuel, dst, a, b);
+            },
             _ => {
                 assert(false);
             },

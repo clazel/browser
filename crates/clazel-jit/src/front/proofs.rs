@@ -316,6 +316,10 @@ pub proof fn lemma_jump_op(
 
 /// A conditional jump on the register `src` being (or not being) the value
 /// `v`: `br_if` of a comparison with the constant.
+///
+/// The resource limit is raised: with the second slice's lowerings in scope
+/// (`lower::lower` names them all) the proof is near the default limit.
+#[verifier::rlimit(100)]
 pub proof fn lemma_jump_if_is(
     c: js::Code,
     op: js::Op,

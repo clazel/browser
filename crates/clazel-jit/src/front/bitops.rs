@@ -21,14 +21,6 @@ use vstd::prelude::*;
 
 verus! {
 
-use vstd::arithmetic::power2::{
-    lemma2_to64_rest,
-    lemma_pow2_adds,
-    lemma_pow2_pos,
-    lemma_pow2_strictly_increases,
-    pow2,
-};
-
 /// The 64-bit operator of operation `k`.
 pub open spec fn bit_ibin(k: nat) -> lir::IBin {
     if k == 0 {
@@ -76,9 +68,9 @@ pub open spec fn bit_res(k: nat, ia: i32, ib: i32) -> i32 {
     } else if k == 2 {
         ia ^ ib
     } else if k == 3 {
-        js::wrap_i32(ia as int * pow2(shift_count(ib)) as int)
+        js::wrap_i32(ia as int * vstd::arithmetic::power2::pow2(shift_count(ib)) as int)
     } else {
-        ((ia as int) / (pow2(shift_count(ib)) as int)) as i32
+        ((ia as int) / (vstd::arithmetic::power2::pow2(shift_count(ib)) as int)) as i32
     }
 }
 
@@ -159,7 +151,7 @@ pub proof fn lemma_bit_tail_trace(lay: lir::Layout, k: nat, st: lir::St, base: S
             st.with_stack(base.push(lir::Val::I64(bit_word(k, xa, xb)))),
         ),
 {
-    broadcast use super::blocks::stack_shape;
+    broadcast use super::blocks::lemma_below_push1, super::blocks::lemma_below_push2, super::blocks::lemma_drop_last_push;
 
     reveal_with_fuel(super::run::exec, 8);
 }
@@ -185,7 +177,7 @@ pub proof fn lemma_bit_val_trace(lay: lir::Layout, k: nat, va: u64, vb: u64)
             == lir::Val::I64(vb) implies super::run::exec(lay, bit_val(k), st1) == lir::Outcome::Normal(
         st1.with_stack(st1.stack.push(lir::Val::I64(w))),
     ) by {
-        broadcast use super::blocks::stack_shape;
+        broadcast use super::blocks::lemma_below_push1, super::blocks::lemma_below_push2, super::blocks::lemma_drop_last_push;
 
         super::trace::lemma_exec_sext_local(lay, st1, 1, va);
         let s1 = st1.with_stack(st1.stack.push(lir::Val::I64(xa)));
@@ -210,7 +202,7 @@ pub proof fn lemma_shl_low(ia: i32, c: u32)
         c < 32,
     ensures
         ((((ia as i64) as u64) << (c as u64)) & 0xFFFF_FFFFu64) == (((ia as u32) << c) as u64),
-        ((ia as int) * (pow2(c as nat) as int)) % 4294967296int == (((ia as u32) << c) as int),
+        ((ia as int) * (vstd::arithmetic::power2::pow2(c as nat) as int)) % 4294967296int == (((ia as u32) << c) as int),
 {
     assert(((((ia as i64) as u64) << (c as u64)) & 0xFFFF_FFFFu64) == (((ia as u32) << c) as u64)) by (bit_vector)
         requires
@@ -222,7 +214,7 @@ pub proof fn lemma_shl_low(ia: i32, c: u32)
     ;
     vstd::bits::lemma_u32_pow2_no_overflow(c as nat);
     vstd::bits::lemma_u32_shl_is_mul(1u32, c);
-    assert((1u32 << c) as int == pow2(c as nat) as int);
+    assert((1u32 << c) as int == vstd::arithmetic::power2::pow2(c as nat) as int);
 }
 
 /// LIR's `shl` of a word by a small count is the machine's.
@@ -232,10 +224,10 @@ pub proof fn lemma_shl64(x: u64, y: u64)
     ensures
         lir::ibin64(lir::IBin::Shl, x, y) == (x << y),
 {
-    lemma2_to64_rest();
+    vstd::arithmetic::power2::lemma2_to64_rest();
     vstd::bits::lemma_u64_pow2_no_overflow(y as nat);
     vstd::bits::lemma_u64_shl_is_mul(1u64, y);
-    assert((1u64 << y) as int == pow2(y as nat) as int);
+    assert((1u64 << y) as int == vstd::arithmetic::power2::pow2(y as nat) as int);
     assert((y as int % 64) as nat == y as nat);
     assert((((x as int) * ((1u64 << y) as int)) % 0x1_0000_0000_0000_0000int) as u64 == (x << y)) by (bit_vector)
         requires
@@ -270,10 +262,10 @@ pub proof fn lemma_shr_range(ia: i32, c: nat)
     requires
         c < 32,
     ensures
-        -2147483648int <= (ia as int) / (pow2(c) as int) <= 2147483647int,
+        -2147483648int <= (ia as int) / (vstd::arithmetic::power2::pow2(c) as int) <= 2147483647int,
 {
-    let d = pow2(c) as int;
-    lemma_pow2_pos(c);
+    let d = vstd::arithmetic::power2::pow2(c) as int;
+    vstd::arithmetic::power2::lemma_pow2_pos(c);
     assert(d >= 1);
     vstd::arithmetic::div_mod::lemma_div_is_ordered(ia as int, 2147483647int, d);
     vstd::arithmetic::div_mod::lemma_div_is_ordered_by_denominator(2147483647int, 1, d);
@@ -308,7 +300,7 @@ pub proof fn lemma_shrs64(ia: i32, y: u64)
     requires
         y < 32,
     ensures
-        lir::ibin64(lir::IBin::ShrS, (ia as i64) as u64, y) == ((((ia as int) / (pow2(y as nat) as int)) as i32)
+        lir::ibin64(lir::IBin::ShrS, (ia as i64) as u64, y) == ((((ia as int) / (vstd::arithmetic::power2::pow2(y as nat) as int)) as i32)
             as i64) as u64,
 {
     let xa = (ia as i64) as u64;
@@ -316,10 +308,10 @@ pub proof fn lemma_shrs64(ia: i32, y: u64)
     assert(((ia as i64) as u64) as i64 == (ia as i64)) by (bit_vector);
     assert(lir::signed_of(64, xa as int) == ia as int);
     lemma_shr_range(ia, y as nat);
-    let q: int = (ia as int) / (pow2(y as nat) as int);
+    let q: int = (ia as int) / (vstd::arithmetic::power2::pow2(y as nat) as int);
     let r: i32 = q as i32;
     assert(r as int == q);
-    lemma2_to64_rest();
+    vstd::arithmetic::power2::lemma2_to64_rest();
     assert((y as int % 64) as nat == y as nat);
     assert((((r as int) % 0x1_0000_0000_0000_0000int) as u64) == ((r as i64) as u64)) by (bit_vector);
 }
@@ -372,7 +364,7 @@ pub proof fn lemma_bit_word(k: nat, va: u64, vb: u64)
         if k == 3 {
             lemma_shl64(xa, y);
             lemma_shl_low(ia, c);
-            let n: int = ia as int * pow2(shift_count(ib)) as int;
+            let n: int = ia as int * vstd::arithmetic::power2::pow2(shift_count(ib)) as int;
             lemma_wrap_i32_low(n);
             let r = js::wrap_i32(n);
             let s = xa << y;
@@ -389,7 +381,7 @@ pub proof fn lemma_bit_word(k: nat, va: u64, vb: u64)
             ;
         } else {
             lemma_shrs64(ia, y);
-            let r: i32 = ((ia as int) / (pow2(shift_count(ib)) as int)) as i32;
+            let r: i32 = ((ia as int) / (vstd::arithmetic::power2::pow2(shift_count(ib)) as int)) as i32;
             let s = lir::ibin64(lir::IBin::ShrS, xa, y);
             assert(s == ((r as i64) as u64));
             assert(super::arith::tagged(s) == js::enc_int32(r)) by (bit_vector)

@@ -136,7 +136,7 @@ pub proof fn lemma_cmp_val_trace(lay: lir::Layout, k: nat, va: u64, vb: u64)
             == lir::Val::I64(vb) implies super::run::exec(lay, cmp_val(k), st1) == lir::Outcome::Normal(
         st1.with_stack(st1.stack.push(lir::Val::I64(w))),
     ) by {
-        broadcast use super::blocks::stack_shape;
+        broadcast use super::blocks::lemma_below_push1, super::blocks::lemma_below_push2, super::blocks::lemma_drop_last_push;
 
         super::trace::lemma_exec_sext_local(lay, st1, 1, va);
         let s1 = st1.with_stack(st1.stack.push(lir::Val::I64(xa)));

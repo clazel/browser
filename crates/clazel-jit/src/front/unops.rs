@@ -264,7 +264,7 @@ pub proof fn lemma_half_trace(lay: lir::Layout, st: lir::St, base: Seq<lir::Val>
             ),
         ),
 {
-    broadcast use super::blocks::stack_shape;
+    broadcast use super::blocks::lemma_below_push1, super::blocks::lemma_below_push2, super::blocks::lemma_drop_last_push;
 
     super::arith::lemma_sx(super::arith::lo32(va));
     reveal_with_fuel(super::run::exec, 7);
@@ -393,39 +393,49 @@ pub proof fn lemma_un_g(k: nat, va: u64)
     }
 }
 
+/// The value block's trace, for one op (the case split is by `k`, one lemma
+/// each, so that every proof stays small). The resource limit is raised: the
+/// four blocks are nine instructions each and `k` is symbolic.
+#[verifier::rlimit(100)]
+pub proof fn lemma_un_val_trace_k(lay: lir::Layout, k: nat, st1: lir::St, xa: u64)
+    requires
+        k <= 3,
+        st1.locals.len() == nlocals(),
+        st1.locals[1] == lir::Val::I64(xa),
+    ensures
+        super::run::exec(lay, un_val(k), st1) == lir::Outcome::Normal(
+            st1.with_stack(
+                st1.stack.push(lir::Val::I64(un_word(k, super::arith::sext(super::arith::lo32(xa))))),
+            ),
+        ),
+{
+    broadcast use super::blocks::lemma_below_push1, super::blocks::lemma_below_push2, super::blocks::lemma_drop_last_push;
+
+    super::arith::lemma_sx(super::arith::lo32(xa));
+    reveal_with_fuel(super::run::exec, 10);
+}
+
 /// The value block's trace.
 pub proof fn lemma_un_val_trace(lay: lir::Layout, k: nat, va: u64)
     ensures
         super::blocks::val_computes1(lay, un_val(k), va, un_word(k, super::arith::sext(super::arith::lo32(va)))),
 {
-    let xa = super::arith::sext(super::arith::lo32(va));
-    super::arith::lemma_sx(super::arith::lo32(va));
     assert forall|st1: lir::St|
         #![trigger super::run::exec(lay, un_val(k), st1)]
         st1.locals.len() == nlocals() && st1.locals[1] == lir::Val::I64(va) implies super::run::exec(
         lay,
         un_val(k),
         st1,
-    ) == lir::Outcome::Normal(st1.with_stack(st1.stack.push(lir::Val::I64(un_word(k, xa))))) by {
-        broadcast use super::blocks::stack_shape;
-
-        reveal_with_fuel(super::run::exec, 10);
-        if k == 0 {
-            assert(super::run::exec(lay, un_val(0), st1) == lir::Outcome::Normal(
-                st1.with_stack(st1.stack.push(lir::Val::I64(un_word(0, xa)))),
-            ));
-        } else if k == 1 {
-            assert(super::run::exec(lay, un_val(1), st1) == lir::Outcome::Normal(
-                st1.with_stack(st1.stack.push(lir::Val::I64(un_word(1, xa)))),
-            ));
-        } else if k == 2 {
-            assert(super::run::exec(lay, un_val(2), st1) == lir::Outcome::Normal(
-                st1.with_stack(st1.stack.push(lir::Val::I64(un_word(2, xa)))),
-            ));
+    ) == lir::Outcome::Normal(
+        st1.with_stack(
+            st1.stack.push(lir::Val::I64(un_word(k, super::arith::sext(super::arith::lo32(va))))),
+        ),
+    ) by {
+        if k <= 3 {
+            lemma_un_val_trace_k(lay, k, st1, va);
         } else {
-            assert(super::run::exec(lay, un_val(k), st1) == lir::Outcome::Normal(
-                st1.with_stack(st1.stack.push(lir::Val::I64(un_word(k, xa)))),
-            ));
+            assert(un_val(k) == un_val(3));
+            lemma_un_val_trace_k(lay, 3, st1, va);
         }
     }
 }
