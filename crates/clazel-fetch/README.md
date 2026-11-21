@@ -89,6 +89,29 @@ reload-and-back policy for a `POST` entry, `tests/fetch.rs` against an
 in-process server, and the widening of `independent.rs` to methods with a
 body (its correspondence still requires a plain `GET`).
 
+## Opaque-response blocking (phase-6.md item 6.17)
+
+`src/orb/` is Fetch's opaque-response-safelist check (PR #1755, §2.11, commit
+`730d67a3`; not yet in the living standard): `spec.rs` transcribes steps 1 to 15
+and the two MIME type sets, `check.rs` is the executable check
+(`safelist_check_exec`, `orb_allows_exec`) proven equal to it, on `clazel-http`'s
+list splitting and `clazel-mime`'s parser and sniffers. The kernel applies it to
+the final response of every sub-fetch (`clazel-kernel`). **Modelling choices**
+(the full list is the header of `src/orb/spec.rs`): the whole buffered response
+is decided on, with the first 8096 octets of the body sniffed (the standard's
+number; the plan said 1,024); the "no-cors media request state" is "none" (no
+media requests); every 206 response is refused (the kernel sends no `Range`);
+steps 13 (no type) and 15 (JavaScript and not JSON) refuse, since the kernel has
+no JavaScript parser (`kernel_model`; `spec_model` is the standard's), so a
+response gets through only with a safelisted declared type or sniffed image,
+audio or video bytes (`theorem_orb`); "extract a MIME type" keeps no charset.
+Tests: `tests/conformance_orb.rs` runs WPT `fetch/orb`'s pages that need no
+script (`tests/data/wpt-orb/`, four rows of its coverage page follow an older ORB
+draft and are expected to differ, listed). **Not verified:** nothing in `src/orb/`
+has run through Verus (the proofs, the examples by `compute_only` and the six
+mutations' certificates go to CI); the new `clazel-mime` dependency is the only
+change to the crate's manifest besides the `theorem_orb` entry.
+
 ## Verification
 
 Tier 2 (raised on CI's full verification of its pull request). Every executable function is proven in Verus to meet its
