@@ -1,0 +1,27 @@
+[package]
+name = "clazel-js-vm"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "The JavaScript engine's bytecode and its semantics for Clazel's Phase 7 browser (phase-7.md item 7.4): the instruction set, NaN-boxed values, and `spec fn step`."
+
+[dependencies]
+vstd = "=0.0.0-2026-10-04-0306"
+
+# Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
+# shipped code today: nothing, since this crate holds only the specification
+# of item 7.4 (the handlers, compiler and interpreter loop come later, in 7.7
+# and 7.8). `target-tier` is 0 for the shipped code, as the Crates table of
+# phase-7.md states; the spec itself is written to Tier 2 standards (Verus
+# checks it and the lemmas in src/lemmas.rs), because the JIT's front-end
+# proofs (jit.md J.10) refine `step`.
+[package.metadata.clazel]
+tier = 0
+target-tier = 0
+
+[package.metadata.verus]
+verify = true
+
+[lints]
+workspace = true

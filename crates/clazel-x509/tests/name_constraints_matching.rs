@@ -420,11 +420,16 @@ fn malformed_dns_bases_refuse_the_path() {
             ],
         ));
     }
-    // Neither field present.
-    refused(run(
-        &[],
-        &[ca(&[], nc(None, None)), cert(&[san_dns("example.com")])],
-    ));
+    // Neither field present: RFC 5280 §4.2.1.10, refused by the decoder
+    // before matching (`run` gives `None` when a value does not decode).
+    assert!(parse_name_constraints(&nc(None, None)).is_none());
+    assert_eq!(
+        run(
+            &[],
+            &[ca(&[], nc(None, None)), cert(&[san_dns("example.com")])],
+        ),
+        None
+    );
 }
 
 #[test]
