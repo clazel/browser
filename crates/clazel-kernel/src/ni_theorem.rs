@@ -95,9 +95,9 @@ pub proof fn lemma_local_error_outputs_submit(
         d2 != d,
         accepted_message(s1.renderers[find_by_id(s1.renderers, id, 0)->Some_0], bytes) matches Some(clazel_ipc::message::spec::Message::Submit { url, method, content_type, body })
             && submit_request(s1.renderers[find_by_id(s1.renderers, id, 0)->Some_0], method, content_type, body) is Some
-            && clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) matches Some(relative)
-            && (urls.resolve)(s1.renderers[find_by_id(s1.renderers, id, 0)->Some_0].url, relative) matches Some(resolved)
-            && lock_of_url(urls, resolved, s1.next_id) is None,
+            && (clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) matches Some(relative)
+            && ((urls.resolve)(s1.renderers[find_by_id(s1.renderers, id, 0)->Some_0].url, relative) matches Some(resolved)
+            && lock_of_url(urls, resolved, s1.next_id) is None)),
     ensures
         crate::noninterference::outputs_for(rules, d, s1, s1, step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).1) == Seq::<Output>::empty(),
 {

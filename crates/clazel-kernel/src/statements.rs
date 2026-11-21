@@ -1076,7 +1076,7 @@ pub open spec fn no_submit_tab(t: Seq<Event>) -> bool {
 
 /// `bytes` ends with `tail`: it is some octets, then `tail`.
 pub open spec fn ends_with(bytes: Seq<u8>, tail: Seq<u8>) -> bool {
-    tail.len() <= bytes.len() && bytes.subrange(bytes.len() - tail.len(), bytes.len()) == tail
+    tail.len() <= bytes.len() && bytes.subrange(bytes.len() - tail.len(), bytes.len() as int) == tail
 }
 
 /// `theorem_body_from_requester` (item 6.16): in any state a run of the
