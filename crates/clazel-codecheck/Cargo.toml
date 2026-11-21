@@ -4,7 +4,7 @@ version = "0.0.0"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "The JIT's code validators (docs/phases/jit.md item J.6), the x86-64 one and the A64 one: what an accepted code blob is, the contract of the validator, and the executable validator, proven sound and complete against the spec. The second (dataflow) validators and the confinement theorem do not exist yet."
+description = "The JIT's code validators (docs/phases/jit.md item J.6), the x86-64 one and the A64 one: what an accepted code blob is, the contract of the validator, and the executable validator, proven sound and complete against the spec. The second x86-64 validator (dataflow) is there, proven sound; the A64 one and the confinement theorem do not exist yet."
 
 [dependencies]
 vstd = "=0.0.0-2026-10-04-0306"

@@ -1,6 +1,8 @@
 //! The JIT's code validators (docs/phases/jit.md item J.6): the x86-64 one
-//! in this module's root, and the A64 one in [`a64`]. The second, independent
-//! validators (dataflow analyses) and the confinement theorem are later work.
+//! in this module's root, the A64 one in [`a64`], and the second, independent
+//! x86-64 validator (a dataflow analysis, proven to accept only what the
+//! first accepts) in [`dataflow`]. The A64 dataflow validator and the
+//! confinement theorem are later work.
 //!
 //! This is the first part of item J.6: the specification of what the
 //! validator accepts and the contract of its entry point, written before any

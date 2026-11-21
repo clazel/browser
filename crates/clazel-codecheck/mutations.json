@@ -284,6 +284,78 @@
         "lemma": "lemma_b_target_is_pc_relative(cx_branch(), 0, 3)",
         "witness": "jump_targets(cx_branch(), 0)[0] == 16"
       }
+    },
+    {
+      "id": "df-permit-size-reversed",
+      "module": "dataflow::check",
+      "file": "src/dataflow/check.rs",
+      "find": "(FactE::Base(k), FactE::Idx(k2, n)) => k == k2 && size <= n,",
+      "replace": "(FactE::Base(k), FactE::Idx(k2, n)) => k == k2 && n <= size,",
+      "expect": "killed-incidentally",
+      "reason": "The permission check of the dataflow checker compares the checked size and the access size the wrong way round, so a check for 4 bytes would license an 8-byte access: permit_e no longer implies the spec's access_ok, and its proof fails."
+    },
+    {
+      "id": "df-stack-pointer-write-allowed",
+      "module": "dataflow::check",
+      "file": "src/dataflow/check.rs",
+      "find": "Some(d) => d == 15 || d == 4,",
+      "replace": "Some(d) => d == 15,",
+      "expect": "killed-incidentally",
+      "reason": "The checker stops refusing a write to rsp, so a unit the spec's plain_ok refuses would be taken: the proof that the unit is a spec unit fails."
+    },
+    {
+      "id": "df-weaker-ignores-size",
+      "module": "dataflow::check",
+      "file": "src/dataflow/check.rs",
+      "find": "(FactE::Idx(k, n), FactE::Idx(k2, n2)) => k == k2 && n == n2,",
+      "replace": "(FactE::Idx(k, n), FactE::Idx(k2, n2)) => k == k2,",
+      "expect": "killed-incidentally",
+      "reason": "The post-fixpoint comparison treats an index checked for 4 bytes as no stronger than one checked for 8: weaker_e no longer implies its postcondition."
+    },
+    {
+      "id": "df-target-state-not-checked",
+      "module": "dataflow::check",
+      "file": "src/dataflow/check.rs",
+      "find": "all_unknown_e(cur.as_slice())",
+      "replace": "true",
+      "expect": "killed-incidentally",
+      "reason": "The state at an entry or jump target is no longer required to be empty, so a fact could flow along a branch edge that the spec forgets at: the proof that the certificate state is sound for the spec's facts fails."
+    },
+    {
+      "id": "df-fixpoint-not-checked",
+      "module": "dataflow::check",
+      "file": "src/dataflow/check.rs",
+      "find": "weaker_all(cur.as_slice(), prev.as_slice())",
+      "replace": "true",
+      "expect": "killed-incidentally",
+      "reason": "The certificate is no longer checked to be a post-fixpoint (a unit's state no stronger than the unit before's transfer), so an untrusted solver could assert any fact: the proof that the state is sound for the spec's facts fails."
+    },
+    {
+      "id": "df-jmp-keeps-facts",
+      "module": "dataflow::check",
+      "file": "src/dataflow/check.rs",
+      "find": "                        reset_e(&mut prev);\n                        proof {",
+      "replace": "                        proof {",
+      "expect": "killed-incidentally",
+      "reason": "The transfer of a jmp no longer forgets the facts, as the spec's plain_ok does: the proof that the state after it is sound for the spec's no_facts fails."
+    },
+    {
+      "id": "df-target-not-unit-start",
+      "module": "dataflow::validate",
+      "file": "src/dataflow/validate.rs",
+      "find": "if t && !u {",
+      "replace": "if false {",
+      "expect": "killed-incidentally",
+      "reason": "A flagged entry or jump target need not be a unit start, so a jump into the middle of a bounds check would be accepted: the proof of the policy's subset_of fails."
+    },
+    {
+      "id": "df-target-out-of-range",
+      "module": "dataflow::targets",
+      "file": "src/dataflow/targets.rs",
+      "find": "if e >= total {",
+      "replace": "if false {",
+      "expect": "killed-incidentally",
+      "reason": "An entry beyond the end of the blob is no longer refused: the flag cannot be set, and the proof that every target is inside the blob fails."
     }
   ]
 }
