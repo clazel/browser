@@ -845,7 +845,9 @@ fn every_script_name_resolves() -> Result<(), String> {
     };
     // Every name in the generated table, and the table's own consistency.
     let mut seen = std::collections::BTreeSet::new();
-    for s in tables::SCRIPTS {
+    // The parse and compile of every spelling is slow under Miri: a stride.
+    let stride = if cfg!(miri) { 12 } else { 1 };
+    for (i, s) in tables::SCRIPTS.iter().enumerate() {
         assert!(!s.names.is_empty(), "{:?}", s.names);
         for n in s.names {
             assert!(seen.insert(*n), "{n} names two scripts");
@@ -854,6 +856,9 @@ fn every_script_name_resolves() -> Result<(), String> {
             }
             assert!(UcdScripts.is_script(n));
             for prop in ["sc", "Script", "scx", "Script_Extensions"] {
+                if i % stride != 0 {
+                    break;
+                }
                 let text: Vec<u16> = format!("\\p{{{prop}={n}}}").encode_utf16().collect();
                 let pat = parse(&text, u).map_err(|e| format!("{prop}={n}: {e}"))?;
                 compile(&pat, u).map_err(|e| format!("{prop}={n}: {e}"))?;
