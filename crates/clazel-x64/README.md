@@ -4,7 +4,7 @@
 Part of [Clazel](../../README.md). The x86-64 subset the JIT emits: its
 semantics, encoder and decoder ([jit.md](../../docs/phases/jit.md) item J.3).
 
-Nothing is implemented yet (tier 0, target tier 2). Item J.2 vendored or
+The primary spec (`src/spec.rs`, from ACL2) and the encoder/decoder contracts (`src/contract.rs`, `src/api.rs`) are written; no encoder or decoder exists yet (tier 0, target tier 2). Item J.2 vendored or
 pinned the sources the semantics will be written against, in `tests/data/`:
 
 | Suite | What | Held as |
