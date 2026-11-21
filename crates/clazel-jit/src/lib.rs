@@ -8,6 +8,11 @@
 //! contract first (CLAUDE.md rule 3): [`spec`], [`contract`] and [`api`] came
 //! in their own commit, before any template.
 //!
+//! **The A64 back end is [`a64`]**: the same design and the same slice over
+//! `clazel-a64`'s machine, module for module (its header says what is proven
+//! there and what differs). The rest of this header, and the modules below,
+//! are the x86-64 one.
+//!
 //! # The statements
 //!
 //! - [`spec`]: **what the back end is about.** The state relation between a

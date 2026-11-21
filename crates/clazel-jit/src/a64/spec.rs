@@ -87,28 +87,33 @@ verus! {
 // ============================================================================
 
 /// The program as one LIR instruction ([`crate::spec::prog_instr`]).
+#[verifier::inline]
 pub open spec fn prog_instr(ops: Seq<Op>) -> lir::Instr {
     crate::spec::prog_instr(ops)
 }
 
 /// The stack height after the program `ops`, started at height `h`
 /// ([`crate::spec::height_after`]).
+#[verifier::inline]
 pub open spec fn height_after(ops: Seq<Op>, h: nat) -> nat {
     crate::spec::height_after(ops, h)
 }
 
 /// The value in slot `j` of the LIR state `a` ([`crate::spec::slot_val`]).
+#[verifier::inline]
 pub open spec fn slot_val(a: lir::St, nl: nat, j: nat) -> lir::Val {
     crate::spec::slot_val(a, nl, j)
 }
 
 /// `a` is an address inside some region of `lay` ([`crate::spec::in_regions`]).
+#[verifier::inline]
 pub open spec fn in_regions(lay: lir::Layout, a: nat) -> bool {
     crate::spec::in_regions(lay, a)
 }
 
 /// LIR's memory and the machine's agree on every byte of every region
 /// ([`crate::spec::mem_rel`]).
+#[verifier::inline]
 pub open spec fn mem_rel(lay: lir::Layout, lm: lir::Mem, mm: Map<int, u8>) -> bool {
     crate::spec::mem_rel(lay, lm, mm)
 }
