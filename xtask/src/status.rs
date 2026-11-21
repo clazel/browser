@@ -95,6 +95,8 @@ const PLACES: &[(&str, Place)] = &[
     ("clazel-codecheck", Place::Primitive),
     // The JIT's low-level IR (item J.5).
     ("clazel-lir", Place::Renderer),
+    // The JIT's back ends (item J.9), the x86-64 one first.
+    ("clazel-jit", Place::Renderer),
     ("clazel-ipc", Place::Primitive),
     ("clazel-sandbox", Place::Os),
     ("clazel-sys", Place::Os),

@@ -389,6 +389,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "clazel-jit"
+version = "0.0.0"
+dependencies = [
+ "clazel-codecheck",
+ "clazel-lir",
+ "clazel-x64",
+ "vstd",
+]
+
+[[package]]
 name = "clazel-js-lexer"
 version = "0.0.0"
 dependencies = [
