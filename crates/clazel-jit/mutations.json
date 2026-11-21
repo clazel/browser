@@ -37,8 +37,8 @@
       "file": "src/spec.rs",
       "find": "    preserved_mem(m, m2) && m2.rgf[abi::sp_reg() as int] == m.rgf[abi::sp_reg() as int]\n}",
       "replace": "    preserved_mem(m, m2)\n}",
-      "expect": "survives",
-      "reason": "Drops the claim that a template leaves `rsp` as it was. The clause is a claim the real proofs establish (from `mid_post`'s preservation of `rsp`), but nothing downstream uses it: the templates never name `rsp` (`scratch` excludes it), and the exit sequence's `ret`, the one instruction that changes it, is stated by `exit_refines` against `preserved_mem` and its own statement of the new `rsp`. So removing the clause breaks no proof: a known gap in how much the proofs depend on it. Closing it needs a consumer, for example the validator's confinement theorem (jit.md exit criterion 2), which assumes `rsp` is never written by the code between exits."
+      "expect": "killed-incidentally",
+      "reason": "Drops the claim that a template leaves `rsp` as it was. Every template still leaves `rsp` unchanged, so no theorem becomes false for the mutant; but the control-flow refinement (`cfspec::cf_refines`) states `preserved_r`, which includes `rsp`, and `cfop::lemma_preserved_to_r` derives it from `preserved`, so that derivation no longer goes through. Only a proof step breaks: not coverage. A certified kill needs a theorem the mutant falsifies, which `rsp` preservation by the code between exits (the confinement theorem, jit.md exit criterion 2) will give once the back end is tied to it."
     },
     {
       "id": "a64-cset-signed-less-than-uses-wrong-condition",
