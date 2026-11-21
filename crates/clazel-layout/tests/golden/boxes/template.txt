@@ -143,14 +143,14 @@ root
 root
   block <html>
     block <body>
-      inline <select>
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 19
 #data "<select><template><option></option></template></select>"
 root
   block <html>
     block <body>
-      inline <select>
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 20
 #data "<template><option></option></select><option></option></template>"
@@ -163,39 +163,35 @@ root
 root
   block <html>
     block <body>
-      inline <select>
-        inline <option>
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 22
 #data "<select><option><template></template></select>"
 root
   block <html>
     block <body>
-      inline <select>
-        inline <option>
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 23
 #data "<select><template>"
 root
   block <html>
     block <body>
-      inline <select>
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 24
 #data "<select><option></option><template>"
 root
   block <html>
     block <body>
-      inline <select>
-        inline <option>
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 25
 #data "<select><option></option><template><option>"
 root
   block <html>
     block <body>
-      inline <select>
-        inline <option>
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 26
 #data "<table><thead><template><td></template></table>"
@@ -746,7 +742,7 @@ root
           table-row-group <tbody>
             table-row <tr>
               table-cell <td>
-                inline <select>
+                replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 109
 #data "<body></body><template>"

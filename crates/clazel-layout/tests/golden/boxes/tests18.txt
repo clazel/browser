@@ -127,12 +127,7 @@ root
 root
   block <html>
     block <body>
-      block (anonymous)
-        inline <select> first
-      block <plaintext>
-        text "</plaintext>X" white-space=Pre
-      block (anonymous)
-        inline <select> last
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 14
 #data "<!doctype html><table><select><plaintext>a<caption>b"
@@ -140,11 +135,7 @@ root
   block <html>
     block <body>
       block (anonymous)
-        inline <select> first
-      block <plaintext>
-        text "a<caption>b" white-space=Pre
-      block (anonymous)
-        inline <select> last
+        replaced <select> inline Select { rows: 1, chars: 1 }
       table-wrapper <table>
         table <table>
 
@@ -259,8 +250,7 @@ root
 root
   block <html>
     block <body>
-      inline <select>
-        text "abc"
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 28
 #data "<!doctype html><table><select><script></style></script>abc"
@@ -268,8 +258,7 @@ root
   block <html>
     block <body>
       block (anonymous)
-        inline <select>
-          text "abc"
+        replaced <select> inline Select { rows: 1, chars: 1 }
       table-wrapper <table>
         table <table>
 
@@ -279,8 +268,7 @@ root
   block <html>
     block <body>
       block (anonymous)
-        inline <select>
-          text "abc"
+        replaced <select> inline Select { rows: 1, chars: 1 }
       table-wrapper <table>
         table <table>
           table-row-group <tbody>

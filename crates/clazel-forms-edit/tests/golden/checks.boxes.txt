@@ -1,0 +1,10 @@
+root
+  block <html>
+    block <body>
+      block <form>
+        block <div>
+          replaced <input> inline Input(Check)
+          replaced <input> inline Input(Check)
+          replaced <input> inline Input(Check)
+          replaced <input> inline Input(Check)
+          replaced <input> inline Input(Check)

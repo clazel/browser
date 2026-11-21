@@ -244,25 +244,21 @@ root (anonymous) 0,0 800x600
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      line 8,8 784x18.640625 base=22.859375
-        inline <select> 8,8 11.5625x18.640625 start end
-        inline <option> 8,8 11.5625x18.640625 start end
-        inline <option> 19.5625,8 24.015625x18.640625 start end
-        inline <select> 31.328125,8 12.25x18.640625 start end
-        inline <option> 31.328125,8 12.25x18.640625 start end
-        inline <option> 43.578125,8 24.515625x18.640625 start end
-        inline <select> 56.40625,8 11.6875x18.640625 start end
-        inline <option> 56.40625,8 11.6875x18.640625 start end
-        inline <option> 68.09375,8 23.890625x18.640625 start end
-        inline <select> 79.203125,8 12.78125x18.640625 start end
-        inline <option> 79.203125,8 12.78125x18.640625 start end
-        text "A" x=8 base=22.859375 w=11.5625
-        text "B" x=19.5625 base=22.859375 w=11.765625
-        text "C" x=31.328125 base=22.859375 w=12.25
-        text "D" x=43.578125 base=22.859375 w=12.828125
-        text "E" x=56.40625 base=22.859375 w=11.6875
-        text "F" x=68.09375 base=22.859375 w=11.109375
-        text "G" x=79.203125 base=22.859375 w=12.78125
+      line 8,8 784x26.421875 base=30.640625
+        inline <option> 46.234375,15.78125 50x18.640625 start end
+        inline <option> 96.234375,15.78125 51.0625x18.640625 start end
+        inline <option> 147.296875,15.78125 49.34375x18.640625 start end
+        atomic <select>
+        text "B" x=46.234375 base=30.640625 w=11.765625
+        atomic <select>
+        text "D" x=96.234375 base=30.640625 w=12.828125
+        atomic <select>
+        text "F" x=147.296875 base=30.640625 w=11.109375
+        atomic <select>
+      replaced <select> 8,8 38.234375x22.640625
+        replaced <select> 58,8 38.234375x22.640625
+        replaced <select> 109.0625,8 38.234375x22.640625
+        replaced <select> 158.40625,8 38.234375x22.640625
 
 #case 32
 #data "<dd><dd><dt><dt><dd><li><li>"
@@ -314,29 +310,37 @@ root (anonymous) 0,0 800x600
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      block (anonymous) 8,8 784x0
-      table-wrapper <table> 8,8 4x4 m=0,780,0,0
-        table <table> 8,8 4x4
-          column-group <colgroup> 10,10 0x0
-            column <col> 10,10 0x0
-          row-group <tbody> 10,10 0x0
-            row <tr> 10,10 0x0
-      block (anonymous) 8,12 784x0
+      block (anonymous) 8,8 784x22.640625
+        line 8,8 784x22.640625 base=30.640625
+          inline <kbd> 8,15.78125 38.234375x18.640625 start
+          atomic <select>
+          replaced <select> 8,8 38.234375x22.640625
+      table-wrapper <table> 8,30.640625 4x4 m=0,780,0,0
+        table <table> 8,30.640625 4x4
+          column-group <colgroup> 10,32.640625 0x0
+            column <col> 10,32.640625 0x0
+          row-group <tbody> 10,32.640625 0x0
+            row <tr> 10,32.640625 0x0
+      block (anonymous) 8,34.640625 784x0
 
 #case 37
 #data "<kbd><table></kbd><col><select><tr></table><div>"
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      block (anonymous) 8,8 784x0
-      table-wrapper <table> 8,8 4x4 m=0,780,0,0
-        table <table> 8,8 4x4
-          column-group <colgroup> 10,10 0x0
-            column <col> 10,10 0x0
-          row-group <tbody> 10,10 0x0
-            row <tr> 10,10 0x0
-      block <div> 8,12 784x0
-      block (anonymous) 8,12 784x0
+      block (anonymous) 8,8 784x22.640625
+        line 8,8 784x22.640625 base=30.640625
+          inline <kbd> 8,15.78125 38.234375x18.640625 start
+          atomic <select>
+          replaced <select> 8,8 38.234375x22.640625
+      table-wrapper <table> 8,30.640625 4x4 m=0,780,0,0
+        table <table> 8,30.640625 4x4
+          column-group <colgroup> 10,32.640625 0x0
+            column <col> 10,32.640625 0x0
+          row-group <tbody> 10,32.640625 0x0
+            row <tr> 10,32.640625 0x0
+      block <div> 8,34.640625 784x0
+      block (anonymous) 8,34.640625 784x0
 
 #case 38
 #data "<a><li><style></style><title></title></a>"

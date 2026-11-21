@@ -35,6 +35,7 @@ use super::state::{
 };
 use crate::boxes::replaced::string;
 use crate::boxes::{BoxId, BoxKind, BoxTree, Class, StyleFns};
+use crate::controls::{self, ControlView, Draw};
 use crate::flow::TextFns;
 use crate::flow::block::{Mode, mode};
 use crate::flow::fragment::{FragmentTree, GlyphRun, InlinePiece, LineItem, Rect, Sides};
@@ -99,6 +100,8 @@ struct Walk<'a, F: TextFns> {
     /// A box whose background went to the canvas (§14.2).
     canvas_box: Option<BoxId>,
     root_box: Option<BoxId>,
+    /// Item 6.15: the controls to draw, by node.
+    controls: HashMap<usize, &'a ControlView>,
     out: DisplayList,
 }
 
@@ -141,6 +144,11 @@ impl<F: TextFns> Walk<'_, F> {
             return;
         };
         let rect = snap_rect(f.padding_box(), self.scale);
+        self.clip_to(rect);
+    }
+
+    /// Clip to `rect` (device pixels), inside the clip in force.
+    fn clip_to(&mut self, rect: DeviceRect) {
         self.outer.push(self.clips.current);
         let (next, change) = self.clips.enter(rect);
         self.clips = next;
@@ -152,6 +160,107 @@ impl<F: TextFns> Walk<'_, F> {
         let (next, change) = self.clips.leave(outer);
         self.clips = next;
         self.change(change);
+    }
+
+    /// Item 6.15: the look of the control drawn for box `b` (E.2 7.1 and
+    /// 7.2.1.6: "the replaced content"), and a ring on any other focused
+    /// walked box.
+    fn control(&mut self, b: BoxId) {
+        let Some(node) = self.frags.node(b) else {
+            return;
+        };
+        let Some(view) = self.controls.get(&node).copied() else {
+            return;
+        };
+        if !self.visible(b) {
+            return;
+        }
+        let (Some(f), Some(style)) = (self.frags.fragment(b), self.style(b).cloned()) else {
+            return;
+        };
+        let bb = f.border_box;
+        let draws = controls::draw(view, self.arena, &style, self.fonts, bb);
+        self.emit(draws);
+    }
+
+    /// The chrome of a `button` element and the ring of a focused element
+    /// that is not a replaced control (a link, a `tabindex` element), in the
+    /// background pass of its box.
+    fn chrome(&mut self, b: BoxId) {
+        let Some(node) = self.frags.node(b) else {
+            return;
+        };
+        let Some(view) = self.controls.get(&node).copied() else {
+            return;
+        };
+        if !self.visible(b) || matches!(self.tree.class(b), Class::Replaced { .. }) {
+            return;
+        }
+        let (Some(f), Some(style)) = (self.frags.fragment(b), self.style(b).cloned()) else {
+            return;
+        };
+        let bb = f.border_box;
+        let draws = if controls::is_element(self.arena, node, "button") {
+            controls::chrome(view, bb)
+        } else {
+            controls::draw(view, self.arena, &style, self.fonts, bb)
+        };
+        self.emit(draws);
+    }
+
+    /// Draws `draws` (1/64 CSS px) as items.
+    fn emit(&mut self, draws: Vec<Draw>) {
+        for d in draws {
+            match d {
+                Draw::Fill(r, c) => self.fill(r, c),
+                Draw::Clip(r) => {
+                    let rect = snap_rect(r, self.scale);
+                    self.clip_to(rect);
+                }
+                Draw::Unclip => self.clip_leave(),
+                Draw::Text {
+                    face,
+                    size,
+                    colour,
+                    baseline,
+                    glyphs,
+                } => {
+                    if glyphs.is_empty() || transparent(colour) {
+                        continue;
+                    }
+                    let x0 = glyphs.iter().map(|g| g.1).min().unwrap_or(0);
+                    let x1 = glyphs.iter().map(|g| g.1).max().unwrap_or(0);
+                    let s = size.max(0);
+                    let bounds = snap_rect(
+                        Rect {
+                            x: x0.saturating_sub(s),
+                            y: baseline.saturating_sub(s.saturating_mul(2)),
+                            width: x1.saturating_sub(x0).saturating_add(s.saturating_mul(2)),
+                            height: s.saturating_mul(3),
+                        },
+                        self.scale,
+                    );
+                    let scale = self.scale;
+                    let placed = glyphs
+                        .iter()
+                        .map(|&(id, x, y)| PlacedGlyph {
+                            id,
+                            x: fine(x, scale),
+                            y: fine(baseline.saturating_add(y), scale),
+                        })
+                        .collect();
+                    self.out.items.push(Item::Text {
+                        bounds,
+                        run: TextItem {
+                            face,
+                            size: fine(size, scale),
+                            colour: premultiply(colour),
+                            glyphs: placed,
+                        },
+                    });
+                }
+            }
+        }
     }
 
     /// A hit region for box `b`'s rectangle `r`, if `b` is in a link.
@@ -323,7 +432,10 @@ impl<F: TextFns> Walk<'_, F> {
             // A table's layers and cells are its own (`table`).
             Class::Cell | Class::Row | Class::RowGroup | Class::Column | Class::ColumnGroup => {}
             Class::Root => {}
-            _ => self.background_and_border(b),
+            _ => {
+                self.background_and_border(b);
+                self.chrome(b);
+            }
         }
         let clips = self.clipping.get(b).copied().unwrap_or(false);
         if clips {
@@ -348,8 +460,10 @@ impl<F: TextFns> Walk<'_, F> {
             return;
         }
         // 7.1: "If the element is a block-level replaced element, then: the
-        // replaced content, atomically": nothing in this phase.
+        // replaced content, atomically": nothing, but a form control's look
+        // (item 6.15, `controls`) when the caller gave one.
         if matches!(class, Class::Replaced { .. }) {
+            self.control(b);
             return;
         }
         let clips = self.clipping.get(b).copied().unwrap_or(false);
@@ -454,6 +568,15 @@ impl<F: TextFns> Walk<'_, F> {
         self.fill(border_box, bg);
         for (r, c) in border_rects(border_box, edges).into_iter().zip(colours) {
             self.fill(r, c);
+        }
+        // Item 6.15: the ring of a focused inline element (a link), over
+        // this piece.
+        if let Some(node) = self.frags.node(p.inline)
+            && let Some(view) = self.controls.get(&node).copied()
+            && view.focused
+        {
+            let draws = controls::chrome_ring(border_box);
+            self.emit(draws);
         }
     }
 
@@ -596,6 +719,41 @@ pub fn paint(
     base: Option<&ParsedUrl>,
     scale: u32,
 ) -> DisplayList {
+    paint_with_controls(
+        frags,
+        tree,
+        arena,
+        styles,
+        fonts,
+        Target { base, scale },
+        &[],
+    )
+}
+
+/// Where a list is painted for: the base URL links resolve against and the
+/// device pixels per CSS pixel.
+#[derive(Clone, Copy)]
+pub struct Target<'a> {
+    /// The document's base URL.
+    pub base: Option<&'a ParsedUrl>,
+    /// Device pixels per CSS pixel.
+    pub scale: u32,
+}
+
+/// [`paint`] with the look of the form controls in `controls` (item 6.15):
+/// each control of a view is drawn at its place in the paint order, and a
+/// focused element that is not a control gets a ring. A control with no
+/// view is drawn as [`paint`] draws it: as nothing.
+pub fn paint_with_controls(
+    frags: &FragmentTree,
+    tree: &BoxTree,
+    arena: &Arena,
+    styles: &impl StyleFns,
+    fonts: &impl TextFns,
+    target: Target<'_>,
+    controls: &[ControlView],
+) -> DisplayList {
+    let Target { base, scale } = target;
     let n = tree.boxes.len();
     let styles = box_styles(tree, styles);
     let quirks = mode(arena) == Mode::Quirks;
@@ -679,6 +837,7 @@ pub fn paint(
         clipping,
         canvas_box,
         root_box,
+        controls: controls.iter().map(|v| (v.node, v)).collect(),
         out: DisplayList {
             items: Vec::new(),
             hits: Vec::new(),
