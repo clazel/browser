@@ -208,7 +208,10 @@ fn not_run_by_reason() {
         None
     );
     assert_eq!(
-        c("css/a.html", "<div style='background-attachment: fixed'>x</div>"),
+        c(
+            "css/a.html",
+            "<div style='background-attachment: fixed'>x</div>"
+        ),
         Some(NotRun::OutsideSubset("background-attachment".to_owned()))
     );
     // In the subset: a table, a background colour, margins.
