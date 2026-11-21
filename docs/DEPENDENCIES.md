@@ -265,9 +265,13 @@ Changing a row is a reviewable act. Adding one means saying why below.
 | radium | 0.7.0 | test | Atomic and non-atomic cell abstraction (MIT), required by `bitvec`. No dependencies. |
 | tap | 1.0.1 | test | Method-chaining helpers (MIT), required by `bitvec` and `wyz`. No dependencies. |
 | wyz | 0.5.1 | test | A utility collection (MIT), required by `bitvec`. Its only dependency is `tap`. |
+| tiny-skia | 0.12.0 | test | The 2D rasterizer of the resvg project (a port of the core of Skia, in Rust), written by others: the reference engine in `clazel-svg`'s differential test (`tests/conformance_svg.rs`, phase-6.md item 6.11a), which fills HN's two paths with it and compares the pixels with the shipped decoder's within a stated tolerance. Used without default features but with `std` (no `simd`, no `png-format`: `cargo tree` shows `arrayvec`, `arrayref`, `bytemuck`, `cfg-if`, `log` and `tiny-skia-path`). Pinned to 0.12.0, its latest release when added (2026-11-16). It is not the whole of resvg: resvg also pulls an XML parser, an image decoder and font code. |
+| tiny-skia-path | 0.12.0 | test | tiny-skia's path types and path builder, required by `tiny-skia` (the paths of the differential test are built with it). Its dependencies are `arrayref`, `bytemuck` and `strict-num`. |
+| arrayref | 0.3.9 | test | Macros for taking array references out of slices, required by `tiny-skia` and `tiny-skia-path`. No dependencies. |
+| strict-num | 0.1.1 | test | Finite and normalised float newtypes, required by `tiny-skia-path`. No dependencies. |
 | naga | 30.0.1 | tooling | The wgpu project's shader translator: `xtask/src/shaders.rs` compiles `clazel-gpu`'s GLSL to the committed SPIR-V with it and `cargo xtask check` confirms the two agree (phase-5.md item 5.17b: "compiled from GLSL by tooling that never ships"). No SPIR-V compiler is installed on the development machine, and this keeps the check in Rust. Features `glsl-in`, `spv-out`, and `wgsl-in`, which is unused but without which 30.0.1 does not build. |
 | naga-types | 30.0.1 | tooling | Required by `naga` (GLSL to SPIR-V for `clazel-gpu`'s shaders, in `xtask` only). |
-| arrayvec | 0.7.8 | tooling | Required by `naga` (GLSL to SPIR-V for `clazel-gpu`'s shaders, in `xtask` only). |
+| arrayvec | 0.7.8 | test | A vector with fixed capacity, required by `tiny-skia` (the reference rasterizer of `clazel-svg`'s differential test) and by `naga` (GLSL to SPIR-V for `clazel-gpu`'s shaders, in `xtask` only: that use is tooling, this one reaches a browser crate through a dev-dependency, so the row takes the stricter class). |
 | bit-set | 0.10.0 | tooling | Required by `naga` (GLSL to SPIR-V for `clazel-gpu`'s shaders, in `xtask` only). |
 | bit-vec | 0.9.1 | tooling | Required by `naga` (GLSL to SPIR-V for `clazel-gpu`'s shaders, in `xtask` only). |
 | cfg_aliases | 0.2.2 | tooling | Build-script helper, required by `naga` (GLSL to SPIR-V for `clazel-gpu`'s shaders, in `xtask` only). |
