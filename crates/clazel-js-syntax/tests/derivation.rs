@@ -337,6 +337,9 @@ fn covered_early_rules_are_verified() {
         "{ a; { b; } }",
         "var a; var a;",
         "'use strict'; a = 1;",
+        "let a; const b = 1; { let a; var c; function f() {} function f() {} }",
+        "for (let i = 0; i < 1; i++) { var j; }",
+        "function f(a) { let b; { let a; } }",
         "x = { m(a) { return a; }, get g() { return 1; }, __proto__: null, ['__proto__']: 1 };",
         "(function () {})",
         "function f(a, [b], {c}, ...d) { return a; }",
@@ -359,7 +362,6 @@ fn covered_early_rules_are_verified() {
 #[test]
 fn other_early_rules_are_unsupported_not_failed() {
     for s in [
-        "let a;",
         "a: b;",
         "class A {}",
         "for (a in b) ;",

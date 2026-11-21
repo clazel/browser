@@ -39,6 +39,7 @@
 //! and `name`, the lexer's contract of item 7.2).
 
 use crate::arena_d::*;
+use crate::arena_decls::*;
 use crate::arena_names::*;
 use crate::ast::*;
 use crate::spec::*;
@@ -79,7 +80,7 @@ pub(crate) proof fn lemma_node_tok_at(a: AstV, ts: Stream, n: int, x: int)
 }
 
 /// The words of the identifier rules, as code points.
-proof fn lemma_words_early()
+pub(crate) proof fn lemma_words_early()
     ensures
         sv("yield"@) =~= seq![0x79u32, 0x69, 0x65, 0x6C, 0x64],
         sv("await"@) =~= seq![0x61u32, 0x77, 0x61, 0x69, 0x74],
@@ -1083,83 +1084,6 @@ pub(crate) proof fn lemma_list_early_empty(a: AstV, ts: Stream, n: int, ks: Seq<
     }));
 }
 
-/// The items of node `m` declare nothing lexically.
-pub(crate) fn items_lex_empty(nodes: &[Node], m: usize, top: bool) -> (r: bool)
-    requires
-        m < nodes.len(),
-        ast_wf(arena_of(nodes@)),
-    ensures
-        r ==> forall|j: int|
-            0 <= j < arena_of(nodes@).nodes[m as int].children.len() ==> lex_empty_kind(
-                kd(arena_of(nodes@), #[trigger] arena_of(nodes@).nodes[m as int].children[j]),
-                top,
-            ),
-{
-    let nd = match nodes.get(m) {
-        Some(x) => x,
-        None => {
-            return false;
-        },
-    };
-    let len = nd.children.len();
-    let ghost a = arena_of(nodes@);
-    proof {
-        assert(a.nodes[m as int] == nodes@[m as int]@);
-        assert(nd == &nodes@[m as int]);
-        assert(a.nodes[m as int].children.len() == len);
-    }
-    let mut k: usize = 0;
-    while k < len
-        invariant
-            m < nodes.len(),
-            nodes@.len() == nodes.len(),
-            a == arena_of(nodes@),
-            ast_wf(a),
-            nd == &nodes@[m as int],
-            len == nd.children.len(),
-            len == a.nodes[m as int].children.len(),
-            k <= len,
-            forall|j: int|
-                0 <= j < k ==> lex_empty_kind(kd(a, #[trigger] a.nodes[m as int].children[j]), top),
-        decreases len - k,
-    {
-        let c = match nd.children.as_slice().get(k) {
-            Some(x) => *x as usize,
-            None => {
-                return false;
-            },
-        };
-        proof {
-            assert(a.nodes[m as int].children[k as int] == c as int);
-            lemma_child_before(a, m as int, k as int);
-        }
-        let ck = match nodes.get(c) {
-            Some(x) => x.kind,
-            None => {
-                return false;
-            },
-        };
-        proof {
-            assert(a.nodes[c as int] == nodes@[c as int]@);
-        }
-        let ok = !(matches!(
-            ck,
-            NodeKind::LexicalDeclaration | NodeKind::ClassDeclaration | NodeKind::ImportDeclaration
-                | NodeKind::ExportDeclaration
-        ) || (!top && matches!(
-            ck,
-            NodeKind::FunctionDeclaration | NodeKind::GeneratorDeclaration
-                | NodeKind::AsyncFunctionDeclaration | NodeKind::AsyncGeneratorDeclaration
-                | NodeKind::LabelledStatement
-        )));
-        if !ok {
-            return false;
-        }
-        k = k.saturating_add(1);
-    }
-    true
-}
-
 /// The kind of child `i` of node `m`, `Script` where there is none (`spec::kd(a, kid(ks, i))`).
 pub(crate) fn kid_kind(nodes: &[Node], m: usize, i: usize) -> (r: Option<NodeKind>)
     requires
@@ -1224,6 +1148,7 @@ fn early_local_exec(
         starts_inc(ts),
         tk.bn.len() == nodes.len(),
         bn_inv(arena_of(nodes@), ts, tk.toks@, tk.bn@, nodes.len() as int),
+        names_inv(tk, nodes@, ts),
     ensures
         r ==> early_local(arena_of(nodes@), ts, m as int, eenv_of(*e)),
 {
@@ -1387,17 +1312,11 @@ fn early_local_exec(
                     return false;
                 },
             };
-            let k0 = match kid_kind(nodes, m, 0) {
-                Some(k) => k,
-                None => {
-                    return false;
-                },
-            };
             proof {
                 assert(a.nodes[m as int].children[3] == c as int);
                 lemma_child_before(a, m as int, 3);
             }
-            c < m && not_labelled(nodes, c) && !matches!(k0, NodeKind::LexicalDeclaration)
+            c < m && not_labelled(nodes, c) && for_lex_exec(tk, nodes, m, Ghost(ts))
         },
         NodeKind::ContinueStatement | NodeKind::BreakStatement => {
             let k0 = match kid_kind(nodes, m, 0) {
@@ -1415,34 +1334,11 @@ fn early_local_exec(
                 e.in_breakable
             }
         },
-        NodeKind::BlockStatement => {
-            let ok = items_lex_empty(nodes, m, false);
-            proof {
-                if ok {
-                    lemma_list_early_empty(a, ts, m as int, a.nodes[m as int].children, e.strict, false);
-                }
-            }
-            ok
-        },
-        NodeKind::Script => {
-            let ok = items_lex_empty(nodes, m, true);
-            proof {
-                if ok {
-                    lemma_list_early_empty(a, ts, m as int, a.nodes[m as int].children, e.strict, true);
-                }
-            }
-            ok
-        },
+        NodeKind::BlockStatement => list_early_exec(tk, nodes, m, e.strict, false, Ghost(ts)),
+        NodeKind::Script => list_early_exec(tk, nodes, m, e.strict, true, Ghost(ts)),
         NodeKind::ObjectLiteral => object_literal_exec(tk, nodes, m, Ghost(ts)),
-        NodeKind::FunctionBody => {
-            let ok = items_lex_empty(nodes, m, true);
-            proof {
-                if ok {
-                    lemma_list_early_empty(a, ts, m as int, a.nodes[m as int].children, e.strict, true);
-                }
-            }
-            ok
-        },
+        NodeKind::FunctionBody => list_early_exec(tk, nodes, m, e.strict, true, Ghost(ts)),
+        NodeKind::LexicalDeclaration => lexical_decl_exec(tk, nodes, m, Ghost(ts)),
         NodeKind::FunctionDeclaration | NodeKind::FunctionExpression | NodeKind::GeneratorDeclaration
         | NodeKind::GeneratorExpression | NodeKind::AsyncFunctionDeclaration
         | NodeKind::AsyncFunctionExpression | NodeKind::AsyncGeneratorDeclaration
@@ -1661,7 +1557,18 @@ pub fn check_early(
             return Derivation::Unsupported;
         },
     };
-    let tk = Tk { src, toks, by_start: by_start.as_slice(), bn: bn.as_slice() };
+    let empty = Names { lf: Vec::new(), lt: Vec::new(), vf: Vec::new(), vt: Vec::new() };
+    let tk0 = Tk { src, toks, by_start: by_start.as_slice(), bn: bn.as_slice(), nm: &empty };
+    let nm = match decl_names_all(&tk0, nodes, Ghost(ts)) {
+        Some(nm) => nm,
+        None => {
+            return Derivation::Unsupported;
+        },
+    };
+    let tk = Tk { src, toks, by_start: by_start.as_slice(), bn: bn.as_slice(), nm: &nm };
+    proof {
+        assert(names_inv(&tk, nodes@, ts));
+    }
     // The root's environment: a script, strict if its Directive Prologue has a Use Strict Directive.
     let root_strict = match use_strict_exec(src, nodes, toks, by_start.as_slice(), last, Ghost(ts)) {
         Some(v) => v,
@@ -1772,6 +1679,7 @@ pub fn check_early(
             tk.src@ == src@,
             tk.toks@ == toks@,
             tk.bn@ == bn@,
+            names_inv(&tk, nodes@, ts),
             starts_inc(ts),
             bn.len() == n,
             bn_inv(a, ts, toks@, bn@, n as int),
@@ -1815,6 +1723,7 @@ pub fn check_early(
                 tk.src@ == src@,
                 tk.toks@ == toks@,
                 tk.bn@ == bn@,
+                names_inv(&tk, nodes@, ts),
                 starts_inc(ts),
                 forall|j: int| 0 <= j < m ==> early(a, ts, j, eenv_of(envs@[j])),
                 forall|q: int|

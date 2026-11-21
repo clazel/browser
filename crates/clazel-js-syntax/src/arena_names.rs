@@ -27,6 +27,8 @@ pub struct Tk<'a> {
     pub by_start: &'a [usize],
     /// The BoundNames of each node ([`bn_inv`]).
     pub bn: &'a [Vec<usize>],
+    /// The declared names of each node ([`crate::arena_decls::names_inv`]).
+    pub nm: &'a crate::arena_decls::Names,
 }
 
 /// The names of the tokens `xs`.
@@ -887,6 +889,7 @@ pub fn function_early_exec(
         starts_inc(ts),
         tk.bn.len() == nodes.len(),
         bn_inv(arena_of(nodes@), ts, tk.toks@, tk.bn@, nodes.len() as int),
+        crate::arena_decls::names_inv(tk, nodes@, ts),
     ensures
         r ==> {
             let a = arena_of(nodes@);
@@ -906,7 +909,7 @@ pub fn function_early_exec(
     let by_start = tk.by_start;
     let bn = tk.bn;
     let ghost a = arena_of(nodes@);
-    let (hus, lex_empty) = match body {
+    let (hus, lex) = match body {
         Some(b) => {
             let h = match use_strict_exec(src, nodes, toks, by_start, b, Ghost(ts)) {
                 Some(h) => h,
@@ -914,13 +917,16 @@ pub fn function_early_exec(
                     return false;
                 },
             };
-            (h, items_lex_empty(nodes, b, true))
+            let l = match crate::arena_decls::cat_exec(nodes, tk.nm.lt.as_slice(), b, 0) {
+                Some(l) => l,
+                None => {
+                    return false;
+                },
+            };
+            (h, l)
         },
-        None => (false, true),
+        None => (false, Vec::new()),
     };
-    if !lex_empty {
-        return false;
-    }
     let simple = simple_params_exec(nodes, params);
     if hus && !simple {
         return false;
@@ -940,6 +946,22 @@ pub fn function_early_exec(
     if need_unique && !distinct {
         return false;
     }
+    let names_dd = crate::arena_decls::decls_from_names(names.as_slice());
+    proof {
+        crate::arena_decls::lemma_decl_ok_names(toks@, names@);
+        match body {
+            Some(b) => {
+                crate::arena_decls::lemma_lex_body(arena_of(nodes@), ts, tk, nodes@, b as int);
+            },
+            None => {
+                assert(lex@ =~= Seq::<crate::arena_decls::Decl>::empty());
+            },
+        }
+        assert(crate::arena_decls::decl_ok(toks@, lex@));
+    }
+    if !crate::arena_decls::no_intersect_dd(toks, names_dd.as_slice(), lex.as_slice()) {
+        return false;
+    }
     proof {
         let body_ks = match body {
             Some(b) => kids(a, b as int),
@@ -948,14 +970,23 @@ pub fn function_early_exec(
         let nb = a.nodes.len() as int;
         let strict = env_strict || has_use_strict(a, ts, body_ks);
         assert(has_use_strict(a, ts, body_ks) == hus);
-        if let Some(b) = body {
-            lemma_lex_list_empty(a, ts, nb, body_ks, 0, true);
+        let lexn = lex_names_list(a, ts, nb, body_ks, 0, true);
+        match body {
+            Some(b) => {
+                crate::arena_decls::lemma_lex_body(a, ts, tk, nodes@, b as int);
+                assert(crate::arena_decls::decls_of(toks@, lex@) =~= lexn);
+            },
+            None => {
+                assert(body_ks =~= Seq::<int>::empty());
+                assert(lexn =~= Seq::<DeclName>::empty());
+                assert(crate::arena_decls::decls_of(toks@, lex@) =~= Seq::<DeclName>::empty());
+            },
         }
-        assert(lex_names_list(a, ts, nb, body_ks, 0, true) =~= Seq::<DeclName>::empty());
-        assert(plain_names(lex_names_list(a, ts, nb, body_ks, 0, true)) =~= Seq::<Seq<u32>>::empty());
         let bnames = bound_names(a, ts, params as int);
         assert(bnames =~= names_of(toks@, names@));
-        assert(!intersects(bnames, plain_names(lex_names_list(a, ts, nb, body_ks, 0, true))));
+        assert(crate::arena_decls::dn(toks@, names_dd@) =~= bnames);
+        assert(plain_names(lexn) =~= crate::arena_decls::dn(toks@, lex@));
+        assert(!intersects(bnames, plain_names(lexn)));
         if strict || unique || !is_simple_params(a, params as int) {
             if env_strict || hus || unique || !simple {
                 assert(!has_duplicate(names_of(toks@, names@)));
