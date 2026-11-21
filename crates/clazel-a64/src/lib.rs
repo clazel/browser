@@ -30,7 +30,9 @@
 //! `docs/VERIFICATION.md`.
 
 pub mod api;
+pub mod classes;
 pub mod contract;
+pub mod decoder;
 pub mod encoder;
 pub mod examples;
 pub mod spec;
