@@ -797,17 +797,16 @@ fn corpus_is_well_formed() -> Result<(), String> {
 /// function says, never more.
 #[test]
 fn many_arguments_and_locals() -> Result<(), String> {
-    let params: Vec<String> = (0..200).map(|i| format!("p{i}")).collect();
+    let n: u32 = if cfg!(miri) { 20 } else { 200 };
+    let params: Vec<String> = (0..n).map(|i| format!("p{i}")).collect();
     let src = format!(
-        "function f({}) {{ return p0 + p199; }} f({});",
+        "function f({}) {{ return p0 + p{}; }} f({});",
         params.join(", "),
-        (0..200)
-            .map(|i| i.to_string())
-            .collect::<Vec<_>>()
-            .join(", ")
+        n.saturating_sub(1),
+        (0..n).map(|i| i.to_string()).collect::<Vec<_>>().join(", ")
     );
     let p = compile(&src)?;
-    assert_eq!(func(&p, 1)?.nparams, 200);
+    assert_eq!(func(&p, 1)?.nparams, n);
     Ok(())
 }
 
@@ -815,7 +814,8 @@ fn many_arguments_and_locals() -> Result<(), String> {
 /// and must not overflow the stack.
 #[test]
 fn deeply_nested_programs_compile() -> Result<(), String> {
-    let depth = 900;
+    // Miri is about a hundred times slower: a shallower program there.
+    let depth = if cfg!(miri) { 40 } else { 900 };
     let parens = format!("x = {}1{};", "(".repeat(depth), ")".repeat(depth));
     compile(&parens)?;
     let blocks = format!("{}x;{}", "{".repeat(depth), "}".repeat(depth));
