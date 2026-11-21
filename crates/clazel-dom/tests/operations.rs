@@ -73,25 +73,41 @@ fn is_not_found(e: &Option<DomError>) -> bool {
 fn check(a: &Arena) {
     for n in 0..a.len() {
         let kids = a.children(n);
-        for (i, c) in kids.iter().enumerate() {
+        for c in kids {
             assert_eq!(a.parent(*c), Some(n), "child {c} of {n}");
-            assert!(!kids[..i].contains(c), "duplicate child {c} of {n}");
+            assert_eq!(
+                kids.iter().filter(|x| *x == c).count(),
+                1,
+                "duplicate child {c} of {n}"
+            );
         }
         if let Some(p) = a.parent(n) {
             assert!(a.children(p).contains(&n), "{n} is not in its parent {p}");
         }
-        let mut steps = 0;
         let mut cur = n;
-        while let Some(p) = a.parent(cur) {
-            cur = p;
-            steps += 1;
-            assert!(steps <= a.len(), "cycle above {n}");
+        for _ in 0..=a.len() {
+            match a.parent(cur) {
+                Some(p) => cur = p,
+                None => break,
+            }
         }
+        assert_eq!(a.parent(cur), None, "cycle above {n}");
     }
     assert_eq!(a.parent(0), None);
 }
 
-/// A document, and a helper to add a child that is created for it.
+/// Three elements `a`, `b` and `c`, appended in order to `parent`.
+fn kids3(a: &mut Arena, parent: usize) -> (usize, usize, usize) {
+    let x = create(a, element("a"));
+    let y = create(a, element("b"));
+    let z = create(a, element("c"));
+    a.append(parent, x);
+    a.append(parent, y);
+    a.append(parent, z);
+    (x, y, z)
+}
+
+/// A new document.
 fn new_doc() -> Arena {
     Arena::new(s("about:blank"))
 }
@@ -125,7 +141,9 @@ fn document_children_rules() {
     // child, here `html` itself, is invalid).
     assert!(is_hierarchy(&a.pre_insert(html, 0, None)));
     // A doctype is not allowed in an element.
-    assert!(is_hierarchy(&a.ensure_pre_insertion_validity(dt2, html, None)));
+    assert!(is_hierarchy(
+        &a.ensure_pre_insertion_validity(dt2, html, None)
+    ));
     check(&a);
 }
 
@@ -175,13 +193,23 @@ fn hierarchy_checks() {
     // 1. A text node cannot have children.
     assert!(is_hierarchy(&a.ensure_pre_insertion_validity(p, t, None)));
     // 2. A node cannot go into itself or a descendant.
-    assert!(is_hierarchy(&a.ensure_pre_insertion_validity(html, p, None)));
-    assert!(is_hierarchy(&a.ensure_pre_insertion_validity(body, body, None)));
+    assert!(is_hierarchy(
+        &a.ensure_pre_insertion_validity(html, p, None)
+    ));
+    assert!(is_hierarchy(
+        &a.ensure_pre_insertion_validity(body, body, None)
+    ));
     // 3. The reference child must be a child of the parent.
-    assert!(is_not_found(&a.ensure_pre_insertion_validity(p, body, Some(t))));
+    assert!(is_not_found(&a.ensure_pre_insertion_validity(
+        p,
+        body,
+        Some(t)
+    )));
     // 4. The document node cannot be inserted (into a parentless element).
     let loose = create(&mut a, element("div"));
-    assert!(is_hierarchy(&a.ensure_pre_insertion_validity(0, loose, None)));
+    assert!(is_hierarchy(
+        &a.ensure_pre_insertion_validity(0, loose, None)
+    ));
     // An error changes nothing.
     let before: Vec<Vec<usize>> = (0..a.len()).map(|n| a.children(n).to_vec()).collect();
     assert!(is_hierarchy(&a.pre_insert(html, p, None)));
@@ -203,7 +231,9 @@ fn a_template_cannot_go_into_its_own_contents() {
     let p = create(&mut a, element("p"));
     a.append(contents, p);
     assert!(is_hierarchy(&a.ensure_pre_insertion_validity(tpl, p, None)));
-    assert!(is_hierarchy(&a.ensure_pre_insertion_validity(tpl, contents, None)));
+    assert!(is_hierarchy(
+        &a.ensure_pre_insertion_validity(tpl, contents, None)
+    ));
     // A fragment that is the contents of a template can itself be inserted,
     // and then moves the template's children out.
     let host = create(&mut a, element("div"));
@@ -218,28 +248,25 @@ fn a_template_cannot_go_into_its_own_contents() {
 fn pre_insert_places_children() {
     let mut a = new_doc();
     let div = create(&mut a, element("div"));
-    let kids: Vec<usize> = ["a", "b", "c"].iter().map(|n| create(&mut a, element(n))).collect();
-    for k in &kids {
-        a.append(div, *k);
-    }
+    let (k0, k1, k2) = kids3(&mut a, div);
     let x = create(&mut a, element("x"));
-    assert!(a.pre_insert(x, div, Some(kids[1])).is_none());
-    assert_eq!(a.children(div), &[kids[0], x, kids[1], kids[2]]);
-    assert_eq!(a.next_sibling(x), Some(kids[1]));
-    assert_eq!(a.next_sibling(kids[2]), None);
+    assert!(a.pre_insert(x, div, Some(k1)).is_none());
+    assert_eq!(a.children(div), &[k0, x, k1, k2]);
+    assert_eq!(a.next_sibling(x), Some(k1));
+    assert_eq!(a.next_sibling(k2), None);
     assert_eq!(a.next_sibling(0), None);
     // Before itself: the reference child is its next sibling, so it stays.
     assert!(a.pre_insert(x, div, Some(x)).is_none());
-    assert_eq!(a.children(div), &[kids[0], x, kids[1], kids[2]]);
+    assert_eq!(a.children(div), &[k0, x, k1, k2]);
     // Before itself, as the last child: it stays last.
-    assert!(a.pre_insert(kids[2], div, Some(kids[2])).is_none());
-    assert_eq!(a.children(div), &[kids[0], x, kids[1], kids[2]]);
+    assert!(a.pre_insert(k2, div, Some(k2)).is_none());
+    assert_eq!(a.children(div), &[k0, x, k1, k2]);
     // Moving the first child to the end.
-    assert!(a.pre_insert(kids[0], div, None).is_none());
-    assert_eq!(a.children(div), &[x, kids[1], kids[2], kids[0]]);
+    assert!(a.pre_insert(k0, div, None).is_none());
+    assert_eq!(a.children(div), &[x, k1, k2, k0]);
     // Moving a node before a later sibling.
-    assert!(a.pre_insert(x, div, Some(kids[0])).is_none());
-    assert_eq!(a.children(div), &[kids[1], kids[2], x, kids[0]]);
+    assert!(a.pre_insert(x, div, Some(k0)).is_none());
+    assert_eq!(a.children(div), &[k1, k2, x, k0]);
     check(&a);
 }
 
@@ -247,30 +274,27 @@ fn pre_insert_places_children() {
 fn inserting_a_fragment_moves_its_children_in_order() {
     let mut a = new_doc();
     let div = create(&mut a, element("div"));
-    let k: Vec<usize> = ["a", "b", "c"].iter().map(|n| create(&mut a, element(n))).collect();
-    for n in &k {
-        a.append(div, *n);
-    }
+    let (k0, k1, k2) = kids3(&mut a, div);
     let f = create(&mut a, fragment());
     let x = create(&mut a, element("x"));
     let y = create(&mut a, text("y"));
     a.append(f, x);
     a.append(f, y);
-    assert!(a.pre_insert(f, div, Some(k[1])).is_none());
-    assert_eq!(a.children(div), &[k[0], x, y, k[1], k[2]]);
+    assert!(a.pre_insert(f, div, Some(k1)).is_none());
+    assert_eq!(a.children(div), &[k0, x, y, k1, k2]);
     assert!(a.children(f).is_empty());
     assert_eq!(a.parent(f), None);
     assert_eq!(a.parent(x), Some(div));
     assert_eq!(a.parent(y), Some(div));
     // An empty fragment changes nothing.
-    assert!(a.pre_insert(f, div, Some(k[0])).is_none());
-    assert_eq!(a.children(div), &[k[0], x, y, k[1], k[2]]);
+    assert!(a.pre_insert(f, div, Some(k0)).is_none());
+    assert_eq!(a.children(div), &[k0, x, y, k1, k2]);
     // At the end.
     let g = create(&mut a, fragment());
     let z = create(&mut a, element("z"));
     a.append(g, z);
     assert!(a.pre_insert(g, div, None).is_none());
-    assert_eq!(a.children(div), &[k[0], x, y, k[1], k[2], z]);
+    assert_eq!(a.children(div), &[k0, x, y, k1, k2, z]);
     // A fragment cannot go into one of its own children.
     let h = create(&mut a, fragment());
     let w = create(&mut a, element("w"));
@@ -284,23 +308,20 @@ fn inserting_a_fragment_moves_its_children_in_order() {
 fn replace_swaps_in_place() {
     let mut a = new_doc();
     let div = create(&mut a, element("div"));
-    let k: Vec<usize> = ["a", "b", "c"].iter().map(|n| create(&mut a, element(n))).collect();
-    for n in &k {
-        a.append(div, *n);
-    }
+    let (k0, k1, k2) = kids3(&mut a, div);
     let x = create(&mut a, element("x"));
-    assert!(a.replace(k[1], x, div).is_none());
-    assert_eq!(a.children(div), &[k[0], x, k[2]]);
-    assert_eq!(a.parent(k[1]), None);
+    assert!(a.replace(k1, x, div).is_none());
+    assert_eq!(a.children(div), &[k0, x, k2]);
+    assert_eq!(a.parent(k1), None);
     // Replacing a child with itself changes nothing.
     assert!(a.replace(x, x, div).is_none());
-    assert_eq!(a.children(div), &[k[0], x, k[2]]);
+    assert_eq!(a.children(div), &[k0, x, k2]);
     // With its next sibling: the next sibling takes its place.
-    assert!(a.replace(k[0], x, div).is_none());
-    assert_eq!(a.children(div), &[x, k[2]]);
-    assert_eq!(a.parent(k[0]), None);
+    assert!(a.replace(k0, x, div).is_none());
+    assert_eq!(a.children(div), &[x, k2]);
+    assert_eq!(a.parent(k0), None);
     // With a node that comes before it.
-    assert!(a.replace(k[2], x, div).is_none());
+    assert!(a.replace(k2, x, div).is_none());
     assert_eq!(a.children(div), &[x]);
     // A node that is not a child.
     let other = create(&mut a, element("o"));
@@ -352,15 +373,12 @@ fn replace_in_a_document() {
 fn replace_all_replaces_children() {
     let mut a = new_doc();
     let div = create(&mut a, element("div"));
-    let k: Vec<usize> = ["a", "b", "c"].iter().map(|n| create(&mut a, element(n))).collect();
-    for n in &k {
-        a.append(div, *n);
-    }
+    let (k0, k1, k2) = kids3(&mut a, div);
     let t = create(&mut a, text("hello"));
     a.replace_all(Some(t), div);
     assert_eq!(a.children(div), &[t]);
-    for n in &k {
-        assert_eq!(a.parent(*n), None);
+    for n in [k0, k1, k2] {
+        assert_eq!(a.parent(n), None);
     }
     // A child of the parent itself.
     a.replace_all(Some(t), div);
@@ -375,11 +393,11 @@ fn replace_all_replaces_children() {
     let y = create(&mut a, element("y"));
     a.append(f, x);
     a.append(f, y);
-    a.append(div, k[0]);
+    a.append(div, k0);
     a.replace_all(Some(f), div);
     assert_eq!(a.children(div), &[x, y]);
     assert!(a.children(f).is_empty());
-    assert_eq!(a.parent(k[0]), None);
+    assert_eq!(a.parent(k0), None);
     // A node from elsewhere in the tree moves.
     let other = create(&mut a, element("other"));
     let z = create(&mut a, element("z"));
@@ -411,7 +429,10 @@ fn attrs(a: &Arena, n: usize) -> Vec<(String, String)> {
             .iter()
             .map(|x| {
                 (
-                    x.local_name.iter().filter_map(|c| char::from_u32(*c)).collect(),
+                    x.local_name
+                        .iter()
+                        .filter_map(|c| char::from_u32(*c))
+                        .collect(),
                     x.value.iter().filter_map(|c| char::from_u32(*c)).collect(),
                 )
             })
@@ -430,15 +451,26 @@ fn attribute_changes() {
     a.change_attribute(e, 1, s("two"));
     assert_eq!(
         attrs(&a, e),
-        [("a".into(), "1".into()), ("b".into(), "two".into()), ("c".into(), "3".into())]
+        [
+            ("a".into(), "1".into()),
+            ("b".into(), "two".into()),
+            ("c".into(), "3".into())
+        ]
     );
     a.replace_attribute(e, 0, attr("z", "26"));
     assert_eq!(
         attrs(&a, e),
-        [("z".into(), "26".into()), ("b".into(), "two".into()), ("c".into(), "3".into())]
+        [
+            ("z".into(), "26".into()),
+            ("b".into(), "two".into()),
+            ("c".into(), "3".into())
+        ]
     );
     a.remove_attribute(e, 1);
-    assert_eq!(attrs(&a, e), [("z".into(), "26".into()), ("c".into(), "3".into())]);
+    assert_eq!(
+        attrs(&a, e),
+        [("z".into(), "26".into()), ("c".into(), "3".into())]
+    );
     a.remove_attribute(e, 1);
     a.remove_attribute(e, 0);
     assert!(attrs(&a, e).is_empty());
@@ -485,13 +517,13 @@ fn shallow_clone() {
             assert!(template_contents.is_none());
             assert!(form_owner.is_none());
         }
-        _ => panic!("an element"),
+        other => assert!(matches!(other, ExecKind::Element { .. }), "an element"),
     }
     assert_eq!(a.len(), n + 1);
     // The original is untouched, and the copy is independent of it.
     assert_eq!(a.children(e), &[kid]);
     a.change_attribute(c, 0, s("9"));
-    assert_eq!(attrs(&a, e)[0].1, "5");
+    assert_eq!(attrs(&a, e).first().map(|x| x.1.as_str()), Some("5"));
     // Other kinds.
     let t = a.clone_node(kid).unwrap_or_default();
     assert!(matches!(a.kind(t), ExecKind::Text { data } if *data == s("kid")));
@@ -500,7 +532,10 @@ fn shallow_clone() {
     assert!(matches!(a.kind(d2), ExecKind::DocumentType { name, .. } if *name == s("html")));
     let f = create(&mut a, fragment());
     let f2 = a.clone_node(f).unwrap_or_default();
-    assert!(matches!(a.kind(f2), ExecKind::DocumentFragment { host: None }));
+    assert!(matches!(
+        a.kind(f2),
+        ExecKind::DocumentFragment { host: None }
+    ));
     check(&a);
 }
 
@@ -516,14 +551,28 @@ fn cloning_a_template_gives_the_copy_contents_of_its_own() {
     assert_eq!(copy, n);
     assert_eq!(a.len(), n + 2);
     match a.kind(copy) {
-        ExecKind::Element { template_contents: Some(c), .. } => {
+        ExecKind::Element {
+            template_contents: Some(c),
+            ..
+        } => {
             assert_eq!(*c, n + 1);
             // Shallow: the copy's contents are empty, and the original's
             // are as they were.
             assert!(a.children(*c).is_empty());
-            assert!(matches!(a.kind(*c), ExecKind::DocumentFragment { host: Some(h) } if *h == copy));
+            assert!(
+                matches!(a.kind(*c), ExecKind::DocumentFragment { host: Some(h) } if *h == copy)
+            );
         }
-        _ => panic!("a template"),
+        other => assert!(
+            matches!(
+                other,
+                ExecKind::Element {
+                    template_contents: Some(_),
+                    ..
+                }
+            ),
+            "a template"
+        ),
     }
     assert_eq!(a.children(contents), &[p]);
     check(&a);

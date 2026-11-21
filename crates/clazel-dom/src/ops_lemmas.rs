@@ -6,7 +6,9 @@
 //!
 //! Each `theorem_*` listed in `Cargo.toml` is a `pub proof fn` here.
 
+#[cfg(verus_only)]
 use super::contract::*;
+#[cfg(verus_only)]
 use super::lemmas::*;
 #[allow(unused_imports)]
 use super::spec::*;

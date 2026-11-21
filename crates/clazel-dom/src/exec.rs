@@ -1191,18 +1191,9 @@ fn kind_is(k: &ExecKind, t: &NodeTag) -> (r: bool)
         r == has_tag(k@, *t),
 {
     match t {
-        NodeTag::Element => match k {
-            ExecKind::Element { .. } => true,
-            _ => false,
-        },
-        NodeTag::Text => match k {
-            ExecKind::Text { .. } => true,
-            _ => false,
-        },
-        NodeTag::DocumentType => match k {
-            ExecKind::DocumentType { .. } => true,
-            _ => false,
-        },
+        NodeTag::Element => matches!(k, ExecKind::Element { .. }),
+        NodeTag::Text => matches!(k, ExecKind::Text { .. }),
+        NodeTag::DocumentType => matches!(k, ExecKind::DocumentType { .. }),
     }
 }
 
@@ -1211,12 +1202,7 @@ fn kind_may_have_children(k: &ExecKind) -> (r: bool)
     ensures
         r == may_have_children(k@),
 {
-    match k {
-        ExecKind::Document { .. } => true,
-        ExecKind::Element { .. } => true,
-        ExecKind::DocumentFragment { .. } => true,
-        _ => false,
-    }
+    matches!(k, ExecKind::Document { .. } | ExecKind::Element { .. } | ExecKind::DocumentFragment { .. })
 }
 
 impl Arena {
@@ -1307,7 +1293,8 @@ impl Arena {
                 // Never saturates: i < kids.len().
                 let j = i.saturating_add(1);
                 if j < kids.len() {
-                    Some(kids[j])
+                    let x = kids.get(j)?;
+                    Some(*x)
                 } else {
                     None
                 }
@@ -1516,10 +1503,12 @@ impl Arena {
             return Some(DomError::HierarchyRequest);
         }
         // 3.
-        if let Some(c) = child {
-            if self.node(c).parent != Some(parent) {
-                return Some(DomError::NotFound);
-            }
+        let not_found = match child {
+            Some(c) => self.node(c).parent != Some(parent),
+            None => false,
+        };
+        if not_found {
+            return Some(DomError::NotFound);
         }
         let nk = self.kind(node);
         // 4.
@@ -1527,10 +1516,7 @@ impl Arena {
             return Some(DomError::HierarchyRequest);
         }
         // 5.
-        let parent_is_document = match pk {
-            ExecKind::Document { .. } => true,
-            _ => false,
-        };
+        let parent_is_document = matches!(pk, ExecKind::Document { .. });
         let node_is_text = kind_is(nk, &NodeTag::Text);
         let node_is_doctype = kind_is(nk, &NodeTag::DocumentType);
         if (node_is_text && parent_is_document) || (node_is_doctype && !parent_is_document) {
@@ -1638,10 +1624,7 @@ impl Arena {
             return Some(DomError::HierarchyRequest);
         }
         // 5.
-        let parent_is_document = match pk {
-            ExecKind::Document { .. } => true,
-            _ => false,
-        };
+        let parent_is_document = matches!(pk, ExecKind::Document { .. });
         let node_is_text = kind_is(nk, &NodeTag::Text);
         let node_is_doctype = kind_is(nk, &NodeTag::DocumentType);
         if (node_is_text && parent_is_document) || (node_is_doctype && !parent_is_document) {
@@ -1732,10 +1715,7 @@ impl Arena {
         ensures
             final(self)@ == insert_any(old(self)@, node, parent, child),
     {
-        let is_fragment = match self.kind(node) {
-            ExecKind::DocumentFragment { .. } => true,
-            _ => false,
-        };
+        let is_fragment = matches!(self.kind(node), ExecKind::DocumentFragment { .. });
         if is_fragment {
             self.insert_fragment(node, parent, child);
         } else {
@@ -1842,8 +1822,11 @@ fn copy_opt_str(s: &Option<Vec<u32>>) -> (r: Option<Vec<u32>>)
         opt_str_view(r) == opt_str_view(*s),
 {
     match s {
-        Some(v) => Some(copy_str(v)),
         None => None,
+        Some(v) => {
+            let c = copy_str(v);
+            Some(c)
+        },
     }
 }
 
@@ -1884,7 +1867,7 @@ fn copy_attr(a: &ExecAttr) -> (r: ExecAttr)
 }
 
 /// A copy of an attribute list.
-fn copy_attrs(v: &Vec<ExecAttr>) -> (r: Vec<ExecAttr>)
+fn copy_attrs(v: &[ExecAttr]) -> (r: Vec<ExecAttr>)
     ensures
         attrs_view(r@) == attrs_view(v@),
 {
@@ -1941,10 +1924,7 @@ fn is_template_exec(k: &ExecKind) -> (r: bool)
     ensures
         r == is_template(k@),
 {
-    match k {
-        ExecKind::Element { template_contents: Some(_), .. } => true,
-        _ => false,
-    }
+    matches!(k, ExecKind::Element { template_contents: Some(_), .. })
 }
 
 impl Arena {
@@ -1964,17 +1944,14 @@ impl Arena {
         } else {
             1
         };
-        if self.nodes.len() > MAX_NODES - count {
+        if self.nodes.len().saturating_add(count) > MAX_NODES {
             return None;
         }
         proof {
             let k = d0.nodes[node as int].kind;
             assert(creatable(d0, clone_kind(k)));
         }
-        let id = match self.create(kind) {
-            Some(id) => id,
-            None => return None,
-        };
+        let id = self.create(kind)?;
         // 5.
         if template {
             proof {

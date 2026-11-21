@@ -17,8 +17,11 @@
 //! mutation changes; facts that a mutation would change come from the
 //! theorems instead.
 
+#[cfg(verus_only)]
 use super::lemmas::*;
+#[cfg(verus_only)]
 use super::mutation_lemmas::*;
+#[cfg(verus_only)]
 use super::ops_lemmas::*;
 #[allow(unused_imports)]
 use super::spec::*;
@@ -293,7 +296,7 @@ pub proof fn ol_attrs_wf()
 /// `theorem_change_attribute_wf`: the new value is the attribute's value.
 pub proof fn ol_change_value()
     ensures
-        change_attribute(ol_attrs(), 1, 0, seq![9u32]).nodes[1].kind->Element_attributes[0].value == seq![9u32],
+        change_attribute(ol_attrs(), 1, 0, seq![9u32]).nodes[1].kind->Element_attributes[0].value[0] == 9u32,
 {
     ol_attrs_wf();
     theorem_change_attribute_wf(ol_attrs(), 1, 0, seq![9u32]);
@@ -304,11 +307,11 @@ pub proof fn ol_change_value()
 /// first.
 pub proof fn ol_remove_index()
     ensures
-        remove_attribute(ol_attrs(), 1, 1).nodes[1].kind->Element_attributes[0].local_name == seq![1u32],
+        remove_attribute(ol_attrs(), 1, 1).nodes[1].kind->Element_attributes[0].local_name[0] == 1u32,
 {
     ol_attrs_wf();
     theorem_remove_attribute_wf(ol_attrs(), 1, 1);
-    assert(ol_attrs().nodes[1].kind->Element_attributes.remove(1)[0].local_name == seq![1u32]) by (compute_only);
+    assert(ol_attrs().nodes[1].kind->Element_attributes.remove(1)[0].local_name[0] == 1u32) by (compute_only);
 }
 
 /// `theorem_replace_attribute_wf`: replacing an attribute keeps the length

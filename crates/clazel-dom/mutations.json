@@ -194,7 +194,175 @@
         "lemma": "ml_fragment_takes_children()",
         "witness": "append(ml_doc_template(), 4, 1).nodes[4].children.len() == 1 && append(ml_doc_template(), 4, 1).nodes[4].kind is DocumentFragment"
       },
-      "module": "lemmas"
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "validity-skips-host-check",
+      "file": "src/spec.rs",
+      "find": "    else if is_host_including_inclusive_ancestor(doc, node, parent) {\n        Some(DomError::HierarchyRequest)\n    }\n    // 3.\n    else if child is Some &&",
+      "replace": "    else if false {\n        Some(DomError::HierarchyRequest)\n    }\n    // 3.\n    else if child is Some &&",
+      "expect": "killed",
+      "reason": "\"Ensure pre-insertion validity\" step 2 never fires, so a node can be inserted into its own descendant: lemma_pre_insert_valid (no error implies the node is not an inclusive ancestor of the parent) is false, and so is theorem_pre_insert_wf's well-formedness.",
+      "certificate": {
+        "file": "src/ops_mutation_lemmas.rs",
+        "lemma": "ol_validity_ancestor()",
+        "witness": "pre_insert_error(ol_base(), 1, 2, None) is None"
+      },
+      "module": "ops_lemmas"
+    },
+    {
+      "id": "validity-skips-not-found",
+      "file": "src/spec.rs",
+      "find": "    else if child is Some && doc.nodes[child->Some_0 as int].parent != Some(parent) {",
+      "replace": "    else if false {",
+      "expect": "killed",
+      "reason": "Step 3 never fires, so a reference child that is not a child of the parent is accepted: lemma_pre_insert_valid (no error implies the reference child is the parent's child) is false.",
+      "certificate": {
+        "file": "src/ops_mutation_lemmas.rs",
+        "lemma": "ol_validity_not_found()",
+        "witness": "pre_insert_error(ol_base(), 5, 2, Some(1)) is None"
+      },
+      "module": "ops_lemmas"
+    },
+    {
+      "id": "validity-allows-leaf-parent",
+      "file": "src/spec.rs",
+      "find": "    if !may_have_children(doc.nodes[parent as int].kind) {\n        Some(DomError::HierarchyRequest)\n    }\n    // 2.\n    else if is_host_including_inclusive_ancestor(doc, node, parent) {\n        Some(DomError::HierarchyRequest)\n    }\n    // 3.\n    else if child is Some &&",
+      "replace": "    if false {\n        Some(DomError::HierarchyRequest)\n    }\n    // 2.\n    else if is_host_including_inclusive_ancestor(doc, node, parent) {\n        Some(DomError::HierarchyRequest)\n    }\n    // 3.\n    else if child is Some &&",
+      "expect": "killed",
+      "reason": "Step 1 never fires, so a node whose kind has no children (a Text node) can be a parent: lemma_pre_insert_valid (no error implies the parent may have children) is false, and with it wf's rule that only documents, elements and fragments have children.",
+      "certificate": {
+        "file": "src/ops_mutation_lemmas.rs",
+        "lemma": "ol_validity_leaf_parent()",
+        "witness": "pre_insert_error(ol_base(), 5, 3, None) is None"
+      },
+      "module": "ops_lemmas"
+    },
+    {
+      "id": "validity-allows-document-node",
+      "file": "src/spec.rs",
+      "find": "    // 4. (Every kind but a Document is one of the listed.)\n    else if doc.nodes[node as int].kind is Document {",
+      "replace": "    // 4. (Every kind but a Document is one of the listed.)\n    else if false {",
+      "expect": "killed",
+      "reason": "Step 4 never fires, so the document node can be inserted: lemma_pre_insert_valid (no error implies the node is not a document) is false, and wf says node 0 is the only document and has no parent.",
+      "certificate": {
+        "file": "src/ops_mutation_lemmas.rs",
+        "lemma": "ol_validity_document_node()",
+        "witness": "pre_insert_error(ol_base(), 0, 5, None) is None"
+      },
+      "module": "ops_lemmas"
+    },
+    {
+      "id": "replace-skips-remove",
+      "file": "src/spec.rs",
+      "find": "            remove(doc, child)\n        } else {\n            doc\n        };",
+      "replace": "            doc\n        } else {\n            doc\n        };",
+      "expect": "killed",
+      "reason": "Step 11 does not remove child, so the replaced node stays a child of the parent: theorem_replace_wf (child has no parent afterwards) and lemma_replace_valid are false.",
+      "certificate": {
+        "file": "src/ops_mutation_lemmas.rs",
+        "lemma": "ol_replace_detaches()",
+        "witness": "replace(ol_base(), 3, 4, 2).nodes[3].parent is Some"
+      },
+      "module": "ops_lemmas"
+    },
+    {
+      "id": "replace-all-keeps-children",
+      "file": "src/spec.rs",
+      "find": "        Some(n) => insert_any(d1, n, parent, None),",
+      "replace": "        Some(n) => insert_any(doc, n, parent, None),",
+      "expect": "killed",
+      "reason": "Step 6 inserts into the arena from before step 5, so the old children stay: theorem_replace_all_wf (the parent's children are exactly the node) is false.",
+      "certificate": {
+        "file": "src/ops_mutation_lemmas.rs",
+        "lemma": "ol_replace_all_clears()",
+        "witness": "children(replace_all(ol_base(), Some(4), 2), 2).len() == 2"
+      },
+      "module": "ops_lemmas"
+    },
+    {
+      "id": "fragment-drops-first-node",
+      "file": "src/spec.rs",
+      "find": "        insert_list(d1, nodes, parent, child)",
+      "replace": "        insert_list(d1, nodes.drop_first(), parent, child)",
+      "expect": "killed",
+      "reason": "Inserting a fragment skips its first child: theorem_insert_any_wf (the parent's children are the old ones with the fragment's children, in order, at the reference child) is false.",
+      "certificate": {
+        "file": "src/ops_mutation_lemmas.rs",
+        "lemma": "ol_fragment_order()",
+        "witness": "pre_insert(ol_base(), 6, 2, None).nodes[2].children.len() == 2"
+      },
+      "module": "ops_lemmas"
+    },
+    {
+      "id": "clone-drops-attributes",
+      "file": "src/spec.rs",
+      "find": "            attributes,\n            template_contents: None,\n            form_owner: None,\n        },\n        NodeKind::DocumentFragment { .. } => NodeKind::DocumentFragment { host: None },",
+      "replace": "            attributes: seq![],\n            template_contents: None,\n            form_owner: None,\n        },\n        NodeKind::DocumentFragment { .. } => NodeKind::DocumentFragment { host: None },",
+      "expect": "killed",
+      "reason": "The copy of an element has no attributes: theorem_clone_node_wf (the copy's attribute list is the element's) is false.",
+      "certificate": {
+        "file": "src/ops_mutation_lemmas.rs",
+        "lemma": "ol_clone_attributes()",
+        "witness": "clone_node(ol_attrs(), 1).0.nodes[2].kind->Element_attributes.len() == 0"
+      },
+      "module": "ops_lemmas"
+    },
+    {
+      "id": "change-attribute-keeps-value",
+      "file": "src/spec.rs",
+      "find": "attrs.update(i as int, Attr { value, ..attrs[i as int] })",
+      "replace": "attrs.update(i as int, attrs[i as int])",
+      "expect": "killed",
+      "reason": "\"Change an attribute\" does not set the value: theorem_change_attribute_wf (the attribute is the old one with the new value) is false.",
+      "certificate": {
+        "file": "src/ops_mutation_lemmas.rs",
+        "lemma": "ol_change_value()",
+        "witness": "change_attribute(ol_attrs(), 1, 0, seq![9u32]).nodes[1].kind->Element_attributes[0].value[0] == 1u32"
+      },
+      "module": "ops_lemmas"
+    },
+    {
+      "id": "remove-attribute-wrong-index",
+      "file": "src/spec.rs",
+      "find": "doc.nodes[e as int].kind->Element_attributes.remove(i as int)",
+      "replace": "doc.nodes[e as int].kind->Element_attributes.remove(0)",
+      "expect": "killed",
+      "reason": "\"Remove an attribute\" removes the first attribute whichever is named: theorem_remove_attribute_wf (the list is the old one without the i-th) is false.",
+      "certificate": {
+        "file": "src/ops_mutation_lemmas.rs",
+        "lemma": "ol_remove_index()",
+        "witness": "remove_attribute(ol_attrs(), 1, 1).nodes[1].kind->Element_attributes[0].local_name[0] == 2u32"
+      },
+      "module": "ops_lemmas"
+    },
+    {
+      "id": "replace-attribute-appends",
+      "file": "src/spec.rs",
+      "find": "doc.nodes[e as int].kind->Element_attributes.update(i as int, new_attr)",
+      "replace": "doc.nodes[e as int].kind->Element_attributes.push(new_attr)",
+      "expect": "killed",
+      "reason": "\"Replace an attribute\" appends the new one and keeps the old: theorem_replace_attribute_wf (the list keeps its length, with the new attribute at the old one's place) is false.",
+      "certificate": {
+        "file": "src/ops_mutation_lemmas.rs",
+        "lemma": "ol_replace_attribute_length()",
+        "witness": "replace_attribute(ol_attrs(), 1, 0, ol_attr(3)).nodes[1].kind->Element_attributes.len() == 3"
+      },
+      "module": "ops_lemmas"
+    },
+    {
+      "id": "template-clone-count-one",
+      "file": "src/spec.rs",
+      "find": "    if is_template(doc.nodes[node as int].kind) {\n        2\n    } else {\n        1\n    }",
+      "replace": "    if is_template(doc.nodes[node as int].kind) {\n        1\n    } else {\n        1\n    }",
+      "expect": "killed",
+      "reason": "A template's clone is counted as one new node, though it adds two (the copy and its contents): theorem_clone_node_wf (the arena grows by clone_count) is false.",
+      "certificate": {
+        "file": "src/ops_mutation_lemmas.rs",
+        "lemma": "ol_clone_count()",
+        "witness": "clone_count(ol_template(), 1) == 1"
+      },
+      "module": "ops_lemmas"
     }
   ]
 }
