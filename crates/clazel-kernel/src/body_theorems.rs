@@ -18,7 +18,6 @@ use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
-
 verus! {
 
 /// After the step from `old` to `new`, every body of a navigation in flight in

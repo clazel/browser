@@ -729,7 +729,10 @@ fn a_submit_sends_its_body_once_on_the_connection_it_opens() {
     let sent = sent.unwrap_or_default();
     let text = String::from_utf8_lossy(sent).into_owned();
     assert!(text.starts_with("POST /post HTTP/1.1\r\n"), "{text}");
-    assert!(text.contains(&format!("Content-Type: {FORM}\r\n")), "{text}");
+    assert!(
+        text.contains(&format!("Content-Type: {FORM}\r\n")),
+        "{text}"
+    );
     assert!(text.contains("Content-Length: 7\r\n"), "{text}");
     assert!(text.contains("Origin: http://example.test\r\n"), "{text}");
     assert!(sent.ends_with(b"\r\n\r\na=1&b=2"), "{text}");
@@ -800,7 +803,11 @@ fn a_submit_from_a_renderer_that_has_not_committed_kills_it() {
 
 #[test]
 fn a_post_redirected_by_301_302_or_303_becomes_a_get_without_the_body() {
-    for status in if cfg!(miri) { vec![302] } else { vec![301, 302, 303] } {
+    for status in if cfg!(miri) {
+        vec![302]
+    } else {
+        vec![301, 302, 303]
+    } {
         let mut k = Kernel::new();
         let id = open(&mut k, "http://example.test/form");
         k.send(id, &submit("/post", "POST", FORM, b"secret=1"));
@@ -812,7 +819,10 @@ fn a_post_redirected_by_301_302_or_303_becomes_a_get_without_the_body() {
         assert_eq!(out, vec![Out::Close(0), connect(1, "example.test")]);
         let out = k.net(1, InputBuf::Connected);
         let text = String::from_utf8_lossy(the_send(&out).unwrap_or_default()).into_owned();
-        assert!(text.starts_with("GET /done HTTP/1.1\r\n"), "{status}: {text}");
+        assert!(
+            text.starts_with("GET /done HTTP/1.1\r\n"),
+            "{status}: {text}"
+        );
         assert!(!text.contains("secret=1"), "{status}: {text}");
         assert!(!text.contains("Content-Length"), "{status}: {text}");
     }
@@ -820,7 +830,11 @@ fn a_post_redirected_by_301_302_or_303_becomes_a_get_without_the_body() {
 
 #[test]
 fn a_post_redirected_by_307_or_308_sends_its_body_again() {
-    for status in if cfg!(miri) { vec![307] } else { vec![307, 308] } {
+    for status in if cfg!(miri) {
+        vec![307]
+    } else {
+        vec![307, 308]
+    } {
         let mut k = Kernel::new();
         let id = open(&mut k, "http://example.test/form");
         k.send(id, &submit("/post", "POST", FORM, b"secret=1"));
@@ -833,7 +847,10 @@ fn a_post_redirected_by_307_or_308_sends_its_body_again() {
         let out = k.net(1, InputBuf::Connected);
         let sent = the_send(&out).unwrap_or_default();
         let text = String::from_utf8_lossy(sent).into_owned();
-        assert!(text.starts_with("POST /again HTTP/1.1\r\n"), "{status}: {text}");
+        assert!(
+            text.starts_with("POST /again HTTP/1.1\r\n"),
+            "{status}: {text}"
+        );
         assert!(sent.ends_with(b"\r\n\r\nsecret=1"), "{status}: {text}");
     }
 }
