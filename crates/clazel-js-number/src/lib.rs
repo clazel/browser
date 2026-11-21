@@ -14,21 +14,27 @@
 //! - [`to_fixed`], [`to_exponential`], [`to_precision`]: exact, by big
 //!   integers ([`format`], [`bigint`]).
 //!
-//! Not here yet: BigInt parsing and printing (StringToBigInt, BigInt::toString,
-//! and `BigInt()`'s literal parsing), which phase-7.md lists under item 7.11
-//! and which come in a later change; Number::toString for radix other than
-//! 10 (a built-in of 7.9, not a conversion of the numeric value).
+//! - [`string_to_bigint`], [`bigint_literal_value`] and
+//!   [`BigInt::to_string_radix`]: StringToBigInt §7.1.14†, the value of a
+//!   BigInt literal, and BigInt::toString §6.1.6.2.23†, radix 2 to 36
+//!   ([`js_bigint`]).
+//!
+//! Not here: Number::toString for radix other than 10 (a built-in of 7.9,
+//! not a conversion of the numeric value), and heap storage for BigInts
+//! (item 7.5).
 //!
 //! The crate has no dependencies and no `unsafe`. Its `proofs` module holds
 //! Kani harnesses (compiled only under `cargo kani`).
 
 pub mod bigint;
 pub mod format;
+pub mod js_bigint;
 pub mod parse;
 pub mod shortest;
 pub mod tables;
 
 pub use format::{RangeError, number_to_string, to_exponential, to_fixed, to_precision};
+pub use js_bigint::{BigInt, bigint_literal_value, string_to_bigint};
 pub use parse::string_to_number;
 
 #[cfg(kani)]

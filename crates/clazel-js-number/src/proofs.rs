@@ -28,8 +28,20 @@
 //! `number_to_string`, the three `to_*` formatters, `Big` beyond `add_small`,
 //! and `d2d_with`. The differential tests (`tests/differential.rs`, with
 //! overflow checks on) exercise them; that is evidence, not proof.
+//!
+//! BigInt parsing and printing (`js_bigint`): proven are `digit_value` and
+//! `digit_char` (total, below 36, mutually inverse, exactly the ASCII
+//! alphanumerics), `chunk_power` (the largest power of each radix 2 to 36
+//! in a `u64`), and one-limb `mul_small` then `add_small` against `u128`
+//! arithmetic (31 s). Written and stopped after more than 3 minutes, so
+//! removed: one-limb `div_small` against `u64` division (a 128-by-64-bit
+//! division) and `push_chunk` (a 64-step loop of `u64` division). Not proven:
+//! `parse_magnitude`, `magnitude_digits`, `string_to_bigint`,
+//! `bigint_literal_value`, `BigInt::to_string_radix`; `tests/bigint.rs`
+//! exercises them against an independent reference.
 
 use crate::bigint::Big;
+use crate::js_bigint::{chunk_power, digit_char, digit_value};
 use crate::parse::{
     Decimal, eisel_lemire, leading_digits, radix_value, round_to_f64, scan_decimal,
 };
@@ -140,4 +152,63 @@ fn radix_value_is_total() {
         assert!(!v.is_nan());
         assert!(v.is_sign_positive());
     }
+}
+
+// ---- BigInt parsing and printing (`js_bigint`): the small, bounded pieces ----
+
+#[kani::proof]
+fn digit_value_is_below_36_and_inverts_digit_char() {
+    let b: u8 = kani::any();
+    if let Some(d) = digit_value(b) {
+        assert!(d < 36);
+        // Re-printing gives the lowercase form of the same digit.
+        let c = digit_char(d);
+        assert!(c.is_some());
+        assert!(c.map(|c| c.to_ascii_lowercase()) == Some(b.to_ascii_lowercase()));
+        // Exactly the ASCII alphanumerics are digits.
+        assert!(b.is_ascii_alphanumeric());
+    } else {
+        assert!(!b.is_ascii_alphanumeric());
+    }
+}
+
+#[kani::proof]
+fn digit_char_is_total_and_inverts_digit_value() {
+    let d: u32 = kani::any();
+    match digit_char(d) {
+        Some(c) => {
+            assert!(d < 36);
+            assert!(digit_value(c) == Some(d));
+            assert!(c.is_ascii_digit() || c.is_ascii_lowercase());
+        }
+        None => assert!(d >= 36),
+    }
+}
+
+#[kani::proof]
+#[kani::unwind(66)]
+fn chunk_power_is_the_largest_power_in_a_word() {
+    let radix: u32 = kani::any();
+    kani::assume((2..=36).contains(&radix));
+    let (p, k) = chunk_power(radix);
+    assert!(k >= 1 && k <= 63);
+    assert!(p >= u64::from(radix));
+    // The largest: one more factor of the radix would not fit.
+    assert!(p.checked_mul(u64::from(radix)).is_none());
+}
+
+#[kani::proof]
+#[kani::unwind(6)]
+fn single_limb_mul_add_is_u128_arithmetic() {
+    // The step `parse_magnitude` takes: `mag = mag * m + a`, for a one-limb
+    // magnitude (the product spills into a second limb).
+    let x: u64 = kani::any();
+    let m: u64 = kani::any();
+    let a: u64 = kani::any();
+    let mut b = Big::from_u64(x);
+    b.mul_small(m);
+    b.add_small(a);
+    let want = u128::from(x) * u128::from(m);
+    kani::assume(want <= u128::MAX - u128::from(a));
+    assert!(b.low_u128() == want + u128::from(a));
 }
