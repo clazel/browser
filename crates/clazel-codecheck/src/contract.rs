@@ -22,8 +22,8 @@
 //! - **A blob is at most 2^31 - 1 bytes** (`requires`).
 //!
 //! Not stated here: that an accepted blob is *safe to run*. That is jit.md's
-//! theorem (exit criterion 2), over `clazel_x64::spec::step`, and it is not
-//! yet written; see [`super::spec`]'s header.
+//! theorem (exit criterion 2), over `clazel_x64::spec::step`, stated in
+//! [`super::safety`] and proven in [`super::safety::proof`].
 
 #[allow(unused_imports)]
 use super::spec::*;

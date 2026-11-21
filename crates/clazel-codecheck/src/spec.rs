@@ -125,9 +125,8 @@
 //!
 //! - **The safety theorem of jit.md exit criterion 2** (every execution of an
 //!   accepted blob stays in its regions, leaves through the exit, and so on)
-//!   is *not stated or proven here*. It needs the machine-level invariant over
-//!   `clazel_x64::spec::step` and the region layout; this file defines
-//!   *acceptance* only, so that the theorem has something to be about.
+//!   is not here: this file defines *acceptance* only. It is stated in
+//!   `safety` and proven in `safety::proof`.
 //! - **Termination.** A blob may loop for ever (a backward `jmp` is a direct
 //!   branch to a unit start). jit.md names no preemption mechanism (see the
 //!   report in the pull request); nothing here rules a loop out.
