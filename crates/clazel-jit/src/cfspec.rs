@@ -141,11 +141,28 @@ impl MTy {
 pub enum MemOp {
     /// `bounds_check region size code`: the index on top of the stack; exit
     /// with `code` unless `index + size <= bound(region)`.
-    BoundsCheck { region: usize, size: usize, code: u32 },
+    BoundsCheck {
+        /// The region (0 to 15).
+        region: usize,
+        /// The number of bytes the access that follows touches.
+        size: usize,
+        /// The exit code if the check fails.
+        code: u32,
+    },
     /// `t.load region`: pop the index, push the value in the region.
-    Load { region: usize, ty: MTy },
+    Load {
+        /// The region (0 to 15).
+        region: usize,
+        /// The type loaded.
+        ty: MTy,
+    },
     /// `t.store region`: pop the value, pop the index, write the value.
-    Store { region: usize, ty: MTy },
+    Store {
+        /// The region (0 to 15).
+        region: usize,
+        /// The type stored.
+        ty: MTy,
+    },
 }
 
 impl vstd::view::View for MemOp {
@@ -360,36 +377,6 @@ pub open spec fn flow_fits(f: Flow, h: nat) -> bool {
     match f {
         Flow::Falls(h1) => h1 == h,
         Flow::Dead => true,
-    }
-}
-
-/// The nesting depth of labels in a node: how many labels its deepest part
-/// has in scope beyond the node's own context.
-pub open spec fn nest(n: Node) -> nat
-    decreases n,
-{
-    match n {
-        Node::Then(a, b) => {
-            let x = nest(*a);
-            let y = nest(*b);
-            if x > y {
-                x
-            } else {
-                y
-            }
-        },
-        Node::Block(b) => nest(*b) + 1,
-        Node::Loop(b) => nest(*b) + 1,
-        Node::If(t, e) => {
-            let x = nest(*t);
-            let y = nest(*e);
-            1 + if x > y {
-                x
-            } else {
-                y
-            }
-        },
-        _ => 0,
     }
 }
 

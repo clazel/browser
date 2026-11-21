@@ -3,9 +3,12 @@
 //! relation survives truncating the stack to a prefix, and a [`cf_refines`]
 //! statement can be used at one state.
 
+#[allow(unused_imports)]
+use super::spec::*;
+#[cfg(verus_only)]
 use crate::cfcontract::*;
+#[cfg(verus_only)]
 use crate::cfspec::*;
-use crate::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 

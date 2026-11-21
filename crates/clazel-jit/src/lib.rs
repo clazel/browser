@@ -77,9 +77,12 @@
 //!     it** ([`cfproofs::lemma_ctmpl_refines`]), with every `jmp` and `jcc`
 //!     displacement a 32-bit number ([`cfproofs::labels_fit`]) and every
 //!     instruction in the subset ([`cfvalid`]);
-//!   - the executable emitter returns that code ([`cfemit::emit_cf_body`])
-//!     and its encoding ([`cfemit::emit_cf_blob`]).
 //! - **Not done:**
+//!   - **the executable emitter** for control flow and its validator-acceptance
+//!     test: the code is the spec function [`cftemplates::ctmpl`], proven to
+//!     refine, and [`cfcontract::emit_cf_blob_ensures`] states what an emitter
+//!     must satisfy, but no emitter is written, so nothing about the validator
+//!     has been checked for control flow;
 //!   - the memory instructions `bounds_check`, `load`, `store`: the
 //!     statement is made for them ([`cfspec::MemOp`], [`cfspec::cf_flow`]),
 //!     but there is no template and no proof, and [`cfspec::templated`]
@@ -87,8 +90,6 @@
 //!   - `br_table` (likewise);
 //!   - blocks with parameters or results (modelling choice 8 of [`cfspec`]);
 //!   - the A64 back end's control flow and memory.
-//! - Checked, not proven: `tests/validator_cf.rs` (every form and 1500
-//!   generated programs are accepted by the validator).
 //!
 //! # What is not (of the first slice)
 //!
@@ -120,7 +121,6 @@ pub mod cfalg;
 pub mod cfblock;
 pub mod cfcompose;
 pub mod cfcontract;
-pub mod cfemit;
 pub mod cfexit;
 pub mod cfheight;
 pub mod cfif;

@@ -4,8 +4,10 @@
 //! Heights are counted from `hb`, the number of values below the instruction's
 //! own (fresh) stack, which is what [`crate::cfspec::rel_base`]'s `base` holds.
 
+#[allow(unused_imports)]
+use super::spec::*;
+#[cfg(verus_only)]
 use crate::cfspec::*;
-use crate::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 

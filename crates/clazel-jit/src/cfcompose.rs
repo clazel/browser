@@ -10,13 +10,22 @@
 //! part, from the state after the code before it ([`lemma_lift_pre`]), and one
 //! about the code followed by more ([`lemma_lift_post`]).
 
+#[allow(unused_imports)]
+use super::spec::*;
+#[cfg(verus_only)]
 use crate::cfalg::*;
+#[cfg(verus_only)]
 use crate::cfcontract::*;
+#[cfg(verus_only)]
 use crate::cfheight::*;
+#[cfg(verus_only)]
 use crate::cfspec::*;
+#[cfg(verus_only)]
 use crate::cfsteps::*;
+#[cfg(verus_only)]
 use crate::cftemplates::*;
-use crate::spec::*;
+#[cfg(verus_only)]
+use crate::contract::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 

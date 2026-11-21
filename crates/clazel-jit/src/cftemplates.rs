@@ -20,8 +20,15 @@
 //! A `jmp` or `jcc` has a 32-bit displacement from the end of the
 //! instruction, so every label offset is `target - end of this jump`.
 
+#[allow(unused_imports)]
+use super::spec::*;
+#[cfg(verus_only)]
+use crate::cflens::*;
+#[cfg(verus_only)]
+use crate::cfproofs::*;
+#[cfg(verus_only)]
 use crate::cfspec::*;
-use crate::spec::*;
+#[cfg(verus_only)]
 use crate::templates::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
@@ -136,11 +143,11 @@ pub open spec fn max_size() -> nat {
 
 /// The program `n` of a function with `nl` locals has a translation: its
 /// frame holds the locals, its analysis, entered with an empty stack and the return label in scope, is
-/// defined, every node in it has a template ([`templated`]), its nesting is
-/// below `2^28` ([`nest`]), and the code is at most [`max_size`] bytes.
+/// defined, every node in it has a template ([`templated`]), and the code is at most
+/// [`max_size`] bytes.
 pub open spec fn cf_prog_ok(n: Node, nl: nat) -> bool {
-    nl <= max_slots() && nest(n) < 0x0FFF_0000 && cf_flow(n, nl, 0, 1) is Some && templated(n)
-        && csize(n, nl, 0, 1) <= max_size()
+    nl <= max_slots() && cf_flow(n, nl, 0, 1) is Some && templated(n) && csize(n, nl, 0, 1)
+        <= max_size()
 }
 
 } // verus!

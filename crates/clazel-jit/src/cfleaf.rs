@@ -4,13 +4,21 @@
 //! instructions followed by one more, and the relation surviving a change of
 //! `rip`.
 
+#[allow(unused_imports)]
+use super::spec::*;
+#[cfg(verus_only)]
 use crate::cfalg::*;
+#[cfg(verus_only)]
 use crate::cfcontract::*;
+#[cfg(verus_only)]
 use crate::cflens::*;
+#[cfg(verus_only)]
 use crate::cfspec::*;
+#[cfg(verus_only)]
 use crate::cfsteps::*;
+#[cfg(verus_only)]
 use crate::cftemplates::*;
-use crate::spec::*;
+#[cfg(verus_only)]
 use crate::templates::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;

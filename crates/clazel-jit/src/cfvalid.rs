@@ -2,11 +2,14 @@
 //! ([`x64::valid_instr`]): the emitter's blob is decoded by the validator
 //! only if it is.
 
+#[allow(unused_imports)]
+use super::spec::*;
+#[cfg(verus_only)]
 use crate::cfspec::*;
+#[cfg(verus_only)]
 use crate::cftemplates::*;
+#[cfg(verus_only)]
 use crate::contract::*;
-use crate::spec::*;
-use crate::templates::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 

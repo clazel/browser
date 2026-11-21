@@ -2,9 +2,13 @@
 //! on its displacement, so [`csize`] is the length of [`ctmpl`] whatever the
 //! labels' offsets are.
 
+#[allow(unused_imports)]
+use super::spec::*;
+#[cfg(verus_only)]
 use crate::cfspec::*;
+#[cfg(verus_only)]
 use crate::cftemplates::*;
-use crate::spec::*;
+#[cfg(verus_only)]
 use crate::templates::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;

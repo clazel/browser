@@ -3,17 +3,31 @@
 //! condition picks, run with the condition popped, so the arm's label 0 is the
 //! end of the whole `if`.
 
+#[allow(unused_imports)]
+use super::spec::*;
+#[cfg(verus_only)]
 use crate::cfalg::*;
+#[cfg(verus_only)]
 use crate::cfblock::*;
+#[cfg(verus_only)]
 use crate::cfcompose::*;
+#[cfg(verus_only)]
 use crate::cfcontract::*;
+#[cfg(verus_only)]
 use crate::cfheight::*;
+#[cfg(verus_only)]
 use crate::cfleaf::*;
+#[cfg(verus_only)]
 use crate::cflens::*;
+#[cfg(verus_only)]
 use crate::cfspec::*;
+#[cfg(verus_only)]
 use crate::cfsteps::*;
+#[cfg(verus_only)]
 use crate::cftemplates::*;
-use crate::spec::*;
+#[cfg(verus_only)]
+use crate::contract::*;
+#[cfg(verus_only)]
 use crate::templates::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;

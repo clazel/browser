@@ -2,8 +2,10 @@
 //! is a run in any list that contains it, runs compose, and a run of
 //! jump-free code by [`run_seq`] is a run by [`steps`].
 
+#[allow(unused_imports)]
+use super::spec::*;
+#[cfg(verus_only)]
 use crate::cfspec::*;
-use crate::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 

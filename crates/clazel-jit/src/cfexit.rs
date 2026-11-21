@@ -4,12 +4,20 @@
 //! writes nothing but the exit-code word, so they are still in their frame
 //! slots afterwards ([`exit_ops_refines`], [`cf_refines`]).
 
+#[allow(unused_imports)]
+use super::spec::*;
+#[cfg(verus_only)]
 use crate::cfalg::*;
+#[cfg(verus_only)]
 use crate::cfcontract::*;
+#[cfg(verus_only)]
 use crate::cfleaf::*;
+#[cfg(verus_only)]
 use crate::cfspec::*;
+#[cfg(verus_only)]
 use crate::cfsteps::*;
-use crate::spec::*;
+#[cfg(verus_only)]
+use crate::contract::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 

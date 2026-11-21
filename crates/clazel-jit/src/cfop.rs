@@ -2,10 +2,21 @@
 //! by `run_seq`: the bridge from the first slice's [`refines`] to the
 //! control-flow statement [`cf_refines`] for a straight-line instruction.
 
+#[allow(unused_imports)]
+use super::spec::*;
+#[cfg(verus_only)]
+use crate::cfalg::*;
+#[cfg(verus_only)]
 use crate::cfcontract::*;
+#[cfg(verus_only)]
 use crate::cfspec::*;
+#[cfg(verus_only)]
 use crate::cfsteps::*;
-use crate::spec::*;
+#[cfg(verus_only)]
+use crate::contract::*;
+#[cfg(verus_only)]
+use crate::templates::*;
+#[cfg(verus_only)]
 use crate::tlemmas::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;

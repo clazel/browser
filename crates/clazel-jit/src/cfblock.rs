@@ -3,12 +3,20 @@
 //! body, a branch to the block's own label, a branch past it, an exit), then
 //! the two lemmas that use them.
 
+#[allow(unused_imports)]
+use super::spec::*;
+#[cfg(verus_only)]
 use crate::cfalg::*;
+#[cfg(verus_only)]
 use crate::cfcompose::*;
+#[cfg(verus_only)]
 use crate::cfcontract::*;
+#[cfg(verus_only)]
 use crate::cfheight::*;
+#[cfg(verus_only)]
 use crate::cfspec::*;
-use crate::spec::*;
+#[cfg(verus_only)]
+use crate::contract::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 

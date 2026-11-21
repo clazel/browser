@@ -19,7 +19,7 @@ verus! {
 // ----------------------------------------------------------------------------
 
 /// `a + b`, when it does not overflow.
-pub(crate) fn add_u(a: usize, b: usize) -> (r: usize)
+fn add_u(a: usize, b: usize) -> (r: usize)
     requires
         a + b <= usize::MAX,
     ensures
@@ -29,7 +29,7 @@ pub(crate) fn add_u(a: usize, b: usize) -> (r: usize)
 }
 
 /// `a - b`, when it does not underflow.
-pub(crate) fn sub_u(a: usize, b: usize) -> (r: usize)
+fn sub_u(a: usize, b: usize) -> (r: usize)
     requires
         b <= a,
     ensures
@@ -60,7 +60,7 @@ fn slot_disp_exec(j: usize) -> (d: i32)
 }
 
 /// `mov dst, [r15 + 264 + 8 j]`.
-pub(crate) fn ex_load(dst: u8, j: usize) -> (i: x64::Instr)
+fn ex_load(dst: u8, j: usize) -> (i: x64::Instr)
     requires
         j < 31,
     ensures
@@ -197,7 +197,7 @@ fn un_supported_exec(u: &lir::UnOp) -> (r: bool)
 }
 
 /// `pops`.
-pub(crate) fn pops_exec(op: &Op) -> (r: usize)
+fn pops_exec(op: &Op) -> (r: usize)
     ensures
         r == pops(*op),
 {
@@ -215,7 +215,7 @@ pub(crate) fn pops_exec(op: &Op) -> (r: usize)
 }
 
 /// `pushes`.
-pub(crate) fn pushes_exec(op: &Op) -> (r: usize)
+fn pushes_exec(op: &Op) -> (r: usize)
     ensures
         r == pushes(*op),
 {
@@ -233,7 +233,7 @@ pub(crate) fn pushes_exec(op: &Op) -> (r: usize)
 }
 
 /// [`op_ok`], executable.
-pub(crate) fn op_ok_exec(op: &Op, nl: usize, h: usize) -> (r: bool)
+fn op_ok_exec(op: &Op, nl: usize, h: usize) -> (r: bool)
     ensures
         r == op_ok(*op, nl as nat, h as nat),
 {
@@ -268,7 +268,7 @@ pub(crate) fn op_ok_exec(op: &Op, nl: usize, h: usize) -> (r: bool)
 
 /// Append the template of `op` at height `h` with `nl` locals.
 #[verifier::rlimit(500)]
-pub(crate) fn emit_op(op: &Op, nl: usize, h: usize, out: &mut Vec<x64::Instr>)
+fn emit_op(op: &Op, nl: usize, h: usize, out: &mut Vec<x64::Instr>)
     requires
         op_ok(*op, nl as nat, h as nat),
     ensures
@@ -682,7 +682,7 @@ fn emit_body_impl(ops: &[Op], nl: usize) -> (r: Option<Vec<x64::Instr>>)
 }
 
 /// The exit sequence appended to `code`.
-pub(crate) fn emit_exit(code: &mut Vec<x64::Instr>, exit_code: u32)
+fn emit_exit(code: &mut Vec<x64::Instr>, exit_code: u32)
     ensures
         final(code)@ == old(code)@ + exit_seq(exit_code),
 {

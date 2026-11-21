@@ -4,17 +4,30 @@
 //! [`crate::cfblock`], [`crate::cfif`]). The induction also carries the size
 //! invariant that every `jmp` and `jcc` displacement is a 32-bit number.
 
+#[allow(unused_imports)]
+use super::spec::*;
+#[cfg(verus_only)]
 use crate::cfblock::*;
+#[cfg(verus_only)]
 use crate::cfcompose::*;
+#[cfg(verus_only)]
 use crate::cfcontract::*;
+#[cfg(verus_only)]
 use crate::cfexit::*;
+#[cfg(verus_only)]
 use crate::cfif::*;
+#[cfg(verus_only)]
 use crate::cfleaf::*;
+#[cfg(verus_only)]
 use crate::cflens::*;
+#[cfg(verus_only)]
 use crate::cfop::*;
+#[cfg(verus_only)]
 use crate::cfspec::*;
+#[cfg(verus_only)]
 use crate::cftemplates::*;
-use crate::spec::*;
+#[cfg(verus_only)]
+use crate::contract::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
