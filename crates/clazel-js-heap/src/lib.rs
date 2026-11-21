@@ -18,6 +18,7 @@
 //! `docs/VERIFICATION.md`.
 
 pub mod arena;
+pub mod shape;
 pub mod string;
 pub mod value;
 
