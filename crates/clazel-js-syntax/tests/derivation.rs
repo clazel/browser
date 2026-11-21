@@ -180,6 +180,72 @@ var c;",
     }
 }
 
+/// The remaining script syntax: optional chains, `super`, `new.target`, `import()`,
+/// `import.meta`, `for await`, Annex B's `for (var x = 1 in o)` and function declarations
+/// as statement bodies, patterns as `for` heads, and operands of `[~In]` heads.
+#[test]
+fn remaining_script_syntax_is_verified() {
+    for s in [
+        "a?.b;",
+        "a?.[b];",
+        "a?.();",
+        "a?.b.c(d)?.[e];",
+        "a?.b\n.c?.d(e)\n[f];",
+        "class A extends B { constructor() { super(); super(1, ...a); } m() { super.x; super[x](); } }",
+        "x = { m() { return super.m; } };",
+        "function f() { new.target; new.target.x; }",
+        "function f() { return a?.b?.(c)?.[d]; }",
+        "class A { #x; m() { return this?.#x; } }",
+        "import('a');",
+        "import('a', {});",
+        "import('a',);",
+        "import('a', b,);",
+        "async function f() { for await (x of y) ; }",
+        "async function f() { for await (const [a, b] of c) d; }",
+        "for (var x = 1 in o) ;",
+        "if (a) function f() {} else function g() {}",
+        "l: function f() {}",
+        "for (let [a, b] of o) ;",
+        "for (const {a, b: [c = 1]} of o) ;",
+        "for (var [a] in o) ;",
+        "for ([a, b = 1, ...c] of o) ;",
+        "for ({a, b: c = 2, ...d} in o) ;",
+        "for (a.b[c] of d) ;",
+        "for (f().x of y) ;",
+        "for (let [a = (1, 2)] of b) ;",
+        "for (a, b;;) ;",
+        "for (i = 0, j = 1; i < j; i++) ;",
+        "for (var i = a ? b : c; ;) ;",
+        "for (var i = f(1), j = new A(2); ;) ;",
+        "for (var i = a.b[c]; ;) ;",
+        "for (var i = (1, 2); ;) ;",
+        "for (var i = [1, ...a]; ;) ;",
+        "for (var i = {a: 1, ...b, [c]: 2, m() {}}; ;) ;",
+        "for (var i = `a${b}`; ;) ;",
+        "for (var i = a`x`; ;) ;",
+        "for (var i = a?.b; ;) ;",
+        "for (var i = ({a} = b); ;) ;",
+        "for (var i = 0, j = (1, 2); i < j; i++) ;",
+    ] {
+        assert!(
+            derivation(s, SourceGoal::Script) == Some(Derivation::Verified),
+            "{s}"
+        );
+    }
+}
+
+/// `import.meta` is in a `Module` only.
+#[test]
+fn import_meta_is_verified_in_a_module() {
+    for s in ["import.meta;", "import.meta.url;", "f(import.meta);"] {
+        assert!(
+            derivation(s, SourceGoal::Module) == Some(Derivation::Verified),
+            "{s}"
+        );
+        assert!(derivation(s, SourceGoal::Script).is_none(), "{s}");
+    }
+}
+
 /// Productions only a sloppy-mode `Script` has.
 #[test]
 fn covered_sloppy_programs_are_verified() {
@@ -199,7 +265,7 @@ fn covered_sloppy_programs_are_verified() {
 
 #[test]
 fn other_programs_are_unsupported_not_failed() {
-    for s in ["for (a, b;;) ;", "a?.b;"] {
+    for s in ["for (var i = class {};;) ;", "for (let in o) ;"] {
         assert!(
             derivation(s, SourceGoal::Script) == Some(Derivation::Unsupported),
             "{s}"
@@ -222,7 +288,7 @@ fn errors_are_still_errors() {
 fn what_the_check_costs() {
     let body = "(1 + 2 * 3) < 4 - 5 / 6 % 7;\n".repeat(60_000);
     let covered = cps(&body);
-    let stopped = cps(&format!("a?.b;\n{body}"));
+    let stopped = cps(&format!("for (var i = class {{}};;) ;\n{body}"));
     let time = |src: &[u32]| {
         let t = Instant::now();
         let r = parse_checked(src, SourceGoal::Script);

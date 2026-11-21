@@ -249,16 +249,17 @@ fn test262_fixtures_parse() -> Result<(), String> {
     Ok(())
 }
 
-/// How much of Test262 the proven derivation check ([`clazel_js_syntax::arena_d`])
-/// covers: the share of the positive tests and of the harness files whose whole arena
-/// comes out `Verified`, not `Unsupported`. Printed, not asserted: it grows as the
-/// check covers more of the grammar.
+/// How much of Test262 the proven checks ([`clazel_js_syntax::arena_d`]) cover: the
+/// share of the positive runs (scripts and modules apart) and of the harness files
+/// whose whole arena comes out `Verified`, not `Unsupported`. Printed, not
+/// asserted: it grows as the checks cover more of the grammar.
 #[test]
 #[cfg_attr(miri, ignore = "reads files")]
 fn test262_verified_share() -> Result<(), String> {
     use clazel_js_syntax::arena_d::Derivation;
     use clazel_js_syntax::exec::parse_checked;
     let (mut positives, mut verified) = (0usize, 0usize);
+    let (mut mpositives, mut mverified) = (0usize, 0usize);
     for case in TEST262 {
         if !judged(case) || case.negative.is_some() {
             continue;
@@ -270,9 +271,13 @@ fn test262_verified_share() -> Result<(), String> {
                 s.extend("\"use strict\";\n".chars().map(u32::from));
             }
             s.extend(src.iter().copied());
-            positives += 1;
-            if let Ok((_, Derivation::Verified)) = parse_checked(&s, goal) {
-                verified += 1;
+            let ok = matches!(parse_checked(&s, goal), Ok((_, Derivation::Verified)));
+            if goal == SourceGoal::Module {
+                mpositives += 1;
+                mverified += usize::from(ok);
+            } else {
+                positives += 1;
+                verified += usize::from(ok);
             }
         }
     }
@@ -287,6 +292,81 @@ fn test262_verified_share() -> Result<(), String> {
             hv += 1;
         }
     }
-    println!("Verified: {verified} of {positives} positive runs, {hv} of {hn} harness files");
+    println!(
+        "Verified: {verified} of {positives} script positive runs, {mverified} of {mpositives} module positive runs, {hv} of {hn} harness files"
+    );
+    Ok(())
+}
+
+/// Which constructs the unverified runs contain: a histogram of the kinds the
+/// check may not cover. Printed with `--nocapture`; for finding what to cover.
+#[test]
+#[cfg_attr(miri, ignore = "reads files")]
+fn test262_unverified_kinds() -> Result<(), String> {
+    use clazel_js_syntax::arena_d::Derivation;
+    use clazel_js_syntax::ast::NodeKind as K;
+    use clazel_js_syntax::exec::parse_checked;
+    use std::collections::BTreeMap;
+    let mut hist: BTreeMap<&'static str, usize> = BTreeMap::new();
+    let mut note = |src: &[u32], goal: SourceGoal| -> bool {
+        let Ok((ast, d)) = parse_checked(src, goal) else {
+            return false;
+        };
+        if d == Derivation::Verified {
+            return false;
+        }
+        let mut seen: BTreeSet<&'static str> = BTreeSet::new();
+        for n in &ast.nodes {
+            let l = match n.kind {
+                K::OptionalExpression => "optional",
+                K::SuperProperty => "super.x",
+                K::SuperCall => "super()",
+                K::ImportCall => "import()",
+                K::ImportMeta => "import.meta",
+                K::NewTarget => "new.target",
+                K::CoverInitializedName => "cover-init",
+                K::ImportDeclaration => "import-decl",
+                K::ExportDeclaration => "export-decl",
+                K::ForOfStatement if n.flag => "for-await",
+                K::ForOfStatement | K::ForInStatement => "for-in-of",
+                K::ForStatement => "for",
+                _ => continue,
+            };
+            seen.insert(l);
+        }
+        if seen.is_empty() {
+            seen.insert("(none of the listed)");
+        }
+        for l in seen {
+            *hist.entry(l).or_default() += 1;
+        }
+        true
+    };
+    for case in TEST262 {
+        if !judged(case) || case.negative.is_some() {
+            continue;
+        }
+        let src = read(case)?;
+        for (goal, strict) in runs(case) {
+            let mut s: Vec<u32> = Vec::new();
+            if strict {
+                s.extend("\"use strict\";\n".chars().map(u32::from));
+            }
+            s.extend(src.iter().copied());
+            if note(&s, goal) && std::env::var("SHOW_UNVERIFIED").is_ok() {
+                println!("unverified {} {:?}", case.path, goal == SourceGoal::Module);
+            }
+        }
+    }
+    let mut files = Vec::new();
+    all_js(&root().join("../harness"), &mut files);
+    for f in &files {
+        let text = std::fs::read_to_string(f).map_err(|e| e.to_string())?;
+        let src: Vec<u32> = text.chars().map(u32::from).collect();
+        if note(&src, SourceGoal::Script) {
+            println!("harness unverified: {}", f.display());
+        }
+    }
+    println!("unverified, by construct: {hist:?}");
     Ok(())
 }
