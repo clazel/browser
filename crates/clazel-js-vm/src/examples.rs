@@ -627,4 +627,108 @@ pub proof fn example_generators_classes()
     assert(op_handler(Op::ThrowIfNotObject { src: 0 }) == HandlerId::ThrowIfNotObject) by (compute_only);
 }
 
+/// The operands `op_wf` accepts of the ops added for `with`, direct `eval` and `delete` of a
+/// variable (`ToObject`, `WithHas`, `WithGet`, `WithSet`, `WithDelete`, `DeleteGlobal`,
+/// `DirectEval`): every register inside the frame (registers 0 to 2), every register range inside
+/// it, every constant index inside the pool (0 to 2), a record constant that is a value (constant 2
+/// is not), and each small enumerated operand below its bound.
+pub proof fn example_withs_wf()
+    ensures
+        op_wf(example_code(), Op::ToObject { dst: 0, src: 0 }),
+        !op_wf(example_code(), Op::ToObject { dst: 3, src: 0 }),
+        !op_wf(example_code(), Op::ToObject { dst: 0, src: 3 }),
+        op_wf(example_code(), Op::WithHas { dst: 0, obj: 0, key: 0 }),
+        !op_wf(example_code(), Op::WithHas { dst: 3, obj: 0, key: 0 }),
+        !op_wf(example_code(), Op::WithHas { dst: 0, obj: 3, key: 0 }),
+        !op_wf(example_code(), Op::WithHas { dst: 0, obj: 0, key: 3 }),
+        op_wf(example_code(), Op::WithGet { dst: 0, obj: 0, key: 0, strict: false }),
+        !op_wf(example_code(), Op::WithGet { dst: 3, obj: 0, key: 0, strict: false }),
+        !op_wf(example_code(), Op::WithGet { dst: 0, obj: 3, key: 0, strict: false }),
+        !op_wf(example_code(), Op::WithGet { dst: 0, obj: 0, key: 3, strict: false }),
+        op_wf(example_code(), Op::WithSet { obj: 0, key: 0, val: 0, strict: false }),
+        !op_wf(example_code(), Op::WithSet { obj: 3, key: 0, val: 0, strict: false }),
+        !op_wf(example_code(), Op::WithSet { obj: 0, key: 3, val: 0, strict: false }),
+        !op_wf(example_code(), Op::WithSet { obj: 0, key: 0, val: 3, strict: false }),
+        op_wf(example_code(), Op::WithDelete { dst: 0, obj: 0, key: 0 }),
+        !op_wf(example_code(), Op::WithDelete { dst: 3, obj: 0, key: 0 }),
+        !op_wf(example_code(), Op::WithDelete { dst: 0, obj: 3, key: 0 }),
+        !op_wf(example_code(), Op::WithDelete { dst: 0, obj: 0, key: 3 }),
+        op_wf(example_code(), Op::DeleteGlobal { dst: 0, key: 0 }),
+        !op_wf(example_code(), Op::DeleteGlobal { dst: 3, key: 0 }),
+        !op_wf(example_code(), Op::DeleteGlobal { dst: 0, key: 3 }),
+        op_wf(example_code(), Op::DirectEval { dst: 0, callee: 0, this: 0, args: 0, argc: 3, env: 0, k: 0 }),
+        !op_wf(example_code(), Op::DirectEval { dst: 3, callee: 0, this: 0, args: 0, argc: 3, env: 0, k: 0 }),
+        !op_wf(example_code(), Op::DirectEval { dst: 0, callee: 3, this: 0, args: 0, argc: 3, env: 0, k: 0 }),
+        !op_wf(example_code(), Op::DirectEval { dst: 0, callee: 0, this: 3, args: 0, argc: 3, env: 0, k: 0 }),
+        !op_wf(example_code(), Op::DirectEval { dst: 0, callee: 0, this: 0, args: 2, argc: 2, env: 0, k: 0 }),
+        !op_wf(example_code(), Op::DirectEval { dst: 0, callee: 0, this: 0, args: 0, argc: 3, env: 3, k: 0 }),
+        !op_wf(example_code(), Op::DirectEval { dst: 0, callee: 0, this: 0, args: 0, argc: 3, env: 0, k: 2 }),
+{
+    assert(op_wf(example_code(), Op::ToObject { dst: 0, src: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::ToObject { dst: 3, src: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::ToObject { dst: 0, src: 3 })) by (compute_only);
+    assert(op_wf(example_code(), Op::WithHas { dst: 0, obj: 0, key: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::WithHas { dst: 3, obj: 0, key: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::WithHas { dst: 0, obj: 3, key: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::WithHas { dst: 0, obj: 0, key: 3 })) by (compute_only);
+    assert(op_wf(example_code(), Op::WithGet { dst: 0, obj: 0, key: 0, strict: false })) by (compute_only);
+    assert(!op_wf(example_code(), Op::WithGet { dst: 3, obj: 0, key: 0, strict: false })) by (compute_only);
+    assert(!op_wf(example_code(), Op::WithGet { dst: 0, obj: 3, key: 0, strict: false })) by (compute_only);
+    assert(!op_wf(example_code(), Op::WithGet { dst: 0, obj: 0, key: 3, strict: false })) by (compute_only);
+    assert(op_wf(example_code(), Op::WithSet { obj: 0, key: 0, val: 0, strict: false })) by (compute_only);
+    assert(!op_wf(example_code(), Op::WithSet { obj: 3, key: 0, val: 0, strict: false })) by (compute_only);
+    assert(!op_wf(example_code(), Op::WithSet { obj: 0, key: 3, val: 0, strict: false })) by (compute_only);
+    assert(!op_wf(example_code(), Op::WithSet { obj: 0, key: 0, val: 3, strict: false })) by (compute_only);
+    assert(op_wf(example_code(), Op::WithDelete { dst: 0, obj: 0, key: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::WithDelete { dst: 3, obj: 0, key: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::WithDelete { dst: 0, obj: 3, key: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::WithDelete { dst: 0, obj: 0, key: 3 })) by (compute_only);
+    assert(op_wf(example_code(), Op::DeleteGlobal { dst: 0, key: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::DeleteGlobal { dst: 3, key: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::DeleteGlobal { dst: 0, key: 3 })) by (compute_only);
+    assert(op_wf(example_code(), Op::DirectEval { dst: 0, callee: 0, this: 0, args: 0, argc: 3, env: 0, k: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::DirectEval { dst: 3, callee: 0, this: 0, args: 0, argc: 3, env: 0, k: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::DirectEval { dst: 0, callee: 3, this: 0, args: 0, argc: 3, env: 0, k: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::DirectEval { dst: 0, callee: 0, this: 3, args: 0, argc: 3, env: 0, k: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::DirectEval { dst: 0, callee: 0, this: 0, args: 2, argc: 2, env: 0, k: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::DirectEval { dst: 0, callee: 0, this: 0, args: 0, argc: 3, env: 3, k: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::DirectEval { dst: 0, callee: 0, this: 0, args: 0, argc: 3, env: 0, k: 2 })) by (compute_only);
+}
+
+/// The class and the handler of each op added for `with`, direct `eval` and `delete` of a variable:
+/// each always calls out (it can allocate, call user code or throw), so each is a handler op, which
+/// the JIT lowers to an exit, with its own handler.
+pub proof fn example_withs_classes()
+    ensures
+        op_class(Op::ToObject { dst: 0, src: 0 }) is Handler,
+        op_handler(Op::ToObject { dst: 0, src: 0 }) == HandlerId::ToObject,
+        op_class(Op::WithHas { dst: 0, obj: 0, key: 0 }) is Handler,
+        op_handler(Op::WithHas { dst: 0, obj: 0, key: 0 }) == HandlerId::WithHas,
+        op_class(Op::WithGet { dst: 0, obj: 0, key: 0, strict: false }) is Handler,
+        op_handler(Op::WithGet { dst: 0, obj: 0, key: 0, strict: false }) == HandlerId::WithGet,
+        op_class(Op::WithSet { obj: 0, key: 0, val: 0, strict: false }) is Handler,
+        op_handler(Op::WithSet { obj: 0, key: 0, val: 0, strict: false }) == HandlerId::WithSet,
+        op_class(Op::WithDelete { dst: 0, obj: 0, key: 0 }) is Handler,
+        op_handler(Op::WithDelete { dst: 0, obj: 0, key: 0 }) == HandlerId::WithDelete,
+        op_class(Op::DeleteGlobal { dst: 0, key: 0 }) is Handler,
+        op_handler(Op::DeleteGlobal { dst: 0, key: 0 }) == HandlerId::DeleteGlobal,
+        op_class(Op::DirectEval { dst: 0, callee: 0, this: 0, args: 0, argc: 3, env: 0, k: 0 }) is Handler,
+        op_handler(Op::DirectEval { dst: 0, callee: 0, this: 0, args: 0, argc: 3, env: 0, k: 0 }) == HandlerId::DirectEval,
+{
+    assert(op_class(Op::ToObject { dst: 0, src: 0 }) is Handler) by (compute_only);
+    assert(op_handler(Op::ToObject { dst: 0, src: 0 }) == HandlerId::ToObject) by (compute_only);
+    assert(op_class(Op::WithHas { dst: 0, obj: 0, key: 0 }) is Handler) by (compute_only);
+    assert(op_handler(Op::WithHas { dst: 0, obj: 0, key: 0 }) == HandlerId::WithHas) by (compute_only);
+    assert(op_class(Op::WithGet { dst: 0, obj: 0, key: 0, strict: false }) is Handler) by (compute_only);
+    assert(op_handler(Op::WithGet { dst: 0, obj: 0, key: 0, strict: false }) == HandlerId::WithGet) by (compute_only);
+    assert(op_class(Op::WithSet { obj: 0, key: 0, val: 0, strict: false }) is Handler) by (compute_only);
+    assert(op_handler(Op::WithSet { obj: 0, key: 0, val: 0, strict: false }) == HandlerId::WithSet) by (compute_only);
+    assert(op_class(Op::WithDelete { dst: 0, obj: 0, key: 0 }) is Handler) by (compute_only);
+    assert(op_handler(Op::WithDelete { dst: 0, obj: 0, key: 0 }) == HandlerId::WithDelete) by (compute_only);
+    assert(op_class(Op::DeleteGlobal { dst: 0, key: 0 }) is Handler) by (compute_only);
+    assert(op_handler(Op::DeleteGlobal { dst: 0, key: 0 }) == HandlerId::DeleteGlobal) by (compute_only);
+    assert(op_class(Op::DirectEval { dst: 0, callee: 0, this: 0, args: 0, argc: 3, env: 0, k: 0 }) is Handler) by (compute_only);
+    assert(op_handler(Op::DirectEval { dst: 0, callee: 0, this: 0, args: 0, argc: 3, env: 0, k: 0 }) == HandlerId::DirectEval) by (compute_only);
+}
+
 } // verus!

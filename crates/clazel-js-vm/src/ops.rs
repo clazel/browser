@@ -266,6 +266,22 @@ pub enum HandlerId {
     IterValue,
     /// The check of the result of an iterator's `return`, §7.4.11† and §7.4.13†.
     ThrowIfNotObject,
+    /// ToObject §7.1.18†.
+    ToObject,
+    /// HasBinding of an object Environment Record, §9.1.1.2.1†.
+    WithHas,
+    /// GetBindingValue of an object Environment Record, §9.1.1.2.6†.
+    WithGet,
+    /// SetMutableBinding of an object Environment Record, §9.1.1.2.5†.
+    WithSet,
+    /// DeleteBinding of an object Environment Record, §9.1.1.2.7†.
+    WithDelete,
+    /// `delete` of an identifier that resolves to the global environment, §13.5.1.2† and
+    /// DeleteBinding §9.1.1.4.7†.
+    DeleteGlobal,
+    /// A call of `eval` that may be a direct eval: EvaluateCall §13.3.6.2†, PerformEval §19.2.1.1†
+    /// and EvalDeclarationInstantiation §19.2.1.3†, through the host's compile path.
+    DirectEval,
 }
 
 /// The error constructors a compiler-known throw can name.
@@ -1474,6 +1490,157 @@ pub enum Op {
         /// The register read.
         src: nat,
     },
+    /// `dst := ToObject(src)`, §7.1.18†: `undefined` and `null` are a TypeError, a primitive
+    /// becomes its wrapper object (step 1, the table), an Object is itself. It is the evaluation of
+    /// the expression of a `with` statement (§14.11.2† step 2: "Let obj be ? ToObject(?
+    /// GetValue(val))"). A `with` statement's object environment is an environment object
+    /// ([`Op::NewEnv`]) whose slot 0 holds the object this op gave, and the ops [`Op::WithHas`],
+    /// [`Op::WithGet`], [`Op::WithSet`] and [`Op::WithDelete`] are the Object Environment Record's
+    /// operations on it.
+    ToObject {
+        /// The register written.
+        dst: nat,
+        /// The register read.
+        src: nat,
+    },
+    /// `dst := HasBinding(consts[key])` on the Object Environment Record whose binding object is
+    /// `obj`, with [[IsWithEnvironment]] true (§9.1.1.2.1†): "Let foundBinding be ?
+    /// HasProperty(bindingObject, N)" (step 2), "If foundBinding is false, return false" (step 3),
+    /// "If envRec.[[IsWithEnvironment]] is false, return true" (step 4), "Let unscopables be ?
+    /// Get(bindingObject, @@unscopables)" and, if it is an Object, "Let blocked be ToBoolean(?
+    /// Get(unscopables, N))", "If blocked is true, return false" (steps 5 and 6), "Return true"
+    /// (step 7). `obj` is the object that the environment's slot 0 holds (a `with` statement's,
+    /// from [`Op::ToObject`]). The same op serves the variable object of a sloppy function that
+    /// calls direct eval: the compiler makes that object with a null prototype, which has no
+    /// @@unscopables, so step 4's two cases give the same answer. It allocates and calls user code
+    /// (proxies, getters), so it is a handler op.
+    WithHas {
+        /// The register receiving the boolean.
+        dst: nat,
+        /// The register holding the binding object.
+        obj: nat,
+        /// The constant-pool index of the name.
+        key: nat,
+    },
+    /// `dst := GetBindingValue(consts[key], strict)` on the Object Environment Record of
+    /// [`Op::WithHas`] (§9.1.1.2.6†): "Let value be ? HasProperty(bindingObject, N)" (step 1), "If
+    /// value is false, then: if S is false, return undefined; otherwise throw a ReferenceError
+    /// exception" (step 2), "Return ? Get(bindingObject, N)" (step 3). `strict` is the Reference
+    /// Record's [[Strict]]: the strictness of the code that names the variable.
+    WithGet {
+        /// The register written.
+        dst: nat,
+        /// The register holding the binding object.
+        obj: nat,
+        /// The constant-pool index of the name.
+        key: nat,
+        /// Whether the referencing code is strict.
+        strict: bool,
+    },
+    /// `SetMutableBinding(consts[key], val, strict)` on the Object Environment Record of
+    /// [`Op::WithHas`] (§9.1.1.2.5†): "Let stillExists be ? HasProperty(bindingObject, N)" (step
+    /// 1), "If stillExists is false and S is true, throw a ReferenceError exception" (step 2),
+    /// "Perform ? Set(bindingObject, N, V, S)" (step 3).
+    WithSet {
+        /// The register holding the binding object.
+        obj: nat,
+        /// The constant-pool index of the name.
+        key: nat,
+        /// The register holding the value.
+        val: nat,
+        /// Whether the referencing code is strict.
+        strict: bool,
+    },
+    /// `dst := DeleteBinding(consts[key])` on the Object Environment Record of [`Op::WithHas`]
+    /// (§9.1.1.2.7†: "Return ? bindingObject.[[Delete]](N)"), the result of `delete name` for a
+    /// name that resolved to it (§13.5.1.2† step 5.d: "Return ?
+    /// base.DeleteBinding(ref.[[ReferencedName]])"). A property of the variable object of a sloppy
+    /// function that calls direct eval is deletable.
+    WithDelete {
+        /// The register receiving the boolean.
+        dst: nat,
+        /// The register holding the binding object.
+        obj: nat,
+        /// The constant-pool index of the name.
+        key: nat,
+    },
+    /// `dst := ` the result of `delete name` for an identifier that no scope of the code binds, so
+    /// it is a reference into the global environment or an unresolvable one (§13.5.1.2† step 5: "If
+    /// IsUnresolvableReference(ref) is true, then ... return true" (step 5.c); "Else, Let base be
+    /// ref.[[Base]]; return ? base.DeleteBinding(ref.[[ReferencedName]])" (step 5.d)).
+    /// DeleteBinding of the global Environment Record (§9.1.1.4.7†): "If DclRec.HasBinding(N) is
+    /// true, return ! DclRec.DeleteBinding(N)" (step 2: false, a declarative binding cannot be
+    /// deleted), "Let globalObject be ObjRec.[[BindingObject]]" and "Let existingProp be ?
+    /// HasOwnProperty(globalObject, N)" (steps 3 and 4), "If existingProp is true, return ?
+    /// ObjRec.DeleteBinding(N)" (step 5, a [[Delete]] of the global object), "Return true" (step
+    /// 6). `delete` of a binding of a function or block scope is false, which the compiler writes
+    /// as a constant.
+    DeleteGlobal {
+        /// The register receiving the boolean.
+        dst: nat,
+        /// The constant-pool index of the name.
+        key: nat,
+    },
+    /// `dst := ` the value of the call `eval(args[0..argc])` written as a direct call
+    /// (CallExpression : CoverCallExpression, §13.3.6.1† step 6: the callee is the
+    /// IdentifierReference `eval`, not parenthesized and not optional). `callee` holds the value
+    /// that the name `eval` resolved to, read as any identifier is (a `with` object or an eval
+    /// variable object may supply it), `this` the call's `this` value (EvaluateCall §13.3.6.2† step
+    /// 1: the `with` object or undefined), `args` the arguments, and `env` the current environment
+    /// object (the innermost scope of the code that has one, §9.1.1.1; see below).
+    /// The handler does what step 6 says. "If SameValue(func, %eval%) is true" is false, this is an
+    /// ordinary call of `callee` (EvaluateCall steps 4 to 6). If it is true: "If argList has no
+    /// elements, return undefined" (step 6.d.i); evalArg is the first argument, strictCaller is
+    /// `consts[k].strict` ("Let strictCaller be IsStrict of this CallExpression", step 6.d.iii),
+    /// and the result is "? PerformEval(evalArg, strictCaller, true)" (step 6.d.vi), §19.2.1.1†: an
+    /// evalArg that is not a String is the result (step 2); otherwise it is parsed as an eval
+    /// script, with `inFunction`, `inMethod`, `inDerivedConstructor` and `inClassFieldInitializer`
+    /// taken from the record (steps 5 to 9, which make `new.target`, `super.x`, `super()` and
+    /// `arguments` early errors where the caller does not allow them), a SyntaxError of the parse
+    /// being thrown in the running realm (step 10).
+    /// The host compile path. The handler hands the parsed eval script and the record `consts[k]`
+    /// to the compiler's entry for eval code, `compile::compile_eval(ast, source, &EvalScopeInfo)`
+    /// (not yet written: the interpreter, 7.8, is its first user), which returns a Program whose
+    /// main function runs as the eval code. The record, built by the compiler from what scope
+    /// analysis knows at the call, lists the scopes from the innermost out to the script, each with
+    /// its kind and, for each name it binds, the slot of the name in the scope's environment object
+    /// and what kind of binding it is. It lists only scopes that have an environment object,
+    /// because the compiler gave every binding of every enclosing scope an environment slot when
+    /// the function has a direct eval: an enclosing function's registers are gone otherwise. Names
+    /// of eval code that it does not declare itself resolve through that list, one `GetEnvParent`
+    /// per scope that precedes the one that binds them, as the compiler's own references do; names
+    /// that none binds are globals. The caller's `this`, `new.target` and function are bindings in
+    /// the list (of kinds This, NewTarget and Callee) that eval code reads for `this`, `new.target`
+    /// and `super`. The eval code is strict if strictCaller is true or it starts with a Use Strict
+    /// Directive (step 21: strictEval). A strict eval has its own variable scope (step 24: "If
+    /// strictEval is true, set varEnv to lexEnv"), so its `var`s and functions are not visible
+    /// outside; a sloppy eval's declarations are made by EvalDeclarationInstantiation (§19.2.1.3†):
+    /// in the script's global code they are properties of the global object
+    /// (CreateGlobalVarBinding(vn, true), configurable), and in a function they are properties of
+    /// the variable object of the nearest scope of kind EvalVars, an environment slot that the
+    /// function's entry filled with a null-prototype object (CreateMutableBinding(vn, true), so
+    /// deletable); every reference that the compiler could not resolve inside the function consults
+    /// that object with [`Op::WithHas`] first. The step-3 early errors (a `var` of eval code
+    /// colliding with a lexical binding of a scope between the call and the variable scope,
+    /// §19.2.1.3† step 3.d) are the handler's SyntaxError, from the same list. `let`, `const` and
+    /// `class` declarations of the eval code are in a new scope of its own (step 25). The result of
+    /// the op is the completion value of the eval code (step 30).
+    DirectEval {
+        /// The register written.
+        dst: nat,
+        /// The register holding the value of the name `eval`.
+        callee: nat,
+        /// The register holding the call's `this` value.
+        this: nat,
+        /// The first of the consecutive argument registers.
+        args: nat,
+        /// The number of arguments.
+        argc: nat,
+        /// The register holding the current environment object.
+        env: nat,
+        /// The constant-pool index of the record of the call's scopes and strictness.
+        k: nat,
+    },
 }
 
 /// The class of an op (see the file header).
@@ -1595,6 +1762,13 @@ pub open spec fn op_class(op: Op) -> OpClass {
         | Op::IterComplete { .. }
         | Op::IterValue { .. }
         | Op::ThrowIfNotObject { .. }
+        | Op::ToObject { .. }
+        | Op::WithHas { .. }
+        | Op::WithGet { .. }
+        | Op::WithSet { .. }
+        | Op::WithDelete { .. }
+        | Op::DeleteGlobal { .. }
+        | Op::DirectEval { .. }
         | Op::ThrowError { .. } => OpClass::Handler,
     }
 }
@@ -1666,6 +1840,13 @@ pub open spec fn op_handler(op: Op) -> HandlerId {
         Op::Await { .. } => HandlerId::Await,
         Op::Throw { .. } | Op::Nop => HandlerId::Throw,
         Op::ThrowError { .. } => HandlerId::ThrowError,
+        Op::ToObject { .. } => HandlerId::ToObject,
+        Op::WithHas { .. } => HandlerId::WithHas,
+        Op::WithGet { .. } => HandlerId::WithGet,
+        Op::WithSet { .. } => HandlerId::WithSet,
+        Op::WithDelete { .. } => HandlerId::WithDelete,
+        Op::DeleteGlobal { .. } => HandlerId::DeleteGlobal,
+        Op::DirectEval { .. } => HandlerId::DirectEval,
         Op::GeneratorStart => HandlerId::GeneratorStart,
         Op::YieldDelegate { .. } => HandlerId::YieldDelegate,
         Op::GetAsyncIterator { .. } => HandlerId::GetAsyncIterator,
