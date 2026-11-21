@@ -8,6 +8,8 @@
 //! register `r` is at [`reg_off`]`(r)`, a header slot at [`hdr_off`].
 
 #[allow(unused_imports)]
+use super::arith::*;
+#[allow(unused_imports)]
 use super::run::*;
 #[allow(unused_imports)]
 use super::spec::*;
@@ -83,6 +85,9 @@ pub open spec fn lowered(op: js::Op) -> bool {
             js::Op::JumpIfNotUndefined { .. } => true,
             js::Op::JumpIfNullish { .. } => true,
             js::Op::JumpIfNotNullish { .. } => true,
+            js::Op::Add { .. } => true,
+            js::Op::Sub { .. } => true,
+            js::Op::Mul { .. } => true,
             _ => false,
         }
     }
@@ -120,6 +125,126 @@ pub open spec fn nullish_rest(not_nullish: bool, lbl: nat) -> Seq<lir::Instr> {
     ]
 }
 
+/// The block type of a block that takes and leaves nothing.
+pub open spec fn bt0() -> lir::BlockType {
+    lir::BlockType { params: seq![], results: seq![] }
+}
+
+/// Test that scratch local `x` holds an int32 value: its high 32 bits are
+/// the tag and 16 zero bits. Pushes an `i32`.
+pub open spec fn tag_test(x: nat) -> Seq<lir::Instr> {
+    seq![
+        lir::Instr::LocalGet(x),
+        i64c(32),
+        lir::Instr::Bin(lir::BinOp::I64(lir::IBin::ShrU)),
+        i64c(tag_hi()),
+        cmp64(lir::ICmp::Eq),
+    ]
+}
+
+/// Load the two operands into scratch locals 1 and 2.
+pub open spec fn operands_ins(a: nat, b: nat) -> Seq<lir::Instr> {
+    load_ins(reg_off(a)) + seq![lir::Instr::LocalSet(1)] + load_ins(reg_off(b))
+        + seq![lir::Instr::LocalSet(2)]
+}
+
+/// Both operands are int32 values: the `and` of the two tests.
+pub open spec fn guard1_ins() -> Seq<lir::Instr> {
+    tag_test(1) + tag_test(2) + seq![lir::Instr::Bin(lir::BinOp::I32(lir::IBin::And))]
+}
+
+/// Push the sign extension of the payload of scratch local `x`.
+pub open spec fn sext_local(x: nat) -> Seq<lir::Instr> {
+    seq![
+        lir::Instr::LocalGet(x),
+        lir::Instr::Un(lir::UnOp::I32WrapI64),
+        lir::Instr::Un(lir::UnOp::I64ExtendI32S),
+    ]
+}
+
+/// The operation in 64 bits, into scratch local 3.
+pub open spec fn compute_ins(k: nat) -> Seq<lir::Instr> {
+    sext_local(1) + sext_local(2) + seq![
+        lir::Instr::Bin(lir::BinOp::I64(ibin_of(k))),
+        lir::Instr::LocalSet(3),
+    ]
+}
+
+/// The part of the second guard every operation has: local 3 is its own
+/// sign-extended low half. Pushes an `i32`.
+pub open spec fn fits_ins() -> Seq<lir::Instr> {
+    seq![
+        lir::Instr::LocalGet(3),
+        lir::Instr::Un(lir::UnOp::I32WrapI64),
+        lir::Instr::Un(lir::UnOp::I64ExtendI32S),
+        lir::Instr::LocalGet(3),
+        cmp64(lir::ICmp::Eq),
+    ]
+}
+
+/// A product's extra test, with the fits flag on the stack: the result is
+/// not a zero from a negative operand (`+0 × -5` is `-0`, not an int32).
+/// Leaves one `i32`: the fits flag and that.
+pub open spec fn mul_tail_ins() -> Seq<lir::Instr> {
+    seq![lir::Instr::LocalGet(3), lir::Instr::Un(lir::UnOp::I64Eqz)] + sext_local(1)
+        + sext_local(2) + seq![
+        lir::Instr::Bin(lir::BinOp::I64(lir::IBin::Or)),
+        i64c(0),
+        cmp64(lir::ICmp::LtS),
+    ] + seq![
+        lir::Instr::Bin(lir::BinOp::I32(lir::IBin::And)),
+        lir::Instr::Un(lir::UnOp::I32Eqz),
+        lir::Instr::Bin(lir::BinOp::I32(lir::IBin::And)),
+    ]
+}
+
+/// The test that the result in local 3 is an int32 the semantics encodes as
+/// one: it is its own sign-extended low half and, for a product, not a zero
+/// from a negative operand. Pushes an `i32`.
+pub open spec fn guard2_ins(k: nat) -> Seq<lir::Instr> {
+    if k == 2 {
+        fits_ins() + mul_tail_ins()
+    } else {
+        fits_ins()
+    }
+}
+
+/// The value to store: the low half of local 3, tagged.
+pub open spec fn tagged_ins() -> Seq<lir::Instr> {
+    seq![
+        lir::Instr::LocalGet(3),
+        i64c(0xFFFF_FFFF),
+        lir::Instr::Bin(lir::BinOp::I64(lir::IBin::And)),
+        i64c(tag_bits()),
+        lir::Instr::Bin(lir::BinOp::I64(lir::IBin::Or)),
+    ]
+}
+
+/// The lowering of small-integer add (`k` 0), subtract (1) or multiply (2)
+/// of registers `a` and `b` into `dst`, with an exit to handler `h` from
+/// the op at `pc` when an operand is not an int32 or the result is not.
+pub open spec fn lower_arith(
+    k: nat,
+    dst: nat,
+    a: nat,
+    b: nat,
+    h: js::HandlerId,
+    pc: nat,
+) -> lir::Instr {
+    let exit = chain(exit_ins(h, pc));
+    let store = chain(store_ins(reg_off(dst), tagged_ins()));
+    let inner = chain((compute_ins(k) + guard2_ins(k)).push(lir::Instr::If(
+        bt0(),
+        Box::new(store),
+        Box::new(exit),
+    )));
+    chain((operands_ins(a, b) + guard1_ins()).push(lir::Instr::If(
+        bt0(),
+        Box::new(inner),
+        Box::new(exit),
+    )))
+}
+
 /// The LIR instruction that implements `op`, the op at `pc` of the function
 /// whose code is `c`, with `lbl` the label of a jump's target. Meaningful
 /// for the ops [`lowered`] holds of.
@@ -154,6 +279,9 @@ pub open spec fn lower(c: js::Code, op: js::Op, pc: nat, lbl: nat) -> lir::Instr
             js::Op::JumpIfNotNullish { src, .. } => chain(
                 load_ins(reg_off(src)) + nullish_rest(true, lbl),
             ),
+            js::Op::Add { dst, a, b } => lower_arith(0, dst, a, b, js::op_handler(op), pc),
+            js::Op::Sub { dst, a, b } => lower_arith(1, dst, a, b, js::op_handler(op), pc),
+            js::Op::Mul { dst, a, b } => lower_arith(2, dst, a, b, js::op_handler(op), pc),
             _ => lir::Instr::Nop,
         }
     }

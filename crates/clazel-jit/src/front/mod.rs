@@ -14,10 +14,14 @@
 //!   the modelling choices.
 //! - [`contract`]: the refinement statement, [`contract::lowers`].
 
+pub mod arith;
 pub mod contract;
+pub mod dispatch;
 pub mod frame;
+pub mod intops;
 pub mod lirmem;
 pub mod lower;
 pub mod proofs;
 pub mod run;
 pub mod spec;
+pub mod trace;

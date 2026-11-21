@@ -388,7 +388,7 @@ pub open spec fn jump_target(op: js::Op) -> Option<nat> {
 /// outcome (LIR's `eval` is fuelled; "not enough fuel" is not a claim). A
 /// lowering has no loop, so its depth is bounded by a constant.
 pub open spec fn lower_fuel() -> nat {
-    64
+    128
 }
 
 /// What LIR's outcome `o` of a lowering of `op` must be, from the bytecode
