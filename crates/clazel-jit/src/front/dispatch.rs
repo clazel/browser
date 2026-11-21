@@ -134,6 +134,26 @@ pub proof fn lemma_op_case(
                 assert(jump_target(op) is None);
                 super::intcmp::lemma_cmp_op(c, op, pc, lbl, lay, s, st, fuel, 5, dst, a, b);
             },
+            js::Op::BitAnd { dst, a, b } => {
+                assert(jump_target(op) is None);
+                super::bitops::lemma_bit_op(c, op, pc, lbl, lay, s, st, fuel, 0, dst, a, b);
+            },
+            js::Op::BitOr { dst, a, b } => {
+                assert(jump_target(op) is None);
+                super::bitops::lemma_bit_op(c, op, pc, lbl, lay, s, st, fuel, 1, dst, a, b);
+            },
+            js::Op::BitXor { dst, a, b } => {
+                assert(jump_target(op) is None);
+                super::bitops::lemma_bit_op(c, op, pc, lbl, lay, s, st, fuel, 2, dst, a, b);
+            },
+            js::Op::Shl { dst, a, b } => {
+                assert(jump_target(op) is None);
+                super::bitops::lemma_bit_op(c, op, pc, lbl, lay, s, st, fuel, 3, dst, a, b);
+            },
+            js::Op::Shr { dst, a, b } => {
+                assert(jump_target(op) is None);
+                super::bitops::lemma_bit_op(c, op, pc, lbl, lay, s, st, fuel, 4, dst, a, b);
+            },
             _ => {
                 assert(false);
             },

@@ -83,6 +83,7 @@
 //! - **No tier is claimed.** `tier` stays 0 (CLAUDE.md rule 7).
 
 pub mod arith;
+pub mod bitops;
 pub mod blocks;
 pub mod contract;
 pub mod dispatch;
