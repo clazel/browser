@@ -363,11 +363,55 @@ pub open spec fn flow_fits(f: Flow, h: nat) -> bool {
     }
 }
 
-/// The program `n` of a function with `nl` locals has a translation: its
-/// analysis, entered with an empty stack and the return label in scope, is
-/// defined.
-pub open spec fn cf_prog_ok(n: Node, nl: nat) -> bool {
-    cf_flow(n, nl, 0, 1) is Some
+/// The nesting depth of labels in a node: how many labels its deepest part
+/// has in scope beyond the node's own context.
+pub open spec fn nest(n: Node) -> nat
+    decreases n,
+{
+    match n {
+        Node::Then(a, b) => {
+            let x = nest(*a);
+            let y = nest(*b);
+            if x > y {
+                x
+            } else {
+                y
+            }
+        },
+        Node::Block(b) => nest(*b) + 1,
+        Node::Loop(b) => nest(*b) + 1,
+        Node::If(t, e) => {
+            let x = nest(*t);
+            let y = nest(*e);
+            1 + if x > y {
+                x
+            } else {
+                y
+            }
+        },
+        _ => 0,
+    }
+}
+
+/// The node has a template in this slice. **Not** the memory instructions
+/// (`bounds_check`, `load`, `store`) or `br_table`, which are in [`Node`]
+/// and [`cf_flow`] (the statement is made for them) but have no proven
+/// template yet; everything else has one.
+pub open spec fn templated(n: Node) -> bool
+    decreases n,
+{
+    match n {
+        Node::Op(_) => true,
+        Node::Mem(_) => false,
+        Node::Then(a, b) => templated(*a) && templated(*b),
+        Node::Block(b) => templated(*b),
+        Node::Loop(b) => templated(*b),
+        Node::If(t, e) => templated(*t) && templated(*e),
+        Node::Br(_) => true,
+        Node::BrIf(_) => true,
+        Node::BrTable(_, _) => false,
+        Node::Exit(_, _) => true,
+    }
 }
 
 // ============================================================================

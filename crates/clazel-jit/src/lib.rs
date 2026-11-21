@@ -56,22 +56,56 @@
 //!   ([`contract::emit_body_ensures`], [`contract::emit_blob_ensures`]),
 //!   and refuses (`None`) exactly the programs [`spec::prog_ok`] refuses.
 //!
-//! # What is not
+//! # Control flow (the second slice, x86-64 only)
+//!
+//! Written contract first like the first ([`cfspec`], [`cfcontract`] in
+//! their own commit; the statement was refined while proving, see the PR).
+//! The source language is [`cfspec::Node`] (void blocks only), the statement
+//! is [`cfcontract::cf_refines`] (a forward simulation over a run with jumps,
+//! [`cfspec::reaches`]: `Normal`, `Branch` to a label's address, `Exit`).
+//!
+//! - **Proven, no axiom, no assumption:**
+//!   - the static analysis [`cfspec::cf_flow`] is sound for LIR's `eval`
+//!     ([`cfheight`]);
+//!   - composition over `then`, `block`, `loop` and `if`
+//!     ([`cfcompose::lemma_then`], [`cfblock::lemma_block`],
+//!     [`cfblock::lemma_loop`], [`cfif::lemma_if`]), and the leaves `br`
+//!     (a `jmp`), `br_if` (condition test and `jcc`), `exit` **with
+//!     operands** and a straight-line instruction ([`cfleaf`], [`cfexit`],
+//!     [`cfop`]);
+//!   - by induction over the program, **every templated node's code refines
+//!     it** ([`cfproofs::lemma_ctmpl_refines`]), with every `jmp` and `jcc`
+//!     displacement a 32-bit number ([`cfproofs::labels_fit`]) and every
+//!     instruction in the subset ([`cfvalid`]);
+//!   - the executable emitter returns that code ([`cfemit::emit_cf_body`])
+//!     and its encoding ([`cfemit::emit_cf_blob`]).
+//! - **Not done:**
+//!   - the memory instructions `bounds_check`, `load`, `store`: the
+//!     statement is made for them ([`cfspec::MemOp`], [`cfspec::cf_flow`]),
+//!     but there is no template and no proof, and [`cfspec::templated`]
+//!     refuses them, so the emitter does too;
+//!   - `br_table` (likewise);
+//!   - blocks with parameters or results (modelling choice 8 of [`cfspec`]);
+//!   - the A64 back end's control flow and memory.
+//! - Checked, not proven: `tests/validator_cf.rs` (every form and 1500
+//!   generated programs are accepted by the validator).
+//!
+//! # What is not (of the first slice)
 //!
 //! - **That the validator accepts every blob** is checked by
 //!   `tests/validator.rs` (every template, 3000 generated programs), not
 //!   proven.
-//! - **Not covered by any template:** the memory instructions
-//!   (`bounds_check`, `load`, `store`); structured control flow (`block`,
-//!   `loop`, `if`, `br`, `br_if`, `br_table`) and so composition over it;
-//!   `exit` with operands; `f64` arithmetic, comparison and conversion
+//! - **Not covered by any template of the first slice:** the memory
+//!   instructions, structured control flow and `exit` with operands (those
+//!   are the second slice, above, for x86-64); `f64` arithmetic, comparison
+//!   and conversion
 //!   (LIR's `f64` operators are uninterpreted functions, so a refinement to
 //!   SSE would need an axiom this crate does not add); rotates (the subset
 //!   has no rotate instruction); a frame beyond 31 slots (it needs the
 //!   region frame and the bounds-check sequence on every access).
 //! - **No tier is claimed.** `tier` stays 0 until CI's full verification of
-//!   this crate is green (CLAUDE.md rule 7), and the crate has no mutation
-//!   file, no independent transcription and no conformance suite, which
+//!   this crate is green (CLAUDE.md rule 7), and the crate has no independent
+//!   transcription and no conformance suite, which
 //!   tier 2 requires. The proofs are about the spec of `clazel-x64` and the
 //!   semantics of `clazel-lir`, whose faithfulness is their crates' claim.
 //!
@@ -86,12 +120,18 @@ pub mod cfalg;
 pub mod cfblock;
 pub mod cfcompose;
 pub mod cfcontract;
+pub mod cfemit;
+pub mod cfexit;
 pub mod cfheight;
+pub mod cfif;
 pub mod cfleaf;
 pub mod cflens;
+pub mod cfop;
+pub mod cfproofs;
 pub mod cfspec;
 pub mod cfsteps;
 pub mod cftemplates;
+pub mod cfvalid;
 pub mod compose;
 pub mod contract;
 pub mod emit;

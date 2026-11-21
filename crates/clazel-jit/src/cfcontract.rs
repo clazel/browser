@@ -45,6 +45,7 @@
 //! - Anything about `rip`, flags or scratch registers beyond what is said.
 
 use crate::cfspec::*;
+use crate::cftemplates::cf_prog_ok;
 use crate::contract::*;
 use crate::spec::*;
 #[allow(unused_imports)]

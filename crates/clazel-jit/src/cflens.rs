@@ -130,7 +130,109 @@ pub proof fn lemma_ctmpl_len(n: Node, nl: nat, h: nat, offs: Seq<int>)
     ensures
         code_len(ctmpl(n, nl, h, offs)) == csize(n, nl, h, offs.len()),
 {
-    lemma_ctmpl_len_eq(n, nl, h, offs, Seq::new(offs.len(), |i: int| 0int));
+    lemma_ctmpl_len_eq(n, nl, h, offs, zeros(offs.len()));
+}
+
+/// `csize` of `then`: the first's, and the second's at the height the first
+/// leaves.
+pub proof fn lemma_csize_then(a: Node, b: Node, nl: nat, h: nat, depth: nat)
+    ensures
+        csize(Node::Then(Box::new(a), Box::new(b)), nl, h, depth) == csize(a, nl, h, depth)
+            + csize(b, nl, flow_h(a, nl, h, depth), depth),
+{
+    let t = Node::Then(Box::new(a), Box::new(b));
+    let z = zeros(depth);
+    let d = csize(a, nl, h, depth) as int;
+    let h1 = flow_h(a, nl, h, depth);
+    assert(z.len() == depth);
+    lemma_ctmpl_len(b, nl, h1, shift(z, d));
+    assert(shift(z, d).len() == depth);
+    super::runseq::lemma_code_len_append(
+        ctmpl(a, nl, h, z),
+        ctmpl(b, nl, h1, shift(z, d)),
+    );
+}
+
+/// `csize` of `block`: the body's, one label deeper.
+pub proof fn lemma_csize_block(b: Node, nl: nat, h: nat, depth: nat)
+    ensures
+        csize(Node::Block(Box::new(b)), nl, h, depth) == csize(b, nl, h, depth + 1),
+{
+    let z = zeros(depth);
+    lemma_ctmpl_len(b, nl, h, seq![csize(b, nl, h, depth + 1) as int] + z);
+    assert((seq![csize(b, nl, h, depth + 1) as int] + z).len() == depth + 1);
+}
+
+/// `csize` of `loop`: the body's, one label deeper.
+pub proof fn lemma_csize_loop(b: Node, nl: nat, h: nat, depth: nat)
+    ensures
+        csize(Node::Loop(Box::new(b)), nl, h, depth) == csize(b, nl, h, depth + 1),
+{
+    let z = zeros(depth);
+    lemma_ctmpl_len(b, nl, h, seq![0int] + z);
+    assert((seq![0int] + z).len() == depth + 1);
+}
+
+/// `csize` of `br`: one `jmp`.
+pub proof fn lemma_csize_br(l: usize, nl: nat, h: nat, depth: nat)
+    ensures
+        csize(Node::Br(l), nl, h, depth) == 5,
+{
+    let z = zeros(depth);
+    let rel = if l < z.len() {
+        z[l as int] - 5
+    } else {
+        0
+    };
+    lemma_jmp_len(rel);
+    super::runseq::lemma_code_len_one(jmp_i(rel));
+}
+
+/// `csize` of `br_if`: the condition test.
+pub proof fn lemma_csize_brif(l: usize, nl: nat, h: nat, depth: nat)
+    ensures
+        csize(Node::BrIf(l), nl, h, depth) == cond_len(nl, h),
+{
+    let z = zeros(depth);
+    lemma_cond_pre_len(
+        nl,
+        h,
+        5,
+        if l < z.len() {
+            z[l as int] - cond_len(nl, h) as int
+        } else {
+            0
+        },
+    );
+}
+
+/// `csize` of `if`: the test, the first arm, a `jmp`, the second arm.
+pub proof fn lemma_csize_if(t: Node, e: Node, nl: nat, h: nat, depth: nat)
+    requires
+        1 <= h,
+    ensures
+        csize(Node::If(Box::new(t), Box::new(e)), nl, h, depth) == cond_len(nl, h)
+            + csize(t, nl, (h - 1) as nat, depth + 1) + 5 + csize(e, nl, (h - 1) as nat, depth + 1),
+{
+    let z = zeros(depth);
+    let p = cond_len(nl, h) as int;
+    let st = csize(t, nl, (h - 1) as nat, depth + 1) as int;
+    let se = csize(e, nl, (h - 1) as nat, depth + 1) as int;
+    let ot = seq![st + 5 + se] + shift(z, p);
+    let oe = seq![se] + shift(z, p + st + 5);
+    lemma_ctmpl_len(t, nl, (h - 1) as nat, ot);
+    lemma_ctmpl_len(e, nl, (h - 1) as nat, oe);
+    assert(ot.len() == depth + 1);
+    assert(oe.len() == depth + 1);
+    lemma_cond_pre_len(nl, h, 4, st + 5);
+    lemma_jmp_len(se);
+    let cp = cond_pre(nl, h, 4, st + 5);
+    let ct = ctmpl(t, nl, (h - 1) as nat, ot);
+    let ce = ctmpl(e, nl, (h - 1) as nat, oe);
+    super::runseq::lemma_code_len_append(cp, ct);
+    super::runseq::lemma_code_len_append(cp + ct, seq![jmp_i(se)]);
+    super::runseq::lemma_code_len_append(cp + ct + seq![jmp_i(se)], ce);
+    super::runseq::lemma_code_len_one(jmp_i(se));
 }
 
 } // verus!

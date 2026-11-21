@@ -154,6 +154,31 @@ pub proof fn lemma_exit_rel_cat(
     assert((base + extra2).len() == (base + ast + extra).len());
 }
 
+/// The relation part of a branch to the block's own label: with the body's
+/// base extended by the outer stack and some extra values, the outer stack
+/// alone is related.
+pub proof fn lemma_br0_rel(
+    lay: lir::Layout,
+    base: Seq<lir::Val>,
+    ast: Seq<lir::Val>,
+    s: lir::St,
+    m2: x64::State,
+    nl: nat,
+)
+    requires
+        rel_ext(lay, base + ast, s, m2, nl),
+    ensures
+        rel_base(lay, base, s.with_stack(ast), m2, nl),
+{
+    reveal(rel_base);
+    let extra = choose|extra: Seq<lir::Val>| rel_base(lay, base + ast + extra, s, m2, nl);
+    let full = base + ast + extra + s.stack;
+    assert(rel(lay, s.with_stack(full), m2, nl));
+    assert(full.take((base + ast).len() as int) =~= base + ast);
+    lemma_rel_prefix(lay, s, full, base + ast, m2, nl);
+    assert(s.with_stack(ast).with_stack(base + ast) == s.with_stack(base + ast));
+}
+
 /// **A branch to the block's own label** (label 0 of the body) is the block
 /// ending: the state is related to the outer stack alone, at the end of the
 /// block's code (`offs_b[0]` is its length).
@@ -176,7 +201,6 @@ pub proof fn lemma_blk_br0(
     ensures
         cf_post(lay, base, nl, offs, c, cu, m, lir::Outcome::Normal(s.with_stack(ast))),
 {
-    reveal(rel_base);
     let m2 = choose|m2: x64::State|
         reaches(cu, c, m.rip, m, m2) && m2.rip == m.rip + offs_b[0] && rel_ext(
             lay,
@@ -185,13 +209,7 @@ pub proof fn lemma_blk_br0(
             m2,
             nl,
         ) && preserved_r(lay, m, m2);
-    let extra = choose|extra: Seq<lir::Val>| rel_base(lay, base + ast + extra, s, m2, nl);
-    let full = base + ast + extra + s.stack;
-    assert(rel(lay, s.with_stack(full), m2, nl));
-    assert(full.take((base + ast).len() as int) =~= base + ast);
-    lemma_rel_prefix(lay, s, full, base + ast, m2, nl);
-    assert(s.with_stack(ast).with_stack(base + ast) == s.with_stack(base + ast));
-    assert(rel_base(lay, base, s.with_stack(ast), m2, nl));
+    lemma_br0_rel(lay, base, ast, s, m2, nl);
 }
 
 /// **A branch past the block** (label `n + 1` of the body is the block's

@@ -402,4 +402,41 @@ pub proof fn lemma_run_seq_steps(
     lemma_steps_is_gen(cu, pre + code + post, b, s, code.len());
 }
 
+/// [`reaches`] in code followed by more.
+pub proof fn lemma_reaches_post(
+    cu: spec_fn(nat) -> nat,
+    c: Seq<x64::Instr>,
+    post: Seq<x64::Instr>,
+    base: int,
+    s: x64::State,
+    s2: x64::State,
+)
+    requires
+        reaches(cu, c, base, s, s2),
+    ensures
+        reaches(cu, c + post, base, s, s2),
+{
+    assert(Seq::<x64::Instr>::empty() + c + post =~= c + post);
+    assert(code_len(Seq::<x64::Instr>::empty()) == 0);
+    lemma_reaches_embed(cu, Seq::empty(), c, post, base, s, s2);
+}
+
+/// [`reaches`] in code preceded by more (the base moves back).
+pub proof fn lemma_reaches_pre(
+    cu: spec_fn(nat) -> nat,
+    pre: Seq<x64::Instr>,
+    c: Seq<x64::Instr>,
+    base: int,
+    s: x64::State,
+    s2: x64::State,
+)
+    requires
+        reaches(cu, c, base, s, s2),
+    ensures
+        reaches(cu, pre + c, base - code_len(pre), s, s2),
+{
+    assert(pre + c + Seq::<x64::Instr>::empty() =~= pre + c);
+    lemma_reaches_embed(cu, pre, c, Seq::empty(), base, s, s2);
+}
+
 } // verus!

@@ -38,6 +38,12 @@ pub open spec fn jcc_i(cc: u8, rel: int) -> x64::Instr {
     x64::Instr::Jcc { cc: cc, rel: rel as i32 }
 }
 
+/// The offsets [`csize`] is defined with: `depth` labels, all at 0 (the length
+/// of the code does not depend on them: [`crate::cflens::lemma_ctmpl_len`]).
+pub open spec fn zeros(depth: nat) -> Seq<int> {
+    Seq::new(depth, |i: int| 0int)
+}
+
 /// The labels of `offs`, as seen from `d` bytes further on.
 pub open spec fn shift(offs: Seq<int>, d: int) -> Seq<int> {
     offs.map_values(|o: int| o - d)
@@ -119,7 +125,22 @@ pub open spec fn ctmpl(n: Node, nl: nat, h: nat, offs: Seq<int>) -> Seq<x64::Ins
 pub open spec fn csize(n: Node, nl: nat, h: nat, depth: nat) -> nat
     decreases n, 1nat,
 {
-    code_len(ctmpl(n, nl, h, Seq::new(depth, |i: int| 0int)))
+    code_len(ctmpl(n, nl, h, zeros(depth)))
+}
+
+/// The largest code this slice translates, in bytes: well below `2^31`, so
+/// every displacement fits a `rel32` ([`crate::cfproofs::labels_fit`]).
+pub open spec fn max_size() -> nat {
+    0x2000_0000
+}
+
+/// The program `n` of a function with `nl` locals has a translation: its
+/// frame holds the locals, its analysis, entered with an empty stack and the return label in scope, is
+/// defined, every node in it has a template ([`templated`]), its nesting is
+/// below `2^28` ([`nest`]), and the code is at most [`max_size`] bytes.
+pub open spec fn cf_prog_ok(n: Node, nl: nat) -> bool {
+    nl <= max_slots() && nest(n) < 0x0FFF_0000 && cf_flow(n, nl, 0, 1) is Some && templated(n)
+        && csize(n, nl, 0, 1) <= max_size()
 }
 
 } // verus!
