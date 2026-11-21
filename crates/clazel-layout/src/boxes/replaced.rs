@@ -19,8 +19,12 @@
 //!   renders as "an 'inline-block' box depicting a multiline text
 //!   control", which is drawn as an empty box like `input`). `audio`,
 //!   `canvas`, `embed`, `object` and `video` are ordinary elements in this
-//!   phase, so their fallback content is rendered (Phase 6). `button` and
-//!   `select` are ordinary elements too (Phase 6's forms).
+//!   phase, so their fallback content is rendered (Phase 6). `button` is an
+//!   ordinary element (its content is its label). **`select` is replaced
+//!   since item 6.15**: a list drawn in the content area, [`Replaced::Select`]
+//!   rows high and as wide as its longest option label (a native popup would
+//!   be outside the tab's surface). HTML leaves a `select`'s size to the user
+//!   agent, so the choice is ours, listed.
 //! - **No image is decoded** (Phase 6), so every `img` is §15.4.2's "img
 //!   element that represents nothing": "a replaced element whose natural
 //!   dimensions are 0". Its used size comes from `width` and `height`,
@@ -42,7 +46,7 @@
 //!   An `input` in the Hidden state has `display: none` from the user agent
 //!   style sheet and gets no box.
 
-use clazel_dom::exec::Arena;
+use clazel_dom::exec::{Arena, ExecAttr, ExecKind};
 use clazel_style::cascade::hints::{attribute, html_element};
 use clazel_style::cascade::legacy::non_negative_integer;
 
@@ -84,11 +88,103 @@ pub enum Replaced {
         /// `rows`, likewise with 2.
         rows: u32,
     },
+    /// `select` (item 6.15): drawn as a list of `rows` rows, `chars`
+    /// characters wide (the longest option label, at least 1).
+    Select {
+        /// The visible rows: the `size` attribute when it is greater than 1,
+        /// else 4 for a `multiple` select, else the number of options (at
+        /// least 1, at most [`SELECT_DROPDOWN_ROWS`]): a drop-down is drawn
+        /// as the list it would open.
+        rows: u32,
+        /// The width in characters.
+        chars: u32,
+    },
     /// `iframe`, with its `src` attribute (item 5.24 draws it as a link).
     Iframe {
         /// The `src` attribute's value, if it has one.
         src: Option<String>,
     },
+}
+
+/// The most rows a `select` without `multiple` or a `size` above 1 shows.
+pub const SELECT_DROPDOWN_ROWS: u32 = 8;
+
+/// Whether `n` is an HTML element named `name`.
+fn named_element(arena: &Arena, n: usize, name: &str) -> bool {
+    html_element(arena, n).is_some_and(|(l, _)| l.iter().copied().eq(name.chars().map(u32::from)))
+}
+
+/// Infra "strip and collapse ASCII whitespace".
+fn collapse(s: &[u32]) -> String {
+    let mut out = String::new();
+    for word in s
+        .split(|&c| matches!(c, 0x09 | 0x0A | 0x0C | 0x0D | 0x20))
+        .filter(|w| !w.is_empty())
+    {
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.push_str(&string(word));
+    }
+    out
+}
+
+/// The `option` elements of `select` `sel` in tree order: its `option`
+/// children and those of its `optgroup` children (HTML §4.10.7 "list of
+/// options"; item 6.13's `list_of_options` is the proven one, this is the
+/// layout's own read of the same shape).
+pub fn select_options(arena: &Arena, sel: usize) -> Vec<usize> {
+    let mut out = Vec::new();
+    for &c in arena.children(sel) {
+        if named_element(arena, c, "option") {
+            out.push(c);
+        } else if named_element(arena, c, "optgroup") {
+            out.extend(
+                arena
+                    .children(c)
+                    .iter()
+                    .copied()
+                    .filter(|&o| named_element(arena, o, "option")),
+            );
+        }
+    }
+    out
+}
+
+/// An option's label as drawn: HTML §4.10.10 "label": the `label` attribute
+/// if it is not empty, else the option's text with ASCII whitespace
+/// stripped and collapsed ("the `text` IDL attribute").
+pub fn option_label(arena: &Arena, option: usize) -> String {
+    if let Some((_, attrs)) = html_element(arena, option)
+        && let Some(l) = attribute(attrs, "label")
+        && !l.is_empty()
+    {
+        return string(l);
+    }
+    let mut text: Vec<u32> = Vec::new();
+    for &c in arena.children(option) {
+        if let ExecKind::Text { data } = arena.kind(c) {
+            text.extend_from_slice(data);
+        }
+    }
+    collapse(&text)
+}
+
+/// The `select`'s display row count, from [`Replaced::Select`]'s rule.
+fn select_rows(attrs: &[ExecAttr], options: usize) -> u32 {
+    let size = attribute(attrs, "size")
+        .and_then(non_negative_integer)
+        .and_then(|n| u32::try_from(n).ok())
+        .unwrap_or(0);
+    if size > 1 {
+        size
+    } else if attribute(attrs, "multiple").is_some() {
+        4
+    } else {
+        u32::try_from(options)
+            .unwrap_or(u32::MAX)
+            .clamp(1, SELECT_DROPDOWN_ROWS)
+    }
 }
 
 /// Code points to a `String`, with any that is not a scalar value replaced
@@ -180,6 +276,18 @@ pub fn replaced(arena: &Arena, x: usize) -> Option<Replaced> {
         Some(Replaced::TextArea {
             cols: positive_or(attribute(attributes, "cols"), 20),
             rows: positive_or(attribute(attributes, "rows"), 2),
+        })
+    } else if named("select") {
+        let options = select_options(arena, x);
+        let chars = options
+            .iter()
+            .map(|&o| option_label(arena, o).chars().count())
+            .max()
+            .unwrap_or(0)
+            .max(1);
+        Some(Replaced::Select {
+            rows: select_rows(attributes, options.len()),
+            chars: u32::try_from(chars).unwrap_or(u32::MAX),
         })
     } else if named("iframe") {
         Some(Replaced::Iframe {
