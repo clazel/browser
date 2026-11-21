@@ -6,14 +6,20 @@ license.workspace = true
 publish.workspace = true
 description = "The JavaScript lexer for Clazel's Phase 7 browser (phase-7.md item 7.2): ECMA-262 section 12 source text to tokens, the goal symbol an input."
 
+[dependencies]
+vstd = "=0.0.0-2026-10-04-0306"
+
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
 # shipped code today; `target-tier` is what the policy requires, since this
-# lexes scripts a page chose (phase-7.md 7.0(a)). Tier 0: this is only the
-# skeleton that holds the test data of item 7.1. The contracts come first
-# (rule 3), in item 7.2.
+# lexes scripts a page chose (phase-7.md 7.0(a)). Tier 0: the spec and the
+# contracts are written (item 7.2, first half, CLAUDE.md rule 3) and check
+# with Verus, but no implementation exists, so nothing shipped is proven.
 [package.metadata.clazel]
 tier = 0
 target-tier = 2
+
+[package.metadata.verus]
+verify = true
 
 [lints]
 workspace = true

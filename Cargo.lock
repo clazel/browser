@@ -362,6 +362,9 @@ dependencies = [
 [[package]]
 name = "clazel-js-lexer"
 version = "0.0.0"
+dependencies = [
+ "vstd",
+]
 
 [[package]]
 name = "clazel-js-regexp"
