@@ -21,9 +21,11 @@ mod html5lib_tokenizer;
 mod html5lib_tree;
 mod http_state_dates;
 mod http_state_parser;
+mod inventory;
 mod js;
 mod llhttp;
 mod nist_cavp_sigver;
+mod test262;
 mod wpt_base64;
 mod wpt_cookies;
 mod wpt_css_cascade;
@@ -135,6 +137,7 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         nist_cavp_sigver::convert,
         nist_cavp_sigver::FILES,
     ),
+    ("test262", test262::convert, test262::FILES),
     ("wpt-base64", wpt_base64::convert, wpt_base64::FILES),
     ("wpt-cookies", wpt_cookies::convert, wpt_cookies::FILES),
     ("wpt-encoding", wpt_encoding::convert, wpt_encoding::FILES),
@@ -190,7 +193,23 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         wycheproof_rsa::FILES,
     ),
     ("x509-limbo", x509_limbo::convert, x509_limbo::FILES),
+    // Phase 7 item 7.1: files later items read as files; each converts to an
+    // inventory of paths, sizes and hashes (see inventory.rs).
+    ("wpt-web", inventory::convert_wpt_web, &[]),
+    ("todomvc", inventory::convert_todomvc, &[]),
+    (
+        "webref-idl",
+        inventory::convert_webref_idl,
+        inventory::WEBREF_IDL_FILES,
+    ),
+    ("ucd-regexp", inventory::convert_ucd, inventory::UCD_FILES),
 ];
+
+/// Suites whose directory is a tree of upstream paths, not a flat list: the
+/// converter walks it and lists what it finds (its inventory is then the
+/// record of which files exist), and the directory is checked for
+/// `SOURCE.md` and `LICENSE.md` only.
+const TREE_SUITES: &[&str] = &["wpt-web", "todomvc", "test262"];
 
 /// A converter for a binary artefact written beside a suite's Rust table.
 type ConvertBytes = fn(&Path) -> Result<Vec<u8>, String>;
@@ -270,6 +289,15 @@ fn check_suite_dir(s: &Suite) -> Vec<String> {
         ),
         Err(e) => problems.push(format!("{rel}/SOURCE.md: {e}")),
     }
+    if TREE_SUITES
+        .iter()
+        .any(|t| s.dir.file_name().is_some_and(|n| n == *t))
+    {
+        if !s.dir.join("LICENSE.md").is_file() {
+            problems.push(format!("{rel}/LICENSE.md: missing"));
+        }
+        return problems;
+    }
     let expected: Vec<&str> = s.files.iter().chain(ALWAYS).copied().collect();
     match std::fs::read_dir(&s.dir) {
         Ok(entries) => {
@@ -303,7 +331,10 @@ fn source_problems(text: &str) -> Vec<String> {
     };
     // A git-hosted suite names its commit; one published as an archive (NIST
     // CAVP) names the archive's SHA-256 instead.
-    if !hex_of(field("Commit:"), 40) && !hex_of(field("SHA-256:"), 64) {
+    // A `SHA-256:` line may name its file after the hash (`SHA-256: <hash>
+    // <file>`, as in a suite of several unversioned files).
+    let first_token = field("SHA-256:").and_then(|v| v.split_whitespace().next());
+    if !hex_of(field("Commit:"), 40) && !hex_of(first_token, 64) {
         problems.push(
             "no \"Commit:\" line with a full 40-hex commit (or, for an archive, \
              a \"SHA-256:\" line with 64 hex digits)"
@@ -368,7 +399,10 @@ pub fn run(crates: &[Crate], write: bool) -> (Vec<String>, Vec<String>) {
             };
             let cases = fresh
                 .lines()
-                .filter(|l| l.trim_start().starts_with("Case {"))
+                .filter(|l| {
+                    let l = l.trim_start();
+                    l.starts_with("Case {") || l.starts_with("File {")
+                })
                 .count();
             let current = std::fs::read_to_string(&s.generated).ok();
             if current.as_deref() == Some(fresh.as_str()) {

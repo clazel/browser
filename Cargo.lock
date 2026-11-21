@@ -360,6 +360,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "clazel-js-lexer"
+version = "0.0.0"
+
+[[package]]
+name = "clazel-js-regexp"
+version = "0.0.0"
+
+[[package]]
 name = "clazel-kernel"
 version = "0.0.0"
 dependencies = [
@@ -576,6 +584,14 @@ dependencies = [
  "url",
  "vstd",
 ]
+
+[[package]]
+name = "clazel-web"
+version = "0.0.0"
+
+[[package]]
+name = "clazel-webidl"
+version = "0.0.0"
 
 [[package]]
 name = "clazel-window"
