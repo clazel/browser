@@ -124,6 +124,7 @@ pub proof fn lemma_independent_adopt(doc: Document, node: NodeId)
 
 /// The independent "insert" is the spec's, on every call the parser makes
 /// ([`insert_requires`]); so are "append" and "pre-insert", which call it.
+#[verifier::rlimit(50)]
 pub proof fn lemma_independent_insert(doc: Document, node: NodeId, parent: NodeId, child: Option<NodeId>)
     requires
         insert_requires(doc, node, parent, child),
@@ -160,8 +161,10 @@ pub proof fn lemma_independent_insert(doc: Document, node: NodeId, parent: NodeI
     }
     let a = ind_insert(doc, node, parent, child);
     let b = insert(doc, node, parent, child);
-    assert forall|i: int| 0 <= i < doc.nodes.len() implies #[trigger] a.nodes[i] == b.nodes[i] by {}
-    assert(a.nodes =~= b.nodes);
+    let c = attach(d1, node, parent, kids);
+    assert(b == c);
+    assert forall|i: int| 0 <= i < doc.nodes.len() implies #[trigger] a.nodes[i] == c.nodes[i] by {}
+    assert(a.nodes =~= c.nodes);
 }
 
 } // verus!
