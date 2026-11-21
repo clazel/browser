@@ -130,6 +130,11 @@ pub open spec fn region_ok(c: Cfg, k: int) -> bool {
 /// **A configuration the sandbox may hand over**: the blob is accepted (the
 /// instruction list `ins` is its decoding and passes the policy at the
 /// entries), and the layout is as the module documentation says.
+///
+/// `opaque` only for the prover's sake (`decodes_to` quantifies over the
+/// large `encode`, and a proof that unfolded it at every step would not
+/// finish): `super::chain::lemma_cfg` reveals it, and nothing else changes.
+#[verifier::opaque]
 pub open spec fn cfg_ok(c: Cfg) -> bool {
     decodes_to(c.blob, c.ins) && policy(c.ins, c.entries) && c.bases.len() == abi::num_regions()
         && c.bounds.len() == abi::num_regions() && 0 <= c.code && c.code % 4 == 0 && c.code
