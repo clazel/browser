@@ -96,6 +96,7 @@ fn context_of(ctx: &str) -> Option<ExecContext> {
         name: u32s(name),
         attrs: Vec::<ExecAttr>::new(),
         mode: DocumentMode::NoQuirks,
+        in_form: false,
     })
 }
 

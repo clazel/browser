@@ -111,6 +111,7 @@ fn ours(input: &str, fragment: Option<&str>, scripting: bool) -> String {
                 name: u32s(name),
                 attrs: Vec::<ExecAttr>::new(),
                 mode: DocumentMode::NoQuirks,
+                in_form: false,
             };
             let (p, root, _) = parse_fragment_real(&NoEnc, &input, context, scripting);
             dump::dump_children(&p.arena, root)

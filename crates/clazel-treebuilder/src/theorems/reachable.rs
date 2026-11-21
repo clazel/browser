@@ -155,7 +155,7 @@ pub proof fn lemma_fragment_parser_wf(ctx: Context, scripting: bool)
     crate::exec::step::lemma_fragment_start_inv(ctx, p1, ctx_id, root, fragment);
     let p2 = reset_insertion_mode(p1);
     assert(ids_in_doc(p2) && parser_wf(p2) && head_ok(p2));
-    let p3 = if is_html(ctx_el, Tag::Form) {
+    let p3 = if is_html(ctx_el, Tag::Form) || ctx.in_form {
         Parser { form: Some(ctx_id), ..p2 }
     } else {
         p2
