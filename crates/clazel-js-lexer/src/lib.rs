@@ -5,16 +5,23 @@
 //! Tier: see `[package.metadata.clazel]` in `Cargo.toml` and
 //! `docs/VERIFICATION.md`.
 //!
-//! This is the first half of item 7.2: the spec and the contracts, with no
-//! implementation (CLAUDE.md rule 3).
-//!
 //! - [`spec`]: a transcription of the lexical grammar, the goal symbol a
 //!   parameter, and the longest-input-element rule.
 //! - [`contract`]: what the executable lexer must be proven to satisfy.
 //! - [`api`]: the token types and the contract-only trait [`api::JsLexer`].
+//! - [`exec`]: the executable lexer. Its totality and span coverage are
+//!   proven; its agreement with [`spec`] (the rest of [`contract`]) is
+//!   tested, not proven, so it does not implement [`api::JsLexer`] yet
+//!   (see the module's header for exactly what is proven).
+//! - [`unicode`], [`unicode_data`]: `ID_Start` and `ID_Continue` above
+//!   U+007F, from a table generated from Unicode 18.0.0. The spec leaves
+//!   them uninterpreted, and nothing ties the two.
 
 pub mod api;
 pub mod contract;
 pub mod examples;
+pub mod exec;
 pub mod lemmas;
 pub mod spec;
+pub mod unicode;
+pub mod unicode_data;
