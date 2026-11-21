@@ -16,7 +16,7 @@ Tier 0, target tier 0: safe Rust, tested, nothing proven. So far:
   `>` escaped in attributes; the line feed after `pre`, `textarea` and
   `listing`), because the text of §13.3 is not vendored.
   `tests/serialize.rs` covers each step on hand-built trees.
-  `tests/round_trip.rs` serializes the children of every element of every
+  `tests/conformance_round_trip.rs` serializes the children of every element of every
   tree the html5lib tree-construction suite builds and fragment-parses the
   result with that element as the context, through
   `clazel-treebuilder`'s `parse_fragment_real`: 9,360 contexts, 9,213 give

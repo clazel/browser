@@ -39,7 +39,7 @@
 //!   feed": the standard's earlier text had this step, and it is kept
 //!   because the parser drops one line feed after those start tags, so
 //!   without it serializing then parsing a `pre` that starts with a blank
-//!   line loses the line (`tests/round_trip.rs` checks the round trip).
+//!   line loses the line (`tests/conformance_round_trip.rs` checks the round trip).
 //!   Whether the current text still has this step is what to check.
 
 use clazel_dom::exec::{Arena, ExecAttr, ExecKind};
