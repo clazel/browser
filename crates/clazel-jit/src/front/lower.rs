@@ -96,6 +96,10 @@ pub open spec fn lowered(op: js::Op) -> bool {
             js::Op::BitXor { .. } => true,
             js::Op::Shl { .. } => true,
             js::Op::Shr { .. } => true,
+            js::Op::Inc { .. } => true,
+            js::Op::Dec { .. } => true,
+            js::Op::Neg { .. } => true,
+            js::Op::BitNot { .. } => true,
             _ => false,
         }
     }
@@ -301,6 +305,10 @@ pub open spec fn lower(c: js::Code, op: js::Op, pc: nat, lbl: nat) -> lir::Instr
             js::Op::BitXor { dst, a, b } => super::bitops::lower_bit(2, dst, a, b, op, pc),
             js::Op::Shl { dst, a, b } => super::bitops::lower_bit(3, dst, a, b, op, pc),
             js::Op::Shr { dst, a, b } => super::bitops::lower_bit(4, dst, a, b, op, pc),
+            js::Op::Inc { dst, src } => super::unops::lower_unary(0, dst, src, op, pc),
+            js::Op::Dec { dst, src } => super::unops::lower_unary(1, dst, src, op, pc),
+            js::Op::Neg { dst, src } => super::unops::lower_unary(2, dst, src, op, pc),
+            js::Op::BitNot { dst, src } => super::unops::lower_unary(3, dst, src, op, pc),
             _ => lir::Instr::Nop,
         }
     }

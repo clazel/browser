@@ -353,4 +353,166 @@ pub proof fn lemma_bin_op(
     }
 }
 
+/// A flag block computes the `i32` flag `g` from the operand word `va` held
+/// in scratch local 1: it pushes `g` and changes nothing else.
+pub open spec fn flag_computes(lay: lir::Layout, fl: Seq<lir::Instr>, va: u64, g: u32) -> bool {
+    forall|st1: lir::St|
+        #![trigger super::run::exec(lay, fl, st1)]
+        st1.locals.len() == nlocals() && st1.locals[1] == lir::Val::I64(va)
+            ==> super::run::exec(lay, fl, st1) == lir::Outcome::Normal(
+            st1.with_stack(st1.stack.push(lir::Val::I32(g))),
+        )
+}
+
+/// The unary prefix: the register loaded into scratch local 1, then the flag
+/// block `fl`.
+pub open spec fn un_pre(src: nat, fl: Seq<lir::Instr>) -> Seq<lir::Instr> {
+    super::lower::load_ins(reg_off(src)) + (seq![lir::Instr::LocalSet(1)] + fl)
+}
+
+/// A unary lowering: the unary prefix, the guard exit, then a store of the
+/// value block's word in `dst`.
+pub open spec fn lower_un(
+    fl: Seq<lir::Instr>,
+    val: Seq<lir::Instr>,
+    dst: nat,
+    src: nat,
+    op: js::Op,
+    pc: nat,
+) -> lir::Instr {
+    guarded(
+        un_pre(src, fl),
+        op,
+        pc,
+        super::run::chain(super::lower::store_ins(reg_off(dst), val)),
+    )
+}
+
+/// The unary prefix: leaves the flag `g` on the stack, with the operand in
+/// local 1.
+pub proof fn lemma_pre_un(
+    lay: lir::Layout,
+    s: js::State,
+    st: lir::St,
+    src: nat,
+    fl: Seq<lir::Instr>,
+    g: u32,
+)
+    requires
+        rel(lay, s, st),
+        st.stack == Seq::<lir::Val>::empty(),
+        js::state_wf(s),
+        js::reg_ok(js::cur_code(s), src),
+        super::run::all_simple(fl),
+        fl.len() < 40,
+        flag_computes(lay, fl, js::reg(s, src), g),
+    ensures
+        ({
+            let v = js::reg(s, src);
+            let pre = un_pre(src, fl);
+            let st3 = lir::St {
+                stack: seq![lir::Val::I32(g)],
+                locals: st.locals.update(1, lir::Val::I64(v)),
+                mem: st.mem,
+            };
+            &&& super::run::all_simple(pre)
+            &&& pre.len() == 6 + fl.len()
+            &&& super::run::exec(lay, pre, st) == lir::Outcome::Normal(st3)
+            &&& rel(lay, s, st3)
+            &&& st3.locals.len() == nlocals()
+            &&& st3.locals[1] == lir::Val::I64(v)
+        }),
+{
+    broadcast use stack_shape;
+
+    let v = js::reg(s, src);
+    super::proofs::lemma_reg_slot_ok(s, src);
+    super::proofs::lemma_blocks_simple(reg_off(src), 0);
+    let l = super::lower::load_ins(reg_off(src));
+    let set1 = seq![lir::Instr::LocalSet(1)];
+    assert(super::run::all_simple(set1)) by {
+        assert forall|i: int| 0 <= i < set1.len() implies super::run::is_simple(#[trigger] set1[i]) by {
+            assert(i == 0);
+        }
+    }
+    super::intops::lemma_simple_concat(set1, fl);
+    super::intops::lemma_simple_concat(l, set1 + fl);
+    super::frame::lemma_exec_load(lay, s, st, reg_off(src));
+    let sl = st.with_stack(st.stack.push(lir::Val::I64(v)));
+    super::trace::lemma_exec_app(lay, l, set1 + fl, st, sl);
+    reveal_with_fuel(super::run::exec, 2);
+    let loc = st.locals.update(1, lir::Val::I64(v));
+    let sb = lir::St { stack: Seq::<lir::Val>::empty(), locals: loc, mem: st.mem };
+    assert(super::run::exec(lay, set1, sl) == lir::Outcome::Normal(sb));
+    super::trace::lemma_exec_app(lay, set1, fl, sl, sb);
+    super::trace::lemma_locals_set(s, st.locals, 1, v);
+    assert(rel(lay, s, sb));
+    assert(sb.locals.len() == nlocals());
+    assert(sb.locals[1] == lir::Val::I64(v));
+    assert(super::run::exec(lay, fl, sb) == lir::Outcome::Normal(sb.with_stack(sb.stack.push(lir::Val::I32(g)))));
+    assert(sb.stack.push(lir::Val::I32(g)) =~= seq![lir::Val::I32(g)]);
+}
+
+/// A unary lowering whose flag block computes `g` and whose value block
+/// computes `w` refines `step`: a zero flag exits to the handler, otherwise
+/// the op's fast path holds and its result is `w` in `dst`.
+pub proof fn lemma_un_op(
+    op: js::Op,
+    pc: nat,
+    lbl: nat,
+    lay: lir::Layout,
+    s: js::State,
+    st: lir::St,
+    fuel: nat,
+    dst: nat,
+    src: nat,
+    fl: Seq<lir::Instr>,
+    val: Seq<lir::Instr>,
+    g: u32,
+    w: u64,
+)
+    requires
+        fuel >= 100,
+        rel(lay, s, st),
+        st.stack == Seq::<lir::Val>::empty(),
+        js::state_wf(s),
+        s.pc == pc,
+        handler_complete(s, op),
+        js::reg_ok(js::cur_code(s), dst),
+        js::reg_ok(js::cur_code(s), src),
+        super::run::all_simple(fl),
+        fl.len() < 40,
+        super::run::all_simple(val),
+        val.len() < 40,
+        flag_computes(lay, fl, js::reg(s, src), g),
+        g != 0 ==> js::fast_path(s, op) && js::fast_step(s, op) == js::next(js::set_reg(s, dst, w)),
+        g != 0 ==> val_computes1(lay, val, js::reg(s, src), w),
+    ensures
+        outcome_refines(lay, s, op, lbl, lir::eval(lay, lower_un(fl, val, dst, src, op, pc), st, fuel)),
+{
+    lemma_pre_un(lay, s, st, src, fl, g);
+    let v = js::reg(s, src);
+    let pre = un_pre(src, fl);
+    let st3 = lir::St {
+        stack: seq![lir::Val::I32(g)],
+        locals: st.locals.update(1, lir::Val::I64(v)),
+        mem: st.mem,
+    };
+    let rest = super::run::chain(super::lower::store_ins(reg_off(dst), val));
+    lemma_guarded(op, pc, lbl, lay, s, st, st3, pre, rest, g, fuel);
+    if g != 0 {
+        let st4 = st3.with_stack(Seq::<lir::Val>::empty());
+        assert(rel(lay, s, st4));
+        super::proofs::lemma_reg_slot_ok(s, dst);
+        let sa = st4.with_stack(st4.stack.push(lir::Val::I64((8 * s.fp + reg_off(dst)) as u64)));
+        assert(sa.locals == st3.locals);
+        assert(sa.locals.len() == nlocals());
+        assert(sa.locals[1] == lir::Val::I64(v));
+        assert(super::run::exec(lay, val, sa) == lir::Outcome::Normal(
+            sa.with_stack(sa.stack.push(lir::Val::I64(w))),
+        ));
+        lemma_store_outcome(op, lbl, lay, s, st4, (fuel - 2) as nat, dst, val, w);
+    }
+}
+
 } // verus!
