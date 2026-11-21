@@ -110,6 +110,30 @@ pub proof fn lemma_op_case(
                 assert(jump_target(op) is None);
                 super::intops::lemma_arith_op(c, op, pc, lbl, lay, s, st, fuel, 2, dst, a, b);
             },
+            js::Op::Lt { dst, a, b } => {
+                assert(jump_target(op) is None);
+                super::intcmp::lemma_cmp_op(c, op, pc, lbl, lay, s, st, fuel, 0, dst, a, b);
+            },
+            js::Op::Le { dst, a, b } => {
+                assert(jump_target(op) is None);
+                super::intcmp::lemma_cmp_op(c, op, pc, lbl, lay, s, st, fuel, 1, dst, a, b);
+            },
+            js::Op::Gt { dst, a, b } => {
+                assert(jump_target(op) is None);
+                super::intcmp::lemma_cmp_op(c, op, pc, lbl, lay, s, st, fuel, 2, dst, a, b);
+            },
+            js::Op::Ge { dst, a, b } => {
+                assert(jump_target(op) is None);
+                super::intcmp::lemma_cmp_op(c, op, pc, lbl, lay, s, st, fuel, 3, dst, a, b);
+            },
+            js::Op::StrictEq { dst, a, b } => {
+                assert(jump_target(op) is None);
+                super::intcmp::lemma_cmp_op(c, op, pc, lbl, lay, s, st, fuel, 4, dst, a, b);
+            },
+            js::Op::StrictNe { dst, a, b } => {
+                assert(jump_target(op) is None);
+                super::intcmp::lemma_cmp_op(c, op, pc, lbl, lay, s, st, fuel, 5, dst, a, b);
+            },
             _ => {
                 assert(false);
             },

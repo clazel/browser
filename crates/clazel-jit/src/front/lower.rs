@@ -85,6 +85,12 @@ pub open spec fn lowered(op: js::Op) -> bool {
             js::Op::Add { .. } => true,
             js::Op::Sub { .. } => true,
             js::Op::Mul { .. } => true,
+            js::Op::Lt { .. } => true,
+            js::Op::Le { .. } => true,
+            js::Op::Gt { .. } => true,
+            js::Op::Ge { .. } => true,
+            js::Op::StrictEq { .. } => true,
+            js::Op::StrictNe { .. } => true,
             _ => false,
         }
     }
@@ -279,6 +285,12 @@ pub open spec fn lower(c: js::Code, op: js::Op, pc: nat, lbl: nat) -> lir::Instr
             js::Op::Add { dst, a, b } => lower_arith(0, dst, a, b, js::op_handler(op), pc),
             js::Op::Sub { dst, a, b } => lower_arith(1, dst, a, b, js::op_handler(op), pc),
             js::Op::Mul { dst, a, b } => lower_arith(2, dst, a, b, js::op_handler(op), pc),
+            js::Op::Lt { dst, a, b } => super::intcmp::lower_cmp(0, dst, a, b, op, pc),
+            js::Op::Le { dst, a, b } => super::intcmp::lower_cmp(1, dst, a, b, op, pc),
+            js::Op::Gt { dst, a, b } => super::intcmp::lower_cmp(2, dst, a, b, op, pc),
+            js::Op::Ge { dst, a, b } => super::intcmp::lower_cmp(3, dst, a, b, op, pc),
+            js::Op::StrictEq { dst, a, b } => super::intcmp::lower_cmp(4, dst, a, b, op, pc),
+            js::Op::StrictNe { dst, a, b } => super::intcmp::lower_cmp(5, dst, a, b, op, pc),
             _ => lir::Instr::Nop,
         }
     }
