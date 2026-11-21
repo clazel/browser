@@ -53,25 +53,19 @@ Detailed plan: [phases/phase-3.md](phases/phase-3.md).
 **Status: in progress (started 2026-10-23). The TLS decision (3.0) is
 taken: option B. HTTP, DNS, the fetch client with redirects and cookies, the
 kernel join, the TLS client and the `curl` clone over `http:` and `https:` are
-on `main` (CI's full verification green on bf6a9ea). Left: persistent state (3.10), the TLS proofs and tier raises (3.5e to 3.5g), and
+on `main` (CI's full verification green on bf6a9ea). Since then `clazel-tls`
+and `clazel-p384` are at tier 2 and the store (3.10a, `clazel-store`) is at
+tier 2. Left: `clazel-x509` at tier 2 (it is at tier 0), the store's first
+consumers (3.10b), so cookies and history still do not outlive a run, and
 the wrap-up (3.9).**
 
 ## Phase 4: HTML and DOM
 WHATWG tokenizer (proven total and panic-free), tree builder, DOM.
 *Exit:* a text-mode browser (Lynx-style) that browses real sites.
 Detailed plan: [phases/phase-4.md](phases/phase-4.md).
-**Status: built (2026-10-31), not complete.** Every item but 4.4 is merged
-into `main` (the last at `9f776b2`): `clazel-html` (tokenizer, character
-references, encoding sniffing) and `clazel-treebuilder` are at tier 2, the
-kernel's display theorems are proven, and `clazel browse` runs on `http://`
-sites. CI's full verification at `e29265d`
-([run 41140621041](https://github.com/clazel/browser/actions/runs/41140621041)) had every job
-green but Miri, which overran its 360-minute limit (traced to the Phase 3
-TLS tests; fix open as PR #75). Left: a green full run, and `clazel-dom` at
-tier 2 (`phase4/dom-conformance-tier2`). Item 4.4 (multi-byte encodings)
-moved to Phase 8.
-<!-- Once both hold, replace the paragraph above with this line, filling in the date, sha and run id: -->
-<!-- **Status: complete (YYYY-MM-DD).** CI's full verification passed at `<sha>` ([run <id>](https://github.com/clazel/browser/actions/runs/<id>)). -->
+**Status: complete (2026-11-15).** CI's full verification passed at `72e11de` ([run 43742499291](https://github.com/clazel/browser/actions/runs/43742499291)).
+`clazel-html`, `clazel-treebuilder` and `clazel-dom` are at tier 2. Item 4.4
+(multi-byte encodings) moved to Phase 8.
 
 ## Phase 5: CSS, layout, graphics (the Show HN milestone)
 CSS parsing and cascade, block, inline and table layout, font parsing and
@@ -79,12 +73,26 @@ shaping, GPU raster, and a native window on macOS, Linux and Windows.
 *Exit:* **renders news.ycombinator.com correctly**, so the Show HN post can be
 read in the browser it announces.
 Detailed plan: [phases/phase-5.md](phases/phase-5.md).
-**Status: planned (2026-10-31); decisions in item 5.0 taken (2026-11-04), one
-question about 5.18 still open; no other item started.**
+**Status: built, not complete.** On `main` (CI's full verification green at
+`72e11de`, [run 43742499291](https://github.com/clazel/browser/actions/runs/43742499291)):
+`clazel URL` opens a window on macOS, Linux and Windows and draws the page
+through a sandboxed renderer and a sandboxed GPU process per tab (Metal,
+Vulkan, Direct3D 12), with linked style sheets fetched by the kernel, the
+cascade, block, inline and table layout, system fonts, and an address bar
+that is the kernel's; `--headless` writes a PNG. Left: the tier raises, each
+waiting on its evidence: `clazel-css`, `clazel-selectors` and
+`clazel-displaylist` to tier 2, `clazel-style`, `clazel-font` and
+`clazel-glyph-mask` to tier 1 (each is at tier 0); deleting `clazel-text`
+(5.0(g)); and phase-5.md's Status table, which still reads as before the
+work began.
 
 ## Phase 6: Images and forms
 PNG, JPEG, GIF and WebP decoders (Tier 1, written in the style of WUFFS), plus
 form submission.
+*Exit (6.0(g)):* news.ycombinator.com with its images, and logging
+in, voting and commenting through its own forms.
+Detailed plan: [phases/phase-6.md](phases/phase-6.md).
+**Status: planned (2026-11-16); decisions in item 6.0 taken the same day.**
 
 ## Phase 7: JavaScript
 Interpreter only, no JIT. The GC uses an index-based arena so the heap stays
