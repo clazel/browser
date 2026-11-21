@@ -23,6 +23,7 @@ mod http_state_dates;
 mod http_state_parser;
 mod inventory;
 mod isa;
+mod jpeg;
 mod js;
 mod llhttp;
 mod nist_cavp_sigver;
@@ -220,6 +221,12 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         wuffs_deflate::FILES_ARTIFICIAL,
     ),
     ("pngsuite", pngsuite::convert, pngsuite::FILES),
+    (
+        "libjpeg-turbo-testimages",
+        jpeg::convert,
+        jpeg::FILES_TESTIMAGES,
+    ),
+    ("jpeg-corpus", jpeg::convert, jpeg::FILES_CORPUS),
     // Phase 7 item 7.1: files later items read as files; each converts to an
     // inventory of paths, sizes and hashes (see inventory.rs).
     ("wpt-web", inventory::convert_wpt_web, &[]),

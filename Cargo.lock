@@ -434,6 +434,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "clazel-jpeg"
+version = "0.0.0"
+dependencies = [
+ "clazel-image-shape",
+]
+
+[[package]]
 name = "clazel-js-lexer"
 version = "0.0.0"
 dependencies = [
