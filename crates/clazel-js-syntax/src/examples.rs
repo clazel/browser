@@ -250,4 +250,139 @@ pub proof fn example_depth_limit()
     assert(max_height(a, 0, a.nodes[0].children, 0) == 0);
 }
 
+/// An `IdentifierName` token of the one-letter name `a` at `start`.
+pub open spec fn name_a(start: int) -> Tok {
+    Tok {
+        kind: TokKind::IdentifierName,
+        start: start,
+        end: start + 1,
+        text: seq![0x61u32],
+        name: seq![0x61u32],
+        escaped: false,
+        nl_before: false,
+        legacy: false,
+        bigint: false,
+        invalid_escape: false,
+        regexp_valid: false,
+    }
+}
+
+/// The module of `export {a}; export {a}`: two `ExportNamed` items.
+pub open spec fn module_export_a_twice() -> AstV {
+    AstV {
+        nodes: seq![
+            node(NodeKind::IdentifierName, Op::None, 8, 9, Seq::empty()),
+            node(NodeKind::Absent, Op::None, 9, 9, Seq::empty()),
+            node(NodeKind::ExportSpecifier, Op::None, 8, 9, seq![0int, 1int]),
+            node(NodeKind::NamedExports, Op::None, 7, 10, seq![2int]),
+            node(NodeKind::ExportDeclaration, Op::ExportNamed, 0, 11, seq![3int]),
+            node(NodeKind::IdentifierName, Op::None, 27, 28, Seq::empty()),
+            node(NodeKind::Absent, Op::None, 28, 28, Seq::empty()),
+            node(NodeKind::ExportSpecifier, Op::None, 27, 28, seq![5int, 6int]),
+            node(NodeKind::NamedExports, Op::None, 26, 29, seq![7int]),
+            node(NodeKind::ExportDeclaration, Op::ExportNamed, 19, 30, seq![8int]),
+            node(NodeKind::Module, Op::None, 0, 30, seq![4int, 9int]),
+        ],
+        root: 10,
+    }
+}
+
+/// §16.2.1.1: a name exported twice is an early error: `export {a}; export {a}`
+/// exports `a` twice.
+pub proof fn example_duplicate_export_is_an_early_error()
+    ensures
+        ({
+            let a = module_export_a_twice();
+            let ts = Stream { toks: seq![name_a(8), name_a(27)], gaps: seq![Ins::None, Ins::None, Ins::None] };
+            !exports_early(a, ts, 10, a.nodes[10].children)
+        }),
+{
+    let a = module_export_a_twice();
+    let ts = Stream { toks: seq![name_a(8), name_a(27)], gaps: seq![Ins::None, Ins::None, Ins::None] };
+    assert(exists|x: int| 0 <= x < tn(ts) && ts.toks[x].start == a.nodes[0].start) by {
+        assert(ts.toks[0].start == 8);
+    }
+    assert(exists|x: int| 0 <= x < tn(ts) && ts.toks[x].start == a.nodes[5].start) by {
+        assert(ts.toks[1].start == 27);
+    }
+    assert(node_tok(a, ts, 0) == ts.toks[0]);
+    assert(node_tok(a, ts, 5) == ts.toks[1]);
+    assert(name_of(a, ts, 0) == seq![0x61u32]);
+    assert(name_of(a, ts, 5) == seq![0x61u32]);
+    let ks = a.nodes[10].children;
+    reveal_with_fuel(exported_names_list, 3);
+    let n4 = exported_names_item(a, ts, 4);
+    let n9 = exported_names_item(a, ts, 9);
+    assert(n4 =~= seq![seq![0x61u32]]);
+    assert(n9 =~= seq![seq![0x61u32]]);
+    let all = exported_names_list(a, ts, ks, 0);
+    assert(all =~= seq![seq![0x61u32], seq![0x61u32]]);
+    example_repeated_export_names_are_not_unique();
+    assert(all == seq![seq![0x61u32], seq![0x61u32]]);
+}
+
+/// §16.2.1.1: the same name twice is a duplicate.
+pub proof fn example_repeated_export_names_are_not_unique()
+    ensures
+        !exported_names_unique(seq![seq![0x61u32], seq![0x61u32]]),
+{
+    let ns = seq![seq![0x61u32], seq![0x61u32]];
+    assert(ns[0] == ns[1]);
+    assert(name_in(ns, ns[0], 1));
+    assert(names_repeat_from(ns, 0));
+}
+
+/// §16.2.2.1: a string that holds a lone surrogate is not well formed; a
+/// surrogate pair is.
+pub proof fn example_lone_surrogate_is_ill_formed()
+    ensures
+        !well_formed_utf16(seq![0xD800u32]),
+        !well_formed_utf16(seq![0xDC00u32]),
+        !surrogate_ok_at(seq![0xDC00u32], 0),
+        well_formed_utf16(seq![0xD83Du32, 0xDE00u32]),
+{
+    let lone = seq![0xD800u32];
+    assert(!surrogate_ok_at(lone, 0));
+    let low = seq![0xDC00u32];
+    assert(!surrogate_ok_at(low, 0));
+    let pair = seq![0xD83Du32, 0xDE00u32];
+    assert forall|k: int| 0 <= k < pair.len() implies #[trigger] surrogate_ok_at(pair, k) by {
+        if k == 0 {
+        } else {
+            assert(k == 1);
+        }
+    }
+}
+
+/// §15.1 `FormalParameters`, §14.3.3: a `...rest` ends its list. A list of the rest
+/// alone is fine; a rest followed by another item is not.
+pub proof fn example_rest_ends_its_list()
+    ensures
+        ({
+            let a = AstV {
+                nodes: seq![
+                    node(NodeKind::FunctionRestParameter, Op::None, 0, 0, Seq::empty()),
+                    node(NodeKind::FunctionRestParameter, Op::None, 0, 0, Seq::empty()),
+                ],
+                root: 1,
+            };
+            !rest_only_last(a, seq![0int, 1int]) && rest_only_last(a, seq![1int])
+        }),
+{
+    let a = AstV {
+        nodes: seq![
+            node(NodeKind::FunctionRestParameter, Op::None, 0, 0, Seq::empty()),
+            node(NodeKind::FunctionRestParameter, Op::None, 0, 0, Seq::empty()),
+        ],
+        root: 1,
+    };
+    let two = seq![0int, 1int];
+    assert(two[0] == 0);
+    assert(is_rest_kind(kd(a, two[0])));
+    reveal_with_fuel(rest_free_from, 3);
+    assert(!rest_only_last(a, two));
+    let one = seq![1int];
+    assert(rest_only_last(a, one));
+}
+
 } // verus!

@@ -37,7 +37,8 @@
 //!   mode, the targets of assignments, `super`, `new.target`, `import.meta`,
 //!   `yield` and `await` in parameters, private names and the constructors of
 //!   classes, directive prologues, duplicate `__proto__`, `arguments` in field
-//!   initializers), and §16.2.3.1's rule on the local names of `export {..};`,
+//!   initializers), §16.2.3.1's rule on the local names of `export {..};`, and
+//!   §16.2.1.1's on duplicate and undeclared exports and ill-formed export names,
 //!   with Annex B.3.2 (duplicate sloppy function declarations in a block), B.3.3,
 //!   B.3.4 (`var` of a `catch` parameter's name), B.3.5 and B.3.9 (calls as
 //!   assignment targets: `~web-compat~`).
@@ -45,9 +46,7 @@
 //!
 //! # What it leaves out
 //!
-//! - **Early errors not yet specified.** §13.2.8.1's limit of 2^32 template strings;
-//!   §16.2.1.1's rules on ExportedNames (no duplicate), ExportedBindings (each is
-//!   declared) and `IsStringWellFormedUnicode` of module export names; the
+//! - **Early errors not yet specified.** §13.2.8.1's limit of 2^32 template strings; the
 //!   exception of Annex B.3.4 for a `for (var e of ...)` inside a `catch (e)`;
 //!   the rules about the *contents* of a regular expression (§22.2.1.1, Annex
 //!   B.1.2), which are `regexp_valid` of its token, supplied by `clazel-js-regexp`;
@@ -1200,6 +1199,132 @@ pub open spec fn private_declared(env: EarlyEnv, nm: Seq<u32>) -> bool {
     has_name(env.privates, nm)
 }
 
+/// `s`, read as UTF-16 code units, has no lone surrogate: `IsStringWellFormedUnicode`
+/// (§7.1.? ) of the StringValue of a `StringLiteral` (§16.2.2.1, §16.2.3.1: "It
+/// is a Syntax Error if IsStringWellFormedUnicode(the SV of the StringLiteral) is
+/// false").
+pub open spec fn well_formed_utf16(s: Seq<u32>) -> bool {
+    forall|k: int| 0 <= k < s.len() ==> #[trigger] surrogate_ok_at(s, k)
+}
+
+/// The code unit at `k` of `s` is not a lone surrogate: a high surrogate is
+/// followed by a low one, and a low one preceded by a high one.
+pub open spec fn surrogate_ok_at(s: Seq<u32>, k: int) -> bool {
+    (0xD800 <= s[k] <= 0xDBFF ==> (k + 1 < s.len() && 0xDC00 <= s[k + 1] <= 0xDFFF)) && (0xDC00
+        <= s[k] <= 0xDFFF ==> (k > 0 && 0xD800 <= s[k - 1] <= 0xDBFF))
+}
+
+/// `n` is the name at `ns[k]` or after it.
+pub open spec fn name_in(ns: Seq<Seq<u32>>, n: Seq<u32>, k: int) -> bool
+    decreases ns.len() - k,
+{
+    k < ns.len() && (ns[k] == n || name_in(ns, n, k + 1))
+}
+
+/// A name of `ns[k..]` occurs again after it.
+pub open spec fn names_repeat_from(ns: Seq<Seq<u32>>, k: int) -> bool
+    decreases ns.len() - k,
+{
+    k + 1 < ns.len() && (name_in(ns, ns[k], k + 1) || names_repeat_from(ns, k + 1))
+}
+
+/// The exported names `ns` are all different (§16.2.1.1: "the ExportedNames of
+/// ModuleItemList contains any duplicate entries" is a Syntax Error).
+pub open spec fn exported_names_unique(ns: Seq<Seq<u32>>) -> bool {
+    !names_repeat_from(ns, 0)
+}
+
+/// §16.2.2.1, §16.2.3.1 `ModuleExportName : StringLiteral`: the string is well formed.
+pub open spec fn module_export_name_ok(a: AstV, ts: Stream, c: int) -> bool {
+    kd(a, c) != NodeKind::StringLiteral || well_formed_utf16(name_of(a, ts, c))
+}
+
+/// The names that an `ExportSpecifier` list exports (the name after `as`, or the
+/// name itself).
+pub open spec fn exported_specifier_names(a: AstV, ts: Stream, ss: Seq<int>) -> Seq<Seq<u32>> {
+    ss.map_values(
+        |s: int|
+            if kd(a, kid(kids(a, s), 1)) == NodeKind::Absent {
+                name_of(a, ts, kid(kids(a, s), 0))
+            } else {
+                name_of(a, ts, kid(kids(a, s), 1))
+            },
+    )
+}
+
+/// §16.2.3.? ExportedNames of one module item `c`.
+pub open spec fn exported_names_item(a: AstV, ts: Stream, c: int) -> Seq<Seq<u32>> {
+    if 0 <= c < a.nodes.len() && a.nodes[c].kind == NodeKind::ExportDeclaration {
+        let k0 = kid(kids(a, c), 0);
+        match a.nodes[c].op {
+            Op::ExportAll => Seq::empty(),
+            Op::ExportAllAs => seq![name_of(a, ts, k0)],
+            Op::ExportFrom | Op::ExportNamed => exported_specifier_names(a, ts, kids(a, k0)),
+            Op::ExportVar => bound_names(a, ts, k0),
+            Op::ExportDecl => plain_names(lex_names_item(a, ts, k0, false)),
+            _ => seq![sv("default"@)],
+        }
+    } else {
+        Seq::empty()
+    }
+}
+
+/// §16.2.3.? ExportedBindings of one module item `c`: the local names of an
+/// `export { ... };` that has no `from`.
+pub open spec fn exported_bindings_item(a: AstV, ts: Stream, c: int) -> Seq<Seq<u32>> {
+    if 0 <= c < a.nodes.len() && a.nodes[c].kind == NodeKind::ExportDeclaration
+        && a.nodes[c].op == Op::ExportNamed {
+        kids(a, kid(kids(a, c), 0)).map_values(|s: int| name_of(a, ts, kid(kids(a, s), 0)))
+    } else {
+        Seq::empty()
+    }
+}
+
+/// The ExportedNames of the module items `ks[k..]`.
+pub open spec fn exported_names_list(a: AstV, ts: Stream, ks: Seq<int>, k: int) -> Seq<Seq<u32>>
+    decreases ks.len() - k,
+{
+    if k < 0 || k >= ks.len() {
+        Seq::empty()
+    } else {
+        exported_names_item(a, ts, ks[k]) + exported_names_list(a, ts, ks, k + 1)
+    }
+}
+
+/// The ExportedBindings of the module items `ks[k..]`.
+pub open spec fn exported_bindings_list(a: AstV, ts: Stream, ks: Seq<int>, k: int) -> Seq<Seq<u32>>
+    decreases ks.len() - k,
+{
+    if k < 0 || k >= ks.len() {
+        Seq::empty()
+    } else {
+        exported_bindings_item(a, ts, ks[k]) + exported_bindings_list(a, ts, ks, k + 1)
+    }
+}
+
+/// §16.2.1.1 the rules of a `ModuleItemList` `ks` (the children of the `Module`
+/// `n`) on its exports: "It is a Syntax Error if the ExportedNames of
+/// ModuleItemList contains any duplicate entries", and "if any element of the
+/// ExportedBindings of ModuleItemList does not also occur in either the
+/// VarDeclaredNames of ModuleItemList, or the LexicallyDeclaredNames of
+/// ModuleItemList". Names are compared as sequences of code points or code
+/// units, as `name_of` gives them: an identifier and a string literal name that
+/// are the same text above U+FFFF are not taken as the same name.
+pub open spec fn exports_early(a: AstV, ts: Stream, n: int, ks: Seq<int>) -> bool {
+    let declared = plain_names(lex_names_list(a, ts, n, ks, 0, false)) + var_names_list(
+        a,
+        ts,
+        n,
+        ks,
+        0,
+    );
+    exported_names_unique(exported_names_list(a, ts, ks, 0)) && (forall|x: int|
+        0 <= x < exported_bindings_list(a, ts, ks, 0).len() ==> has_name(
+            declared,
+            #[trigger] exported_bindings_list(a, ts, ks, 0)[x],
+        ))
+}
+
 /// The early errors of node `n` itself, in the environment `env`: every "It is a
 /// Syntax Error if" rule of the clauses cited, for the production `n` is.
 pub open spec fn early_local(a: AstV, ts: Stream, n: int, env: EarlyEnv) -> bool {
@@ -1396,18 +1521,25 @@ pub open spec fn early_local(a: AstV, ts: Stream, n: int, env: EarlyEnv) -> bool
         NodeKind::ClassBody => class_body_early(a, ts, ks),
         // 16.1.1 Script, 16.2.1.1 Module: names, and for a module its exports (16.2.3.1)
         NodeKind::Script => list_early(a, ts, n, ks, env.strict, true),
-        NodeKind::Module => list_early(a, ts, n, ks, true, false),
+        NodeKind::Module => list_early(a, ts, n, ks, true, false) && exports_early(a, ts, n, ks),
         // 16.2.2.1: "WithClauseToAttributes of WithClause has two different entries with the same [[Key]]"
         NodeKind::WithClause => !has_duplicate(
             ks.map_values(|c: int| name_of(a, ts, kid(kids(a, c), 0))),
         ),
         // 16.2.3.1: "ReferencedBindings of NamedExports contains any StringLiteral", or a reserved word
-        NodeKind::ExportDeclaration => nd.op != Op::ExportNamed || forall|x: int|
+        NodeKind::ExportDeclaration => (nd.op != Op::ExportNamed || forall|x: int|
             0 <= x < kids(a, k0).len() ==> {
                 let loc = kid(kids(a, #[trigger] kids(a, k0)[x]), 0);
                 kd(a, loc) != NodeKind::StringLiteral && !is_reserved_text(name_of(a, ts, loc))
                     && !is_strict_reserved(name_of(a, ts, loc))
-            },
+            }) && (nd.op != Op::ExportAllAs || module_export_name_ok(a, ts, k0)),
+        // 16.2.2.1, 16.2.3.1: a `StringLiteral` that is a `ModuleExportName` is well formed
+        NodeKind::ExportSpecifier => module_export_name_ok(a, ts, k0) && module_export_name_ok(
+            a,
+            ts,
+            k1,
+        ),
+        NodeKind::ImportSpecifier => module_export_name_ok(a, ts, k0),
         _ => true,
     }
 }
@@ -2377,9 +2509,22 @@ pub open spec fn all_args(a: AstV, ks: Seq<int>) -> bool {
             == NodeKind::SpreadElement
 }
 
-/// A `...rest` child is the last of its list.
+/// A `...rest` child is the last of its list: no child but the last is one. (Written
+/// as a recursion over the positions `0 <= k` and `k + 1 < len`: a `forall` over
+/// `0 <= k + 1 < len` would take in `k == -1`, whose `ks[k]` is unconstrained.)
 pub open spec fn rest_only_last(a: AstV, ks: Seq<int>) -> bool {
-    forall|k: int| 0 <= k + 1 < ks.len() ==> !is_rest_kind(kd(a, #[trigger] ks[k]))
+    rest_free_from(a, ks, 0)
+}
+
+/// No child of `ks[k..]` but the last is a `...rest`.
+pub open spec fn rest_free_from(a: AstV, ks: Seq<int>, k: int) -> bool
+    decreases ks.len() - k,
+{
+    if k + 1 >= ks.len() {
+        true
+    } else {
+        !is_rest_kind(kd(a, ks[k])) && rest_free_from(a, ks, k + 1)
+    }
 }
 
 /// An optional `Expression`: absent, or an `Expression`.

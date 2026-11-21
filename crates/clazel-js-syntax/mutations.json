@@ -38,6 +38,45 @@
         "lemma": "example_inserted_semicolon_consumes_no_token()",
         "witness": "semi(Stream { toks: Seq::empty(), gaps: seq![Ins::DoWhile] }, 0, 0, false)"
       }
+    },
+    {
+      "id": "duplicate-exports-allowed",
+      "file": "src/spec.rs",
+      "find": "!names_repeat_from(ns, 0)",
+      "replace": "true",
+      "expect": "killed",
+      "reason": "Drops the rule of §16.2.1.1 that the ExportedNames of a module have no duplicate, so `export {a}; export {a}` would be valid: example_repeated_export_names_are_not_unique is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_repeated_export_names_are_not_unique()",
+        "witness": "exported_names_unique(seq![seq![0x61u32], seq![0x61u32]])"
+      }
+    },
+    {
+      "id": "lone-low-surrogate-allowed",
+      "file": "src/spec.rs",
+      "find": "<= s[k] <= 0xDFFF ==> (k > 0 && 0xD800 <= s[k - 1] <= 0xDBFF))",
+      "replace": "<= s[k] <= 0xDFFF ==> (true || 0xD800 <= s[k - 1] <= 0xDBFF))",
+      "expect": "killed",
+      "reason": "Lets a low surrogate stand alone in the name of a ModuleExportName, which IsStringWellFormedUnicode forbids: example_lone_surrogate_is_ill_formed is false (its surrogate_ok_at conjunct).",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_lone_surrogate_is_ill_formed()",
+        "witness": "surrogate_ok_at(seq![0xDC00u32], 0)"
+      }
+    },
+    {
+      "id": "rest-anywhere-in-list",
+      "file": "src/spec.rs",
+      "find": "!is_rest_kind(kd(a, ks[k])) && rest_free_from(a, ks, k + 1)",
+      "replace": "rest_free_from(a, ks, k + 1)",
+      "expect": "killed",
+      "reason": "Lets a `...rest` parameter or element come before another item of its list, so `function f(...a, b) {}` would parse, which §15.1 and §14.3.3 forbid: example_rest_ends_its_list is false (its first conjunct).",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_rest_ends_its_list()",
+        "witness": "rest_only_last(AstV { nodes: seq![node(NodeKind::FunctionRestParameter, Op::None, 0, 0, Seq::empty()), node(NodeKind::FunctionRestParameter, Op::None, 0, 0, Seq::empty())], root: 1 }, seq![0int, 1int])"
+      }
     }
   ]
 }

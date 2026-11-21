@@ -91,6 +91,8 @@ const PLACES: &[(&str, Place)] = &[
     // The JIT's instruction-set layer (docs/phases/jit.md item J.2 creates them empty).
     ("clazel-x64", Place::Primitive),
     ("clazel-a64", Place::Primitive),
+    // The JIT's validators (item J.6), linked into whichever process validates.
+    ("clazel-codecheck", Place::Primitive),
     // The JIT's low-level IR (item J.5).
     ("clazel-lir", Place::Renderer),
     ("clazel-ipc", Place::Primitive),
