@@ -6,7 +6,8 @@ and the Unicode tables behind `\p{..}` and case folding
 
 **Written: the pattern parser and its early errors; the backtracking matcher
 with a bounded stack, a step budget and an interrupt hook; the case-folding
-tables, and the General_Category and binary-property tables (not `Script`).**
+tables, and the General_Category, binary-property, Script, Script_Extensions
+and properties-of-strings tables.**
 Tier 0 (target tier 1): see "What is proven".
 
 The Unicode 18.0.0 files the tables are generated from are vendored in
@@ -54,12 +55,12 @@ choices at its top.
 
 **Not done**
 
-- `\p{Script=..}` and `\p{Script_Extensions=..}` values are accepted by
-  syntax. A script table plugs in through `props::Names` (`parse_with`); the
-  generated tables of item 7.10's second half are where it comes from.
-  `General_Category` values, the binary properties and the properties of
+- `General_Category` values, the binary properties and the properties of
   strings are checked, against lists in `src/props.rs` that
-  `tests/conformance_names.rs` compares with the vendored UCD.
+  `tests/conformance_names.rs` compares with the vendored UCD. `Script` and
+  `Script_Extensions` values are checked by `parse` against the generated
+  `tables::SCRIPTS` (`props::UcdScripts`); `parse_with` takes any other
+  `props::Names`.
 - The section numbers are not checked against the specification's text (†).
 - There is no `spec.rs`: the parser is the transcription, with the grammar's
   production names at each step. No Verus.
@@ -111,6 +112,19 @@ Spec: §22.2.2† (Pattern Semantics), section numbers marked † as everywhere.
 - `\p{..}` and `\P{..}` for `General_Category` (every value and alias) and
   the binary properties of ECMA-262's table (`Any`, `ASCII`, `Assigned` and
   the others from tables generated from the UCD).
+- `\p{Script=..}`, `\p{sc=..}`, `\p{Script_Extensions=..}`, `\p{scx=..}` and
+  their `\P` forms, for every value of `PropertyValueAliases.txt` by long
+  name, short name or further alias (`Qaai` for `Inherited`), including
+  `Unknown` (`Zzzz`: every code point `Scripts.txt` does not list) and
+  `Katakana_Or_Hiragana` (`Hrkt`: no code points). Under `i` they follow the
+  same per-leaf rule as the other properties (`/\P{sc=Greek}/iu` matches
+  `\u03b9`, `v` mode does not).
+- Properties of strings with `v`: `Basic_Emoji`, `Emoji_Keycap_Sequence`,
+  `RGI_Emoji_Modifier_Sequence`, `RGI_Emoji_Flag_Sequence`,
+  `RGI_Emoji_Tag_Sequence`, `RGI_Emoji_ZWJ_Sequence` and `RGI_Emoji` (their
+  union, UTS #51 ED-27), as an atom or in a class set, with `&&` and `--`: the
+  strings of two or more code points longest first, then the one-character
+  members (only `Basic_Emoji` has any), as for `\q{..}`.
 - **An explicit backtrack stack, no recursion over the pattern or the input.**
   Choice points and register changes are entries of a `Vec` capped at
   `Limits::max_stack` entries (default a million, 16 to 24 bytes each). A
@@ -129,12 +143,11 @@ Spec: §22.2.2† (Pattern Semantics), section numbers marked † as everywhere.
 
 **Not done**
 
-- `\p{Script=..}`, `\p{Script_Extensions=..}` and the properties of strings
-  (`\p{RGI_Emoji}` and the like, `v` mode): `compile` returns
-  `CompileError::UnsupportedProperty`. The parser accepts the names; the
-  tables are not generated. (`Scripts.txt`, `ScriptExtensions.txt` and the
-  emoji sequence files are vendored; the generator in `tests/tables.rs` is
-  where they would go.)
+- A string property is matched as a flat list of alternatives, one
+  instruction run per string (about 2 800 strings for `RGI_Emoji`), not a
+  trie: correct, but a search for `\p{RGI_Emoji}` tries every string at each
+  start. `CompileError::UnsupportedProperty` is now only for a tree built by
+  hand with a name the tables do not hold.
 - The `RegExp` object: `lastIndex`, `exec`'s result object, `d` indices,
   `Symbol.replace` and the rest (7.10's other items).
 - Test262's `built-ins/RegExp` is not vendored, and the
@@ -159,11 +172,18 @@ committed file differs from what the generator writes; to rewrite it run
 `toUppercase` of the BMP (`SpecialCasing.txt` and `UnicodeData.txt`),
 `General_Category` (`DerivedGeneralCategory.txt`), and the binary properties
 (`PropList.txt`, `DerivedCoreProperties.txt`, `DerivedNormalizationProps.txt`,
-`DerivedBinaryProperties.txt`, `emoji-data.txt`). About 22 000 lines.
+`DerivedBinaryProperties.txt`, `emoji-data.txt`), `Script` and
+`Script_Extensions` per script (`Scripts.txt`, `ScriptExtensions.txt`, names
+from `PropertyValueAliases.txt`), and the six emoji sequence types
+(`emoji-sequences.txt`, `emoji-zwj-sequences.txt`; `RGI_Emoji` is their
+union). About 29 500 lines.
 Independent checks in the same file: the categories against `UnicodeData.txt`
 for every code point, the equivalence classes (`unicode::equivalents`) against
 `canonicalize` for every code point, folding idempotent, the word-character
-extras exactly U+017F and U+212A, every property name resolving.
+extras exactly U+017F and U+212A, every property name resolving, every script
+name resolving, `Script` and `Script_Extensions` against `Scripts.txt` and
+`ScriptExtensions.txt` for every code point (read again, not through the
+generator), and the string properties against the emoji files.
 
 ## Evidence
 
@@ -194,7 +214,12 @@ extras exactly U+017F and U+212A, every property name resolving.
   every start with and without `y`, in all of `i m s u v`. The test is not
   vacuous: injecting a bug into the empty check, the backward group capture,
   `\b`, the word-character extras, lookahead negation, or subtraction
-  operand order each made it fail. A reduced count under Miri.
+  operand order each made it fail. A reduced count under Miri. A second test
+  runs 33 patterns for `Script`, `Script_Extensions` and strings (order of
+  the alternatives, `\P` under `iu` and `iv`, set operations, lookbehind) on
+  every input of up to two tokens and a sample of three, about 19 000
+  comparisons; making the strings shortest-first made it fail. The reference
+  reads the same tables, so the tables are checked by `tests/tables.rs`.
 - `tests/tables.rs`: the generated tables against the UCD, above.
 - `src/proofs.rs`: the Kani harnesses, below.
 

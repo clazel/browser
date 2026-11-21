@@ -630,20 +630,264 @@ fn named_groups_through_the_api() -> Result<(), String> {
 }
 
 #[test]
-fn properties_without_a_table_are_not_compiled() -> Result<(), String> {
-    for (p, flags) in [
-        ("\\p{Script=Latin}", "u"),
-        ("\\p{sc=Latn}", "u"),
-        ("\\p{scx=Grek}", "v"),
-        ("[\\p{RGI_Emoji}]", "v"),
-        ("\\p{Basic_Emoji}", "v"),
-    ] {
-        let f = Flags::parse(&units(flags)).map_err(|e| format!("{e:?}"))?;
-        let pat = parse(&units(p), f).map_err(|e| e.to_string())?;
-        match compile(&pat, f) {
+fn script_and_script_extensions() -> Result<(), String> {
+    run(
+        "matcher: Script and Script_Extensions",
+        &[
+            // Long and short names, and the aliases.
+            (
+                "\\p{Script=Latin}+",
+                "u",
+                "\u{3b1}\u{3b2}abc\u{3b3}",
+                Some(&[Some("abc")]),
+            ),
+            (
+                "\\p{sc=Grek}+",
+                "u",
+                "abc\u{3b1}\u{3b2}\u{3b3}d",
+                Some(&[Some("\u{3b1}\u{3b2}\u{3b3}")]),
+            ),
+            (
+                "\\P{sc=Greek}+",
+                "u",
+                "\u{3b1}\u{3b2}ab\u{3b3}",
+                Some(&[Some("ab")]),
+            ),
+            ("\\p{sc=Zinh}", "u", "\u{342}", Some(&[Some("\u{342}")])),
+            (
+                "\\p{Script=Inherited}",
+                "u",
+                "\u{342}",
+                Some(&[Some("\u{342}")]),
+            ),
+            ("\\p{sc=Qaai}", "u", "\u{342}", Some(&[Some("\u{342}")])),
+            // U+0342 is Inherited, and its extensions are Greek alone.
+            ("\\p{sc=Greek}", "u", "\u{342}", None),
+            ("\\p{scx=Greek}", "u", "\u{342}", Some(&[Some("\u{342}")])),
+            (
+                "\\p{Script_Extensions=Grek}",
+                "u",
+                "\u{342}",
+                Some(&[Some("\u{342}")]),
+            ),
+            ("\\P{scx=Greek}", "u", "\u{342}", None),
+            // U+00B7 is Common, and extends to Latin among others.
+            ("\\p{sc=Latn}", "u", "\u{b7}", None),
+            ("\\p{sc=Common}", "u", "\u{b7}", Some(&[Some("\u{b7}")])),
+            ("\\p{scx=Latn}", "u", "\u{b7}", Some(&[Some("\u{b7}")])),
+            ("\\p{scx=Cyrillic}", "u", "\u{b7}", None),
+            // A code point no row of ScriptExtensions lists extends to its script.
+            ("\\p{scx=Latin}", "u", "a", Some(&[Some("a")])),
+            ("\\p{scx=Greek}", "u", "a", None),
+            // Unknown: unassigned and private use; Hrkt has no code point.
+            ("\\p{sc=Zzzz}", "u", "\u{378}", Some(&[Some("\u{378}")])),
+            (
+                "\\p{sc=Unknown}",
+                "u",
+                "\u{e000}",
+                Some(&[Some("\u{e000}")]),
+            ),
+            ("\\p{sc=Unknown}", "u", "a", None),
+            ("\\p{sc=Hrkt}", "u", "\u{3042}", None),
+            (
+                "\\p{sc=Hiragana}",
+                "u",
+                "\u{3042}",
+                Some(&[Some("\u{3042}")]),
+            ),
+            // Astral scripts, by code point.
+            (
+                "^\\p{sc=Deseret}+$",
+                "u",
+                "\u{10400}\u{10428}",
+                Some(&[Some("\u{10400}\u{10428}")]),
+            ),
+            // With i and u, a leaf holds if some character with the same
+            // Canonicalize is in the set: U+0345 (Inherited) folds to U+03B9.
+            ("\\P{sc=Greek}", "iu", "\u{3b9}", Some(&[Some("\u{3b9}")])),
+            ("\\p{sc=Greek}", "iu", "\u{345}", Some(&[Some("\u{345}")])),
+            ("\\p{sc=Greek}", "u", "\u{345}", None),
+            // ... and all of those are in Script_Extensions=Greek.
+            ("\\P{scx=Greek}", "iu", "\u{3b9}", None),
+            // With v the set is folded first and then complemented.
+            ("\\P{sc=Greek}", "iv", "\u{3b9}", None),
+            ("\\P{sc=Greek}", "iv", "a", Some(&[Some("a")])),
+            (
+                "[\\p{sc=Greek}&&\\p{Lu}]",
+                "v",
+                "\u{3b1}\u{391}",
+                Some(&[Some("\u{391}")]),
+            ),
+            (
+                "[\\p{sc=Greek}--\\p{Lu}]+",
+                "v",
+                "\u{3b1}\u{391}\u{3b2}",
+                Some(&[Some("\u{3b1}")]),
+            ),
+            ("[^\\p{scx=Greek}]", "v", "\u{342}a", Some(&[Some("a")])),
+        ],
+    )
+}
+
+#[test]
+fn properties_of_strings() -> Result<(), String> {
+    // man, woman, girl, boy: a family and its three-person prefix.
+    const F3: &str = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}";
+    const F4: &str = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}";
+    const KEY: &str = "1\u{fe0f}\u{20e3}";
+    const FR: &str = "\u{1F1EB}\u{1F1F7}";
+    run(
+        "matcher: properties of strings",
+        &[
+            ("^\\p{Emoji_Keycap_Sequence}$", "v", KEY, Some(&[Some(KEY)])),
+            ("\\p{Emoji_Keycap_Sequence}", "v", "1", None),
+            (
+                "\\p{Emoji_Keycap_Sequence}",
+                "v",
+                "a1\u{fe0f}\u{20e3}",
+                Some(&[Some(KEY)]),
+            ),
+            (
+                "\\p{Emoji_Keycap_Sequence}{2}",
+                "v",
+                "1\u{fe0f}\u{20e3}1\u{fe0f}\u{20e3}x",
+                Some(&[Some("1\u{fe0f}\u{20e3}1\u{fe0f}\u{20e3}")]),
+            ),
+            (
+                "(?<=\\p{Emoji_Keycap_Sequence})x",
+                "v",
+                "1\u{fe0f}\u{20e3}x",
+                Some(&[Some("x")]),
+            ),
+            ("(?<=\\p{Emoji_Keycap_Sequence})x", "v", "1x", None),
+            // Longest first.
+            (
+                "\\p{RGI_Emoji}",
+                "v",
+                "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}x",
+                Some(&[Some(F4)]),
+            ),
+            ("\\p{RGI_Emoji_ZWJ_Sequence}", "v", F3, Some(&[Some(F3)])),
+            // ... and the next shorter one when the rest of the pattern fails.
+            (
+                "\\p{RGI_Emoji}\u{200D}",
+                "v",
+                F4,
+                Some(&[Some("\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}")]),
+            ),
+            (
+                "\\p{RGI_Emoji}",
+                "v",
+                "\u{1F468}x",
+                Some(&[Some("\u{1F468}")]),
+            ),
+            ("^\\p{RGI_Emoji_Flag_Sequence}$", "v", FR, Some(&[Some(FR)])),
+            (
+                "\\p{RGI_Emoji_Flag_Sequence}",
+                "v",
+                "x\u{1F1EB}\u{1F1F7}",
+                Some(&[Some(FR)]),
+            ),
+            (
+                "\\p{RGI_Emoji_Flag_Sequence}",
+                "v",
+                "\u{1F1EB}\u{1F1EB}",
+                None,
+            ),
+            // Basic_Emoji has one-character members and two-character ones.
+            (
+                "\\p{Basic_Emoji}",
+                "v",
+                "\u{1F600}",
+                Some(&[Some("\u{1F600}")]),
+            ),
+            (
+                "\\p{Basic_Emoji}",
+                "v",
+                "\u{263a}\u{fe0f}",
+                Some(&[Some("\u{263a}\u{fe0f}")]),
+            ),
+            ("\\p{Basic_Emoji}", "v", "\u{263a}", None),
+            (
+                "\\p{RGI_Emoji_Modifier_Sequence}",
+                "v",
+                "\u{261D}\u{1F3FB}",
+                Some(&[Some("\u{261D}\u{1F3FB}")]),
+            ),
+            (
+                "\\p{RGI_Emoji_Tag_Sequence}",
+                "v",
+                "\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}",
+                Some(&[Some(
+                    "\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}",
+                )]),
+            ),
+            // Set operations on them.
+            ("[\\p{RGI_Emoji}--\\q{\u{1F1EB}\u{1F1F7}}]", "v", FR, None),
+            (
+                "[\\p{RGI_Emoji}--\\q{\u{1F1EB}\u{1F1F7}}]",
+                "v",
+                "\u{1F1E9}\u{1F1EA}",
+                Some(&[Some("\u{1F1E9}\u{1F1EA}")]),
+            ),
+            (
+                "[\\p{RGI_Emoji_Flag_Sequence}&&\\q{\u{1F1EB}\u{1F1F7}|a}]",
+                "v",
+                FR,
+                Some(&[Some(FR)]),
+            ),
+            (
+                "[\\p{RGI_Emoji_Flag_Sequence}&&\\q{\u{1F1EB}\u{1F1F7}|a}]",
+                "v",
+                "a\u{1F1E9}\u{1F1EA}",
+                None,
+            ),
+            (
+                "[\\p{Basic_Emoji}--\\p{Emoji_Keycap_Sequence}]",
+                "v",
+                "\u{1F600}",
+                Some(&[Some("\u{1F600}")]),
+            ),
+            (
+                "[\\p{Emoji_Keycap_Sequence}\\q{ab}x]+",
+                "v",
+                "x1\u{fe0f}\u{20e3}abz",
+                Some(&[Some("x1\u{fe0f}\u{20e3}ab")]),
+            ),
+            // With i.
+            ("\\p{RGI_Emoji}", "iv", KEY, Some(&[Some(KEY)])),
+            // Inside other constructs.
+            (
+                "(\\p{RGI_Emoji})+",
+                "v",
+                "\u{1F600}\u{1F600}",
+                Some(&[Some("\u{1F600}\u{1F600}"), Some("\u{1F600}")]),
+            ),
+        ],
+    )
+}
+
+#[test]
+fn unknown_script_names_do_not_parse_or_compile() -> Result<(), String> {
+    let u = Flags::parse(&units("u")).map_err(|e| format!("{e:?}"))?;
+    let v = Flags::parse(&units("v")).map_err(|e| format!("{e:?}"))?;
+    for p in ["\\p{sc=Klingon}", "\\p{scx=latin}", "\\p{Script=Latn_}"] {
+        assert!(parse(&units(p), u).is_err(), "{p}");
+        // Parsed without the name check, compile refuses the value.
+        let pat = clazel_js_regexp::parse_with(&units(p), u, &clazel_js_regexp::SyntaxOnly)
+            .map_err(|e| e.to_string())?;
+        match compile(&pat, u) {
             Err(CompileError::UnsupportedProperty(_)) => {}
-            other => return Err(format!("/{p}/{flags}: {other:?}")),
+            other => return Err(format!("{p}: {other:?}")),
         }
+    }
+    // The properties of strings are for `v` only, and never negated.
+    for (p, f) in [
+        ("\\p{RGI_Emoji}", u),
+        ("\\P{RGI_Emoji}", v),
+        ("[^\\p{RGI_Emoji}]", v),
+    ] {
+        assert!(parse(&units(p), f).is_err(), "{p}");
     }
     Ok(())
 }

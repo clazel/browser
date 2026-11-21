@@ -61,8 +61,9 @@ pub enum CompileError {
     /// A backreference to a group that does not exist (a tree from
     /// [`crate::parse`] never has one).
     BackReference(u32),
-    /// A `\p{..}` whose table is not generated: `Script`, `Script_Extensions`
-    /// and the properties of strings (`v`). The text names it.
+    /// A `\p{..}` whose table is not generated: a name or value the tables do
+    /// not hold (a tree from [`crate::parse`] never has one). The text names
+    /// it.
     UnsupportedProperty(String),
     /// More than 2^32 instructions or registers.
     TooLarge,
@@ -372,6 +373,9 @@ impl Compiler<'_> {
                 ic: st.ic,
             },
             Atom::Dot => OneKind::Dot { all: st.dot_all },
+            // `\p{RGI_Emoji}` and the like (`v`): strings, so an alternation
+            // (§22.2.2.7† CompileAtom, "CharacterClassEscape"); see `atom`.
+            Atom::Escape(e) if e.may_contain_strings() => return Ok(None),
             Atom::Escape(e) => {
                 let mut ops = Vec::new();
                 self.escape(e, &mut ops)?;
@@ -435,8 +439,19 @@ impl Compiler<'_> {
                 self.backref(groups, st)
             }
             Atom::Class(c) => self.class_with_strings(c, st, depth),
+            // A property of strings outside a class is the class that holds
+            // only it.
+            Atom::Escape(e) => {
+                let class = CharacterClass {
+                    negated: false,
+                    contents: ClassContents::Set(ClassSetExpr::Union(vec![ClassSetItem::Operand(
+                        ClassSetOperand::Escape(e.clone()),
+                    )])),
+                };
+                self.class_with_strings(&class, st, depth)
+            }
             // One character, handled by `one_of`.
-            Atom::Char(_) | Atom::Dot | Atom::Escape(_) => Ok(()),
+            Atom::Char(_) | Atom::Dot => Ok(()),
         }
     }
 
@@ -505,9 +520,17 @@ impl Compiler<'_> {
             Property::Binary(n) => {
                 unicode::binary_property(n).ok_or_else(|| unsupported("binary property", n))
             }
-            Property::Script(v) => Err(unsupported("Script", v)),
-            Property::ScriptExtensions(v) => Err(unsupported("Script_Extensions", v)),
-            Property::Strings(n) => Err(unsupported("property of strings", n)),
+            Property::Script(v) => {
+                unicode::script_property(v, false).ok_or_else(|| unsupported("Script", v))
+            }
+            Property::ScriptExtensions(v) => {
+                unicode::script_property(v, true).ok_or_else(|| unsupported("Script_Extensions", v))
+            }
+            // The one-character members; the longer strings are
+            // `operand_strings`'s.
+            Property::Strings(n) => unicode::string_property(n)
+                .map(|s| s.chars)
+                .ok_or_else(|| unsupported("property of strings", n)),
         }
     }
 
@@ -668,7 +691,31 @@ impl Compiler<'_> {
         depth: usize,
     ) -> R<BTreeSet<Vec<u32>>> {
         match o {
-            ClassSetOperand::Char(_) | ClassSetOperand::Escape(_) => Ok(BTreeSet::new()),
+            ClassSetOperand::Char(_) => Ok(BTreeSet::new()),
+            ClassSetOperand::Escape(ClassEscape::Property {
+                property: Property::Strings(n),
+                ..
+            }) => {
+                // A property of strings: its strings of two or more
+                // characters (UTS #51 ED-27).
+                let set = unicode::string_property(n).ok_or_else(|| {
+                    CompileError::UnsupportedProperty(format!(
+                        "property of strings={n}: no table is generated"
+                    ))
+                })?;
+                Ok(set
+                    .strings
+                    .into_iter()
+                    .map(|s| {
+                        if fold {
+                            s.iter().map(|&c| simple_fold(c)).collect()
+                        } else {
+                            s
+                        }
+                    })
+                    .collect())
+            }
+            ClassSetOperand::Escape(_) => Ok(BTreeSet::new()),
             ClassSetOperand::Nested { negated, expr } => {
                 if *negated {
                     Ok(BTreeSet::new())

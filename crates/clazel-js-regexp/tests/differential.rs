@@ -30,7 +30,9 @@ use clazel_js_regexp::ast::{
     Assertion, Atom, ClassContents, ClassEscape, ClassItem, ClassSetExpr, ClassSetItem,
     ClassSetOperand, Disjunction, Property, Term, TermKind,
 };
-use clazel_js_regexp::unicode::{Prop, canonicalize, category_mask};
+use clazel_js_regexp::unicode::{
+    Prop, binary_property, canonicalize, category_mask, script_property, string_property,
+};
 use clazel_js_regexp::{Flags, Limits, Pattern, Program, compile, parse};
 
 // ---------------------------------------------------------------------------
@@ -103,7 +105,10 @@ struct Reference<'a> {
 /// Latin Extended, the places the test alphabet's case mappings live.
 fn universe() -> impl Iterator<Item = u32> {
     (0u32..0x300)
-        .chain([0x17F, 0x1E9E, 0x212A, 0x2126, 0x3A3, 0x3C2, 0x3C3])
+        .chain([0x17F, 0x1E9E, 0x212A, 0x2126, 0x3A3, 0x3C2, 0x3C3, 0x1FBE])
+        // Greek and Cyrillic, where `Script` and `Script_Extensions` differ
+        // from what the case folding relates (U+0345 folds to U+03B9).
+        .chain(0x300..0x460)
         .chain(0x10400..0x10450)
 }
 
@@ -355,8 +360,119 @@ impl Reference<'_> {
             Property::GeneralCategory(v) => {
                 category_mask(v).is_some_and(|m| Prop::Category(m).contains(a))
             }
-            _ => false,
+            Property::Binary(n) => binary_property(n).is_some_and(|p| p.contains(a)),
+            Property::Script(v) => script_property(v, false).is_some_and(|p| p.contains(a)),
+            Property::ScriptExtensions(v) => {
+                script_property(v, true).is_some_and(|p| p.contains(a))
+            }
+            // The members of one character (the longer ones are `has_multi`'s).
+            Property::Strings(n) => string_property(n).is_some_and(|s| s.chars.contains(a)),
         }
+    }
+
+    /// Whether the string `s` (not one character, already Canonicalized with
+    /// `i`) is an element of the set of an operand: CompileToCharSet
+    /// (§22.2.2.7†) with strings, read as a predicate on strings.
+    fn operand_has_multi(&self, o: &ClassSetOperand, s: &[u32], fl: Fl) -> bool {
+        let same = |t: &[u32]| {
+            t.len() == s.len()
+                && t.iter()
+                    .zip(s)
+                    .all(|(&a, &b)| if fl.ic { self.canon(a) == b } else { a == b })
+        };
+        match o {
+            ClassSetOperand::Char(_) => false,
+            ClassSetOperand::Escape(ClassEscape::Property {
+                property: Property::Strings(n),
+                ..
+            }) => string_property(n).is_some_and(|set| set.strings.iter().any(|t| same(t))),
+            ClassSetOperand::Escape(_) => false,
+            ClassSetOperand::Nested { negated, expr } => !*negated && self.has_multi(expr, s, fl),
+            ClassSetOperand::Strings(list) => list.iter().any(|t| same(t)),
+        }
+    }
+
+    /// [`Self::operand_has_multi`] for an expression.
+    fn has_multi(&self, e: &ClassSetExpr, s: &[u32], fl: Fl) -> bool {
+        match e {
+            ClassSetExpr::Union(items) => items.iter().any(|it| match it {
+                ClassSetItem::Operand(o) => self.operand_has_multi(o, s, fl),
+                ClassSetItem::Range(..) => false,
+            }),
+            ClassSetExpr::Intersection(os) => os.iter().all(|o| self.operand_has_multi(o, s, fl)),
+            ClassSetExpr::Subtraction(os) => match os.split_first() {
+                Some((first, rest)) => {
+                    self.operand_has_multi(first, s, fl)
+                        && !rest.iter().any(|o| self.operand_has_multi(o, s, fl))
+                }
+                None => false,
+            },
+        }
+    }
+
+    /// A `v` class that may contain strings, as CompileAtom (§22.2.2.7†)
+    /// builds it: the strings of the set that are not one character,
+    /// longest first; then the characters; then the empty string, if the set
+    /// has it. A string is tried as the input's slice of its length, which is
+    /// the only string of that length that can match there.
+    fn set_with_strings(
+        &self,
+        expr: &ClassSetExpr,
+        fl: Fl,
+        fwd: bool,
+        x: &State,
+        c: Cont<'_>,
+    ) -> Option<State> {
+        let avail = if fwd {
+            self.input.chars.len().saturating_sub(x.end)
+        } else {
+            x.end
+        };
+        for len in (2..=avail.min(32)).rev() {
+            if !self.burn() {
+                return None;
+            }
+            let slice = if fwd {
+                self.input.chars.get(x.end..x.end.saturating_add(len))?
+            } else {
+                self.input.chars.get(x.end.checked_sub(len)?..x.end)?
+            };
+            let s: Vec<u32> = slice
+                .iter()
+                .map(|&ch| if fl.ic { self.canon(ch) } else { ch })
+                .collect();
+            if self.has_multi(expr, &s, fl) {
+                let end = if fwd {
+                    x.end.saturating_add(len)
+                } else {
+                    x.end.saturating_sub(len)
+                };
+                if let Some(r) = c(State {
+                    end,
+                    caps: x.caps.clone(),
+                }) {
+                    return Some(r);
+                }
+            }
+        }
+        if avail >= 1 {
+            let idx = if fwd { x.end } else { x.end.saturating_sub(1) };
+            let ch = *self.input.chars.get(idx)?;
+            let cc = if fl.ic { self.canon(ch) } else { ch };
+            if self.vset_has(expr, cc, fl) {
+                let end = if fwd { x.end.saturating_add(1) } else { idx };
+                if let Some(r) = c(State {
+                    end,
+                    caps: x.caps.clone(),
+                }) {
+                    return Some(r);
+                }
+            }
+        }
+        if self.has_multi(expr, &[], fl) {
+            return c(x.clone());
+        }
+        None
     }
 
     /// A positive escape (for `v`, where negation is the complement of the
@@ -450,6 +566,12 @@ impl Reference<'_> {
                     caps: x.caps.clone(),
                 })
             }
+            Atom::Escape(e) if e.may_contain_strings() => {
+                let expr = ClassSetExpr::Union(vec![ClassSetItem::Operand(
+                    ClassSetOperand::Escape(e.clone()),
+                )]);
+                self.set_with_strings(&expr, fl, fwd, x, c)
+            }
             Atom::Escape(e) => {
                 if self.v_mode() && Self::is_negated_escape(e) {
                     // `\P{..}` with `v`: the complement of the folded set.
@@ -479,6 +601,9 @@ impl Reference<'_> {
                         })
                     };
                     self.set(&pred, cls.negated, fl, fwd, x, c)
+                }
+                ClassContents::Set(expr) if !cls.negated && expr.may_contain_strings() => {
+                    self.set_with_strings(expr, fl, fwd, x, c)
                 }
                 ClassContents::Set(expr) => {
                     let idx = if fwd { x.end } else { x.end.checked_sub(1)? };
@@ -742,14 +867,44 @@ impl Gen<'_> {
     }
 
     fn escape(&mut self) -> String {
-        let list: &[&str] = if self.unicode {
-            &[
-                "\\d", "\\w", "\\s", "\\D", "\\W", "\\S", "\\p{Lu}", "\\P{Lu}", "\\p{L}", "\\p{Ll}",
-            ]
-        } else {
-            &["\\d", "\\w", "\\s", "\\D", "\\W", "\\S"]
-        };
-        self.s(list)
+        let mut list: Vec<&str> = vec!["\\d", "\\w", "\\s", "\\D", "\\W", "\\S"];
+        if self.unicode {
+            list.extend([
+                "\\p{Lu}",
+                "\\P{Lu}",
+                "\\p{L}",
+                "\\p{Ll}",
+                "\\p{sc=Latin}",
+                "\\P{sc=Greek}",
+                "\\p{scx=Grek}",
+                "\\P{scx=Greek}",
+                "\\p{Script=Cyrillic}",
+                "\\p{scx=Latn}",
+                "\\p{sc=Zinh}",
+                "\\p{Lowercase}",
+            ]);
+        }
+        if self.v {
+            list.extend([
+                "\\p{RGI_Emoji}",
+                "\\p{Emoji_Keycap_Sequence}",
+                "\\p{Basic_Emoji}",
+                "\\p{RGI_Emoji_Flag_Sequence}",
+                "\\p{RGI_Emoji_ZWJ_Sequence}",
+            ]);
+        }
+        self.s(&list)
+    }
+
+    /// `\q{..}` (`v`): strings of several lengths, some empty.
+    fn v_string(&mut self) -> String {
+        self.s(&[
+            "\\q{ab|c}",
+            "\\q{ab|abc|a}",
+            "\\q{ba|}",
+            "\\q{\u{1F600}a|b}",
+            "\\q{A\u{3b9}|\u{345}}",
+        ])
     }
 
     fn backref(&mut self) -> String {
@@ -835,8 +990,10 @@ impl Gen<'_> {
                         self.class_char()
                     } else if r < 65 {
                         self.s(&["a-c", "A-C", "0-9", "a-z"])
-                    } else if r < 80 {
+                    } else if r < 74 {
                         self.escape()
+                    } else if r < 82 {
+                        self.v_string()
                     } else {
                         format!("[{}]", self.v_contents(depth.saturating_add(1)))
                     }
@@ -850,8 +1007,10 @@ impl Gen<'_> {
                     let r = self.rng.below(100);
                     if r < 40 {
                         format!("[{}]", self.v_contents(depth.saturating_add(1)))
-                    } else if r < 60 {
+                    } else if r < 55 {
                         self.escape()
+                    } else if r < 65 {
+                        self.v_string()
                     } else if r < 80 {
                         format!("[^{}]", self.class_char())
                     } else {
@@ -886,6 +1045,17 @@ const INPUT_CHARS: &[&str] = &[
     "\n",
     "-",
     "\u{1F600}",
+    "\u{3b1}",
+    "\u{3b9}",
+    "\u{399}",
+    "\u{345}",
+    "\u{b7}",
+    "\u{430}",
+    "\u{fe0f}",
+    "1\u{fe0f}\u{20e3}",
+    "\u{1F1E6}\u{1F1E8}",
+    "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}",
+    "\u{263a}\u{fe0f}",
     "\u{10400}",
     "\u{10428}",
 ];
@@ -1097,5 +1267,145 @@ fn matcher_agrees_with_the_reference() -> Result<(), String> {
         "fewer than a tenth of the comparisons found a match"
     );
     assert!(total.out_of_fuel.saturating_mul(20) < total.compared);
+    Ok(())
+}
+
+/// Patterns that put `Script`, `Script_Extensions` and the properties of
+/// strings where the order of the alternatives or the folding matters, run on
+/// every input of up to a few tokens from a small alphabet. The random
+/// differential reaches them only by chance.
+#[test]
+fn properties_and_strings_agree_with_the_reference() -> Result<(), String> {
+    // (pattern, flags)
+    let cases: &[(&str, &str)] = &[
+        ("\\p{sc=Greek}+", "u"),
+        ("\\P{sc=Greek}", "u"),
+        ("\\P{sc=Greek}", "iu"),
+        ("\\P{sc=Greek}", "iv"),
+        ("\\p{scx=Greek}+", "u"),
+        ("\\P{scx=Greek}", "iu"),
+        ("\\p{scx=Grek}", "iv"),
+        ("\\p{sc=Inherited}", "u"),
+        ("\\p{sc=Common}\\p{scx=Latin}?", "u"),
+        ("[\\p{sc=Greek}--\\p{Lu}]+", "v"),
+        ("[\\p{sc=Greek}&&\\p{Lu}]", "iv"),
+        ("[^\\p{scx=Greek}]", "iv"),
+        ("[\\q{ab|a}]b", "v"),
+        ("[\\q{a|ab|abc}]c", "v"),
+        ("^(?:[\\q{ab|a}]|b)(b*)$", "v"),
+        ("[\\q{ab|a|}]*c", "v"),
+        ("(?<=[\\q{ab|b}])c", "v"),
+        ("[\\q{AB|a}]b", "iv"),
+        ("[\\q{ab|abc|a}--\\q{ab}]c?", "v"),
+        ("[\\q{ab|abc}&&\\q{abc|a}]", "v"),
+        ("\\p{Emoji_Keycap_Sequence}", "v"),
+        ("\\p{Emoji_Keycap_Sequence}\\p{Emoji_Keycap_Sequence}?", "v"),
+        ("(\\p{Emoji_Keycap_Sequence}|1)\\u{FE0F}", "v"),
+        ("\\p{RGI_Emoji}\\u{200D}", "v"),
+        ("\\p{RGI_Emoji}+$", "v"),
+        ("^\\p{RGI_Emoji}$", "iv"),
+        ("(?<=\\p{RGI_Emoji})x", "v"),
+        ("\\p{Basic_Emoji}\\p{Basic_Emoji}?", "v"),
+        ("[\\p{RGI_Emoji}--\\q{\u{1F1E6}\u{1F1E8}}]", "v"),
+        (
+            "[\\p{RGI_Emoji_Flag_Sequence}&&\\q{\u{1F1E6}\u{1F1E8}|a}]",
+            "v",
+        ),
+        ("[\\p{Basic_Emoji}--\\p{Emoji_Keycap_Sequence}]", "v"),
+        ("\\p{RGI_Emoji_ZWJ_Sequence}", "v"),
+        ("\\p{RGI_Emoji}{2}", "v"),
+    ];
+    let alphabet: &[&str] = &[
+        "a",
+        "b",
+        "A",
+        "c",
+        "x",
+        "1",
+        "\u{3b9}",
+        "\u{399}",
+        "\u{345}",
+        "\u{b7}",
+        "\u{fe0f}",
+        "\u{200d}",
+        "1\u{fe0f}\u{20e3}",
+        "\u{1F1E6}\u{1F1E8}",
+        "\u{1F468}",
+        "\u{1F468}\u{200D}\u{1F469}",
+        "\u{1F600}",
+        "\u{263a}\u{fe0f}",
+    ];
+    let len = if cfg!(miri) { 1 } else { 3 };
+    let mut rng = Rng(0x2545_F491_4F6C_DD1D);
+    let mut tally = Tally {
+        patterns: 0,
+        parse_errors: 0,
+        compile_errors: 0,
+        compared: 0,
+        matched: 0,
+        out_of_fuel: 0,
+    };
+    // Every sequence of up to `len` tokens.
+    let mut inputs: Vec<(usize, String)> = vec![(0, String::new())];
+    // And the ones that make the alternatives' order show: more than one
+    // string of the set matches at a start, and they end differently.
+    for s in [
+        "abb",
+        "abc",
+        "abcc",
+        "abbc",
+        "aabbc",
+        "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}x",
+        "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}",
+        "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F466}\u{200D}\u{1F466}",
+        "1\u{fe0f}\u{20e3}1\u{fe0f}\u{20e3}x",
+        "\u{1F1E6}\u{1F1E8}\u{1F1E6}\u{1F1E8}a",
+        "\u{263a}\u{fe0f}\u{263a}\u{fe0f}",
+        "A\u{3b9}\u{345}\u{399}",
+    ] {
+        inputs.push((0, s.to_string()));
+    }
+    let mut layer: Vec<String> = vec![String::new()];
+    for n in 1..=len {
+        let mut next = Vec::new();
+        for p in &layer {
+            for t in alphabet {
+                next.push(format!("{p}{t}"));
+            }
+        }
+        inputs.extend(next.iter().map(|s| (n, s.clone())));
+        layer = next;
+    }
+    let mut idle = Vec::new();
+    for &(pattern, flag_text) in cases {
+        let flags = Flags::parse(&units(flag_text)).map_err(|e| format!("{e:?}"))?;
+        let pat = parse(&units(pattern), flags).map_err(|e| format!("/{pattern}/: {e}"))?;
+        let prog = compile(&pat, flags).map_err(|e| format!("/{pattern}/: {e}"))?;
+        let before = tally.matched;
+        for (n, input) in &inputs {
+            // The longest inputs are many: take a twenty-fifth of them.
+            if *n > 2 && rng.below(25) != 0 {
+                continue;
+            }
+            let subject = Subject {
+                pattern,
+                flag_text,
+                flags,
+                pat: &pat,
+                prog: &prog,
+            };
+            compare_one(&subject, input, &mut tally, &mut rng)?;
+        }
+        if tally.matched == before {
+            idle.push(format!("/{pattern}/{flag_text} matched no input"));
+        }
+    }
+    println!(
+        "clazel-conformance: suite=\"differential: scripts and strings\" pass={} xfail=0 fail=0 total={}",
+        tally.compared, tally.compared
+    );
+    // Every pattern must match something, or it tests nothing.
+    assert!(idle.is_empty(), "{}", idle.join("\n"));
+    assert!(tally.out_of_fuel.saturating_mul(20) < tally.compared);
     Ok(())
 }
