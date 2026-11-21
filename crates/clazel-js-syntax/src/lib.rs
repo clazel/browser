@@ -57,6 +57,7 @@
 pub mod api;
 pub mod arena_d;
 pub mod arena_e;
+pub mod arena_m;
 pub mod ast;
 pub mod check;
 pub mod contract;

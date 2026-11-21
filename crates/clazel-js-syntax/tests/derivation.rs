@@ -246,6 +246,70 @@ fn import_meta_is_verified_in_a_module() {
     }
 }
 
+/// Every form of `import` and `export` (§16.2).
+#[test]
+fn module_items_are_verified() {
+    for s in [
+        "import a from 'b';",
+        "import 'b';",
+        "import * as ns from 'b';",
+        "import a, * as ns from 'b';",
+        "import a, { b, c as d } from 'b';",
+        "import { } from 'b';",
+        "import { a, } from 'b'\nx",
+        "import { \"str\" as s } from 'b';",
+        "import { default as x } from 'b';",
+        "import a from 'b' with { type: 'json' };",
+        "import 'b' with { };",
+        "import a from 'b' with { 'type': 'json', };",
+        "export default 1;",
+        "export default function () {}",
+        "export default function f() {}",
+        "export default async function () {}",
+        "export default function* () {}",
+        "export default class {}",
+        "export default class A { m() {} static s() {} }",
+        "export default a + b",
+        "export { };",
+        "var a; export { a as \"b\", a as c, };",
+        "export { a } from 'b';",
+        "export { a as b } from 'b' with { type: 'json' };",
+        "export * from 'b';",
+        "export * as ns from 'b';",
+        "export * as \"x y\" from 'b' with { a: 'b' };",
+        "export const x = 1, y = 2;",
+        "export let z;",
+        "export var v;",
+        "export function f() {}",
+        "export async function f() {}",
+        "export class A {}",
+        "import.meta; await 1; export default await 1;",
+    ] {
+        assert!(
+            derivation(s, SourceGoal::Module) == Some(Derivation::Verified),
+            "{s}"
+        );
+    }
+}
+
+/// The last gaps of the script grammar: `let` as an identifier head, and `await`, `yield`
+/// and classes in `[~In]` heads.
+#[test]
+fn leftover_script_gaps_are_verified() {
+    for s in [
+        "for (let in o) ;",
+        "for (var i = class {}; ;) ;",
+        "for (var i = class A extends B { m() {} }; ;) ;",
+        "async function f() { for (var i = await x; ;) ; }",
+        "function* g() { for (var i = yield x; ;) ; }",
+    ] {
+        assert!(
+            derivation(s, SourceGoal::Script) == Some(Derivation::Verified),
+            "{s}"
+        );
+    }
+}
+
 /// Productions only a sloppy-mode `Script` has.
 #[test]
 fn covered_sloppy_programs_are_verified() {
@@ -265,7 +329,7 @@ fn covered_sloppy_programs_are_verified() {
 
 #[test]
 fn other_programs_are_unsupported_not_failed() {
-    for s in ["for (var i = class {};;) ;", "for (let in o) ;"] {
+    for s in ["for (var i = class { x = 1 };;) ;", "for (var i = class { #p; };;) ;"] {
         assert!(
             derivation(s, SourceGoal::Script) == Some(Derivation::Unsupported),
             "{s}"
@@ -288,7 +352,7 @@ fn errors_are_still_errors() {
 fn what_the_check_costs() {
     let body = "(1 + 2 * 3) < 4 - 5 / 6 % 7;\n".repeat(60_000);
     let covered = cps(&body);
-    let stopped = cps(&format!("for (var i = class {{}};;) ;\n{body}"));
+    let stopped = cps(&format!("for (var i = class {{ x = 1 }};;) ;\n{body}"));
     let time = |src: &[u32]| {
         let t = Instant::now();
         let r = parse_checked(src, SourceGoal::Script);

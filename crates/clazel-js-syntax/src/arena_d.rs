@@ -23,8 +23,9 @@
 //! patterns and Annex B forms as `for` heads, `for await`, function declarations as
 //! statement bodies, and operands of `[~In]` heads (bracketed operands are `[+In]`:
 //! `cx_ok_t`, `cx_ok_init`). `CoverInitializedName` never survives the early errors; its
-//! assignment-pattern reading is covered. Not covered: `await`, `yield` and class
-//! expressions inside `[~In]` heads, and modules' `import` and `export`.
+//! assignment-pattern reading is covered. Modules' `import` and `export` (all forms, with import
+//! attributes) are in [`crate::arena_m`]. Not covered: class fields and other `[+Default]`-sensitive
+//! members of an `export default class`, and class fields in `[~In]` heads.
 //!
 //! [`crate::exec::parse_checked`] runs [`check_derivation_canon`] on every arena
 //! the parser builds, and rejects it if a covered node is `Failed`.
@@ -174,6 +175,15 @@ pub(crate) proof fn lemma_dl_cons(a: AstV, ts: Stream, bound: int, ks: Seq<int>,
 {
 }
 
+/// The items of a root are `StatementListItem`s (a `Script`) or `ModuleItem`s (a `Module`).
+pub open spec fn root_items(a: AstV, ks: Seq<int>, g: SourceGoal) -> bool {
+    if g == SourceGoal::Script {
+        all_items(a, ks)
+    } else {
+        forall|k: int| 0 <= k < ks.len() ==> is_module_item_kind(kd(a, #[trigger] ks[k]))
+    }
+}
+
 /// The `Script` or `Module` root `n` derives the whole stream.
 proof fn lemma_root_derives(a: AstV, ts: Stream, n: int, cx: Ctx, g: SourceGoal)
     requires
@@ -183,7 +193,7 @@ proof fn lemma_root_derives(a: AstV, ts: Stream, n: int, cx: Ctx, g: SourceGoal)
         } else {
             NodeKind::Module
         }),
-        all_items(a, a.nodes[n].children),
+        root_items(a, a.nodes[n].children, g),
         dl(a, ts, n, a.nodes[n].children, 0, cx, 0, tn(ts)),
         span_ok(a, ts, n, 0, tn(ts)),
     ensures
@@ -1606,6 +1616,12 @@ pub open spec fn item_ok_val(l: int, k: NodeKind, mode: int) -> bool {
         k == NodeKind::BindingProperty || k == NodeKind::BindingRestProperty
     } else if mode == 9 {
         k == NodeKind::AssignmentProperty || k == NodeKind::AssignmentRestProperty
+    } else if mode == 11 {
+        k == NodeKind::ImportSpecifier
+    } else if mode == 13 {
+        k == NodeKind::ImportAttribute
+    } else if mode == 15 {
+        k == NodeKind::ExportSpecifier
     } else {
         k == NodeKind::BindingElement || k == NodeKind::FunctionRestParameter
     }
@@ -1630,6 +1646,12 @@ fn item_ok_exec(l: i32, k: NodeKind, mode: u8) -> (r: bool)
         matches!(k, NodeKind::BindingProperty | NodeKind::BindingRestProperty)
     } else if mode == 9 {
         matches!(k, NodeKind::AssignmentProperty | NodeKind::AssignmentRestProperty)
+    } else if mode == 11 {
+        matches!(k, NodeKind::ImportSpecifier)
+    } else if mode == 13 {
+        matches!(k, NodeKind::ImportAttribute)
+    } else if mode == 15 {
+        matches!(k, NodeKind::ExportSpecifier)
     } else {
         matches!(k, NodeKind::BindingElement | NodeKind::FunctionRestParameter)
     }
@@ -1652,7 +1674,7 @@ pub struct ListSpec {
 /// The items of the list `ls`: separated by `,`, each an assignment expression (or a
 /// spread element where `spread_ok`), and ending at token `e` (after a trailing `,`
 /// where `trail` allows one). `spec::dsep` of the children.
-fn check_list(
+pub(crate) fn check_list(
     src: &[u32],
     nodes: &[Node],
     toks: &[DTok],
@@ -4129,7 +4151,7 @@ proof fn lemma_comma_text()
 }
 
 /// The words that cannot start an `ExpressionStatement` (§14.5), as code points.
-proof fn lemma_kw_text()
+pub(crate) proof fn lemma_kw_text()
     ensures
         cps("function"@) =~= seq![0x66u32, 0x75, 0x6E, 0x63, 0x74, 0x69, 0x6F, 0x6E],
         cps("class"@) =~= seq![0x63u32, 0x6C, 0x61, 0x73, 0x73],
@@ -5848,7 +5870,7 @@ fn check_root(
             cx_ok(a, done.cxs@, root as int, cx),
             dl(a, ts, root as int, a.nodes[root as int].children, k as int, cx, pos as int, nt as int),
             forall|j: int|
-                k <= j < len ==> is_item_kind(kd(a, #[trigger] a.nodes[root as int].children[j])),
+                k <= j < len ==> (if module { is_module_item_kind(kd(a, #[trigger] a.nodes[root as int].children[j])) } else { is_item_kind(kd(a, #[trigger] a.nodes[root as int].children[j])) }),
         decreases k,
     {
         let c = match nd.children.as_slice().get(k.saturating_sub(1)) {
@@ -5874,7 +5896,7 @@ fn check_root(
             },
         };
         let item = match nodes.get(c) {
-            Some(x) => item_kind_exec(x.kind),
+            Some(x) => item_kind_exec(x.kind) || (module && matches!(x.kind, NodeKind::ImportDeclaration | NodeKind::ExportDeclaration)),
             None => false,
         };
         if hi_c != pos || !item {
@@ -5885,7 +5907,7 @@ fn check_root(
             assert(a.nodes[c as int] == nodes@[c as int]@);
             let ks = a.nodes[root as int].children;
             lemma_dl_cons(a, ts, root as int, ks, k as int - 1, cx, lo_c as int, hi_c as int, nt as int);
-            assert(is_item_kind(kd(a, c as int)));
+            assert(is_module_item_kind(kd(a, c as int)));
         }
         pos = lo_c;
         k = k.saturating_sub(1);
@@ -5924,7 +5946,7 @@ fn check_root(
             lemma_env_tok(src@, nodes@, toks@, gaps@, ts, nt as int - 1);
             assert(span_ok(a, ts, root as int, 0, tn(ts)));
         }
-        assert(all_items(a, a.nodes[root as int].children));
+        assert(root_items(a, a.nodes[root as int].children, goal_of(module)));
         lemma_root_derives(a, ts, root as int, cx, goal_of(module));
     }
     true
@@ -6174,6 +6196,17 @@ pub fn check_derivation(
             } else {
                 check_binding(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx }))
             }
+        } else if matches!(nd.kind, NodeKind::ExportDeclaration) {
+            // The declaration of `export default` has `[+Default]`.
+            let dd = matches!(nd.op, Op::ExportDefaultHoistable | Op::ExportDefaultClass);
+            let ck = if dd { Cx5 { y: cxm.y, a: cxm.a, i: cxm.i, r: cxm.r, d: true } } else { cxm };
+            if !plain || !kids_cx_g(nodes, done.cxs.as_slice(), m, &cxm, &ck) {
+                return Derivation::Unsupported;
+            }
+            proof {
+                assert(nd == &nodes@[m as int]);
+            }
+            crate::arena_m::check_export(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx }))
         } else if matches!(nd.kind, NodeKind::ConditionalExpression)
             || (matches!(nd.kind, NodeKind::MemberExpression) && matches!(nd.op, Op::Bracket))
         {
@@ -6276,7 +6309,9 @@ pub fn check_derivation(
                 | NodeKind::BindingRestElement | NodeKind::BindingRestProperty
                 | NodeKind::AssignmentRestElement | NodeKind::AssignmentRestProperty
                 | NodeKind::Elision | NodeKind::CallExpression | NodeKind::NewExpression
-                | NodeKind::TaggedTemplate | NodeKind::Expression
+                | NodeKind::TaggedTemplate | NodeKind::Expression | NodeKind::ClassDeclaration
+                | NodeKind::ClassExpression | NodeKind::ClassBody | NodeKind::AwaitExpression
+                | NodeKind::YieldExpression
         );
         if !plain && !any_ctx {
             return Derivation::Unsupported;
@@ -6460,6 +6495,11 @@ pub fn check_derivation(
             NodeKind::FunctionRestParameter => check_rest_param(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
             NodeKind::YieldExpression => check_yield(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
             NodeKind::AwaitExpression => check_await(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
+            NodeKind::ImportDeclaration => crate::arena_m::check_import(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
+            NodeKind::ImportClause => crate::arena_m::check_import_clause(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
+            NodeKind::NameSpaceImport => crate::arena_m::check_ns_import(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
+            NodeKind::NamedImports | NodeKind::NamedExports | NodeKind::WithClause => crate::arena_m::check_braced(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
+            NodeKind::ImportSpecifier | NodeKind::ImportAttribute | NodeKind::ExportSpecifier => crate::arena_m::check_pair(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
             NodeKind::NewTarget | NodeKind::ImportMeta => crate::arena_e::check_meta(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
             NodeKind::SuperProperty => crate::arena_e::check_super_prop(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
             NodeKind::SuperCall => crate::arena_e::check_super_call(src, nodes, toks, gaps, &done, m, Ghost(GCx { ts, cx })),
@@ -6560,6 +6600,8 @@ fn assign_ctx(nodes: &[Node], module: bool) -> (r: Vec<Cx5>)
             matches!(nd.op, Op::Shorthand)
         } else if matches!(nd.kind, NodeKind::MemberExpression) {
             matches!(nd.op, Op::Bracket)
+        } else if matches!(nd.kind, NodeKind::ExportDeclaration) {
+            matches!(nd.op, Op::ExportDefaultHoistable | Op::ExportDefaultClass)
         } else {
             arrow && child_kind_is(nodes, nd, 0, true)
         };
@@ -6644,6 +6686,10 @@ fn child_cx(kind: NodeKind, k: usize, p: &Cx5, ident: bool, braced: bool) -> (r:
     ) {
         return if k == 0 { cx5_noin(p) } else { *p };
     }
+    // `export default` declarations (`ident`) have `[+Default]`; the other forms pass their context.
+    if matches!(kind, NodeKind::ExportDeclaration) {
+        return if ident { Cx5 { y: p.y, a: p.a, i: p.i, r: p.r, d: true } } else { *p };
+    }
     // `a[b]`: the property is `[+In]` (`ident` is the bracket form); `a ? b : c`: so is `b`.
     if matches!(kind, NodeKind::MemberExpression) {
         return if k == 1 && ident { Cx5 { y: p.y, a: p.a, i: true, r: p.r, d: false } } else { *p };
@@ -6668,7 +6714,8 @@ fn child_cx(kind: NodeKind, k: usize, p: &Cx5, ident: bool, braced: bool) -> (r:
             | NodeKind::BindingRestElement | NodeKind::BindingRestProperty
             | NodeKind::AssignmentRestElement | NodeKind::AssignmentRestProperty
             | NodeKind::CallExpression | NodeKind::NewExpression | NodeKind::TaggedTemplate
-            | NodeKind::Expression
+            | NodeKind::Expression | NodeKind::ClassDeclaration | NodeKind::ClassExpression
+            | NodeKind::ClassBody | NodeKind::AwaitExpression | NodeKind::YieldExpression
     ) {
         return *p;
     }
@@ -6827,6 +6874,80 @@ fn kids_cx_t(nodes: &[Node], cxs: &[Cx5], m: usize, c: &Cx5, ct: &Cx5) -> (r: bo
             },
         };
         if !cx_eq(cc, ct) {
+            return false;
+        }
+        k = k.saturating_add(1);
+    }
+    true
+}
+
+/// Node `m` is checked in `c` and each of its children in `ck` (any context).
+pub(crate) fn kids_cx_g(nodes: &[Node], cxs: &[Cx5], m: usize, c: &Cx5, ck: &Cx5) -> (r: bool)
+    requires
+        m < nodes.len(),
+        cxs.len() == nodes.len(),
+        ast_wf(arena_of(nodes@)),
+    ensures
+        r ==> (cx_of(cxs@[m as int]) == cx_of(*c) && kids_ok(arena_of(nodes@), cxs@, m as int, cx_of(*ck))),
+{
+    let nd = match nodes.get(m) {
+        Some(x) => x,
+        None => {
+            return false;
+        },
+    };
+    match cxs.get(m) {
+        Some(x) => {
+            if !cx_eq(x, c) {
+                return false;
+            }
+        },
+        None => {
+            return false;
+        },
+    }
+    let len = nd.children.len();
+    let ghost a = arena_of(nodes@);
+    proof {
+        assert(a.nodes[m as int] == nodes@[m as int]@);
+        assert(nd == &nodes@[m as int]);
+        assert(a.nodes[m as int].children.len() == len);
+    }
+    let mut k: usize = 0;
+    while k < len
+        invariant
+            m < nodes.len(),
+            nodes@.len() == nodes.len(),
+            a == arena_of(nodes@),
+            ast_wf(a),
+            nd == &nodes@[m as int],
+            len == nd.children.len(),
+            len == a.nodes[m as int].children.len(),
+            k <= len,
+            cxs.len() == nodes.len(),
+            cx_of(cxs@[m as int]) == cx_of(*c),
+            forall|q: int|
+                0 <= q < k ==> 0 <= #[trigger] a.nodes[m as int].children[q] < cxs.len()
+                    && cx_of(cxs@[a.nodes[m as int].children[q]]) == cx_of(*ck),
+        decreases len - k,
+    {
+        let ch = match nd.children.as_slice().get(k) {
+            Some(x) => *x as usize,
+            None => {
+                return false;
+            },
+        };
+        proof {
+            assert(a.nodes[m as int].children[k as int] == ch as int);
+            lemma_child_before(a, m as int, k as int);
+        }
+        let cc = match cxs.get(ch) {
+            Some(x) => x,
+            None => {
+                return false;
+            },
+        };
+        if !cx_eq(cc, ck) {
             return false;
         }
         k = k.saturating_add(1);
@@ -9846,6 +9967,7 @@ pub open spec fn fn_cx(cx: Ctx, is_async: bool, is_gen: bool, is_expr: bool) -> 
 /// §15.2 `function BindingIdentifier? ( FormalParameters ) { FunctionBody }` and the
 /// generator, `async` and `async` generator forms (`d_function`).
 #[verifier::spinoff_prover]
+#[verifier::rlimit(300)]
 proof fn lemma_function_done(
     a: AstV,
     ts: Stream,
@@ -9888,7 +10010,7 @@ proof fn lemma_function_done(
         }),
         !is_gen || is_p(ts, nm - 1, "*"@),
         if kd(a, n0) == NodeKind::Absent {
-            is_expr && d(a, ts, n0, fn_cx(cx, is_async, is_gen, is_expr).0, nm, nm) && mn == nm && ed(a, ts, n0, nm) == nm
+            (is_expr || cx.deflt) && d(a, ts, n0, fn_cx(cx, is_async, is_gen, is_expr).0, nm, nm) && mn == nm && ed(a, ts, n0, nm) == nm
         } else {
             kd(a, n0) == NodeKind::BindingIdentifier && node_done(
                 a,
@@ -10045,7 +10167,13 @@ fn check_function(
     let ghost cxb = fn_cx(g.cx, fs.is_async, fs.is_gen, fs.is_expr).2;
     let kn = kind_at(nodes, n0);
     let mn: usize = if matches!(kn, NodeKind::Absent) {
-        if !fs.is_expr || !check_absent(src, nodes, toks, gaps, n0, nm, Ghost(GCx { ts: g.ts, cx: cxn })) {
+        let deflt = match done.cxs.get(m) {
+            Some(c) => c.d,
+            None => {
+                return None;
+            },
+        };
+        if !(fs.is_expr || deflt) || !check_absent(src, nodes, toks, gaps, n0, nm, Ghost(GCx { ts: g.ts, cx: cxn })) {
             return None;
         }
         nm
@@ -11249,7 +11377,7 @@ fn kids_cx4(nodes: &[Node], cxs: &[Cx5], m: usize, c0: &Cx5, c1: &Cx5, c2: &Cx5,
 }
 
 /// Token `x` is not the keyword `w` (it may not exist).
-fn not_word_at(
+pub(crate) fn not_word_at(
     src: &[u32],
     nodes: &[Node],
     toks: &[DTok],
@@ -11982,6 +12110,9 @@ fn check_for_in_of(
             return None;
         },
     };
+    if x > usize::MAX - 8 {
+        return None;
+    }
     let flag = nd.flag;
     // `for await (`: the `await` is the second token, the head starts after the `(`.
     let s = if flag { x.saturating_add(3) } else { x.saturating_add(2) };
@@ -12002,8 +12133,11 @@ fn check_for_in_of(
     // array literal, or an assignment pattern; not `let` (`async` for `of`).
     let lhs_ok = matches!(kh, NodeKind::ArrayAssignmentPattern | NodeKind::ObjectAssignmentPattern)
         || (lv_h >= 14 && !matches!(kh, NodeKind::ObjectLiteral | NodeKind::ArrayLiteral));
-    let head_ok = decl || (lhs_ok
-        && not_word_at(src, nodes, toks, gaps, s, &[0x6C, 0x65, 0x74], Ghost(GW { g, w: "let"@ }))
+    let let_strict = not_word_at(src, nodes, toks, gaps, s, &[0x6C, 0x65, 0x74], Ghost(GW { g, w: "let"@ }));
+    // `for (let in o)` is a sloppy-mode identifier `let`; only `let [` is excluded for `in`.
+    let in_next = !sh.of
+        && word_at(src, nodes, toks, gaps, s.saturating_add(1), &[0x69, 0x6E], Ghost(GW { g, w: "in"@ }));
+    let head_ok = decl || (lhs_ok && (let_strict || in_next)
         && (!sh.of || not_word_at(src, nodes, toks, gaps, s, &[0x61, 0x73, 0x79, 0x6E, 0x63], Ghost(GW { g, w: "async"@ }))));
     // Only `for (var a = 1 in x)` (Annex B.3.5) has a `VariableDeclaration` in its head.
     let head_first_ok = if decl {
@@ -12056,6 +12190,7 @@ fn check_for_in_of(
             x as int + 2
         }));
         assert(s.saturating_sub(1) as int == s as int - 1);
+        assert(s.saturating_add(1) as int == s as int + 1);
         assert(cxm == &done.cxs@[m as int]);
         assert(mh.saturating_add(1) as int == mh as int + 1);
         assert(q.saturating_add(1) as int == q as int + 1);
@@ -12087,7 +12222,12 @@ fn check_for_in_of(
         assert(a.nodes[h as int] == nodes@[h as int]@);
         assert(for_head_ok(a, g.ts, h as int, s as int, sh.of, a.nodes[m as int].flag)) by {
             if !decl {
-                assert(!is_kw(g.ts, s as int, "let"@));
+                if sh.of || let_strict {
+                    assert(!is_kw(g.ts, s as int, "let"@));
+                } else {
+                    assert(is_kw(g.ts, s as int + 1, "in"@));
+                    assert(!is_p(g.ts, s as int + 1, "["@));
+                }
             }
         }
         assert(sh.of ==> first_kid_kind(a, h as int) != NodeKind::VariableDeclaration) by {
@@ -15484,7 +15624,6 @@ proof fn lemma_class_done(
 )
     requires
         toks_wf(ts),
-        !cx.deflt,
         0 <= m < a.nodes.len(),
         0 <= k0 < m,
         0 <= k1 < m,
@@ -15498,7 +15637,7 @@ proof fn lemma_class_done(
         is_kw(ts, x, "class"@),
         kd(a, k2) == NodeKind::ClassBody,
         if kd(a, k0) == NodeKind::Absent {
-            is_expr && d(a, ts, k0, cx, x + 1, x + 1) && mn == x + 1 && ed(a, ts, k0, x + 1) == mn
+            (is_expr || cx.deflt) && d(a, ts, k0, cx, x + 1, x + 1) && mn == x + 1 && ed(a, ts, k0, x + 1) == mn
         } else {
             kd(a, k0) == NodeKind::BindingIdentifier && node_done(a, ts, k0, cx, x + 1, mn)
         },
@@ -15557,7 +15696,6 @@ fn check_class(
 ) -> (r: Option<(usize, usize, i32)>)
     requires
         sh.m < nodes.len(),
-        !g.cx.deflt,
         nodes@[sh.m as int].kind == (if sh.is_expr {
             NodeKind::ClassExpression
         } else {
@@ -15623,7 +15761,13 @@ fn check_class(
     let x1 = x.saturating_add(1);
     let kn = kind_at(nodes, k0);
     let mn: usize = if matches!(kn, NodeKind::Absent) {
-        if !sh.is_expr || !check_absent(src, nodes, toks, gaps, k0, x1, Ghost(g)) {
+        let deflt = match done.cxs.get(m) {
+            Some(c) => c.d,
+            None => {
+                return None;
+            },
+        };
+        if !(sh.is_expr || deflt) || !check_absent(src, nodes, toks, gaps, k0, x1, Ghost(g)) {
             return None;
         }
         x1

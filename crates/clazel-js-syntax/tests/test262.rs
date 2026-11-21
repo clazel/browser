@@ -292,8 +292,23 @@ fn test262_verified_share() -> Result<(), String> {
             hv += 1;
         }
     }
+    // The `_FIXTURE.js` modules the tests import.
+    let mut fixtures = Vec::new();
+    all_js(&root(), &mut fixtures);
+    let (mut fv, mut fnn) = (0usize, 0usize);
+    for f in fixtures
+        .iter()
+        .filter(|f| f.to_string_lossy().ends_with("_FIXTURE.js"))
+    {
+        let text = std::fs::read_to_string(f).map_err(|e| e.to_string())?;
+        let src: Vec<u32> = text.chars().map(u32::from).collect();
+        if let Ok((_, d)) = parse_checked(&src, SourceGoal::Module) {
+            fnn += 1;
+            fv += usize::from(d == Derivation::Verified);
+        }
+    }
     println!(
-        "Verified: {verified} of {positives} script positive runs, {mverified} of {mpositives} module positive runs, {hv} of {hn} harness files"
+        "Verified: {verified} of {positives} script positive runs, {mverified} of {mpositives} module positive runs, {fv} of {fnn} module fixtures, {hv} of {hn} harness files"
     );
     Ok(())
 }
