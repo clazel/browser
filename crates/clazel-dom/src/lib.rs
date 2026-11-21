@@ -10,6 +10,8 @@
 //! - [`exec`]: the executable arena, `Arena`, proven to meet the contracts.
 //! - [`lemmas`]: the acyclicity witness is the ancestor chain, and every
 //!   operation keeps `wf` and does what its DOM steps say.
+//! - [`ops_lemmas`]: the same for Phase 7 item 7.13's operations (validity,
+//!   pre-insert, replace, replace all, clone, attribute changes).
 //! - [`mutation_lemmas`]: the theorems on small concrete arenas, the kill
 //!   certificates of `mutations.json`.
 //! - [`independent`], [`independent_equivalence`]: a second, same-text
@@ -22,4 +24,5 @@ pub mod independent;
 pub mod independent_equivalence;
 pub mod lemmas;
 pub mod mutation_lemmas;
+pub mod ops_lemmas;
 pub mod spec;

@@ -46,6 +46,16 @@ theorems = [
     "theorem_remove_keeps_order",
     "theorem_append_attribute_frame",
     "theorem_set_mode_frame",
+    # Phase 7 item 7.13's theorems (src/ops_lemmas.rs).
+    "theorem_change_attribute_wf",
+    "theorem_remove_attribute_wf",
+    "theorem_replace_attribute_wf",
+    "theorem_adopt_wf",
+    "theorem_clone_node_wf",
+    "theorem_insert_any_wf",
+    "theorem_pre_insert_wf",
+    "theorem_replace_wf",
+    "theorem_replace_all_wf",
 ]
 
 [package.metadata.verus]
