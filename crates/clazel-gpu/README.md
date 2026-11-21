@@ -515,6 +515,59 @@ the host allocate up to 256 MiB a frame.
 - The kernel does not yet act on `GpuReady`, `GpuRefused` or the process's exit
   (5.17c's crash policy in the kernel), so the host only logs an exit.
 
+## Item 6.12: images
+
+Image upload, draw and free (display list tags 7 to 9, item 6.10) are drawn by every
+backend but Direct3D 12.
+
+**Decisions** (each also written where it is made):
+
+- **No texture object: the image store is a storage buffer, and the fragment shader
+  filters.** The plan says "a textured-quad pipeline sampling an RGBA8 texture". A
+  texture would need images, samplers, layout transitions and a new descriptor type
+  in `clazel-sys` on three OSes, all `unsafe` and each needing an audit, none of it
+  testable by the session that wrote this. So images live in one buffer of 32-bit
+  words, read by the **same** pipeline as fills and masks (`src/images.rs` is the
+  glyph atlas's design: bump allocator, compaction, a CPU copy kept for it). This
+  departs from the plan's wording; **if a real texture and sampler are wanted, that
+  is a larger change this item did not make.**
+- **An image draw is a quad** whose `columns` is `u32::MAX` and whose `offset`
+  indexes a 12-word record (`backend::ImageDraw`) in a second buffer. The vertex
+  shader is unchanged; the fragment shader tells the kinds apart. No new pipeline, so
+  nothing is created after the warm-up frame, which is what the Linux sandbox needs.
+- **The filter is defined in integers** (`backend.rs`): the destination pixel's
+  centre `(2i + 1) · len / 2n` is mapped into the source rectangle; nearest takes the
+  pixel it is in, linear the two around it less half a pixel, weighted, **clamped to
+  the source rectangle**. `reference.rs` and `soft.rs` compute it exactly in
+  rational numbers and round once, written separately and required to be equal; the
+  shaders compute it in `f32` and are compared within one level.
+- **`LIST_MAX` is the list's limit**, `spec::MAX_LIST_BYTES` (384 MiB), and a test pins
+  it. It was 256 MiB, below it.
+- **The second channel is not built.** `tests/upload_measure.rs` prints what a
+  4096 × 4096 upload costs through the list socket on each OS, for the maintainer.
+
+**Evidence.** `src/tests.rs`: hand-worked pixels (nearest, linear at the ends, the
+source-rectangle fence, source-over, freed and reused ids, images across lists, clips,
+an upload past the budget refused) through the fake backend; the scenes `images`,
+`image-frames` and `image-store` through the fake backend, equal to the reference;
+`tests/pixels-reference/` pins the reference's pixels. `tests/vulkan.rs` and
+`tests/metal.rs` run the same scenes on lavapipe and Metal against the reference
+within one level.
+
+**Not done or not known.**
+- No pixels are stored from lavapipe or Metal for the image scenes (none could be
+  drawn by the session that wrote them): the stored-pixel comparison skips for them,
+  and `CLAZEL_GPU_BLESS=1` writes them.
+- **Never run on Metal or on a real GPU**; the Metal shader and calls are checked only
+  by CI.
+- **Direct3D 12 refuses images** (`d3d12.rs`): the HLSL and its DXBC are unchanged,
+  because only `vkd3d-compiler` 1.19 makes the DXBC and no machine here has it.
+- A store above 64 MiB is unmeasured, and a driver may refuse a buffer that large (a
+  storage buffer's range is the device's limit). A worst-case list of images is about
+  1.4 GiB in the GPU process, over `hostile_graphics.rs`'s `GPU_LIMIT`.
+- The Linux sandbox has not run with an image store; the buffers are allocated after
+  the filter, as the atlas's are.
+
 ## How Metal is reached: dispatcher casts
 
 The plan reached Metal through several `#[link_name = "objc_msgSend"]` declarations,

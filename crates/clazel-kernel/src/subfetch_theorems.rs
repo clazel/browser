@@ -181,10 +181,10 @@ pub proof fn lemma_carry_out_tables(urls: UrlFns, s: State, tab: nat, partition:
 
 /// `begin_navigation` keeps the tables and outputs nothing on a sub-fetch
 /// connection.
-pub proof fn lemma_begin_tables(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, url: Seq<u32>)
+pub proof fn lemma_begin_tables(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, url: Seq<u32>, req: clazel_fetch::request::spec::Req)
     ensures
-        tables_kept(s, begin_navigation(rules, urls, fetch, s, tab, url).0),
-        sub_free(begin_navigation(rules, urls, fetch, s, tab, url).1),
+        tables_kept(s, begin_navigation(rules, urls, fetch, s, tab, url, req).0),
+        sub_free(begin_navigation(rules, urls, fetch, s, tab, url, req).1),
 {
     if let Some(i) = find_by_tab(s.renderers, tab, 0) {
         if lock_of_url(urls, url, s.next_id) is Some {
@@ -196,7 +196,7 @@ pub proof fn lemma_begin_tables(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns
                     lemma_sub_free_concat(closes, fail_navigation(s0, i, old, error_bad_url()).1);
                 },
                 Some(parsed) => {
-                    let (fs, actions) = clazel_fetch::transducer::spec::start(parsed);
+                    let (fs, actions) = clazel_fetch::transducer::spec::start_req(parsed, req);
                     let nav = Navigation { url, fetch: fs, partition: crate::domain::domain_of_renderer(rules, old) };
                     let s1 = State { renderers: s0.renderers.update(i, Renderer { pending: Some(nav), ..old }), ..s0 };
                     lemma_carry_out_tables(urls, s1, tab, nav.partition, None, actions);
@@ -243,11 +243,21 @@ pub proof fn lemma_handle_message_tables(rules: Seq<clazel_psl::spec::Rule>, url
         sub_free(handle_message(rules, urls, fetch, s, r, m).1),
 {
     let (s1, out) = handle_message(rules, urls, fetch, s, r, m);
-    if let clazel_ipc::message::spec::Message::Navigate { url } = m {
+    if let clazel_ipc::message::spec::Message::Submit { url, method, content_type, body } = m {
+        if let Some(req) = submit_request(r, method, content_type, body) {
         if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
             if let Some(resolved) = (urls.resolve)(r.url, relative) {
                 if lock_of_url(urls, resolved, s.next_id) is Some {
-                    lemma_begin_tables(rules, urls, fetch, s, r.tab, resolved);
+                    lemma_begin_tables(rules, urls, fetch, s, r.tab, resolved, req);
+                }
+            }
+        }
+    }
+    } else if let clazel_ipc::message::spec::Message::Navigate { url } = m {
+        if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+            if let Some(resolved) = (urls.resolve)(r.url, relative) {
+                if lock_of_url(urls, resolved, s.next_id) is Some {
+                    lemma_begin_tables(rules, urls, fetch, s, r.tab, resolved, clazel_fetch::request::spec::get_req());
                 }
             }
         }
@@ -284,10 +294,10 @@ pub proof fn lemma_open_tab_tables(rules: Seq<clazel_psl::spec::Rule>, urls: Url
     if let Some(lock) = lock_of_url(urls, url, id) {
         if script is None {
             let s0 = State { renderers: s.renderers.push(Renderer { committed: false, id, tab: id, url, lock, pending: None }), next_id: id + 1, ..s };
-            lemma_begin_tables(rules, urls, fetch, s0, id, url);
+            lemma_begin_tables(rules, urls, fetch, s0, id, url, clazel_fetch::request::spec::get_req());
             lemma_sub_free_concat(
                 seq![Output::Spawn { id, policy: Policy::Gpu }, Output::Spawn { id, policy: Policy::Renderer }],
-                begin_navigation(rules, urls, fetch, s0, id, url).1,
+                begin_navigation(rules, urls, fetch, s0, id, url, clazel_fetch::request::spec::get_req()).1,
             );
         } else {
             let out = open_tab(rules, urls, fetch, s, url, script).1;
@@ -330,7 +340,8 @@ pub proof fn lemma_step_tables(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns,
     match e {
         Event::FromRenderer { id, bytes } => lemma_from_renderer_tables(rules, urls, fetch, s, id, bytes),
         Event::OpenTab { url, script } => lemma_open_tab_tables(rules, urls, fetch, s, url, script),
-        Event::NavigateTab { tab, url } => lemma_begin_tables(rules, urls, fetch, s, tab, url),
+        Event::NavigateTab { tab, url } => lemma_begin_tables(rules, urls, fetch, s, tab, url, clazel_fetch::request::spec::get_req()),
+        Event::SubmitTab { tab, url, req } => lemma_begin_tables(rules, urls, fetch, s, tab, url, req),
         Event::Net { conn, input } => lemma_net_tables(rules, urls, fetch, s, conn, input),
         Event::RendererExited { id } => {
             if let Some(i) = find_by_id(s.renderers, id, 0) {

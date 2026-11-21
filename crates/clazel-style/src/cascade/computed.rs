@@ -355,6 +355,152 @@ pub enum AlignDescendants {
     Right,
 }
 
+/// One axis of a computed `background-repeat` (CSS Backgrounds 3 §2.4†: "list, each item a
+/// pair of keywords, one per dimension").
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(kani, derive(kani::Arbitrary))]
+pub enum BgRepeat {
+    /// `repeat`.
+    Repeat,
+    /// `space`.
+    Space,
+    /// `round`.
+    Round,
+    /// `no-repeat`.
+    NoRepeat,
+}
+
+/// A computed `background-size` (CSS Backgrounds 3 §2.9†: "list, each item a pair of sizes
+/// (one per axis) each represented as either a keyword or a computed `<length-percentage>`
+/// value"). `cover` and `contain` stand alone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(kani, derive(kani::Arbitrary))]
+pub enum BgSize {
+    /// `cover`.
+    Cover,
+    /// `contain`.
+    Contain,
+    /// Width and height, `None` for `auto`.
+    Explicit([Option<Lp>; 2]),
+}
+
+/// A box a background is positioned in or painted to (CSS Backgrounds 3 §2.7†, §2.8†).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(kani, derive(kani::Arbitrary))]
+pub enum BgBox {
+    /// `border-box`.
+    Border,
+    /// `padding-box`.
+    Padding,
+    /// `content-box`.
+    Content,
+}
+
+/// What `background-image` computes one layer to: `url()` resolved to an absolute URL (see
+/// `cascade/urls.rs`), or `none`. A gradient is a layer that paints nothing (listed in
+/// `cascade/mod.rs`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BgImage {
+    /// `none`, or an `<image>` the subset does not paint.
+    None,
+    /// `url()`: the URL as a string of code points, absolute if its base was known.
+    Url(Vec<u32>),
+}
+
+/// The computed `background-*` lists (CSS Backgrounds 3 §2.1†): each list as its property
+/// computes, with the matching of lists to layers left to [`Backgrounds::layers`]. Every
+/// list is non-empty.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Backgrounds {
+    /// `background-image`: its length is the number of layers.
+    pub image: Vec<BgImage>,
+    /// `background-repeat`.
+    pub repeat: Vec<[BgRepeat; 2]>,
+    /// `background-position`: the offsets from the top left (§2.6†: `left`, `top` 0%,
+    /// `center` 50%, `right`, `bottom` 100%).
+    pub position: Vec<[Lp; 2]>,
+    /// `background-size`.
+    pub size: Vec<BgSize>,
+    /// `background-origin` (the positioning area, §2.8†).
+    pub origin: Vec<BgBox>,
+    /// `background-clip` (the painting area, §2.7†).
+    pub clip: Vec<BgBox>,
+}
+
+/// One background layer, with every property matched up (§2.1†).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BgLayer {
+    /// Its image.
+    pub image: BgImage,
+    /// Its repeat, horizontal then vertical.
+    pub repeat: [BgRepeat; 2],
+    /// Its position, horizontal then vertical.
+    pub position: [Lp; 2],
+    /// Its size.
+    pub size: BgSize,
+    /// Its positioning area.
+    pub origin: BgBox,
+    /// Its painting area.
+    pub clip: BgBox,
+}
+
+impl Backgrounds {
+    /// The initial lists, one layer: `none`, `repeat`, `0% 0%`, `auto`, `padding-box`,
+    /// `border-box`.
+    pub fn initial() -> Backgrounds {
+        Backgrounds {
+            image: vec![BgImage::None],
+            repeat: vec![[BgRepeat::Repeat; 2]],
+            position: vec![[Lp::Percent(Num::ZERO); 2]],
+            size: vec![BgSize::Explicit([None, None])],
+            origin: vec![BgBox::Padding],
+            clip: vec![BgBox::Border],
+        }
+    }
+
+    /// The painting area of the bottom-most layer, which clips the background colour (§2.2†:
+    /// "The background color is clipped according to the background-clip value associated
+    /// with the bottom-most background image layer").
+    pub fn bottom_clip(&self) -> BgBox {
+        let last = self.image.len().saturating_sub(1);
+        self.clip
+            .get(last.checked_rem(self.clip.len()).unwrap_or(0))
+            .copied()
+            .unwrap_or(BgBox::Border)
+    }
+
+    /// True if no layer has an image (`background-image` is `none` on the element).
+    pub fn is_none(&self) -> bool {
+        self.image.iter().all(|i| *i == BgImage::None)
+    }
+
+    /// CSS Backgrounds 3 §2.1†: "The number of layers is determined by the number of
+    /// comma-separated values in the background-image property. ... The lists are matched
+    /// up from the first value: excess values at the end are not used. If a property
+    /// doesn't have enough comma-separated values to match the number of layers, the UA
+    /// must calculate its used value by repeating the list of values until there are
+    /// enough." The first layer is the one "closest to the user".
+    pub fn layers(&self) -> Vec<BgLayer> {
+        fn nth<T: Copy>(v: &[T], i: usize, default: T) -> T {
+            v.get(i.checked_rem(v.len()).unwrap_or(0))
+                .copied()
+                .unwrap_or(default)
+        }
+        self.image
+            .iter()
+            .enumerate()
+            .map(|(i, image)| BgLayer {
+                image: image.clone(),
+                repeat: nth(&self.repeat, i, [BgRepeat::Repeat; 2]),
+                position: nth(&self.position, i, [Lp::Percent(Num::ZERO); 2]),
+                size: nth(&self.size, i, BgSize::Explicit([None, None])),
+                origin: nth(&self.origin, i, BgBox::Padding),
+                clip: nth(&self.clip, i, BgBox::Border),
+            })
+            .collect()
+    }
+}
+
 /// One element's computed values for the applied properties of the subset.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ComputedStyle {
@@ -438,6 +584,8 @@ pub struct ComputedStyle {
     pub table_layout_fixed: bool,
     /// `list-style-type`.
     pub list_style_type: ListStyleType,
+    /// The `background-*` longhands other than the colour (CSS Backgrounds 3 §2†).
+    pub backgrounds: Backgrounds,
     /// HTML's "align descendants", if the element does (not a CSS property; never
     /// inherited).
     pub align_descendants: Option<AlignDescendants>,
@@ -498,6 +646,7 @@ impl ComputedStyle {
             border_collapse: false,
             table_layout_fixed: false,
             list_style_type: ListStyleType::Named("disc"),
+            backgrounds: Backgrounds::initial(),
             align_descendants: None,
         }
     }

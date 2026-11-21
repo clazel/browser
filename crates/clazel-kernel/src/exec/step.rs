@@ -862,7 +862,7 @@ pub fn open_tab_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: Sta
                 },
                 None => {
                     let spawn = two_outputs(OutputRecord::SpawnGpu { id }, OutputRecord::Spawn { id });
-                    let (s2, out) = begin_navigation_exec(urls, fetch, s, id, url);
+                    let (s2, out) = begin_navigation_exec(urls, fetch, s, id, url, clazel_fetch::request::build::get_req_buf());
                     (s2, append_outputs(spawn, out))
                 },
             }
@@ -1219,9 +1219,42 @@ pub fn carry_out_exec<U: UrlFnsExec, F: FetchFnsExec>(
 // A navigation starts, and the network answers.
 // ---------------------------------------------------------------------
 
+/// [`submit_request`], executable (item 6.16): the request a `Submit` of
+/// renderer `r` makes, or none.
+pub fn submit_request_exec(r: &RendererRecord, method: &[u8], content_type: Vec<u8>, body: Vec<u8>) -> (out: Option<clazel_fetch::request::build::ReqBuf>)
+    ensures
+        match out {
+            Some(q) => submit_request(r@, method@, content_type@, body@) == Some(q@),
+            None => submit_request(r@, method@, content_type@, body@) is None,
+        },
+{
+    if clazel_fetch::request::build::is_get(method) {
+        if content_type.is_empty() && body.is_empty() {
+            let q = clazel_fetch::request::build::ReqBuf { method: vstd::slice::slice_to_vec(method), body: None, initiator: Some(clone_origin(&r.lock)), origin_tainted: false };
+            Some(q)
+        } else {
+            None
+        }
+    } else if clazel_fetch::request::build::is_post(method) {
+        if body.len() <= 0x100_0000 {
+            let q = clazel_fetch::request::build::ReqBuf {
+                method: vstd::slice::slice_to_vec(method),
+                body: Some(clazel_fetch::request::build::PayloadBuf { content_type, bytes: body }),
+                initiator: Some(clone_origin(&r.lock)),
+                origin_tainted: false,
+            };
+            Some(q)
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
 /// [`begin_navigation`]: the renderer of tab `tab` starts navigating to
 /// `url`, and the transducer asks for the first connection.
-pub fn begin_navigation_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRecord, tab: u64, url: &[u32]) -> (out: (
+pub fn begin_navigation_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRecord, tab: u64, url: &[u32], req: clazel_fetch::request::build::ReqBuf) -> (out: (
     StateRecord,
     Vec<OutputRecord>,
 ))
@@ -1231,7 +1264,7 @@ pub fn begin_navigation_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F
         s.next_id < 0xFFFF_FFFF_FFFF_FFFFu64,
         s.next_conn as nat + conn_headroom() <= 0xFFFF_FFFF_FFFF_FFFFnat,
     ensures
-        result_view(out) == begin_navigation(crate::contract::psl(), urls.urls(), fetch.fetch(), s@, tab as nat, url@),
+        result_view(out) == begin_navigation(crate::contract::psl(), urls.urls(), fetch.fetch(), s@, tab as nat, url@, req@),
         renderers_ok::<F>(out.0.renderers@),
         super::subfetch::subfetches_ok::<F>(out.0.subfetches@),
         keeps_storage_jar_now(s, out.0),
@@ -1250,10 +1283,11 @@ pub fn begin_navigation_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F
                         (s1, append_outputs(closes, out))
                     },
                     Some(parsed) => {
-                        let (fs, actions) = clazel_fetch::transducer::step::start(&parsed);
+                        let ghost req_view = req@;
+                        let (fs, actions) = clazel_fetch::transducer::step::start_req(&parsed, req);
                         proof {
                             F::nav_ok_idle(&fs);
-                            clazel_fetch::transducer::theorems::lemma_begin_budget(parsed@, 0, false);
+                            clazel_fetch::transducer::theorems::lemma_begin_budget(parsed@, 0, false, req_view);
                         }
                         let partition = match s0.renderers.get(i) {
                             Some(r) => domain_of_lock_exec(&r.lock),
@@ -1581,8 +1615,39 @@ pub fn handle_message_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, 
                         let outs = reply_exec(&r, &e);
                         (s, outs)
                     } else {
-                        begin_navigation_exec(urls, fetch, s, r.tab, resolved.as_slice())
+                        begin_navigation_exec(urls, fetch, s, r.tab, resolved.as_slice(), clazel_fetch::request::build::get_req_buf())
                     }
+                },
+            },
+        },
+        // Item 6.16: `submit`.
+        Msg::Submit { url, method, content_type, body } => match submit_request_exec(&r, method.as_slice(), content_type, body) {
+            None => {
+                let e = Msg::Error { code: 3 };
+                let outs = reply_exec(&r, &e);
+                (s, outs)
+            },
+            Some(req) => match clazel_encoding::utf8::decode::decode_without_bom_or_fail(url.as_slice()) {
+                None => {
+                    let e = Msg::Error { code: 3 };
+                    let outs = reply_exec(&r, &e);
+                    (s, outs)
+                },
+                Some(relative) => match urls.resolve(r.url.as_slice(), relative.as_slice()) {
+                    None => {
+                        let e = Msg::Error { code: 3 };
+                        let outs = reply_exec(&r, &e);
+                        (s, outs)
+                    },
+                    Some(resolved) => {
+                        if lock_of_url_exec(urls, resolved.as_slice(), s.next_id).is_none() {
+                            let e = Msg::Error { code: 3 };
+                            let outs = reply_exec(&r, &e);
+                            (s, outs)
+                        } else {
+                            begin_navigation_exec(urls, fetch, s, r.tab, resolved.as_slice(), req)
+                        }
+                    },
                 },
             },
         },
@@ -1660,7 +1725,7 @@ pub fn from_renderer_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s
                         Some(r) => r.committed,
                         None => false,
                     };
-                    let display = matches!(m, Msg::Display { .. } | Msg::Title { .. } | Msg::FetchStyle { .. });
+                    let display = matches!(m, Msg::Display { .. } | Msg::Title { .. } | Msg::FetchStyle { .. } | Msg::Submit { .. });
                     if clazel_ipc::message::codec::is_from_renderer(&m) && (committed || !display) {
                         handle_message_exec(urls, fetch, s, i, m)
                     } else {
@@ -1696,7 +1761,7 @@ pub fn step_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRe
     let out = match e {
         EventRecord::FromRenderer { id, bytes } => from_renderer_exec(urls, fetch, s, *id, bytes.as_slice()),
         EventRecord::OpenTab { url, script } => open_tab_exec::<U, F>(urls, fetch, s, url.as_slice(), script),
-        EventRecord::NavigateTab { tab, url } => begin_navigation_exec(urls, fetch, s, *tab, url.as_slice()),
+        EventRecord::NavigateTab { tab, url } => begin_navigation_exec(urls, fetch, s, *tab, url.as_slice(), clazel_fetch::request::build::get_req_buf()),
         EventRecord::Net { conn, input } => net_exec(urls, fetch, s, *conn, input),
         EventRecord::RendererExited { id } => renderer_exited_exec::<F>(s, *id),
         EventRecord::Tick { time } => super::subfetch::tick_all_exec::<F>(s, *time),

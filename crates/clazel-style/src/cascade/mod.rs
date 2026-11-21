@@ -67,6 +67,7 @@ pub mod logical;
 pub mod rules;
 pub mod sort;
 pub mod ua;
+pub mod urls;
 
 #[cfg(kani)]
 mod proofs;
@@ -74,6 +75,7 @@ mod proofs;
 use std::collections::HashMap;
 
 use clazel_dom::exec::{Arena, ExecKind};
+use clazel_url::url::record::ParsedUrl;
 
 use crate::sources::{Device, Sources};
 use crate::values::{Declared, Specified};
@@ -175,11 +177,15 @@ fn prepare(sheets: &ua::Sheets, sources: &Sources, device: Device) -> (Vec<Prepa
     } = sheets;
     let mut rules = Vec::new();
     let mut order: u32 = 0;
-    let mut add = |origin: Origin, r: &crate::sources::StyleRule, quirks: bool| {
+    let mut add = |origin: Origin,
+                   r: &crate::sources::StyleRule,
+                   quirks: bool,
+                   base: Option<&clazel_url::url::record::ParsedUrl>| {
         let Some(selectors) = Selectors::parse(&r.selectors) else {
             return;
         };
-        let declarations = read_declarations(&r.declarations, quirks);
+        let mut declarations = read_declarations(&r.declarations, quirks);
+        urls::resolve(&mut declarations, base);
         let count: usize = declarations.iter().map(|d| d.set.len()).sum();
         if count == 0 {
             return;
@@ -194,18 +200,33 @@ fn prepare(sheets: &ua::Sheets, sources: &Sources, device: Device) -> (Vec<Prepa
         order = order.saturating_add(u32::try_from(count).unwrap_or(u32::MAX));
     };
     for r in ua.rules_for(device) {
-        add(Origin::Ua, r, false);
+        add(Origin::Ua, r, false, None);
     }
     if sources.quirks {
         for r in ua_quirks.rules_for(device) {
-            add(Origin::Ua, r, false);
+            add(Origin::Ua, r, false, None);
         }
     }
     for r in hint_sheet.rules_for(device) {
-        add(Origin::Hint, r, false);
+        add(Origin::Hint, r, false, None);
     }
-    for (_, r) in sources.rules_for(device) {
-        add(Origin::Author, r, sources.quirks);
+    // Item 6.11: each sheet's `url()`s are relative to its own URL, a `style` element's to the
+    // document's (`urls.rs`).
+    let bases: Vec<Option<ParsedUrl>> = sources
+        .sheets
+        .iter()
+        .map(|s| match &s.url {
+            Some(u) => urls::base(Some(u)),
+            None => urls::base(sources.document_url.as_deref()),
+        })
+        .collect();
+    for (i, r) in sources.rules_for(device) {
+        add(
+            Origin::Author,
+            r,
+            sources.quirks,
+            bases.get(i).and_then(Option::as_ref),
+        );
     }
     (rules, order)
 }
@@ -347,10 +368,15 @@ fn run(
     // an element's parent is on the path; the elements after it are left first.
     let mut path: Vec<(usize, Vec<index::Key>)> = Vec::new();
     let mut ancestors: index::Ancestors<index::Key> = index::Ancestors::default();
+    let document_base = urls::base(sources.document_url.as_deref());
     let attributes: HashMap<usize, Vec<Longhands>> = sources
         .attributes
         .iter()
-        .map(|a| (a.node, read_declarations(&a.declarations, quirks)))
+        .map(|a| {
+            let mut d = read_declarations(&a.declarations, quirks);
+            urls::resolve(&mut d, document_base.as_ref());
+            (a.node, d)
+        })
         .collect();
     let hint_cx = hints::Context {
         quirks,

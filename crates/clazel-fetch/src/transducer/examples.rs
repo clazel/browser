@@ -32,7 +32,7 @@ pub open spec fn url_a(fragment: Option<Seq<u32>>) -> Url {
 
 /// A state for `url_a(fragment)`.
 pub open spec fn state_a(fragment: Option<Seq<u32>>, redirects: nat, phase: Phase) -> State {
-    State { url: url_a(fragment), redirects: redirects, phase: phase, tainted: false }
+    State { url: url_a(fragment), redirects: redirects, phase: phase, req: crate::request::spec::get_req(), tainted: false }
 }
 
 /// `step` with the real functions from `state_a(fragment, redirects,
@@ -317,7 +317,7 @@ pub open spec fn ex_cstep(jar: Seq<Cookie>, now: int, tainted: bool, phase: Phas
     let r = step(
         super::real::real_http(),
         example_urls(),
-        State { url: url_a(None), redirects: 0, phase: phase, tainted: tainted },
+        State { url: url_a(None), redirects: 0, phase: phase, req: crate::request::spec::get_req(), tainted: tainted },
         input,
         jar,
         now,

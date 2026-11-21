@@ -1,3 +1,6 @@
 # Line endings are part of the data: vendored test suites and certdata.txt are
 # compared byte for byte, so a checkout must never rewrite them to CRLF.
 * text=auto eol=lf
+
+# Test262 tests use CR, CRLF, U+2028 and lone line terminators on purpose: store them as they are.
+crates/clazel-js-lexer/tests/data/test262/** -text

@@ -693,3 +693,223 @@ fn a_sub_fetch_event_for_another_renderer_is_ignored() {
     // Serial 0 of `b` does not exist: `a`'s fetch is not reachable through `b`.
     assert_eq!(k.sub_net(b, 0, 1, InputBuf::Connected), vec![]);
 }
+
+// ---------------------------------------------------------------------
+// Item 6.16: a renderer's `Submit`, a navigation with a method and a body.
+// ---------------------------------------------------------------------
+
+fn submit(url: &str, method: &str, content_type: &str, body: &[u8]) -> Msg {
+    Msg::Submit {
+        url: url.as_bytes().to_vec(),
+        method: method.as_bytes().to_vec(),
+        content_type: content_type.as_bytes().to_vec(),
+        body: body.to_vec(),
+    }
+}
+
+/// The octets of the single `Send` in `out`.
+fn the_send(out: &[Out]) -> Option<&[u8]> {
+    match out {
+        [Out::Send(_, bytes)] => Some(bytes.as_slice()),
+        _ => None,
+    }
+}
+
+const FORM: &str = "application/x-www-form-urlencoded";
+
+#[test]
+fn a_submit_sends_its_body_once_on_the_connection_it_opens() {
+    let mut k = Kernel::new();
+    let id = open(&mut k, "http://example.test/form");
+    let out = k.send(id, &submit("/post", "POST", FORM, b"a=1&b=2"));
+    assert_eq!(out, vec![connect(0, "example.test")]);
+    let out = k.net(0, InputBuf::Connected);
+    let sent = the_send(&out);
+    assert!(sent.is_some(), "{out:?}");
+    let sent = sent.unwrap_or_default();
+    let text = String::from_utf8_lossy(sent).into_owned();
+    assert!(text.starts_with("POST /post HTTP/1.1\r\n"), "{text}");
+    assert!(
+        text.contains(&format!("Content-Type: {FORM}\r\n")),
+        "{text}"
+    );
+    assert!(text.contains("Content-Length: 7\r\n"), "{text}");
+    assert!(text.contains("Origin: http://example.test\r\n"), "{text}");
+    assert!(sent.ends_with(b"\r\n\r\na=1&b=2"), "{text}");
+    // The request is written once: the connection is now reading, and a second
+    // `Connected` is a protocol error of the shell that sends nothing.
+    let out = k.net(0, InputBuf::Connected);
+    assert!(!out.iter().any(|o| matches!(o, Out::Send(..))), "{out:?}");
+}
+
+#[test]
+fn a_post_without_a_body_sends_a_zero_content_length() {
+    let mut k = Kernel::new();
+    let id = open(&mut k, "http://example.test/form");
+    k.send(id, &submit("/post", "POST", "", b""));
+    let out = k.net(0, InputBuf::Connected);
+    let text = String::from_utf8_lossy(the_send(&out).unwrap_or_default()).into_owned();
+    assert!(text.starts_with("POST /post HTTP/1.1\r\n"), "{text}");
+    assert!(text.contains("Content-Length: 0\r\n"), "{text}");
+}
+
+#[test]
+fn a_submit_of_get_is_a_navigation_without_a_body() {
+    let mut k = Kernel::new();
+    let id = open(&mut k, "http://example.test/form");
+    let out = k.send(id, &submit("/q?x=1", "GET", "", b""));
+    assert_eq!(out, vec![connect(0, "example.test")]);
+    let out = k.net(0, InputBuf::Connected);
+    let text = String::from_utf8_lossy(the_send(&out).unwrap_or_default()).into_owned();
+    assert!(text.starts_with("GET /q?x=1 HTTP/1.1\r\n"), "{text}");
+    assert!(!text.contains("Content-Length"), "{text}");
+    assert!(!text.contains("Origin:"), "{text}");
+}
+
+#[test]
+fn a_submit_the_kernel_cannot_build_is_answered_with_an_error() {
+    for bad in [
+        submit("/x", "PUT", FORM, b"a=1"),
+        submit("/x", "DELETE", "", b""),
+        submit("/x", "GET", FORM, b"a=1"),
+        submit("/x", "GET", "", b"a=1"),
+        submit("http://", "POST", FORM, b"a=1"),
+    ] {
+        let mut k = Kernel::new();
+        let id = open(&mut k, "http://example.test/form");
+        let out = k.send(id, &bad);
+        assert_eq!(out, vec![Out::To(id, Msg::Error { code: 3 })], "{bad:?}");
+        // Nothing started: no connection to answer.
+        assert!(k.net(0, InputBuf::Connected).is_empty());
+    }
+}
+
+#[test]
+fn a_submit_from_a_renderer_that_has_not_committed_kills_it() {
+    let mut k = Kernel::new();
+    let out = k.event(&EventRecord::OpenTab {
+        url: code_points("http://example.test/"),
+        script: None,
+    });
+    let id = out.iter().find_map(|o| match o {
+        Out::Spawn(id) => Some(*id),
+        _ => None,
+    });
+    let id = id.unwrap_or(u64::MAX);
+    let out = k.send(id, &submit("/post", "POST", FORM, b"a=1"));
+    assert!(out.contains(&Out::Kill(id)), "{out:?}");
+    assert!(!out.iter().any(|o| matches!(o, Out::Send(..))), "{out:?}");
+}
+
+#[test]
+fn a_post_redirected_by_301_302_or_303_becomes_a_get_without_the_body() {
+    for status in if cfg!(miri) {
+        vec![302]
+    } else {
+        vec![301, 302, 303]
+    } {
+        let mut k = Kernel::new();
+        let id = open(&mut k, "http://example.test/form");
+        k.send(id, &submit("/post", "POST", FORM, b"secret=1"));
+        k.net(0, InputBuf::Connected);
+        let redirect = format!(
+            "HTTP/1.1 {status} X\r\nLocation: http://example.test/done\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        );
+        let out = k.net(0, InputBuf::Bytes(redirect.into_bytes()));
+        assert_eq!(out, vec![Out::Close(0), connect(1, "example.test")]);
+        let out = k.net(1, InputBuf::Connected);
+        let text = String::from_utf8_lossy(the_send(&out).unwrap_or_default()).into_owned();
+        assert!(
+            text.starts_with("GET /done HTTP/1.1\r\n"),
+            "{status}: {text}"
+        );
+        assert!(!text.contains("secret=1"), "{status}: {text}");
+        assert!(!text.contains("Content-Length"), "{status}: {text}");
+    }
+}
+
+#[test]
+fn a_post_redirected_by_307_or_308_sends_its_body_again() {
+    for status in if cfg!(miri) {
+        vec![307]
+    } else {
+        vec![307, 308]
+    } {
+        let mut k = Kernel::new();
+        let id = open(&mut k, "http://example.test/form");
+        k.send(id, &submit("/post", "POST", FORM, b"secret=1"));
+        k.net(0, InputBuf::Connected);
+        let redirect = format!(
+            "HTTP/1.1 {status} X\r\nLocation: http://example.test/again\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        );
+        let out = k.net(0, InputBuf::Bytes(redirect.into_bytes()));
+        assert_eq!(out, vec![Out::Close(0), connect(1, "example.test")]);
+        let out = k.net(1, InputBuf::Connected);
+        let sent = the_send(&out).unwrap_or_default();
+        let text = String::from_utf8_lossy(sent).into_owned();
+        assert!(
+            text.starts_with("POST /again HTTP/1.1\r\n"),
+            "{status}: {text}"
+        );
+        assert!(sent.ends_with(b"\r\n\r\nsecret=1"), "{status}: {text}");
+    }
+}
+
+#[test]
+fn a_post_redirected_off_site_by_307_names_a_null_origin() {
+    // A 307 from the form's site to another site keeps the body (RFC 9110
+    // 15.4.8); the `Origin` is then `null` (Fetch: the redirect left the
+    // origin), not the form's.
+    let mut k = Kernel::new();
+    let id = open(&mut k, "http://example.test/form");
+    k.send(id, &submit("/post", "POST", FORM, b"a=1"));
+    k.net(0, InputBuf::Connected);
+    let redirect = b"HTTP/1.1 307 X\r\nLocation: http://other.test/in\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec();
+    let out = k.net(0, InputBuf::Bytes(redirect));
+    assert_eq!(out, vec![Out::Close(0), connect(1, "other.test")]);
+    let out = k.net(1, InputBuf::Connected);
+    let text = String::from_utf8_lossy(the_send(&out).unwrap_or_default()).into_owned();
+    assert!(text.starts_with("POST /in HTTP/1.1\r\n"), "{text}");
+    assert!(text.contains("Origin: null\r\n"), "{text}");
+}
+
+#[test]
+fn a_submit_replaces_only_its_own_tabs_navigation() {
+    let mut k = Kernel::new();
+    let a = open(&mut k, "http://example.test/a");
+    let b = open(&mut k, "http://other.test/b");
+    // Tab b has a navigation in flight.
+    assert_eq!(
+        k.navigate(b, "http://other.test/next"),
+        vec![connect(0, "other.test")]
+    );
+    // A submit from tab a opens its own connection and closes nothing of b.
+    let out = k.send(a, &submit("/post", "POST", FORM, b"a=1"));
+    assert_eq!(out, vec![connect(1, "example.test")]);
+    // The connection of b still answers b.
+    k.net(0, InputBuf::Connected);
+    let out = k.net(0, InputBuf::Bytes(response(b"page of b")));
+    assert_eq!(
+        out,
+        vec![
+            Out::Close(0),
+            Out::Commit(b, commit("http://other.test/next", b"page of b"))
+        ]
+    );
+    // A later submit of tab a replaces its navigation: the old connection is closed.
+    let out = k.send(a, &submit("/again", "POST", FORM, b"c=2"));
+    assert_eq!(out, vec![Out::Close(1), connect(2, "example.test")]);
+}
+
+#[test]
+fn a_submit_of_a_large_body_is_sent_whole() {
+    // One `Submit` is one frame (1 MiB): the body bound is the frame's.
+    let mut k = Kernel::new();
+    let id = open(&mut k, "http://example.test/form");
+    let body = vec![b'x'; if cfg!(miri) { 1000 } else { 1_000_000 }];
+    let out = k.send(id, &submit("/post", "POST", FORM, &body));
+    assert_eq!(out, vec![connect(0, "example.test")]);
+    let out = k.net(0, InputBuf::Connected);
+    let sent = the_send(&out).unwrap_or_default();
+    assert!(sent.ends_with(&body));
+}

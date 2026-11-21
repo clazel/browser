@@ -1,0 +1,56 @@
+{
+  "mutations": [
+    {
+      "id": "line-terminator-drops-ls",
+      "file": "src/spec.rs",
+      "find": "c == 0x000A || c == 0x000D || c == 0x2028 || c == 0x2029",
+      "replace": "c == 0x000A || c == 0x000D || c == 0x2029",
+      "expect": "killed",
+      "reason": "Drops <LS> from LineTerminator (§12.3): U+2028 would no longer end a line or trigger ASI, so example_line_terminators is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_line_terminators()",
+        "witness": "!is_line_terminator(0x2028u32)"
+      }
+    },
+    {
+      "id": "line-terminator-adds-nel",
+      "file": "src/spec.rs",
+      "find": "c == 0x000A || c == 0x000D || c == 0x2028 || c == 0x2029",
+      "replace": "c == 0x000A || c == 0x000D || c == 0x0085 || c == 0x2028 || c == 0x2029",
+      "expect": "killed",
+      "reason": "Counts U+0085 NEL as a LineTerminator, which §12.3 does not: example_line_terminators is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_line_terminators()",
+        "witness": "is_line_terminator(0x0085u32)"
+      }
+    },
+    {
+      "id": "hex-digit-value-lowercase-offset",
+      "file": "src/spec.rs",
+      "find": "c as int - 0x61 + 10",
+      "replace": "c as int - 0x61",
+      "expect": "killed",
+      "reason": "Gives `b` the MV 1 instead of 11 (§12.9.3.1), so `\\x62`-style escapes and `0xb` would get the wrong value: example_hex_digit_values is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_hex_digit_values()",
+        "witness": "hex_digit_value(0x62u32) == 1"
+      }
+    },
+    {
+      "id": "legacy-octal-two-digits-only",
+      "file": "src/spec.rs",
+      "find": "        || (i + 2 < j && is_octal_digit(s[j - 1]) && legacy_octal_integer_literal(s, i, j - 1)))",
+      "replace": "        )",
+      "expect": "killed",
+      "reason": "Drops the recursive alternative `LegacyOctalIntegerLiteral OctalDigit` (§12.9.3, Annex B), so `010` is no longer a LegacyOctalIntegerLiteral: example_legacy_numeric_literals is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_legacy_numeric_literals()",
+        "witness": "!legacy_octal_integer_literal(seq![0x30u32, 0x31, 0x30], 0, 3)"
+      }
+    }
+  ]
+}

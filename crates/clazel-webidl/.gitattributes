@@ -1,0 +1,3 @@
+# Vendored data is compared byte for byte (see the root attributes file); the
+# upstream files' line endings are part of what they test.
+tests/data/** -text

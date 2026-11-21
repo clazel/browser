@@ -47,6 +47,8 @@ pub struct StateBuf {
     pub redirects: u8,
     /// where it is
     pub phase: PhaseBuf,
+    /// the rest of the request (item 6.16)
+    pub req: crate::request::build::ReqBuf,
     /// the redirect-taint is cross-site
     pub tainted: bool,
 }
@@ -59,6 +61,7 @@ impl View for StateBuf {
             url: self.url@,
             redirects: self.redirects as nat,
             phase: self.phase@,
+            req: self.req@,
             tainted: self.tainted,
         }
     }

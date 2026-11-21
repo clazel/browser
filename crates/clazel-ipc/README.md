@@ -49,6 +49,18 @@ parsers of untrusted input carry machine-checked proofs.
   with 5.18's. Every `StyleBody` of at most `MAX_STYLE_CHUNK` octets fits one
   frame (`lemma_style_body_fits_frame`). The request id is the renderer's
   own and identifies nothing to the kernel.
+- **Item 6.16's message**: `Submit` (12, renderer to kernel: the URL, the
+  method, `GET` or `POST`, the body's content type and the body's octets;
+  `Navigate`, tag 9, stays the `GET`-only form). **The body's bound is the
+  frame's**, not the plan's proposed 16 MiB: a `Submit` is one frame, so with
+  a URL, method and content type of at most `MAX_SUBMIT_HEAD` (8192) octets
+  together, a body of at most `MAX_SUBMIT_BODY` (1,040,320) octets fits
+  (`lemma_submit_fits_frame`) and a larger one is not sent
+  (`encode_framed` gives `None`). Raising it means chunking the body or
+  raising `MAX_FRAME`, which every receiver's memory bound depends on;
+  neither is done. A renderer's `Submit` is accepted by
+  `decode_renderer_message`; what the kernel does with it is
+  `clazel-kernel`'s part of 6.16 (not done yet).
 
 Out of scope: any CBOR outside the profile, and the transport itself
 (sockets, reading and writing); this crate only turns bytes into values and

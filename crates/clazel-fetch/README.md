@@ -61,6 +61,34 @@ Not built yet: the `Cookie` field and
 initiator: the context is fixed), `SameSite=Lax-allowing-unsafe`, and a
 conformance suite beyond the http-state corpus (see below).
 
+Requests with a method and a body (item 6.16, built in part): the
+transducer's state holds a `Req` (method, body with its content type,
+the initiator's origin and the origin redirect-taint), `start_req` starts a
+fetch of any request, and `start` is a `GET` with none of them, as before.
+The bytes sent are the head, then the body octet for octet (RFC 9112 §6.2).
+A body adds `Content-Type` and `Content-Length` (Fetch §4.6 steps 6 to 9);
+a `POST` without a body adds `Content-Length: 0`; any method but `GET` and
+`HEAD` adds `Origin` (Fetch "append a request `Origin` header"), which is
+`null` for a request with no initiator, an opaque one, an https initiator
+and a URL that is not https, or after a redirect that left the origin; the
+`Cookie` field stays last. Only `GET` (with no body) and `POST` are built,
+a body is at most 16 MiB; anything else ends the fetch with `NotFetched`
+before connecting. HTTP-redirect fetch step 12 is
+`rewrite_for_redirect`: 301 and 302 turn a `POST` into a `GET` without a
+body, 303 does so for every method but `GET` and `HEAD`, 307 and 308 keep
+method and body, so the next `Send` writes the body again. The cookie
+context reads the method (a `POST` is not safe, RFC 9110 §9.2.1) and the
+initiator as the site for cookies, so `SameSite=Lax` and `Strict` cookies
+are not sent on a cross-site `POST` (`theorem_post_cookies`).
+`theorem_redirect_method` states the rewriting for every step, and
+`theorem_sends_have_valid_req` that a `Send` only follows a request this
+client builds. **Not built:** the `clazel-ipc` `Submit` message, the
+kernel's handling (and `theorem_body_from_requester`,
+`theorem_body_sent_once`, `theorem_address_bar_integrity` restated), the
+reload-and-back policy for a `POST` entry, `tests/fetch.rs` against an
+in-process server, and the widening of `independent.rs` to methods with a
+body (its correspondence still requires a plain `GET`).
+
 ## Verification
 
 Tier 2 (raised on CI's full verification of its pull request). Every executable function is proven in Verus to meet its
@@ -130,6 +158,20 @@ request's `Cookie` field compared): 195 pass, 27 are expected failures
 with reasons (RFC 6265 and draft 22 differ; the HTTP layer rejects a NUL
 or CR), none fail. The Fetch Standard text was read from its commit snapshot
 on the web; the repository holds no copy of it.
+
+Conformance (`tests/conformance_post.rs`, item 6.16): random `GET` and
+`POST` requests (no body, empty or with a body of up to 39 octets with CR,
+LF, NUL and octets above 0x7F, three content types, no initiator or an opaque
+one) through random redirect chains over all five redirect statuses and 200,
+against a reference model written from Fetch's HTTP-redirect fetch step 12,
+RFC 9110 §15.4 and Fetch §4.6, with rust-url resolving `Location`. The
+client's bytes at every hop (head, empty line and body) and the final status
+must equal the model's: 1378 of 1378 agree, 668 with a body, 97 chains in
+which the `POST` and its body are sent again, 318 in which a redirect drops
+them. The model shares the author's reading of the standards, so this is not
+independent of them as the rust-url part is; the request side is also covered
+by the Verus examples (`src/request/examples_body.rs`,
+`src/transducer/examples_body.rs`) and 12 new mutations (81 in all, every one certified, 0 survive). Four more (the request context and the redirect step of the transducer: initiator ignored, method always safe, taint lost, no rewrite) are killed by the example proofs but their certificates, which evaluate a whole transducer step, time out at 600 s, so they are not listed.
 
 Conformance (`tests/conformance_differential.rs`): 1500 random redirect
 chains, each run by an independent reference built from rust-url (the

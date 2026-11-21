@@ -1,0 +1,53 @@
+//! The JIT's code validators (docs/phases/jit.md item J.6), the x86-64 one
+//! first. The A64 validator and the second, independent x86-64 validator are
+//! later work.
+//!
+//! This is the first part of item J.6: the specification of what the
+//! validator accepts and the contract of its entry point, written before any
+//! validator (CLAUDE.md rule 3).
+//!
+//! - [`spec`]: **what an accepted blob is.** The checks of jit.md J.6 as spec
+//!   functions over the instruction subset of `clazel-x64`. Read its header
+//!   first: it lists the modelling choices and the ABI the validator fixes
+//!   (the context register, the region table, the bounds-check and exit
+//!   sequences).
+//! - [`contract`]: what the validator must be proven to satisfy.
+//! - [`api`]: the contract-only trait [`api::Validator`] (no implementation).
+//! - [`examples`]: instruction sequences (and one byte sequence) that are
+//!   accepted and refused, proven by evaluating the spec.
+//! - [`lemmas`]: general facts proven about the spec (a region access is a
+//!   checked access, the region table is never written, ...). They are what
+//!   the kill certificates of `mutations.json` cite.
+//!
+//! The decoder of untrusted bytes will be this crate's own (CLAUDE.md rule
+//! 8); the only thing shared with `clazel-x64` is its specification of the
+//! subset and its canonical encoding.
+//!
+//! # Status
+//!
+//! Tier 0. [`validate::validate`] is the executable validator, written in
+//! `verus!` and proven **sound and complete**: it returns `true` if and only
+//! if the blob is `spec::accepted`, which is `contract::validate_ensures`. It
+//! is built from verified parts: `clazel-x64`'s executable decoder and
+//! encoder, [`decode_all`] (which finds the unique decomposition), [`unit_exec`]
+//! (each unit check equal to its spec function) and [`scan_exec`] (the scan
+//! equal to the spec's recursive `scan`). The tier stays 0 until CI's full
+//! verification runs (CLAUDE.md rule 7). The theorem of jit.md exit criterion 2
+//! (an accepted blob
+//! is confined) is not stated or proven here; see the end of [`spec`]'s
+//! header.
+//!
+//! Tier: see `[package.metadata.clazel]` in `Cargo.toml` and
+//! `docs/VERIFICATION.md`.
+
+pub mod acc_lemmas;
+pub mod api;
+pub mod contract;
+pub mod decode_all;
+pub mod examples;
+pub mod lemmas;
+pub mod scan_exec;
+pub mod spec;
+pub mod uniq;
+pub mod unit_exec;
+pub mod validate;
