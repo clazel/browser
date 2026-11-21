@@ -24,6 +24,7 @@
 
 pub mod arena;
 pub mod elements;
+pub mod gc;
 pub mod shape;
 pub mod string;
 pub mod symbol;
