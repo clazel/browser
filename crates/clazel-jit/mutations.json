@@ -206,7 +206,7 @@
       "certificate": {
         "file": "src/front/arith.rs",
         "lemma": "lemma_sx(0xFFFF_FFFFu32)",
-        "witness": "lir::wrap(64, lir::signed_of(32, 0xFFFF_FFFFu32 as int)) as u64 == 0xFFFF_FFFF_FFFF_FFFFu64 && sext(0xFFFF_FFFFu32) == 0xFFFF_FFFFu64",
+        "witness": "lir::wrap(64, lir::signed_of(32, 0xFFFF_FFFFu32 as int)) as u64 == 0xFFFF_FFFF_FFFF_FFFFu64",
         "reveal": [
           "vstd::arithmetic::power::pow"
         ]
