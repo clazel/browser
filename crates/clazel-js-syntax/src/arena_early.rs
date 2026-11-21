@@ -1433,6 +1433,7 @@ fn early_local_exec(
             }
             ok
         },
+        NodeKind::ObjectLiteral => object_literal_exec(tk, nodes, m, Ghost(ts)),
         NodeKind::FunctionBody => {
             let ok = items_lex_empty(nodes, m, true);
             proof {
@@ -1505,72 +1506,6 @@ fn early_local_exec(
     }
 }
 
-
-/// The first statement of the root is not a directive: no Use Strict Directive.
-proof fn lemma_no_directive(a: AstV, ts: Stream, ks: Seq<int>)
-    requires
-        ks.len() == 0 || !is_directive(a, ks[0]),
-    ensures
-        !has_use_strict(a, ts, ks),
-{
-}
-
-/// The root is not a Directive Prologue's: its first item is not a string literal statement.
-fn root_has_no_directive(nodes: &[Node], root: usize) -> (r: bool)
-    requires
-        root < nodes.len(),
-        ast_wf(arena_of(nodes@)),
-    ensures
-        r ==> (arena_of(nodes@).nodes[root as int].children.len() == 0 || !is_directive(
-            arena_of(nodes@),
-            arena_of(nodes@).nodes[root as int].children[0],
-        )),
-{
-    let nd = match nodes.get(root) {
-        Some(x) => x,
-        None => {
-            return false;
-        },
-    };
-    if nd.children.is_empty() {
-        proof {
-            let a = arena_of(nodes@);
-            assert(a.nodes[root as int] == nodes@[root as int]@);
-            assert(nd == &nodes@[root as int]);
-            assert(a.nodes[root as int].children.len() == 0);
-        }
-        return true;
-    }
-    let k0 = match kid_kind(nodes, root, 0) {
-        Some(k) => k,
-        None => {
-            return false;
-        },
-    };
-    if !matches!(k0, NodeKind::ExpressionStatement) {
-        return true;
-    }
-    let c = match nd.children.as_slice().get(ZERO) {
-        Some(c) => *c as usize,
-        None => {
-            return false;
-        },
-    };
-    proof {
-        let a = arena_of(nodes@);
-        assert(a.nodes[root as int] == nodes@[root as int]@);
-        assert(nd == &nodes@[root as int]);
-        assert(a.nodes[root as int].children[0] == c as int);
-        lemma_child_before(a, root as int, 0);
-    }
-    if c >= root {
-        return false;
-    }
-    match kid_kind(nodes, c, 0) {
-        Some(k) => !matches!(k, NodeKind::StringLiteral),
-        None => false,
-    }
-}
 
 /// [`check_early`] on the canonical stream of the executable tokens and gaps
 /// ([`canon_stream`]), which needs no ghost argument.
@@ -1727,12 +1662,15 @@ pub fn check_early(
         },
     };
     let tk = Tk { src, toks, by_start: by_start.as_slice(), bn: bn.as_slice() };
-    // The root's environment: a script without a Use Strict Directive.
-    if !root_has_no_directive(nodes, last) {
-        return Derivation::Unsupported;
-    }
+    // The root's environment: a script, strict if its Directive Prologue has a Use Strict Directive.
+    let root_strict = match use_strict_exec(src, nodes, toks, by_start.as_slice(), last, Ghost(ts)) {
+        Some(v) => v,
+        None => {
+            return Derivation::Unsupported;
+        },
+    };
     let root_e = EEnv {
-        strict: false,
+        strict: root_strict,
         module: false,
         yield_: false,
         await_: false,
@@ -1930,8 +1868,7 @@ pub fn check_early(
     proof {
         let g = goal_of(module);
         assert(g == SourceGoal::Script);
-        lemma_no_directive(a, ts, a.nodes[a.root].children);
-        assert(!has_use_strict(a, ts, kids(a, a.root)));
+        assert(a.root == last as int);
         assert(root_env(a, ts, g) == eenv_of(root_e));
         assert(a.root == last as int);
         assert(early(a, ts, a.root, eenv_of(envs@[a.root])));

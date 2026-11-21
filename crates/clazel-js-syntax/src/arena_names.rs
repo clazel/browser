@@ -968,4 +968,217 @@ pub fn function_early_exec(
     true
 }
 
+// ---------------------------------------------------------------------
+// Object literals.
+// ---------------------------------------------------------------------
+
+/// `__proto__` as code points.
+proof fn lemma_proto_word()
+    ensures
+        sv("__proto__"@) =~= seq![0x5Fu32, 0x5F, 0x70, 0x72, 0x6F, 0x74, 0x6F, 0x5F, 0x5F],
+{
+    reveal_strlit("__proto__");
+    assert("__proto__"@ =~= seq!['_', '_', 'p', 'r', 'o', 't', 'o', '_', '_']);
+}
+
+/// The property `c` is a `__proto__: value` entry (`is_proto_entry`).
+#[verifier::rlimit(400)]
+fn is_proto_exec(tk: &Tk, nodes: &[Node], c: usize, Ghost(ts): Ghost<Stream>) -> (r: Option<bool>)
+    requires
+        c < nodes.len(),
+        ast_wf(arena_of(nodes@)),
+        toks_match(tk.src@, tk.toks@, ts),
+        starts_inc(ts),
+    ensures
+        match r {
+            Some(v) => v == is_proto_entry(arena_of(nodes@), ts, c as int),
+            None => true,
+        },
+{
+    let src = tk.src;
+    let toks = tk.toks;
+    let by_start = tk.by_start;
+    let _ = src.len();
+    let ghost a = arena_of(nodes@);
+    let nd = match nodes.get(c) {
+        Some(x) => x,
+        None => {
+            return None;
+        },
+    };
+    proof {
+        assert(a.nodes[c as int] == nodes@[c as int]@);
+        assert(nd == &nodes@[c as int]);
+        assert(a.nodes[c as int].kind == nd.kind);
+        assert(a.nodes[c as int].op == nd.op);
+        assert(a.nodes[c as int].children.len() == nd.children.len());
+        assert(kids(a, c as int) == a.nodes[c as int].children);
+    }
+    if !matches!(nd.kind, NodeKind::PropertyDefinition) || !matches!(nd.op, Op::KeyValue) {
+        return Some(false);
+    }
+    let key = match nd.children.as_slice().get(ZERO) {
+        Some(k) => *k as usize,
+        None => {
+            return Some(false);
+        },
+    };
+    proof {
+        assert(a.nodes[c as int].children[0] == key as int);
+        lemma_child_before(a, c as int, 0);
+    }
+    let kk = match nodes.get(key) {
+        Some(x) => x.kind,
+        None => {
+            return None;
+        },
+    };
+    proof {
+        assert(a.nodes[key as int] == nodes@[key as int]@);
+        assert(a.nodes[key as int].kind == kk);
+    }
+    if !matches!(kk, NodeKind::IdentifierName | NodeKind::StringLiteral) {
+        return Some(false);
+    }
+    let x = match node_token(nodes, toks, by_start, key) {
+        Some(x) => x,
+        None => {
+            return None;
+        },
+    };
+    let t = match toks.get(x) {
+        Some(t) => t,
+        None => {
+            return None;
+        },
+    };
+    proof {
+        assert(t == &toks@[x as int]);
+        assert(dtok_matches(src@, toks@[x as int], ts.toks[x as int]));
+        lemma_node_tok_at(a, ts, key as int, x as int);
+        lemma_proto_word();
+    }
+    Some(seq_eq(t.name.as_slice(), &[0x5F, 0x5F, 0x70, 0x72, 0x6F, 0x74, 0x6F, 0x5F, 0x5F]))
+}
+
+/// `early_local` of an `ObjectLiteral` node `m`: at most one `__proto__: v` entry, and no method
+/// with a private name.
+#[verifier::rlimit(400)]
+pub fn object_literal_exec(tk: &Tk, nodes: &[Node], m: usize, Ghost(ts): Ghost<Stream>) -> (r: bool)
+    requires
+        m < nodes.len(),
+        ast_wf(arena_of(nodes@)),
+        toks_match(tk.src@, tk.toks@, ts),
+        starts_inc(ts),
+    ensures
+        r ==> {
+            let a = arena_of(nodes@);
+            let ks = a.nodes[m as int].children;
+            (!exists|x: int, y: int|
+                0 <= x < y < ks.len() && is_proto_entry(a, ts, #[trigger] ks[x]) && is_proto_entry(
+                    a,
+                    ts,
+                    #[trigger] ks[y],
+                )) && (forall|x: int|
+                0 <= x < ks.len() ==> !(kd(a, #[trigger] ks[x]) == NodeKind::MethodDefinition && kd(
+                    a,
+                    kid(kids(a, ks[x]), 0),
+                ) == NodeKind::PrivateIdentifier))
+        },
+{
+    let ghost a = arena_of(nodes@);
+    let nd = match nodes.get(m) {
+        Some(x) => x,
+        None => {
+            return false;
+        },
+    };
+    let len = nd.children.len();
+    proof {
+        assert(a.nodes[m as int] == nodes@[m as int]@);
+        assert(nd == &nodes@[m as int]);
+        assert(a.nodes[m as int].children.len() == len);
+    }
+    let ghost ks = a.nodes[m as int].children;
+    let mut seen = false;
+    let mut k: usize = 0;
+    while k < len
+        invariant
+            k <= len,
+            len == nd.children.len(),
+            m < nodes.len(),
+            nd == &nodes@[m as int],
+            a == arena_of(nodes@),
+            ast_wf(a),
+            toks_match(tk.src@, tk.toks@, ts),
+            starts_inc(ts),
+            ks == a.nodes[m as int].children,
+            len == ks.len(),
+            seen ==> exists|x: int| 0 <= x < k && is_proto_entry(a, ts, #[trigger] ks[x]),
+            !seen ==> forall|x: int| 0 <= x < k ==> !is_proto_entry(a, ts, #[trigger] ks[x]),
+            forall|x: int, y: int|
+                0 <= x < y < k ==> !(is_proto_entry(a, ts, #[trigger] ks[x]) && is_proto_entry(
+                    a,
+                    ts,
+                    #[trigger] ks[y],
+                )),
+            forall|x: int|
+                0 <= x < k ==> !(kd(a, #[trigger] ks[x]) == NodeKind::MethodDefinition && kd(
+                    a,
+                    kid(kids(a, ks[x]), 0),
+                ) == NodeKind::PrivateIdentifier),
+        decreases len - k,
+    {
+        let c = match nd.children.as_slice().get(k) {
+            Some(c) => *c as usize,
+            None => {
+                return false;
+            },
+        };
+        proof {
+            assert(a.nodes[m as int].children[k as int] == c as int);
+            lemma_child_before(a, m as int, k as int);
+        }
+        let is_p = match is_proto_exec(tk, nodes, c, Ghost(ts)) {
+            Some(v) => v,
+            None => {
+                return false;
+            },
+        };
+        if is_p && seen {
+            return false;
+        }
+        let ck = match nodes.get(c) {
+            Some(x) => x.kind,
+            None => {
+                return false;
+            },
+        };
+        proof {
+            assert(a.nodes[c as int] == nodes@[c as int]@);
+            assert(a.nodes[c as int].kind == ck);
+        }
+        if matches!(ck, NodeKind::MethodDefinition) {
+            match kid_kind(nodes, c, 0) {
+                Some(NodeKind::PrivateIdentifier) => {
+                    return false;
+                },
+                Some(_) => {},
+                None => {
+                    return false;
+                },
+            }
+        }
+        proof {
+            assert(kids(a, c as int) == a.nodes[c as int].children);
+            assert(ks[k as int] == c as int);
+        }
+        if is_p {
+            seen = true;
+        }
+        k = k.saturating_add(1);
+    }
+    true
+}
+
 } // verus!

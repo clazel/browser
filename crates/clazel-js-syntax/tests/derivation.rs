@@ -336,6 +336,8 @@ fn covered_early_rules_are_verified() {
         "delete a.b; typeof a; void 0; a in b; a instanceof b;",
         "{ a; { b; } }",
         "var a; var a;",
+        "'use strict'; a = 1;",
+        "x = { m(a) { return a; }, get g() { return 1; }, __proto__: null, ['__proto__']: 1 };",
         "(function () {})",
         "function f(a, [b], {c}, ...d) { return a; }",
         "function f(a, a) { }",
@@ -357,7 +359,6 @@ fn covered_early_rules_are_verified() {
 #[test]
 fn other_early_rules_are_unsupported_not_failed() {
     for s in [
-        "'use strict'; a = 1;",
         "let a;",
         "a: b;",
         "class A {}",
