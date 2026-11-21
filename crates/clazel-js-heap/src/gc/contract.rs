@@ -79,6 +79,43 @@
 //!   between editions, so they are cited by name), so a program never sees
 //!   a target vanish within one job.
 //!
+//! - **GC5 (work).** Marking is linear: for a graph of `n` nodes, `s`
+//!   strong edges and `e` ephemerons, it does at most `n + s + 2e` units
+//!   of work ([`work_bound`]), whatever the order of the entries. A unit is
+//!   one node taken off the work list, one strong edge examined, one
+//!   ephemeron examined when its map is processed, or one pending ephemeron
+//!   fired when its key is marked. (A pass over every ephemeron until
+//!   nothing changes is quadratic on a chain listed backwards; the
+//!   collector indexes the pending ephemerons by key instead.) This bounds
+//!   the work; it is not a pause-time claim.
+//! - **GC10 Shapes.** After a collection, every shape of a live object, and
+//!   the parent of every live shape, is live, and so is the root shape
+//!   (`crate::shape::ROOT`): a lookup that walks a live shape's parent
+//!   chain never meets a freed shape. A shape the embedder names as a root
+//!   (an inline cache's, a class's initial shape) is live. A *transition*
+//!   (a shape's table of children) is weak: it does not keep the child
+//!   alive, and a transition to a freed shape is removed.
+//! - **GC11 Keys.** After a collection, every interned string that a live
+//!   shape names (the key it added, or, for a dictionary shape, every key it
+//!   holds) is live, and so is every key the embedder names as a root (a
+//!   constant of live bytecode). Resolving a live key gives the string it
+//!   was interned as.
+//! - **GC12 Precision for shapes and keys.** A shape that none of GC10's
+//!   rules keeps is freed, and so is a key that none of GC11's rules keeps
+//!   ([`live_shapes`] is the exact set; [`shapes_safe`] and
+//!   [`shapes_exact`] check against it). Shapes of dead objects keep
+//!   nothing, so a dictionary shape dies with its object.
+//! - **GC13 Ids are never reused.** A freed shape id resolves to nothing
+//!   from then on, and a freed key too: a table never hands out an id twice,
+//!   so an inline cache that cached a freed shape id cannot hit another
+//!   shape, and a stale key is a defined error, not another property.
+//!   (The cost is a tombstone per freed entry; compacting the tables is a
+//!   later optimization that must flush the inline caches.)
+//!
+//! Symbols are not collected in this slice, and nothing outside the heap's
+//! own tables (an embedder's own copies of a `Key`) is traced: the
+//! embedder reports the keys and shapes it holds.
+//!
 //! The arena's own invariants (`crate::arena::contract`) hold throughout:
 //! freeing goes through `Arena::free`, so a stale reference to a freed slot
 //! is a defined error, whatever the collector does (7.0(f)).
@@ -218,9 +255,192 @@ pub fn closed<G: Graph + ?Sized>(graph: &G, survives: &[bool]) -> bool {
     })
 }
 
+/// GC5's bound on the work of marking a graph of `nodes` nodes, `strong`
+/// strong edges and `ephemerons` ephemerons: `nodes + strong + 2 *
+/// ephemerons` (saturating).
+#[must_use]
+pub const fn work_bound(nodes: usize, strong: usize, ephemerons: usize) -> usize {
+    nodes
+        .saturating_add(strong)
+        .saturating_add(ephemerons.saturating_mul(2))
+}
+
+/// The totals of a graph, for [`work_bound`]: its nodes, strong edges and
+/// ephemerons.
+#[must_use]
+pub fn totals<G: Graph + ?Sized>(graph: &G) -> (usize, usize, usize) {
+    let (mut strong, mut eph) = (0usize, 0usize);
+    for i in 0..graph.len() {
+        strong = strong.saturating_add(graph.strong(i).len());
+        eph = eph.saturating_add(graph.ephemerons(i).len());
+    }
+    (graph.len(), strong, eph)
+}
+
+/// The shape table, as GC10 to GC12 see it: entry `i` is the table's own
+/// index (the shape with id `n` is entry `n - 1`), and an interned key is a
+/// number below the key table's size.
+pub trait ShapeGraph {
+    /// The number of table entries, freed ones included.
+    fn len(&self) -> usize;
+    /// Whether entry `i` is a live shape (a freed or missing one is not).
+    fn exists(&self, i: usize) -> bool;
+    /// The parent of shape `i`, if it has one.
+    fn parent(&self, i: usize) -> Option<usize>;
+    /// Calls `f` with each key shape `i` names: the one key a shared shape
+    /// added, or all the keys of a dictionary shape.
+    fn each_key(&self, i: usize, f: &mut dyn FnMut(usize));
+    /// Whether there are no entries.
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+/// The live shapes and keys (GC10 to GC12), as two flag vectors (shapes by
+/// entry, keys by number below `key_count`): the least sets such that a
+/// root that is a live shape is in the first, the parent of a member is in
+/// the first, and a root key and every key a member names is in the second.
+/// Written as the plainest fixpoint. A root or key naming nothing is
+/// ignored.
+#[must_use]
+pub fn live_shapes<G: ShapeGraph + ?Sized>(
+    graph: &G,
+    roots: &[usize],
+    root_keys: &[usize],
+    key_count: usize,
+) -> (Vec<bool>, Vec<bool>) {
+    let mut shapes = vec![false; graph.len()];
+    let mut keys = vec![false; key_count];
+    for &r in roots {
+        if graph.exists(r) {
+            mark(&mut shapes, r);
+        }
+    }
+    for &k in root_keys {
+        mark(&mut keys, k);
+    }
+    loop {
+        let mut changed = false;
+        for i in 0..graph.len() {
+            if !shapes.get(i).copied().unwrap_or(false) {
+                continue;
+            }
+            if let Some(p) = graph.parent(i).filter(|&p| graph.exists(p)) {
+                changed |= mark(&mut shapes, p);
+            }
+            graph.each_key(i, &mut |k| changed |= mark(&mut keys, k));
+        }
+        if !changed {
+            return (shapes, keys);
+        }
+    }
+}
+
+/// GC10 and GC11: every live shape and key survives.
+#[must_use]
+pub fn shapes_safe<G: ShapeGraph + ?Sized>(
+    graph: &G,
+    roots: &[usize],
+    root_keys: &[usize],
+    shapes: &[bool],
+    keys: &[bool],
+) -> bool {
+    let (want_s, want_k) = live_shapes(graph, roots, root_keys, keys.len());
+    shapes.len() == want_s.len()
+        && want_s.iter().zip(shapes).all(|(&w, &s)| !w || s)
+        && want_k.iter().zip(keys).all(|(&w, &s)| !w || s)
+}
+
+/// GC10 to GC12: exactly the live shapes and keys survive.
+#[must_use]
+pub fn shapes_exact<G: ShapeGraph + ?Sized>(
+    graph: &G,
+    roots: &[usize],
+    root_keys: &[usize],
+    shapes: &[bool],
+    keys: &[bool],
+) -> bool {
+    live_shapes(graph, roots, root_keys, keys.len()) == (shapes.to_vec(), keys.to_vec())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Shape tables for the spec's tests: `(exists, parent, keys)`.
+    struct Table(Vec<(bool, Option<usize>, Vec<usize>)>);
+
+    impl ShapeGraph for Table {
+        fn len(&self) -> usize {
+            self.0.len()
+        }
+        fn exists(&self, i: usize) -> bool {
+            self.0.get(i).is_some_and(|e| e.0)
+        }
+        fn parent(&self, i: usize) -> Option<usize> {
+            self.0.get(i).and_then(|e| e.1)
+        }
+        fn each_key(&self, i: usize, f: &mut dyn FnMut(usize)) {
+            for &k in self.0.get(i).map_or(&[][..], |e| &e.2) {
+                f(k);
+            }
+        }
+    }
+
+    #[test]
+    fn a_live_shape_keeps_its_parents_and_its_keys() {
+        // 0 <- 1 <- 2 (keys 0, 1, 2), and 3 is a separate shape of key 3.
+        let t = Table(vec![
+            (true, None, vec![]),
+            (true, Some(0), vec![0]),
+            (true, Some(1), vec![1]),
+            (true, None, vec![3]),
+        ]);
+        let (s, k) = live_shapes(&t, &[2], &[], 5);
+        assert_eq!(s, [true, true, true, false]);
+        assert_eq!(k, [true, true, false, false, false]);
+        // A root key alone keeps its string, and nothing else.
+        let (s, k) = live_shapes(&t, &[], &[4], 5);
+        assert_eq!(s, [false; 4]);
+        assert_eq!(k, [false, false, false, false, true]);
+    }
+
+    #[test]
+    fn freed_and_missing_shapes_and_keys_reach_nothing() {
+        let t = Table(vec![(false, None, vec![]), (true, Some(0), vec![9])]);
+        // The parent was freed (it cannot be, in a heap; the spec does not
+        // follow it), a root names a missing shape and a missing key.
+        let (s, k) = live_shapes(&t, &[1, 7], &[8], 2);
+        assert_eq!(s, [false, true]);
+        assert_eq!(k, [false, false]);
+    }
+
+    #[test]
+    fn safe_and_exact_tell_the_cases_apart() {
+        let t = Table(vec![(true, None, vec![]), (true, Some(0), vec![0])]);
+        assert!(shapes_exact(&t, &[1], &[], &[true, true], &[true]));
+        assert!(shapes_safe(&t, &[1], &[], &[true, true], &[true]));
+        // Keeping the key of nothing is safe, not exact.
+        assert!(shapes_safe(&t, &[0], &[], &[true, true], &[true]));
+        assert!(!shapes_exact(&t, &[0], &[], &[true, true], &[true]));
+        // Freeing a parent or a key is neither.
+        assert!(!shapes_safe(&t, &[1], &[], &[false, true], &[true]));
+        assert!(!shapes_safe(&t, &[1], &[], &[true, true], &[false]));
+    }
+
+    #[test]
+    fn the_work_bound_counts_each_ephemeron_twice() {
+        assert_eq!(work_bound(10, 3, 4), 21);
+        assert_eq!(work_bound(usize::MAX, 1, 1), usize::MAX);
+        let g = [
+            Node {
+                strong: vec![1],
+                ephemerons: vec![(1, 2)],
+            },
+            Node::default(),
+        ];
+        assert_eq!(totals(&g), (2, 1, 1));
+    }
 
     fn node(strong: &[usize], eph: &[(usize, usize)]) -> Node {
         Node {
