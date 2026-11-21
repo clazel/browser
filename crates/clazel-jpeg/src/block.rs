@@ -57,7 +57,7 @@ pub(crate) struct Block {
 }
 
 /// `EXTEND(V, T)`, Figure F.12: the signed value of the `size` bits `v`.
-fn extend(v: u16, size: u8) -> Option<i32> {
+pub(crate) fn extend(v: u16, size: u8) -> Option<i32> {
     let v = i32::from(v);
     let half = 1i32.checked_shl(u32::from(size).checked_sub(1)?)?;
     if v < half {

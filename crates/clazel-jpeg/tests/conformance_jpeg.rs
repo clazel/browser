@@ -52,6 +52,9 @@ use clazel_jpeg::Jpeg;
 mod testimages {
     include!("generated/libjpeg_turbo_testimages.rs");
 }
+mod progressive_table {
+    include!("generated/jpeg_progressive.rs");
+}
 mod corpus_table {
     include!("generated/jpeg_corpus.rs");
 }
@@ -309,7 +312,11 @@ struct Entry<'a> {
 }
 
 fn corpus() -> Vec<Entry<'static>> {
-    let pack = corpus_table::FILES.first().map_or(&[][..], |c| c.bytes);
+    entries_of(corpus_table::FILES.first().map_or(&[][..], |c| c.bytes))
+}
+
+/// The records of a pack (`corpus.pack` or `progressive.pack`).
+fn entries_of(pack: &'static [u8]) -> Vec<Entry<'static>> {
     let mut out = Vec::new();
     let mut at = 0usize;
     while at < pack.len() {
@@ -853,7 +860,6 @@ fn refusals_by_marker() {
         v
     };
     for (m, word) in [
-        (0xC2, "progressive"),
         (0xC3, "lossless"),
         (0xC5, "hierarchical"),
         (0xC9, "arithmetic"),
@@ -1067,7 +1073,7 @@ fn interface_edges() -> Result<(), Error> {
     assert!(matches!(Jpeg::start(&config), Err(Error::Unsupported(_))));
     let config = Config::new(Format::Jpeg, 8, 8, FrameCount::Known(1))?;
     let wlen = Jpeg::work_len(&config)?;
-    assert_eq!(wlen, 4 * 39 * 39);
+    assert_eq!(wlen, 6 * 39 * 43);
     let mut s = Jpeg::start(&config)?;
     let (mut p, mut w) = (vec![0u8; 256], vec![0u8; 10]);
     let mut b = Buffers {
@@ -1087,14 +1093,16 @@ fn vendored_tables() {
     let named = testimages::FILES
         .iter()
         .map(|c| (c.file, c.sha256))
-        .chain(corpus_table::FILES.iter().map(|c| (c.file, c.sha256)));
+        .chain(corpus_table::FILES.iter().map(|c| (c.file, c.sha256)))
+        .chain(progressive_table::FILES.iter().map(|c| (c.file, c.sha256)));
     let mut n = 0usize;
     for (file, sha) in named {
         assert!(!file.is_empty());
         assert!(sha.len() == 64 && sha.bytes().all(|b| b.is_ascii_hexdigit()));
         n = n.saturating_add(1);
     }
-    assert_eq!(n, 7);
+    assert_eq!(n, 9);
+    assert_eq!(progressive_files().len(), 654);
     let entries = corpus();
     assert_eq!(entries.len(), 132);
     // Every file with a reference is one libjpeg-turbo decoded.
@@ -1103,4 +1111,412 @@ fn vendored_tables() {
             .iter()
             .all(|e| e.reference.is_empty() || parse_ref(e.reference).is_some())
     );
+}
+
+// ------------------------------------------------------------ progressive
+
+/// Miri runs the progressive files of at most this many bytes, every 20th
+/// (the differential test) and every 60th at chunk size 1 (chunking).
+const MIRI_PROG_MAX_FILE: usize = 800;
+const MIRI_PROG_DIFF_EVERY: usize = 20;
+const MIRI_PROG_CHUNK_EVERY: usize = 60;
+
+/// `progressive.pack`: `VARIANT/ORIGINAL` names, the progressive JPEG, no
+/// reference of its own.
+fn progressive_files() -> Vec<Entry<'static>> {
+    entries_of(
+        progressive_table::FILES
+            .iter()
+            .find(|c| c.file == "progressive.pack")
+            .map_or(&[][..], |c| c.bytes),
+    )
+}
+
+/// The name of the baseline original of a `VARIANT/ORIGINAL` name.
+fn original_of(name: &str) -> &str {
+    name.split_once('/').map_or(name, |(_, o)| o)
+}
+
+/// The reference of a progressive file: that of its baseline original (the
+/// file `jpegtran` transcoded; the script asserted libjpeg-turbo decodes
+/// both alike).
+fn original_reference(name: &str) -> Option<Vec<u8>> {
+    let original = original_of(name);
+    all_decodable()
+        .into_iter()
+        .find(|(n, _, _)| n == original)
+        .map(|(_, _, r)| r)
+}
+
+/// Every progressive file against libjpeg-turbo's output for its baseline
+/// original: every sample exact.
+#[test]
+fn progressive_differential_vs_libjpeg_turbo() {
+    let files = progressive_files();
+    let mut total_hist = [0u64; 6];
+    let (mut pass, mut run, mut xfail) = (0usize, 0usize, 0usize);
+    let mut notes = Vec::new();
+    let mut seen = 0usize;
+    let mut variants: Vec<(String, usize)> = Vec::new();
+    for e in &files {
+        if miri() {
+            if e.jpeg.len() > MIRI_PROG_MAX_FILE {
+                continue;
+            }
+            seen = seen.saturating_add(1);
+            if !seen.is_multiple_of(MIRI_PROG_DIFF_EVERY) {
+                continue;
+            }
+        }
+        run = run.saturating_add(1);
+        let Some(reference) = original_reference(e.name) else {
+            notes.push(format!("{}: no baseline original", e.name));
+            continue;
+        };
+        // The orientation is in the original's name.
+        match compare(original_of(e.name), e.jpeg, &reference) {
+            Ok(hist) => {
+                for (t, n) in total_hist.iter_mut().zip(hist) {
+                    *t = t.saturating_add(n);
+                }
+                pass = pass.saturating_add(1);
+                let v = e.name.split_once('/').map_or("?", |(v, _)| v);
+                match variants.iter_mut().find(|(n, _)| n == v) {
+                    Some((_, n)) => *n = n.saturating_add(1),
+                    None => variants.push((v.to_owned(), 1)),
+                }
+            }
+            Err(msg) if msg.contains("do not fit the work buffer") && is_four_component(e.name) => {
+                xfail = xfail.saturating_add(1);
+            }
+            Err(msg) => notes.push(format!("{}: {msg}", e.name)),
+        }
+    }
+    println!(
+        "  difference histogram of every sample compared: {}",
+        show(&total_hist)
+    );
+    println!("  files by variant: {variants:?}");
+    print_suite(
+        "JPEG progressive vs libjpeg-turbo: jpegtran copies of every baseline file (xfail: 4-component, full-resolution, refused by the work buffer)",
+        pass,
+        xfail,
+        notes.len(),
+        run,
+    );
+    assert!(notes.is_empty(), "{}", notes.join("\n"));
+    assert!(miri() || run == files.len());
+}
+
+/// Progressive files at several chunk sizes equal the whole-file decode.
+#[test]
+fn progressive_chunking() {
+    let files = progressive_files();
+    let chunks: &[usize] = if miri() { &[1] } else { &[1, 5, 4096] };
+    let every = if miri() { MIRI_PROG_CHUNK_EVERY } else { 3 };
+    let (mut pass, mut run, mut xfail) = (0usize, 0usize, 0usize);
+    for (i, e) in files.iter().enumerate() {
+        if i % every != 0 || (miri() && e.jpeg.len() > MIRI_PROG_MAX_FILE) {
+            continue;
+        }
+        run = run.saturating_add(1);
+        let whole = decode(e.jpeg, e.jpeg.len().max(1));
+        let same = chunks.iter().all(|&c| decode(e.jpeg, c) == whole);
+        let refused = matches!(&whole, Err(Error::Unsupported(m)) if m.contains("work buffer"))
+            && is_four_component(e.name);
+        if same && whole.is_ok() {
+            pass = pass.saturating_add(1);
+        } else if same && refused {
+            xfail = xfail.saturating_add(1);
+        } else {
+            println!("  {}: chunking differs or fails", e.name);
+        }
+    }
+    print_suite(
+        "JPEG progressive chunking: files at chunk sizes 1, 5 and 4096",
+        pass,
+        xfail,
+        run.saturating_sub(pass).saturating_sub(xfail),
+        run,
+    );
+    assert_eq!(pass.saturating_add(xfail), run);
+}
+
+/// Whether a file's name says it has four components (CMYK or YCCK): the
+/// ones whose full-resolution coefficients may not fit the work buffer.
+fn is_four_component(name: &str) -> bool {
+    name.contains("cmyk") || name.contains("ycck")
+}
+
+/// Mutants of progressive files never panic and keep the invariant.
+#[test]
+fn progressive_mutations_never_panic() {
+    let files = progressive_files();
+    let every = if miri() { 100 } else { 4 };
+    let per_file = if miri() { 2 } else { 6 };
+    let (mut mutants, mut errors, mut frames, mut units) = (0usize, 0usize, 0usize, 0usize);
+    for (n, e) in files.iter().enumerate() {
+        if n % every != 0 || (miri() && e.jpeg.len() > 4096) {
+            continue;
+        }
+        units = units.saturating_add(1);
+        let mut rng = Rng(0x2545_F491_4F6C_DD1D ^ (u64::try_from(n).unwrap_or(0) << 20) ^ 7);
+        for _ in 0..per_file {
+            let m = mutate(e.jpeg, &mut rng);
+            for chunk in [m.len().max(1), 5] {
+                mutants = mutants.saturating_add(1);
+                match survive(&m, chunk) {
+                    Ok(_) => frames = frames.saturating_add(1),
+                    Err(_) => errors = errors.saturating_add(1),
+                }
+            }
+        }
+    }
+    println!("  {mutants} mutants, {errors} ended in an error, {frames} frames completed");
+    print_suite(
+        "JPEG progressive mutations: no panic, the invariant kept",
+        units,
+        0,
+        0,
+        units,
+    );
+}
+
+/// SOF2 with these components and size.
+fn sof2(w: u16, h: u16, comps: &[(u8, u8, u8)]) -> Vec<u8> {
+    let mut b = vec![8];
+    b.extend(h.to_be_bytes());
+    b.extend(w.to_be_bytes());
+    b.push(u8::try_from(comps.len()).unwrap_or(0));
+    for &(id, hv, tq) in comps {
+        b.extend([id, hv, tq]);
+    }
+    seg(0xC2, &b)
+}
+
+/// SOS of a progressive scan: `(component, DC and AC table selectors)`, then
+/// `Ss`, `Se`, `Ah` and `Al`.
+fn sos_p(comps: &[(u8, u8)], ss: u8, se: u8, ah: u8, al: u8) -> Vec<u8> {
+    let mut b = vec![u8::try_from(comps.len()).unwrap_or(0)];
+    for &(id, tdta) in comps {
+        b.extend([id, tdta]);
+    }
+    b.extend([ss, se, (ah << 4) | al]);
+    seg(0xDA, &b)
+}
+
+/// The AC table of the progressive tests: `0` is symbol `0x01` (run 0, size
+/// 1), `10` is `0x02` (run 0, size 2), `110` is `0x00` (`EOB0`), `1110` is
+/// `0x10` (`EOB1`: a run of 2 and one more bit), `1111` is `0x11`.
+fn ac_table_p() -> Vec<u8> {
+    dht(
+        0x10,
+        &[(1, 1), (2, 1), (3, 1), (4, 2)],
+        &[0x01, 0x02, 0x00, 0x10, 0x11],
+    )
+}
+
+/// A scan: its header and its already packed data.
+type ScanBytes = (Vec<u8>, Vec<u8>);
+
+/// A gray image of `blocks` blocks in a row, quantizer 8, with these scans.
+fn prog_gray(blocks: u16, scans: &[ScanBytes]) -> Vec<u8> {
+    let mut v = vec![0xFF, 0xD8];
+    v.extend(dqt(8));
+    v.extend(sof2(blocks.saturating_mul(8), 8, &[(1, 0x11, 0)]));
+    v.extend(dc_table());
+    v.extend(ac_table_p());
+    for (head, data) in scans {
+        v.extend(head);
+        v.extend(data);
+    }
+    v.extend([0xFF, 0xD9]);
+    v
+}
+
+/// The R channel of every pixel of a decoded image.
+fn reds(d: &Decoded) -> Vec<u8> {
+    d.pixels
+        .chunks(4)
+        .filter_map(|p| p.first().copied())
+        .collect()
+}
+
+#[test]
+fn progressive_dc_first_and_refinement() -> Result<(), Error> {
+    // DC code `1` then 4 bits: 1100 is a difference of 12; shifted left by
+    // Al = 1 it is 24: a level of 128 + 24 * 8 / 8.
+    let first = (sos_p(&[(1, 0x00)], 0, 0, 0, 1), pack(&[1, 1, 1, 0, 0]));
+    // The refinement bit 1 of Ah = 1, Al = 0 makes it 25.
+    let refine = (sos_p(&[(1, 0x00)], 0, 0, 1, 0), pack(&[1]));
+    let one = prog_gray(1, std::slice::from_ref(&first));
+    let d = decode(&one, one.len())?;
+    assert_eq!(reds(&d), vec![152; 64]);
+    let two = prog_gray(1, &[first.clone(), refine]);
+    let d = decode(&two, two.len())?;
+    assert_eq!(reds(&d), vec![153; 64]);
+    // A refinement bit 0 changes nothing.
+    let zero = prog_gray(1, &[first, (sos_p(&[(1, 0x00)], 0, 0, 1, 0), pack(&[0]))]);
+    let d = decode(&zero, zero.len())?;
+    assert_eq!(reds(&d), vec![152; 64]);
+    Ok(())
+}
+
+#[test]
+fn progressive_eob_run_covers_following_blocks() -> Result<(), Error> {
+    // Three blocks, DC 0 in each (DC code `0`: category 0).
+    let dc = (sos_p(&[(1, 0x00)], 0, 0, 0, 0), pack(&[0, 0, 0]));
+    // Block 1: `0` and bit 1 (+1 at k = 1), then `1110` (EOB1) and the extra
+    // bit 0: a run of 2, this block and the next, which takes no bits.
+    // Block 3: `0` and bit 1, then `110` (EOB0).
+    let ac = (
+        sos_p(&[(1, 0x00)], 1, 63, 0, 0),
+        pack(&[0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0]),
+    );
+    let img = prog_gray(3, &[dc, ac]);
+    let d = decode(&img, img.len())?;
+    let r = reds(&d);
+    let block = |b: usize| {
+        let at = b.saturating_mul(8);
+        r.get(at..at.saturating_add(8)).map(<[u8]>::to_vec)
+    };
+    // The first row of each block: blocks 1 and 3 equal and not flat, block
+    // 2 flat.
+    assert_eq!(block(0), block(2));
+    assert_ne!(block(0), Some(vec![128; 8]));
+    assert_eq!(block(1), Some(vec![128; 8]));
+    Ok(())
+}
+
+#[test]
+fn progressive_successive_approximation_equals_direct() -> Result<(), Error> {
+    let dc = (sos_p(&[(1, 0x00)], 0, 0, 0, 0), pack(&[0]));
+    // A: one AC-first scan, Al = 0: `10` (size 2), `11` (value 3), then
+    // `110` (EOB0).
+    let a = prog_gray(
+        1,
+        &[
+            dc.clone(),
+            (
+                sos_p(&[(1, 0x00)], 1, 63, 0, 0),
+                pack(&[1, 0, 1, 1, 1, 1, 0]),
+            ),
+        ],
+    );
+    // B: Al = 1: `0` (size 1), bit 1 (+1, shifted to 2), `110` EOB0; then the
+    // refinement Ah = 1, Al = 0: `110` is an EOB0, whose run corrects the
+    // nonzero coefficient with the next bit 1: 2 becomes 3.
+    let b = prog_gray(
+        1,
+        &[
+            dc,
+            (sos_p(&[(1, 0x00)], 1, 63, 0, 1), pack(&[0, 1, 1, 1, 0])),
+            (sos_p(&[(1, 0x00)], 1, 63, 1, 0), pack(&[1, 1, 0, 1])),
+        ],
+    );
+    let (da, db) = (decode(&a, a.len())?, decode(&b, b.len())?);
+    assert_eq!(da.pixels, db.pixels);
+    // The coefficient is not flat.
+    assert!(reds(&da).windows(2).any(|w| w.first() != w.get(1)));
+    Ok(())
+}
+
+#[test]
+fn progressive_scan_header_errors() {
+    let dc = (sos_p(&[(1, 0x00)], 0, 0, 0, 0), pack(&[0]));
+    let with = |head: Vec<u8>| prog_gray(1, &[dc.clone(), (head, pack(&[0]))]);
+    // Al over 13, Al not Ah - 1, a DC scan with Se, a band backwards, Se
+    // over 63.
+    for (ss, se, ah, al) in [
+        (0, 0, 0, 14),
+        (1, 5, 2, 0),
+        (0, 1, 0, 0),
+        (5, 2, 0, 0),
+        (1, 64, 0, 0),
+    ] {
+        let img = with(sos_p(&[(1, 0x00)], ss, se, ah, al));
+        assert!(
+            matches!(expect_err(&img), Error::Malformed(m) if m.contains("progressive scan")),
+            "{ss} {se} {ah} {al}"
+        );
+    }
+    // An AC scan of several components.
+    let mut v = vec![0xFF, 0xD8];
+    v.extend(dqt(8));
+    v.extend(sof2(8, 8, &[(1, 0x11, 0), (2, 0x11, 0), (3, 0x11, 0)]));
+    v.extend(dc_table());
+    v.extend(ac_table_p());
+    v.extend(sos_p(&[(1, 0), (2, 0)], 1, 5, 0, 0));
+    assert!(matches!(expect_err(&v), Error::Malformed(m) if m.contains("several components")));
+    // A component never scanned.
+    let mut v = vec![0xFF, 0xD8];
+    v.extend(dqt(8));
+    v.extend(sof2(8, 8, &[(1, 0x11, 0), (2, 0x11, 0), (3, 0x11, 0)]));
+    v.extend(dc_table());
+    v.extend(ac_table_p());
+    v.extend(sos_p(&[(1, 0)], 0, 0, 0, 0));
+    v.extend(pack(&[0]));
+    v.extend([0xFF, 0xD9]);
+    assert!(matches!(expect_err(&v), Error::Malformed(m) if m.contains("no scan data")));
+    // An AC scan with no AC table.
+    let mut v = vec![0xFF, 0xD8];
+    v.extend(dqt(8));
+    v.extend(sof2(8, 8, &[(1, 0x11, 0)]));
+    v.extend(dc_table());
+    v.extend(sos_p(&[(1, 0)], 1, 5, 0, 0));
+    assert!(matches!(expect_err(&v), Error::Malformed(m) if m.contains("not defined")));
+    // A stream with no EOI after complete scans is truncated.
+    let mut cut = prog_gray(1, &[dc]);
+    cut.truncate(cut.len().saturating_sub(2));
+    assert_eq!(decode(&cut, cut.len()).err(), Some(Error::Truncated));
+}
+
+/// A never-ending sequence of scans is refused at the 101st, and costs no
+/// more than its bytes.
+#[test]
+fn progressive_scan_count_is_bounded() {
+    let scan = (sos_p(&[(1, 0x00)], 0, 0, 0, 0), pack(&[0]));
+    let ok = prog_gray(1, &vec![scan.clone(); 100]);
+    assert!(decode(&ok, ok.len()).is_ok());
+    let many = prog_gray(1, &vec![scan; 5000]);
+    let e = expect_err(&many);
+    assert!(
+        matches!(e, Error::Unsupported(m) if m.contains("100 scans")),
+        "{e:?}"
+    );
+}
+
+/// Hostile sizes: a frame over the pixel limit is refused by the config; a
+/// 4-component frame whose coefficients do not fit the work buffer by the
+/// frame header; neither needs a big work buffer to say so.
+#[test]
+fn progressive_sizes_are_bounded() {
+    for side in [65535u16, 16384] {
+        let mut v = vec![0xFF, 0xD8];
+        v.extend(sof2(side, side, &[(1, 0x11, 0)]));
+        assert!(matches!(Jpeg::decode_config(&v), Err(Error::Size(_))));
+    }
+    // 1024 by 1024 with four full components needs 4 * (2 * 2^20 + ...) over
+    // the 6 * 1055 * 1059 the config allows.
+    let mut v = vec![0xFF, 0xD8];
+    v.extend(dqt(8));
+    v.extend(sof2(
+        1024,
+        1024,
+        &[(1, 0x11, 0), (2, 0x11, 0), (3, 0x11, 0), (4, 0x11, 0)],
+    ));
+    v.extend(dc_table());
+    v.extend(sos_p(&[(1, 0)], 0, 0, 0, 0));
+    assert!(matches!(expect_err(&v), Error::Unsupported(m) if m.contains("work buffer")));
+    // Subsampled, the four components fit: the decode goes on to the data.
+    let mut v = vec![0xFF, 0xD8];
+    v.extend(dqt(8));
+    v.extend(sof2(
+        1024,
+        1024,
+        &[(1, 0x22, 0), (2, 0x11, 0), (3, 0x11, 0), (4, 0x22, 0)],
+    ));
+    v.extend(dc_table());
+    v.extend(sos_p(&[(1, 0)], 0, 0, 0, 0));
+    assert_eq!(expect_err(&v), Error::Truncated);
 }
