@@ -481,4 +481,33 @@ pub proof fn example_compiler_ops_classes()
     assert(op_handler(Op::ForInIterator { dst: 0, src: 0 }) == HandlerId::ForInIterator) by (compute_only);
 }
 
+/// The operands `op_wf` accepts of the ops added for top-level lexical
+/// declarations (`InitGlobalLexical`):
+/// every register inside the frame (registers 0 to 2), every register range
+/// inside it, every constant index inside the pool (0 to 2), a record constant
+/// that is a value (constant 2 is not), and each small enumerated operand below
+/// its bound.
+pub proof fn example_global_lexical_wf()
+    ensures
+        op_wf(example_code(), Op::InitGlobalLexical { key: 2, src: 0 }),
+        !op_wf(example_code(), Op::InitGlobalLexical { key: 3, src: 0 }),
+        !op_wf(example_code(), Op::InitGlobalLexical { key: 2, src: 3 }),
+{
+    assert(op_wf(example_code(), Op::InitGlobalLexical { key: 2, src: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::InitGlobalLexical { key: 3, src: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::InitGlobalLexical { key: 2, src: 3 })) by (compute_only);
+}
+
+/// The class and the handler of each op added for the compiler's second
+/// slice: each always calls out (it can allocate, call user code or throw), so
+/// each is a handler op, which the JIT lowers to an exit, with its own handler.
+pub proof fn example_global_lexical_classes()
+    ensures
+        op_class(Op::InitGlobalLexical { key: 2, src: 0 }) is Handler,
+        op_handler(Op::InitGlobalLexical { key: 2, src: 0 }) == HandlerId::InitGlobalLexical,
+{
+    assert(op_class(Op::InitGlobalLexical { key: 2, src: 0 }) is Handler) by (compute_only);
+    assert(op_handler(Op::InitGlobalLexical { key: 2, src: 0 }) == HandlerId::InitGlobalLexical) by (compute_only);
+}
+
 } // verus!

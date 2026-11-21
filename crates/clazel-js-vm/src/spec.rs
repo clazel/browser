@@ -1193,6 +1193,7 @@ pub open spec fn op_wf(c: Code, op: Op) -> bool {
             reg_ok(c, src) && reg_ok(c, value) && reg_ok(c, mode),
         Op::Throw { src } => reg_ok(c, src),
         Op::ThrowError { msg, .. } => msg < c.consts.len(),
+        Op::InitGlobalLexical { key, src, .. } => key < c.consts.len() && reg_ok(c, src),
         Op::ToPropertyKey { dst, src, .. } => reg_ok(c, dst) && reg_ok(c, src),
         Op::ToString { dst, src, .. } => reg_ok(c, dst) && reg_ok(c, src),
         Op::CopyDataProperties { obj, src, excl, nexcl, .. } => reg_ok(c, obj) && reg_ok(c, src) && regs_ok(c, excl, nexcl),

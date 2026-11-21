@@ -1871,6 +1871,58 @@
         "lemma": "crate::examples::example_compiler_ops_classes()",
         "witness": "op_class(Op::ForInIterator { dst: 0, src: 0 }) is Core"
       }
+    },
+    {
+      "id": "init-global-lexical-key-wf",
+      "file": "src/spec.rs",
+      "find": "Op::InitGlobalLexical { key, src, .. } => key < c.consts.len() && reg_ok(c, src),",
+      "replace": "Op::InitGlobalLexical { key, src, .. } => key <= c.consts.len() && reg_ok(c, src),",
+      "expect": "killed",
+      "reason": "InitGlobalLexical accepts a constant index one past the pool (operand `key`): example_global_lexical_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_global_lexical_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::InitGlobalLexical { key: 3, src: 0 })"
+      }
+    },
+    {
+      "id": "init-global-lexical-src-wf",
+      "file": "src/spec.rs",
+      "find": "Op::InitGlobalLexical { key, src, .. } => key < c.consts.len() && reg_ok(c, src),",
+      "replace": "Op::InitGlobalLexical { key, src, .. } => key < c.consts.len(),",
+      "expect": "killed",
+      "reason": "InitGlobalLexical accepts a register outside the frame (operand `src`): example_global_lexical_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_global_lexical_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::InitGlobalLexical { key: 2, src: 3 })"
+      }
+    },
+    {
+      "id": "init-global-lexical-handler",
+      "file": "src/ops.rs",
+      "find": "Op::InitGlobalLexical { .. } => HandlerId::InitGlobalLexical,",
+      "replace": "Op::InitGlobalLexical { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "InitGlobalLexical calls the throw handler instead of its own: example_global_lexical_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_global_lexical_classes()",
+        "witness": "op_handler(Op::InitGlobalLexical { key: 2, src: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "init-global-lexical-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::InitGlobalLexical { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "InitGlobalLexical is a core op, which never calls out: example_global_lexical_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_global_lexical_classes()",
+        "witness": "op_class(Op::InitGlobalLexical { key: 2, src: 0 }) is Core"
+      }
     }
   ]
 }

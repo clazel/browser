@@ -245,6 +245,8 @@ pub enum HandlerId {
     CreateRestArray,
     /// EnumerateObjectProperties, §14.7.5.9†.
     ForInIterator,
+    /// InitializeBinding on the global declarative record, §9.1.1.4.2†.
+    InitGlobalLexical,
 }
 
 /// The error constructors a compiler-known throw can name.
@@ -1315,6 +1317,23 @@ pub enum Op {
         /// The register read.
         src: nat,
     },
+    /// InitializeBinding(`consts[key]`, `src`) on the global Environment Record (§9.1.1.4.2†
+    /// InitializeBinding step 2: "If DclRec.HasBinding(N) is true, return !
+    /// DclRec.InitializeBinding(N, V)"), whose [[DeclarativeRecord]] holds the binding that
+    /// [`Op::DeclareGlobals`] created, uninitialized (GlobalDeclarationInstantiation §16.1.7† step
+    /// 15: CreateMutableBinding or CreateImmutableBinding). It is the evaluation of a top-level
+    /// `let`, `const` or `class` declaration (§14.3.1.2† LexicalBinding evaluation, "Perform !
+    /// InitializeReferencedBinding(lhs, value)", §15.7.15†). Reads and writes of the binding are
+    /// [`Op::GetGlobal`] and [`Op::SetGlobal`], which resolve a name in the declarative record
+    /// before the global object (ResolveBinding §9.4.2†, GetIdentifierReference §9.1.2.1) and so
+    /// throw a ReferenceError for the uninitialized binding (GetBindingValue §9.1.1.1.6† step 2)
+    /// and a TypeError for a `const` (SetMutableBinding §9.1.1.1.5† step 5).
+    InitGlobalLexical {
+        /// The constant-pool index of the name.
+        key: nat,
+        /// The register read.
+        src: nat,
+    },
 }
 
 /// The class of an op (see the file header).
@@ -1427,6 +1446,7 @@ pub open spec fn op_class(op: Op) -> OpClass {
         | Op::CreateMappedArguments { .. }
         | Op::CreateRestArray { .. }
         | Op::ForInIterator { .. }
+        | Op::InitGlobalLexical { .. }
         | Op::ThrowError { .. } => OpClass::Handler,
     }
 }
@@ -1498,6 +1518,7 @@ pub open spec fn op_handler(op: Op) -> HandlerId {
         Op::Await { .. } => HandlerId::Await,
         Op::Throw { .. } | Op::Nop => HandlerId::Throw,
         Op::ThrowError { .. } => HandlerId::ThrowError,
+        Op::InitGlobalLexical { .. } => HandlerId::InitGlobalLexical,
         Op::ToPropertyKey { .. } => HandlerId::ToPropertyKey,
         Op::ToString { .. } => HandlerId::ToString,
         Op::CopyDataProperties { .. } => HandlerId::CopyDataProperties,
