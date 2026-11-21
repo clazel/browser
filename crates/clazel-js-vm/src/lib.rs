@@ -14,7 +14,7 @@
 //!   the executable form of `spec::code_wf`;
 //! - [`scope`]: scope analysis, which bindings are captured (item 7.7);
 //! - [`compile`]: [`compile::compile_script`], the compiler from the AST of
-//!   `clazel-js-syntax` to bytecode (item 7.7, first and second slice: its
+//!   `clazel-js-syntax` to bytecode (item 7.7, first to third slice: its
 //!   module header lists what it compiles and what it does not yet);
 //! - [`literal`]: the values of names and literals, which the AST leaves in
 //!   the source text.

@@ -1,28 +1,33 @@
-//! The compiler from the AST to bytecode (phase-7.md item 7.7, first and second
+//! The compiler from the AST to bytecode (phase-7.md item 7.7, first to third
 //! slice): [`compile_script`].
 //!
 //! # What it compiles
 //!
 //! - **Expressions:** literals (numbers, BigInts, strings, `true`, `false`,
-//!   `null`), identifiers, `this`, the unary, binary, logical, conditional and
-//!   comma operators, assignment (simple, compound, logical and destructuring),
-//!   `++` and `--`, calls and `new` (with spread arguments), member access,
-//!   optional chaining, object literals (data properties, methods, accessors,
-//!   computed names, spread and `__proto__:`) and array literals (with spread),
-//!   template literals and tagged templates, function and arrow function
-//!   expressions, class expressions, `super` properties and `super()`,
-//!   `new.target`, private names (`o.#x`, `#x in o`); `typeof` of a global,
-//!   unary `+` as `ToNumber`.
+//!   `null`, regular expressions), identifiers, `this`, the unary, binary,
+//!   logical, conditional and comma operators, assignment (simple, compound,
+//!   logical and destructuring), `++` and `--`, calls and `new` (with spread
+//!   arguments), direct `eval`, member access, optional chaining, object
+//!   literals (data properties, methods, accessors, computed names, spread and
+//!   `__proto__:`) and array literals (with spread), template literals and
+//!   tagged templates, function, arrow function, generator and async function
+//!   expressions, class expressions, `yield`, `yield*` and `await`, `super`
+//!   properties and `super()`, `new.target`, private names (`o.#x`, `#x in o`);
+//!   `typeof` and `delete` of an identifier, unary `+` as `ToNumber`.
 //! - **Statements:** `var`, `let` and `const` with temporal-dead-zone checks and
-//!   binding patterns, blocks, `if`, `while`, `do`-`while` and `for`, `for`-`in`
-//!   and `for`-`of` (with iterator closing), `switch`, labels, `break`,
-//!   `continue`, `return`, `throw`, `try`/`catch`/`finally` (with a pattern as the
-//!   `catch` parameter), function and class declarations, with Annex B.3.3's
-//!   block-level hoisting.
-//! - **Functions:** default and rest parameters and patterns as parameters, the
-//!   mapped and unmapped `arguments` object; classes with fields, methods,
-//!   accessors, static members and blocks, private names, `extends` and the
-//!   default constructors.
+//!   binding patterns, blocks, `if`, `while`, `do`-`while` and `for`, `for`-`in`,
+//!   `for`-`of` and `for await` (with iterator closing), `switch`, `with`, labels,
+//!   `break`, `continue`, `return`, `throw`, `try`/`catch`/`finally` (with a
+//!   pattern as the `catch` parameter), function, generator, async and class
+//!   declarations, with Annex B.3.3's block-level hoisting.
+//! - **Functions:** default and rest parameters and patterns as parameters (with
+//!   a separate environment for the body when the parameters have expressions),
+//!   the mapped and unmapped `arguments` object (and a `var arguments` that
+//!   shares it); generators, async functions, async arrow functions and async
+//!   generators, and their methods; classes with fields, methods, accessors,
+//!   static members and blocks, private names, `extends` and the default
+//!   constructors; NamedEvaluation of anonymous functions and classes with a
+//!   name known at compile time.
 //! - **Closures:** scope analysis ([`crate::scope`]) puts a binding that no
 //!   inner function refers to in a register and a captured one in a slot of an
 //!   environment object that its scope creates on entry.
@@ -30,31 +35,35 @@
 //! # What it does not compile yet
 //!
 //! It returns [`CompileError::NotYetCompiled`] with a stated feature, never a
-//! panic: generators and async functions (and generator and async methods,
-//! `for await`), `with` and direct `eval`, modules, regular expression
-//! literals, dynamic `import()`, and the few forms listed on
-//! [`CompileError::NotYetCompiled`]'s users in this file (`delete` of a variable
-//! or of an optional chain, a function declaration as the body of an `if` or a
-//! label).
+//! panic: modules, dynamic `import()`, and the few forms listed on
+//! [`CompileError::NotYetCompiled`]'s users in this file (`delete` of an
+//! optional chain, a direct `eval` with a spread argument, a function
+//! declaration as the body of an `if` or a label).
 //!
 //! # Known gaps in what it compiles
 //!
-//! - A function with a non-simple parameter list has one scope for its
-//!   parameters and its body, where §10.2.11† step 28 has a separate
-//!   environment for the body's `var`s: a closure in a default value sees
-//!   the body's declarations.
-//! - NamedEvaluation (§8.4.5†) of an anonymous function or class assigned to a
-//!   name is not done (only a function's own name, and a class constructor's
-//!   name, are in its template).
 //! - `super()` reads the active function's prototype when the op runs, after
 //!   the arguments are evaluated, where §13.3.7.1† step 5 reads it before; the
 //!   difference shows only if an argument expression changes that prototype.
-//! - `var arguments` in a function body does not share the `arguments`
-//!   object's binding (§10.2.11† step 27.b).
+//! - NamedEvaluation (§8.4.5†) covers a name known when the code is compiled:
+//!   an identifier, an identifier or string key, a private name. A computed
+//!   key, and a numeric key, name a function when `DefineMethod` and its
+//!   siblings run or not at all.
 //! - A member expression's computed key is converted when the access runs, as
 //!   §13.3.3† (ES2024) has it; a computed property name of a literal, a class or
 //!   a pattern is converted when it is evaluated, by
 //!   [`crate::bytecode::Instr::ToPropertyKey`].
+//! - A name that a `with` object or a direct eval's variable object may supply
+//!   is resolved before the right side of an assignment to it, an update or a
+//!   call (§13.15.2 step 1.a), but not for the target of a destructuring
+//!   assignment or a `for` head, which look it up when they store.
+//! - Sloppy direct eval in a parameter expression declares its `var`s in the
+//!   function's variable object, where §19.2.1.3† would use the parameters'
+//!   own environment (§10.2.11† step 20).
+//! - Direct eval's host compile path (`compile_eval`, see
+//!   [`crate::ops::Op::DirectEval`]) is specified, not written: eval code is not
+//!   compiled yet, only the call and the record of the scopes it needs.
+//! - No differential against Boa yet.
 //!
 //! # Conventions of the output
 //!
@@ -81,8 +90,13 @@
 //!
 //! # Where the standard is followed
 //!
-//! Comments cite ECMA-262 (see `spec.rs` for the pinned edition). The steps
-//! this slice implements: §14.15.3 (try-finally completion), §14.7.4.4
+//! Comments cite ECMA-262 (see `spec.rs` for the pinned edition). The third
+//! slice adds §13.2.7.3 (regular expression literals), §15.5.2, §15.5.5 and
+//! §27.5.3 (generators and `yield*`), §15.6, §15.8 and §27.6 to §27.7 (async
+//! functions and async generators), §14.7.5.7 (`for await`), §14.11.2 (`with`),
+//! §13.3.6.1, §19.2.1.1 and §19.2.1.3 (direct eval), §13.5.1.2 (`delete`),
+//! §8.4.5 (NamedEvaluation) and §10.2.11 steps 27 and 28. The steps the second
+//! slice implements: §14.15.3 (try-finally completion), §14.7.4.4
 //! CreatePerIterationEnvironment, §14.12.4 (switch evaluation), §9.1.1.1.5
 //! SetMutableBinding steps 3 to 6, §9.1.1.1.6 GetBindingValue step 2 (TDZ),
 //! §15.2.5 InstantiateOrdinaryFunctionExpression, §10.2.11
@@ -92,8 +106,9 @@
 //! numbers marked † are from memory (phase-7.md's convention).
 
 use crate::bytecode::{
-    Const, ErrorKind, FunctionCode, FunctionKind, GlobalDecls, Handler, Instr, LIMIT, Program, Reg,
-    Span, TemplateSite, VarScoped,
+    Const, ErrorKind, EvalBinding, EvalName, EvalScope, EvalScopeInfo, EvalScopeKind, Flavor,
+    FunctionCode, FunctionKind, GlobalDecls, Handler, Instr, LIMIT, Program, Reg, RegExpSite, Span,
+    TemplateSite, VarScoped,
 };
 use crate::literal::{self, Number};
 use crate::scope::{self, Analysis, BKind, NONE, SKind, Target, span_of};
@@ -104,6 +119,7 @@ mod classes;
 mod loops;
 mod misc;
 mod patterns;
+mod suspend;
 
 /// Why a script was not compiled.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -231,9 +247,10 @@ enum Ctl {
         labels: Vec<u32>,
         brk: usize,
         cont: usize,
-        /// For a `for`-`of` loop: the iterator register, and the label of the
-        /// stub that rethrows (see [`Cg::emit_iter_close`]).
-        close: Option<(Reg, usize)>,
+        /// For a `for`-`of` loop: the iterator register, the label of the
+        /// stub that rethrows (see [`Cg::emit_iter_close`]), and whether the
+        /// loop is a `for await`, whose close awaits.
+        close: Option<(Reg, usize, bool)>,
     },
     Switch {
         labels: Vec<u32>,
@@ -254,6 +271,8 @@ enum Ctl {
 /// The state of the function being compiled.
 struct FnState {
     kind: FunctionKind,
+    /// Whether the function is a generator, an async function or both.
+    flavor: Flavor,
     strict: bool,
     span: Span,
     instrs: Vec<Instr>,
@@ -287,6 +306,7 @@ impl FnState {
     fn new(kind: FunctionKind, strict: bool, span: Span, nparams: u32) -> Self {
         FnState {
             kind,
+            flavor: Flavor::Plain,
             strict,
             span,
             instrs: Vec::new(),
@@ -314,6 +334,7 @@ impl FnState {
 struct FnMeta {
     name: Vec<u16>,
     kind: FunctionKind,
+    flavor: Flavor,
     nparams: u32,
     length: u32,
     span: Span,
@@ -345,12 +366,17 @@ fn final_op_kind(k: NodeKind) -> bool {
         NodeKind::NumericLiteral
             | NodeKind::StringLiteral
             | NodeKind::NullLiteral
+            | NodeKind::RegularExpressionLiteral
             | NodeKind::BooleanLiteral
             | NodeKind::ThisExpression
             | NodeKind::IdentifierReference
             | NodeKind::NewTarget
             | NodeKind::FunctionExpression
+            | NodeKind::GeneratorExpression
+            | NodeKind::AsyncFunctionExpression
+            | NodeKind::AsyncGeneratorExpression
             | NodeKind::ArrowFunction
+            | NodeKind::AsyncArrowFunction
             | NodeKind::MemberExpression
             | NodeKind::CallExpression
             | NodeKind::NewExpression
@@ -634,6 +660,11 @@ impl<'a> Cg<'a> {
     /// releases the temporary with `mark`/`release`.
     fn env_for(&mut self, b: u32, sp: Span) -> R<Reg> {
         let target = self.binding(b)?.scope;
+        self.env_for_scope(target, sp)
+    }
+
+    /// As [`Self::env_for`], for the environment object of scope `target`.
+    fn env_for_scope(&mut self, target: u32, sp: Span) -> R<Reg> {
         let func = self.cur_func_index()?;
         let mut s = self.f.cur_scope;
         let mut hops: u32 = 0;
@@ -708,6 +739,7 @@ impl<'a> Cg<'a> {
         }
         let bd = self.binding(b)?;
         if bd.captured
+            || !self.dyn_scopes(bd.scope)?.is_empty()
             || matches!(
                 bd.kind,
                 BKind::Const
@@ -858,9 +890,155 @@ impl<'a> Cg<'a> {
         Ok(())
     }
 
+    /// The scopes between the current one and `target` (a binding's scope, or
+    /// [`NONE`] for a global) whose object a reference to a name that none of
+    /// the scopes in between binds must consult first, innermost first, each with
+    /// whether it is a `with` statement's (§9.1.2.1 GetIdentifierReference step 1:
+    /// the environment's HasBinding comes before the outer environment's). A
+    /// `with` body is one; the function scope of sloppy code that calls direct eval
+    /// is another (its variable object, §19.2.1.3†), but only for a reference
+    /// that leaves the function: its own bindings cannot be shadowed by what eval
+    /// declares.
+    fn dyn_scopes(&self, target: u32) -> R<Vec<(u32, bool)>> {
+        let mut out = Vec::new();
+        let mut s = self.f.cur_scope;
+        while s != NONE && s != target {
+            let sc = self.scope(s)?;
+            match sc.kind {
+                SKind::With => out.push((s, true)),
+                SKind::Function | SKind::Body if self.an.dyn_binding.contains_key(&s) => {
+                    out.push((s, false));
+                }
+                _ => {}
+            }
+            s = sc.parent;
+        }
+        Ok(out)
+    }
+
+    /// The dynamic scopes of the identifier reference `n`.
+    fn ident_dyn(&self, n: u32) -> R<Vec<(u32, bool)>> {
+        let b = self.res(n);
+        let target = if b == NONE {
+            NONE
+        } else {
+            self.binding(b)?.scope
+        };
+        self.dyn_scopes(target)
+    }
+
+    /// ResolveBinding of the identifier reference `n` when a dynamic scope lies
+    /// in front of its static resolution (§9.1.2.1 step 1: "If env.HasBinding(name)
+    /// is true, return the Reference Record"): tests each such scope's object
+    /// with [`Instr::WithHas`], innermost first, and leaves the first that has
+    /// the name in the returned register, `undefined` when none does. When
+    /// `this` is wanted (a call, §13.3.6.2† EvaluateCall: the reference's
+    /// WithBaseObject §9.1.1.2.11†), it is that object for a `with` scope and
+    /// `undefined` otherwise. `None` if no dynamic scope applies.
+    fn resolve_dyn(&mut self, n: u32, this: Option<Reg>) -> R<Option<Reg>> {
+        let dyns = self.ident_dyn(n)?;
+        if dyns.is_empty() {
+            return Ok(None);
+        }
+        let sp = self.sp(n);
+        let name = self.name_of(n);
+        let key = self.konst(Const::String(self.name_units(name)?))?;
+        let holder = self.alloc()?;
+        self.emit(Instr::LoadUndefined { dst: holder }, sp)?;
+        if let Some(t) = this {
+            self.emit(Instr::LoadUndefined { dst: t }, sp)?;
+        }
+        let done = self.label();
+        for (s, is_with) in dyns {
+            let m = self.mark();
+            let (obj, found) = (self.alloc()?, self.alloc()?);
+            let slot = self.dyn_slot(s)?;
+            let env = self.env_for_scope(s, sp)?;
+            self.emit(
+                Instr::GetEnvSlot {
+                    dst: obj,
+                    env,
+                    idx: slot,
+                },
+                sp,
+            )?;
+            self.emit(
+                Instr::WithHas {
+                    dst: found,
+                    obj,
+                    key,
+                },
+                sp,
+            )?;
+            let next = self.label();
+            self.jump_if_false(found, next, sp)?;
+            self.emit(
+                Instr::Move {
+                    dst: holder,
+                    src: obj,
+                },
+                sp,
+            )?;
+            if let (Some(t), true) = (this, is_with) {
+                self.emit(Instr::Move { dst: t, src: obj }, sp)?;
+            }
+            self.jump(done, sp)?;
+            self.bind(next)?;
+            self.release(m);
+        }
+        self.bind(done)?;
+        Ok(Some(holder))
+    }
+
+    /// The slot of scope `s`'s environment object that holds its binding object.
+    fn dyn_slot(&self, s: u32) -> R<u32> {
+        let b = self
+            .an
+            .dyn_binding
+            .get(&s)
+            .copied()
+            .ok_or(CompileError::Internal("scope without a binding object"))?;
+        Ok(self.binding(b)?.slot)
+    }
+
     /// `dst := the identifier reference n`: a binding, or a global
     /// (§9.1.2.1 GetIdentifierReference, GetValue §6.2.5.5).
     fn read_ident(&mut self, n: u32, dst: Reg) -> R<()> {
+        let m = self.mark();
+        let h = self.resolve_dyn(n, None)?;
+        self.read_ident_h(n, dst, h)?;
+        self.release(m);
+        Ok(())
+    }
+
+    /// As [`Self::read_ident`], for a reference resolved by
+    /// [`Self::resolve_dyn`] to `holder` (GetBindingValue §9.1.1.2.6†).
+    fn read_ident_h(&mut self, n: u32, dst: Reg, holder: Option<Reg>) -> R<()> {
+        let sp = self.sp(n);
+        let Some(h) = holder else {
+            return self.read_ident_static(n, dst);
+        };
+        let (st, end) = (self.label(), self.label());
+        let name = self.name_of(n);
+        let key = self.konst(Const::String(self.name_units(name)?))?;
+        let target = Self::label_id(st)?;
+        self.emit(Instr::JumpIfUndefined { src: h, target }, sp)?;
+        self.emit(
+            Instr::WithGet {
+                dst,
+                obj: h,
+                key,
+                strict: self.f.strict,
+            },
+            sp,
+        )?;
+        self.jump(end, sp)?;
+        self.bind(st)?;
+        self.read_ident_static(n, dst)?;
+        self.bind(end)
+    }
+
+    fn read_ident_static(&mut self, n: u32, dst: Reg) -> R<()> {
         let sp = self.sp(n);
         let b = self.res(n);
         if b == NONE {
@@ -876,6 +1054,41 @@ impl<'a> Cg<'a> {
 
     /// Assigns `src` to the identifier reference `n` (PutValue §6.2.5.6).
     fn write_ident(&mut self, n: u32, src: Reg) -> R<()> {
+        let m = self.mark();
+        let h = self.resolve_dyn(n, None)?;
+        self.write_ident_h(n, src, h)?;
+        self.release(m);
+        Ok(())
+    }
+
+    /// As [`Self::write_ident`], for a reference resolved by
+    /// [`Self::resolve_dyn`] to `holder` (SetMutableBinding §9.1.1.2.5†).
+    fn write_ident_h(&mut self, n: u32, src: Reg, holder: Option<Reg>) -> R<()> {
+        let sp = self.sp(n);
+        let Some(h) = holder else {
+            return self.write_ident_static(n, src);
+        };
+        let (st, end) = (self.label(), self.label());
+        let name = self.name_of(n);
+        let key = self.konst(Const::String(self.name_units(name)?))?;
+        let target = Self::label_id(st)?;
+        self.emit(Instr::JumpIfUndefined { src: h, target }, sp)?;
+        self.emit(
+            Instr::WithSet {
+                obj: h,
+                key,
+                val: src,
+                strict: self.f.strict,
+            },
+            sp,
+        )?;
+        self.jump(end, sp)?;
+        self.bind(st)?;
+        self.write_ident_static(n, src)?;
+        self.bind(end)
+    }
+
+    fn write_ident_static(&mut self, n: u32, src: Reg) -> R<()> {
         let sp = self.sp(n);
         let b = self.res(n);
         if b == NONE {
@@ -945,7 +1158,18 @@ impl<'a> Cg<'a> {
                     } else if bd.decl_fn == NONE {
                         let m = self.mark();
                         let t = self.alloc()?;
-                        self.emit(Instr::LoadUndefined { dst: t }, sp)?;
+                        // §10.2.11† step 28.f.i: in a body scope, a `var` that is
+                        // also a parameter (or `arguments`) starts with that
+                        // binding's value, any other `var` with `undefined`.
+                        let param = if sc.kind == SKind::Body {
+                            self.scope(self.f.fscope)?.names.get(&bd.name).copied()
+                        } else {
+                            None
+                        };
+                        match param {
+                            Some(pb) => self.read_binding(pb, usize::MAX, t, sp)?,
+                            None => self.emit(Instr::LoadUndefined { dst: t }, sp)?,
+                        }
                         self.init_binding(b, t, sp)?;
                         self.release(m);
                     }
@@ -1029,6 +1253,21 @@ impl<'a> Cg<'a> {
                     self.release(m);
                 }
                 BKind::Hidden => {}
+                // Set by the `with` statement, once its object is known.
+                BKind::WithObject => {}
+                BKind::EvalVars => {
+                    // The variable object of sloppy eval code's declarations:
+                    // an ordinary object without a prototype, so that
+                    // WithHas finds only what eval declared and no
+                    // @@unscopables.
+                    let m = self.mark();
+                    let (o, nul) = (self.alloc()?, self.alloc()?);
+                    self.emit(Instr::NewObject { dst: o }, sp)?;
+                    self.emit(Instr::LoadNull { dst: nul }, sp)?;
+                    self.emit(Instr::SetLiteralProto { obj: o, val: nul }, sp)?;
+                    self.init_binding(b, o, sp)?;
+                    self.release(m);
+                }
             }
         }
         // Hoisted function declarations, in source order.
@@ -1084,7 +1323,7 @@ impl<'a> Cg<'a> {
         let (nparams, length, body): (u32, u32, Option<u32>) = match nd.kind {
             NodeKind::Script => (0, 0, None),
             NodeKind::ClassStaticBlock => (0, 0, Some(self.child(nd, 0)?)),
-            NodeKind::ArrowFunction => {
+            k if scope::is_arrow_kind(k) => {
                 let p = self.child(nd, 0)?;
                 let pn = self.node(p)?;
                 let (np, len) = if pn.kind == NodeKind::FormalParameters {
@@ -1103,7 +1342,7 @@ impl<'a> Cg<'a> {
         let override_name = self.name_override.take();
         let name: Vec<u16> = match nd.kind {
             _ if override_name.is_some() => override_name.unwrap_or_default(),
-            NodeKind::FunctionDeclaration | NodeKind::FunctionExpression => {
+            k if scope::is_decl_kind(k) || scope::is_fexpr_kind(k) => {
                 let nm = self.child(nd, 0)?;
                 if self.node(nm)?.kind == NodeKind::BindingIdentifier {
                     self.name_units(self.name_of(nm))?
@@ -1136,9 +1375,11 @@ impl<'a> Cg<'a> {
         };
         let mut fresh = FnState::new(kind, sc.strict, span, nparams);
         fresh.fscope = sc_id;
+        let flavor = scope::flavor_of(nd);
+        fresh.flavor = flavor;
         fresh.simple_params = match nd.kind {
             NodeKind::Script | NodeKind::ClassStaticBlock => true,
-            NodeKind::ArrowFunction => {
+            k if scope::is_arrow_kind(k) => {
                 let p = self.child(nd, 0)?;
                 self.node(p)?.kind != NodeKind::FormalParameters
                     || scope::is_simple_params(self.ast, p)?
@@ -1155,6 +1396,7 @@ impl<'a> Cg<'a> {
             FnMeta {
                 name,
                 kind,
+                flavor,
                 nparams,
                 length,
                 span,
@@ -1169,6 +1411,7 @@ impl<'a> Cg<'a> {
         let FnMeta {
             name,
             kind,
+            flavor,
             nparams,
             length,
             span,
@@ -1200,6 +1443,7 @@ impl<'a> Cg<'a> {
         let code = FunctionCode {
             name,
             kind,
+            flavor,
             strict: st.strict,
             span,
             nparams,
@@ -1289,6 +1533,23 @@ impl<'a> Cg<'a> {
         }
         self.enter_scope(sc_id, start)?;
         self.function_prologue(nd, start)?;
+        // The body's own scope, when the parameters have expressions (§10.2.11†
+        // step 28).
+        let body_scope = match body {
+            Some(b) if self.node(b)?.kind == NodeKind::FunctionBody => {
+                self.an.own_scope.get(b as usize).copied().unwrap_or(NONE)
+            }
+            _ => NONE,
+        };
+        if body_scope != NONE {
+            self.enter_scope(body_scope, start)?;
+        }
+        if matches!(self.f.flavor, Flavor::Generator | Flavor::AsyncGenerator) {
+            // EvaluateGeneratorBody §15.5.2† steps 2 to 4: the generator object
+            // is created after FunctionDeclarationInstantiation (step 1), which
+            // this prologue was, and returned to the caller.
+            self.emit(Instr::GeneratorStart, start)?;
+        }
         match nd.kind {
             NodeKind::Script => {
                 for &c in &nd.children {
@@ -1311,6 +1572,9 @@ impl<'a> Cg<'a> {
                     self.release(m);
                 }
             }
+        }
+        if body_scope != NONE {
+            self.exit_scope(body_scope)?;
         }
         let m = self.mark();
         let t = self.alloc()?;
@@ -1439,6 +1703,13 @@ impl<'a> Cg<'a> {
                     let t = self.alloc()?;
                     self.emit(Instr::LoadUndefined { dst: t }, sp)?;
                     t
+                } else if self.f.flavor == Flavor::AsyncGenerator {
+                    // §14.10.1 ReturnStatement evaluation step 3.b: in an async
+                    // generator the operand is awaited first.
+                    let v = self.alloc()?;
+                    let e = self.expr_any(e)?;
+                    self.emit_await(e, v, sp)?;
+                    v
                 } else {
                     self.expr_any(e)?
                 };
@@ -1455,7 +1726,39 @@ impl<'a> Cg<'a> {
                 Ok(())
             }
             NodeKind::TryStatement => self.try_stmt(nd, sp),
+            NodeKind::WithStatement => {
+                // §14.11.2† WithStatement evaluation: "Let obj be ?
+                // ToObject(? GetValue(val))" (step 2), a new object
+                // environment over it (steps 3 and 4), then the body.
+                let (e, body) = (self.child(nd, 0)?, self.child(nd, 1)?);
+                let s = self.an.own_scope.get(n as usize).copied().unwrap_or(NONE);
+                let m = self.mark();
+                let obj = self.alloc()?;
+                {
+                    let m2 = self.mark();
+                    let v = self.expr_any(e)?;
+                    self.emit(Instr::ToObject { dst: obj, src: v }, self.sp(e))?;
+                    self.release(m2);
+                }
+                self.enter_scope(s, sp)?;
+                let wb = self
+                    .an
+                    .dyn_binding
+                    .get(&s)
+                    .copied()
+                    .ok_or(CompileError::Internal("with scope without a binding"))?;
+                self.init_binding(wb, obj, sp)?;
+                self.stmt(body, &[])?;
+                self.exit_scope(s)?;
+                self.release(m);
+                Ok(())
+            }
             NodeKind::FunctionDeclaration => self.annexb_copy(n, sp),
+            // Hoisted to the entry of their scope; Annex B.3.3 does not apply to
+            // generators and async functions.
+            NodeKind::GeneratorDeclaration
+            | NodeKind::AsyncFunctionDeclaration
+            | NodeKind::AsyncGeneratorDeclaration => Ok(()),
             _ => Err(CompileError::Internal("unexpected statement kind")),
         }
     }
@@ -1498,6 +1801,9 @@ impl<'a> Cg<'a> {
     /// names: initialization if `is_init`, else assignment.
     fn assign_to_ident(&mut self, target: u32, init: u32, is_init: bool) -> R<()> {
         let sp = self.sp(target);
+        // §14.3.2.1† and §14.3.1.2† step 3.a: NamedEvaluation of an anonymous
+        // function or class definition with the binding's name.
+        self.named_ident(init, target)?;
         let b = self.res(target);
         if b != NONE {
             let bd = self.binding(b)?;
@@ -2136,6 +2442,13 @@ impl<'a> Cg<'a> {
                 self.emit(Instr::LoadConst { dst: d, k }, sp)
             }
             NodeKind::NullLiteral => self.emit(Instr::LoadNull { dst: d }, sp),
+            NodeKind::RegularExpressionLiteral => {
+                // §13.2.7.3† RegularExpressionLiteral evaluation: a new RegExp
+                // object per evaluation, from the pattern and the flags.
+                let (pattern, flags) = literal::regex_at(self.src, nd.start, nd.end)?;
+                let k = self.konst(Const::RegExp(RegExpSite { pattern, flags }))?;
+                self.emit(Instr::NewRegExp { dst: d, k }, sp)
+            }
             NodeKind::BooleanLiteral => {
                 let flag = self.src.get(nd.start).copied() == Some(u32::from(b't'));
                 self.emit(Instr::LoadBool { dst: d, flag }, sp)
@@ -2145,8 +2458,18 @@ impl<'a> Cg<'a> {
                 self.read_this(b, d, sp)
             }
             NodeKind::IdentifierReference => self.read_ident(n, d),
-            NodeKind::FunctionExpression => self.make_closure(n, d, FunctionKind::Normal),
-            NodeKind::ArrowFunction => self.make_closure(n, d, FunctionKind::Arrow),
+            k if scope::is_fexpr_kind(k) => self.make_closure(n, d, FunctionKind::Normal),
+            k if scope::is_arrow_kind(k) => self.make_closure(n, d, FunctionKind::Arrow),
+            NodeKind::AwaitExpression => {
+                // §15.8.5† AwaitExpression evaluation: "Return ? Await(value)".
+                let m = self.mark();
+                let arg = self.child(nd, 0)?;
+                let v = self.expr_any(arg)?;
+                self.emit_await(v, d, sp)?;
+                self.release(m);
+                Ok(())
+            }
+            NodeKind::YieldExpression => self.yield_expr(nd, d, sp),
             NodeKind::MemberExpression => {
                 let (obj, prop) = (self.child(nd, 0)?, self.child(nd, 1)?);
                 let o = self.operand(obj, &[prop])?;
@@ -2278,9 +2601,39 @@ impl<'a> Cg<'a> {
             }
             AOp::Typeof => {
                 let inner = self.unparen(operand)?;
-                if self.node(inner)?.kind == NodeKind::IdentifierReference
-                    && self.res(inner) == NONE
-                {
+                let is_ident = self.node(inner)?.kind == NodeKind::IdentifierReference;
+                if is_ident && !self.ident_dyn(inner)?.is_empty() {
+                    // The reference is resolved first; a name that no `with`
+                    // object or eval variable has is the static case below.
+                    let m = self.mark();
+                    let t = self.alloc()?;
+                    let h = self.resolve_dyn(inner, None)?;
+                    let (st, end) = (self.label(), self.label());
+                    let target = Self::label_id(st)?;
+                    let h = h.ok_or(CompileError::Internal("dynamic reference lost"))?;
+                    self.emit(Instr::JumpIfUndefined { src: h, target }, sp)?;
+                    let name = self.name_of(inner);
+                    let key = self.konst(Const::String(self.name_units(name)?))?;
+                    self.emit(
+                        Instr::WithGet {
+                            dst: t,
+                            obj: h,
+                            key,
+                            strict: self.f.strict,
+                        },
+                        sp,
+                    )?;
+                    self.jump(end, sp)?;
+                    self.bind(st)?;
+                    if self.res(inner) == NONE {
+                        self.emit(Instr::GetGlobalOrUndefined { dst: t, key }, sp)?;
+                    } else {
+                        self.read_ident_static(inner, t)?;
+                    }
+                    self.bind(end)?;
+                    self.emit(Instr::TypeOf { dst: d, src: t }, sp)?;
+                    self.release(m);
+                } else if is_ident && self.res(inner) == NONE {
                     // §13.5.3.1 step 2.a: `typeof` of an unresolvable reference is
                     // "undefined", and GetGlobal throws for one; step 3 is
                     // GetValue otherwise.
@@ -2318,6 +2671,15 @@ impl<'a> Cg<'a> {
         let result: Reg;
         match tn.kind {
             NodeKind::IdentifierReference => {
+                // §13.15.2 step 1.a: the reference is resolved (ResolveBinding
+                // §9.4.2†, which a `with` object or eval variable object can answer)
+                // before the right side is evaluated.
+                let dynh = self.resolve_dyn(t, None)?;
+                // §13.15.2 steps 1.c, 5.d, 6.d: NamedEvaluation of an anonymous
+                // function definition on the right of `=`, `&&=`, `||=`, `??=`.
+                if nd.op == AOp::Assign || Self::logical_assign(nd.op).is_some() {
+                    self.named_ident(value, t)?;
+                }
                 if nd.op == AOp::Assign {
                     if let Some(r) = self.simple_local(t)? {
                         self.expr_to(value, Some(r), false)?;
@@ -2325,16 +2687,16 @@ impl<'a> Cg<'a> {
                     } else {
                         let v = self.alloc()?;
                         self.expr_to(value, Some(v), true)?;
-                        self.write_ident(t, v)?;
+                        self.write_ident_h(t, v, dynh)?;
                         result = v;
                     }
                 } else if let Some(short) = Self::logical_assign(nd.op) {
                     let cur = self.alloc()?;
-                    self.read_ident(t, cur)?;
+                    self.read_ident_h(t, cur, dynh)?;
                     let end = self.label();
                     self.short_circuit(short, cur, end, sp)?;
                     self.expr_to(value, Some(cur), true)?;
-                    self.write_ident(t, cur)?;
+                    self.write_ident_h(t, cur, dynh)?;
                     self.bind(end)?;
                     result = cur;
                 } else {
@@ -2358,7 +2720,7 @@ impl<'a> Cg<'a> {
                         }
                         None => {
                             let c = self.alloc()?;
-                            self.read_ident(t, c)?;
+                            self.read_ident_h(t, c, dynh)?;
                             c
                         }
                     };
@@ -2371,7 +2733,7 @@ impl<'a> Cg<'a> {
                         .ok_or(CompileError::Internal("unknown compound assignment"))?;
                     self.emit(ins, sp)?;
                     if local.is_none() {
-                        self.write_ident(t, out)?;
+                        self.write_ident_h(t, out, dynh)?;
                     }
                     result = out;
                 }
@@ -2526,10 +2888,13 @@ impl<'a> Cg<'a> {
                         result = r;
                     }
                 } else {
+                    // §13.4.2.1† step 1 (and the like): the reference is resolved
+                    // once, then read and written.
+                    let dynh = self.resolve_dyn(t, None)?;
                     let cur = self.alloc()?;
-                    self.read_ident(t, cur)?;
+                    self.read_ident_h(t, cur, dynh)?;
                     let (old, new) = self.step_values(cur, wanted_old, &step, sp)?;
-                    self.write_ident(t, new)?;
+                    self.write_ident_h(t, new, dynh)?;
                     result = if prefix { new } else { old };
                 }
             }

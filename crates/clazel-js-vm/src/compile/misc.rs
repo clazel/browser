@@ -189,6 +189,16 @@ impl<'a> Cg<'a> {
                 Ok(())
             }
             NodeKind::OptionalExpression => self.optional_chain(cn_id, fr, Some(this), sp),
+            NodeKind::IdentifierReference if !self.ident_dyn(cn_id)?.is_empty() => {
+                // §13.3.6.1 step 3.b: a reference whose base is an object
+                // Environment Record of a `with` has WithBaseObject as its `this`
+                // (§9.1.1.2.11†), and otherwise `undefined`.
+                let m = self.mark();
+                let h = self.resolve_dyn(cn_id, Some(this))?;
+                self.read_ident_h(cn_id, fr, h)?;
+                self.release(m);
+                Ok(())
+            }
             _ => {
                 self.expr_to(cn_id, Some(fr), true)?;
                 self.emit(Instr::LoadUndefined { dst: this }, sp)
@@ -207,7 +217,7 @@ impl<'a> Cg<'a> {
             && self.eval_name != NONE
             && self.name_of(cn_id) == self.eval_name
         {
-            return self.not_yet("direct eval", cn_id);
+            return self.direct_eval(cn_id, args, d, sp);
         }
         let m = self.mark();
         let (fr, this) = (self.alloc()?, self.alloc()?);
@@ -235,6 +245,173 @@ impl<'a> Cg<'a> {
         }
         self.release(m);
         Ok(())
+    }
+
+    /// NamedEvaluation (§8.4.5†) of the initializer `e` for the static name
+    /// `name`: when `e` is an anonymous function or class definition (§8.4.3†
+    /// IsAnonymousFunctionDefinition, which sees through parentheses), the next
+    /// function or class compiled gets `name`, which is the `name` property its
+    /// SetFunctionName (§10.2.9†) gives it. A name known only when the code runs
+    /// (a computed key) is not covered.
+    pub(super) fn named(&mut self, e: u32, name: &[u16]) -> R<()> {
+        let u = self.unparen(e)?;
+        let nd = self.node(u)?;
+        let anonymous = |this: &Self| -> R<bool> {
+            let first = this.child(nd, 0)?;
+            Ok(this.node(first)?.kind != NodeKind::BindingIdentifier)
+        };
+        let is_anon = match nd.kind {
+            k if scope::is_fexpr_kind(k) => anonymous(self)?,
+            NodeKind::ClassExpression => anonymous(self)?,
+            k if scope::is_arrow_kind(k) => true,
+            _ => false,
+        };
+        if is_anon {
+            self.name_override = Some(name.to_vec());
+        }
+        Ok(())
+    }
+
+    /// NamedEvaluation of `e` for the name of identifier node `target`.
+    pub(super) fn named_ident(&mut self, e: u32, target: u32) -> R<()> {
+        let name = self.name_units(self.name_of(target))?;
+        self.named(e, &name)
+    }
+
+    /// The static name a class element or property key gives (§8.4.5†
+    /// ClassElementName and PropertyName evaluation): an identifier or string
+    /// literal, or a private name with its `#`; `None` for a computed or numeric key.
+    pub(super) fn static_key_name(&self, key: u32) -> R<Option<Vec<u16>>> {
+        let kn = self.node(key)?;
+        Ok(match kn.kind {
+            NodeKind::IdentifierName | NodeKind::IdentifierReference => {
+                Some(literal::name_units_at(self.src, kn.start)?)
+            }
+            NodeKind::StringLiteral => Some(literal::string_at(self.src, kn.start)?),
+            NodeKind::PrivateIdentifier => {
+                let mut v: Vec<u16> = vec![u16::from(b'#')];
+                v.extend(literal::name_units_at(self.src, kn.start)?);
+                Some(v)
+            }
+            _ => None,
+        })
+    }
+
+    /// `eval(args)` written as a direct call (§13.3.6.1† step 6): the value of
+    /// `eval`, the `this` of the call and the arguments, then
+    /// [`Instr::DirectEval`], which compares the callee with %eval% and either
+    /// calls it or performs the eval (PerformEval §19.2.1.1†).
+    fn direct_eval(&mut self, cn_id: u32, args: u32, d: Reg, sp: Span) -> R<()> {
+        let m = self.mark();
+        let (fr, this) = (self.alloc()?, self.alloc()?);
+        self.callee_and_this(cn_id, fr, this, sp)?;
+        match self.arg_list(args)? {
+            ArgList::Plain(base, argc) => {
+                let info = self.eval_scope_info()?;
+                let k = self.konst(Const::EvalScope(info))?;
+                let env = self.current_env_reg()?;
+                self.emit(
+                    Instr::DirectEval {
+                        dst: d,
+                        callee: fr,
+                        this,
+                        args: base,
+                        argc,
+                        env,
+                        k,
+                    },
+                    sp,
+                )?;
+            }
+            ArgList::Spread(_) => {
+                return self.not_yet("direct eval with spread arguments", cn_id);
+            }
+        }
+        self.release(m);
+        Ok(())
+    }
+
+    /// What the host compile path needs of the scopes around the current
+    /// position (see [`crate::bytecode::EvalScopeInfo`]).
+    fn eval_scope_info(&self) -> R<EvalScopeInfo> {
+        let cur = self.scope(self.f.cur_scope)?;
+        let mut f = cur.func;
+        while let Some(fi) = self.an.funcs.get(f as usize) {
+            if fi.arrow {
+                f = self.scope(fi.parent_scope)?.func;
+            } else {
+                break;
+            }
+        }
+        let (node_kind, derived) = match self.an.funcs.get(f as usize) {
+            Some(fi) => (self.node(fi.node)?.kind, fi.derived_ctor),
+            None => return Err(CompileError::Internal("no such function")),
+        };
+        let in_class_init = matches!(
+            node_kind,
+            NodeKind::ClassStaticBlock | NodeKind::ClassDeclaration | NodeKind::ClassExpression
+        );
+        let mut scopes = Vec::new();
+        let mut s = self.f.cur_scope;
+        while s != NONE {
+            let sc = self.scope(s)?;
+            if sc.has_env() {
+                let mut names = Vec::new();
+                for &b in &sc.bindings {
+                    let bd = self.binding(b)?;
+                    let (kind, named) = match bd.kind {
+                        BKind::Var => (EvalBinding::Var, true),
+                        BKind::Let => (EvalBinding::Let, true),
+                        BKind::Const => (EvalBinding::Const, true),
+                        BKind::Catch => (EvalBinding::Catch, true),
+                        BKind::FuncName => (EvalBinding::FuncName, true),
+                        BKind::Arguments => (EvalBinding::Arguments, true),
+                        BKind::PrivateName => (EvalBinding::PrivateName, true),
+                        BKind::This => (EvalBinding::This, false),
+                        BKind::DerivedThis => (EvalBinding::DerivedThis, false),
+                        BKind::NewTarget => (EvalBinding::NewTarget, false),
+                        BKind::Callee => (EvalBinding::Callee, false),
+                        BKind::Hidden | BKind::WithObject | BKind::EvalVars => continue,
+                    };
+                    names.push(EvalName {
+                        name: if named {
+                            self.name_units(bd.name)?
+                        } else {
+                            Vec::new()
+                        },
+                        slot: bd.slot,
+                        kind,
+                    });
+                }
+                let kind = match sc.kind {
+                    SKind::Script => EvalScopeKind::Script,
+                    SKind::Function | SKind::Body => EvalScopeKind::Function,
+                    SKind::Class => EvalScopeKind::Class,
+                    SKind::With => EvalScopeKind::With,
+                    SKind::Block | SKind::For | SKind::Switch | SKind::Catch => {
+                        EvalScopeKind::Block
+                    }
+                };
+                let var_object = match (sc.kind, self.an.dyn_binding.get(&s)) {
+                    (SKind::Function | SKind::Body, Some(&b)) => Some(self.binding(b)?.slot),
+                    _ => None,
+                };
+                scopes.push(EvalScope {
+                    kind,
+                    var_object,
+                    names,
+                });
+            }
+            s = sc.parent;
+        }
+        Ok(EvalScopeInfo {
+            strict: cur.strict,
+            in_function: f != 0,
+            in_method: matches!(node_kind, NodeKind::MethodDefinition) || in_class_init,
+            in_derived_constructor: derived,
+            in_class_field_initializer: in_class_init,
+            scopes,
+        })
     }
 
     /// Evaluates an `Arguments` node: into consecutive registers, or, if it has
@@ -577,6 +754,7 @@ impl<'a> Cg<'a> {
                         NodeKind::StringLiteral => Some(literal::string_at(self.src, kn.start)?),
                         _ => None,
                     };
+                    let name_units = plain_key.clone();
                     let proto: Vec<u16> = "__proto__".encode_utf16().collect();
                     // §13.2.5.5† step 3: `__proto__: value`, with a non-computed key.
                     let is_proto_setter =
@@ -591,6 +769,12 @@ impl<'a> Cg<'a> {
                             Prop::Computed(r)
                         }
                     };
+                    if !is_proto_setter
+                        && pn.op == AOp::KeyValue
+                        && let Some(units) = &name_units
+                    {
+                        self.named(value_node, units)?;
+                    }
                     let v = self.expr_any(value_node)?;
                     if is_proto_setter {
                         self.emit(Instr::SetLiteralProto { obj: d, val: v }, psp)?;
@@ -841,7 +1025,48 @@ impl<'a> Cg<'a> {
                     sp,
                 )
             }
-            NodeKind::IdentifierReference => self.not_yet("delete of a variable", inner),
+            NodeKind::IdentifierReference => {
+                // §13.5.1.2† step 5: `delete name` is DeleteBinding on the
+                // environment that holds the name. A binding of a function or block
+                // scope is not deletable (§9.1.1.1.7†: false), a global is
+                // [`Instr::DeleteGlobal`], and the object of a `with` or the
+                // variable object of eval is [`Instr::WithDelete`].
+                let m = self.mark();
+                let h = self.resolve_dyn(inner, None)?;
+                let name = self.name_of(inner);
+                let key = self.konst(Const::String(self.name_units(name)?))?;
+                let (st, end) = (self.label(), self.label());
+                if let Some(h) = h {
+                    let target = Self::label_id(st)?;
+                    self.emit(Instr::JumpIfUndefined { src: h, target }, sp)?;
+                    self.emit(
+                        Instr::WithDelete {
+                            dst: d,
+                            obj: h,
+                            key,
+                        },
+                        sp,
+                    )?;
+                    self.jump(end, sp)?;
+                    self.bind(st)?;
+                }
+                if self.res(inner) == NONE {
+                    self.emit(Instr::DeleteGlobal { dst: d, key }, sp)?;
+                } else {
+                    self.emit(
+                        Instr::LoadBool {
+                            dst: d,
+                            flag: false,
+                        },
+                        sp,
+                    )?;
+                }
+                if h.is_some() {
+                    self.bind(end)?;
+                }
+                self.release(m);
+                Ok(())
+            }
             NodeKind::OptionalExpression => self.not_yet("delete of an optional chain", inner),
             _ => {
                 // §13.5.1.2 step 5: `delete` of a non-reference is true,

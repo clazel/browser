@@ -13,15 +13,25 @@
 //!
 //! - One **function scope** per function holds its parameters, its `var`s, its
 //!   function declarations and the `let`, `const` bindings at the top of its
-//!   body. (ECMA-262 §10.2.11 FunctionDeclarationInstantiation uses a separate
-//!   environment for the body only when a parameter has an initializer, which
-//!   this slice does not compile.)
+//!   body. When a parameter has an initializer or a computed name
+//!   (ECMA-262 §10.2.11 FunctionDeclarationInstantiation step 28), the function
+//!   scope holds the parameters only and a **body scope** inside it holds the
+//!   body's declarations, so that a closure in a default value does not see them.
 //! - The **script scope** holds only the script's top-level `let` and `const`.
 //!   Its `var`s and functions are properties of the global object
 //!   (§16.1.7 GlobalDeclarationInstantiation) and so have no binding: a
 //!   reference to one is a global reference.
 //! - Blocks, `for` statements with a lexical declaration, `switch` statements
-//!   and `catch` clauses have their own scope.
+//!   and `catch` clauses have their own scope, and so does a `with` statement's
+//!   body: an object environment (§14.11.2†), whose environment object holds
+//!   the object in its one slot.
+//! - **Direct eval** (§19.2.1.1†): the code that `eval` runs can name any
+//!   binding visible at the call, so each such binding of each enclosing scope is
+//!   captured, and the caller's `this`, `new.target`, function and `arguments`
+//!   are bindings. A sloppy caller's function scope also has a binding for the
+//!   variable object that the `var`s of its eval code become properties of.
+//!   A reference that leaves a `with` body or such a function without finding its
+//!   name inside first looks in that object (the compiler's `dyn_scopes`).
 //! - A named function expression's own name (§15.2.5 step 3, `funcEnv`) is a
 //!   binding of its function scope when nothing there declares that name,
 //!   which is observationally the same as the standard's extra scope.
@@ -38,7 +48,7 @@
 //! parameter. [`Analysis::annexb`] records, for such a declaration, the variable
 //! its evaluation copies the block's binding to.
 
-use crate::bytecode::Span;
+use crate::bytecode::{Flavor, Span};
 use crate::compile::CompileError;
 use crate::literal;
 use clazel_js_syntax::ast::{Ast, Node, NodeKind, Op as AOp};
@@ -78,6 +88,14 @@ pub enum BKind {
     /// A value the compiler keeps for a class: the key of a computed field name
     /// and a private method's function.
     Hidden,
+    /// The binding object of a `with` statement's object environment, in slot 0
+    /// of the environment object its scope creates (§14.11.2† step 4:
+    /// NewObjectEnvironment(obj, true, oldEnv)).
+    WithObject,
+    /// The variable object of a sloppy function that calls direct eval: a
+    /// null-prototype object that the declarations of the eval code become
+    /// properties of (§19.2.1.3† EvalDeclarationInstantiation).
+    EvalVars,
 }
 
 /// A binding.
@@ -121,6 +139,14 @@ pub enum SKind {
     /// A class: its inner name binding, its private names and the values the
     /// compiler keeps for its elements (§15.7.14† classScope).
     Class,
+    /// A `with` statement's body: an object environment (§14.11.2†), whose
+    /// environment object holds the object in slot 0.
+    With,
+    /// The body of a function whose parameter list has expressions: the
+    /// separate environment for the body's `var`s and top-level declarations
+    /// (§10.2.11† step 28.f: "varEnv be NewDeclarativeEnvironment(env)"), inside
+    /// the function scope that holds the parameters.
+    Body,
 }
 
 /// A scope.
@@ -244,6 +270,12 @@ pub struct Analysis {
     /// with whether it is a constant, in source order: bindings of the global
     /// declarative record, not of a scope (§16.1.7† step 13).
     pub global_lexicals: Vec<(u32, bool)>,
+    /// For a scope whose references may reach a property of an object before
+    /// any binding (a `with` body, or the function scope of sloppy code that
+    /// calls direct eval), the binding that holds that object.
+    pub dyn_binding: HashMap<u32, u32>,
+    /// The direct eval calls (`CallExpression` nodes), in arena order.
+    pub eval_calls: Vec<u32>,
 }
 
 /// The node at `i`.
@@ -266,14 +298,57 @@ pub fn span_of(ast: &Ast, i: usize) -> Span {
 
 /// Whether the kind creates a function scope.
 fn is_function(k: NodeKind) -> bool {
+    is_decl_kind(k)
+        || is_fexpr_kind(k)
+        || is_arrow_kind(k)
+        || matches!(k, NodeKind::MethodDefinition | NodeKind::ClassStaticBlock)
+}
+
+/// A function declaration of any flavor (§15.2, §15.5, §15.6, §15.8).
+pub fn is_decl_kind(k: NodeKind) -> bool {
     matches!(
         k,
         NodeKind::FunctionDeclaration
-            | NodeKind::FunctionExpression
-            | NodeKind::ArrowFunction
-            | NodeKind::MethodDefinition
-            | NodeKind::ClassStaticBlock
+            | NodeKind::GeneratorDeclaration
+            | NodeKind::AsyncFunctionDeclaration
+            | NodeKind::AsyncGeneratorDeclaration
     )
+}
+
+/// A function expression of any flavor.
+pub fn is_fexpr_kind(k: NodeKind) -> bool {
+    matches!(
+        k,
+        NodeKind::FunctionExpression
+            | NodeKind::GeneratorExpression
+            | NodeKind::AsyncFunctionExpression
+            | NodeKind::AsyncGeneratorExpression
+    )
+}
+
+/// An arrow function, async or not (§15.3, §15.9).
+pub fn is_arrow_kind(k: NodeKind) -> bool {
+    matches!(k, NodeKind::ArrowFunction | NodeKind::AsyncArrowFunction)
+}
+
+/// Whether the function node is a generator, an async function or both.
+pub fn flavor_of(nd: &Node) -> Flavor {
+    match nd.kind {
+        NodeKind::GeneratorDeclaration | NodeKind::GeneratorExpression => Flavor::Generator,
+        NodeKind::AsyncFunctionDeclaration
+        | NodeKind::AsyncFunctionExpression
+        | NodeKind::AsyncArrowFunction => Flavor::Async,
+        NodeKind::AsyncGeneratorDeclaration | NodeKind::AsyncGeneratorExpression => {
+            Flavor::AsyncGenerator
+        }
+        NodeKind::MethodDefinition => match nd.op {
+            AOp::GeneratorMethod => Flavor::Generator,
+            AOp::AsyncMethod => Flavor::Async,
+            AOp::AsyncGeneratorMethod => Flavor::AsyncGenerator,
+            _ => Flavor::Plain,
+        },
+        _ => Flavor::Plain,
+    }
 }
 
 /// The `BindingIdentifier` nodes a binding target binds (BoundNames, §8.2.1†):
@@ -349,26 +424,6 @@ pub fn check_supported(ast: &Ast) -> Result<(), CompileError> {
             | NodeKind::ExportSpecifier
             | NodeKind::ImportMeta => Some("modules"),
             NodeKind::ImportCall => Some("dynamic import"),
-            NodeKind::ForOfStatement if n.flag => Some("generators and async functions"),
-            NodeKind::WithStatement => Some("with statements"),
-            NodeKind::GeneratorDeclaration
-            | NodeKind::GeneratorExpression
-            | NodeKind::AsyncFunctionDeclaration
-            | NodeKind::AsyncFunctionExpression
-            | NodeKind::AsyncGeneratorDeclaration
-            | NodeKind::AsyncGeneratorExpression
-            | NodeKind::AsyncArrowFunction
-            | NodeKind::YieldExpression
-            | NodeKind::AwaitExpression => Some("generators and async functions"),
-            NodeKind::RegularExpressionLiteral => Some("regular expression literals"),
-            NodeKind::MethodDefinition
-                if matches!(
-                    n.op,
-                    AOp::GeneratorMethod | AOp::AsyncMethod | AOp::AsyncGeneratorMethod
-                ) =>
-            {
-                Some("generator or async methods")
-            }
             NodeKind::IfStatement | NodeKind::LabelledStatement => {
                 // Annex B.3.2: a function declaration as the body of an `if` or a
                 // label.
@@ -465,7 +520,7 @@ impl Builder<'_> {
     fn fn_scope(&self, mut s: u32) -> Result<u32, CompileError> {
         loop {
             let sc = self.scope(s)?;
-            if matches!(sc.kind, SKind::Function | SKind::Script) {
+            if matches!(sc.kind, SKind::Function | SKind::Script | SKind::Body) {
                 return Ok(s);
             }
             s = sc.parent;
@@ -543,6 +598,8 @@ pub fn analyze(ast: &Ast, src: &[u32]) -> Result<Analysis, CompileError> {
             special: HashMap::new(),
             hidden: HashMap::new(),
             global_lexicals: Vec::new(),
+            dyn_binding: HashMap::new(),
+            eval_calls: Vec::new(),
         },
         intern: HashMap::new(),
     };
@@ -550,9 +607,12 @@ pub fn analyze(ast: &Ast, src: &[u32]) -> Result<Analysis, CompileError> {
     scopes_pass(&mut b, src, &parent)?;
     derived_pass(&mut b, src)?;
     declare_pass(&mut b, &parent)?;
+    with_pass(&mut b)?;
+    var_arguments_pass(&mut b)?;
     annexb_pass(&mut b)?;
     funcname_pass(&mut b)?;
     reference_pass(&mut b, &parent)?;
+    eval_pass(&mut b)?;
     finish_pass(&mut b)?;
     Ok(b.a)
 }
@@ -599,13 +659,12 @@ fn scopes_pass(b: &mut Builder<'_>, src: &[u32], parent: &[u32]) -> Result<(), C
             NONE
         } else {
             let pn = node(ast, p as usize)?;
-            let outer_first = matches!(
+            let outer_first = (matches!(
                 pn.kind,
-                NodeKind::SwitchStatement
-                    | NodeKind::FunctionDeclaration
-                    | NodeKind::FunctionExpression
-                    | NodeKind::MethodDefinition
-            ) && pn.children.first() == Some(&i32_);
+                NodeKind::SwitchStatement | NodeKind::MethodDefinition | NodeKind::WithStatement
+            ) || is_decl_kind(pn.kind)
+                || is_fexpr_kind(pn.kind))
+                && pn.children.first() == Some(&i32_);
             let from = if outer_first { &b.a.owner_scope } else { &ctx };
             let mut o = from.get(p as usize).copied().unwrap_or(NONE);
             // A field's initializer runs in the class's initializer function,
@@ -657,6 +716,8 @@ fn scopes_pass(b: &mut Builder<'_>, src: &[u32], parent: &[u32]) -> Result<(), C
                 }
             }
             NodeKind::SwitchStatement => Some(SKind::Switch),
+            NodeKind::WithStatement => Some(SKind::With),
+            NodeKind::FunctionBody if body_scope_needed(ast, parent, i)? => Some(SKind::Body),
             NodeKind::Catch => Some(SKind::Catch),
             NodeKind::ClassDeclaration | NodeKind::ClassExpression => Some(SKind::Class),
             _ => None,
@@ -692,7 +753,7 @@ fn scopes_pass(b: &mut Builder<'_>, src: &[u32], parent: &[u32]) -> Result<(), C
                     b.a.funcs.push(Func {
                         node: i32_,
                         scope: sid,
-                        arrow: nd.kind == NodeKind::ArrowFunction,
+                        arrow: is_arrow_kind(nd.kind),
                         parent_scope: owner,
                         derived_ctor: false,
                     });
@@ -897,7 +958,7 @@ fn declare_pass(b: &mut Builder<'_>, parent: &[u32]) -> Result<(), CompileError>
                     b.binding_mut(bid)?.init_end = nd.end;
                 }
             }
-            NodeKind::FunctionDeclaration => {
+            k if is_decl_kind(k) => {
                 let Some(name) = first_name else {
                     return Err(CompileError::Internal("function declaration has no name"));
                 };
@@ -905,7 +966,7 @@ fn declare_pass(b: &mut Builder<'_>, parent: &[u32]) -> Result<(), CompileError>
                 b.scope_mut(owner)?.funcs.push(node_id);
                 match owner_kind {
                     SKind::Script => {}
-                    SKind::Function => {
+                    SKind::Function | SKind::Body => {
                         let bid = b.declare(owner, name, BKind::Var)?;
                         b.binding_mut(bid)?.decl_fn = node_id;
                     }
@@ -936,7 +997,7 @@ fn declare_pass(b: &mut Builder<'_>, parent: &[u32]) -> Result<(), CompileError>
                     }
                 }
             }
-            NodeKind::ArrowFunction => {
+            k if is_arrow_kind(k) => {
                 if let Some(name) = first_name {
                     let own = b.a.own_scope.get(i).copied().unwrap_or(NONE);
                     let bid = b.declare(own, name, BKind::Var)?;
@@ -988,7 +1049,7 @@ fn declare_vars(b: &mut Builder<'_>, owner: u32, target: u32) -> Result<(), Comp
     let fs = b.fn_scope(owner)?;
     for id in bound_idents(b.ast, target)? {
         let name = b.a.name_of.get(id as usize).copied().unwrap_or(NONE);
-        if b.scope(fs)?.kind == SKind::Function {
+        if matches!(b.scope(fs)?.kind, SKind::Function | SKind::Body) {
             b.declare(fs, name, BKind::Var)?;
         } else {
             b.a.global_vars.push(id);
@@ -1044,7 +1105,7 @@ fn annexb_pass(b: &mut Builder<'_>) -> Result<(), CompileError> {
         }
         let owner = b.a.owner_scope.get(i).copied().unwrap_or(NONE);
         let osc = b.scope(owner)?;
-        if matches!(osc.kind, SKind::Script | SKind::Function) || osc.strict {
+        if matches!(osc.kind, SKind::Script | SKind::Function | SKind::Body) || osc.strict {
             continue;
         }
         let Some(&nm) = nd.children.first() else {
@@ -1057,7 +1118,7 @@ fn annexb_pass(b: &mut Builder<'_>) -> Result<(), CompileError> {
         let mut blocked = false;
         let fs = loop {
             let sc = b.scope(s)?;
-            if matches!(sc.kind, SKind::Function | SKind::Script) {
+            if matches!(sc.kind, SKind::Function | SKind::Script | SKind::Body) {
                 break s;
             }
             if let Some(&bid) = sc.names.get(&name)
@@ -1074,6 +1135,14 @@ fn annexb_pass(b: &mut Builder<'_>) -> Result<(), CompileError> {
         if let Some(&bid) = fsc.names.get(&name)
             && let Some(bd) = b.a.bindings.get(bid as usize)
             && (bd.param != NONE || matches!(bd.kind, BKind::Let | BKind::Const))
+        {
+            blocked = true;
+        }
+        // The parameters are in the function scope outside a body scope.
+        if fsc.kind == SKind::Body
+            && let Some(&bid) = b.scope(fsc.parent)?.names.get(&name)
+            && let Some(bd) = b.a.bindings.get(bid as usize)
+            && bd.param != NONE
         {
             blocked = true;
         }
@@ -1096,7 +1165,7 @@ fn annexb_pass(b: &mut Builder<'_>) -> Result<(), CompileError> {
 fn funcname_pass(b: &mut Builder<'_>) -> Result<(), CompileError> {
     let ast = b.ast;
     for (i, nd) in ast.nodes.iter().enumerate() {
-        if nd.kind != NodeKind::FunctionExpression {
+        if !is_fexpr_kind(nd.kind) {
             continue;
         }
         let Some(&nm) = nd.children.first() else {
@@ -1221,35 +1290,239 @@ fn arguments_binding(b: &mut Builder<'_>, owner: u32, r: u32) -> Result<u32, Com
     let fresh = !b.scope(home_scope)?.names.contains_key(&name);
     let bid = b.declare(home_scope, name, BKind::Arguments)?;
     if fresh {
-        // A sloppy function with a simple parameter list gets a mapped
-        // `arguments` object, whose indices alias the parameters: they live in
-        // the environment object (§10.4.4.7†).
         let fnode = b.a.funcs.get(f as usize).map(|fi| fi.node).unwrap_or(NONE);
-        let strict = b.scope(home_scope)?.strict;
-        let simple = match b.ast.nodes.get(fnode as usize) {
-            Some(nd) => match nd.children.get(1) {
-                Some(&fp) => {
-                    node(b.ast, fp as usize)?.kind == NodeKind::FormalParameters
-                        && is_simple_params(b.ast, fp)?
-                }
-                None => false,
-            },
-            None => false,
-        };
-        if !strict && simple {
-            let ids: Vec<u32> = b.scope(home_scope)?.bindings.clone();
-            for id in ids {
-                let bd = b.binding_mut(id)?;
-                if bd.param != NONE {
-                    bd.captured = true;
-                }
-            }
-        }
+        capture_mapped_params(b, home_scope, fnode)?;
     }
     if here != f {
         b.binding_mut(bid)?.captured = true;
     }
     Ok(bid)
+}
+
+/// Whether the `FunctionBody` node `i` gets a scope of its own, apart from the
+/// function's: its function has parameter expressions (§15.1.5†
+/// ContainsExpression of the FormalParameters: an initializer, or a computed
+/// property name in a pattern), which is when §10.2.11† step 28 makes a separate
+/// environment for the body's `var`s, so that a closure in a default value does
+/// not see them.
+fn body_scope_needed(ast: &Ast, parent: &[u32], i: usize) -> Result<bool, CompileError> {
+    let f = parent.get(i).copied().unwrap_or(NONE);
+    if f == NONE {
+        return Ok(false);
+    }
+    let fnn = node(ast, f as usize)?;
+    if !is_function(fnn.kind) || fnn.children.len() < 2 {
+        return Ok(false);
+    }
+    let Some(&fp) = fnn.children.get(fnn.children.len().saturating_sub(2)) else {
+        return Ok(false);
+    };
+    if node(ast, fp as usize)?.kind != NodeKind::FormalParameters {
+        return Ok(false);
+    }
+    let mut stack = vec![fp];
+    while let Some(n) = stack.pop() {
+        let nd = node(ast, n as usize)?;
+        match nd.kind {
+            NodeKind::FormalParameters
+            | NodeKind::ObjectBindingPattern
+            | NodeKind::ArrayBindingPattern
+            | NodeKind::BindingRestElement
+            | NodeKind::BindingRestProperty
+            | NodeKind::FunctionRestParameter => stack.extend(nd.children.iter().copied()),
+            NodeKind::BindingIdentifier | NodeKind::Absent => {}
+            NodeKind::BindingElement => {
+                if let Some(&init) = nd.children.get(1)
+                    && node(ast, init as usize)?.kind != NodeKind::Absent
+                {
+                    return Ok(true);
+                }
+                stack.extend(nd.children.first().copied());
+            }
+            NodeKind::BindingProperty => {
+                if nd.children.len() == 2
+                    && let Some(&key) = nd.children.first()
+                    && node(ast, key as usize)?.kind == NodeKind::ComputedPropertyName
+                {
+                    return Ok(true);
+                }
+                stack.extend(nd.children.last().copied());
+            }
+            _ => return Ok(true),
+        }
+    }
+    Ok(false)
+}
+
+/// The binding object of each `with` statement's scope (always captured: the
+/// scope's environment object holds it in slot 0).
+fn with_pass(b: &mut Builder<'_>) -> Result<(), CompileError> {
+    let name = b.intern(vec![u32::MAX - 5])?;
+    for s in 0..b.a.scopes.len() {
+        let sid = u32::try_from(s).map_err(|_| CompileError::TooLarge("scopes"))?;
+        if b.scope(sid)?.kind != SKind::With {
+            continue;
+        }
+        let bid = b.declare(sid, name, BKind::WithObject)?;
+        b.binding_mut(bid)?.captured = true;
+        b.a.dyn_binding.insert(sid, bid);
+    }
+    Ok(())
+}
+
+/// §10.2.11† FunctionDeclarationInstantiation step 27.b: a `var arguments` in
+/// a function that has an `arguments` object shares its binding (the object
+/// is bound to `arguments` in step 22, before the `var`s, which skip a name
+/// that is bound already). The function has no parameter, function
+/// declaration or lexical declaration of that name; the binding that
+/// `declare_pass` made for the `var` becomes the `arguments` binding.
+fn var_arguments_pass(b: &mut Builder<'_>) -> Result<(), CompileError> {
+    let arguments = b.intern("arguments".chars().map(u32::from).collect())?;
+    for bid in 0..b.a.bindings.len() {
+        let bd =
+            b.a.bindings
+                .get(bid)
+                .ok_or(CompileError::Internal("binding"))?;
+        if bd.name != arguments || bd.kind != BKind::Var || bd.param != NONE || bd.decl_fn != NONE {
+            continue;
+        }
+        let sc = b.scope(bd.scope)?;
+        if !matches!(sc.kind, SKind::Function | SKind::Body) {
+            continue;
+        }
+        let in_body = sc.kind == SKind::Body;
+        let Some(f) = b.a.funcs.get(sc.func as usize) else {
+            continue;
+        };
+        let (fnode, fscope, arrow) = (f.node, f.scope, f.arrow);
+        if arrow || (!in_body && fscope != bd.scope) {
+            continue;
+        }
+        // The synthetic functions of a class (initializers) and static blocks
+        // have no `arguments`.
+        let nk = node(b.ast, fnode as usize)?.kind;
+        if matches!(
+            nk,
+            NodeKind::ClassDeclaration | NodeKind::ClassExpression | NodeKind::ClassStaticBlock
+        ) {
+            continue;
+        }
+        if in_body {
+            // The `arguments` object is bound in the parameter scope (step 22),
+            // and the body's `var` of that name starts with its value
+            // (step 28.f.i.2: "initialValue be ! env.GetBindingValue(n, false)").
+            b.declare(fscope, arguments, BKind::Arguments)?;
+            continue;
+        }
+        let id = u32::try_from(bid).map_err(|_| CompileError::TooLarge("bindings"))?;
+        b.binding_mut(id)?.kind = BKind::Arguments;
+        capture_mapped_params(b, fscope, fnode)?;
+    }
+    Ok(())
+}
+
+/// A sloppy function with a simple parameter list gets a mapped `arguments`
+/// object, whose indices alias the parameters: they live in the environment
+/// object (§10.4.4.7†).
+fn capture_mapped_params(
+    b: &mut Builder<'_>,
+    home_scope: u32,
+    fnode: u32,
+) -> Result<(), CompileError> {
+    let strict = b.scope(home_scope)?.strict;
+    let simple = match b.ast.nodes.get(fnode as usize) {
+        Some(nd) => match nd.children.get(1) {
+            Some(&fp) => {
+                node(b.ast, fp as usize)?.kind == NodeKind::FormalParameters
+                    && is_simple_params(b.ast, fp)?
+            }
+            None => false,
+        },
+        None => false,
+    };
+    if !strict && simple {
+        let ids: Vec<u32> = b.scope(home_scope)?.bindings.clone();
+        for id in ids {
+            let bd = b.binding_mut(id)?;
+            if bd.param != NONE {
+                bd.captured = true;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Direct eval (§13.3.6.1† step 6, §19.2.1.1†): the code that `eval` runs can
+/// name any binding visible at the call, by name, and can declare `var`s in the
+/// calling function. So every binding of every scope that encloses a direct
+/// eval is captured (an environment slot, which the eval code's compiler finds
+/// by name through [`crate::bytecode::EvalScopeInfo`]), the caller's `this`,
+/// `new.target`, function and `arguments` are bindings too, and a sloppy
+/// caller's function scope has a binding for the variable object.
+fn eval_pass(b: &mut Builder<'_>) -> Result<(), CompileError> {
+    let ast = b.ast;
+    let eval = b.intern("eval".chars().map(u32::from).collect())?;
+    let arguments = b.intern("arguments".chars().map(u32::from).collect())?;
+    let this_name = b.intern(vec![u32::MAX])?;
+    let nt_name = b.intern(vec![u32::MAX - 2])?;
+    let callee_name = b.intern(vec![u32::MAX - 3])?;
+    let vars_name = b.intern(vec![u32::MAX - 4])?;
+    let mut calls: Vec<u32> = Vec::new();
+    for (i, nd) in ast.nodes.iter().enumerate() {
+        if nd.kind != NodeKind::CallExpression {
+            continue;
+        }
+        let Some(&c) = nd.children.first() else {
+            continue;
+        };
+        if node(ast, c as usize)?.kind == NodeKind::IdentifierReference
+            && b.a.name_of.get(c as usize).copied() == Some(eval)
+        {
+            calls.push(u32::try_from(i).map_err(|_| CompileError::TooLarge("nodes"))?);
+        }
+    }
+    for &i in &calls {
+        let owner = b.a.owner_scope.get(i as usize).copied().unwrap_or(NONE);
+        let (_, home) = home_func(b, owner)?;
+        if home != 0 {
+            let (home_scope, home_node, derived) = match b.a.funcs.get(home as usize) {
+                Some(f) => (f.scope, f.node, f.derived_ctor),
+                None => return Err(CompileError::Internal("no such function")),
+            };
+            if !derived {
+                b.declare(home_scope, this_name, BKind::This)?;
+            }
+            b.declare(home_scope, nt_name, BKind::NewTarget)?;
+            b.declare(home_scope, callee_name, BKind::Callee)?;
+            let nk = node(ast, home_node as usize)?.kind;
+            if !matches!(
+                nk,
+                NodeKind::ClassDeclaration | NodeKind::ClassExpression | NodeKind::ClassStaticBlock
+            ) {
+                let r = b.resolve(owner, arguments)?;
+                arguments_binding(b, owner, r)?;
+            }
+        }
+        if !b.scope(owner)?.strict {
+            let fs = b.fn_scope(owner)?;
+            if matches!(b.scope(fs)?.kind, SKind::Function | SKind::Body) {
+                let bid = b.declare(fs, vars_name, BKind::EvalVars)?;
+                b.a.dyn_binding.insert(fs, bid);
+            }
+        }
+        b.a.eval_calls.push(i);
+    }
+    for &i in &calls {
+        let mut s = b.a.owner_scope.get(i as usize).copied().unwrap_or(NONE);
+        while s != NONE {
+            let ids: Vec<u32> = b.scope(s)?.bindings.clone();
+            for id in ids {
+                b.binding_mut(id)?.captured = true;
+            }
+            s = b.scope(s)?.parent;
+        }
+    }
+    Ok(())
 }
 
 /// Resolves every reference, marking captured bindings.
@@ -1272,7 +1545,7 @@ fn reference_pass(b: &mut Builder<'_>, parent: &[u32]) -> Result<(), CompileErro
                 }
             }
             NodeKind::FormalParameters => roots.extend(nd.children.iter().copied()),
-            NodeKind::ArrowFunction => {
+            k if is_arrow_kind(k) => {
                 if let Some(&t) = nd.children.first()
                     && node(ast, t as usize)?.kind == NodeKind::BindingIdentifier
                 {

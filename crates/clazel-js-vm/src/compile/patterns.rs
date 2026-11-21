@@ -136,8 +136,18 @@ impl<'a> Cg<'a> {
     /// The default value: `if t is undefined, t := init` (§14.3.3.3†
     /// SingleNameBinding steps 3 and 4: "If Initializer is present and v is
     /// undefined").
-    fn default_value(&mut self, t: Reg, init: Option<u32>) -> R<()> {
+    fn default_value(&mut self, t: Reg, init: Option<u32>, target: u32) -> R<()> {
         if let Some(i) = init {
+            // NamedEvaluation (§8.4.5†) of the initializer when the target is a
+            // plain identifier (SingleNameBinding step 4.a: "If IsAnonymousFunctionDefinition(Initializer)
+            // is true, set v to ? NamedEvaluation of Initializer with argument bindingId").
+            let tk = self.node(target)?.kind;
+            if matches!(
+                tk,
+                NodeKind::BindingIdentifier | NodeKind::IdentifierReference
+            ) {
+                self.named_ident(i, target)?;
+            }
             let skip = self.label();
             let target = Self::label_id(skip)?;
             self.emit(Instr::JumpIfNotUndefined { src: t, target }, self.sp(i))?;
@@ -269,7 +279,7 @@ impl<'a> Cg<'a> {
             let tgt = self.prepare_target(target_node)?;
             let t = self.alloc()?;
             self.load_prop(t, val, &key, psp)?;
-            self.default_value(t, init)?;
+            self.default_value(t, init, target_node)?;
             self.store_target(&tgt, t, mode)?;
             self.release(m2);
         }
@@ -430,7 +440,7 @@ impl<'a> Cg<'a> {
                     let tgt = self.prepare_target(target_node)?;
                     let t = self.alloc()?;
                     self.iter_step(iter, done, t, esp)?;
-                    self.default_value(t, init)?;
+                    self.default_value(t, init, target_node)?;
                     self.store_target(&tgt, t, mode)?;
                 }
             }
@@ -526,7 +536,7 @@ impl<'a> Cg<'a> {
         }
         let fp = match nd.kind {
             NodeKind::Script | NodeKind::ClassStaticBlock => return Ok(()),
-            NodeKind::ArrowFunction => self.child(nd, 0)?,
+            k if scope::is_arrow_kind(k) => self.child(nd, 0)?,
             _ => self.child(nd, 1)?,
         };
         if self.node(fp)?.kind != NodeKind::FormalParameters || self.f.simple_params {
@@ -554,7 +564,7 @@ impl<'a> Cg<'a> {
                 let t = self.alloc()?;
                 let src = u32::try_from(idx).map_err(|_| CompileError::TooLarge("parameters"))?;
                 self.emit(Instr::Move { dst: t, src }, esp)?;
-                self.default_value(t, init)?;
+                self.default_value(t, init, target_node)?;
                 let tgt = self.prepare_target(target_node)?;
                 self.store_target(&tgt, t, Mode::Init)?;
             }

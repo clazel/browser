@@ -17,12 +17,16 @@ impl<'a> Cg<'a> {
     /// `return`: the op has its own exception-table entry (which comes before
     /// the loop's, as inner entries do), so that a throw from it is not caught by
     /// the loop's own catch-all.
-    pub(super) fn emit_iter_close(&mut self, close: Option<(Reg, usize)>, sp: Span) -> R<()> {
-        if let Some((iter, rethrow)) = close {
+    pub(super) fn emit_iter_close(&mut self, close: Option<(Reg, usize, bool)>, sp: Span) -> R<()> {
+        if let Some((iter, rethrow, asyn)) = close {
             let s = self.label();
             let e = self.label();
             self.bind(s)?;
-            self.emit(Instr::IterClose { iter }, sp)?;
+            if asyn {
+                self.emit_async_close(iter, sp)?;
+            } else {
+                self.emit(Instr::IterClose { iter }, sp)?;
+            }
             self.bind(e)?;
             self.f.handlers.push((s, e, rethrow));
         }
@@ -58,6 +62,9 @@ impl<'a> Cg<'a> {
     pub(super) fn for_in_of(&mut self, n: u32, nd: &Node, sp: Span, labels: &[u32]) -> R<()> {
         let (head, expr, body) = (self.child(nd, 0)?, self.child(nd, 1)?, self.child(nd, 2)?);
         let is_of = nd.kind == NodeKind::ForOfStatement;
+        // `for await (x of y)` (§14.7.5.6† ForIn/OfHeadEvaluation with iterKind
+        // async-iterate): the flag of the node.
+        let is_await = is_of && nd.flag;
         let s = self.an.own_scope.get(n as usize).copied().unwrap_or(NONE);
         let m = self.mark();
         // The loop's lexical bindings are in their dead zone while the
@@ -77,7 +84,9 @@ impl<'a> Cg<'a> {
         {
             let m2 = self.mark();
             let v = self.expr_any(expr)?;
-            if is_of {
+            if is_await {
+                self.emit(Instr::GetAsyncIterator { dst: iter, src: v }, self.sp(expr))?;
+            } else if is_of {
                 self.emit(Instr::GetIterator { dst: iter, src: v }, self.sp(expr))?;
             } else {
                 self.emit(Instr::ForInIterator { dst: iter, src: v }, self.sp(expr))?;
@@ -92,22 +101,59 @@ impl<'a> Cg<'a> {
         let exc_l = self.label();
         let rethrow = self.label();
         self.bind(top)?;
-        self.emit(
-            Instr::IterNext {
-                value: val,
-                done,
-                iter,
-            },
-            self.sp(expr),
-        )?;
-        let end_t = Self::label_id(end)?;
-        self.emit(
-            Instr::JumpIfTrue {
-                cond: done,
-                target: end_t,
-            },
-            self.sp(expr),
-        )?;
+        if is_await {
+            // ForIn/OfBodyEvaluation §14.7.5.7† step 6.a to 6.d for async-iterate:
+            // call `next`, await the result, check it is an Object (IterComplete),
+            // then read `done` and `value`.
+            let esp = self.sp(expr);
+            let m2 = self.mark();
+            let (res, found) = (self.alloc()?, self.alloc()?);
+            self.emit(
+                Instr::IterCallMethod {
+                    dst: res,
+                    found,
+                    iter,
+                    arg: res,
+                    which: 4,
+                },
+                esp,
+            )?;
+            self.emit_await(res, res, esp)?;
+            self.emit(Instr::IterComplete { done, result: res }, esp)?;
+            let end_t = Self::label_id(end)?;
+            self.emit(
+                Instr::JumpIfTrue {
+                    cond: done,
+                    target: end_t,
+                },
+                esp,
+            )?;
+            self.emit(
+                Instr::IterValue {
+                    dst: val,
+                    result: res,
+                },
+                esp,
+            )?;
+            self.release(m2);
+        } else {
+            self.emit(
+                Instr::IterNext {
+                    value: val,
+                    done,
+                    iter,
+                },
+                self.sp(expr),
+            )?;
+            let end_t = Self::label_id(end)?;
+            self.emit(
+                Instr::JumpIfTrue {
+                    cond: done,
+                    target: end_t,
+                },
+                self.sp(expr),
+            )?;
+        }
         self.bind(region_start)?;
         if s != NONE && self.scope(s)?.has_env() {
             self.fresh_env(s, sp)?;
@@ -135,7 +181,11 @@ impl<'a> Cg<'a> {
             labels: labels.to_vec(),
             brk: end,
             cont: top,
-            close: if is_of { Some((iter, rethrow)) } else { None },
+            close: if is_of {
+                Some((iter, rethrow, is_await))
+            } else {
+                None
+            },
         });
         self.stmt(body, &[])?;
         self.f.ctl.pop();
@@ -147,7 +197,11 @@ impl<'a> Cg<'a> {
             self.emit(Instr::GetException { dst: exc }, sp)?;
             let (qs, qe, sw) = (self.label(), self.label(), self.label());
             self.bind(qs)?;
-            self.emit(Instr::IterClose { iter }, sp)?;
+            if is_await {
+                self.emit_async_close_quiet(iter, sp)?;
+            } else {
+                self.emit(Instr::IterClose { iter }, sp)?;
+            }
             self.bind(qe)?;
             self.emit(Instr::Throw { src: exc }, sp)?;
             self.bind(sw)?;
