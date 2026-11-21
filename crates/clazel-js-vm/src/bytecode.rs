@@ -124,6 +124,7 @@ instrs! {
     StrictNe { dst: Reg, a: Reg, b: Reg },
     Not { dst: Reg, src: Reg },
     ToNumeric { dst: Reg, src: Reg },
+    ToNumber { dst: Reg, src: Reg },
     JumpIfTrue { cond: Reg, target: u32 },
     JumpIfFalse { cond: Reg, target: u32 },
     Loop { target: u32 },
@@ -147,6 +148,11 @@ instrs! {
     DeleteProp { dst: Reg, obj: Reg, idx: Reg },
     GetGlobal { dst: Reg, key: u32, ic: u32 },
     SetGlobal { key: u32, src: Reg, ic: u32 },
+    GetGlobalOrUndefined { dst: Reg, key: u32 },
+    DeclareGlobals { k: u32 },
+    DefineProp { obj: Reg, key: u32, val: Reg },
+    DefineElem { obj: Reg, idx: Reg, val: Reg },
+    SetLiteralProto { obj: Reg, val: Reg },
     NewObject { dst: Reg },
     NewArray { dst: Reg, len: u32 },
     NewEnv { dst: Reg, parent: Reg, size: u32 },
@@ -220,6 +226,38 @@ pub enum Const {
     /// A BigInt: the digits of its literal, with the radix prefix (`0x`, `0o`,
     /// `0b`) if it has one, without the `n` suffix and the `_` separators.
     BigInt(Vec<u16>),
+    /// A script's declaration record, which [`Instr::DeclareGlobals`] reads:
+    /// the heap builds it when it loads the function (see
+    /// [`crate::ops::Op::DeclareGlobals`]).
+    GlobalDeclarations(GlobalDecls),
+}
+
+/// What GlobalDeclarationInstantiation (§16.1.7†) reads of a script.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
+pub struct GlobalDecls {
+    /// The names of the LexicallyScopedDeclarations (step 13), each with
+    /// whether it is a constant.
+    pub lexical: Vec<(Vec<u16>, bool)>,
+    /// The VarScopedDeclarations (step 5), in source order.
+    pub var_scoped: Vec<VarScoped>,
+    /// The names Annex B.3.2.2† adds at step 12: functions declared in
+    /// blocks, in source order.
+    pub annexb: Vec<Vec<u16>>,
+}
+
+/// A var-scoped declaration of a script.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum VarScoped {
+    /// A `var` (one bound name).
+    Var(Vec<u16>),
+    /// A function declaration: its name and its template in
+    /// [`Program::functions`].
+    Function {
+        /// The function's name.
+        name: Vec<u16>,
+        /// The index of its template.
+        func: u32,
+    },
 }
 
 /// An exception-table entry (see the module header).
@@ -367,6 +405,7 @@ pub fn check_function(f: &FunctionCode, nfuncs: usize) -> Result<(), &'static st
             | Instr::BitNot { dst, src }
             | Instr::Not { dst, src }
             | Instr::ToNumeric { dst, src }
+            | Instr::ToNumber { dst, src }
             | Instr::TypeOf { dst, src }
             | Instr::GetIterator { dst, src } => reg_ok(f, dst) && reg_ok(f, src),
             Instr::ThrowIfHole { src }
@@ -400,6 +439,21 @@ pub fn check_function(f: &FunctionCode, nfuncs: usize) -> Result<(), &'static st
             Instr::SetEnvSlot { env, src, .. } => reg_ok(f, env) && reg_ok(f, src),
             Instr::GetEnvParent { dst, env } => reg_ok(f, dst) && reg_ok(f, env),
             Instr::GetGlobal { dst, key, ic: c } => reg_ok(f, dst) && konst(key) && ic(c),
+            Instr::GetGlobalOrUndefined { dst, key } => reg_ok(f, dst) && konst(key),
+            // `spec::op_wf`'s `value_wf(consts[k])`: the constant is a declaration
+            // record, whose functions are templates of the program.
+            Instr::DeclareGlobals { k } => match f.consts.get(k as usize) {
+                Some(Const::GlobalDeclarations(d)) => d.var_scoped.iter().all(|v| match v {
+                    VarScoped::Function { func, .. } => (*func as usize) < nfuncs,
+                    VarScoped::Var(_) => true,
+                }),
+                _ => false,
+            },
+            Instr::DefineProp { obj, key, val } => reg_ok(f, obj) && konst(key) && reg_ok(f, val),
+            Instr::DefineElem { obj, idx, val } => {
+                reg_ok(f, obj) && reg_ok(f, idx) && reg_ok(f, val)
+            }
+            Instr::SetLiteralProto { obj, val } => reg_ok(f, obj) && reg_ok(f, val),
             Instr::SetGlobal { key, src, ic: c } => konst(key) && reg_ok(f, src) && ic(c),
             Instr::NewEnv { dst, parent, .. } => reg_ok(f, dst) && reg_ok(f, parent),
             Instr::NewClosure { dst, func, env } => {

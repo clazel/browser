@@ -181,6 +181,10 @@ pub struct Analysis {
     pub name_of: Vec<u32>,
     /// Block-level function declarations that also assign a variable.
     pub annexb: HashMap<u32, Target>,
+    /// The `var` declarations (nodes) directly in the script, outside any
+    /// function, in arena order: the global object's variables
+    /// (§16.1.7 GlobalDeclarationInstantiation step 10).
+    pub global_vars: Vec<u32>,
     /// Whether evaluating the node can assign a variable of the current
     /// function (an assignment or an update, outside inner functions).
     pub contains_assign: Vec<bool>,
@@ -458,6 +462,7 @@ pub fn analyze(ast: &Ast, src: &[u32]) -> Result<Analysis, CompileError> {
             res: vec![NONE; n],
             name_of: vec![NONE; n],
             annexb: HashMap::new(),
+            global_vars: Vec::new(),
             contains_assign: vec![false; n],
         },
         intern: HashMap::new(),
@@ -615,6 +620,9 @@ fn declare_pass(b: &mut Builder<'_>, parent: &[u32]) -> Result<(), CompileError>
                 let fs = b.fn_scope(owner)?;
                 if b.scope(fs)?.kind == SKind::Function {
                     b.declare(fs, name, BKind::Var)?;
+                } else {
+                    let id = u32::try_from(i).map_err(|_| CompileError::TooLarge("nodes"))?;
+                    b.a.global_vars.push(id);
                 }
             }
             NodeKind::LexicalBinding => {
