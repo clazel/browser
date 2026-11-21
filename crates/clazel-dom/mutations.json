@@ -363,6 +363,440 @@
         "witness": "clone_count(ol_template(), 1) == 1"
       },
       "module": "ops_lemmas"
+    },
+    {
+      "id": "pi-allows-text-in-document",
+      "file": "src/spec.rs",
+      "find": "    else if (doc.nodes[node as int].kind is Text && doc.nodes[parent as int].kind is Document) || (doc.nodes[node as int].kind is DocumentType\n        && !(doc.nodes[parent as int].kind is Document)) {\n        Some(DomError::HierarchyRequest)\n    }\n    // 6.\n    else if doc.nodes[parent as int].kind is Document && pre_insert_document_violation",
+      "replace": "    else if (false) || (doc.nodes[node as int].kind is DocumentType\n        && !(doc.nodes[parent as int].kind is Document)) {\n        Some(DomError::HierarchyRequest)\n    }\n    // 6.\n    else if doc.nodes[parent as int].kind is Document && pre_insert_document_violation",
+      "expect": "killed",
+      "reason": "Step 5 no longer refuses a `Text` node as a document's child: theorem_pre_insert_children_rules (a call without an error leaves the rules true) is false, for a text inserted into the empty document.",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_pi_text_in_document()",
+        "witness": "pre_insert_error(vm_pre(), 1, 0, None) is None"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "pi-allows-doctype-in-element",
+      "file": "src/spec.rs",
+      "find": "    else if (doc.nodes[node as int].kind is Text && doc.nodes[parent as int].kind is Document) || (doc.nodes[node as int].kind is DocumentType\n        && !(doc.nodes[parent as int].kind is Document)) {\n        Some(DomError::HierarchyRequest)\n    }\n    // 6.\n    else if doc.nodes[parent as int].kind is Document && pre_insert_document_violation",
+      "replace": "    else if (doc.nodes[node as int].kind is Text && doc.nodes[parent as int].kind is Document) || (false) {\n        Some(DomError::HierarchyRequest)\n    }\n    // 6.\n    else if doc.nodes[parent as int].kind is Document && pre_insert_document_violation",
+      "expect": "killed",
+      "reason": "Step 5 no longer refuses a doctype under an element: theorem_pre_insert_children_rules is false, for a doctype inserted into an element.",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_pi_doctype_in_element()",
+        "witness": "pre_insert_error(vm_pre(), 5, 15, None) is None"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "pi-fragment-skips-two-elements",
+      "file": "src/spec.rs",
+      "find": "elements > 1 || texts > 0 || (elements == 1 && (count_tag(doc, kids, NodeTag::Element, None) > 0 || child_is_doctype\n                || after > 0))",
+      "replace": "false || texts > 0 || (elements == 1 && (count_tag(doc, kids, NodeTag::Element, None) > 0 || child_is_doctype\n                || after > 0))",
+      "expect": "killed",
+      "reason": "A fragment of two elements is no longer refused as a document's child: theorem_pre_insert_children_rules is false (the document would get two elements).",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_pi_fragment_two_elements()",
+        "witness": "pre_insert_error(vm_pre(), 8, 0, None) is None"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "pi-fragment-skips-text",
+      "file": "src/spec.rs",
+      "find": "elements > 1 || texts > 0 || (elements == 1 && (count_tag(doc, kids, NodeTag::Element, None) > 0 || child_is_doctype\n                || after > 0))",
+      "replace": "elements > 1 || false || (elements == 1 && (count_tag(doc, kids, NodeTag::Element, None) > 0 || child_is_doctype\n                || after > 0))",
+      "expect": "killed",
+      "reason": "A fragment with a `Text` child is no longer refused as a document's child: theorem_pre_insert_children_rules is false (the document would get a text).",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_pi_fragment_text()",
+        "witness": "pre_insert_error(vm_pre(), 11, 0, None) is None"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "pi-fragment-skips-parent-element",
+      "file": "src/spec.rs",
+      "find": "elements > 1 || texts > 0 || (elements == 1 && (count_tag(doc, kids, NodeTag::Element, None) > 0 || child_is_doctype\n                || after > 0))",
+      "replace": "elements > 1 || texts > 0 || (elements == 1 && (false || child_is_doctype\n                || after > 0))",
+      "expect": "killed",
+      "reason": "A fragment of one element is no longer refused when the document has an element: theorem_pre_insert_children_rules is false (two elements).",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_pi_fragment_element_parent_element()",
+        "witness": "pre_insert_error(vm_s1(), 13, 0, None) is None"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "pi-fragment-skips-child-doctype",
+      "file": "src/spec.rs",
+      "find": "elements > 1 || texts > 0 || (elements == 1 && (count_tag(doc, kids, NodeTag::Element, None) > 0 || child_is_doctype\n                || after > 0))",
+      "replace": "elements > 1 || texts > 0 || (elements == 1 && (count_tag(doc, kids, NodeTag::Element, None) > 0 || false\n                || after > 0))",
+      "expect": "killed",
+      "reason": "A fragment of one element is no longer refused before a doctype: theorem_pre_insert_children_rules is false (the element would precede the doctype).",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_pi_fragment_element_before_doctype()",
+        "witness": "pre_insert_error(vm_s2(), 13, 0, Some(4usize)) is None"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "pi-fragment-skips-doctype-after",
+      "file": "src/spec.rs",
+      "find": "elements > 1 || texts > 0 || (elements == 1 && (count_tag(doc, kids, NodeTag::Element, None) > 0 || child_is_doctype\n                || after > 0))",
+      "replace": "elements > 1 || texts > 0 || (elements == 1 && (count_tag(doc, kids, NodeTag::Element, None) > 0 || child_is_doctype\n                || false))",
+      "expect": "killed",
+      "reason": "A fragment of one element is no longer refused when a doctype follows the child: theorem_pre_insert_children_rules is false (the element would precede the doctype).",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_pi_fragment_element_doctype_after()",
+        "witness": "pre_insert_error(vm_s3(), 13, 0, Some(6usize)) is None"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "pi-element-skips-parent-element",
+      "file": "src/spec.rs",
+      "find": "NodeKind::Element { .. } => count_tag(doc, kids, NodeTag::Element, None) > 0 || child_is_doctype || after > 0,",
+      "replace": "NodeKind::Element { .. } => false || child_is_doctype || after > 0,",
+      "expect": "killed",
+      "reason": "An element is no longer refused when the document has an element: theorem_pre_insert_children_rules is false (two elements).",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_pi_element_parent_element()",
+        "witness": "pre_insert_error(vm_s1(), 3, 0, None) is None"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "pi-element-skips-child-doctype",
+      "file": "src/spec.rs",
+      "find": "NodeKind::Element { .. } => count_tag(doc, kids, NodeTag::Element, None) > 0 || child_is_doctype || after > 0,",
+      "replace": "NodeKind::Element { .. } => count_tag(doc, kids, NodeTag::Element, None) > 0 || false || after > 0,",
+      "expect": "killed",
+      "reason": "An element is no longer refused before a doctype: theorem_pre_insert_children_rules is false (the element would precede the doctype).",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_pi_element_before_doctype()",
+        "witness": "pre_insert_error(vm_s2(), 3, 0, Some(4usize)) is None"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "pi-element-skips-doctype-after",
+      "file": "src/spec.rs",
+      "find": "NodeKind::Element { .. } => count_tag(doc, kids, NodeTag::Element, None) > 0 || child_is_doctype || after > 0,",
+      "replace": "NodeKind::Element { .. } => count_tag(doc, kids, NodeTag::Element, None) > 0 || child_is_doctype || false,",
+      "expect": "killed",
+      "reason": "An element is no longer refused when a doctype follows the child: theorem_pre_insert_children_rules is false (the element would precede the doctype).",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_pi_element_doctype_after()",
+        "witness": "pre_insert_error(vm_s3(), 3, 0, Some(6usize)) is None"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "pi-doctype-skips-parent-doctype",
+      "file": "src/spec.rs",
+      "find": "NodeKind::DocumentType { .. } => count_tag(doc, kids, NodeTag::DocumentType, None) > 0 || before > 0 || (child is None\n            && count_tag(doc, kids, NodeTag::Element, None) > 0),",
+      "replace": "NodeKind::DocumentType { .. } => false || before > 0 || (child is None\n            && count_tag(doc, kids, NodeTag::Element, None) > 0),",
+      "expect": "killed",
+      "reason": "A doctype is no longer refused when the document has one: theorem_pre_insert_children_rules is false (two doctypes).",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_pi_doctype_parent_doctype()",
+        "witness": "pre_insert_error(vm_s2(), 5, 0, None) is None"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "pi-doctype-skips-element-preceding",
+      "file": "src/spec.rs",
+      "find": "NodeKind::DocumentType { .. } => count_tag(doc, kids, NodeTag::DocumentType, None) > 0 || before > 0 || (child is None\n            && count_tag(doc, kids, NodeTag::Element, None) > 0),",
+      "replace": "NodeKind::DocumentType { .. } => count_tag(doc, kids, NodeTag::DocumentType, None) > 0 || false || (child is None\n            && count_tag(doc, kids, NodeTag::Element, None) > 0),",
+      "expect": "killed",
+      "reason": "A doctype is no longer refused after the element: theorem_pre_insert_children_rules is false (the doctype would follow the element).",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_pi_doctype_element_preceding()",
+        "witness": "pre_insert_error(vm_s4(), 5, 0, Some(6usize)) is None"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "pi-doctype-skips-append-after-element",
+      "file": "src/spec.rs",
+      "find": "NodeKind::DocumentType { .. } => count_tag(doc, kids, NodeTag::DocumentType, None) > 0 || before > 0 || (child is None\n            && count_tag(doc, kids, NodeTag::Element, None) > 0),",
+      "replace": "NodeKind::DocumentType { .. } => count_tag(doc, kids, NodeTag::DocumentType, None) > 0 || before > 0 || (child is None\n            && false),",
+      "expect": "killed",
+      "reason": "A doctype appended after the document's element is no longer refused: theorem_pre_insert_children_rules is false (the doctype would follow the element).",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_pi_doctype_after_element()",
+        "witness": "pre_insert_error(vm_s1(), 5, 0, None) is None"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "pi-fragment-refuses-one-element",
+      "file": "src/spec.rs",
+      "find": "elements > 1 || texts > 0 || (elements == 1 && (count_tag(doc, kids, NodeTag::Element, None) > 0 || child_is_doctype\n                || after > 0))",
+      "replace": "elements > 0 || texts > 0 || (elements == 1 && (count_tag(doc, kids, NodeTag::Element, None) > 0 || child_is_doctype\n                || after > 0))",
+      "expect": "killed",
+      "reason": "A fragment of one element is refused as a child of the empty document: theorem_pre_insert_children_rules (a call that would leave the rules true has no error) is false.",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_pi_fragment_one_element()",
+        "witness": "pre_insert_error(vm_pre(), 13, 0, None) is Some"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "pi-refuses-text-in-element",
+      "file": "src/spec.rs",
+      "find": "    else if (doc.nodes[node as int].kind is Text && doc.nodes[parent as int].kind is Document) || (doc.nodes[node as int].kind is DocumentType\n        && !(doc.nodes[parent as int].kind is Document)) {\n        Some(DomError::HierarchyRequest)\n    }\n    // 6.\n    else if doc.nodes[parent as int].kind is Document && pre_insert_document_violation",
+      "replace": "    else if (doc.nodes[node as int].kind is Text) || (doc.nodes[node as int].kind is DocumentType\n        && !(doc.nodes[parent as int].kind is Document)) {\n        Some(DomError::HierarchyRequest)\n    }\n    // 6.\n    else if doc.nodes[parent as int].kind is Document && pre_insert_document_violation",
+      "expect": "killed",
+      "reason": "A `Text` node is refused as an element's child: theorem_pre_insert_children_rules (a call that would leave the rules true has no error) is false.",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_pi_text_in_element()",
+        "witness": "pre_insert_error(vm_pre(), 1, 15, None) is Some"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "pi-refuses-doctype-in-document",
+      "file": "src/spec.rs",
+      "find": "    else if (doc.nodes[node as int].kind is Text && doc.nodes[parent as int].kind is Document) || (doc.nodes[node as int].kind is DocumentType\n        && !(doc.nodes[parent as int].kind is Document)) {\n        Some(DomError::HierarchyRequest)\n    }\n    // 6.\n    else if doc.nodes[parent as int].kind is Document && pre_insert_document_violation",
+      "replace": "    else if (doc.nodes[node as int].kind is Text && doc.nodes[parent as int].kind is Document) || (doc.nodes[node as int].kind is DocumentType) {\n        Some(DomError::HierarchyRequest)\n    }\n    // 6.\n    else if doc.nodes[parent as int].kind is Document && pre_insert_document_violation",
+      "expect": "killed",
+      "reason": "A doctype is refused as the child of the empty document: theorem_pre_insert_children_rules (a call that would leave the rules true has no error) is false.",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_pi_doctype_in_document()",
+        "witness": "pre_insert_error(vm_pre(), 4, 0, None) is Some"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "rp-allows-text-in-document",
+      "file": "src/spec.rs",
+      "find": "    else if (doc.nodes[node as int].kind is Text && doc.nodes[parent as int].kind is Document) || (doc.nodes[node as int].kind is DocumentType\n        && !(doc.nodes[parent as int].kind is Document)) {\n        Some(DomError::HierarchyRequest)\n    }\n    // 6.\n    else if doc.nodes[parent as int].kind is Document && replace_document_violation",
+      "replace": "    else if (false) || (doc.nodes[node as int].kind is DocumentType\n        && !(doc.nodes[parent as int].kind is Document)) {\n        Some(DomError::HierarchyRequest)\n    }\n    // 6.\n    else if doc.nodes[parent as int].kind is Document && replace_document_violation",
+      "expect": "killed",
+      "reason": "Replace no longer refuses a `Text` node as a document's child: theorem_replace_children_rules (a call without an error leaves the rules true) is false.",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_rp_text_in_document()",
+        "witness": "replace_error(vm_s1(), 2, 1, 0) is None"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "rp-allows-doctype-in-element",
+      "file": "src/spec.rs",
+      "find": "    else if (doc.nodes[node as int].kind is Text && doc.nodes[parent as int].kind is Document) || (doc.nodes[node as int].kind is DocumentType\n        && !(doc.nodes[parent as int].kind is Document)) {\n        Some(DomError::HierarchyRequest)\n    }\n    // 6.\n    else if doc.nodes[parent as int].kind is Document && replace_document_violation",
+      "replace": "    else if (doc.nodes[node as int].kind is Text && doc.nodes[parent as int].kind is Document) || (false) {\n        Some(DomError::HierarchyRequest)\n    }\n    // 6.\n    else if doc.nodes[parent as int].kind is Document && replace_document_violation",
+      "expect": "killed",
+      "reason": "Replace no longer refuses a doctype under an element: theorem_replace_children_rules is false.",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_rp_doctype_in_element()",
+        "witness": "replace_error(vm_s9(), 7, 5, 15) is None"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "rp-fragment-skips-two-elements",
+      "file": "src/spec.rs",
+      "find": "elements > 1 || texts > 0 || (elements == 1 && (count_tag(doc, kids, NodeTag::Element, Some(child)) > 0 || after > 0))",
+      "replace": "false || texts > 0 || (elements == 1 && (count_tag(doc, kids, NodeTag::Element, Some(child)) > 0 || after > 0))",
+      "expect": "killed",
+      "reason": "Replace no longer refuses a fragment of two elements in a document: theorem_replace_children_rules is false.",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_rp_fragment_two_elements()",
+        "witness": "replace_error(vm_s6(), 6, 8, 0) is None"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "rp-fragment-skips-text",
+      "file": "src/spec.rs",
+      "find": "elements > 1 || texts > 0 || (elements == 1 && (count_tag(doc, kids, NodeTag::Element, Some(child)) > 0 || after > 0))",
+      "replace": "elements > 1 || false || (elements == 1 && (count_tag(doc, kids, NodeTag::Element, Some(child)) > 0 || after > 0))",
+      "expect": "killed",
+      "reason": "Replace no longer refuses a fragment with a `Text` child in a document: theorem_replace_children_rules is false.",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_rp_fragment_text()",
+        "witness": "replace_error(vm_s6(), 6, 11, 0) is None"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "rp-fragment-skips-parent-element",
+      "file": "src/spec.rs",
+      "find": "elements > 1 || texts > 0 || (elements == 1 && (count_tag(doc, kids, NodeTag::Element, Some(child)) > 0 || after > 0))",
+      "replace": "elements > 1 || texts > 0 || (elements == 1 && (false || after > 0))",
+      "expect": "killed",
+      "reason": "Replace no longer refuses a fragment of one element when the document has another element: theorem_replace_children_rules is false.",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_rp_fragment_element_parent_element()",
+        "witness": "replace_error(vm_s4(), 6, 13, 0) is None"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "rp-fragment-skips-doctype-after",
+      "file": "src/spec.rs",
+      "find": "elements > 1 || texts > 0 || (elements == 1 && (count_tag(doc, kids, NodeTag::Element, Some(child)) > 0 || after > 0))",
+      "replace": "elements > 1 || texts > 0 || (elements == 1 && (count_tag(doc, kids, NodeTag::Element, Some(child)) > 0 || false))",
+      "expect": "killed",
+      "reason": "Replace no longer refuses a fragment of one element when a doctype follows the child: theorem_replace_children_rules is false.",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_rp_fragment_element_doctype_after()",
+        "witness": "replace_error(vm_s3(), 6, 13, 0) is None"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "rp-element-skips-parent-element",
+      "file": "src/spec.rs",
+      "find": "NodeKind::Element { .. } => count_tag(doc, kids, NodeTag::Element, Some(child)) > 0 || after > 0,",
+      "replace": "NodeKind::Element { .. } => false || after > 0,",
+      "expect": "killed",
+      "reason": "Replace no longer refuses an element when the document has another element: theorem_replace_children_rules is false.",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_rp_element_parent_element()",
+        "witness": "replace_error(vm_s4(), 6, 3, 0) is None"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "rp-element-skips-doctype-after",
+      "file": "src/spec.rs",
+      "find": "NodeKind::Element { .. } => count_tag(doc, kids, NodeTag::Element, Some(child)) > 0 || after > 0,",
+      "replace": "NodeKind::Element { .. } => count_tag(doc, kids, NodeTag::Element, Some(child)) > 0 || false,",
+      "expect": "killed",
+      "reason": "Replace no longer refuses an element when a doctype follows the child: theorem_replace_children_rules is false.",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_rp_element_doctype_after()",
+        "witness": "replace_error(vm_s3(), 6, 3, 0) is None"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "rp-doctype-skips-parent-doctype",
+      "file": "src/spec.rs",
+      "find": "NodeKind::DocumentType { .. } => count_tag(doc, kids, NodeTag::DocumentType, Some(child)) > 0 || before > 0,",
+      "replace": "NodeKind::DocumentType { .. } => false || before > 0,",
+      "expect": "killed",
+      "reason": "Replace no longer refuses a doctype when the document has another doctype: theorem_replace_children_rules is false.",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_rp_doctype_parent_doctype()",
+        "witness": "replace_error(vm_s8(), 6, 5, 0) is None"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "rp-doctype-skips-element-preceding",
+      "file": "src/spec.rs",
+      "find": "NodeKind::DocumentType { .. } => count_tag(doc, kids, NodeTag::DocumentType, Some(child)) > 0 || before > 0,",
+      "replace": "NodeKind::DocumentType { .. } => count_tag(doc, kids, NodeTag::DocumentType, Some(child)) > 0 || false,",
+      "expect": "killed",
+      "reason": "Replace no longer refuses a doctype after the document's element: theorem_replace_children_rules is false.",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_rp_doctype_element_preceding()",
+        "witness": "replace_error(vm_s4(), 6, 5, 0) is None"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "rp-element-counts-child",
+      "file": "src/spec.rs",
+      "find": "NodeKind::Element { .. } => count_tag(doc, kids, NodeTag::Element, Some(child)) > 0 || after > 0,",
+      "replace": "NodeKind::Element { .. } => count_tag(doc, kids, NodeTag::Element, None) > 0 || after > 0,",
+      "expect": "killed",
+      "reason": "Replace counts the replaced child against the new element: theorem_replace_children_rules (a call that would leave the rules true has no error) is false.",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_rp_element_replaces_element()",
+        "witness": "replace_error(vm_s1(), 2, 3, 0) is Some"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "rp-doctype-counts-child",
+      "file": "src/spec.rs",
+      "find": "NodeKind::DocumentType { .. } => count_tag(doc, kids, NodeTag::DocumentType, Some(child)) > 0 || before > 0,",
+      "replace": "NodeKind::DocumentType { .. } => count_tag(doc, kids, NodeTag::DocumentType, None) > 0 || before > 0,",
+      "expect": "killed",
+      "reason": "Replace counts the replaced child against the new doctype: theorem_replace_children_rules is false.",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_rp_doctype_replaces_doctype()",
+        "witness": "replace_error(vm_s2(), 4, 5, 0) is Some"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "rp-fragment-counts-child",
+      "file": "src/spec.rs",
+      "find": "elements > 1 || texts > 0 || (elements == 1 && (count_tag(doc, kids, NodeTag::Element, Some(child)) > 0 || after > 0))",
+      "replace": "elements > 1 || texts > 0 || (elements == 1 && (count_tag(doc, kids, NodeTag::Element, None) > 0 || after > 0))",
+      "expect": "killed",
+      "reason": "Replace counts the replaced child against a fragment's element: theorem_replace_children_rules is false.",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_rp_fragment_replaces_element()",
+        "witness": "replace_error(vm_s1(), 2, 13, 0) is Some"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "rp-refuses-text-in-element",
+      "file": "src/spec.rs",
+      "find": "    else if (doc.nodes[node as int].kind is Text && doc.nodes[parent as int].kind is Document) || (doc.nodes[node as int].kind is DocumentType\n        && !(doc.nodes[parent as int].kind is Document)) {\n        Some(DomError::HierarchyRequest)\n    }\n    // 6.\n    else if doc.nodes[parent as int].kind is Document && replace_document_violation",
+      "replace": "    else if (doc.nodes[node as int].kind is Text) || (doc.nodes[node as int].kind is DocumentType\n        && !(doc.nodes[parent as int].kind is Document)) {\n        Some(DomError::HierarchyRequest)\n    }\n    // 6.\n    else if doc.nodes[parent as int].kind is Document && replace_document_violation",
+      "expect": "killed",
+      "reason": "Replace refuses a `Text` node as an element's child: theorem_replace_children_rules is false.",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_rp_text_in_element()",
+        "witness": "replace_error(vm_s9(), 7, 1, 15) is Some"
+      },
+      "module": "validity_lemmas"
+    },
+    {
+      "id": "rp-refuses-doctype-in-document",
+      "file": "src/spec.rs",
+      "find": "    else if (doc.nodes[node as int].kind is Text && doc.nodes[parent as int].kind is Document) || (doc.nodes[node as int].kind is DocumentType\n        && !(doc.nodes[parent as int].kind is Document)) {\n        Some(DomError::HierarchyRequest)\n    }\n    // 6.\n    else if doc.nodes[parent as int].kind is Document && replace_document_violation",
+      "replace": "    else if (doc.nodes[node as int].kind is Text && doc.nodes[parent as int].kind is Document) || (doc.nodes[node as int].kind is DocumentType) {\n        Some(DomError::HierarchyRequest)\n    }\n    // 6.\n    else if doc.nodes[parent as int].kind is Document && replace_document_violation",
+      "expect": "killed",
+      "reason": "Replace refuses a doctype as a document's child: theorem_replace_children_rules is false.",
+      "certificate": {
+        "file": "src/validity_mutation_lemmas.rs",
+        "lemma": "vm_rp_doctype_in_document()",
+        "witness": "replace_error(vm_s6(), 6, 4, 0) is Some"
+      },
+      "module": "validity_lemmas"
     }
   ]
 }

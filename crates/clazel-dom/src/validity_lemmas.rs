@@ -663,7 +663,7 @@ pub proof fn lemma_ok_insert_node(doc: Document, node: NodeId, p: Seq<NodeId>, s
 /// Only kinds matter to the rules on a sequence.
 pub proof fn lemma_ok_kinds(doc: Document, d2: Document, kids: Seq<NodeId>)
     requires
-        d2.nodes.len() == doc.nodes.len(),
+        d2.nodes.len() >= doc.nodes.len(),
         forall|x: int| 0 <= x < doc.nodes.len() ==> (#[trigger] d2.nodes[x]).kind == doc.nodes[x].kind,
         forall|j: int| 0 <= j < kids.len() ==> (#[trigger] kids[j]) < doc.nodes.len(),
         document_children_ok(doc, kids),
@@ -1264,8 +1264,76 @@ pub proof fn theorem_replace_children_rules(doc: Document, child: NodeId, node: 
 }
 
 // ---------------------------------------------------------------------
-// For the kill certificates of `mutations.json`: what the theorems say of
-// a call, in terms of the condition that does not read the checks.
+// For the kill certificates of `mutations.json`: building arenas where the
+// rules hold, and what the theorems say of a call, in terms of the
+// condition that does not read the checks.
+
+/// A new document obeys the rules.
+pub proof fn lemma_new_document_rules(url: Seq<u32>)
+    ensures
+        children_rules_hold(new_document(url)),
+{
+    let d = new_document(url);
+    assert(d.nodes.len() == 1);
+    assert(d.nodes[0].kind is Document);
+    assert(d.nodes[0].children =~= Seq::<NodeId>::empty());
+    assert(document_children_ok(d, d.nodes[0].children));
+}
+
+/// In a well-formed arena every child is a node of it.
+pub proof fn lemma_children_valid(doc: Document)
+    requires
+        wf(doc),
+    ensures
+        forall|i: int, j: int| 0 <= i < doc.nodes.len() && 0 <= j < doc.nodes[i].children.len() ==> (#[trigger] doc.nodes[i].children[j]) < doc.nodes.len(),
+{
+    let paths = lemma_wf_witness(doc);
+    lemma_wf_split(doc, paths);
+}
+
+/// Creating a node keeps the rules true: it has no children and no
+/// existing node changes.
+#[verifier::rlimit(100)]
+pub proof fn lemma_create_keeps_rules(doc: Document, k: NodeKind)
+    requires
+        wf(doc),
+        children_rules_hold(doc),
+    ensures
+        children_rules_hold(create_node(doc, k).0),
+{
+    let d2 = create_node(doc, k).0;
+    let n = doc.nodes.len();
+    lemma_children_valid(doc);
+    assert(d2.nodes.len() == n + 1);
+    assert(1 <= n);
+    assert forall|p: int, j: int|
+        0 <= p < d2.nodes.len() && !(d2.nodes[p].kind is Document) && 0 <= j < d2.nodes[p].children.len() implies !(d2.nodes[#[trigger] d2.nodes[p].children[j] as int].kind is DocumentType) by {
+        assert(p < n);
+        assert(d2.nodes[p] == doc.nodes[p]);
+        let c = doc.nodes[p].children[j];
+        assert(c < n);
+        assert(d2.nodes[c as int] == doc.nodes[c as int]);
+    }
+    assert(d2.nodes[0] == doc.nodes[0]);
+    assert forall|x: int| 0 <= x < n implies (#[trigger] d2.nodes[x]).kind == doc.nodes[x].kind by {}
+    lemma_ok_kinds(doc, d2, doc.nodes[0].children);
+}
+
+/// Appending to a parent a node that has no parent keeps the rules true
+/// when [`pre_insert_condition`] holds.
+pub proof fn lemma_append_keeps_rules(doc: Document, parent: NodeId, node: NodeId)
+    requires
+        insert_requires(doc, node, parent, None),
+        children_rules_hold(doc),
+        doc.nodes[node as int].parent is None,
+        pre_insert_condition(doc, node, parent, None),
+    ensures
+        children_rules_hold(append(doc, parent, node)),
+{
+    assert(insert_any_requires(doc, node, parent, None));
+    assert(append(doc, parent, node) == insert_any(doc, node, parent, None));
+    lemma_insert_rules_iff(doc, node, parent, None);
+}
 
 /// A call that [`pre_insert_condition`] rejects gets an error from "ensure
 /// pre-insertion validity" (`theorem_pre_insert_children_rules`).
