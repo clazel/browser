@@ -40,6 +40,7 @@
 //! Tier: see `[package.metadata.clazel]` in `Cargo.toml` and
 //! `docs/VERIFICATION.md`.
 
+pub mod a64;
 pub mod acc_lemmas;
 pub mod api;
 pub mod contract;

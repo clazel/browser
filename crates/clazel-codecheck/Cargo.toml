@@ -12,6 +12,8 @@ vstd = "=0.0.0-2026-10-04-0306"
 # The decoder of untrusted bytes is this crate's own (CLAUDE.md rule 8); the
 # only thing taken from `clazel-x64` is the specification of the subset.
 clazel-x64 = { path = "../clazel-x64" }
+# The A64 subset and its proven encoder and decoder, for the A64 validator.
+clazel-a64 = { path = "../clazel-a64" }
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
 # shipped code today: nothing, because no validator exists yet (the spec, the
