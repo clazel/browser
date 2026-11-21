@@ -318,6 +318,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "clazel-forms-edit"
+version = "0.0.0"
+dependencies = [
+ "clazel-dom",
+ "clazel-encoding",
+ "clazel-forms",
+ "clazel-layout",
+ "clazel-style",
+ "clazel-treebuilder",
+ "clazel-url",
+]
+
+[[package]]
 name = "clazel-gif"
 version = "0.0.0"
 dependencies = [

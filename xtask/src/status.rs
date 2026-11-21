@@ -74,6 +74,7 @@ const PLACES: &[(&str, Place)] = &[
     ("clazel-image-shape", Place::Renderer),
     ("clazel-gif", Place::Renderer),
     ("clazel-forms", Place::Renderer),
+    ("clazel-forms-edit", Place::Renderer),
     // The GPU process (item 5.17b): sandboxed and one per tab like the renderer.
     // The detail image has no panel for it yet; item 5.27 adds one.
     ("clazel-gpu", Place::Renderer),
