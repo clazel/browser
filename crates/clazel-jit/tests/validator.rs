@@ -304,7 +304,11 @@ fn clone_un(u: &UnOp) -> UnOp {
 fn generated_programs_are_accepted() {
     let mut rng = Rng(0x9e37_79b9_7f4a_7c15);
     let mut longest = 0usize;
-    for round in 0..3000usize {
+    // Miri interprets every step: 3000 programs took 4772 s there, over
+    // xtask's 300 s limit, so it checks the first 40 of the same sequence
+    // (about a minute). The normal test job checks all 3000.
+    let rounds = if cfg!(miri) { 40usize } else { 3000usize };
+    for round in 0..rounds {
         let nl = rng.below(6);
         let len = rng.below(60);
         let prog = random_program(&mut rng, nl, len);
@@ -323,7 +327,10 @@ fn generated_programs_are_accepted() {
         longest = longest.max(b.len());
     }
     // the programs are not all tiny
-    assert!(longest > 300, "longest blob {longest}");
+    assert!(
+        longest > if cfg!(miri) { 100 } else { 300 },
+        "longest blob {longest}"
+    );
 }
 
 #[test]
