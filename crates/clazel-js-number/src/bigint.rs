@@ -199,6 +199,21 @@ impl Big {
         self.mul_small(p);
     }
 
+    /// `self = floor(self / 5^k)`: floor division composes, so this divides
+    /// by `5^27` as often as it fits, then by the rest.
+    pub fn div_pow5(&mut self, k: u32) {
+        let mut k = k;
+        while k >= 27 {
+            self.div_small(FIVE_27);
+            k = k.saturating_sub(27);
+        }
+        let mut p: u64 = 1;
+        for _ in 0..k {
+            p = p.saturating_mul(5);
+        }
+        self.div_small(p);
+    }
+
     /// `self << bits`.
     #[must_use]
     pub fn shl(&self, bits: u64) -> Self {

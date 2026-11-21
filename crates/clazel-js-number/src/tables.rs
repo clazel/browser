@@ -71,7 +71,8 @@ fn build_el() -> Vec<u128> {
             } else {
                 z.saturating_mul(2).saturating_add(128)
             };
-            let (mut c, _) = Big::divrem(&Big::from_u64(1).shl(b), &p);
+            let mut c = Big::from_u64(1).shl(b);
+            c.div_pow5(k);
             c.add_small(1);
             let cl = c.bit_len();
             if cl > 128 {
@@ -104,11 +105,11 @@ fn build_split() -> Vec<u128> {
 fn build_inv() -> Vec<u128> {
     (0..POW5_INV_SPLIT_LEN)
         .map(|q| {
-            let p = Big::pow5(q);
             let sh = u64::from(pow5bits(q))
                 .saturating_sub(1)
                 .saturating_add(u64::from(POW5_BITCOUNT));
-            let (mut c, _) = Big::divrem(&Big::from_u64(1).shl(sh), &p);
+            let mut c = Big::from_u64(1).shl(sh);
+            c.div_pow5(q);
             c.add_small(1);
             c.low_u128()
         })
