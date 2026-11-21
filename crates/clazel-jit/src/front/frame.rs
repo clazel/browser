@@ -3,17 +3,12 @@
 //! bounds check), loading a slot, storing to a slot.
 
 #[allow(unused_imports)]
-use super::lirmem::*;
-#[allow(unused_imports)]
-use super::lower::*;
-#[allow(unused_imports)]
-use super::run::*;
-#[allow(unused_imports)]
 use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
 verus! {
+
 
 /// `i64.add` of two small numbers is their sum.
 pub proof fn lemma_add_small(x: u64, y: u64)
@@ -41,11 +36,11 @@ pub proof fn lemma_exec_addr(lay: lir::Layout, s: js::State, st: lir::St, off: n
         rel(lay, s, st),
         slot_ok(s, off),
     ensures
-        exec(lay, addr_ins(off), st) == lir::Outcome::Normal(
+        super::run::exec(lay, super::lower::addr_ins(off), st) == lir::Outcome::Normal(
             st.with_stack(st.stack.push(lir::Val::I64((8 * s.fp + off) as u64))),
         ),
 {
-    reveal_with_fuel(exec, 5);
+    reveal_with_fuel(super::run::exec, 5);
     let base = (8 * s.fp) as u64;
     assert(8 * s.fp + off <= 8 * s.region.len());
     assert(lay[0].bound == 8 * s.region.len());
@@ -68,16 +63,16 @@ pub proof fn lemma_exec_load(lay: lir::Layout, s: js::State, st: lir::St, off: n
         rel(lay, s, st),
         slot_ok(s, off),
     ensures
-        exec(lay, load_ins(off), st) == lir::Outcome::Normal(
+        super::run::exec(lay, super::lower::load_ins(off), st) == lir::Outcome::Normal(
             st.with_stack(st.stack.push(lir::Val::I64(s.region[(s.fp + off / 8) as int]))),
         ),
 {
     lemma_exec_addr(lay, s, st, off);
     let sa = st.with_stack(st.stack.push(lir::Val::I64((8 * s.fp + off) as u64)));
     let ld = seq![lir::Instr::Load { region: 0, ty: lir::Ty::I64 }];
-    assert(load_ins(off) =~= addr_ins(off) + ld);
-    lemma_exec_concat(lay, addr_ins(off), ld, st);
-    reveal_with_fuel(exec, 2);
+    assert(super::lower::load_ins(off) =~= super::lower::addr_ins(off) + ld);
+    super::run::lemma_exec_concat(lay, super::lower::addr_ins(off), ld, st);
+    reveal_with_fuel(super::run::exec, 2);
     let j = (s.fp + off / 8) as int;
     assert(8 * s.fp + off == 8 * j);
     assert(lay[0].base + lir::masked(lay[0].bound, (8 * s.fp + off) as nat) == slot_addr(lay, j));
@@ -101,7 +96,7 @@ pub proof fn lemma_exec_store(
     requires
         rel(lay, s, st),
         slot_ok(s, off),
-        exec(
+        super::run::exec(
             lay,
             val,
             st.with_stack(st.stack.push(lir::Val::I64((8 * s.fp + off) as u64))),
@@ -117,17 +112,17 @@ pub proof fn lemma_exec_store(
                 locals: mid.locals,
                 mem: lir::write_le(st.mem, slot_addr(lay, j), v as nat, 8),
             };
-            &&& exec(lay, store_ins(off, val), st) == lir::Outcome::Normal(st2)
+            &&& super::run::exec(lay, super::lower::store_ins(off, val), st) == lir::Outcome::Normal(st2)
             &&& rel(lay, js::State { region: s.region.update(j, v), ..s }, st2)
         }),
 {
     lemma_exec_addr(lay, s, st, off);
     let sa = st.with_stack(st.stack.push(lir::Val::I64((8 * s.fp + off) as u64)));
     let stor = seq![lir::Instr::Store { region: 0, ty: lir::Ty::I64 }];
-    assert(store_ins(off, val) =~= (addr_ins(off) + val) + stor);
-    lemma_exec_concat(lay, addr_ins(off) + val, stor, st);
-    lemma_exec_concat(lay, addr_ins(off), val, st);
-    reveal_with_fuel(exec, 2);
+    assert(super::lower::store_ins(off, val) =~= (super::lower::addr_ins(off) + val) + stor);
+    super::run::lemma_exec_concat(lay, super::lower::addr_ins(off) + val, stor, st);
+    super::run::lemma_exec_concat(lay, super::lower::addr_ins(off), val, st);
+    reveal_with_fuel(super::run::exec, 2);
     let j = (s.fp + off / 8) as int;
     assert(8 * s.fp + off == 8 * j);
     assert(lay[0].base + lir::masked(lay[0].bound, (8 * s.fp + off) as nat) == slot_addr(lay, j));
@@ -135,7 +130,7 @@ pub proof fn lemma_exec_store(
     assert(mid.stack[n - 1] == lir::Val::I64(v));
     assert(mid.stack[n - 2] == lir::Val::I64((8 * s.fp + off) as u64));
     assert(lir::below(mid.stack, 2) =~= st.stack);
-    lemma_store_mem_rel(lay, s.region, st.mem, j, v);
+    super::lirmem::lemma_store_mem_rel(lay, s.region, st.mem, j, v);
     let s2 = js::State { region: s.region.update(j, v), ..s };
     assert(layout_ok(lay, s2));
 }

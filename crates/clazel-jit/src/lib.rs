@@ -13,6 +13,11 @@
 //! there and what differs). The rest of this header, and the modules below,
 //! are the x86-64 one.
 //!
+//! **The JS front end is [`front`]** (item J.10): bytecode → LIR, a proof per
+//! op that the LIR refines `clazel-js-vm`'s `step`. It stops at LIR, so it
+//! holds for both back ends. Its header says which ops are lowered and proven
+//! and which are not.
+//!
 //! # The statements
 //!
 //! - [`spec`]: **what the back end is about.** The state relation between a

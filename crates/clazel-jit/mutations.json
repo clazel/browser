@@ -149,6 +149,82 @@
         "lemma": "lemma_slot_imm(0)",
         "witness": "slot_imm(0) == 66u16"
       }
+    },
+    {
+      "id": "front-int32-tag-test-uses-the-wrong-tag",
+      "module": "front::trace",
+      "file": "src/front/arith.rs",
+      "find": "pub open spec fn tag_hi() -> u64 {\n    0xFFF9_0000\n}",
+      "replace": "pub open spec fn tag_hi() -> u64 {\n    0xFFFA_0000\n}",
+      "expect": "killed",
+      "reason": "The int32 test of the small-integer lowerings would compare the high half of a word with the tag of the specials (0xFFFA) instead of int32's (0xFFF9), so it would reject every int32 and accept `undefined`, `null` and the booleans. `trace::lemma_tag_test` (a word's high half is the tag exactly when it is an int32) is false for the mutant at the int32 5.",
+      "certificate": {
+        "file": "src/front/trace.rs",
+        "lemma": "lemma_tag_test(0xFFF9_0000_0000_0005u64)",
+        "witness": "((0xFFF9_0000_0000_0005u64 >> 32u64) == super::arith::tag_hi()) == false && js::is_int32(0xFFF9_0000_0000_0005u64) == true"
+      }
+    },
+    {
+      "id": "front-result-is-tagged-as-a-special",
+      "module": "front::arith",
+      "file": "src/front/arith.rs",
+      "find": "pub open spec fn tag_bits() -> u64 {\n    0xFFF9_0000_0000_0000\n}",
+      "replace": "pub open spec fn tag_bits() -> u64 {\n    0xFFFA_0000_0000_0000\n}",
+      "expect": "killed",
+      "reason": "The word the lowering stores for an int32 result would carry the specials' tag (0xFFFA) instead of int32's (0xFFF9), so a sum would be stored as a non-value. `arith::lemma_fits_bv` (the tagged low half of a fitting result is `enc_int32` of it) is false for the mutant at 5.",
+      "certificate": {
+        "file": "src/front/arith.rs",
+        "lemma": "lemma_fits_bv(5i64)",
+        "witness": "tagged(5u64) != js::enc_int32(5i32)"
+      }
+    },
+    {
+      "id": "front-subtract-lowers-to-add",
+      "module": "front::arith",
+      "file": "src/front/arith.rs",
+      "find": "lir::IBin::Add\n    } else if k == 1 {\n        lir::IBin::Sub",
+      "replace": "lir::IBin::Add\n    } else if k == 1 {\n        lir::IBin::Add",
+      "expect": "killed",
+      "reason": "The lowering of `Sub` would emit a 64-bit `add`. `arith::lemma_ibin64` (the 64-bit operation of `k` is the machine's add, subtract or multiply) is false for the mutant at `k = 1`, 5 and 3: it gives 8, not 2.",
+      "certificate": {
+        "file": "src/front/arith.rs",
+        "lemma": "lemma_ibin64(1nat, 5u64, 3u64)",
+        "witness": "lir::ibin64(ibin_of(1nat), 5u64, 3u64) == 8u64",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "front-sign-extension-zero-extends",
+      "module": "front::arith",
+      "file": "src/front/arith.rs",
+      "find": "    ((x as i32) as i64) as u64\n}",
+      "replace": "    (x as i64) as u64\n}",
+      "expect": "killed",
+      "reason": "The sign extension of a payload would zero-extend, so `-1 + 1` in the lowering would be computed as `4294967295 + 1`. `arith::lemma_sx` (`i64.extend_i32_s` computes `sext`) is false for the mutant at 0xFFFF_FFFF.",
+      "certificate": {
+        "file": "src/front/arith.rs",
+        "lemma": "lemma_sx(0xFFFF_FFFFu32)",
+        "witness": "lir::wrap(64, lir::signed_of(32, 0xFFFF_FFFFu32 as int)) as u64 == 0xFFFF_FFFF_FFFF_FFFFu64 && sext(0xFFFF_FFFFu32) == 0xFFFF_FFFFu64",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "front-handler-codes-collide",
+      "module": "front::dispatch",
+      "file": "src/front/spec.rs",
+      "find": "        js::HandlerId::Sub => 1,",
+      "replace": "        js::HandlerId::Sub => 0,",
+      "expect": "killed",
+      "reason": "`Sub` would exit with `Add`'s code, so the host would run the wrong handler. `dispatch::lemma_handler_index_inverse` (decoding an exit code gives back the handler) is false for the mutant at `Sub`.",
+      "certificate": {
+        "file": "src/front/dispatch.rs",
+        "lemma": "lemma_handler_index_inverse(js::HandlerId::Sub)",
+        "witness": "handler_index(js::HandlerId::Sub) == 0nat && handler_of_index(0nat) == Some(js::HandlerId::Add)"
+      }
     }
   ]
 }

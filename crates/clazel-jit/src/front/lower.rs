@@ -8,15 +8,12 @@
 //! register `r` is at [`reg_off`]`(r)`, a header slot at [`hdr_off`].
 
 #[allow(unused_imports)]
-use super::arith::*;
-#[allow(unused_imports)]
-use super::run::*;
-#[allow(unused_imports)]
 use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
 verus! {
+
 
 /// The exit code of a failed bounds check. No handler has it, and under the
 /// state relation the check never fails (the proofs show it).
@@ -137,7 +134,7 @@ pub open spec fn tag_test(x: nat) -> Seq<lir::Instr> {
         lir::Instr::LocalGet(x),
         i64c(32),
         lir::Instr::Bin(lir::BinOp::I64(lir::IBin::ShrU)),
-        i64c(tag_hi()),
+        i64c(super::arith::tag_hi()),
         cmp64(lir::ICmp::Eq),
     ]
 }
@@ -165,7 +162,7 @@ pub open spec fn sext_local(x: nat) -> Seq<lir::Instr> {
 /// The operation in 64 bits, into scratch local 3.
 pub open spec fn compute_ins(k: nat) -> Seq<lir::Instr> {
     sext_local(1) + sext_local(2) + seq![
-        lir::Instr::Bin(lir::BinOp::I64(ibin_of(k))),
+        lir::Instr::Bin(lir::BinOp::I64(super::arith::ibin_of(k))),
         lir::Instr::LocalSet(3),
     ]
 }
@@ -215,7 +212,7 @@ pub open spec fn tagged_ins() -> Seq<lir::Instr> {
         lir::Instr::LocalGet(3),
         i64c(0xFFFF_FFFF),
         lir::Instr::Bin(lir::BinOp::I64(lir::IBin::And)),
-        i64c(tag_bits()),
+        i64c(super::arith::tag_bits()),
         lir::Instr::Bin(lir::BinOp::I64(lir::IBin::Or)),
     ]
 }
@@ -231,14 +228,14 @@ pub open spec fn lower_arith(
     h: js::HandlerId,
     pc: nat,
 ) -> lir::Instr {
-    let exit = chain(exit_ins(h, pc));
-    let store = chain(store_ins(reg_off(dst), tagged_ins()));
-    let inner = chain((compute_ins(k) + guard2_ins(k)).push(lir::Instr::If(
+    let exit = super::run::chain(exit_ins(h, pc));
+    let store = super::run::chain(store_ins(reg_off(dst), tagged_ins()));
+    let inner = super::run::chain((compute_ins(k) + guard2_ins(k)).push(lir::Instr::If(
         bt0(),
         Box::new(store),
         Box::new(exit),
     )));
-    chain((operands_ins(a, b) + guard1_ins()).push(lir::Instr::If(
+    super::run::chain((operands_ins(a, b) + guard1_ins()).push(lir::Instr::If(
         bt0(),
         Box::new(inner),
         Box::new(exit),
@@ -251,32 +248,32 @@ pub open spec fn lower_arith(
 pub open spec fn lower(c: js::Code, op: js::Op, pc: nat, lbl: nat) -> lir::Instr {
     if js::op_class(op) is Handler {
         // Every handler op: an exit to its handler.
-        chain(exit_ins(js::op_handler(op), pc))
+        super::run::chain(exit_ins(js::op_handler(op), pc))
     } else {
         match op {
             js::Op::Nop => lir::Instr::Nop,
-            js::Op::Move { dst, src } => chain(store_ins(reg_off(dst), load_ins(reg_off(src)))),
-            js::Op::LoadConst { dst, k } => chain(set_const(dst, c.consts[k as int])),
-            js::Op::LoadInt { dst, imm } => chain(set_const(dst, js::enc_int32(imm))),
-            js::Op::LoadUndefined { dst } => chain(set_const(dst, js::UNDEFINED)),
-            js::Op::LoadNull { dst } => chain(set_const(dst, js::NULL)),
-            js::Op::LoadBool { dst, flag } => chain(set_const(dst, js::enc_bool(flag))),
-            js::Op::LoadHole { dst } => chain(set_const(dst, js::HOLE)),
-            js::Op::GetThis { dst } => chain(
+            js::Op::Move { dst, src } => super::run::chain(store_ins(reg_off(dst), load_ins(reg_off(src)))),
+            js::Op::LoadConst { dst, k } => super::run::chain(set_const(dst, c.consts[k as int])),
+            js::Op::LoadInt { dst, imm } => super::run::chain(set_const(dst, js::enc_int32(imm))),
+            js::Op::LoadUndefined { dst } => super::run::chain(set_const(dst, js::UNDEFINED)),
+            js::Op::LoadNull { dst } => super::run::chain(set_const(dst, js::NULL)),
+            js::Op::LoadBool { dst, flag } => super::run::chain(set_const(dst, js::enc_bool(flag))),
+            js::Op::LoadHole { dst } => super::run::chain(set_const(dst, js::HOLE)),
+            js::Op::GetThis { dst } => super::run::chain(
                 store_ins(reg_off(dst), load_ins(hdr_off(js::hdr_this()))),
             ),
-            js::Op::GetCallee { dst } => chain(
+            js::Op::GetCallee { dst } => super::run::chain(
                 store_ins(reg_off(dst), load_ins(hdr_off(js::hdr_callee()))),
             ),
             js::Op::Jump { .. } => lir::Instr::Br(lbl),
-            js::Op::JumpIfUndefined { src, .. } => chain(jump_if_is(src, js::UNDEFINED, true, lbl)),
-            js::Op::JumpIfNotUndefined { src, .. } => chain(
+            js::Op::JumpIfUndefined { src, .. } => super::run::chain(jump_if_is(src, js::UNDEFINED, true, lbl)),
+            js::Op::JumpIfNotUndefined { src, .. } => super::run::chain(
                 jump_if_is(src, js::UNDEFINED, false, lbl),
             ),
-            js::Op::JumpIfNullish { src, .. } => chain(
+            js::Op::JumpIfNullish { src, .. } => super::run::chain(
                 load_ins(reg_off(src)) + nullish_rest(false, lbl),
             ),
-            js::Op::JumpIfNotNullish { src, .. } => chain(
+            js::Op::JumpIfNotNullish { src, .. } => super::run::chain(
                 load_ins(reg_off(src)) + nullish_rest(true, lbl),
             ),
             js::Op::Add { dst, a, b } => lower_arith(0, dst, a, b, js::op_handler(op), pc),

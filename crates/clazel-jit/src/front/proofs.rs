@@ -4,21 +4,12 @@
 //! [`super::frame`], and compares the outcome with `step`.
 
 #[allow(unused_imports)]
-use super::contract::*;
-#[allow(unused_imports)]
-use super::frame::*;
-#[allow(unused_imports)]
-use super::lirmem::*;
-#[allow(unused_imports)]
-use super::lower::*;
-#[allow(unused_imports)]
-use super::run::*;
-#[allow(unused_imports)]
 use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
 verus! {
+
 
 /// What a lowering's proof may assume of the states (the hypotheses of
 /// [`lowers`]).
@@ -64,7 +55,7 @@ pub proof fn lemma_reg_slot_ok(s: js::State, r: nat)
         js::state_wf(s),
         js::reg_ok(js::cur_code(s), r),
     ensures
-        slot_ok(s, reg_off(r)),
+        super::frame::slot_ok(s, reg_off(r)),
         js::reg_slot(s.fp, r) == s.fp + reg_off(r) / 8,
         js::reg_slot(s.fp, r) < s.region.len(),
 {
@@ -82,7 +73,7 @@ pub proof fn lemma_hdr_slot_ok(s: js::State, k: nat)
         js::state_wf(s),
         k < js::hdr_slots(),
     ensures
-        slot_ok(s, hdr_off(k)),
+        super::frame::slot_ok(s, hdr_off(k)),
         hdr_off(k) / 8 == k,
 {
     lemma_state_facts(s);
@@ -116,19 +107,19 @@ pub proof fn lemma_handler_op(
         pre(c, op, pc, lay, s, st, fuel),
         js::op_class(op) is Handler,
     ensures
-        outcome_refines(lay, s, op, lbl, lir::eval(lay, lower(c, op, pc, lbl), st, fuel)),
+        outcome_refines(lay, s, op, lbl, lir::eval(lay, super::lower::lower(c, op, pc, lbl), st, fuel)),
 {
     clazel_js_vm::lemmas::lemma_handler_never_fast(s, op);
     let h = js::op_handler(op);
-    let ins = exit_ins(h, pc);
-    assert(all_simple(ins)) by {
-        assert forall|i: int| 0 <= i < ins.len() implies is_simple(#[trigger] ins[i]) by {
+    let ins = super::lower::exit_ins(h, pc);
+    assert(super::run::all_simple(ins)) by {
+        assert forall|i: int| 0 <= i < ins.len() implies super::run::is_simple(#[trigger] ins[i]) by {
             assert(i == 0 || i == 1);
         }
     }
-    assert(lower(c, op, pc, lbl) == chain(ins));
-    lemma_chain(lay, ins, st, fuel);
-    reveal_with_fuel(exec, 3);
+    assert(super::lower::lower(c, op, pc, lbl) == super::run::chain(ins));
+    super::run::lemma_chain(lay, ins, st, fuel);
+    reveal_with_fuel(super::run::exec, 3);
     let st1 = st.with_stack(seq![lir::Val::I32(pc as u32)]);
     assert(st.stack.push(lir::Val::I32(pc as u32)) =~= seq![lir::Val::I32(pc as u32)]);
     assert(lir::top(st1.stack, 1) =~= seq![lir::Val::I32(pc as u32)]);
@@ -155,12 +146,12 @@ pub proof fn lemma_store_reg_outcome(
     requires
         pre(c, op, pc, lay, s, st, fuel),
         js::reg_ok(js::cur_code(s), dst),
-        lower(c, op, pc, lbl) == chain(store_ins(reg_off(dst), val)),
-        all_simple(val),
+        super::lower::lower(c, op, pc, lbl) == super::run::chain(super::lower::store_ins(reg_off(dst), val)),
+        super::run::all_simple(val),
         val.len() < 40,
         js::fast_path(s, op),
         js::fast_step(s, op) == js::next(js::set_reg(s, dst, v)),
-        exec(
+        super::run::exec(
             lay,
             val,
             st.with_stack(st.stack.push(lir::Val::I64((8 * s.fp + reg_off(dst)) as u64))),
@@ -171,15 +162,15 @@ pub proof fn lemma_store_reg_outcome(
         mid.mem == st.mem,
         locals_rel(s, mid.locals),
     ensures
-        outcome_refines(lay, s, op, lbl, lir::eval(lay, lower(c, op, pc, lbl), st, fuel)),
+        outcome_refines(lay, s, op, lbl, lir::eval(lay, super::lower::lower(c, op, pc, lbl), st, fuel)),
 {
     lemma_reg_slot_ok(s, dst);
     let off = reg_off(dst);
-    let ins = store_ins(off, val);
-    assert(all_simple(ins)) by {
-        assert forall|i: int| 0 <= i < ins.len() implies is_simple(#[trigger] ins[i]) by {
+    let ins = super::lower::store_ins(off, val);
+    assert(super::run::all_simple(ins)) by {
+        assert forall|i: int| 0 <= i < ins.len() implies super::run::is_simple(#[trigger] ins[i]) by {
             if i < 4 {
-                assert(ins[i] == addr_ins(off)[i]);
+                assert(ins[i] == super::lower::addr_ins(off)[i]);
             } else if i < 4 + val.len() {
                 assert(ins[i] == val[i - 4]);
             } else {
@@ -188,8 +179,8 @@ pub proof fn lemma_store_reg_outcome(
         }
     }
     assert(ins.len() == 5 + val.len());
-    lemma_chain(lay, ins, st, fuel);
-    lemma_exec_store(lay, s, st, off, val, v, mid);
+    super::run::lemma_chain(lay, ins, st, fuel);
+    super::frame::lemma_exec_store(lay, s, st, off, val, v, mid);
     let j = (s.fp + off / 8) as int;
     let s2 = js::fast_step(s, op);
     assert(s2.region == s.region.update(j, v));
@@ -205,27 +196,27 @@ pub proof fn lemma_store_reg_outcome(
 /// The address, load and constant blocks are simple.
 pub proof fn lemma_blocks_simple(off: nat, v: u64)
     ensures
-        all_simple(addr_ins(off)),
-        all_simple(load_ins(off)),
-        all_simple(seq![i64c(v)]),
-        load_ins(off).len() == 5,
+        super::run::all_simple(super::lower::addr_ins(off)),
+        super::run::all_simple(super::lower::load_ins(off)),
+        super::run::all_simple(seq![super::lower::i64c(v)]),
+        super::lower::load_ins(off).len() == 5,
 {
-    let a = addr_ins(off);
-    assert(all_simple(a)) by {
-        assert forall|i: int| 0 <= i < a.len() implies is_simple(#[trigger] a[i]) by {
+    let a = super::lower::addr_ins(off);
+    assert(super::run::all_simple(a)) by {
+        assert forall|i: int| 0 <= i < a.len() implies super::run::is_simple(#[trigger] a[i]) by {
             assert(0 <= i < 4);
         }
     }
-    let l = load_ins(off);
-    assert(all_simple(l)) by {
-        assert forall|i: int| 0 <= i < l.len() implies is_simple(#[trigger] l[i]) by {
+    let l = super::lower::load_ins(off);
+    assert(super::run::all_simple(l)) by {
+        assert forall|i: int| 0 <= i < l.len() implies super::run::is_simple(#[trigger] l[i]) by {
             if i < 4 {
                 assert(l[i] == a[i]);
             }
         }
     }
-    assert(all_simple(seq![i64c(v)])) by {
-        assert forall|i: int| 0 <= i < 1 implies is_simple(#[trigger] seq![i64c(v)][i]) by {}
+    assert(super::run::all_simple(seq![super::lower::i64c(v)])) by {
+        assert forall|i: int| 0 <= i < 1 implies super::run::is_simple(#[trigger] seq![super::lower::i64c(v)][i]) by {}
     }
 }
 
@@ -245,19 +236,19 @@ pub proof fn lemma_const_op(
     requires
         pre(c, op, pc, lay, s, st, fuel),
         js::reg_ok(js::cur_code(s), dst),
-        lower(c, op, pc, lbl) == chain(set_const(dst, v)),
+        super::lower::lower(c, op, pc, lbl) == super::run::chain(super::lower::set_const(dst, v)),
         js::fast_path(s, op),
         js::fast_step(s, op) == js::next(js::set_reg(s, dst, v)),
     ensures
-        outcome_refines(lay, s, op, lbl, lir::eval(lay, lower(c, op, pc, lbl), st, fuel)),
+        outcome_refines(lay, s, op, lbl, lir::eval(lay, super::lower::lower(c, op, pc, lbl), st, fuel)),
 {
     lemma_blocks_simple(0, v);
     lemma_reg_slot_ok(s, dst);
     let sa = st.with_stack(st.stack.push(lir::Val::I64((8 * s.fp + reg_off(dst)) as u64)));
-    reveal_with_fuel(exec, 2);
+    reveal_with_fuel(super::run::exec, 2);
     let mid = sa.with_stack(sa.stack.push(lir::Val::I64(v)));
-    assert(exec(lay, seq![i64c(v)], sa) == lir::Outcome::Normal(mid));
-    lemma_store_reg_outcome(c, op, pc, lbl, lay, s, st, fuel, dst, seq![i64c(v)], v, mid);
+    assert(super::run::exec(lay, seq![super::lower::i64c(v)], sa) == lir::Outcome::Normal(mid));
+    lemma_store_reg_outcome(c, op, pc, lbl, lay, s, st, fuel, dst, seq![super::lower::i64c(v)], v, mid);
 }
 
 /// An op that copies a slot (a register or a header slot) into a register.
@@ -276,25 +267,25 @@ pub proof fn lemma_copy_op(
     requires
         pre(c, op, pc, lay, s, st, fuel),
         js::reg_ok(js::cur_code(s), dst),
-        slot_ok(s, src_off),
-        lower(c, op, pc, lbl) == chain(store_ins(reg_off(dst), load_ins(src_off))),
+        super::frame::slot_ok(s, src_off),
+        super::lower::lower(c, op, pc, lbl) == super::run::chain(super::lower::store_ins(reg_off(dst), super::lower::load_ins(src_off))),
         js::fast_path(s, op),
         js::fast_step(s, op) == js::next(
             js::set_reg(s, dst, s.region[(s.fp + src_off / 8) as int]),
         ),
     ensures
-        outcome_refines(lay, s, op, lbl, lir::eval(lay, lower(c, op, pc, lbl), st, fuel)),
+        outcome_refines(lay, s, op, lbl, lir::eval(lay, super::lower::lower(c, op, pc, lbl), st, fuel)),
 {
     lemma_blocks_simple(src_off, 0);
     lemma_reg_slot_ok(s, dst);
     let sa = st.with_stack(st.stack.push(lir::Val::I64((8 * s.fp + reg_off(dst)) as u64)));
     assert(rel(lay, s, sa));
-    lemma_exec_load(lay, s, sa, src_off);
+    super::frame::lemma_exec_load(lay, s, sa, src_off);
     let v = s.region[(s.fp + src_off / 8) as int];
     let mid = sa.with_stack(sa.stack.push(lir::Val::I64(v)));
-    assert(exec(lay, load_ins(src_off), sa) == lir::Outcome::Normal(mid));
+    assert(super::run::exec(lay, super::lower::load_ins(src_off), sa) == lir::Outcome::Normal(mid));
     lemma_store_reg_outcome(
-        c, op, pc, lbl, lay, s, st, fuel, dst, load_ins(src_off), v, mid,
+        c, op, pc, lbl, lay, s, st, fuel, dst, super::lower::load_ins(src_off), v, mid,
     );
 }
 
@@ -315,11 +306,11 @@ pub proof fn lemma_jump_op(
         pre(c, op, pc, lay, s, st, fuel),
         op == (js::Op::Jump { target }),
     ensures
-        outcome_refines(lay, s, op, lbl, lir::eval(lay, lower(c, op, pc, lbl), st, fuel)),
+        outcome_refines(lay, s, op, lbl, lir::eval(lay, super::lower::lower(c, op, pc, lbl), st, fuel)),
 {
     assert(js::op_class(op) is Core);
     clazel_js_vm::lemmas::lemma_core_always_fast(s, op);
-    assert(lower(c, op, pc, lbl) == lir::Instr::Br(lbl));
+    assert(super::lower::lower(c, op, pc, lbl) == lir::Instr::Br(lbl));
     lemma_rel_pc(lay, s, st, target);
 }
 
@@ -342,7 +333,7 @@ pub proof fn lemma_jump_if_is(
     requires
         pre(c, op, pc, lay, s, st, fuel),
         js::reg_ok(js::cur_code(s), src),
-        lower(c, op, pc, lbl) == chain(jump_if_is(src, v, eq, lbl)),
+        super::lower::lower(c, op, pc, lbl) == super::run::chain(super::lower::jump_if_is(src, v, eq, lbl)),
         jump_target(op) == Some(target),
         js::fast_path(s, op),
         js::fast_step(s, op) == (if (js::reg(s, src) == v) == eq {
@@ -351,19 +342,19 @@ pub proof fn lemma_jump_if_is(
             js::next(s)
         }),
     ensures
-        outcome_refines(lay, s, op, lbl, lir::eval(lay, lower(c, op, pc, lbl), st, fuel)),
+        outcome_refines(lay, s, op, lbl, lir::eval(lay, super::lower::lower(c, op, pc, lbl), st, fuel)),
 {
     lemma_blocks_simple(reg_off(src), v);
     lemma_reg_slot_ok(s, src);
     let rest = seq![
-        i64c(v),
-        cmp64(if eq { lir::ICmp::Eq } else { lir::ICmp::Ne }),
+        super::lower::i64c(v),
+        super::lower::cmp64(if eq { lir::ICmp::Eq } else { lir::ICmp::Ne }),
         lir::Instr::BrIf(lbl),
     ];
-    let ins = jump_if_is(src, v, eq, lbl);
-    assert(all_simple(ins)) by {
-        let l = load_ins(reg_off(src));
-        assert forall|i: int| 0 <= i < ins.len() implies is_simple(#[trigger] ins[i]) by {
+    let ins = super::lower::jump_if_is(src, v, eq, lbl);
+    assert(super::run::all_simple(ins)) by {
+        let l = super::lower::load_ins(reg_off(src));
+        assert forall|i: int| 0 <= i < ins.len() implies super::run::is_simple(#[trigger] ins[i]) by {
             if i < 5 {
                 assert(ins[i] == l[i]);
             } else {
@@ -371,14 +362,14 @@ pub proof fn lemma_jump_if_is(
             }
         }
     }
-    lemma_chain(lay, ins, st, fuel);
-    lemma_exec_concat(lay, load_ins(reg_off(src)), rest, st);
-    lemma_exec_load(lay, s, st, reg_off(src));
+    super::run::lemma_chain(lay, ins, st, fuel);
+    super::run::lemma_exec_concat(lay, super::lower::load_ins(reg_off(src)), rest, st);
+    super::frame::lemma_exec_load(lay, s, st, reg_off(src));
     let x = js::reg(s, src);
     assert(x == s.region[(s.fp + reg_off(src) / 8) as int]);
     let sl = st.with_stack(st.stack.push(lir::Val::I64(x)));
     assert(st.stack.push(lir::Val::I64(x)) =~= seq![lir::Val::I64(x)]);
-    reveal_with_fuel(exec, 4);
+    reveal_with_fuel(super::run::exec, 4);
     let cond = lir::bool_i32(lir::icmp(if eq { lir::ICmp::Eq } else { lir::ICmp::Ne }, 64, x as int, v as int));
     assert(cond != 0 <==> ((x == v) == eq));
     let s1 = st.with_stack(Seq::<lir::Val>::empty());
@@ -387,10 +378,10 @@ pub proof fn lemma_jump_if_is(
     assert(st.stack =~= Seq::<lir::Val>::empty());
     let sc = sl.with_stack(seq![lir::Val::I64(x), lir::Val::I64(v)]);
     assert(sl.stack.push(lir::Val::I64(v)) =~= seq![lir::Val::I64(x), lir::Val::I64(v)]);
-    assert(lir::eval(lay, i64c(v), sl, 1) == lir::Outcome::Normal(sc));
+    assert(lir::eval(lay, super::lower::i64c(v), sl, 1) == lir::Outcome::Normal(sc));
     let sd = sl.with_stack(seq![lir::Val::I32(cond)]);
     assert(lir::eval(lay, rest[1], sc, 1) == lir::Outcome::Normal(sd));
-    assert(exec(lay, rest, sl) == (if cond != 0 {
+    assert(super::run::exec(lay, rest, sl) == (if cond != 0 {
         lir::Outcome::Branch(lbl, s1)
     } else {
         lir::Outcome::Normal(s1)
@@ -465,7 +456,7 @@ pub proof fn lemma_nullish_trace(
                 locals: sl.locals.update(1, lir::Val::I64(x)),
                 mem: sl.mem,
             };
-            exec(lay, nullish_rest(not_nullish, lbl), sl) == (if lir::ibin32(comb, e1, e2) != 0 {
+            super::run::exec(lay, super::lower::nullish_rest(not_nullish, lbl), sl) == (if lir::ibin32(comb, e1, e2) != 0 {
                 lir::Outcome::Branch(lbl, s1)
             } else {
                 lir::Outcome::Normal(s1)
@@ -477,7 +468,7 @@ pub proof fn lemma_nullish_trace(
     let e1 = lir::bool_i32(lir::icmp(o1, 64, x as int, js::UNDEFINED as int));
     let e2 = lir::bool_i32(lir::icmp(o1, 64, x as int, js::NULL as int));
     let loc2 = sl.locals.update(1, lir::Val::I64(x));
-    let rest = nullish_rest(not_nullish, lbl);
+    let rest = super::lower::nullish_rest(not_nullish, lbl);
     let a1 = lir::St { stack: seq![lir::Val::I64(x)], locals: loc2, mem: sl.mem };
     let a2 = lir::St { stack: seq![lir::Val::I64(x), lir::Val::I64(js::UNDEFINED)], locals: loc2, mem: sl.mem };
     let a3 = lir::St { stack: seq![lir::Val::I32(e1)], locals: loc2, mem: sl.mem };
@@ -508,7 +499,7 @@ pub proof fn lemma_nullish_trace(
     assert(Seq::<lir::Val>::empty().push(lir::Val::I32(cond)) =~= a7.stack);
     assert(lir::eval(lay, rest[6], a6, 1) == lir::Outcome::Normal(a7));
     assert(lir::below(a7.stack, 1) =~= Seq::<lir::Val>::empty());
-    reveal_with_fuel(exec, 9);
+    reveal_with_fuel(super::run::exec, 9);
 }
 
 
@@ -530,7 +521,7 @@ pub proof fn lemma_jump_nullish(
     requires
         pre(c, op, pc, lay, s, st, fuel),
         js::reg_ok(js::cur_code(s), src),
-        lower(c, op, pc, lbl) == chain(load_ins(reg_off(src)) + nullish_rest(not_nullish, lbl)),
+        super::lower::lower(c, op, pc, lbl) == super::run::chain(super::lower::load_ins(reg_off(src)) + super::lower::nullish_rest(not_nullish, lbl)),
         jump_target(op) == Some(target),
         js::fast_path(s, op),
         js::fast_step(s, op) == (if (if not_nullish {
@@ -543,15 +534,15 @@ pub proof fn lemma_jump_nullish(
             js::next(s)
         }),
     ensures
-        outcome_refines(lay, s, op, lbl, lir::eval(lay, lower(c, op, pc, lbl), st, fuel)),
+        outcome_refines(lay, s, op, lbl, lir::eval(lay, super::lower::lower(c, op, pc, lbl), st, fuel)),
 {
     lemma_blocks_simple(reg_off(src), 0);
     lemma_reg_slot_ok(s, src);
-    let rest = nullish_rest(not_nullish, lbl);
-    let l = load_ins(reg_off(src));
+    let rest = super::lower::nullish_rest(not_nullish, lbl);
+    let l = super::lower::load_ins(reg_off(src));
     let ins = l + rest;
-    assert(all_simple(ins)) by {
-        assert forall|i: int| 0 <= i < ins.len() implies is_simple(#[trigger] ins[i]) by {
+    assert(super::run::all_simple(ins)) by {
+        assert forall|i: int| 0 <= i < ins.len() implies super::run::is_simple(#[trigger] ins[i]) by {
             if i < 5 {
                 assert(ins[i] == l[i]);
             } else {
@@ -560,9 +551,9 @@ pub proof fn lemma_jump_nullish(
         }
     }
     assert(ins.len() == 13);
-    lemma_chain(lay, ins, st, fuel);
-    lemma_exec_concat(lay, l, rest, st);
-    lemma_exec_load(lay, s, st, reg_off(src));
+    super::run::lemma_chain(lay, ins, st, fuel);
+    super::run::lemma_exec_concat(lay, l, rest, st);
+    super::frame::lemma_exec_load(lay, s, st, reg_off(src));
     let x = js::reg(s, src);
     assert(x == s.region[(s.fp + reg_off(src) / 8) as int]);
     let sl = st.with_stack(seq![lir::Val::I64(x)]);
