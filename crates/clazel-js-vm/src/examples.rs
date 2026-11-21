@@ -510,4 +510,31 @@ pub proof fn example_global_lexical_classes()
     assert(op_handler(Op::InitGlobalLexical { key: 2, src: 0 }) == HandlerId::InitGlobalLexical) by (compute_only);
 }
 
+/// The operands `op_wf` accepts of the ops added for regular expression literals (`NewRegExp`):
+/// every register inside the frame (registers 0 to 2), every register range inside it, every
+/// constant index inside the pool (0 to 2), a record constant that is a value (constant 2 is not),
+/// and each small enumerated operand below its bound.
+pub proof fn example_regex_wf()
+    ensures
+        op_wf(example_code(), Op::NewRegExp { dst: 0, k: 0 }),
+        !op_wf(example_code(), Op::NewRegExp { dst: 3, k: 0 }),
+        !op_wf(example_code(), Op::NewRegExp { dst: 0, k: 2 }),
+{
+    assert(op_wf(example_code(), Op::NewRegExp { dst: 0, k: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::NewRegExp { dst: 3, k: 0 })) by (compute_only);
+    assert(!op_wf(example_code(), Op::NewRegExp { dst: 0, k: 2 })) by (compute_only);
+}
+
+/// The class and the handler of each op added for regular expression literals: each always calls
+/// out (it can allocate, call user code or throw), so each is a handler op, which the JIT lowers to
+/// an exit, with its own handler.
+pub proof fn example_regex_classes()
+    ensures
+        op_class(Op::NewRegExp { dst: 0, k: 0 }) is Handler,
+        op_handler(Op::NewRegExp { dst: 0, k: 0 }) == HandlerId::NewRegExp,
+{
+    assert(op_class(Op::NewRegExp { dst: 0, k: 0 }) is Handler) by (compute_only);
+    assert(op_handler(Op::NewRegExp { dst: 0, k: 0 }) == HandlerId::NewRegExp) by (compute_only);
+}
+
 } // verus!

@@ -1923,6 +1923,58 @@
         "lemma": "crate::examples::example_global_lexical_classes()",
         "witness": "op_class(Op::InitGlobalLexical { key: 2, src: 0 }) is Core"
       }
+    },
+    {
+      "id": "new-reg-exp-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::NewRegExp { dst, k, .. } => reg_ok(c, dst) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "replace": "Op::NewRegExp { dst, k, .. } => k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "expect": "killed",
+      "reason": "NewRegExp accepts a register outside the frame (operand `dst`): example_regex_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_regex_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::NewRegExp { dst: 3, k: 0 })"
+      }
+    },
+    {
+      "id": "new-reg-exp-k-wf",
+      "file": "src/spec.rs",
+      "find": "Op::NewRegExp { dst, k, .. } => reg_ok(c, dst) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "replace": "Op::NewRegExp { dst, k, .. } => reg_ok(c, dst) && k < c.consts.len(),",
+      "expect": "killed",
+      "reason": "NewRegExp accepts a record constant that is not a value (operand `k`): example_regex_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_regex_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::NewRegExp { dst: 0, k: 2 })"
+      }
+    },
+    {
+      "id": "new-reg-exp-handler",
+      "file": "src/ops.rs",
+      "find": "Op::NewRegExp { .. } => HandlerId::NewRegExp,",
+      "replace": "Op::NewRegExp { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "NewRegExp calls the throw handler instead of its own: example_regex_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_regex_classes()",
+        "witness": "op_handler(Op::NewRegExp { dst: 0, k: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "new-reg-exp-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::NewRegExp { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "NewRegExp is a core op, which never calls out: example_regex_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_regex_classes()",
+        "witness": "op_class(Op::NewRegExp { dst: 0, k: 0 }) is Core"
+      }
     }
   ]
 }

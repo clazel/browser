@@ -1220,6 +1220,7 @@ pub open spec fn op_wf(c: Code, op: Op) -> bool {
         Op::CreateMappedArguments { dst, env, k, .. } => reg_ok(c, dst) && reg_ok(c, env) && k < c.consts.len() && value_wf(c.consts[k as int]),
         Op::CreateRestArray { dst, .. } => reg_ok(c, dst),
         Op::ForInIterator { dst, src, .. } => reg_ok(c, dst) && reg_ok(c, src),
+        Op::NewRegExp { dst, k, .. } => reg_ok(c, dst) && k < c.consts.len() && value_wf(c.consts[k as int]),
     }
 }
 

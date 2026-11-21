@@ -247,6 +247,8 @@ pub enum HandlerId {
     ForInIterator,
     /// InitializeBinding on the global declarative record, §9.1.1.4.2†.
     InitGlobalLexical,
+    /// RegExpCreate §22.2.3.1†, for a regular expression literal (§13.2.7.3†).
+    NewRegExp,
 }
 
 /// The error constructors a compiler-known throw can name.
@@ -1334,6 +1336,21 @@ pub enum Op {
         /// The register read.
         src: nat,
     },
+    /// `dst := RegExpCreate(pattern, flags)` for the literal whose record is `consts[k]` (its
+    /// pattern source text and its flags). RegularExpressionLiteral evaluation (§13.2.7.3†): "Let
+    /// pattern be CodePointsAsString of the BodyText" (step 1), "Let flags be CodePointsAsString of
+    /// the FlagText" (step 2), "Return ! RegExpCreate(pattern, flags)" (step 3). Every evaluation
+    /// creates a new RegExp object, so a literal in a loop gives a new object each time and the
+    /// record is shared. The `!` is the parser's early error (§13.2.7.2†: the body is a valid
+    /// Pattern for the flags and the flags are valid), so the handler never sees a pattern it
+    /// cannot compile; this crate does not compile the pattern, the regular expression engine does,
+    /// when the heap loads the record. It allocates, so it is always a handler call.
+    NewRegExp {
+        /// The register written.
+        dst: nat,
+        /// The constant-pool index of the literal's record (pattern text and flags).
+        k: nat,
+    },
 }
 
 /// The class of an op (see the file header).
@@ -1447,6 +1464,7 @@ pub open spec fn op_class(op: Op) -> OpClass {
         | Op::CreateRestArray { .. }
         | Op::ForInIterator { .. }
         | Op::InitGlobalLexical { .. }
+        | Op::NewRegExp { .. }
         | Op::ThrowError { .. } => OpClass::Handler,
     }
 }
@@ -1518,6 +1536,7 @@ pub open spec fn op_handler(op: Op) -> HandlerId {
         Op::Await { .. } => HandlerId::Await,
         Op::Throw { .. } | Op::Nop => HandlerId::Throw,
         Op::ThrowError { .. } => HandlerId::ThrowError,
+        Op::NewRegExp { .. } => HandlerId::NewRegExp,
         Op::InitGlobalLexical { .. } => HandlerId::InitGlobalLexical,
         Op::ToPropertyKey { .. } => HandlerId::ToPropertyKey,
         Op::ToString { .. } => HandlerId::ToString,
