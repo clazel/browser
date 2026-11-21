@@ -365,9 +365,78 @@ code.
     to each other must be read before they count as independent; Intel's SDM
     volume 2 for the encoding tables;
   - A64: Arm's machine-readable specification and the Sail Arm model.
-- Pin reference disassemblers for tests only (for example `iced-x86` and
+- Pin reference disassemblers for tests only (for example `yaxpeax-x86` and
   `yaxpeax-arm`), each a `test` row in DEPENDENCIES.md.
 - Pin the benchmark set, and record the JIT-off numbers.
+
+**Status (2026-11-16): sources pinned, benchmark numbers not recorded.**
+- **Pinned:** each is a suite under `crates/clazel-x64/tests/data/` or
+  `crates/clazel-a64/tests/data/`, with a `SOURCE.md`, a licence and an
+  `xtask` converter (`xtask/src/testdata/isa.rs`). The crate READMEs record
+  what the pins show:
+  - ACL2 `x86isa` (acl2/acl2 at 33b05575, BSD-3-Clause, 2.6 MB);
+  - Russinoff's RTL library at the same commit (`books/rtl/rel11`, 0.3 MB),
+    which the x86isa floating-point books are defined with;
+  - the Sail x86 model translated from it (rems-project/sail-x86-from-acl2
+    at 0c6c023d, 0.8 MB);
+  - Intel's SDM volume 2, version 093, **pinned by URL and SHA-256 only**:
+    Intel's terms forbid redistribution;
+  - the Arm Architecture Reference Manual for A-profile (DDI 0487), issue
+    M.d (Arm's early-access label), **pinned by URL, size (129 MB) and
+    SHA-256 only**: Arm's terms forbid copying it;
+  - the Sail Armv9.4-A model (rems-project/sail-arm at 5416ef6b,
+    BSD-3-Clause-Clear, 3.9 MB);
+  - Arm's machine-readable specification (BSD-3-Clause, so it may be
+    redistributed), release 2026-09: the licence and README are vendored, and
+    `Instructions.json` (116 MB, over the size budget) is pinned by
+    SHA-256.
+- **The two formal models are not independent, as the pins show:** the Sail
+  x86 model this item names is a mechanical translation of the ACL2 model,
+  and the Sail Arm model is a translation of Arm's own ASL, the same text as
+  the machine-readable specification. **Decision (2026-11-16), by the user:**
+  the second transcription comes from the vendor's manual, not from another
+  formal model (see the notes under J.3 and J.4). The Sail x86 translation is
+  kept only as a check on our reading of ACL2, and **it is not independent of
+  ACL2**. See the two crate READMEs.
+- **Considered and rejected:** `shina-lab/sail-x86`, a Sail x86 model written
+  from the Intel manuals, as the second x86-64 source. It has a single
+  author, no review, and leaves floating-point arithmetic external
+  (`extern`, supplied by its emulator). It is not pinned or vendored.
+- **Reference disassemblers:** `yaxpeax-x86` 2.2.1 and `yaxpeax-arm` 0.5.0
+  (with `yaxpeax-arch`, `bitvec` and four small packages), each a `test` row
+  in DEPENDENCIES.md, dev-dependencies of the new crates only. On
+  2026-11-17 `yaxpeax-x86` replaced `iced-x86` 1.22.0, whose decoder Miri
+  reports as undefined behaviour under Stacked Borrows.
+- **Proposed benchmark set** (a proposal, for a person to accept): the
+  compute-bound programs of Octane 2.0, from `chromium/octane` (archived;
+  BSD-3-Clause for the harness, each benchmark file with its own licence
+  header) at commit 570ad1ccfe86e3eecba0636c8f932ac08edec517. They need no
+  DOM, and `run.js` is a shell harness. SHA-256 of each file at that commit:
+
+  | File | SHA-256 |
+  |---|---|
+  | `base.js` | `216612c2e7096a02b3e52b57e9cf9351bbaf180d60938d5c60b85fd756232733` |
+  | `run.js` | `b4b10b05e3ccefd6f49d57763ec67ef746c3e7c093ed0fdd602c7f126af5c12f` |
+  | `richards.js` | `1246a64a24b931158bf01c24640343259fa74b0226e73bad630bd1f686aa0fa7` |
+  | `deltablue.js` | `6c4784e82f3e8f5c18306d289653d08b17b38838f1bac16b38611d7318fa5a36` |
+  | `crypto.js` | `b01b6b3fe534327fdef05131162927bc5508f100a3208e185d0c5a4efb200a39` |
+  | `raytrace.js` | `64b8ff90969966dd69659100e28754976dfc3e9a4f8ee55b9232f974c66ed08c` |
+  | `earley-boyer.js` | `8dd28a505f7e705642f86816232b012fd3c770ec8afc9f719ce89ce772dab347` |
+  | `splay.js` | `f9a6a60d8f205908f5542ad1180abc1902dcdab3dcb4278017c5ce179ee123f7` |
+  | `navier-stokes.js` | `27926de809451c60b0c49a4185c08f97081310d0db166a30c1d202fb656556a2` |
+  | `box2d.js` | `83b10c280f004e7b156a9e04d09ce4109892ea92788f7c6c963f7fadf29c7bd4` |
+  | `regexp.js` | `a292d6047900c5296ea9e2628453832cc3bfe397e49fddade8aff7b5876c8263` |
+  | `LICENSE` | `cf853177951c6de1b17c029b66edf71f8b194cca1722339a7b5def4e8165aaaa` |
+
+  Left out: `code-load`, `pdfjs`, `typescript`, `mandreel`, `gbemu`, `zlib`
+  (large, or they need `eval`, typed arrays or the DOM). Octane is retired
+  and measures peak throughput, so it is a smoke measure for a baseline JIT,
+  not a claim about page loads; WebKit's JetStream (`WebKit/JetStream`) is
+  the live alternative and was not pinned (it is large and mixes in
+  WebAssembly).
+- **Not done:** the JIT-off numbers. No engine exists, so there is nothing
+  to measure. They are recorded when the interpreter runs these files, in
+  the benchmark suite's README, with the machine and the engine commit.
 
 ### J.3 `clazel-x64` (L)
 
@@ -387,6 +456,18 @@ code.
   subset.
 - Hardware differential tests on the Linux and Windows runners.
 
+*Later note (2026-11-16):* the sources, decided by the user.
+- The **primary spec** is transcribed from the ACL2 `x86isa` model.
+- The **independent transcription** is made from Intel's SDM, its prose and
+  pseudocode (volume 2, pinned in J.2), not from another formal model.
+- A **different session** writes the independent transcription, and it does
+  not read the primary transcription.
+- The **hardware differential tests** are the further check against both.
+- The Sail x86 translation (`sail-x86-from-acl2`) is kept only as a check on
+  our reading of ACL2. It is a machine translation of ACL2, so **it is not
+  independent of it** and does not count as a second source. The crate header
+  says so.
+
 ### J.4 `clazel-a64` (L)
 
 As J.3. The subset is integer ALU, compare and conditional select, loads and
@@ -394,6 +475,17 @@ stores with register base and scaled register or immediate offset, `b`,
 `b.cond`, `cbz`/`cbnz`, `ret` in the epilogue only, and scalar double FP. It
 has fixed 4-byte words and no prefixes. Hardware tests run on the macOS
 runner.
+
+*Later note (2026-11-16):* the sources, decided by the user.
+- The **primary spec** is transcribed from the Sail Arm model and Arm's ASL,
+  which are one source: the Sail model is a translation of the ASL, which
+  Arm's machine-readable specification also carries.
+- The **independent transcription** is made from the Arm Architecture
+  Reference Manual's prose (DDI 0487, pinned in J.2), not from another formal
+  model.
+- A **different session** writes the independent transcription, and it does
+  not read the primary transcription.
+- The **hardware differential tests** are the further check against both.
 
 ### J.5 `clazel-lir`: syntax, typing, semantics (M)
 
@@ -512,8 +604,9 @@ validator is at tier 2.
 - **x86-64's semantics is large, and its two public formal models may share
   ancestry.** This is the assumption the safety claim rests on. Mitigations:
   - keep the subset small, with canonical encodings only;
-  - check the independence of the two sources in J.2, and record it in the
-    crate header if they are not independent;
+  - the two formal models are not independent (J.2), so the second
+    transcription comes from Intel's SDM, written by a different session
+    (J.3's note);
   - hardware differential tests on two OSes;
   - a decoder differential over every accepted encoding.
 - **The code process is new trusted code with a powerful handle.** It is
