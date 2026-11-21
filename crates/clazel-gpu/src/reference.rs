@@ -107,6 +107,11 @@ pub fn draw(items: &[ExecItem], viewport: Viewport, masks: &mut Masks) -> Option
             ExecItem::FreeMask { id } => {
                 masks.0.remove(id)?;
             }
+            // The image items (6.10) are not drawn until 6.12 gives the GPU process
+            // textures, so the reference refuses a list that holds one.
+            ExecItem::UploadImage { .. }
+            | ExecItem::DrawImage { .. }
+            | ExecItem::FreeImage { .. } => return None,
         }
     }
     clips.is_empty().then_some(pixels)

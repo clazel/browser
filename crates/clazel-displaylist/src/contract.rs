@@ -63,21 +63,38 @@ pub open spec fn decode_is_bounded() -> bool {
 }
 
 /// What a list that passes means to `clazel-gpu`: at most [`MAX_ITEMS`] items, every
-/// number in every item in range, every clip popped and never deeper than
-/// [`MAX_CLIP_DEPTH`] or below empty, and a table within the budget left behind.
+/// number in every item in range (an uploaded image's sides among them), every clip popped and never deeper than [`MAX_CLIP_DEPTH`] or
+/// below empty, and tables within their budgets left behind: at most [`MAX_MASK_BYTES`]
+/// of coverage and at most [`MAX_IMAGE_BYTES`] of image pixels.
 pub open spec fn list_is_sound(items: Seq<Item>, after: Masks) -> bool {
     &&& items.len() <= (MAX_ITEMS as nat)
     &&& masks_ok(after)
+    &&& live_image_bytes(after.images) <= (MAX_IMAGE_BYTES as nat)
     &&& forall|i: int| 0 <= i < items.len() ==> in_range(#[trigger] items[i])
     &&& depth_at(items, items.len()) == 0
     &&& forall|n: nat| n <= items.len() ==> 0 <= #[trigger] depth_at(items, n) <= (MAX_CLIP_DEPTH as nat)
 }
 
-/// `theorem_validated_bounds`: every list that passes is sound.
+/// Every image draw in a list lies inside the image it names, as that image is at that
+/// point: the found table with the list's earlier uploads and frees applied.
+pub open spec fn image_sources_inside(before: Masks, items: Seq<Item>) -> bool {
+    forall|i: int|
+        0 <= i < items.len() && #[trigger] items[i] is DrawImage ==> draw_source_ok(
+            masks_at(before, items, i as nat),
+            items[i]->DrawImage_id,
+            items[i]->DrawImage_src_x,
+            items[i]->DrawImage_src_y,
+            items[i]->DrawImage_src_width,
+            items[i]->DrawImage_src_height,
+        )
+}
+
+/// `theorem_validated_bounds`: every list that passes is sound, and every image draw in
+/// it names a live image and has its source rectangle inside it (6.10).
 pub open spec fn validated_bounds() -> bool {
     forall|before: Masks, items: Seq<Item>|
         masks_ok(before) && (#[trigger] validate(before, items)) is Some
-            ==> list_is_sound(items, validate(before, items)->Some_0)
+            ==> list_is_sound(items, validate(before, items)->Some_0) && image_sources_inside(before, items)
 }
 
 /// The masks a list has made by item `n`, if it has broken no rule by then.

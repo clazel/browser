@@ -4,7 +4,8 @@
 //! One line per item, in paint order, in device pixels: `fill x,y wxh
 //! #aarrggbb`, `text x,y wxh #aarrggbb face=f size=s glyphs=n first=x,y`
 //! (the bounds, then the first glyph's position in 1/64 device px),
-//! `push-clip x,y wxh`, `pop-clip`; then one line per hit region: `hit
+//! `image x,y wxh id=i src=x,y wxh linear|nearest`, `push-clip x,y wxh`,
+//! `pop-clip`; then one line per hit region: `hit
 //! x,y wxh node=n url`.
 
 use std::fmt::Write as _;
@@ -37,6 +38,21 @@ pub fn dump(list: &DisplayList) -> String {
                     run.glyphs.len()
                 )
             }
+            Item::Image {
+                rect: r,
+                image,
+                src,
+                linear,
+            } => writeln!(
+                out,
+                "image {} id={image} src={},{} {}x{} {}",
+                rect(r),
+                src[0],
+                src[1],
+                src[2],
+                src[3],
+                if *linear { "linear" } else { "nearest" }
+            ),
             Item::PushClip { rect: r } => writeln!(out, "push-clip {}", rect(r)),
             Item::PopClip => writeln!(out, "pop-clip"),
         };

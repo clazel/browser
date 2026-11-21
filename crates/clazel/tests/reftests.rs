@@ -198,6 +198,22 @@ fn not_run_by_reason() {
         c("css/a.html", "<style>@font-face { font-family: x }</style>"),
         Some(NotRun::OutsideSubset(_))
     ));
+    // Item 6.11: position, size, repeat, origin and clip have an effect now; image and
+    // attachment still have none that a test without an image could show.
+    assert_eq!(
+        c(
+            "css/a.html",
+            "<div style='background: red; background-clip: content-box; padding: 2px'>x</div>"
+        ),
+        None
+    );
+    assert_eq!(
+        c(
+            "css/a.html",
+            "<div style='background-attachment: fixed'>x</div>"
+        ),
+        Some(NotRun::OutsideSubset("background-attachment".to_owned()))
+    );
     // In the subset: a table, a background colour, margins.
     assert_eq!(
         c(

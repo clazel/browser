@@ -41,7 +41,10 @@ use std::io::{self, Read, Write};
 
 use crate::geom::MAX_VIEWPORT_SIDE;
 
-/// The largest list the GPU process reads, in bytes: 256 MiB.
+/// The largest list the GPU process reads, in bytes: 256 MiB. Item 6.10 grew
+/// `clazel_displaylist::spec::MAX_LIST_BYTES` to 384 MiB for image uploads, so until
+/// 6.12 decides this limit (or a second channel for uploads) it is the tighter one:
+/// a list between the two is refused here, never misread.
 pub const LIST_MAX: usize = 1 << 28;
 
 /// The ring's slots per GPU process (the kernel's ring of 3, item 5.18).

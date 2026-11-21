@@ -63,6 +63,45 @@ pub enum ExecItem {
         /// The mask.
         id: u32,
     },
+    /// [`Item::UploadImage`].
+    UploadImage {
+        /// The renderer's number for it, in the images' own space.
+        id: u32,
+        /// The width in pixels.
+        image_width: u16,
+        /// The height in pixels.
+        image_height: u16,
+        /// `width × height × 4` bytes of premultiplied RGBA8, in rows from the top.
+        pixels: Vec<u8>,
+    },
+    /// [`Item::DrawImage`].
+    DrawImage {
+        /// The image.
+        id: u32,
+        /// The destination's left edge, in device pixels.
+        x: i32,
+        /// The destination's top edge.
+        y: i32,
+        /// The destination's width.
+        width: u32,
+        /// The destination's height.
+        height: u32,
+        /// The source's left edge, in the image's pixels.
+        src_x: u16,
+        /// The source's top edge.
+        src_y: u16,
+        /// The source's width.
+        src_width: u16,
+        /// The source's height.
+        src_height: u16,
+        /// Linear filtering if true, nearest if false.
+        linear: bool,
+    },
+    /// [`Item::FreeImage`].
+    FreeImage {
+        /// The image.
+        id: u32,
+    },
 }
 
 /// The item a [`ExecItem`] holds.
@@ -74,6 +113,20 @@ pub open spec fn view_item(item: ExecItem) -> Item {
         ExecItem::UploadMask { id, columns, rows, coverage } => Item::UploadMask { id, columns, rows, coverage: coverage@ },
         ExecItem::DrawMask { id, x, y, colour } => Item::DrawMask { id, x, y, colour },
         ExecItem::FreeMask { id } => Item::FreeMask { id },
+        ExecItem::UploadImage { id, image_width: width, image_height: height, pixels } => Item::UploadImage { id, image_width: width, image_height: height, pixels: pixels@ },
+        ExecItem::DrawImage { id, x, y, width, height, src_x, src_y, src_width, src_height, linear } => Item::DrawImage {
+            id,
+            x,
+            y,
+            width,
+            height,
+            src_x,
+            src_y,
+            src_width,
+            src_height,
+            linear,
+        },
+        ExecItem::FreeImage { id } => Item::FreeImage { id },
     }
 }
 
@@ -281,6 +334,90 @@ fn decode_item_at(bytes: &[u8], pos: usize) -> (output: Option<(ExecItem, usize)
         let id = read_le(bytes, pos.saturating_add(1), 4);
         assert(s.subrange(1, 5) =~= bytes@.subrange(pos + 1, pos + 5));
         Some((ExecItem::FreeMask { id: id as u32 }, 5))
+    } else if tag == 7 {
+        // 6.10 "upload image (id, width, height, then width × height × 4 bytes ...)".
+        if left < 9 {
+            return None;
+        }
+        let id = read_le(bytes, pos.saturating_add(1), 4);
+        let width = read_le(bytes, pos.saturating_add(5), 2);
+        let height = read_le(bytes, pos.saturating_add(7), 2);
+        assert(s.subrange(1, 5) =~= bytes@.subrange(pos + 1, pos + 5));
+        assert(s.subrange(5, 7) =~= bytes@.subrange(pos + 5, pos + 7));
+        assert(s.subrange(7, 9) =~= bytes@.subrange(pos + 7, pos + 9));
+        assert(width * height * 4 < 0x4_0000_0000) by (nonlinear_arith)
+            requires
+                width < 65536,
+                height < 65536,
+        ;
+        // Neither saturates, by the bound above.
+        let size = width.saturating_mul(height).saturating_mul(4);
+        // left - 9 is exact: left >= 9.
+        if (left.saturating_sub(9) as u64) < size {
+            return None;
+        }
+        let start = pos.saturating_add(9);
+        // Within bytes.len(): size <= left - 9.
+        let end = start.saturating_add(size as usize);
+        let pixels = vstd::slice::slice_to_vec(vstd::slice::slice_subrange(bytes, start, end));
+        assert(s.subrange(9, 9 + size as int) =~= bytes@.subrange(start as int, end as int));
+        let item = ExecItem::UploadImage { id: id as u32, image_width: width as u16, image_height: height as u16, pixels };
+        // 9 + size <= left, which is a usize.
+        Some((item, (size as usize).saturating_add(9)))
+    } else if tag == 8 {
+        // 6.10 "draw image (id, destination x, y, width, height, as tag 1; source
+        // rectangle in the image's pixels; a filter flag, nearest or linear)".
+        if left < 30 {
+            return None;
+        }
+        let id = read_le(bytes, pos.saturating_add(1), 4);
+        let x = read_le(bytes, pos.saturating_add(5), 4);
+        let y = read_le(bytes, pos.saturating_add(9), 4);
+        let width = read_le(bytes, pos.saturating_add(13), 4);
+        let height = read_le(bytes, pos.saturating_add(17), 4);
+        let src_x = read_le(bytes, pos.saturating_add(21), 2);
+        let src_y = read_le(bytes, pos.saturating_add(23), 2);
+        let src_width = read_le(bytes, pos.saturating_add(25), 2);
+        let src_height = read_le(bytes, pos.saturating_add(27), 2);
+        let filter = match bytes.get(pos.saturating_add(29)) {
+            Some(&b) => b,
+            None => {
+                return None;
+            },
+        };
+        assert(s[29] == filter);
+        assert(s.subrange(1, 5) =~= bytes@.subrange(pos + 1, pos + 5));
+        assert(s.subrange(5, 9) =~= bytes@.subrange(pos + 5, pos + 9));
+        assert(s.subrange(9, 13) =~= bytes@.subrange(pos + 9, pos + 13));
+        assert(s.subrange(13, 17) =~= bytes@.subrange(pos + 13, pos + 17));
+        assert(s.subrange(17, 21) =~= bytes@.subrange(pos + 17, pos + 21));
+        assert(s.subrange(21, 23) =~= bytes@.subrange(pos + 21, pos + 23));
+        assert(s.subrange(23, 25) =~= bytes@.subrange(pos + 23, pos + 25));
+        assert(s.subrange(25, 27) =~= bytes@.subrange(pos + 25, pos + 27));
+        assert(s.subrange(27, 29) =~= bytes@.subrange(pos + 27, pos + 29));
+        if filter != 0 && filter != 1 {
+            return None;
+        }
+        let item = ExecItem::DrawImage {
+            id: id as u32,
+            x: i32_from(x),
+            y: i32_from(y),
+            width: width as u32,
+            height: height as u32,
+            src_x: src_x as u16,
+            src_y: src_y as u16,
+            src_width: src_width as u16,
+            src_height: src_height as u16,
+            linear: filter == 1,
+        };
+        Some((item, 30))
+    } else if tag == 9 {
+        if left < 5 {
+            return None;
+        }
+        let id = read_le(bytes, pos.saturating_add(1), 4);
+        assert(s.subrange(1, 5) =~= bytes@.subrange(pos + 1, pos + 5));
+        Some((ExecItem::FreeImage { id: id as u32 }, 5))
     } else {
         None
     }
@@ -438,6 +575,33 @@ fn push_item(out: &mut Vec<u8>, item: &ExecItem)
             push_le(out, *id as u64, 4);
             assert(out@ =~= start + encode_item(view_item(*item)));
         },
+        ExecItem::UploadImage { id, image_width: width, image_height: height, pixels } => {
+            out.push(7);
+            push_le(out, *id as u64, 4);
+            push_le(out, *width as u64, 2);
+            push_le(out, *height as u64, 2);
+            out.extend_from_slice(pixels.as_slice());
+            assert(out@ =~= start + encode_item(view_item(*item)));
+        },
+        ExecItem::DrawImage { id, x, y, width, height, src_x, src_y, src_width, src_height, linear } => {
+            out.push(8);
+            push_le(out, *id as u64, 4);
+            push_le(out, bits(*x), 4);
+            push_le(out, bits(*y), 4);
+            push_le(out, *width as u64, 4);
+            push_le(out, *height as u64, 4);
+            push_le(out, *src_x as u64, 2);
+            push_le(out, *src_y as u64, 2);
+            push_le(out, *src_width as u64, 2);
+            push_le(out, *src_height as u64, 2);
+            out.push(if *linear { 1 } else { 0 });
+            assert(out@ =~= start + encode_item(view_item(*item)));
+        },
+        ExecItem::FreeImage { id } => {
+            out.push(9);
+            push_le(out, *id as u64, 4);
+            assert(out@ =~= start + encode_item(view_item(*item)));
+        },
     }
 }
 
@@ -455,6 +619,15 @@ fn can_write(item: &ExecItem) -> (ok: bool)
             ;
             // Does not saturate, by the bound above.
             (coverage.len() as u64) == (*columns as u64).saturating_mul(*rows as u64)
+        },
+        ExecItem::UploadImage { image_width: width, image_height: height, pixels, .. } => {
+            assert((*width as nat) * (*height as nat) * 4 < 0x4_0000_0000) by (nonlinear_arith)
+                requires
+                    (*width as nat) < 65536,
+                    (*height as nat) < 65536,
+            ;
+            // Neither saturates, by the bound above.
+            (pixels.len() as u64) == (*width as u64).saturating_mul(*height as u64).saturating_mul(4)
         },
         _ => true,
     }
@@ -551,23 +724,38 @@ pub open spec fn view_entry(entry: Option<(u16, u16)>) -> Option<MaskSize> {
     }
 }
 
-/// The validator, which keeps the masks between lists.
+/// The entry an exec table of images holds.
+pub open spec fn view_image_entry(entry: Option<(u16, u16)>) -> Option<ImageSize> {
+    match entry {
+        None => None,
+        Some((width, height)) => Some(ImageSize { width: width as nat, height: height as nat }),
+    }
+}
+
+/// The validator, which keeps the masks and images between lists.
 #[derive(Debug)]
 pub struct Validator {
     table: Vec<Option<(u16, u16)>>,
     live: u64,
+    images: Vec<Option<(u16, u16)>>,
+    image_live: u64,
 }
 
 impl Validator {
-    /// The masks it holds.
+    /// The masks and images it holds.
     pub closed spec fn masks(&self) -> Masks {
-        Masks { table: self.table@.map_values(|entry: Option<(u16, u16)>| view_entry(entry)) }
+        Masks {
+            table: self.table@.map_values(|entry: Option<(u16, u16)>| view_entry(entry)),
+            images: self.images@.map_values(|entry: Option<(u16, u16)>| view_image_entry(entry)),
+        }
     }
 
-    /// It holds a sound table, and its count of the coverage bytes is right.
+    /// It holds sound tables, and its counts of the coverage bytes and of the pixel
+    /// bytes are right.
     pub closed spec fn wf(&self) -> bool {
         &&& masks_ok(self.masks())
         &&& self.live as nat == live_bytes(self.masks().table)
+        &&& self.image_live as nat == live_image_bytes(self.masks().images)
     }
 
     /// A validator with no masks.
@@ -589,11 +777,26 @@ impl Validator {
             // i < MAX_MASKS, so this does not saturate.
             i = i.saturating_add(1);
         }
-        let out = Validator { table, live: 0 };
+        let mut images: Vec<Option<(u16, u16)>> = Vec::new();
+        let mut j: usize = 0;
+        while j < MAX_IMAGES
+            invariant
+                j <= MAX_IMAGES,
+                images@.len() == j,
+                forall|k: int| 0 <= k < j ==> images@[k] is None,
+            decreases MAX_IMAGES - j,
+        {
+            images.push(None);
+            // j < MAX_IMAGES, so this does not saturate.
+            j = j.saturating_add(1);
+        }
+        let out = Validator { table, live: 0, images, image_live: 0 };
         proof {
             assert(out.masks().table =~= no_masks().table);
+            assert(out.masks().images =~= no_masks().images);
             super::lemmas::theorem_no_masks_ok();
             super::lemmas::lemma_live_bytes_none(no_masks().table);
+            super::lemmas::lemma_live_image_bytes_none(no_masks().images);
         }
         out
     }
@@ -686,6 +889,7 @@ impl Validator {
                 self.live = total;
                 proof {
                     assert(self.masks().table =~= before.table.update(index as int, Some(size)));
+                    assert(self.masks().images =~= before.images);
                 }
                 Some(depth)
             },
@@ -744,7 +948,123 @@ impl Validator {
                 self.table.set(index, None);
                 proof {
                     assert(self.masks().table =~= before.table.update(index as int, None));
+                    assert(self.masks().images =~= before.images);
                     assert(super::lemmas::entry_bytes(before.table[index as int]) == cost as nat);
+                    super::lemmas::lemma_masks_after_sound(before, view_item(*item));
+                }
+                Some(depth)
+            },
+            ExecItem::UploadImage { id, image_width: width, image_height: height, .. } => {
+                let ghost before = self.masks();
+                let index = *id as usize;
+                if index >= MAX_IMAGES {
+                    return None;
+                }
+                let slot = match self.images.as_slice().get(index) {
+                    Some(slot) => *slot,
+                    None => {
+                        return None;
+                    },
+                };
+                assert(before.images[index as int] == view_image_entry(slot));
+                if slot.is_some() {
+                    return None;
+                }
+                if *width == 0 || *height == 0 {
+                    return None;
+                }
+                if *width as usize > MAX_IMAGE_SIDE || *height as usize > MAX_IMAGE_SIDE {
+                    return None;
+                }
+                let ghost size = ImageSize { width: *width as nat, height: *height as nat };
+                proof {
+                    super::lemmas::lemma_live_image_bytes_update(before.images, index as int, Some(size));
+                    assert(size.width * size.height * 4 <= 1_073_741_824) by (nonlinear_arith)
+                        requires
+                            size.width <= 16384,
+                            size.height <= 16384,
+                    ;
+                }
+                // Neither saturates: the cost is at most 2^30 and live at most 2^28.
+                let cost = (*width as u64).saturating_mul(*height as u64).saturating_mul(4);
+                let total = self.image_live.saturating_add(cost);
+                if total > MAX_IMAGE_BYTES as u64 {
+                    return None;
+                }
+                self.images.set(index, Some((*width, *height)));
+                self.image_live = total;
+                proof {
+                    assert(self.masks().images =~= before.images.update(index as int, Some(size)));
+                    assert(self.masks().table =~= before.table);
+                }
+                Some(depth)
+            },
+            ExecItem::DrawImage { id, x, y, width, height, src_x, src_y, src_width, src_height, .. } => {
+                if !(position_is_ok(*x) && position_is_ok(*y) && size_is_ok(*width) && size_is_ok(*height)) {
+                    return None;
+                }
+                let index = *id as usize;
+                if index >= MAX_IMAGES {
+                    return None;
+                }
+                let slot = match self.images.as_slice().get(index) {
+                    Some(slot) => *slot,
+                    None => {
+                        return None;
+                    },
+                };
+                assert(self.masks().images[index as int] == view_image_entry(slot));
+                match slot {
+                    // 6.10 "a draw names a live image and a source rectangle inside it".
+                    Some((image_width, image_height)) => {
+                        // The sums are of two u16s, so they are exact in usize.
+                        let right = (*src_x as usize).saturating_add(*src_width as usize);
+                        let bottom = (*src_y as usize).saturating_add(*src_height as usize);
+                        if right <= image_width as usize && bottom <= image_height as usize {
+                            Some(depth)
+                        } else {
+                            None
+                        }
+                    },
+                    None => None,
+                }
+            },
+            ExecItem::FreeImage { id } => {
+                let ghost before = self.masks();
+                let index = *id as usize;
+                if index >= MAX_IMAGES {
+                    return None;
+                }
+                let slot = match self.images.as_slice().get(index) {
+                    Some(slot) => *slot,
+                    None => {
+                        return None;
+                    },
+                };
+                assert(before.images[index as int] == view_image_entry(slot));
+                let (width, height) = match slot {
+                    Some(sides) => sides,
+                    None => {
+                        return None;
+                    },
+                };
+                proof {
+                    super::lemmas::lemma_live_image_bytes_update(before.images, index as int, None);
+                }
+                // The freed image's bytes are part of image_live, so this is exact, and
+                // the product does not saturate: both sides are below 2^16.
+                assert((width as nat) * (height as nat) * 4 < 0x4_0000_0000) by (nonlinear_arith)
+                    requires
+                        (width as nat) < 65536,
+                        (height as nat) < 65536,
+                ;
+                let cost = (width as u64).saturating_mul(height as u64).saturating_mul(4);
+                self.image_live = self.image_live.saturating_sub(cost);
+                self.images.set(index, None);
+                proof {
+                    assert(self.masks().images =~= before.images.update(index as int, None));
+                    assert(self.masks().table =~= before.table);
+                    assert(super::lemmas::image_entry_bytes(before.images[index as int]) == cost as nat);
                     super::lemmas::lemma_masks_after_sound(before, view_item(*item));
                 }
                 Some(depth)
