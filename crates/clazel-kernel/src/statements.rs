@@ -785,14 +785,14 @@ pub open spec fn subfetch_only_to_requester_statement(rules: Seq<clazel_psl::spe
                 Some(f) => {
                     &&& out[k]->ToRenderer_id == renderer
                     &&& subfetch_live(s, f)
-                    &&& (out[k]->ToRenderer_bytes == style_failed_frame(f.request) || exists|doc: Document|
-                        out[k]->ToRenderer_bytes == #[trigger] style_frames(f.request, doc))
+                    &&& (out[k]->ToRenderer_bytes == failed_frame(f.sub, f.request) || exists|doc: Document|
+                        out[k]->ToRenderer_bytes == #[trigger] answer_frames(f.sub, f.request, doc))
                 },
                 None => false,
             },
             Event::Tick { time } => exists|j: int|
                 0 <= j < s.subfetches.len() && s.subfetches[j].renderer == out[k]->ToRenderer_id && subfetch_live(tick(s, time).0, s.subfetches[j])
-                    && out[k]->ToRenderer_bytes == style_failed_frame(s.subfetches[j].request),
+                    && out[k]->ToRenderer_bytes == failed_frame(s.subfetches[j].sub, s.subfetches[j].request),
             _ => true,
         }
 }
@@ -868,14 +868,44 @@ pub open spec fn subfetch_ownership_statement(rules: Seq<clazel_psl::spec::Rule>
         }
 }
 
-/// The limits of item 5.19, as a theorem (`theorem_subfetch_limits`): a step
-/// never takes a renderer's sub-fetches in flight past
-/// [`max_subfetches_at_once`] or its document's count past
-/// [`max_subfetches_per_document`], when they were within them before.
+/// The limits of items 5.19 and 6.17, as a theorem (`theorem_subfetch_limits`):
+/// a step never takes a renderer's sub-fetches in flight past
+/// [`max_image_subfetches_at_once`] (16, the largest of the limits: an image
+/// fetch's) or its document's count past [`max_images_per_document`]
+/// (4,096), when they were within them before. (Each request is refused past
+/// its own destination's limits, [`sub_request_args`]; a style sheet's are 8
+/// and 64.)
 pub open spec fn subfetch_limits_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event, id: nat, lock: clazel_origin::spec::Origin) -> bool {
     let s1 = step(rules, urls, fetch, s, e).0;
-    &&& (live_subfetches(s.subfetches, id, lock) <= max_subfetches_at_once() ==> live_subfetches(s1.subfetches, id, lock) <= max_subfetches_at_once())
-    &&& (subcount_of(s.subcounts, id, lock).1 <= max_subfetches_per_document() ==> subcount_of(s1.subcounts, id, lock).1 <= max_subfetches_per_document())
+    &&& (live_subfetches(s.subfetches, id, lock) <= max_image_subfetches_at_once() ==> live_subfetches(s1.subfetches, id, lock) <= max_image_subfetches_at_once())
+    &&& (subcount_of(s.subcounts, id, lock).1 <= max_images_per_document() ==> subcount_of(s1.subcounts, id, lock).1 <= max_images_per_document())
+}
+
+/// `theorem_orb` (item 6.17, decision 6.0(i) B), the kernel's half: a `SubNet`
+/// event that ends a sub-fetch sends its renderer either the failure frame of
+/// its family or the answer frames of a response that Opaque Response Blocking
+/// let through: one whose URL has the renderer's lock as its origin, or whose
+/// opaque-response-safelist check (`clazel_fetch::orb`, which
+/// `theorem_orb` there says leaves only declared safelisted types and
+/// sniffed images, audio and video) is true. A refused response is a
+/// `SubFailed` (or `StyleFailed`): no `SubResponse`, `SubBody` or `SubEnd`,
+/// so no body octet, reaches the renderer.
+pub open spec fn orb_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> bool {
+    let out = step(rules, urls, fetch, s, e).1;
+    forall|k: int|
+        0 <= k < out.len() && (#[trigger] out[k]) is ToRenderer ==> match e {
+            Event::SubNet { renderer, serial, .. } => match subnet_target(s, renderer, serial) {
+                Some(f) => {
+                    &&& out[k]->ToRenderer_bytes == failed_frame(f.sub, f.request) || exists|
+                        url: clazel_url::url::spec::Url,
+                        response: clazel_http::message::spec::Response,
+                    |
+                        out[k]->ToRenderer_bytes == #[trigger] answer_frames(f.sub, f.request, response_document(response)) && sub_orb_allows(sub_ctx(fetch, f), url, response)
+                },
+                None => false,
+            },
+            _ => true,
+        }
 }
 
 /// `theorem_commit_ends_subfetches` (item 5.19, "a navigation ends the old

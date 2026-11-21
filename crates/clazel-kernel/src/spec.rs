@@ -440,6 +440,37 @@
 //! - **A `Tick` fails a sub-fetch** that started [`subfetch_timeout`] (60)
 //!   seconds ago or more: `StyleFailed`, its connection closed.
 //!
+//! # Image sub-fetches and Opaque Response Blocking (phase-6.md item 6.17)
+//!
+//! - **`FetchSub { request, destination, url }`** (decision 6.0(e) B) is
+//!   [`fetch_start`]: 5.19's sub-resource fetch, with the family of the
+//!   answers (`Sub*` for a `FetchSub`, `Style*` for a `FetchStyle`) kept in
+//!   [`SubFetch::sub`], and the limits of the destination
+//!   ([`sub_request_args`]). `FetchStyle` and the `Style*` frames are
+//!   unchanged; they are retired when the renderer sends `FetchSub` for
+//!   sheets (6.18). Destination `image` is a "no-cors" request with
+//!   credentials per 5.0(h)'s F1 (the same [`credentialed`] rule, per hop) and
+//!   the `Accept` field of the transducer's request, which is `*/*` for every
+//!   request (**not done**: Fetch's value for an image is
+//!   `image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5`; the transducer's
+//!   request has no `Accept` parameter, and adding one changes 6.16's `Req`
+//!   and its proofs, so it is left for after 6.16 lands). Limits: an image fetch is refused with `SubFailed` when the
+//!   renderer has [`max_image_subfetches_at_once`] (16) sub-fetches of any kind
+//!   in flight, or its document has started [`max_images_per_document`]
+//!   (4,096) sub-fetches of any kind (both counts are shared with style sheet
+//!   fetches: listed). A destination the kernel does not know is refused with
+//!   `SubFailed`.
+//! - **ORB** is `clazel_fetch::orb` (Fetch PR 1755, §2.11) applied where a
+//!   sub-fetch ends: [`sub_actions`]'s `Done` is let through only if
+//!   [`sub_orb_allows`] (the response's URL is the lock's origin, or the
+//!   opaque-response-safelist check, with the kernel's model, is true);
+//!   otherwise the fetch ends as `Fail`, the answer is `SubFailed` (or
+//!   `StyleFailed`) and no body octet is sent (Main fetch: a refused
+//!   response is a network error). The decision is made on the whole
+//!   buffered response (its header section and the first 8096 octets of its
+//!   body), before any frame of the answer exists. It applies to style
+//!   sheet fetches too. Not modelled: the Cross-Origin Resource Policy check.
+//!
 //! # The GPU crash policy (phase-5.md item 5.17c)
 //!
 //! The item's four rules over the host's new event `GpuExited` and 5.18's
@@ -687,6 +718,9 @@ pub struct SubFetch {
     pub serial: nat,
     /// The renderer's own id for it, which every answer carries.
     pub request: u64,
+    /// Whether it was asked for by `FetchSub` (item 6.17: the answers are
+    /// `Sub*` frames) and not by `FetchStyle` (the answers are `Style*`).
+    pub sub: bool,
     /// The renderer's tab, which owns its connections.
     pub tab: nat,
     /// The transducer's state.
@@ -2439,6 +2473,18 @@ pub open spec fn max_subfetch_serial() -> nat {
     0xFFFF_FFFF_FFFF_FFFFnat
 }
 
+/// The most image sub-fetches (`FetchSub` with destination image, item 6.17)
+/// one renderer has in flight at once (all its sub-fetches count).
+pub open spec fn max_image_subfetches_at_once() -> nat {
+    16
+}
+
+/// The most image sub-fetches one document starts (a commit starts a new
+/// count, which style sheet fetches share).
+pub open spec fn max_images_per_document() -> nat {
+    4096
+}
+
 /// A sub-fetch fails at the first `Tick` at least this many seconds after it
 /// started.
 pub open spec fn subfetch_timeout() -> int {
@@ -2584,11 +2630,87 @@ pub open spec fn style_failed_frame(request: u64) -> Seq<u8> {
     reply_frame(clazel_ipc::message::spec::Message::StyleFailed { request })
 }
 
+/// The `SubBody` frames of `body`, in order: consecutive pieces of at most
+/// `max_sub_chunk` octets, none for an empty body (item 6.17).
+pub open spec fn sub_body_frames(request: u64, body: Seq<u8>) -> Seq<u8>
+    decreases body.len(),
+{
+    if body.len() == 0 {
+        seq![]
+    } else if body.len() <= clazel_ipc::message::spec::max_sub_chunk() {
+        reply_frame(clazel_ipc::message::spec::Message::SubBody { request, bytes: body })
+    } else {
+        reply_frame(clazel_ipc::message::spec::Message::SubBody { request, bytes: body.take(clazel_ipc::message::spec::max_sub_chunk() as int) })
+            + sub_body_frames(request, body.skip(clazel_ipc::message::spec::max_sub_chunk() as int))
+    }
+}
+
+/// The frames of a fetched sub-resource: `SubResponse`, the `SubBody` frames
+/// and `SubEnd`, as one write (item 6.17).
+pub open spec fn sub_frames(request: u64, doc: Document) -> Seq<u8> {
+    reply_frame(clazel_ipc::message::spec::Message::SubResponse { request, content_type: doc.content_type }) + sub_body_frames(request, doc.body)
+        + reply_frame(clazel_ipc::message::spec::Message::SubEnd { request })
+}
+
+/// The frame of `SubFailed`.
+pub open spec fn sub_failed_frame(request: u64) -> Seq<u8> {
+    reply_frame(clazel_ipc::message::spec::Message::SubFailed { request })
+}
+
+/// The frames of a fetched resource, in the family of the request: `Sub*` if
+/// it was a `FetchSub`, `Style*` if a `FetchStyle`.
+pub open spec fn answer_frames(sub: bool, request: u64, doc: Document) -> Seq<u8> {
+    if sub { sub_frames(request, doc) } else { style_frames(request, doc) }
+}
+
+/// The frame that says a fetch failed, in the family of the request.
+pub open spec fn failed_frame(sub: bool, request: u64) -> Seq<u8> {
+    if sub { sub_failed_frame(request) } else { style_failed_frame(request) }
+}
+
+/// The message that says a fetch failed, in the family of the request.
+pub open spec fn failed_message(sub: bool, request: u64) -> clazel_ipc::message::spec::Message {
+    if sub {
+        clazel_ipc::message::spec::Message::SubFailed { request }
+    } else {
+        clazel_ipc::message::spec::Message::StyleFailed { request }
+    }
+}
+
+/// What a sub-fetch's actions need to decide their end (item 6.17): which
+/// family answers, the renderer's lock, and the origin of a URL. Opaque
+/// Response Blocking (`clazel_fetch::orb`) compares the origin of the
+/// response's URL with the lock.
+pub struct SubCtx {
+    /// Whether the answers are `Sub*` frames.
+    pub sub: bool,
+    /// The renderer's lock.
+    pub lock: clazel_origin::spec::Origin,
+    /// URL §4.7 "origin" of a URL.
+    pub origin: spec_fn(clazel_url::url::spec::Url) -> clazel_origin::spec::Origin,
+}
+
+/// The context of a sub-fetch of family `sub` of a renderer locked to `lock`.
+pub open spec fn start_ctx(fetch: FetchFns, sub: bool, lock: clazel_origin::spec::Origin) -> SubCtx {
+    SubCtx { sub, lock, origin: fetch.urls.origin }
+}
+
+/// The context of sub-fetch `f`.
+pub open spec fn sub_ctx(fetch: FetchFns, f: SubFetch) -> SubCtx {
+    start_ctx(fetch, f.sub, f.lock)
+}
+
+/// What ORB does to a final response of a fetch in `ctx` for the response of
+/// `url`: it is let through, or it is a network error.
+pub open spec fn sub_orb_allows(ctx: SubCtx, url: clazel_url::url::spec::Url, response: clazel_http::message::spec::Response) -> bool {
+    clazel_fetch::orb::spec::orb_allows(ctx.lock, (ctx.origin)(url), response)
+}
+
 /// The outputs of a sub-fetch's transducer actions, on connection `hop` of
 /// sub-fetch `serial` of renderer `id`: the connection the last `Connect`
 /// gave, the outputs, and the frames to the renderer if the fetch ended
 /// (`Done` or `Fail`; nothing after it is read).
-pub open spec fn sub_actions(id: nat, serial: nat, request: u64, hop: nat, actions: Seq<NetAction>) -> (nat, Seq<Output>, Option<Seq<u8>>)
+pub open spec fn sub_actions(ctx: SubCtx, id: nat, serial: nat, request: u64, hop: nat, actions: Seq<NetAction>) -> (nat, Seq<Output>, Option<Seq<u8>>)
     decreases actions.len(),
 {
     if actions.len() == 0 {
@@ -2597,19 +2719,26 @@ pub open spec fn sub_actions(id: nat, serial: nat, request: u64, hop: nat, actio
         let rest = actions.drop_first();
         match actions[0] {
             clazel_fetch::transducer::spec::Action::Connect { host, port, tls } => {
-                let (h, out, end) = sub_actions(id, serial, request, hop + 1, rest);
+                let (h, out, end) = sub_actions(ctx, id, serial, request, hop + 1, rest);
                 (h, seq![Output::SubConnect { renderer: id, serial, hop: hop + 1, host, port, tls }] + out, end)
             },
             clazel_fetch::transducer::spec::Action::Send(bytes) => {
-                let (h, out, end) = sub_actions(id, serial, request, hop, rest);
+                let (h, out, end) = sub_actions(ctx, id, serial, request, hop, rest);
                 (h, seq![Output::SubSend { renderer: id, serial, hop, bytes }] + out, end)
             },
             clazel_fetch::transducer::spec::Action::Close => {
-                let (h, out, end) = sub_actions(id, serial, request, hop, rest);
+                let (h, out, end) = sub_actions(ctx, id, serial, request, hop, rest);
                 (h, seq![Output::SubClose { renderer: id, serial, hop }] + out, end)
             },
-            clazel_fetch::transducer::spec::Action::Done { url, response } => (hop, seq![], Some(style_frames(request, response_document(response)))),
-            clazel_fetch::transducer::spec::Action::Fail(_) => (hop, seq![], Some(style_failed_frame(request))),
+            // Item 6.17: Fetch's Main fetch returns a network error when
+            // the opaque-response-safelist check is false (ORB), so a
+            // refused response is a failure, with no body octet.
+            clazel_fetch::transducer::spec::Action::Done { url, response } => if sub_orb_allows(ctx, url, response) {
+                (hop, seq![], Some(answer_frames(ctx.sub, request, response_document(response))))
+            } else {
+                (hop, seq![], Some(failed_frame(ctx.sub, request)))
+            },
+            clazel_fetch::transducer::spec::Action::Fail(_) => (hop, seq![], Some(failed_frame(ctx.sub, request))),
         }
     }
 }
@@ -2629,9 +2758,72 @@ pub open spec fn sub_finish(fs: Seq<SubFetch>, f: SubFetch, out: Seq<Output>, en
 /// navigations use, in the renderer's table, on connections of its tab
 /// whose partition key is its domain.
 pub open spec fn fetch_style(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, r: Renderer, request: u64, url: Seq<u8>) -> (State, Seq<Output>) {
+    fetch_start(rules, urls, fetch, s, r, false, max_subfetches_at_once(), max_subfetches_per_document(), request, url)
+}
+
+/// The parts of a sub-resource request message (item 6.17): whether it is
+/// a `FetchSub` (the answers are `Sub*` frames) and not a `FetchStyle`, the
+/// most sub-fetches the renderer may have in flight and the most its
+/// document may start for the request's destination, the renderer's request
+/// id and the URL. A `FetchStyle` is a style sheet fetch (5.19's limits: 8
+/// and 64). A `FetchSub` of destination style has the same limits; of
+/// destination image, [`max_image_subfetches_at_once`] and
+/// [`max_images_per_document`]; of any other destination, limits of 0, so
+/// the request is refused with `SubFailed` and nothing starts.
+pub open spec fn sub_request_args(m: clazel_ipc::message::spec::Message) -> (bool, nat, nat, u64, Seq<u8>) {
+    match m {
+        clazel_ipc::message::spec::Message::FetchStyle { request, url } => (false, max_subfetches_at_once(), max_subfetches_per_document(), request, url),
+        clazel_ipc::message::spec::Message::FetchSub { request, destination, url } => if destination == clazel_ipc::message::spec::destination_style() {
+            (true, max_subfetches_at_once(), max_subfetches_per_document(), request, url)
+        } else if destination == clazel_ipc::message::spec::destination_image() {
+            (true, max_image_subfetches_at_once(), max_images_per_document(), request, url)
+        } else {
+            (true, 0, 0, request, url)
+        },
+        _ => (false, 0, 0, 0, seq![]),
+    }
+}
+
+/// Whether `m` is a sub-resource request: `FetchStyle` or `FetchSub`.
+pub open spec fn is_sub_request(m: clazel_ipc::message::spec::Message) -> bool {
+    m is FetchStyle || m is FetchSub
+}
+
+/// A committed renderer's `FetchStyle` or `FetchSub` (items 5.19 and
+/// 6.17): [`fetch_start`] with the message's [`sub_request_args`].
+pub open spec fn fetch_sub_request(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns,
+    fetch: FetchFns,
+    s: State,
+    r: Renderer,
+    m: clazel_ipc::message::spec::Message,
+) -> (State, Seq<Output>) {
+    let (sub, at_once, per_document, request, url) = sub_request_args(m);
+    fetch_start(rules, urls, fetch, s, r, sub, at_once, per_document, request, url)
+}
+
+/// The start of a sub-fetch of family `sub` with the limits `at_once` (in
+/// flight) and `per_document`: refused with the family's failure past a
+/// limit or for a URL that does not decode, resolve or parse; otherwise a
+/// sub-fetch is started by the transducer navigations use, in the
+/// renderer's table, on connections of its tab whose partition key is its
+/// domain.
+pub open spec fn fetch_start(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns,
+    fetch: FetchFns,
+    s: State,
+    r: Renderer,
+    sub: bool,
+    at_once: nat,
+    per_document: nat,
+    request: u64,
+    url: Seq<u8>,
+) -> (State, Seq<Output>) {
     let (serial, in_document) = subcount_of(s.subcounts, r.id, r.lock);
-    let refused = (s, reply(r, clazel_ipc::message::spec::Message::StyleFailed { request }));
-    if live_subfetches(s.subfetches, r.id, r.lock) >= max_subfetches_at_once() || in_document >= max_subfetches_per_document() || serial
+    let refused = (s, reply(r, failed_message(sub, request)));
+    if live_subfetches(s.subfetches, r.id, r.lock) >= at_once || in_document >= per_document || serial
         >= max_subfetch_serial() {
         refused
     } else {
@@ -2648,6 +2840,7 @@ pub open spec fn fetch_style(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
                             lock: r.lock,
                             serial,
                             request,
+                            sub,
                             tab: r.tab,
                             fetch: fs,
                             hop: 0,
@@ -2655,7 +2848,7 @@ pub open spec fn fetch_style(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
                             partition: crate::domain::domain_of_renderer(rules, r),
                             ended: false,
                         };
-                        let (hop, out, end) = sub_actions(r.id, serial, request, 0, actions);
+                        let (hop, out, end) = sub_actions(start_ctx(fetch, sub, r.lock), r.id, serial, request, 0, actions);
                         let counts = set_subcount(s.subcounts, r.id, r.lock, serial + 1, in_document + 1);
                         let table = match end {
                             None => s.subfetches.push(SubFetch { hop, ..f }),
@@ -2697,7 +2890,7 @@ pub open spec fn sub_net(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns, s:
             let cred = credentialed(fetch, f.lock, f.fetch.url);
             let (fs, actions, ops) = clazel_fetch::transducer::spec::step(fetch.http, fetch.urls, f.fetch, input, subfetch_jar(fetch, s, f), s.now);
             let jar = if cred { apply_net_ops(rules, s.jar, ops) } else { s.jar };
-            let (h, out, end) = sub_actions(renderer, serial, f.request, hop, actions);
+            let (h, out, end) = sub_actions(sub_ctx(fetch, f), renderer, serial, f.request, hop, actions);
             let (table, outs) = sub_finish(s.subfetches, SubFetch { fetch: fs, hop: h, ..f }, out, end);
             (State { subfetches: table, jar, ..s }, outs)
         },
@@ -2729,7 +2922,7 @@ pub open spec fn sweep(s: State, fs: Seq<SubFetch>) -> (Seq<SubFetch>, Seq<Outpu
         if !subfetch_live(s, f) {
             (rest, close + out)
         } else if s.now >= f.started + subfetch_timeout() {
-            (rest, close + seq![Output::ToRenderer { id: f.renderer, bytes: style_failed_frame(f.request) }] + out)
+            (rest, close + seq![Output::ToRenderer { id: f.renderer, bytes: failed_frame(f.sub, f.request) }] + out)
         } else {
             (seq![f] + rest, out)
         }
@@ -2757,7 +2950,7 @@ pub open spec fn decode_renderer_frame(bytes: Seq<u8>) -> Option<clazel_ipc::mes
 /// is committed.
 pub open spec fn accepted_message(r: Renderer, bytes: Seq<u8>) -> Option<clazel_ipc::message::spec::Message> {
     match decode_renderer_frame(bytes) {
-        Some(m) => if (m is Display || m is Title || m is FetchStyle || m is Submit) && !r.committed { None } else { Some(m) },
+        Some(m) => if (m is Display || m is Title || m is FetchStyle || m is FetchSub || m is Submit) && !r.committed { None } else { Some(m) },
         None => None,
     }
 }
@@ -2830,7 +3023,7 @@ pub open spec fn handle_message(
         // Item 5.18: the renderer's title, kept for its `Paint`s.
         clazel_ipc::message::spec::Message::Title { title } => (State { titles: set_title(s.titles, r.id, r.lock, title), ..s }, seq![]),
         // Item 5.19.
-        clazel_ipc::message::spec::Message::FetchStyle { request, url } => fetch_style(rules, urls, fetch, s, r, request, url),
+        clazel_ipc::message::spec::Message::FetchStyle { .. } | clazel_ipc::message::spec::Message::FetchSub { .. } => fetch_sub_request(rules, urls, fetch, s, r, m),
         // A message a renderer may not send: unreachable, see
         // `decode_renderer_frame`.
         _ => (s, seq![]),
