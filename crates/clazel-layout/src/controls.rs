@@ -48,6 +48,11 @@
 //!   the caret). A `textarea` wraps at the character where the next one
 //!   would overflow, preferring the last space of the line, and scrolls
 //!   vertically so that the caret's line is the last one shown at most.
+//! - **A `textarea` holds one character fewer per row than its `cols`** when
+//!   the font's characters are as wide as the average (the text starts 2px
+//!   in and 2px are kept at the right, and `cols` characters fill the box
+//!   exactly), so soft wrapping on screen can break a row before a `wrap=hard`
+//!   submission would (listed; submission's wrapping is `clazel-forms`').
 //! - **A `password` field** draws one U+2022 BULLET per character, in the
 //!   field's font (the font may lack it: then its `.notdef` shows).
 //! - **The text's advance** per character is the sum of the advances of the

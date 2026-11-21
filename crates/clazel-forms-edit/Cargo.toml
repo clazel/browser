@@ -22,8 +22,8 @@ clazel-style = { path = "../clazel-style" }
 # (tests/*.rs only).
 [dev-dependencies]
 clazel-treebuilder = { path = "../clazel-treebuilder", version = "=0.0.0" }
-clazel-url = { path = "../clazel-url" }
-clazel-encoding = { path = "../clazel-encoding" }
+clazel-url = { path = "../clazel-url", version = "=0.0.0" }
+clazel-encoding = { path = "../clazel-encoding", version = "=0.0.0" }
 
 # Verification tier (docs/VERIFICATION.md). Tier 0: tests only; the policy's
 # tier for editing is 0 (phase-6.md 6.0(b)).
