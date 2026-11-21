@@ -1,0 +1,24 @@
+[package]
+name = "clazel-lir"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "LIR, the JIT's low-level IR shaped like WebAssembly (docs/phases/jit.md item J.5): syntax, typing and semantics. No back end and no front end exist yet."
+
+[dependencies]
+vstd = "=0.0.0-2026-10-04-0306"
+
+# Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
+# shipped code today: nothing, since this crate holds only the language's
+# definition (syntax, semantics, typing) and proofs about it. `target-tier` is
+# what jit.md's "Crates" table sets for the finished crate.
+[package.metadata.clazel]
+tier = 0
+target-tier = 2
+
+[package.metadata.verus]
+verify = true
+
+[lints]
+workspace = true

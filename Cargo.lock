@@ -436,6 +436,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "clazel-lir"
+version = "0.0.0"
+dependencies = [
+ "vstd",
+]
+
+[[package]]
 name = "clazel-mime"
 version = "0.0.0"
 dependencies = [
