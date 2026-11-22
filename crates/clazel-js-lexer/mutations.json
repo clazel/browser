@@ -51,6 +51,201 @@
         "lemma": "example_legacy_numeric_literals()",
         "witness": "!legacy_octal_integer_literal(seq![0x30u32, 0x31, 0x30], 0, 3)"
       }
+    },
+    {
+      "id": "white-space-drops-zwnbsp",
+      "file": "src/spec.rs",
+      "find": "|| s[i] == 0xFEFF",
+      "replace": "|| s[i] == 0xFEFE",
+      "expect": "killed",
+      "reason": "Drops <ZWNBSP> (U+FEFF) from WhiteSpace (§12.2): lemma_white_space_equiv, which equates white_space with the independent Annex A form, is false at U+FEFF.",
+      "certificate": {
+        "file": "src/equivalence.rs",
+        "lemma": "lemma_white_space_equiv(seq![0xFEFFu32], 0, 1)",
+        "witness": "!white_space(seq![0xFEFFu32], 0, 1)"
+      }
+    },
+    {
+      "id": "crlf-sequence-wrong-second-code-point",
+      "file": "src/spec.rs",
+      "find": "|| (j == i + 2 && s[i] == 0x000D && s[i + 1] == 0x000A))",
+      "replace": "|| (j == i + 2 && s[i] == 0x000D && s[i + 1] == 0x000B))",
+      "expect": "killed",
+      "reason": "LineTerminatorSequence (§12.3, alternative 5) wants <CR> then <VT> instead of <CR> <LF>, so CR LF would be two line terminators: lemma_line_terminator_sequence_equiv is false on CR LF over [0, 2).",
+      "certificate": {
+        "file": "src/equivalence.rs",
+        "lemma": "lemma_line_terminator_sequence_equiv(seq![0x0Du32, 0x0Au32], 0, 2)",
+        "witness": "!line_terminator_sequence(seq![0x0Du32, 0x0Au32], 0, 2)"
+      }
+    },
+    {
+      "id": "post-asterisk-allows-slash",
+      "file": "src/spec.rs",
+      "find": "(is_source_character(s[i]) && s[i] != 0x2F && s[i] != 0x2A",
+      "replace": "(is_source_character(s[i]) && s[i] != 0x2A",
+      "expect": "killed",
+      "reason": "PostAsteriskCommentChars (§12.4) stops excluding `/` after a `*`, so `*/` would no longer end a comment: lemma_comment_chars says a `/` right after `*` is not PostAsteriskCommentChars.",
+      "certificate": {
+        "file": "src/equivalence.rs",
+        "lemma": "lemma_comment_chars(seq![0x2Fu32], 0, 1)",
+        "witness": "post_asterisk_comment_chars(seq![0x2Fu32], 0, 1)"
+      }
+    },
+    {
+      "id": "digits-separator-needs-no-flag",
+      "file": "src/spec.rs",
+      "find": "|| (sep && i + 2 < j && s[j - 2] == 0x5F",
+      "replace": "|| (i + 2 < j && s[j - 2] == 0x5F",
+      "expect": "killed",
+      "reason": "Allows NumericLiteralSeparator in `Digits[~Sep]` (§12.9.3), so `1_1` would be plain DecimalDigits (and a CodePoint `\\u{1_1}`): lemma_plain_digits_equiv is false on 1_1.",
+      "certificate": {
+        "file": "src/equivalence.rs",
+        "lemma": "lemma_plain_digits_equiv(10, seq![0x31u32, 0x5Fu32, 0x31u32], 0, 3)",
+        "witness": "digits(10, false, seq![0x31u32, 0x5Fu32, 0x31u32], 0, 3)"
+      }
+    },
+    {
+      "id": "bigint-suffix-wrong-letter",
+      "file": "src/spec.rs",
+      "find": "nonempty(s, i, j) && i + 1 < j && s[j - 1] == 0x6E && (",
+      "replace": "nonempty(s, i, j) && i + 1 < j && s[j - 1] == 0x6D && (",
+      "expect": "killed",
+      "reason": "DecimalBigIntegerLiteral (§12.9.3) ends in `m` instead of `n` (BigIntLiteralSuffix): lemma_decimal_bigint_equiv is false on `1n`.",
+      "certificate": {
+        "file": "src/equivalence.rs",
+        "lemma": "lemma_decimal_bigint_equiv(seq![0x31u32, 0x6Eu32], 0, 2)",
+        "witness": "!decimal_big_integer_literal(seq![0x31u32, 0x6Eu32], 0, 2)"
+      }
+    },
+    {
+      "id": "exponent-indicator-drops-uppercase",
+      "file": "src/spec.rs",
+      "find": "nonempty(s, i, j) && (s[i] == 0x65 || s[i] == 0x45)",
+      "replace": "nonempty(s, i, j) && (s[i] == 0x65)",
+      "expect": "killed",
+      "reason": "ExponentIndicator (§12.9.3) loses `E`: lemma_exponent_equiv is false on `E1`.",
+      "certificate": {
+        "file": "src/equivalence.rs",
+        "lemma": "lemma_exponent_equiv(seq![0x45u32, 0x31u32], 0, 2)",
+        "witness": "!exponent_part(true, seq![0x45u32, 0x31u32], 0, 2)"
+      }
+    },
+    {
+      "id": "hex-prefix-drops-uppercase-x",
+      "file": "src/spec.rs",
+      "find": "((s[i + 1] == 0x78 || s[i + 1] == 0x58) && hex_digits(sep, s, i + 2, j))",
+      "replace": "((s[i + 1] == 0x78) && hex_digits(sep, s, i + 2, j))",
+      "expect": "killed",
+      "reason": "HexIntegerLiteral (§12.9.3) loses the `0X` prefix: lemma_non_decimal_equiv is false on `0X1`.",
+      "certificate": {
+        "file": "src/equivalence.rs",
+        "lemma": "lemma_non_decimal_equiv(seq![0x30u32, 0x58u32, 0x31u32], 0, 3)",
+        "witness": "!non_decimal_integer_literal(true, seq![0x30u32, 0x58u32, 0x31u32], 0, 3)"
+      }
+    },
+    {
+      "id": "identifier-start-drops-dollar",
+      "file": "src/spec.rs",
+      "find": "unicode_id_start(c) || c == 0x24 || c == 0x5F",
+      "replace": "unicode_id_start(c) || c == 0x5F",
+      "expect": "killed",
+      "reason": "IdentifierStartChar (§12.7) loses `$`: lemma_id_char_equiv, which equates it with UAX #31's Start, is false at U+0024.",
+      "certificate": {
+        "file": "src/equivalence.rs",
+        "lemma": "lemma_id_char_equiv(0x24u32)",
+        "witness": "!is_identifier_start_char(0x24u32)"
+      }
+    },
+    {
+      "id": "identifier-part-drops-digits",
+      "file": "src/spec.rs",
+      "find": "is_ascii_letter(c) || is_decimal_digit(c) || c == 0x5F",
+      "replace": "is_ascii_letter(c) || c == 0x5F",
+      "expect": "killed",
+      "reason": "UnicodeIDContinue (§12.7) loses the ASCII digits, so `a1` would end at `a`: lemma_id_char_equiv is false at U+0031.",
+      "certificate": {
+        "file": "src/equivalence.rs",
+        "lemma": "lemma_id_char_equiv(0x31u32)",
+        "witness": "!is_identifier_part_char(0x31u32)"
+      }
+    },
+    {
+      "id": "punctuators-drop-unsigned-right-shift-assign",
+      "file": "src/spec.rs",
+      "find": "seq!['>', '>', '>', '='], ",
+      "replace": "",
+      "expect": "killed",
+      "reason": "OtherPunctuator (§12.8) loses `>>>=`: the list has 52 entries, not the 53 that lemma_other_punctuators_len proves for the standard's list.",
+      "certificate": {
+        "file": "src/equivalence.rs",
+        "lemma": "lemma_other_punctuators_len()",
+        "witness": "other_punctuators().len() == 52"
+      }
+    },
+    {
+      "id": "reserved-words-drop-yield",
+      "file": "src/spec.rs",
+      "find": "        seq!['y', 'i', 'e', 'l', 'd'],\n",
+      "replace": "",
+      "expect": "killed",
+      "reason": "ReservedWord (§12.7.2) loses `yield`: the list has 37 words, but lemma_reserved_words_equiv equates it with the independent list of 38.",
+      "certificate": {
+        "file": "src/equivalence.rs",
+        "lemma": "lemma_reserved_words_equiv()",
+        "witness": "reserved_words().len() == 37"
+      }
+    },
+    {
+      "id": "string-escape-n-is-carriage-return",
+      "file": "src/spec.rs",
+      "find": "    } else if c == 0x6E {\n        0x000A\n",
+      "replace": "    } else if c == 0x6E {\n        0x000D\n",
+      "expect": "killed",
+      "reason": "The SV of `\\n` in a string (§12.9.4.2, Table 'String Single Character Escape Sequences') is <CR> instead of <LF>: example_single_escapes is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_single_escapes()",
+        "witness": "single_escape_code_unit(0x6Eu32) == 0x000Du16"
+      }
+    },
+    {
+      "id": "template-trv-crlf-stays-cr",
+      "file": "src/spec.rs",
+      "find": "        // <CR> <LF>: \"the code unit 0x000A (LINE FEED)\"\n        seq![0x000Au16]",
+      "replace": "        // <CR> <LF>: \"the code unit 0x000A (LINE FEED)\"\n        seq![0x000Du16]",
+      "expect": "killed",
+      "reason": "The TRV of <CR><LF> in a template (§12.9.6.2) is <CR> instead of <LF>: example_trv_crlf is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_trv_crlf()",
+        "witness": "line_terminator_sequence_trv(seq![0x0Du32, 0x0Au32], 0, 2)[0] == 0x000Du16"
+      }
+    },
+    {
+      "id": "regexp-non-terminator-allows-line-feed",
+      "file": "src/spec.rs",
+      "find": "pub open spec fn is_regexp_non_terminator(c: u32) -> bool {\n    is_not_line_terminator(c)",
+      "replace": "pub open spec fn is_regexp_non_terminator(c: u32) -> bool {\n    is_source_character(c)",
+      "expect": "killed",
+      "reason": "RegularExpressionNonTerminator (§12.9.5) accepts <LF>, so a regular expression literal could span lines: example_regexp_non_terminator is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_regexp_non_terminator()",
+        "witness": "is_regexp_non_terminator(0x000Au32)"
+      }
+    },
+    {
+      "id": "comments-are-not-trivia",
+      "file": "src/spec.rs",
+      "find": "|| kind == ElementKind::Comment || kind == ElementKind::HashbangComment",
+      "replace": "|| kind == ElementKind::HashbangComment",
+      "expect": "killed",
+      "reason": "A Comment would reach the syntactic grammar (§12: 'Comments behave like white space and are discarded'): example_trivia is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_trivia()",
+        "witness": "!is_trivia(ElementKind::Comment)"
+      }
     }
   ]
 }

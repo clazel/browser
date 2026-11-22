@@ -265,4 +265,48 @@ pub proof fn example_regexp_literal()
     }
 }
 
+
+/// §12.9.4.2 Table "String Single Character Escape Sequences": `\b` is
+/// U+0008, `\t` U+0009, `\n` U+000A, `\v` U+000B, `\f` U+000C, `\r`
+/// U+000D, and `\"` is `"`.
+pub proof fn example_single_escapes()
+    ensures
+        single_escape_code_unit(0x62u32) == 0x0008u16,
+        single_escape_code_unit(0x74u32) == 0x0009u16,
+        single_escape_code_unit(0x6Eu32) == 0x000Au16,
+        single_escape_code_unit(0x76u32) == 0x000Bu16,
+        single_escape_code_unit(0x66u32) == 0x000Cu16,
+        single_escape_code_unit(0x72u32) == 0x000Du16,
+        single_escape_code_unit(0x22u32) == 0x0022u16,
+{
+}
+
+/// §12.9.6.2: the TRV of `<CR><LF>` is the one code unit `<LF>`.
+pub proof fn example_trv_crlf()
+    ensures
+        line_terminator_sequence_trv(seq![0x0Du32, 0x0Au32], 0, 2) =~= seq![0x000Au16],
+{
+}
+
+/// §12.9.5: a `RegularExpressionNonTerminator` is a `SourceCharacter` but
+/// not a `LineTerminator`: `a` is one, <LF> is not.
+pub proof fn example_regexp_non_terminator()
+    ensures
+        is_regexp_non_terminator(0x61u32),
+        !is_regexp_non_terminator(0x000Au32),
+{
+}
+
+/// §12: comments, white space and line terminators are discarded by the
+/// syntactic grammar; an identifier is not.
+pub proof fn example_trivia()
+    ensures
+        is_trivia(ElementKind::WhiteSpace),
+        is_trivia(ElementKind::LineTerminator),
+        is_trivia(ElementKind::Comment),
+        is_trivia(ElementKind::HashbangComment),
+        !is_trivia(ElementKind::IdentifierName),
+{
+}
+
 } // verus!
