@@ -53,16 +53,26 @@
 //!    crate's source ([`source_hash`]), so every change is audited;
 //! 10. a **code entry** (jit.md J.0(a), decision E1) is the one call that runs
 //!     generated code, in the files of [`CODE_ENTRY_FILES`] only (`enter.rs`). It is
-//!     an `unsafe` block holding exactly `(std::mem::transmute::<usize, unsafe
-//!     extern "ABI" fn(*mut u8, usize)>(stub))(ctx, entry)`, with `ABI` one of
-//!     [`CODE_ENTRY_ABIS`] (one block per ABI), and the `// SAFETY:` comment above it
-//!     cites a man page (or `docs <Function>`) like any other. `stub` is the base
-//!     address of a region the crate mapped and checked to start with its own enter
-//!     stub, so the function called is that fixed stub, which meets the platform ABI
-//!     and calls the validated blob; `transmute` is rejected everywhere else. What
-//!     the checker cannot see, and the audit must: that the stub's bytes are right
-//!     for the ABI, and that the entry is checked against the region before the
-//!     block.
+//!     an `unsafe` block whose whole body is the one expression statement
+//!     `(std::mem::transmute::<usize, unsafe extern "ABI" fn(*mut u8, usize,
+//!     usize)>(stub))(ctx, entry, len)` (no `let`, no other statement, no
+//!     condition or loop around it, and at most a closing `;`), with `ABI` one of
+//!     [`CODE_ENTRY_ABIS`], once per ABI in the file. The block is the whole body
+//!     of `fn run(stub: usize, ctx: *mut u8, entry: usize, len: usize)`, which
+//!     returns nothing, so `stub`, `ctx`, `entry` and `len` are that function's
+//!     parameters and nothing computed in or before the block. The `// SAFETY:`
+//!     comment above the block cites a man page (or `docs <Function>`) like any
+//!     other. `stub` is the base address of a region the crate mapped and checked
+//!     to start with its own enter stub, so the function called is that fixed
+//!     stub, which meets the platform ABI and calls the validated blob;
+//!     `transmute` is rejected everywhere else. What the checker cannot see, and
+//!     the audit must: that the stub's bytes are right for the ABI, that the
+//!     caller of `run` passes the region's base and length, and that the entry is
+//!     checked against the region before the block;
+//! 11. only the crates of [`CODE_USERS`] (`clazel-codecheck`, `clazel-jit`) may
+//!     name the code-region API of `clazel-sys` ([`CODE_NAMES`] and `enter`), so
+//!     only they can build a `Validated` entry, write code or run it
+//!     ([`code_use_violations`]).
 //!
 //! And the README's memory-safety sentence states the measured `unsafe` count
 //! ([`readme_problems`]).
@@ -417,6 +427,16 @@ pub const DISPATCH_CASTS: &[(&str, &[&str])] = &[
 /// The files that may contain a **code entry** (rule 10): the one place the crate
 /// calls generated code (jit.md J.0(a), decision E1).
 pub const CODE_ENTRY_FILES: &[&str] = &["crates/clazel-sys/src/enter.rs"];
+
+/// The crates that may name the code-region API of `clazel-sys` (rule 11):
+/// `clazel-codecheck`, which builds a `Validated` from an entry it checked, and
+/// `clazel-jit`, which owns the regions, writes validated blobs and enters them.
+/// Neither exists as a user yet.
+pub const CODE_USERS: &[&str] = &["clazel-codecheck", "clazel-jit"];
+
+/// The types of the code-region API (`enter` is the function; see
+/// [`code_use_violations`]).
+const CODE_NAMES: &[&str] = &["Validated", "CodeWriter", "CodeRegion", "SharedCode"];
 
 /// The ABIs a code entry may be written with: x86-64 System V, x86-64 Windows,
 /// and AArch64 (`"C"`, which is AAPCS64 there). The enter stub of
@@ -797,6 +817,11 @@ pub struct File {
     pub vtable_calls: usize,
     /// Code entries (rule 10), each in its own `unsafe` block.
     pub code_entries: usize,
+    /// The ABIs of the code entries found, so that each is written once.
+    code_entry_abis: Vec<&'static str>,
+    /// Where the body of each `fn run` of a code-entry file starts (the first
+    /// token's line and column), so a block is known to be a whole body.
+    run_bodies: Vec<(usize, usize)>,
     /// Whether this file may contain a code entry ([`CODE_ENTRY_FILES`]).
     code_entry_allowed: bool,
     /// The foreign functions this file may use.
@@ -889,13 +914,20 @@ fn walk(tokens: &[TokenTree], mut block: Option<&mut Block>, lines: &[&str], fil
                     k = vtable_decl(tokens, k, slots, file);
                     continue;
                 }
+                if name == "fn"
+                    && file.code_entry_allowed
+                    && let Some(TokenTree::Ident(n)) = next
+                    && *n == "run"
+                {
+                    check_run_signature(tokens, k, file);
+                }
                 if name == "transmute" || name == "transmute_copy" {
                     flag(
                         file,
                         line,
                         format!(
                             "`{name}` is only allowed as the cast of a dispatcher in a listed \
-                             `const` (see xtask/src/sys.rs)"
+                             `const` or as a code entry (see xtask/src/sys.rs)"
                         ),
                     );
                 }
@@ -927,8 +959,40 @@ fn walk(tokens: &[TokenTree], mut block: Option<&mut Block>, lines: &[&str], fil
                         && g.delimiter() == Delimiter::Brace
                     {
                         require_safety_comment(lines, line, file);
-                        let mut inner = Block { calls: Vec::new() };
                         let body: Vec<TokenTree> = g.stream().into_iter().collect();
+                        if file.code_entry_allowed
+                            && let Some(abi) = code_entry_abi(&body)
+                        {
+                            // A code entry (rule 10): the whole body is the one
+                            // call, and the block is the whole body of its function.
+                            let starts = tokens.first().map(|t| {
+                                let at = t.span().start();
+                                (at.line, at.column)
+                            });
+                            let whole_body = k == 0
+                                && tokens.len() == 2
+                                && starts.is_some_and(|at| file.run_bodies.contains(&at));
+                            if !whole_body {
+                                flag(
+                                    file,
+                                    line,
+                                    "a code entry must be the whole body of its function, \
+                                     with nothing before it",
+                                );
+                            }
+                            if file.code_entry_abis.contains(&abi) {
+                                flag(
+                                    file,
+                                    line,
+                                    format!("a second code entry for the ABI \"{abi}\""),
+                                );
+                            }
+                            file.code_entry_abis.push(abi);
+                            file.code_entries = file.code_entries.saturating_add(1);
+                            k = k.saturating_add(2);
+                            continue;
+                        }
+                        let mut inner = Block { calls: Vec::new() };
                         walk(&body, Some(&mut inner), lines, file);
                         if inner.calls.len() != 1 {
                             flag(
@@ -1052,15 +1116,6 @@ fn walk(tokens: &[TokenTree], mut block: Option<&mut Block>, lines: &[&str], fil
             {
                 // `(expr)(args)` in an `unsafe` block: a call through a pointer.
                 // The one accepted form is a vtable call (rule 8).
-                if let Some(TokenTree::Group(args)) = next
-                    && let Some(b) = block.as_deref_mut()
-                    && file.code_entry_allowed
-                    && code_entry_call(callee, args, b, file)
-                {
-                    // The callee and the arguments are fixed tokens, checked whole.
-                    k = k.saturating_add(2);
-                    continue;
-                }
                 if let Some(TokenTree::Group(args)) = next
                     && let Some(b) = block.as_deref_mut()
                     && vtable_call(callee, args, line, b, file)
@@ -1188,42 +1243,221 @@ fn vtable_call(
     true
 }
 
-/// A **code entry** (rule 10), inside an `unsafe` block of a file in
-/// [`CODE_ENTRY_FILES`]: `callee` is the first group and `args` the second of
-/// exactly
+/// A **code entry** (rule 10): the body of an `unsafe` block that is exactly
 ///
 /// ```text
-/// (std::mem::transmute::<usize, unsafe extern "ABI" fn(*mut u8, usize)>(stub))(ctx, entry)
+/// (std::mem::transmute::<usize, unsafe extern "ABI" fn(*mut u8, usize, usize)>(stub))(ctx, entry, len)
 /// ```
 ///
-/// with `ABI` one of [`CODE_ENTRY_ABIS`]. True, and counted as the block's one
-/// call, if it is exactly that (compared with whitespace removed); false, and
-/// not flagged here, otherwise (the caller then treats it as any other call
-/// through an expression). The fixed names are the point: the address called is
-/// a `usize` named `stub`, the first address of a region the crate mapped and
-/// checked, never one computed in the block, and the arguments are two plain
-/// variables, so the block holds no expression.
-fn code_entry_call(callee: &Group, args: &Group, block: &mut Block, file: &mut File) -> bool {
+/// as two parenthesized groups, with at most a closing `;` after them and
+/// nothing before them, `ABI` one of [`CODE_ENTRY_ABIS`]. The ABI, if it is
+/// that (compared with whitespace removed); `None` otherwise, which leaves the
+/// block to the ordinary rules (and the `transmute` in it is then rejected).
+/// The fixed names are the point: the address called is a `usize` named `stub`,
+/// the first address of a region the crate mapped and checked, never one
+/// computed in the block, and the arguments are three plain variables, so the
+/// block holds no expression and no other statement.
+fn code_entry_abi(body: &[TokenTree]) -> Option<&'static str> {
     let squash = |ts: TokenStream| -> String {
         ts.to_string()
             .chars()
             .filter(|c| !c.is_whitespace())
             .collect()
     };
-    let callee = squash(callee.stream());
-    let args = squash(args.stream());
-    let matches = args == "ctx,entry"
-        && CODE_ENTRY_ABIS.iter().any(|abi| {
-            callee
-                == format!(
-                    "std::mem::transmute::<usize,unsafeextern\"{abi}\"fn(*mutu8,usize)>(stub)"
-                )
-        });
-    if matches {
-        block.calls.push("code entry".to_owned());
-        file.code_entries = file.code_entries.saturating_add(1);
+    let shaped = match body {
+        [TokenTree::Group(a), TokenTree::Group(b)] => Some((a, b)),
+        [
+            TokenTree::Group(a),
+            TokenTree::Group(b),
+            TokenTree::Punct(p),
+        ] if p.as_char() == ';' => Some((a, b)),
+        _ => None,
+    };
+    let (callee, args) = shaped?;
+    if callee.delimiter() != Delimiter::Parenthesis || args.delimiter() != Delimiter::Parenthesis {
+        return None;
     }
-    matches
+    // rustfmt adds a trailing comma when it breaks the call over lines.
+    if !matches!(
+        squash(args.stream()).as_str(),
+        "ctx,entry,len" | "ctx,entry,len,"
+    ) {
+        return None;
+    }
+    let callee = squash(callee.stream());
+    CODE_ENTRY_ABIS.iter().copied().find(|abi| {
+        callee
+            == format!(
+                "std::mem::transmute::<usize,unsafeextern\"{abi}\"fn(*mutu8,usize,usize)>(stub)"
+            )
+    })
+}
+
+/// In a code-entry file, `fn run` at `k` must be exactly
+/// `fn run(stub: usize, ctx: *mut u8, entry: usize, len: usize) { .. }`: no
+/// return type, so the four names the code entry uses are its parameters.
+fn check_run_signature(tokens: &[TokenTree], k: usize, file: &mut File) {
+    let line = tokens.get(k).map_or(0, line_of);
+    let params = match tokens.get(k.saturating_add(2)) {
+        Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Parenthesis => g
+            .stream()
+            .to_string()
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .collect::<String>(),
+        _ => String::new(),
+    };
+    let has_body = matches!(
+        tokens.get(k.saturating_add(3)),
+        Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Brace
+    );
+    if let Some(TokenTree::Group(body)) = tokens.get(k.saturating_add(3))
+        && let Some(first) = body.stream().into_iter().next()
+    {
+        let at = first.span().start();
+        file.run_bodies.push((at.line, at.column));
+    }
+    if params != "stub:usize,ctx:*mutu8,entry:usize,len:usize" || !has_body {
+        flag(
+            file,
+            line,
+            "`fn run` of a code-entry file must be `fn run(stub: usize, ctx: *mut u8, entry: \
+             usize, len: usize)` with no return type",
+        );
+    }
+}
+
+/// Rule 11: in a source file of a crate that is not in [`CODE_USERS`], the
+/// violations as (1-based line, what). A file is judged only if it names
+/// `clazel_sys`. It must not name a type of [`CODE_NAMES`]; name `enter`
+/// through a path that starts at `clazel_sys` or at a name it was imported as
+/// (`use clazel_sys as sys;`, then `sys::enter`); import `enter` in a `use`
+/// statement that starts there; or glob import `clazel_sys` (`use
+/// clazel_sys::*`), which would bring `enter` in by a bare name. Another
+/// crate's `enter` (`clazel_renderer::sandbox::enter`) is not the API.
+pub fn code_use_violations(source: &str) -> Result<Vec<(usize, String)>, String> {
+    let stream: TokenStream = source
+        .parse()
+        .map_err(|e: proc_macro2::LexError| format!("cannot tokenize: {e}"))?;
+    let tokens: Vec<TokenTree> = stream.into_iter().collect();
+    let mut out = Vec::new();
+    if mentions_ident(&tokens, "clazel_sys") {
+        let mut names = vec!["clazel_sys".to_owned()];
+        collect_sys_aliases(&tokens, &mut names);
+        scan_code_use(&tokens, (false, false), &names, &mut out);
+    }
+    out.sort();
+    Ok(out)
+}
+
+/// Whether the identifier `name` occurs anywhere in `tokens`.
+fn mentions_ident(tokens: &[TokenTree], name: &str) -> bool {
+    tokens.iter().any(|tt| match tt {
+        TokenTree::Ident(i) => *i == name,
+        TokenTree::Group(g) => mentions_ident(&g.stream().into_iter().collect::<Vec<_>>(), name),
+        _ => false,
+    })
+}
+
+/// The names `clazel_sys` is imported as: `X` in each `clazel_sys as X`.
+fn collect_sys_aliases(tokens: &[TokenTree], names: &mut Vec<String>) {
+    for (i, tt) in tokens.iter().enumerate() {
+        match tt {
+            TokenTree::Ident(id)
+                if *id == "clazel_sys"
+                    && ident_is(tokens.get(i.saturating_add(1)), "as")
+                    && let Some(TokenTree::Ident(alias)) = tokens.get(i.saturating_add(2)) =>
+            {
+                names.push(alias.to_string());
+            }
+            TokenTree::Group(g) => {
+                let body: Vec<TokenTree> = g.stream().into_iter().collect();
+                collect_sys_aliases(&body, names);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Whether the path that ends at `tokens[i]` (`a::b::name`) starts at one of
+/// `names`.
+fn path_starts_at(tokens: &[TokenTree], i: usize, names: &[String]) -> bool {
+    let mut at = i;
+    let mut root = None;
+    // Walk back over `ident ::` pairs (and a leading `::`).
+    while let Some(c2) = at.checked_sub(1).and_then(|j| tokens.get(j))
+        && is_punct(Some(c2), ':')
+        && let Some(c1) = at.checked_sub(2).and_then(|j| tokens.get(j))
+        && is_punct(Some(c1), ':')
+    {
+        match at.checked_sub(3).and_then(|j| tokens.get(j)) {
+            Some(TokenTree::Ident(seg)) => {
+                root = Some(seg.to_string());
+                at = at.saturating_sub(3);
+            }
+            _ => break,
+        }
+    }
+    root.is_some_and(|r| names.contains(&r))
+}
+
+/// [`code_use_violations`]'s walk. `state` is (a `use` statement is open, it
+/// starts at `clazel_sys` or an alias); `names` is `clazel_sys` and its aliases.
+fn scan_code_use(
+    tokens: &[TokenTree],
+    state: (bool, bool),
+    names: &[String],
+    out: &mut Vec<(usize, String)>,
+) {
+    let (mut in_use, mut sys_use) = state;
+    for (i, tt) in tokens.iter().enumerate() {
+        let before = |n: usize| i.checked_sub(n).and_then(|j| tokens.get(j));
+        match tt {
+            TokenTree::Ident(id) => {
+                let name = id.to_string();
+                if name == "use" {
+                    in_use = true;
+                    let first = match tokens.get(i.saturating_add(1)) {
+                        Some(TokenTree::Punct(p)) if p.as_char() == ':' => {
+                            tokens.get(i.saturating_add(3))
+                        }
+                        other => other,
+                    };
+                    sys_use = matches!(first, Some(TokenTree::Ident(f)) if names.contains(&f.to_string()));
+                }
+                if CODE_NAMES.contains(&name.as_str()) {
+                    out.push((
+                        line_of(tt),
+                        format!("`{name}` is the code-region API of `clazel-sys`"),
+                    ));
+                }
+                if name == "enter" && ((in_use && sys_use) || path_starts_at(tokens, i, names)) {
+                    out.push((
+                        line_of(tt),
+                        "`enter` is the code-region API of `clazel-sys`".to_owned(),
+                    ));
+                }
+            }
+            TokenTree::Punct(p) if p.as_char() == ';' => {
+                in_use = false;
+                sys_use = false;
+            }
+            TokenTree::Punct(p)
+                if p.as_char() == '*' && in_use && sys_use && is_punct(before(1), ':') =>
+            {
+                out.push((
+                    line_of(tt),
+                    "a glob import of `clazel_sys` would bring `enter` in by its bare name"
+                        .to_owned(),
+                ));
+            }
+            TokenTree::Group(g) => {
+                let body: Vec<TokenTree> = g.stream().into_iter().collect();
+                scan_code_use(&body, (in_use, sys_use), names, out);
+            }
+            _ => {}
+        }
+    }
 }
 
 /// `pub(crate)`: the two tokens.
@@ -2606,16 +2840,22 @@ mod tests {
 
     const ENTER_FILE: &str = "crates/clazel-sys/src/enter.rs";
 
+    /// A `run` function whose body is `body`, with the signature the checker
+    /// requires.
+    fn run_fn(body: &str) -> String {
+        format!("fn run(stub: usize, ctx: *mut u8, entry: usize, len: usize) {{\n{body}\n}}\n")
+    }
+
+    /// The accepted shape: a comment, then the block as the whole body.
     fn entry_src(call: &str) -> String {
-        format!(
-            "fn run(stub: usize, ctx: *mut u8, entry: usize) {{\n    \
-             // SAFETY: man 2 mmap; the stub's ABI.\n    unsafe {{ {call} }}\n}}\n"
-        )
+        run_fn(&format!(
+            "    // SAFETY: man 2 mmap; the stub's ABI.\n    unsafe {{ {call} }}"
+        ))
     }
 
     fn entry(abi: &str) -> String {
         format!(
-            "(std::mem::transmute::<usize, unsafe extern \"{abi}\" fn(*mut u8, usize)>(stub))(ctx, entry)"
+            "(std::mem::transmute::<usize, unsafe extern \"{abi}\" fn(*mut u8, usize, usize)>(stub))(ctx, entry, len)"
         )
     }
 
@@ -2626,6 +2866,33 @@ mod tests {
             assert_eq!(f.violations, Vec::new(), "{abi}");
             assert_eq!(f.code_entries, 1, "{abi}");
         }
+        // A closing semicolon is the same statement.
+        let f = check_source(ENTER_FILE, &entry_src(&format!("{};", entry("C"))))?;
+        assert_eq!(f.violations, Vec::new());
+        assert_eq!(f.code_entries, 1);
+        Ok(())
+    }
+
+    #[test]
+    fn the_three_entries_of_the_enter_file_are_one_per_abi() -> Result<(), String> {
+        let all: String = ["sysv64", "win64", "C"]
+            .iter()
+            .map(|abi| entry_src(&entry(abi)))
+            .collect();
+        let f = check_source(ENTER_FILE, &all)?;
+        assert_eq!(f.violations, Vec::new());
+        assert_eq!(f.code_entries, 3);
+        // The same ABI twice is rejected.
+        let twice = format!(
+            "{}{}",
+            entry_src(&entry("sysv64")),
+            entry_src(&entry("sysv64"))
+        );
+        assert!(
+            violations_in(ENTER_FILE, &twice)?
+                .iter()
+                .any(|m| m.contains("a second code entry for the ABI \"sysv64\""))
+        );
         Ok(())
     }
 
@@ -2642,32 +2909,98 @@ mod tests {
 
     #[test]
     fn planted_code_entries_that_differ_are_rejected() -> Result<(), String> {
+        let good = entry("sysv64");
         let bad = [
             // Another ABI, another signature, another name, another call shape.
             entry("stdcall"),
-            entry("sysv64").replace("*mut u8, usize", "*mut u8, usize, usize"),
-            entry("sysv64").replace("(stub)", "(stub + 8)"),
-            entry("sysv64").replace("usize,", "u64,"),
-            entry("sysv64").replace("(ctx, entry)", "(ctx, entry, 1)"),
-            entry("sysv64").replace("(ctx, entry)", "(ctx, entry + 1)"),
-            entry("sysv64").replace("fn(*mut u8, usize)", "fn(*mut u8, usize) -> u64"),
-            "(std::mem::transmute::<usize, unsafe extern \"sysv64\" fn(*mut u8, usize)>(other))(ctx, entry)"
+            good.replace("*mut u8, usize, usize", "*mut u8, usize"),
+            good.replace("*mut u8, usize, usize", "*mut u8, usize, usize, usize"),
+            good.replace("(stub)", "(stub + 8)"),
+            good.replace("usize,", "u64,"),
+            good.replace("(ctx, entry, len)", "(ctx, entry)"),
+            good.replace("(ctx, entry, len)", "(ctx, entry, len, 1)"),
+            good.replace("(ctx, entry, len)", "(ctx, entry + 1, len)"),
+            good.replace("usize)>(stub)", "usize) -> u64>(stub)"),
+            good.replace("(stub)", "(other)"),
+            "(std::mem::transmute::<usize, unsafe fn(*mut u8, usize, usize)>(stub))(ctx, entry, len)"
                 .to_owned(),
-            "(std::mem::transmute::<usize, unsafe fn(*mut u8, usize)>(stub))(ctx, entry)".to_owned(),
-            "(std::mem::transmute(stub))(ctx, entry)".to_owned(),
-            "(std::mem::transmute_copy::<usize, unsafe extern \"sysv64\" fn(*mut u8, usize)>(&stub))(ctx, entry)"
+            "(std::mem::transmute(stub))(ctx, entry, len)".to_owned(),
+            "(std::mem::transmute_copy::<usize, unsafe extern \"sysv64\" fn(*mut u8, usize, usize)>(&stub))(ctx, entry, len)"
                 .to_owned(),
             // The pointer made elsewhere, then called.
-            "let g = std::mem::transmute::<usize, unsafe extern \"sysv64\" fn(*mut u8, usize)>(stub); g(ctx, entry)"
+            "let g = std::mem::transmute::<usize, unsafe extern \"sysv64\" fn(*mut u8, usize, usize)>(stub); g(ctx, entry, len)"
                 .to_owned(),
+            // The arguments or the address rebound before the call, in the block.
+            format!("let stub = stub + 8; {good}"),
+            format!("let stub = ctx as usize; {good}"),
+            format!("let stub = entry; {good}"),
+            format!("let entry = 0usize; {good}"),
+            format!("let len = 0usize; {good}"),
+            format!("{good}; let _x = stub + 1"),
+            format!("{good}; libc::prctl(1)"),
+            // Inside a condition or a loop.
+            format!("if len > 0 {{ {good} }}"),
+            format!("loop {{ {good} }}"),
+            format!("while len > 1 {{ {good} }}"),
+            // A second argument list: the result of the call is called.
+            format!("{good}(ctx, entry, len)"),
+            format!("{good}(ctx, entry)"),
         ];
         for call in bad {
-            let v = violations_in(ENTER_FILE, &entry_src(&call))?;
+            let src = entry_src(&call);
+            let v = violations_in(ENTER_FILE, &src)?;
             assert!(!v.is_empty(), "accepted: {call}");
-            assert_eq!(
-                check_source(ENTER_FILE, &entry_src(&call))?.code_entries,
-                0,
-                "{call}"
+            assert_eq!(check_source(ENTER_FILE, &src)?.code_entries, 0, "{call}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn a_code_entry_must_be_the_whole_body_of_its_function() -> Result<(), String> {
+        let good = entry("sysv64");
+        let cases = [
+            // Rebinding before the block, outside it.
+            run_fn(&format!(
+                "    let stub = stub + 8;\n    // SAFETY: man 2 mmap.\n    unsafe {{ {good} }}"
+            )),
+            run_fn(&format!(
+                "    let stub = ctx as usize;\n    // SAFETY: man 2 mmap.\n    unsafe {{ {good} }}"
+            )),
+            run_fn(&format!(
+                "    let entry = 0usize;\n    // SAFETY: man 2 mmap.\n    unsafe {{ {good} }}"
+            )),
+            // Something after the block.
+            run_fn(&format!(
+                "    // SAFETY: man 2 mmap.\n    unsafe {{ {good} }}\n    let _ = 1;"
+            )),
+            // Under a condition outside the block.
+            run_fn(&format!(
+                "    if len > 0 {{\n    // SAFETY: man 2 mmap.\n    unsafe {{ {good} }}\n    }}"
+            )),
+        ];
+        for src in cases {
+            let v = violations_in(ENTER_FILE, &src)?;
+            assert!(!v.is_empty(), "accepted: {src}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn the_run_signature_is_fixed() -> Result<(), String> {
+        let good = entry("sysv64");
+        let body = format!("    // SAFETY: man 2 mmap.\n    unsafe {{ {good} }}");
+        for sig in [
+            "fn run(stub: usize, ctx: *mut u8, entry: usize)",
+            "fn run(stub: u64, ctx: *mut u8, entry: usize, len: usize)",
+            "fn run(ctx: *mut u8, stub: usize, entry: usize, len: usize)",
+            "fn run(stub: usize, ctx: *mut u8, entry: usize, len: usize) -> u64",
+        ] {
+            let src = format!("{sig} {{\n{body}\n}}\n");
+            let v = violations_in(ENTER_FILE, &src)?;
+            assert!(
+                v.iter()
+                    .any(|m| m.contains("`fn run` of a code-entry file")),
+                "accepted: {sig}"
             );
         }
         Ok(())
@@ -2676,31 +3009,72 @@ mod tests {
     #[test]
     fn a_code_entry_needs_its_own_block_and_comment() -> Result<(), String> {
         let call = entry("sysv64");
-        let no_comment = format!(
-            "fn run(stub: usize, ctx: *mut u8, entry: usize) {{\n    unsafe {{ {call} }}\n}}\n"
-        );
+        let no_comment = run_fn(&format!("    unsafe {{ {call} }}"));
         assert!(
             violations_in(ENTER_FILE, &no_comment)?
                 .iter()
                 .any(|m| m.contains("without a `// SAFETY:` comment"))
         );
-        let two = entry_src(&format!("{call}; {call}"));
-        assert!(
-            violations_in(ENTER_FILE, &two)?
-                .iter()
-                .any(|m| m.contains("exactly one foreign call, found 2"))
-        );
-        let with_other = entry_src(&format!("{call}; libc::prctl(1)"));
-        assert!(!violations_in(ENTER_FILE, &with_other)?.is_empty());
         // Outside an `unsafe` block it is just a call through an expression.
-        let outside = format!(
-            "fn run(stub: usize, ctx: *mut u8, entry: usize) {{ {} }}",
-            entry("sysv64")
-        );
+        let outside = run_fn(&format!("    {}", entry("sysv64")));
         assert!(
             violations_in(ENTER_FILE, &outside)?
                 .iter()
                 .any(|m| m.contains("`transmute` is only allowed"))
+        );
+        Ok(())
+    }
+
+    // ------------------------------------------------------- code-region users
+
+    #[test]
+    fn rule_11_flags_the_code_region_api_outside_the_listed_crates() -> Result<(), String> {
+        let bad = [
+            "use clazel_sys::Validated;\nfn f() -> Validated { Validated::new(0) }",
+            "fn f() { let _ = clazel_sys::Validated::new(256); }",
+            "use clazel_sys::{CodeWriter, Errno};",
+            "use clazel_sys as sys;\nfn f(r: &sys::CodeRegion) {}",
+            "fn f(s: &clazel_sys::SharedCode) {}",
+            "fn f() { let _ = clazel_sys::enter(&r, e, &mut c); }",
+            "use clazel_sys as sys;\nfn f() { let _ = sys::enter(&r, e, &mut c); }",
+            "use clazel_sys::enter;\nfn f() { enter(&r, e, &mut c); }",
+            "use clazel_sys::{enter, Errno};",
+            "use ::clazel_sys::enter;",
+            "use clazel_sys::*;\nfn f() { enter(&r, e, &mut c); }",
+        ];
+        for src in bad {
+            assert!(
+                !super::code_use_violations(src)?.is_empty(),
+                "accepted: {src}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn rule_11_leaves_other_uses_of_clazel_sys_and_other_enters_alone() -> Result<(), String> {
+        let fine = [
+            "use clazel_sys::Errno;\nfn f(e: Errno) {}",
+            "use clazel_sys::{fill_random, Process};",
+            // No mention of `clazel_sys`: a different `enter` or `Validated`.
+            "struct Validated; fn enter() {} fn f() { enter(); let _ = Validated; }",
+            // A method named `enter`.
+            "use clazel_sys::Errno;\nfn f(s: &S) { s.enter(); }",
+        ];
+        for src in fine {
+            let v = super::code_use_violations(src)?;
+            assert!(v.is_empty(), "flagged: {src}: {v:?}");
+        }
+        // Another crate's `enter` is not the API, with or without a `use`.
+        for src in [
+            "use clazel_sys::Errno;\nuse other::enter;\nfn f() { enter(); }",
+            "use clazel_sys::Errno;\nfn f() { clazel_renderer::sandbox::enter(); }",
+        ] {
+            assert!(super::code_use_violations(src)?.is_empty(), "{src}");
+        }
+        assert!(
+            !super::code_use_violations("use clazel_sys::Errno;\nuse clazel_sys::enter;")?
+                .is_empty()
         );
         Ok(())
     }

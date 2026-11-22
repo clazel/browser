@@ -208,6 +208,18 @@ pub fn scan_crate(c: &Crate) -> Result<CrateScan, String> {
                 ));
             }
         }
+        if !sys_crate && !sys::CODE_USERS.contains(&c.name.as_str()) {
+            let found = sys::code_use_violations(&source)
+                .map_err(|e| format!("{}: {e}", file.display()))?;
+            for (line, what) in found {
+                result.violations.push(format!(
+                    "{}:{line}: code-region API (xtask/src/sys.rs rule 11): {what}; only {} \
+                     may use it",
+                    relative(&file),
+                    sys::CODE_USERS.join(" and ")
+                ));
+            }
+        }
         let in_axioms_file = file.file_name().is_some_and(|n| n == "axioms.rs");
         let lines: Vec<&str> = source.lines().collect();
         for f in scanned.findings {
