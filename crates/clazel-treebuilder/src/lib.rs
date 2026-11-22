@@ -9,7 +9,8 @@
 //! - [`invariant`]: `parser_wf`, the invariant of reachable parser states.
 //! - [`contract`]: what the executable parser is proven to satisfy.
 //! - [`host`]: the invariants that rule out a cycle through a template's
-//!   host in the document.
+//!   host in the document, and `theorem_reachable_host_acyclic`: every
+//!   reachable parser's document is `clazel_dom::spec::host_acyclic`.
 //! - [`independent`]: a second transcription of the insertion modes, from
 //!   the W3C's HTML 5.2, proven equal where the documents agree.
 //! - [`termination`]: `theorem_dispatch_total`, reprocessing ends.

@@ -51,7 +51,9 @@ pub proof fn lemma_to_mode(p: Parser, q1: Parser, m: Mode)
         m == Mode::InCell && p.mode != Mode::InCell && !q1.stopped ==> cell_scoped(q1.open),
     ensures
         next_core(Outcome::Done(Parser { mode: m, ..q1 })),
+        host_next(p, Outcome::Done(Parser { mode: m, ..q1 })),
         next_core(Outcome::Reprocess(Parser { mode: m, ..q1 }, Tok::Eof)),
+        host_next(p, Outcome::Reprocess(Parser { mode: m, ..q1 }, Tok::Eof)),
 {
     if !q1.stopped {
         lemma_finish(p, q1, Parser { mode: m, ..q1 });
@@ -77,6 +79,7 @@ pub proof fn lemma_reset_outcome(p: Parser, p1: Parser)
         !p1.stopped,
     ensures
         next_core(Outcome::Done(reset_insertion_mode(p1))),
+        host_next(p, Outcome::Done(reset_insertion_mode(p1))),
         reset_insertion_mode(p1).stopped || reach_core(reset_insertion_mode(p1)),
 {
     assert(crate::termination::helpers_ranking::count_ok(p1));
@@ -90,6 +93,7 @@ pub proof fn lemma_without_foster(o: Outcome)
         next_core(o),
     ensures
         next_core(outcome_without_foster(o)),
+        host_inv(outcome_parser(outcome_without_foster(o))) == host_inv(outcome_parser(o)),
 {
 }
 
@@ -116,6 +120,7 @@ pub proof fn lemma_foster_in_head(env: EncFns, p: Parser, t: Tok)
         mode_in_body(env, p, t)->Using_0 == Mode::InHead,
     ensures
         next_core(outcome_without_foster(mode_in_head(env, mode_in_body(env, p, t)->Using_1, mode_in_body(env, p, t)->Using_2))),
+        host_next(p, outcome_without_foster(mode_in_head(env, mode_in_body(env, p, t)->Using_1, mode_in_body(env, p, t)->Using_2))),
 {
     hide(in_body_start_tag);
     hide(in_body_end_tag);
@@ -151,6 +156,7 @@ pub proof fn lemma_in_table_anything_else_reach(env: EncFns, p: Parser, t: Tok)
         !(t is Eof),
     ensures
         next_core(in_table_anything_else(env, p, t)),
+        host_next(p, in_table_anything_else(env, p, t)),
 {
     hide(mode_in_body);
     hide(mode_in_head);
@@ -224,6 +230,7 @@ pub proof fn lemma_in_table_sections(env: EncFns, p: Parser, t: Tok)
             == Tag::Td || t->Start_0.tag == Tag::Th || t->Start_0.tag == Tag::Tr),
     ensures
         next_core(mode_in_table(env, p, t)),
+        host_next(p, mode_in_table(env, p, t)),
 {
     hide(in_table_anything_else);
     hide(insert_html_element);
@@ -266,6 +273,7 @@ pub proof fn lemma_in_table_table(env: EncFns, p: Parser, t: Tok)
         (t is Start && t->Start_0.tag == Tag::Table) || (t is End && t->End_0.tag == Tag::Table),
     ensures
         next_core(mode_in_table(env, p, t)),
+        host_next(p, mode_in_table(env, p, t)),
 {
     hide(in_table_anything_else);
     hide(insert_html_element);
@@ -300,6 +308,7 @@ pub proof fn lemma_in_table_input_form(env: EncFns, p: Parser, t: Tok)
         t->Start_0.tag == Tag::Input ==> in_table_input_is_hidden(t->Start_0),
     ensures
         next_core(mode_in_table(env, p, t)),
+        host_next(p, mode_in_table(env, p, t)),
 {
     hide(in_table_anything_else);
     hide(insert_html_element);
@@ -350,6 +359,7 @@ pub proof fn lemma_in_table_rest(env: EncFns, p: Parser, t: Tok)
         !(t is Start && t->Start_0.tag == Tag::Input && in_table_input_is_hidden(t->Start_0)),
     ensures
         next_core(mode_in_table(env, p, t)),
+        host_next(p, mode_in_table(env, p, t)),
 {
     hide(in_table_anything_else);
     hide(insert_html_element);
@@ -403,6 +413,7 @@ pub proof fn lemma_in_table_reach(env: EncFns, p: Parser, t: Tok)
         rules_inv(Rules::Html(Mode::InTable), p, t),
     ensures
         next_core(mode_in_table(env, p, t)),
+        host_next(p, mode_in_table(env, p, t)),
 {
     if t is Start && (t->Start_0.tag == Tag::Caption || t->Start_0.tag == Tag::Colgroup || t->Start_0.tag == Tag::Col
             || t->Start_0.tag == Tag::Tbody || t->Start_0.tag == Tag::Tfoot || t->Start_0.tag == Tag::Thead || t->Start_0.tag
@@ -466,6 +477,7 @@ pub proof fn lemma_in_table_text_reach(env: EncFns, p: Parser, t: Tok)
         rules_inv(Rules::Html(Mode::InTableText), p, t),
     ensures
         next_core(mode_in_table_text(env, p, t)),
+        host_next(p, mode_in_table_text(env, p, t)),
 {
     hide(reprocess_pending);
     hide(insert_characters);
@@ -531,6 +543,7 @@ pub proof fn lemma_in_caption_reach(env: EncFns, p: Parser, t: Tok)
         rules_inv(Rules::Html(Mode::InCaption), p, t),
     ensures
         next_core(mode_in_caption(env, p, t)),
+        host_next(p, mode_in_caption(env, p, t)),
 {
     hide(generate_implied_end_tags);
     hide(pop_until_popped);
@@ -554,6 +567,7 @@ pub proof fn lemma_in_column_group_reach(env: EncFns, p: Parser, t: Tok)
         rules_inv(Rules::Html(Mode::InColumnGroup), p, t),
     ensures
         next_core(mode_in_column_group(env, p, t)),
+        host_next(p, mode_in_column_group(env, p, t)),
 {
     hide(insert_html_element);
     hide(insert_char);
@@ -620,7 +634,9 @@ pub proof fn lemma_clear_pop(p: Parser, f: spec_fn(Elem) -> bool, k: int, m: Mod
         !f(p.open[k]),
     ensures
         next_core(Outcome::Done(Parser { mode: m, ..pop(pop_while(p, f)) })),
+        host_next(p, Outcome::Done(Parser { mode: m, ..pop(pop_while(p, f)) })),
         next_core(Outcome::Reprocess(Parser { mode: m, ..pop(pop_while(p, f)) }, Tok::Eof)),
+        host_next(p, Outcome::Reprocess(Parser { mode: m, ..pop(pop_while(p, f)) }, Tok::Eof)),
 {
     lemma_clear_back_keeps(p, f, k);
     let p1 = pop_while(p, f);
@@ -636,6 +652,7 @@ pub proof fn lemma_in_table_body_reach(env: EncFns, p: Parser, t: Tok)
         rules_inv(Rules::Html(Mode::InTableBody), p, t),
     ensures
         next_core(mode_in_table_body(env, p, t)),
+        host_next(p, mode_in_table_body(env, p, t)),
 {
     hide(insert_html_element);
     assert(rooted_mode(p.mode));
@@ -686,6 +703,7 @@ pub proof fn lemma_in_row_reach(env: EncFns, p: Parser, t: Tok)
         rules_inv(Rules::Html(Mode::InRow), p, t),
     ensures
         next_core(mode_in_row(env, p, t)),
+        host_next(p, mode_in_row(env, p, t)),
 {
     hide(insert_html_element);
     hide(push_marker);

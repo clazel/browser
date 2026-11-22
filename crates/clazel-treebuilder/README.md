@@ -110,6 +110,28 @@ evidence exists (see "Left" below).
   every stack record (`ctx_below`), and that the formatting entries'
   tokens have plain attributes (`fmt_plain`); every rule application
   gets a token with plain attributes (`tok_plain`, from `classify`).
+- **Proven, no cycle through a template's host** (`src/host.rs`,
+  `src/host/`): `theorem_reachable_host_acyclic`: every parser reachable
+  from `new_parser` or `fragment_parser`, stopped or not, has a document
+  that is `clazel_dom::spec::host_acyclic` (no cycle through a parent or a
+  template's host, which `wf` does not forbid), and until it stops its
+  stack of open elements is ordered as the document: no entry is a
+  host-including inclusive ancestor of an entry above it in the stack
+  (`host::host_inv`). `theorem_parse_host_acyclic`: so is the document
+  `parse` and `parse_fragment` return, so every node of it meets
+  `clazel_dom::contract::clone_deep_requires`. No hypotheses. The
+  transcription's guards (and `clazel-dom`'s raw "insert") check only
+  the inclusive-ancestor half of DOM's "ensure pre-insertion validity"
+  step 2; the proof shows the host-including half never fails where
+  that half passes: every DOM call of the rules meets
+  `clazel_dom::host_acyclic_contract::insert_acyclic_requires` (or
+  `reparent_children_acyclic_requires`). A node the rules insert is one
+  they have just created, but in the adoption agency algorithm, whose
+  step 4.21 moves lastNode: there the stack's order, and step 4.5
+  (formattingElement is in scope, so no `table` or `template` element is
+  below it in the stack, and "the appropriate place for inserting a
+  node" is computed from entries above it), give that lastNode is no
+  host-including inclusive ancestor of its new parent.
 - **Proven, actions** (`src/theorems/`): `theorem_actions_ordered`: over a
   whole parse, `StopParsing` occurs at most once and last, and
   `ChangeEncoding` at most once (never if the confidence starts certain),

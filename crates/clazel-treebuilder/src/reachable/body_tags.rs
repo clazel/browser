@@ -25,6 +25,7 @@ pub proof fn lemma_ib_start_block(p: Parser, t: Tok, tt: TagTok)
         (is_block_start_tag(tt.tag) || tt.tag == Tag::Pre || tt.tag == Tag::Listing || tt.tag == Tag::Plaintext) && tt.tag != Tag::Html && tt.tag != Tag::Body && tt.tag != Tag::Frameset,
     ensures
         next_core(in_body_start_tag(p, t, tt)),
+        host_next(p, in_body_start_tag(p, t, tt)),
 {
     hide(in_body_start_html);
     hide(in_body_start_body);
@@ -81,6 +82,7 @@ pub proof fn lemma_ib_start_fmt(p: Parser, t: Tok, tt: TagTok)
         is_formatting_start_tag(tt.tag) || is_applet_like(tt.tag),
     ensures
         next_core(in_body_start_tag(p, t, tt)),
+        host_next(p, in_body_start_tag(p, t, tt)),
 {
     hide(in_body_start_html);
     hide(in_body_start_body);
@@ -140,6 +142,7 @@ pub proof fn lemma_ib_start_table(p: Parser, t: Tok, tt: TagTok)
         tt.tag == Tag::Table,
     ensures
         next_core(in_body_start_tag(p, t, tt)),
+        host_next(p, in_body_start_tag(p, t, tt)),
 {
     hide(in_body_start_html);
     hide(in_body_start_body);
@@ -207,6 +210,7 @@ pub proof fn lemma_ib_start_void(p: Parser, t: Tok, tt: TagTok)
         is_void_start_tag(tt.tag),
     ensures
         next_core(in_body_start_tag(p, t, tt)),
+        host_next(p, in_body_start_tag(p, t, tt)),
 {
     hide(in_body_start_html);
     hide(in_body_start_body);
@@ -258,6 +262,7 @@ pub proof fn lemma_ib_start_param(p: Parser, t: Tok, tt: TagTok)
         tt.tag == Tag::Param || tt.tag == Tag::Source || tt.tag == Tag::Track,
     ensures
         next_core(in_body_start_tag(p, t, tt)),
+        host_next(p, in_body_start_tag(p, t, tt)),
 {
     hide(in_body_start_html);
     hide(in_body_start_body);
@@ -304,6 +309,7 @@ pub proof fn lemma_ib_start_reach(p: Parser, t: Tok, tt: TagTok)
         t == Tok::Start(tt),
     ensures
         next_core(in_body_start_tag(p, t, tt)),
+        host_next(p, in_body_start_tag(p, t, tt)),
 {
     hide(super::doc::dinv);
     hide(crate::independent::equivalence_body::attrs_plain);
@@ -393,6 +399,7 @@ pub proof fn lemma_ib_start_reach_rest(p: Parser, t: Tok, tt: TagTok)
         !ib_start_first(tt.tag),
     ensures
         next_core(in_body_start_tag(p, t, tt)),
+        host_next(p, in_body_start_tag(p, t, tt)),
 {
     hide(super::doc::dinv);
     hide(crate::independent::equivalence_body::attrs_plain);
@@ -511,6 +518,7 @@ pub proof fn lemma_ib_end_reach(p: Parser, t: Tok, tt: TagTok)
         t == Tok::End(tt),
     ensures
         next_core(in_body_end_tag(p, t, tt)),
+        host_next(p, in_body_end_tag(p, t, tt)),
 {
     hide(in_body_end_same_name);
     hide(in_body_end_form);
@@ -587,6 +595,7 @@ pub proof fn lemma_ib_end_reach2(p: Parser, t: Tok, tt: TagTok)
             == Tag::Form || tt.tag == Tag::P || tt.tag == Tag::Li || tt.tag == Tag::Dd || tt.tag == Tag::Dt),
     ensures
         next_core(in_body_end_tag(p, t, tt)),
+        host_next(p, in_body_end_tag(p, t, tt)),
 {
     hide(in_body_end_same_name);
     hide(in_body_end_form);
@@ -654,6 +663,7 @@ pub proof fn lemma_ib_end_form(p: Parser)
         rooted_mode(p.mode),
     ensures
         next_core(Outcome::Done(in_body_end_form(p))),
+        host_next(p, Outcome::Done(in_body_end_form(p))),
 {
     if !parsing_template_contents(p) {
         let q = Parser { form: None, ..p };
@@ -704,6 +714,7 @@ pub proof fn lemma_in_body_reach(env: EncFns, p: Parser, t: Tok)
         rules_inv(Rules::Html(Mode::InBody), p, t),
     ensures
         next_core(mode_in_body(env, p, t)),
+        host_next(p, mode_in_body(env, p, t)),
 {
     hide(in_body_start_tag);
     hide(in_body_end_tag);
@@ -746,7 +757,9 @@ pub proof fn lemma_in_body_reach(env: EncFns, p: Parser, t: Tok)
                 lemma_core_frame(p, q);
             }
         },
-        _ => {},
+        _ => {
+            lemma_stop_keeps(p);
+        },
     }
 }
 

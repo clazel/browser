@@ -1,8 +1,11 @@
 //! The invariants that rule out a cycle through a template's host in the
 //! document the tree builder builds: what a reachable parser state
 //! satisfies so that `clazel_dom::spec::host_acyclic` holds of its document,
-//! and what each rule must keep. This file holds spec functions only: no
-//! proofs, and nothing uses it yet.
+//! and what each rule must keep. This file holds spec functions only. The
+//! proofs are in its submodules ([`hi`]: host-including ancestors under the
+//! DOM calls; [`hostinv`]: the helpers; [`rules`]: the rules that do not go
+//! by `reachable::keeps`; [`theorems`]: `theorem_reachable_host_acyclic`)
+//! and in `reachable`, whose `keeps` carries [`host_step`].
 //!
 //! Why this is needed. `clazel-dom`'s `wf` forbids a cycle of parents, not
 //! one through a template's host (a template inserted below a node of its
@@ -58,6 +61,11 @@
 use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
+
+pub mod hi;
+pub mod hostinv;
+pub mod rules;
+pub mod theorems;
 
 verus! {
 
