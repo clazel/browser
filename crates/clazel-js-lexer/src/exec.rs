@@ -49,6 +49,8 @@
 use super::equivalence::*;
 #[cfg(verus_only)]
 use super::independent::*;
+#[cfg(verus_only)]
+use super::scan_proofs::*;
 #[allow(unused_imports)]
 use super::spec::*;
 #[allow(unused_imports)]
@@ -95,7 +97,19 @@ pub open spec fn kind_proven(kind: ElementKind, html: bool) -> bool {
     kind == ElementKind::WhiteSpace || kind == ElementKind::LineTerminator || kind
         == ElementKind::HashbangComment || kind == ElementKind::DivPunctuator || kind
         == ElementKind::RightBracePunctuator || kind == ElementKind::Punctuator || (kind
-        == ElementKind::Comment && !html)
+        == ElementKind::Comment && !html) || kind == ElementKind::NumericLiteral
+}
+
+/// The kinds whose value is proven to be the spec's
+/// ([`super::contract::element_value_agrees`]).
+pub open spec fn value_proven(kind: ElementKind) -> bool {
+    kind == ElementKind::NumericLiteral
+}
+
+/// For the kinds of [`value_proven`], the value is the one the standard
+/// defines for the range.
+pub open spec fn value_agrees_proven(src: Seq<u32>, el: Element) -> bool {
+    value_proven(el.kind) ==> super::contract::element_value_agrees(src, el)
 }
 
 /// For the kinds of [`kind_proven`], the kind derives the element's range
@@ -132,7 +146,8 @@ pub open spec fn next_input_element_proven(
         Err(_) => pos < src.len(),
         Ok(Step::Eof) => pos == src.len(),
         Ok(Step::Element(el)) => pos < src.len() && el.start == pos && pos < el.end && el.end
-            <= src.len() && value_shape_agrees(el) && kind_agrees_proven(goal, html, src, el),
+            <= src.len() && value_shape_agrees(el) && kind_agrees_proven(goal, html, src, el)
+            && value_agrees_proven(src, el),
     }
 }
 
@@ -155,7 +170,10 @@ pub open spec fn next_token_proven(
         ),
         Ok(Next::Token(tok)) => pos <= tok.element.start < tok.element.end <= src.len()
             && !is_trivia(tok.element.kind) && value_shape_agrees(tok.element)
-            && kind_agrees_proven(goal, html, src, tok.element) && (tok.newline_before
+            && kind_agrees_proven(goal, html, src, tok.element) && value_agrees_proven(
+            src,
+            tok.element,
+        ) && (tok.newline_before
             ==> contains_line_terminator(src, pos as int, tok.element.start as int)),
     }
 }
@@ -180,7 +198,10 @@ pub proof fn lemma_contract_implies_proven(
             Err(_) => pos < src.len(),
             Ok(Step::Eof) => pos == src.len(),
             Ok(Step::Element(el)) => pos < src.len() && el.start == pos && pos < el.end && el.end
-                <= src.len() && kind_agrees_proven(goal, html, src, el),
+                <= src.len() && kind_agrees_proven(goal, html, src, el) && value_agrees_proven(
+                src,
+                el,
+            ),
         },
 {
     if let Ok(Step::Element(el)) = r {
@@ -918,22 +939,52 @@ fn scan_digits_sep(src: &[u32], k: usize, radix: u32) -> (r: usize)
     requires
         k < src.len(),
         radix == 2 || radix == 8 || radix == 10 || radix == 16,
+        is_radix_digit(radix as int, src@[k as int]),
     ensures
         k < r <= src.len(),
+        ind_sep_digits(radix as int, src@, k as int, r as int),
+        forall|j: int| j > r ==> !ind_sep_digits(radix as int, src@, k as int, j),
+        !(r < src.len() && is_radix_digit(radix as int, src@[r as int])),
+        !(r + 1 < src.len() && src@[r as int] == 0x5F && is_radix_digit(
+            radix as int,
+            src@[r as int + 1],
+        )),
 {
+    proof {
+        lemma_digit_class_equiv(radix as int, src@[k as int]);
+        lemma_sep_base(radix as int, src@, k as int);
+    }
     let mut j = k.saturating_add(1);
     loop
         invariant
             k < j <= src.len(),
             radix == 2 || radix == 8 || radix == 10 || radix == 16,
+            ind_sep_digits(radix as int, src@, k as int, j as int),
         decreases src.len() - j,
     {
         let c = peek(src, j);
         if is_radix(radix, c) {
+            proof {
+                lemma_digit_class_equiv(radix as int, c);
+                lemma_sep_extend1(radix as int, src@, k as int, j as int);
+            }
             j = j.saturating_add(1);
         } else if c == 0x5F && is_radix(radix, peek(src, j.saturating_add(1))) {
+            proof {
+                lemma_digit_class_equiv(radix as int, src@[j as int + 1]);
+                lemma_sep_extend2(radix as int, src@, k as int, j as int);
+            }
             j = j.saturating_add(2);
         } else {
+            proof {
+                if j < src.len() {
+                    lemma_digit_class_equiv(radix as int, src@[j as int]);
+                }
+                if j + 1 < src.len() {
+                    lemma_digit_class_equiv(radix as int, src@[j as int + 1]);
+                }
+                lemma_sep_maximal(radix as int, src@, k as int, j as int);
+            }
             return j;
         }
     }
@@ -945,6 +996,8 @@ fn scan_exponent(src: &[u32], k: usize) -> (r: usize)
         k <= src.len(),
     ensures
         k <= r <= src.len(),
+        r > k ==> ind_exponent(src@, k as int, r as int),
+        forall|j: int| ind_exponent(src@, k as int, j) ==> j <= r,
 {
     let c = peek(src, k);
     if c == 0x65 || c == 0x45 {
@@ -972,6 +1025,8 @@ fn scan_decimal_tail(src: &[u32], k: usize) -> (r: usize)
         k <= src.len(),
     ensures
         k <= r <= src.len(),
+        ind_tail(src@, k as int, r as int),
+        forall|j: int| ind_tail(src@, k as int, j) ==> j <= r,
 {
     if peek(src, k) == 0x2E {
         let m = k.saturating_add(1);
@@ -980,31 +1035,327 @@ fn scan_decimal_tail(src: &[u32], k: usize) -> (r: usize)
         } else {
             m
         };
-        scan_exponent(src, n)
+        let r = scan_exponent(src, n);
+        proof {
+            // The tail `.` digits? exponent?, on `[k, r)`.
+            assert(ind_dl_tail_mid(src@, k as int, n as int, r as int));
+            assert forall|j: int| ind_tail(src@, k as int, j) implies j <= r by {
+                if ind_tail(src@, k as int, j) && j != k {
+                    assert(!ind_exponent(src@, k as int, j));
+                    let b = choose|b: int| ind_dl_tail_mid(src@, k as int, b, j);
+                    if m < src.len() && is_decimal_digit(src@[m as int]) {
+                        if b > n {
+                            assert(ind_sep_digits(10, src@, m as int, b));
+                        }
+                        if b < n {
+                            if b > m {
+                                lemma_sep_chars(10, src@, m as int, n as int, b);
+                            }
+                            assert(b == j);
+                        }
+                    }
+                }
+            }
+        }
+        r
     } else {
         scan_exponent(src, k)
     }
 }
 
-/// §12.9.3 `NumericLiteral` at `k`, the longest: its end, whether it is a
-/// BigInt literal, and whether it is legacy (§12.9.3.1).
-fn scan_numeric(src: &[u32], k: usize) -> (r: Option<(usize, bool, bool)>)
+/// What [`scan_numeric`] returns, in the closed forms of `independent.rs`.
+pub open spec fn numeric_ind_result(s: Seq<u32>, k: int, r: Option<(usize, bool, bool)>) -> bool {
+    match r {
+        Some((e, bigint, legacy)) => k < e <= s.len() && ind_numeric_literal(s, k, e as int) && (
+        forall|j: int| ind_numeric_literal(s, k, j) ==> j <= e) && bigint == ind_is_bigint(
+            s,
+            k,
+            e as int,
+        ) && legacy == ind_is_legacy(s, k, e as int),
+        None => forall|j: int| !ind_numeric_literal(s, k, j),
+    }
+}
+
+/// A `.` and a decimal digit.
+fn num_dot(src: &[u32], k: usize) -> (r: Option<(usize, bool, bool)>)
+    requires
+        k + 1 < src.len(),
+        src@[k as int] == 0x2E,
+        is_decimal_digit(src@[k as int + 1]),
+    ensures
+        numeric_ind_result(src@, k as int, r),
+{
+    let e = scan_digits_sep(src, k.saturating_add(1), 10);
+    let r = scan_exponent(src, e);
+    proof {
+        let s = src@;
+        lemma_shape_dot(s, k as int);
+        assert forall|j: int| ind_numeric_literal(s, k as int, j) implies j <= r by {
+            let b = choose|b: int| #[trigger] ind_dl_alt2(s, k as int, j, b);
+            if b < e {
+                lemma_sep_chars(10, s, k as int + 1, e as int, b);
+                assert(j == b);
+            }
+        }
+        assert(ind_dl_alt2(s, k as int, r as int, e as int));
+        assert(ind_decimal_literal(s, k as int, r as int));
+    }
+    Some((r, false, false))
+}
+
+/// A `0`, a prefix letter and a digit of its radix.
+fn num_prefix(src: &[u32], k: usize, radix: u32) -> (r: Option<(usize, bool, bool)>)
+    requires
+        k + 2 < src.len(),
+        prefix_digit(src@, k as int),
+        radix == 2 || radix == 8 || radix == 16,
+        radix == 2 ==> (src@[k as int + 1] == 0x62 || src@[k as int + 1] == 0x42),
+        radix == 8 ==> (src@[k as int + 1] == 0x6F || src@[k as int + 1] == 0x4F),
+        radix == 16 ==> (src@[k as int + 1] == 0x78 || src@[k as int + 1] == 0x58),
+        is_radix_digit(radix as int, src@[k as int + 2]),
+    ensures
+        numeric_ind_result(src@, k as int, r),
+{
+    // NonDecimalIntegerLiteral[+Sep] BigIntLiteralSuffix?
+    let e = scan_digits_sep(src, k.saturating_add(2), radix);
+    proof {
+        lemma_shape_prefix(src@, k as int, radix as int);
+    }
+    if peek(src, e) == 0x6E {
+        proof {
+            let s = src@;
+            assert forall|j: int| ind_numeric_literal(s, k as int, j) implies j <= e + 1 by {
+                if j > k + 3 && s[j - 1] == 0x6E && ind_sep_digits(
+                    radix as int,
+                    s,
+                    k as int + 2,
+                    j - 1,
+                ) {
+                    if j - 1 < e {
+                        lemma_sep_chars(radix as int, s, k as int + 2, e as int, j - 1);
+                    }
+                }
+            }
+        }
+        Some((e.saturating_add(1), true, false))
+    } else {
+        proof {
+            let s = src@;
+            assert forall|j: int| ind_numeric_literal(s, k as int, j) implies j <= e by {
+                if j > k + 3 && s[j - 1] == 0x6E && ind_sep_digits(
+                    radix as int,
+                    s,
+                    k as int + 2,
+                    j - 1,
+                ) {
+                    if j - 1 < e {
+                        lemma_sep_chars(radix as int, s, k as int + 2, e as int, j - 1);
+                    }
+                    assert(false);
+                }
+            }
+        }
+        Some((e, false, false))
+    }
+}
+
+/// A `0` and a decimal digit: `0` and decimal digits, with no separator: a
+/// LegacyOctalIntegerLiteral if they are all octal, else a
+/// NonOctalDecimalIntegerLiteral, which a DecimalLiteral may continue.
+fn num_zero_digit(src: &[u32], k: usize) -> (r: Option<(usize, bool, bool)>)
+    requires
+        k + 1 < src.len(),
+        src@[k as int] == 0x30,
+        is_decimal_digit(src@[k as int + 1]),
+    ensures
+        numeric_ind_result(src@, k as int, r),
+{
+    let mut j = k.saturating_add(1);
+    let mut octal = true;
+    while is_dec(peek(src, j))
+        invariant
+            k < j <= src.len(),
+            all_dec(src@, k as int + 1, j as int),
+            octal == (forall|t: int|
+                k + 1 <= t < j ==> is_octal_digit(#[trigger] src@[t])),
+            !octal ==> exists|t: int|
+                k + 1 <= t < j && is_non_octal_digit(#[trigger] src@[t]),
+        decreases src.len() - j,
+    {
+        let c = peek(src, j);
+        if !is_oct(c) {
+            octal = false;
+        }
+        j = j.saturating_add(1);
+    }
+    proof {
+        lemma_shape_zero_digit(src@, k as int);
+        assert(j > k + 1) by {
+            if j == k + 1 {
+                assert(!is_decimal_digit(src@[k as int + 1]));
+            }
+        }
+    }
+    if octal {
+        proof {
+            let s = src@;
+            assert(ind_plain_digits(8, s, k as int + 1, j as int));
+            assert(ind_legacy_octal(s, k as int, j as int));
+            assert forall|jj: int| ind_numeric_literal(s, k as int, jj) implies jj <= j by {
+                if jj > j {
+                    if ind_legacy_octal(s, k as int, jj) {
+                        assert(ind_dec(s[j as int]));
+                    }
+                }
+                if exists|a: int| #![trigger ind_non_octal_decimal_integer(s, k as int, a)]
+                    ind_non_octal_decimal_integer(s, k as int, a) && ind_tail(s, a, jj) {
+                    let a = choose|a: int|
+                        #![trigger ind_non_octal_decimal_integer(s, k as int, a)]
+                        ind_non_octal_decimal_integer(s, k as int, a) && ind_tail(
+                            s,
+                            a,
+                            jj,
+                        );
+                    let t = choose|t: int| k < t < a && (s[t] == 0x38 || s[t] == 0x39);
+                    assert(a <= j) by {
+                        if a > j {
+                            assert(ind_dec(s[j as int]));
+                        }
+                    }
+                    assert(is_octal_digit(s[t]));
+                }
+            }
+        }
+        Some((j, false, true))
+    } else {
+        let r = scan_decimal_tail(src, j);
+        proof {
+            let s = src@;
+            let t0 = choose|t: int| k + 1 <= t < j && is_non_octal_digit(src@[t]);
+            assert(ind_non_octal_decimal_integer(s, k as int, j as int)) by {
+                assert(ind_plain_digits(10, s, k as int + 1, j as int));
+                assert(k < t0 < j && (s[t0] == 0x38 || s[t0] == 0x39));
+            }
+            assert forall|jj: int| ind_numeric_literal(s, k as int, jj) implies jj <= r by {
+                if ind_legacy_octal(s, k as int, jj) && jj > j {
+                    assert(ind_dec(s[j as int]));
+                }
+                if exists|a: int| #![trigger ind_non_octal_decimal_integer(s, k as int, a)]
+                    ind_non_octal_decimal_integer(s, k as int, a) && ind_tail(s, a, jj) {
+                    let a = choose|a: int|
+                        #![trigger ind_non_octal_decimal_integer(s, k as int, a)]
+                        ind_non_octal_decimal_integer(s, k as int, a) && ind_tail(
+                            s,
+                            a,
+                            jj,
+                        );
+                    assert(a <= j) by {
+                        if a > j {
+                            assert(ind_dec(s[j as int]));
+                        }
+                    }
+                    if a < j {
+                        if jj > a {
+                            lemma_tail_first(s, a, jj);
+                            assert(ind_dec(s[a]));
+                        }
+                    }
+                }
+            }
+        }
+        Some((r, false, true))
+    }
+}
+
+/// A non-zero digit.
+#[verifier::rlimit(100)]
+fn num_nonzero(src: &[u32], k: usize) -> (r: Option<(usize, bool, bool)>)
+    requires
+        k < src.len(),
+        is_decimal_digit(src@[k as int]),
+        src@[k as int] != 0x30,
+    ensures
+        numeric_ind_result(src@, k as int, r),
+{
+    let e = scan_digits_sep(src, k, 10);
+    proof {
+        lemma_shape_nonzero(src@, k as int);
+    }
+    if peek(src, e) == 0x6E {
+        proof {
+            let s = src@;
+            assert forall|j: int| ind_numeric_literal(s, k as int, j) implies j <= e + 1 by {
+                if exists|a: int| #![trigger ind_sep_digits(10, s, k as int, a)]
+                    ind_sep_digits(10, s, k as int, a) && ind_tail(s, a, j) {
+                    let a = choose|a: int| #![trigger ind_sep_digits(10, s, k as int, a)]
+                        ind_sep_digits(10, s, k as int, a) && ind_tail(s, a, j);
+                    if j > a {
+                        lemma_tail_first(s, a, j);
+                        if a < e {
+                            lemma_sep_chars(10, s, k as int, e as int, a);
+                        }
+                    }
+                }
+                if j > k + 1 && s[j - 1] == 0x6E && ind_sep_digits(10, s, k as int, j - 1) {
+                    if j - 1 < e {
+                        lemma_sep_chars(10, s, k as int, e as int, j - 1);
+                    }
+                }
+            }
+        }
+        Some((e.saturating_add(1), true, false))
+    } else {
+        let r = scan_decimal_tail(src, e);
+        proof {
+            let s = src@;
+            assert forall|j: int| ind_numeric_literal(s, k as int, j) implies j <= r by {
+                if exists|a: int| #![trigger ind_sep_digits(10, s, k as int, a)]
+                    ind_sep_digits(10, s, k as int, a) && ind_tail(s, a, j) {
+                    let a = choose|a: int| #![trigger ind_sep_digits(10, s, k as int, a)]
+                        ind_sep_digits(10, s, k as int, a) && ind_tail(s, a, j);
+                    if a < e {
+                        if j > a {
+                            lemma_tail_first(s, a, j);
+                            lemma_sep_chars(10, s, k as int, e as int, a);
+                        }
+                    }
+                }
+                if j > k + 1 && s[j - 1] == 0x6E && ind_sep_digits(10, s, k as int, j - 1) {
+                    if j - 1 < e {
+                        lemma_sep_chars(10, s, k as int, e as int, j - 1);
+                    } else {
+                        assert(j - 1 == e);
+                    }
+                }
+            }
+        }
+        Some((r, false, false))
+    }
+}
+
+/// [`scan_numeric`], stated in the closed forms of `independent.rs`.
+fn scan_numeric_ind(src: &[u32], k: usize) -> (r: Option<(usize, bool, bool)>)
     requires
         k < src.len(),
     ensures
-        match r {
-            Some((e, _, _)) => k < e <= src.len(),
-            None => true,
-        },
+        numeric_ind_result(src@, k as int, r),
 {
     let c0 = peek(src, k);
     let c1 = peek(src, k.saturating_add(1));
     if c0 == 0x2E {
         // DecimalLiteral :: . DecimalDigits[+Sep] ExponentPart[+Sep]?
         if is_dec(c1) {
-            let e = scan_digits_sep(src, k.saturating_add(1), 10);
-            Some((scan_exponent(src, e), false, false))
+            num_dot(src, k)
         } else {
+            proof {
+                let s = src@;
+                assert forall|j: int| !ind_numeric_literal(s, k as int, j) by {
+                    lemma_shape_dot(s, k as int);
+                    if ind_numeric_literal(s, k as int, j) {
+                        let b = choose|b: int| #[trigger] ind_dl_alt2(s, k as int, j, b);
+                    }
+                }
+            }
             None
         }
     } else if c0 == 0x30 {
@@ -1019,59 +1370,85 @@ fn scan_numeric(src: &[u32], k: usize) -> (r: Option<(usize, bool, bool)>)
             0
         };
         if radix != 0 && is_radix(radix, c2) {
-            // NonDecimalIntegerLiteral[+Sep] BigIntLiteralSuffix?
-            let e = scan_digits_sep(src, k.saturating_add(2), radix);
-            if peek(src, e) == 0x6E {
-                Some((e.saturating_add(1), true, false))
-            } else {
-                Some((e, false, false))
-            }
+            num_prefix(src, k, radix)
         } else if c1 == 0x6E {
             // DecimalBigIntegerLiteral :: 0 BigIntLiteralSuffix
+            proof {
+                lemma_shape_zero_n(src@, k as int);
+            }
             Some((k.saturating_add(2), true, false))
         } else if is_dec(c1) {
-            // `0` and decimal digits, with no separator: a
-            // LegacyOctalIntegerLiteral if they are all octal, else a
-            // NonOctalDecimalIntegerLiteral, which a DecimalLiteral may
-            // continue.
-            let mut j = k.saturating_add(1);
-            let mut octal = true;
-            loop
-                invariant
-                    k < j <= src.len(),
-                decreases src.len() - j,
-            {
-                let c = peek(src, j);
-                if is_dec(c) {
-                    if !is_oct(c) {
-                        octal = false;
-                    }
-                    j = j.saturating_add(1);
-                } else {
-                    break;
-                }
-            }
-            if octal {
-                Some((j, false, true))
-            } else {
-                Some((scan_decimal_tail(src, j), false, true))
-            }
+            num_zero_digit(src, k)
         } else {
             // DecimalIntegerLiteral :: 0
+            proof {
+                let s = src@;
+                assert(!prefix_digit(s, k as int));
+                lemma_shape_zero_alone(s, k as int);
+            }
             Some((scan_decimal_tail(src, k.saturating_add(1)), false, false))
         }
     } else if is_dec(c0) {
         // DecimalIntegerLiteral :: NonZeroDigit NumericLiteralSeparator?
         // DecimalDigits[+Sep], or a DecimalBigIntegerLiteral.
-        let e = scan_digits_sep(src, k, 10);
-        if peek(src, e) == 0x6E {
-            Some((e.saturating_add(1), true, false))
-        } else {
-            Some((scan_decimal_tail(src, e), false, false))
-        }
+        num_nonzero(src, k)
     } else {
+        proof {
+            let s = src@;
+            assert forall|j: int| !ind_numeric_literal(s, k as int, j) by {
+                lemma_decimal_literal_tail(s, k as int, j);
+                if ind_decimal_literal(s, k as int, j) {
+                    if !(exists|b: int| #[trigger] ind_dl_alt2(s, k as int, j, b)) {
+                        let a = choose|a: int| #![trigger ind_decimal_integer(s, k as int, a)]
+                            k < a && ind_decimal_integer(s, k as int, a) && ind_tail(s, a, j);
+                    }
+                }
+            }
+        }
         None
     }
+}
+
+/// §12.9.3 `NumericLiteral` at `k`, the longest: its end, whether it is a
+/// BigInt literal, and whether it is legacy (§12.9.3.1).
+///
+/// Proven: the end is a range the spec derives as a `NumericLiteral`
+/// ([`numeric_literal`]) and no longer range is; `None` means no range is;
+/// the two flags are [`numeric_literal_is_bigint`] and
+/// [`numeric_literal_is_legacy`] of the range.
+fn scan_numeric(src: &[u32], k: usize) -> (r: Option<(usize, bool, bool)>)
+    requires
+        k < src.len(),
+    ensures
+        match r {
+            Some((e, bigint, legacy)) => k < e <= src.len() && numeric_literal(
+                src@,
+                k as int,
+                e as int,
+            ) && (forall|j: int| numeric_literal(src@, k as int, j) ==> j <= e) && bigint
+                == numeric_literal_is_bigint(src@, k as int, e as int) && legacy
+                == numeric_literal_is_legacy(src@, k as int, e as int),
+            None => forall|j: int| !numeric_literal(src@, k as int, j),
+        },
+{
+    let r = scan_numeric_ind(src, k);
+    proof {
+        match r {
+            Some((e, bigint, legacy)) => {
+                lemma_numeric_literal_equiv(src@, k as int, e as int);
+                lemma_flags_equiv(src@, k as int, e as int);
+                assert forall|j: int| numeric_literal(src@, k as int, j) implies j <= e by {
+                    lemma_numeric_literal_equiv(src@, k as int, j);
+                }
+            },
+            None => {
+                assert forall|j: int| !numeric_literal(src@, k as int, j) by {
+                    lemma_numeric_literal_equiv(src@, k as int, j);
+                }
+            },
+        }
+    }
+    r
 }
 
 /// §12.9.3: "The SourceCharacter immediately following a NumericLiteral
@@ -1624,7 +2001,10 @@ pub open spec fn candidate_agrees(
     pos: usize,
     c: (Element, Option<LexError>),
 ) -> bool {
-    candidate_ok(src, pos, c) && kind_agrees_proven(goal, html, src, c.0)
+    candidate_ok(src, pos, c) && kind_agrees_proven(goal, html, src, c.0) && value_agrees_proven(
+        src,
+        c.0,
+    )
 }
 
 /// The longer of two candidates (the first on a tie).

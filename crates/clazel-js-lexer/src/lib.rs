@@ -27,6 +27,7 @@ pub mod examples;
 pub mod exec;
 pub mod independent;
 pub mod lemmas;
+pub mod scan_proofs;
 pub mod spec;
 pub mod unicode;
 pub mod unicode_data;
