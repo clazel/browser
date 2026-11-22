@@ -171,6 +171,8 @@ pub proof fn lemma_aa_inner(p: Parser, fe: Elem, ca: Elem, node_idx: int, last_n
         ),
     decreases node_idx,
 {
+    hide(dom::insert);
+    hide(dom::remove);
     hide(aa_inner);
     hide(create_element_for_token);
     hide(dom_insert);
@@ -188,16 +190,19 @@ pub proof fn lemma_aa_inner(p: Parser, fe: Elem, ca: Elem, node_idx: int, last_n
     let c = counter + 1;
     let i = node_idx - 1;
     let node = p.open[i];
-    lemma_inner_drop(p, node.id, fe.id, c > 3);
-    let p1 = if c > 3 && in_formatting(p, node.id) {
-        Parser { formatting: p.formatting.remove(fmt_index_of(p.formatting, p.formatting.len() as int, node.id)), ..p }
-    } else {
-        p
-    };
+    // Step 4.16.4 is named by the hidden `inner_drop`, so that the entry it
+    // removes from the list (a `Seq::remove`) stays out of this proof's
+    // context; only the two facts below need it.
+    let p1 = crate::exec::modes::adoption::inner_drop(p, node.id, c);
+    assert(mk(p, p1) && p1.stopped == p.stopped && (in_formatting(p, fe.id) ==> in_formatting(p1, fe.id))) by {
+        reveal(crate::exec::modes::adoption::inner_drop);
+        lemma_inner_drop(p, node.id, fe.id, c > 3);
+    }
     if !in_formatting(p1, node.id) {
         let p2 = remove_open_at(p1, i);
         assert(r == aa_inner(p2, fe, ca, i, last_node, c, bookmark).0) by {
             reveal_with_fuel(aa_inner, 1);
+            reveal(crate::exec::modes::adoption::inner_drop);
         }
         assert(p2.formatting == p1.formatting && mk(p1, p2)) by {
             reveal(remove_open_at);
@@ -228,6 +233,7 @@ pub proof fn lemma_aa_inner(p: Parser, fe: Elem, ca: Elem, node_idx: int, last_n
         if p2.stopped {
             assert(r == p2) by {
                 reveal_with_fuel(aa_inner, 1);
+                reveal(crate::exec::modes::adoption::inner_drop);
             }
             lemma_mk_trans(p, p1, p2);
         } else {
@@ -244,6 +250,7 @@ pub proof fn lemma_aa_inner(p: Parser, fe: Elem, ca: Elem, node_idx: int, last_n
             let p4 = dom_insert(p3, last_node.id, new_element.id, None);
             assert(r == aa_inner(p4, fe, ca, i, new_element, c, bm).0) by {
                 reveal_with_fuel(aa_inner, 1);
+                reveal(crate::exec::modes::adoption::inner_drop);
             }
             lemma_aa_inner(p4, fe, ca, i, new_element, c, bm);
             lemma_mk_trans(p, p1, p2);

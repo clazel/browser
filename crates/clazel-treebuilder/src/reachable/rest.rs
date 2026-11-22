@@ -45,6 +45,7 @@ pub proof fn lemma_close_the_cell(p: Parser)
         has_cell(p.open),
     ensures
         next_core(Outcome::Reprocess(close_the_cell(p), Tok::Eof)),
+        host_next(p, Outcome::Reprocess(close_the_cell(p), Tok::Eof)),
 {
     let p0 = mode_as(p, Mode::InRow);
     assert(good(p0));
@@ -88,6 +89,15 @@ pub proof fn lemma_cell_end_cell(p: Parser, tt: TagTok)
                 },
             ),
         ),
+        host_next(
+            p,
+            Outcome::Done(
+                Parser {
+                    mode: Mode::InRow,
+                    ..clear_to_last_marker(pop_until_popped(generate_implied_end_tags(p, None), tt.tag))
+                },
+            ),
+        ),
 {
     let p0 = mode_as(p, Mode::InRow);
     assert(good(p0));
@@ -123,6 +133,7 @@ pub proof fn lemma_in_cell_reach(env: EncFns, p: Parser, t: Tok)
         rules_inv(Rules::Html(Mode::InCell), p, t),
     ensures
         next_core(mode_in_cell(env, p, t)),
+        host_next(p, mode_in_cell(env, p, t)),
 {
     hide(close_the_cell);
     hide(generate_implied_end_tags);
@@ -165,7 +176,10 @@ pub proof fn lemma_in_template_eof(p: Parser)
             let p1 = pop_until_popped(p, Tag::Template);
             let p2 = clear_to_last_marker(p1);
             let p3 = Parser { template_modes: p2.template_modes.drop_last(), ..p2 };
-            next_core(Outcome::Reprocess(reset_insertion_mode(p3), Tok::Eof))
+            next_core(Outcome::Reprocess(reset_insertion_mode(p3), Tok::Eof)) && host_next(
+                p,
+                Outcome::Reprocess(reset_insertion_mode(p3), Tok::Eof),
+            )
         }),
 {
     let p0 = mode_as(p, Mode::InBody);
@@ -197,7 +211,10 @@ pub proof fn lemma_in_template_eof0(p: Parser)
             let p1 = pop_until_popped(p, Tag::Template);
             let p2 = clear_to_last_marker(p1);
             let p3 = Parser { template_modes: p2.template_modes.drop_last(), ..p2 };
-            next_core(Outcome::Reprocess(reset_insertion_mode(p3), Tok::Eof))
+            next_core(Outcome::Reprocess(reset_insertion_mode(p3), Tok::Eof)) && host_next(
+                p,
+                Outcome::Reprocess(reset_insertion_mode(p3), Tok::Eof),
+            )
         }),
 {
     let j = crate::termination::helpers_ranking::lemma_open_has_html(p, Tag::Template);
@@ -232,12 +249,14 @@ pub proof fn lemma_in_template_reach(env: EncFns, p: Parser, t: Tok)
         rules_inv(Rules::Html(Mode::InTemplate), p, t),
     ensures
         next_core(mode_in_template(env, p, t)),
+        host_next(p, mode_in_template(env, p, t)),
 {
     hide(pop_until_popped);
     hide(clear_to_last_marker);
     hide(reset_insertion_mode);
     assert(rooted_mode(p.mode));
     assert(good(p));
+    lemma_stop_keeps(p);
     if t is Eof && open_has_html(p, Tag::Template) {
         lemma_in_template_eof(p);
     }
@@ -257,8 +276,11 @@ pub proof fn lemma_insert_tok(p: Parser, t: Tok, loc: Option<Location>)
         loc is None || loc == Some(document_location()) || loc == Some(Location { parent: p.open[0].id, child: None }),
     ensures
         t is Char ==> next_core(Outcome::Done(insert_char(p, t->Char_0))),
+        t is Char ==> host_next(p, Outcome::Done(insert_char(p, t->Char_0))),
         t is Comment ==> next_core(Outcome::Done(insert_comment(p, t->Comment_0, loc))),
+        t is Comment ==> host_next(p, Outcome::Done(insert_comment(p, t->Comment_0, loc))),
         t is Pi ==> next_core(Outcome::Done(insert_pi(p, t->Pi_0, t->Pi_1, loc))),
+        t is Pi ==> host_next(p, Outcome::Done(insert_pi(p, t->Pi_0, t->Pi_1, loc))),
 {
     super::doc::lemma_dinv_at(p, 0);
     super::doc::lemma_document_pok(p.doc);
@@ -290,11 +312,13 @@ pub proof fn lemma_after_body_reach(env: EncFns, p: Parser, t: Tok)
         rules_inv(Rules::Html(Mode::AfterBody), p, t),
     ensures
         next_core(mode_after_body(env, p, t)),
+        host_next(p, mode_after_body(env, p, t)),
 {
     hide(insert_comment);
     hide(insert_pi);
     assert(p.mode == Mode::AfterBody);
     assert(good(p));
+    lemma_stop_keeps(p);
     lemma_insert_tok(p, t, Some(Location { parent: p.open[0].id, child: None }));
     lemma_keeps_refl(p);
     lemma_to_mode(p, p, Mode::AfterAfterBody);
@@ -308,6 +332,7 @@ pub proof fn lemma_in_frameset_reach(env: EncFns, p: Parser, t: Tok)
         rules_inv(Rules::Html(Mode::InFrameset), p, t),
     ensures
         next_core(mode_in_frameset(env, p, t)),
+        host_next(p, mode_in_frameset(env, p, t)),
 {
     hide(insert_char);
     hide(insert_comment);
@@ -315,6 +340,7 @@ pub proof fn lemma_in_frameset_reach(env: EncFns, p: Parser, t: Tok)
     hide(insert_html_element);
     assert(p.mode == Mode::InFrameset);
     assert(good(p));
+    lemma_stop_keeps(p);
     lemma_insert_tok(p, t, None);
     lemma_keeps_refl(p);
     if t is Start && (t->Start_0.tag == Tag::Frameset || t->Start_0.tag == Tag::Frame) {
@@ -341,12 +367,14 @@ pub proof fn lemma_after_frameset_reach(env: EncFns, p: Parser, t: Tok)
         rules_inv(Rules::Html(Mode::AfterFrameset), p, t),
     ensures
         next_core(mode_after_frameset(env, p, t)),
+        host_next(p, mode_after_frameset(env, p, t)),
 {
     hide(insert_char);
     hide(insert_comment);
     hide(insert_pi);
     assert(p.mode == Mode::AfterFrameset);
     assert(good(p));
+    lemma_stop_keeps(p);
     lemma_insert_tok(p, t, None);
     lemma_keeps_refl(p);
     lemma_to_mode(p, p, Mode::AfterAfterFrameset);
@@ -358,11 +386,13 @@ pub proof fn lemma_after_after_body_reach(env: EncFns, p: Parser, t: Tok)
         rules_inv(Rules::Html(Mode::AfterAfterBody), p, t),
     ensures
         next_core(mode_after_after_body(env, p, t)),
+        host_next(p, mode_after_after_body(env, p, t)),
 {
     hide(insert_comment);
     hide(insert_pi);
     assert(p.mode == Mode::AfterAfterBody);
     assert(good(p));
+    lemma_stop_keeps(p);
     lemma_insert_tok(p, t, Some(document_location()));
     lemma_keeps_refl(p);
     lemma_to_mode(p, p, Mode::InBody);
@@ -375,11 +405,13 @@ pub proof fn lemma_after_after_frameset_reach(env: EncFns, p: Parser, t: Tok)
         rules_inv(Rules::Html(Mode::AfterAfterFrameset), p, t),
     ensures
         next_core(mode_after_after_frameset(env, p, t)),
+        host_next(p, mode_after_after_frameset(env, p, t)),
 {
     hide(insert_comment);
     hide(insert_pi);
     assert(p.mode == Mode::AfterAfterFrameset);
     assert(good(p));
+    lemma_stop_keeps(p);
     lemma_insert_tok(p, t, Some(document_location()));
 }
 
@@ -620,6 +652,7 @@ pub proof fn lemma_foreign_reach(env: EncFns, p: Parser, t: Tok)
         rules_inv(Rules::Foreign, p, t),
     ensures
         next_core(foreign_content(env, p, t)),
+        host_next(p, foreign_content(env, p, t)),
 {
     hide(foreign_content);
     assert(p.mode != Mode::Initial && p.mode != Mode::BeforeHtml);

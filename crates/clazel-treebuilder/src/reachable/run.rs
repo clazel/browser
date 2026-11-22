@@ -30,11 +30,15 @@ pub proof fn lemma_rules_reach(env: EncFns, r: Rules, p: Parser, t: Tok)
         rules_inv(r, p, t),
     ensures
         next_core(apply_rules(env, r, p, t)),
+        host_next(p, apply_rules(env, r, p, t)),
 {
     match r {
         Rules::Foreign => lemma_foreign_reach(env, p, t),
         Rules::Html(m) => match m {
-            Mode::Initial => lemma_initial_reach(env, p, t),
+            Mode::Initial => {
+                lemma_initial_reach(env, p, t);
+                lemma_initial_host(env, p, t);
+            },
             Mode::BeforeHtml => lemma_before_html_reach(env, p, t),
             Mode::BeforeHead => lemma_before_head_reach(env, p, t),
             Mode::InHead => lemma_in_head_reach(env, p, t),
@@ -196,6 +200,7 @@ pub proof fn lemma_new_parser_reach(url: Seq<u32>, scripting: bool, tentative: b
 }
 
 /// The fragment parser satisfies [`reachable_inv`].
+#[verifier::spinoff_prover]
 pub proof fn lemma_fragment_parser_reach(ctx: Context, scripting: bool)
     ensures
         reachable_inv(fragment_parser(ctx, scripting).0),

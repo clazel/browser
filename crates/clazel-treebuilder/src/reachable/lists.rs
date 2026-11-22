@@ -8,6 +8,10 @@ use super::cells::*;
 use super::helpers::*;
 #[allow(unused_imports)]
 use super::spec::*;
+#[cfg(verus_only)]
+use crate::host::hi::*;
+#[cfg(verus_only)]
+use crate::host::hostinv::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
@@ -286,8 +290,59 @@ pub proof fn lemma_add_missing_keeps(p: Parser, el: NodeId, attrs: Seq<Attr>, i:
     super::body::lemma_add_missing_frame(p, el, attrs, i);
     if !p.stopped {
         super::doc::lemma_dinv(p);
+        lemma_dinv_ids(p);
+        lemma_add_missing_up(p, el, attrs, i);
+        lemma_host_step_up_same(p, add_missing_attributes(p, el, attrs, i));
+    } else {
+        assert(add_missing_attributes(p, el, attrs, i).doc == p.doc) by {
+            lemma_add_missing_stopped(p, el, attrs, i);
+        }
     }
     lemma_doc_keeps(p, add_missing_attributes(p, el, attrs, i));
+}
+
+/// [`add_missing_attributes`] leaves a stopped parser as it is.
+pub proof fn lemma_add_missing_stopped(p: Parser, el: NodeId, attrs: Seq<Attr>, i: int)
+    requires
+        p.stopped,
+    ensures
+        add_missing_attributes(p, el, attrs, i) == p,
+    decreases attrs.len() - i,
+{
+    if !(i < 0 || i >= attrs.len()) {
+        lemma_add_missing_stopped(p, el, attrs, i + 1);
+    }
+}
+
+/// [`add_missing_attributes`] keeps every node's step up (`hi::up_same`)
+/// and `clazel_dom::spec::host_acyclic`: attributes are no links.
+pub proof fn lemma_add_missing_up(p: Parser, el: NodeId, attrs: Seq<Attr>, i: int)
+    requires
+        clazel_dom::contract::append_attribute_requires(p.doc, el),
+    ensures
+        up_same(p.doc, add_missing_attributes(p, el, attrs, i).doc),
+        dom::host_acyclic(p.doc) ==> dom::host_acyclic(add_missing_attributes(p, el, attrs, i).doc),
+    decreases attrs.len() - i,
+{
+    lemma_up_same_trans(p.doc, p.doc, p.doc);
+    if !(i < 0 || i >= attrs.len()) {
+        let a = attrs[i];
+        let q = if !p.stopped && !element_has_attribute_named(p.doc, el, a.local_name) {
+            Parser { doc: dom::append_attribute(p.doc, el, a), ..p }
+        } else {
+            p
+        };
+        if q != p {
+            clazel_dom::lemmas::theorem_append_attribute_wf(p.doc, el, a);
+            lemma_append_attribute_up_same(p.doc, el, a);
+            if dom::host_acyclic(p.doc) {
+                clazel_dom::host_acyclic_lemmas::theorem_append_attribute_host_acyclic(p.doc, el, a);
+            }
+            assert(q.doc.nodes[el as int].kind is Element);
+        }
+        lemma_add_missing_up(q, el, attrs, i + 1);
+        lemma_up_same_trans(p.doc, q.doc, add_missing_attributes(q, el, attrs, i + 1).doc);
+    }
 }
 
 // ---------------------------------------------------------------------
@@ -398,6 +453,10 @@ pub proof fn lemma_li_loop_keeps(p: Parser, i: int)
     if i < 0 || p.stopped {
         if p.stopped {
             crate::theorems::frame_body::lemma_li_loop(p, i);
+            crate::theorems::open_elements::lemma_li_loop(p, i);
+            if host_inv(p) {
+                lemma_host_stopped(p, li_loop(p, i));
+            }
         } else {
             lemma_keeps_refl(p);
         }
@@ -431,6 +490,10 @@ pub proof fn lemma_dd_dt_loop_keeps(p: Parser, i: int)
     if i < 0 || p.stopped {
         if p.stopped {
             crate::theorems::frame_body::lemma_dd_dt_loop(p, i);
+            crate::theorems::open_elements::lemma_dd_dt_loop(p, i);
+            if host_inv(p) {
+                lemma_host_stopped(p, dd_dt_loop(p, i));
+            }
         } else {
             lemma_keeps_refl(p);
         }
@@ -475,6 +538,10 @@ pub proof fn lemma_any_other_loop_keeps(p: Parser, tt: TagTok, i: int)
     if i < 0 || p.stopped {
         if p.stopped {
             crate::theorems::frame_body::lemma_any_other_end_tag_loop(p, tt, i);
+            crate::theorems::open_elements::lemma_any_other_end_tag_loop(p, tt, i);
+            if host_inv(p) {
+                lemma_host_stopped(p, any_other_end_tag_loop(p, tt, i));
+            }
         } else {
             lemma_keeps_refl(p);
         }

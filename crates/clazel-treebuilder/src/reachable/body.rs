@@ -140,6 +140,7 @@ pub proof fn lemma_ib_done(p: Parser, q: Parser)
         keeps(p, q),
     ensures
         next_core(Outcome::Done(q)),
+        host_next(p, Outcome::Done(q)),
 {
     if !q.stopped {
         lemma_finish(p, q, q);
@@ -173,6 +174,7 @@ pub proof fn lemma_ib_text(p: Parser, q: Parser, tt: TagTok, rawtext: bool)
         tt.tag != Tag::Html && tt.tag != Tag::Table,
     ensures
         next_core(Outcome::Done(generic_text_parsing(q, tt, rawtext))),
+        host_next(p, Outcome::Done(generic_text_parsing(q, tt, rawtext))),
 {
     lemma_keeps_live(p, q);
     if !q.stopped {
@@ -193,6 +195,7 @@ pub proof fn lemma_ib_html(p: Parser, t: Tok, tt: TagTok)
         t == Tok::Start(tt),
     ensures
         next_core(Outcome::Done(in_body_start_html(p, tt))),
+        host_next(p, Outcome::Done(in_body_start_html(p, tt))),
 {
     super::run::lemma_rules_inv_rooted(Rules::Html(Mode::InBody), p, t);
     if !open_has_html(p, Tag::Template) {
@@ -200,6 +203,7 @@ pub proof fn lemma_ib_html(p: Parser, t: Tok, tt: TagTok)
         super::doc::lemma_dinv_at(p, 0);
         super::doc::lemma_dinv(p);
         lemma_core_frame(p, in_body_start_html(p, tt));
+        super::lists::lemma_add_missing_keeps(p, p.open[0].id, tt.attrs, 0);
     }
 }
 
@@ -251,6 +255,7 @@ pub proof fn lemma_ib_body(p: Parser, tt: TagTok)
         ib_pre(p, tt),
     ensures
         next_core(Outcome::Done(in_body_start_body(p, tt))),
+        host_next(p, Outcome::Done(in_body_start_body(p, tt))),
 {
     if !(p.open.len() == 1 || !is_html(p.open[1], Tag::Body) || open_has_html(p, Tag::Template)) {
         let q = frameset_not_ok(p);
@@ -274,6 +279,7 @@ pub proof fn lemma_ib_frameset(p: Parser, tt: TagTok)
         tt.tag == Tag::Frameset,
     ensures
         next_core(Outcome::Done(in_body_start_frameset(p, tt))),
+        host_next(p, Outcome::Done(in_body_start_frameset(p, tt))),
 {
     if p.open.len() == 1 || !is_html(p.open[1], Tag::Body) || !p.frameset_ok {
         lemma_keeps_refl(p);
@@ -381,6 +387,7 @@ pub proof fn lemma_ib_frameset0(p: Parser, tt: TagTok)
         p.mode != Mode::InCell,
     ensures
         next_core(Outcome::Done(in_body_start_frameset(p, tt))),
+        host_next(p, Outcome::Done(in_body_start_frameset(p, tt))),
 {
     if p.open.len() == 1 || !is_html(p.open[1], Tag::Body) || !p.frameset_ok {
         lemma_keeps_refl(p);
@@ -404,6 +411,7 @@ pub proof fn lemma_ib_heading(p: Parser, tt: TagTok)
         is_heading_tag(tt.tag),
     ensures
         next_core(Outcome::Done(in_body_start_heading(p, tt))),
+        host_next(p, Outcome::Done(in_body_start_heading(p, tt))),
 {
     lemma_keeps_refl(p);
     lemma_then_close_p_if(p, p);
@@ -433,6 +441,7 @@ pub proof fn lemma_ib_form(p: Parser, tt: TagTok)
         tt.tag == Tag::Form,
     ensures
         next_core(Outcome::Done(in_body_start_form(p, tt))),
+        host_next(p, Outcome::Done(in_body_start_form(p, tt))),
 {
     if p.form is Some && !parsing_template_contents(p) {
         lemma_keeps_refl(p);
@@ -464,7 +473,9 @@ pub proof fn lemma_ib_li_dd(p: Parser, tt: TagTok)
         tt.tag == Tag::Li || tt.tag == Tag::Dd || tt.tag == Tag::Dt,
     ensures
         tt.tag == Tag::Li ==> next_core(Outcome::Done(in_body_start_li(p, tt))),
+        tt.tag == Tag::Li ==> host_next(p, Outcome::Done(in_body_start_li(p, tt))),
         tt.tag != Tag::Li ==> next_core(Outcome::Done(in_body_start_dd_dt(p, tt))),
+        tt.tag != Tag::Li ==> host_next(p, Outcome::Done(in_body_start_dd_dt(p, tt))),
 {
     let q = frameset_not_ok(p);
     lemma_flags_keeps(p, q);
@@ -491,6 +502,7 @@ pub proof fn lemma_ib_button(p: Parser, tt: TagTok)
         tt.tag == Tag::Button,
     ensures
         next_core(Outcome::Done(in_body_start_button(p, tt))),
+        host_next(p, Outcome::Done(in_body_start_button(p, tt))),
 {
     let q = if has_in_scope(p, Tag::Button, Scope::Default) {
         pop_until_popped(generate_implied_end_tags(p, None), Tag::Button)
@@ -602,6 +614,7 @@ pub proof fn lemma_ib_a(p: Parser, tt: TagTok)
         tt.tag == Tag::A,
     ensures
         next_core(Outcome::Done(in_body_start_a(p, tt))),
+        host_next(p, Outcome::Done(in_body_start_a(p, tt))),
 {
     hide(in_body_adoption);
     let f = p.formatting;
@@ -663,6 +676,7 @@ pub proof fn lemma_ib_nobr(p: Parser, tt: TagTok)
         tt.tag == Tag::Nobr,
     ensures
         next_core(Outcome::Done(in_body_start_nobr(p, tt))),
+        host_next(p, Outcome::Done(in_body_start_nobr(p, tt))),
 {
     hide(in_body_adoption);
     lemma_keeps_refl(p);
@@ -690,6 +704,7 @@ pub proof fn lemma_ib_input(p: Parser, tt: TagTok)
         tt.tag == Tag::Input,
     ensures
         next_core(Outcome::Done(in_body_start_input(p, tt))),
+        host_next(p, Outcome::Done(in_body_start_input(p, tt))),
 {
     if p.context is Some && is_html(p.context->Some_0, Tag::Select) {
         lemma_keeps_refl(p);
@@ -721,6 +736,7 @@ pub proof fn lemma_ib_hr(p: Parser, tt: TagTok)
         tt.tag == Tag::Hr,
     ensures
         next_core(Outcome::Done(in_body_start_hr(p, tt))),
+        host_next(p, Outcome::Done(in_body_start_hr(p, tt))),
 {
     lemma_keeps_refl(p);
     lemma_then_close_p_if(p, p);
@@ -747,6 +763,7 @@ pub proof fn lemma_ib_textarea(p: Parser, tt: TagTok)
         tt.tag == Tag::Textarea,
     ensures
         next_core(Outcome::Done(in_body_start_textarea(p, tt))),
+        host_next(p, Outcome::Done(in_body_start_textarea(p, tt))),
 {
     lemma_insert_html_keeps(p, tt);
     let (q, e) = insert_html_element(p, tt);
@@ -765,8 +782,11 @@ pub proof fn lemma_ib_select(p: Parser, tt: TagTok)
         tt.tag == Tag::Select || tt.tag == Tag::Option || tt.tag == Tag::Optgroup,
     ensures
         tt.tag == Tag::Select ==> next_core(Outcome::Done(in_body_start_select(p, tt))),
+        tt.tag == Tag::Select ==> host_next(p, Outcome::Done(in_body_start_select(p, tt))),
         tt.tag == Tag::Option ==> next_core(Outcome::Done(in_body_start_option(p, tt))),
+        tt.tag == Tag::Option ==> host_next(p, Outcome::Done(in_body_start_option(p, tt))),
         tt.tag == Tag::Optgroup ==> next_core(Outcome::Done(in_body_start_optgroup(p, tt))),
+        tt.tag == Tag::Optgroup ==> host_next(p, Outcome::Done(in_body_start_optgroup(p, tt))),
 {
     let in_sel = has_in_scope(p, Tag::Select, Scope::Default);
     if tt.tag == Tag::Select {
@@ -821,7 +841,9 @@ pub proof fn lemma_ib_foreign(p: Parser, tt: TagTok)
         tt.tag == Tag::Math || tt.tag == Tag::Svg,
     ensures
         tt.tag == Tag::Math ==> next_core(Outcome::Done(in_body_start_math(p, tt))),
+        tt.tag == Tag::Math ==> host_next(p, Outcome::Done(in_body_start_math(p, tt))),
         tt.tag == Tag::Svg ==> next_core(Outcome::Done(in_body_start_svg(p, tt))),
+        tt.tag == Tag::Svg ==> host_next(p, Outcome::Done(in_body_start_svg(p, tt))),
 {
     lemma_keeps_refl(p);
     lemma_then_reconstruct(p, p);
@@ -856,6 +878,11 @@ pub proof fn lemma_ib_ruby(p: Parser, tt: TagTok, except: Option<Tag>)
         tt.tag != Tag::Html && tt.tag != Tag::Table,
     ensures
         next_core(Outcome::Done(insert_html_element(if has_in_scope(p, Tag::Ruby, Scope::Default) {
+            generate_implied_end_tags(p, except)
+        } else {
+            p
+        }, tt).0)),
+        host_next(p, Outcome::Done(insert_html_element(if has_in_scope(p, Tag::Ruby, Scope::Default) {
             generate_implied_end_tags(p, except)
         } else {
             p

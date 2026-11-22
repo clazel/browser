@@ -21,6 +21,34 @@ carry machine-checked proofs.
   "replace data" at the end of a `Text`, §4.9 "append an attribute", and
   setting the document's mode. Readers: parent, children, previous
   sibling, last child, "has a child", inclusive ancestor, kind.
+- **Operations scripts call (Phase 7 item 7.13)**, specified and proven
+  in the same way: DOM §4.2.3† "ensure pre-insertion validity"
+  (`ensure_pre_insertion_validity`, returning the `HierarchyRequestError`
+  or `NotFoundError` the standard throws), "pre-insert" (`pre_insert`, with
+  a node or a `DocumentFragment`, before a child or at the end), "replace"
+  (`replace`), "replace all" (`replace_all`), shallow "clone a node"
+  (`clone_node`), "adopt" (`adopt`), and §4.9† "change", "remove" and
+  "replace an attribute" (`change_attribute`, `remove_attribute`,
+  `replace_attribute`). The named hooks "insertion steps" and "removing
+  steps" are called from "insert" and "remove" and change nothing here.
+  Section and step numbers marked † were written from memory, not read at
+  the pinned DOM commit. Deep "clone a node" (`clone_deep`, the clone
+  children flag) is specified as a relation (the copy is an isomorphic
+  fresh subtree of the host-including subtree, template contents included)
+  and implemented as a worklist, not a recursion. A clone that does not fit
+  the node limit leaves the arena as it was, and is refused only if it does
+  not fit: a successful clone adds exactly `subtree_size` nodes (a count of
+  the host-including subtree, proven), and a refusal needs the arena to be
+  unable to hold that many more. It requires a host-acyclic arena
+  (`host_acyclic`): `wf` forbids a cycle of parents but not one through a
+  template's host, whose unfolding is infinite. Every operation keeps
+  `host_acyclic` (`src/host_acyclic_lemmas.rs`), so it is an invariant of
+  the tree and a caller that starts from `new_document` has it for free;
+  `wf` itself is not strengthened: the tree builder's raw inserts would
+  then each need the host half of the check proven. Document-children
+  rules (step 6 of validity) and the Text/doctype rule (step 5) are covered
+  by `tests/operations.rs` only: no theorem says them, so no mutation of
+  them is certified.
 - **A node limit**, 4,000,000 nodes: creation is refused beyond it, and the
   tree builder treats the refusal as "stop parsing". This is the one
   deliberate deviation from the standards, which have no limit.
@@ -59,8 +87,22 @@ not the tier. The conformance evidence is the crate's own
   contents, "append an attribute" and setting the mode leave alone, and
   that "remove" keeps the siblings' order, are theorems of their own
   (`theorem_*_frame`, `theorem_remove_keeps_order`), so that proofs needing
-  only well-formedness do not carry them. The seventeen theorems are listed
-  in `Cargo.toml`.
+  only well-formedness do not carry them. The twenty-six theorems are listed
+  in `Cargo.toml` (nine of them, in `src/ops_lemmas.rs`, are Phase 7
+  item 7.13's).
+- **Proven (`src/host_acyclic_lemmas.rs`):** every operation keeps
+  `host_acyclic`, the one thing `wf` does not say (no cycle through a
+  template's host): creating a node or template contents, attribute and
+  mode changes, `remove`, `adopt`, pre-insert, replace, replace all, shallow
+  and deep clone. Pre-insert, replace and replace all need nothing but
+  `host_acyclic` of their input: DOM's "host-including inclusive ancestor"
+  check (step 2 of validity) is what refuses a cycle. The raw `insert`,
+  `append`, `insert_before` and `reparent_children`, which the parser calls
+  after its own checks, carry only the inclusive-ancestor half of that
+  check, which is not enough (a template inserted below a node of its own
+  contents passes it), so they additionally need `parent` not to be below
+  `node` through hosts (`host_acyclic_contract::insert_acyclic_requires`,
+  `host_acyclic_contract::reparent_children_acyclic_requires`).
 - **Proven (`src/exec.rs`):** the executable arena equals the spec, for
   every operation and reader (the contracts are `src/contract.rs`). It is
   safe Rust with no recursion; a node's children are edited in place, and
@@ -70,7 +112,11 @@ not the tier. The conformance evidence is the crate's own
   `independent_equivalence.rs` proves them equal to the spec on the parser's
   calls. DOM §4.2.3 has no second source, so this is a same-text
   transcription: it catches slips, not a shared misreading.
-- **Mutations:** fourteen deliberately broken specs (a parent pointer not
+- **Mutations:** twenty-six deliberately broken specs (twelve of them for
+  item 7.13's operations, `src/ops_mutation_lemmas.rs`: validity steps 1 to
+  4 skipped, replace not removing, replace all keeping the old children, a
+  fragment's first child dropped, a clone without attributes or with the
+  wrong count, and the three attribute changes), the first fourteen being a parent pointer not
   set, a child inserted at the wrong index, `remove` leaving the child
   listed or rotating the siblings, `reparent_children` reversing the order,
   the limit off by one, `set_mode` swapping the URLs, `append_attribute`
@@ -118,7 +164,7 @@ not the tier. The conformance evidence is the crate's own
     cast inside `tendril` (the oracle's string type), not in this crate.
 - **Not proven:** that the spec transcribes the DOM Standard correctly
   beyond the above; the two suites and the independent transcription are
-  the evidence. `tests/arena.rs` holds ordinary unit tests. One restriction
+  the evidence. `tests/arena.rs` and `tests/operations.rs` hold ordinary unit tests. One restriction
   the tests respect and the spec leaves to the parser: inserting a template
   into its own contents is not excluded by `insert_requires` (DOM's
   host-including ancestor check), so the differential never makes that call.
