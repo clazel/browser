@@ -14,7 +14,7 @@ description = "The JavaScript engine's heap for Clazel's Phase 7 browser (phase-
 # have not run in CI's full verification on a pull request yet; raising it is
 # CI's call. `target-tier` is the plan's (phase-7.md, "Crates"): 1.
 [package.metadata.clazel]
-tier = 0
+tier = 1
 target-tier = 1
 
 [lints]
