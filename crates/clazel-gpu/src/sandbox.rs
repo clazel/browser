@@ -19,7 +19,9 @@
 //!    when it starts the process (`clazel-renderer`'s `launch::spawn_gpu`): it
 //!    turns off Mesa's on-disk shader cache, whose worker thread otherwise
 //!    opens, locks and writes cache files at any time, the filter below
-//!    included. A process started without it is refused here, every time,
+//!    included, and it fixes the C library's arena limit, whose lazy
+//!    computation otherwise opens a file at the first new thread after the
+//!    filter. A process started without it is refused here, every time,
 //!    rather than killed by its filter some of the time;
 //! 1. `no_new_privs`, then the namespaces (`namespaces::GPU`: user, mount,
 //!    network, IPC), while the process still has one thread, which a user
@@ -89,9 +91,11 @@ impl fmt::Display for Failure {
 impl std::error::Error for Failure {}
 
 /// What the host adds to the Linux GPU process's environment, and what
-/// [`start_vulkan`] checks is there before it makes the backend.
+/// [`start_vulkan`] checks is there before it makes the backend. Two things, each
+/// of which was a way for the process to be killed by its own filter some of the
+/// time.
 ///
-/// `MESA_SHADER_CACHE_DISABLE=true` turns off Mesa's on-disk shader cache
+/// **`MESA_SHADER_CACHE_DISABLE=true`** turns off Mesa's on-disk shader cache
 /// (`util/disk_cache.c`, read when the driver makes its device). With the cache
 /// on, lavapipe hands each compiled shader to a worker thread (named `disk$0`)
 /// that writes it under `~/.cache/mesa_shader_cache` later, with `openat`,
@@ -105,7 +109,34 @@ impl std::error::Error for Failure {}
 /// forbid, and reading compiled machine code back from a file any program of
 /// the user can write is a way in. The warm-up frame compiles every shader
 /// before the filter, so nothing needs the cache after it.
-pub const LINUX_ENVIRONMENT: &[(&str, &str)] = &[("MESA_SHADER_CACHE_DISABLE", "true")];
+///
+/// **`MALLOC_ARENA_MAX=64`** fixes glibc malloc's arena limit. glibc 2.39's
+/// `arena_get2` (`malloc/arena.c`), when a thread needs an arena of its own and
+/// none is free, makes a new one; once the process holds more than
+/// `arena_test` (8 on 64-bit) arenas it first works out the limit, once, from
+/// the number of processors, with `get_nprocs`, which **opens
+/// `/sys/devices/system/cpu/online`** (`openat`). Under the filter that is a
+/// kill. Whether it comes before or after the filter depends on how many
+/// threads have made their first allocation by then, which is timing: the
+/// driver's workers (llvmpipe's, LLVM's pool) start as the device is made, the
+/// warm-up does not force each to allocate, and the GPU process's own two reader
+/// threads, started after the filter, each take an arena. On a machine with many
+/// processors the workers alone pass 8 long before the filter; on a CI runner
+/// with four, a run can reach the filter with the limit not yet worked out.
+/// **Observed on x86-64** (CI's Linux base job: a hosted Ubuntu 24.04 runner,
+/// lavapipe 25.2.8, LLVM 20.1.2): a GPU process lost to `SIGSYS` in
+/// `tests/browse_gpu.rs`, whose kernel audit line is `comm="clazel-gpu"
+/// arch=c000003e syscall=257` (`openat`). **Observed on aarch64** under
+/// `strace -f`: every thread that makes an arena before the filter opens
+/// `/sys/devices/system/cpu/online` just before its heap's `mmap`, and no file is
+/// opened after the filter. With `arena_max` set, `arena_get2` takes it as the
+/// limit and never calls `get_nprocs`, so no thread opens anything when it
+/// starts; past the limit threads share arenas, which takes futexes. The filter
+/// is not widened for `openat`: a file open is what it exists to forbid.
+pub const LINUX_ENVIRONMENT: &[(&str, &str)] = &[
+    ("MESA_SHADER_CACHE_DISABLE", "true"),
+    ("MALLOC_ARENA_MAX", "64"),
+];
 
 /// Whether `get` (the environment, by name) holds [`LINUX_ENVIRONMENT`].
 pub fn has_environment(get: impl Fn(&str) -> Option<std::ffi::OsString>) -> bool {
@@ -326,25 +357,34 @@ mod tests {
     use crate::soft::SoftBackend;
     use std::ffi::OsString;
 
-    /// The cache is off only when the variable says so exactly.
+    /// The environment holds only when every variable says so exactly: the
+    /// shader cache off and the arena limit fixed.
     #[test]
-    fn the_environment_must_turn_the_shader_cache_off() {
+    fn the_environment_must_turn_the_shader_cache_off_and_fix_the_arena_limit() {
         assert_eq!(
             LINUX_ENVIRONMENT,
-            &[("MESA_SHADER_CACHE_DISABLE", "true")][..]
+            &[
+                ("MESA_SHADER_CACHE_DISABLE", "true"),
+                ("MALLOC_ARENA_MAX", "64")
+            ][..]
         );
-        let with = |value: Option<&str>| {
+        let with = |cache: Option<&str>, arenas: Option<&str>| {
             has_environment(|name| {
-                (name == "MESA_SHADER_CACHE_DISABLE")
-                    .then_some(value)
-                    .flatten()
-                    .map(OsString::from)
+                match name {
+                    "MESA_SHADER_CACHE_DISABLE" => cache,
+                    "MALLOC_ARENA_MAX" => arenas,
+                    _ => None,
+                }
+                .map(OsString::from)
             })
         };
-        assert!(with(Some("true")));
-        assert!(!with(None));
-        assert!(!with(Some("false")));
-        assert!(!with(Some("")));
+        assert!(with(Some("true"), Some("64")));
+        assert!(!with(None, Some("64")));
+        assert!(!with(Some("false"), Some("64")));
+        assert!(!with(Some(""), Some("64")));
+        assert!(!with(Some("true"), None));
+        assert!(!with(Some("true"), Some("0")));
+        assert!(!with(Some("true"), Some("")));
     }
 
     /// The software reference draws the warm-up frame to the pixels it names, so
