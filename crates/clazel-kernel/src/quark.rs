@@ -390,9 +390,9 @@ pub proof fn quark_cookie_integrity(rules: Seq<clazel_psl::spec::Rule>, urls: Ur
                                 }
                             }
                         },
-                        Some(clazel_ipc::message::spec::Message::FetchStyle { request, url }) => {
+                        Some(m2) if is_sub_request(m2) => {
                             if r.committed {
-                                crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, request, url);
+                                crate::subfetch_rel::lemma_fetch_sub_shape(rules, urls, fetch, s, r, m2 is FetchScript, sub_request_id(m2), sub_request_url(m2));
                             }
                         },
                         _ => {},

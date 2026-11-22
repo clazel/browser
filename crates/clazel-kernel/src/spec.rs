@@ -422,6 +422,27 @@
 //!   partition key (the renderer's domain): its connections are its tab's,
 //!   keyed by its domain, and every connection is new (`Connection: close`
 //!   is one request per connection).
+//! - **Script fetches (phase-7.md item 7.16).** A committed renderer's
+//!   `FetchScript { request, url }` is exactly a `FetchStyle` in what the
+//!   kernel does ([`fetch_sub`] is the one function both call, with
+//!   `script` false and true): the same resolution against the committed
+//!   URL, the same transducer, limits, credentials (7.0(c) S1: Fetch's
+//!   defaults, same-origin requests carry cookies, cross-origin ones carry
+//!   none) and tables (a script fetch is a [`SubFetch`] with `script` set,
+//!   so it shares a renderer's limits with its style sheet fetches). The
+//!   request is a classic script's without `crossorigin` (destination
+//!   "script", mode "no-cors"): `GET` of the resolved URL with no header,
+//!   body or option of the renderer's. What differs is the answer, which is
+//!   `ScriptResponse { request, content type }`, `ScriptBody` frames and
+//!   `ScriptEnd`, or `ScriptFailed { request }` ([`script_frames`],
+//!   [`script_failed_frame`]), so that a renderer cannot read a script's
+//!   bytes as a sheet's. A `FetchScript` before the renderer's first commit
+//!   is a disallowed frame (killed), as `FetchStyle` is. The opaque-response
+//!   blocking that 7.0(c) lists for no-cors responses is not modelled yet:
+//!   it needs `Fetch` (the later slice of 7.16), whose CORS and ORB checks
+//!   decide what a renderer may read of a cross-origin response; until it
+//!   lands, a cross-origin script is fetched without credentials and handed
+//!   to the renderer whole, as a style sheet is (listed).
 //! - **Sub-fetch connections are named `(renderer, serial, hop)`**, not by
 //!   [`State::next_conn`]: the outputs are `SubConnect`, `SubSend` and
 //!   `SubClose`, and the shell reports with [`Event::SubNet`]. The serial is
@@ -677,7 +698,7 @@ pub struct UserInput {
     pub key: u64,
 }
 
-/// A style sheet fetch in flight (item 5.19).
+/// A style sheet or script fetch in flight (items 5.19 and 7.16).
 pub struct SubFetch {
     /// The renderer that asked.
     pub renderer: nat,
@@ -687,6 +708,10 @@ pub struct SubFetch {
     pub serial: nat,
     /// The renderer's own id for it, which every answer carries.
     pub request: u64,
+    /// Whether it is a script fetch (`FetchScript`, item 7.16), answered
+    /// with `Script*` frames, and not a style sheet fetch (`FetchStyle`),
+    /// answered with `Style*` frames.
+    pub script: bool,
     /// The renderer's tab, which owns its connections.
     pub tab: nat,
     /// The transducer's state.
@@ -2500,11 +2525,50 @@ pub open spec fn style_failed_frame(request: u64) -> Seq<u8> {
     reply_frame(clazel_ipc::message::spec::Message::StyleFailed { request })
 }
 
+/// The `ScriptBody` frames of `body`, in order: consecutive pieces of at most
+/// `max_script_chunk` octets, none for an empty body (item 7.16).
+pub open spec fn script_body_frames(request: u64, body: Seq<u8>) -> Seq<u8>
+    decreases body.len(),
+{
+    if body.len() == 0 {
+        seq![]
+    } else if body.len() <= clazel_ipc::message::spec::max_script_chunk() {
+        reply_frame(clazel_ipc::message::spec::Message::ScriptBody { request, bytes: body })
+    } else {
+        reply_frame(clazel_ipc::message::spec::Message::ScriptBody { request, bytes: body.take(clazel_ipc::message::spec::max_script_chunk() as int) })
+            + script_body_frames(request, body.skip(clazel_ipc::message::spec::max_script_chunk() as int))
+    }
+}
+
+/// The frames of a fetched script: `ScriptResponse`, the `ScriptBody` frames
+/// and `ScriptEnd`, as one write (item 7.16).
+pub open spec fn script_frames(request: u64, doc: Document) -> Seq<u8> {
+    reply_frame(clazel_ipc::message::spec::Message::ScriptResponse { request, content_type: doc.content_type }) + script_body_frames(request, doc.body)
+        + reply_frame(clazel_ipc::message::spec::Message::ScriptEnd { request })
+}
+
+/// The frame of `ScriptFailed` (item 7.16).
+pub open spec fn script_failed_frame(request: u64) -> Seq<u8> {
+    reply_frame(clazel_ipc::message::spec::Message::ScriptFailed { request })
+}
+
+/// The frames of a sub-fetch's response: a script's if it is a script fetch,
+/// a sheet's if not.
+pub open spec fn sub_frames(script: bool, request: u64, doc: Document) -> Seq<u8> {
+    if script { script_frames(request, doc) } else { style_frames(request, doc) }
+}
+
+/// The frame of a sub-fetch's failure: `ScriptFailed` for a script fetch,
+/// `StyleFailed` for a sheet fetch.
+pub open spec fn sub_failed_frame(script: bool, request: u64) -> Seq<u8> {
+    if script { script_failed_frame(request) } else { style_failed_frame(request) }
+}
+
 /// The outputs of a sub-fetch's transducer actions, on connection `hop` of
 /// sub-fetch `serial` of renderer `id`: the connection the last `Connect`
 /// gave, the outputs, and the frames to the renderer if the fetch ended
 /// (`Done` or `Fail`; nothing after it is read).
-pub open spec fn sub_actions(id: nat, serial: nat, request: u64, hop: nat, actions: Seq<NetAction>) -> (nat, Seq<Output>, Option<Seq<u8>>)
+pub open spec fn sub_actions(id: nat, serial: nat, request: u64, script: bool, hop: nat, actions: Seq<NetAction>) -> (nat, Seq<Output>, Option<Seq<u8>>)
     decreases actions.len(),
 {
     if actions.len() == 0 {
@@ -2513,19 +2577,19 @@ pub open spec fn sub_actions(id: nat, serial: nat, request: u64, hop: nat, actio
         let rest = actions.drop_first();
         match actions[0] {
             clazel_fetch::transducer::spec::Action::Connect { host, port, tls } => {
-                let (h, out, end) = sub_actions(id, serial, request, hop + 1, rest);
+                let (h, out, end) = sub_actions(id, serial, request, script, hop + 1, rest);
                 (h, seq![Output::SubConnect { renderer: id, serial, hop: hop + 1, host, port, tls }] + out, end)
             },
             clazel_fetch::transducer::spec::Action::Send(bytes) => {
-                let (h, out, end) = sub_actions(id, serial, request, hop, rest);
+                let (h, out, end) = sub_actions(id, serial, request, script, hop, rest);
                 (h, seq![Output::SubSend { renderer: id, serial, hop, bytes }] + out, end)
             },
             clazel_fetch::transducer::spec::Action::Close => {
-                let (h, out, end) = sub_actions(id, serial, request, hop, rest);
+                let (h, out, end) = sub_actions(id, serial, request, script, hop, rest);
                 (h, seq![Output::SubClose { renderer: id, serial, hop }] + out, end)
             },
-            clazel_fetch::transducer::spec::Action::Done { url, response } => (hop, seq![], Some(style_frames(request, response_document(response)))),
-            clazel_fetch::transducer::spec::Action::Fail(_) => (hop, seq![], Some(style_failed_frame(request))),
+            clazel_fetch::transducer::spec::Action::Done { url, response } => (hop, seq![], Some(sub_frames(script, request, response_document(response)))),
+            clazel_fetch::transducer::spec::Action::Fail(_) => (hop, seq![], Some(sub_failed_frame(script, request))),
         }
     }
 }
@@ -2539,14 +2603,16 @@ pub open spec fn sub_finish(fs: Seq<SubFetch>, f: SubFetch, out: Seq<Output>, en
     }
 }
 
-/// A committed renderer's `FetchStyle { request, url }` (item 5.19): refused
-/// with `StyleFailed` past a limit or for a URL that does not decode,
-/// resolve or parse; otherwise a sub-fetch is started by the transducer
-/// navigations use, in the renderer's table, on connections of its tab
-/// whose partition key is its domain.
-pub open spec fn fetch_style(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, r: Renderer, request: u64, url: Seq<u8>) -> (State, Seq<Output>) {
+/// A committed renderer's `FetchStyle { request, url }` (item 5.19) or
+/// `FetchScript { request, url }` (item 7.16, `script` true): refused with
+/// `StyleFailed` (`ScriptFailed`) past a limit or for a URL that does not
+/// decode, resolve or parse; otherwise a sub-fetch is started by the
+/// transducer navigations use, in the renderer's table, on connections of its
+/// tab whose partition key is its domain. The two differ only in the frames
+/// that answer them.
+pub open spec fn fetch_sub(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, r: Renderer, script: bool, request: u64, url: Seq<u8>) -> (State, Seq<Output>) {
     let (serial, in_document) = subcount_of(s.subcounts, r.id, r.lock);
-    let refused = (s, reply(r, clazel_ipc::message::spec::Message::StyleFailed { request }));
+    let refused = (s, reply_failed(r, script, request));
     if live_subfetches(s.subfetches, r.id, r.lock) >= max_subfetches_at_once() || in_document >= max_subfetches_per_document() || serial
         >= max_subfetch_serial() {
         refused
@@ -2564,6 +2630,7 @@ pub open spec fn fetch_style(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
                             lock: r.lock,
                             serial,
                             request,
+                            script,
                             tab: r.tab,
                             fetch: fs,
                             hop: 0,
@@ -2571,7 +2638,7 @@ pub open spec fn fetch_style(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
                             partition: crate::domain::domain_of_renderer(rules, r),
                             ended: false,
                         };
-                        let (hop, out, end) = sub_actions(r.id, serial, request, 0, actions);
+                        let (hop, out, end) = sub_actions(r.id, serial, request, script, 0, actions);
                         let counts = set_subcount(s.subcounts, r.id, r.lock, serial + 1, in_document + 1);
                         let table = match end {
                             None => s.subfetches.push(SubFetch { hop, ..f }),
@@ -2586,6 +2653,45 @@ pub open spec fn fetch_style(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
                 },
             },
         }
+    }
+}
+
+/// A single `ToRenderer` of the failure frame of a sub-fetch of kind
+/// `script`, to renderer `r`.
+pub open spec fn reply_failed(r: Renderer, script: bool, request: u64) -> Seq<Output> {
+    seq![Output::ToRenderer { id: r.id, bytes: sub_failed_frame(script, request) }]
+}
+
+/// `FetchStyle` (item 5.19): [`fetch_sub`] for a style sheet.
+pub open spec fn fetch_style(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, r: Renderer, request: u64, url: Seq<u8>) -> (State, Seq<Output>) {
+    fetch_sub(rules, urls, fetch, s, r, false, request, url)
+}
+
+/// `FetchScript` (item 7.16): [`fetch_sub`] for a script.
+pub open spec fn fetch_script(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, r: Renderer, request: u64, url: Seq<u8>) -> (State, Seq<Output>) {
+    fetch_sub(rules, urls, fetch, s, r, true, request, url)
+}
+
+/// The message asks for a sub-fetch: a `FetchStyle` or a `FetchScript`.
+pub open spec fn is_sub_request(m: clazel_ipc::message::spec::Message) -> bool {
+    m is FetchStyle || m is FetchScript
+}
+
+/// The `request` id of a sub-fetch request (0 for any other message).
+pub open spec fn sub_request_id(m: clazel_ipc::message::spec::Message) -> u64 {
+    match m {
+        clazel_ipc::message::spec::Message::FetchStyle { request, .. } => request,
+        clazel_ipc::message::spec::Message::FetchScript { request, .. } => request,
+        _ => 0,
+    }
+}
+
+/// The `url` of a sub-fetch request (empty for any other message).
+pub open spec fn sub_request_url(m: clazel_ipc::message::spec::Message) -> Seq<u8> {
+    match m {
+        clazel_ipc::message::spec::Message::FetchStyle { url, .. } => url,
+        clazel_ipc::message::spec::Message::FetchScript { url, .. } => url,
+        _ => seq![],
     }
 }
 
@@ -2613,7 +2719,7 @@ pub open spec fn sub_net(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns, s:
             let cred = credentialed(fetch, f.lock, f.fetch.url);
             let (fs, actions, ops) = clazel_fetch::transducer::spec::step(fetch.http, fetch.urls, f.fetch, input, subfetch_jar(fetch, s, f), s.now);
             let jar = if cred { apply_net_ops(rules, s.jar, ops) } else { s.jar };
-            let (h, out, end) = sub_actions(renderer, serial, f.request, hop, actions);
+            let (h, out, end) = sub_actions(renderer, serial, f.request, f.script, hop, actions);
             let (table, outs) = sub_finish(s.subfetches, SubFetch { fetch: fs, hop: h, ..f }, out, end);
             (State { subfetches: table, jar, ..s }, outs)
         },
@@ -2645,7 +2751,7 @@ pub open spec fn sweep(s: State, fs: Seq<SubFetch>) -> (Seq<SubFetch>, Seq<Outpu
         if !subfetch_live(s, f) {
             (rest, close + out)
         } else if s.now >= f.started + subfetch_timeout() {
-            (rest, close + seq![Output::ToRenderer { id: f.renderer, bytes: style_failed_frame(f.request) }] + out)
+            (rest, close + seq![Output::ToRenderer { id: f.renderer, bytes: sub_failed_frame(f.script, f.request) }] + out)
         } else {
             (seq![f] + rest, out)
         }
@@ -2673,7 +2779,7 @@ pub open spec fn decode_renderer_frame(bytes: Seq<u8>) -> Option<clazel_ipc::mes
 /// is committed.
 pub open spec fn accepted_message(r: Renderer, bytes: Seq<u8>) -> Option<clazel_ipc::message::spec::Message> {
     match decode_renderer_frame(bytes) {
-        Some(m) => if (m is Display || m is Title || m is FetchStyle) && !r.committed { None } else { Some(m) },
+        Some(m) => if (m is Display || m is Title || m is FetchStyle || m is FetchScript) && !r.committed { None } else { Some(m) },
         None => None,
     }
 }
@@ -2745,6 +2851,8 @@ pub open spec fn handle_message(
         clazel_ipc::message::spec::Message::Title { title } => (State { titles: set_title(s.titles, r.id, r.lock, title), ..s }, seq![]),
         // Item 5.19.
         clazel_ipc::message::spec::Message::FetchStyle { request, url } => fetch_style(rules, urls, fetch, s, r, request, url),
+        // Item 7.16.
+        clazel_ipc::message::spec::Message::FetchScript { request, url } => fetch_script(rules, urls, fetch, s, r, request, url),
         // A message a renderer may not send: unreachable, see
         // `decode_renderer_frame`.
         _ => (s, seq![]),

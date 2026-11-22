@@ -762,7 +762,9 @@ pub open spec fn viewport_only_to_own_tab_statement(
 // Style sheet fetches (phase-5.md item 5.19).
 // ---------------------------------------------------------------------
 
-/// `theorem_subfetch_only_to_requester`: every frame of a sub-fetch's answer
+/// `theorem_subfetch_only_to_requester` (restated for item 7.16: a script
+/// fetch's frames are `Script*`, a sheet fetch's `Style*`, by the sub-fetch's
+/// `script` flag): every frame of a sub-fetch's answer
 /// goes to the renderer that asked, under its own request id, and only while
 /// the sub-fetch belongs to that renderer's current document (it is live:
 /// the renderer is live, committed and has the lock it asked with, and no
@@ -780,14 +782,14 @@ pub open spec fn subfetch_only_to_requester_statement(rules: Seq<clazel_psl::spe
                 Some(f) => {
                     &&& out[k]->ToRenderer_id == renderer
                     &&& subfetch_live(s, f)
-                    &&& (out[k]->ToRenderer_bytes == style_failed_frame(f.request) || exists|doc: Document|
-                        out[k]->ToRenderer_bytes == #[trigger] style_frames(f.request, doc))
+                    &&& (out[k]->ToRenderer_bytes == sub_failed_frame(f.script, f.request) || exists|doc: Document|
+                        out[k]->ToRenderer_bytes == #[trigger] sub_frames(f.script, f.request, doc))
                 },
                 None => false,
             },
             Event::Tick { time } => exists|j: int|
                 0 <= j < s.subfetches.len() && s.subfetches[j].renderer == out[k]->ToRenderer_id && subfetch_live(tick(s, time).0, s.subfetches[j])
-                    && out[k]->ToRenderer_bytes == style_failed_frame(s.subfetches[j].request),
+                    && out[k]->ToRenderer_bytes == sub_failed_frame(s.subfetches[j].script, s.subfetches[j].request),
             _ => true,
         }
 }
@@ -883,6 +885,65 @@ pub open spec fn commit_ends_subfetches_statement(urls: UrlFns, s: State, tab: n
             0 <= j < s1.subfetches.len() && (#[trigger] s1.subfetches[j]).renderer == s.renderers[i].id && s1.subfetches[j].lock == s.renderers[i].lock
                 && s1 != s ==> !subfetch_live(s1, s1.subfetches[j]),
         None => true,
+    }
+}
+
+// ---------------------------------------------------------------------
+// Script fetches (phase-7.md item 7.16).
+// ---------------------------------------------------------------------
+
+/// The fetch a script fetch starts, as the transducer is given it: a
+/// sub-fetch of renderer `r` that is a script fetch, under the renderer's
+/// request id, on its tab and with its domain as partition key, whose
+/// transducer state is `start` of the URL the kernel resolved and parsed:
+/// the renderer's only contribution to the request is the URL text.
+pub open spec fn script_fetch_started(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, r: Renderer, request: u64, url: Seq<u8>, f: SubFetch) -> bool {
+    &&& f.script
+    &&& f.renderer == r.id && f.lock == r.lock && f.tab == r.tab && f.request == request
+    &&& f.serial == subcount_of(s.subcounts, r.id, r.lock).0
+    &&& f.partition == crate::domain::domain_of_renderer(rules, r)
+    &&& f.started == s.now && !f.ended
+    &&& exists|relative: Seq<u32>, resolved: Seq<u32>, parsed: clazel_url::url::spec::Url|
+        clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) == Some(relative) && (urls.resolve)(r.url, relative) == Some(resolved)
+            && (fetch.parse)(resolved) == Some(parsed) && f.fetch == clazel_fetch::transducer::spec::start(parsed).0
+}
+
+/// `theorem_script_fetch_shape` (item 7.16): whatever frame `bytes` renderer
+/// `id` sends, if it is a `FetchScript { request, url }` the kernel accepts
+/// (the sender is committed), then
+/// - the step changes nothing but the sender's sub-fetch table and counts
+///   (not the renderers, jar, storage, connections, counters, viewports,
+///   titles or GPU records);
+/// - it either leaves the table alone (refused, or finished at once) or adds
+///   exactly one sub-fetch, a script fetch of the sender, on its tab and
+///   under its domain's partition key, whose request is the transducer's
+///   `start` of the URL the kernel resolved against the sender's committed
+///   URL ([`script_fetch_started`]): a `GET` with no header, body, method,
+///   mode or credentials mode of the renderer's, which is 5.19's request
+///   shape;
+/// - every output is for the sender and is a `ScriptFailed` or a script's
+///   `ScriptResponse`, `ScriptBody` frames and `ScriptEnd` under the sender's
+///   request id (never a `Style*` frame), or a connection the sender's
+///   sub-fetch asks for.
+pub open spec fn script_fetch_shape_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat, bytes: Seq<u8>) -> bool {
+    let (s1, out) = step(rules, urls, fetch, s, Event::FromRenderer { id, bytes });
+    match find_by_id(s.renderers, id, 0) {
+        None => true,
+        Some(i) => match accepted_message(s.renderers[i], bytes) {
+            Some(clazel_ipc::message::spec::Message::FetchScript { request, url }) => {
+                let r = s.renderers[i];
+                &&& r.committed
+                &&& s1 == State { subfetches: s1.subfetches, subcounts: s1.subcounts, ..s }
+                &&& (s1.subfetches == s.subfetches || exists|f: SubFetch| s1.subfetches == s.subfetches.push(f) && script_fetch_started(rules, urls, fetch, s, r, request, url, f))
+                &&& forall|k: int|
+                    0 <= k < out.len() ==> match #[trigger] out[k] {
+                        Output::ToRenderer { id: x, bytes: b } => x == id && (b == script_failed_frame(request) || exists|doc: Document| b == #[trigger] script_frames(request, doc)),
+                        Output::SubConnect { renderer: x, .. } => x == id,
+                        _ => false,
+                    }
+            },
+            _ => true,
+        },
     }
 }
 
