@@ -16,7 +16,16 @@ to trust the agents. Read `docs/VERIFICATION.md` and `docs/ROADMAP.md` first.
    a `// SAFETY:` comment directly above it citing the man page and the
    `libc` declaration (on Windows, the Microsoft Learn page, written
    `docs <Function>`, and the hand-written declaration); there is no raw pointer arithmetic and every `pub fn`
-   is safe. It makes no policy decisions: it takes data that safe, verified
+   is safe. The one exception is the **code entry** (jit.md J.0(a),
+   `xtask/src/sys.rs` rules 10 and 11): in `src/enter.rs`, once per ABI, a
+   block that calls the code region's fixed enter stub, as the whole body
+   of a private `run` that only `enter` calls. `enter` takes a `Validated`
+   entry, which only `clazel-codecheck`'s validator is meant to build, and
+   only `clazel-codecheck` and `clazel-jit` may name the code-region API.
+   Its `// SAFETY:` comment cites the W^X man page (or `docs <Function>`)
+   and the ABI document. The checker enforces the shape; the audit checks
+   the stub's bytes and that the entry is checked against the region.
+   It makes no policy decisions: it takes data that safe, verified
    code built and hands it to the OS. `cargo xtask check` enforces all of
    this, and the README states the measured `unsafe` count.
    **Every change to `clazel-sys` is audited** by a different LLM session
