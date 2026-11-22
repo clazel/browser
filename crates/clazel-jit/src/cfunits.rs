@@ -214,6 +214,7 @@ pub proof fn lemma_blen_one(u: Seq<x64::Instr>)
         blen(seq![u]) == code_len(u),
 {
     assert(seq![u].skip(1) =~= Seq::<Seq<x64::Instr>>::empty());
+    assert(blen(Seq::<Seq<x64::Instr>>::empty()) == 0);
 }
 
 /// The length of a two-unit list.

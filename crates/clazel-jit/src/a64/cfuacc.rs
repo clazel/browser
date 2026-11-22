@@ -482,6 +482,11 @@ proof fn lemma_pre_ucheck(
             let last = base_ld(k);
             let init = pre.drop_last();
             assert(pre.last() == last);
+            lemma_load_slot_straight(x1(), (nl + h - 1) as nat);
+            lemma_load_slot_straight(x4(), (nl + h - 1) as nat);
+            if m is Store {
+                lemma_load_slot_straight(x1(), (nl + h - 2) as nat);
+            }
             assert(all_simp(init)) by {
                 assert forall|q: int| 0 <= q < init.len() implies simp(#[trigger] init[q]) by {
                     assert(init[q] == pre[q]);
