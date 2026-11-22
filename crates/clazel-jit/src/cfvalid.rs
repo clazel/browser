@@ -62,7 +62,9 @@ pub proof fn lemma_ctmpl_valid(n: Node, nl: nat, h: nat, offs: Seq<int>)
         Node::Op(o) => {
             crate::tlemmas::lemma_tmpl_valid(o, nl, h);
         },
-        Node::Mem(_) => {},
+        Node::Mem(m) => {
+            crate::cfmemvalid::lemma_mem_valid(m, nl, h);
+        },
         Node::Then(a, b) => {
             match cf_flow(*a, nl, h, d) {
                 Some(Flow::Falls(h1)) => {
@@ -128,7 +130,9 @@ pub proof fn lemma_ctmpl_valid(n: Node, nl: nat, h: nat, offs: Seq<int>)
                 },
             );
         },
-        Node::BrTable(_, _) => {},
+        Node::BrTable(ls, d) => {
+            crate::cfmemvalid::lemma_brt_valid(ls@, d, nl, h, offs);
+        },
         Node::Exit(c, _) => {
             crate::tlemmas::lemma_exit_valid(c);
         },

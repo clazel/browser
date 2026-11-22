@@ -8,19 +8,19 @@
 #[allow(unused_imports)]
 use super::spec::*;
 #[cfg(verus_only)]
+use crate::cfalg::*;
+#[cfg(verus_only)]
+use crate::cfleaf::*;
+#[cfg(verus_only)]
 use crate::cfmemlens::*;
 #[cfg(verus_only)]
 use crate::cfmemrel::*;
 #[cfg(verus_only)]
 use crate::cfmemsteps::*;
 #[cfg(verus_only)]
-use crate::cfsteps::*;
-#[cfg(verus_only)]
-use crate::cfleaf::*;
-#[cfg(verus_only)]
-use crate::cfalg::*;
-#[cfg(verus_only)]
 use crate::cfspec::*;
+#[cfg(verus_only)]
+use crate::cfsteps::*;
 #[cfg(verus_only)]
 use crate::cftemplates::*;
 #[cfg(verus_only)]
@@ -147,6 +147,71 @@ pub proof fn lemma_table_words(lay: lir::Layout, m: x64::State, k: nat)
     lemma_read_mem_range(m.mem, ctx_of(m) + abi::bound_off(k as int), 8, lk.bound as int);
     super::memlemmas::lemma_p2_consts();
     assert(vstd::arithmetic::power2::pow2(64) == 0x1_0000_0000_0000_0000);
+}
+
+/// A state with the memory and `rip`'s canonicity of a well-formed one, 16
+/// general and 16 XMM registers, is well formed.
+pub proof fn lemma_wf_like(m: x64::State, s: x64::State)
+    requires
+        x64::wf(m),
+        s.mem == m.mem,
+        s.rgf.len() == 16,
+        s.xmm.len() == 16,
+        x64::canonical(s.rip),
+    ensures
+        x64::wf(s),
+{
+}
+
+/// The offsets of the bounds-check sequence's instructions: they begin 0, 3,
+/// 10, 16, 24, 30, 35 and 43 bytes in, and it is 47 bytes long; the part from
+/// the fourth instruction on is 31, from the sixth 17.
+pub proof fn lemma_check_offsets(c: clazel_codecheck::spec::Chk)
+    requires
+        c.i == rcx() && c.t == rdx() && c.z == rax() && 0 <= c.k < 16,
+    ensures
+        ({
+            let cs = clazel_codecheck::spec::check_seq(c);
+            &&& cs.len() == 8
+            &&& code_len(cs.take(0)) == 0
+            &&& code_len(cs.take(1)) == 3
+            &&& code_len(cs.take(2)) == 10
+            &&& code_len(cs.take(3)) == 16
+            &&& code_len(cs.take(4)) == 24
+            &&& code_len(cs.take(5)) == 30
+            &&& code_len(cs.take(6)) == 35
+            &&& code_len(cs.take(7)) == 43
+            &&& code_len(cs) == 47
+            &&& code_len(cs.skip(3)) == 31
+            &&& code_len(cs.skip(5)) == 17
+        }),
+{
+    let cs = clazel_codecheck::spec::check_seq(c);
+    lemma_check_instr_lens(c);
+    assert(cs.len() == 8);
+    assert(cs.take(0) =~= Seq::<x64::Instr>::empty());
+    assert(code_len(Seq::<x64::Instr>::empty()) == 0);
+    assert(cs[0] == clazel_codecheck::spec::check_instr(0, c));
+    assert(cs[1] == clazel_codecheck::spec::check_instr(1, c));
+    assert(cs[2] == clazel_codecheck::spec::check_instr(2, c));
+    assert(cs[3] == clazel_codecheck::spec::check_instr(3, c));
+    assert(cs[4] == clazel_codecheck::spec::check_instr(4, c));
+    assert(cs[5] == clazel_codecheck::spec::check_instr(5, c));
+    assert(cs[6] == clazel_codecheck::spec::check_instr(6, c));
+    assert(cs[7] == clazel_codecheck::spec::check_instr(7, c));
+    lemma_take_len(cs, 0);
+    lemma_take_len(cs, 1);
+    lemma_take_len(cs, 2);
+    lemma_take_len(cs, 3);
+    lemma_take_len(cs, 4);
+    lemma_take_len(cs, 5);
+    lemma_take_len(cs, 6);
+    lemma_take_len(cs, 7);
+    assert(cs.take(8) =~= cs);
+    assert(cs =~= cs.take(3) + cs.skip(3));
+    assert(cs =~= cs.take(5) + cs.skip(5));
+    super::runseq::lemma_code_len_append(cs.take(3), cs.skip(3));
+    super::runseq::lemma_code_len_append(cs.take(5), cs.skip(5));
 }
 
 } // verus!

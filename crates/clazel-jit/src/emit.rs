@@ -197,7 +197,7 @@ fn un_supported_exec(u: &lir::UnOp) -> (r: bool)
 }
 
 /// `pops`.
-fn pops_exec(op: &Op) -> (r: usize)
+pub(crate) fn pops_exec(op: &Op) -> (r: usize)
     ensures
         r == pops(*op),
 {
@@ -215,7 +215,7 @@ fn pops_exec(op: &Op) -> (r: usize)
 }
 
 /// `pushes`.
-fn pushes_exec(op: &Op) -> (r: usize)
+pub(crate) fn pushes_exec(op: &Op) -> (r: usize)
     ensures
         r == pushes(*op),
 {
@@ -233,7 +233,7 @@ fn pushes_exec(op: &Op) -> (r: usize)
 }
 
 /// [`op_ok`], executable.
-fn op_ok_exec(op: &Op, nl: usize, h: usize) -> (r: bool)
+pub(crate) fn op_ok_exec(op: &Op, nl: usize, h: usize) -> (r: bool)
     ensures
         r == op_ok(*op, nl as nat, h as nat),
 {
@@ -268,7 +268,7 @@ fn op_ok_exec(op: &Op, nl: usize, h: usize) -> (r: bool)
 
 /// Append the template of `op` at height `h` with `nl` locals.
 #[verifier::rlimit(500)]
-fn emit_op(op: &Op, nl: usize, h: usize, out: &mut Vec<x64::Instr>)
+pub(crate) fn emit_op(op: &Op, nl: usize, h: usize, out: &mut Vec<x64::Instr>)
     requires
         op_ok(*op, nl as nat, h as nat),
     ensures

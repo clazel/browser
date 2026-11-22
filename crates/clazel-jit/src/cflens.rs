@@ -124,7 +124,10 @@ pub proof fn lemma_ctmpl_len_eq(n: Node, nl: nat, h: nat, o1: Seq<int>, o2: Seq<
             lemma_cond_pre_len(nl, h, 5, if l < o1.len() { o1[l as int] - cond_len(nl, h) as int } else { 0 });
             lemma_cond_pre_len(nl, h, 5, if l < o2.len() { o2[l as int] - cond_len(nl, h) as int } else { 0 });
         },
-        Node::BrTable(_, _) => {},
+        Node::BrTable(ls, d) => {
+            crate::cfbrt::lemma_brt_fetch_jmp(ls@, d, nl, h, o1);
+            crate::cfbrt::lemma_brt_fetch_jmp(ls@, d, nl, h, o2);
+        },
         Node::Exit(c, _) => {},
     }
 }

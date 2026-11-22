@@ -9,6 +9,8 @@ use super::spec::*;
 #[cfg(verus_only)]
 use crate::cfblock::*;
 #[cfg(verus_only)]
+use crate::cfbrt::*;
+#[cfg(verus_only)]
 use crate::cfcompose::*;
 #[cfg(verus_only)]
 use crate::cfcontract::*;
@@ -20,6 +22,10 @@ use crate::cfif::*;
 use crate::cfleaf::*;
 #[cfg(verus_only)]
 use crate::cflens::*;
+#[cfg(verus_only)]
+use crate::cfmem::*;
+#[cfg(verus_only)]
+use crate::cfmemops::*;
 #[cfg(verus_only)]
 use crate::cfop::*;
 #[cfg(verus_only)]
@@ -107,7 +113,19 @@ pub proof fn lemma_ctmpl_refines(n: Node, nl: nat, h: nat, offs: Seq<int>)
         Node::Op(o) => {
             lemma_op_cf(o, nl, h, offs);
         },
-        Node::Mem(_) => {},
+        Node::Mem(m) => {
+            match m {
+                MemOp::BoundsCheck { region, size, code } => {
+                    lemma_bc_cf(region, size, code, nl, h, offs);
+                },
+                MemOp::Load { region, ty } => {
+                    lemma_load_cf(region, ty, nl, h, offs);
+                },
+                MemOp::Store { region, ty } => {
+                    lemma_store_cf(region, ty, nl, h, offs);
+                },
+            }
+        },
         Node::Then(a, b) => {
             match cf_flow(*a, nl, h, d) {
                 Some(Flow::Falls(h1)) => {
@@ -212,7 +230,10 @@ pub proof fn lemma_ctmpl_refines(n: Node, nl: nat, h: nat, offs: Seq<int>)
             lemma_csize_brif(l, nl, h, d);
             lemma_brif(nl, h, offs, l);
         },
-        Node::BrTable(_, _) => {},
+        Node::BrTable(ls, d) => {
+            crate::cfbrt::lemma_brt_fetch_jmp(ls@, d, nl, h, offs);
+            lemma_brt_cf(ls, d, nl, h, offs);
+        },
         Node::Exit(c, k) => {
             lemma_exit_cf(c, k, nl, h, offs);
         },
