@@ -14,11 +14,15 @@
 //!   satisfy.
 //! - [`parse`] and [`quote`]: the executable parser and quoter, and their
 //!   proofs.
+//! - [`independent`]: a second transcription, from RFC 8259's ABNF, and
+//!   [`equivalence`]: its proof of equality with [`spec`].
 //! - [`examples`]: a few cases evaluated on the spec; [`lemmas`]: facts
 //!   about the spec (and the home of the mutation certificates).
 
 pub mod contract;
+pub mod equivalence;
 pub mod examples;
+pub mod independent;
 pub mod lemmas;
 pub mod parse;
 pub mod quote;
