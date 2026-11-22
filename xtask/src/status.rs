@@ -74,6 +74,8 @@ const PLACES: &[(&str, Place)] = &[
     ("clazel-selectors", Place::Renderer),
     ("clazel-js-lexer", Place::Renderer),
     ("clazel-js-vm", Place::Renderer),
+    // The global object's built-ins (phase 7 item 7.9).
+    ("clazel-js-builtins", Place::Renderer),
     ("clazel-js-heap", Place::Renderer),
     ("clazel-js-syntax", Place::Renderer),
     ("clazel-style", Place::Renderer),
