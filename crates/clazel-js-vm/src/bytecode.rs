@@ -193,6 +193,25 @@ instrs! {
     CreateRestArray { dst: Reg, from: u32 },
     ForInIterator { dst: Reg, src: Reg },
     InitGlobalLexical { key: u32, src: Reg },
+    NewRegExp { dst: Reg, k: u32 },
+    GeneratorStart,
+    YieldDelegate { src: Reg, value: Reg, mode: Reg },
+    GetAsyncIterator { dst: Reg, src: Reg },
+    IterCallMethod { dst: Reg, found: Reg, iter: Reg, arg: Reg, which: u32 },
+    IterComplete { done: Reg, result: Reg },
+    IterValue { dst: Reg, result: Reg },
+    ThrowIfNotObject { src: Reg },
+    ToObject { dst: Reg, src: Reg },
+    WithHas { dst: Reg, obj: Reg, key: u32 },
+    WithGet { dst: Reg, obj: Reg, key: u32, strict: bool },
+    WithSet { obj: Reg, key: u32, val: Reg, strict: bool },
+    WithDelete { dst: Reg, obj: Reg, key: u32 },
+    DeleteGlobal { dst: Reg, key: u32 },
+    DirectEval { dst: Reg, callee: Reg, this: Reg, args: Reg, argc: u32, env: Reg, k: u32 },
+    GetImportBinding { dst: Reg, env: Reg, idx: u32 },
+    ImportCall { dst: Reg, specifier: Reg, options: Reg },
+    ImportMeta { dst: Reg },
+    DirectEvalSpread { dst: Reg, callee: Reg, this: Reg, args: Reg, env: Reg, k: u32 },
 }
 
 impl Instr {
@@ -265,6 +284,119 @@ pub enum Const {
     /// parameter, the slot of the environment object it is bound to, or none
     /// when a later parameter of the same name replaces it.
     ArgumentsMap(Vec<Option<u32>>),
+    /// A regular expression literal's record, which [`Instr::NewRegExp`] reads
+    /// (see [`crate::ops::Op::NewRegExp`]).
+    RegExp(RegExpSite),
+    /// The scopes of a direct eval's call, which [`Instr::DirectEval`] reads
+    /// (see [`crate::ops::Op::DirectEval`]).
+    EvalScope(EvalScopeInfo),
+}
+
+/// What a direct eval's code is compiled against (the host compile path of
+/// [`crate::ops::Op::DirectEval`]): the caller's strictness, what eval code
+/// may use of the caller (§19.2.1.1† PerformEval steps 5 to 9) and the scopes
+/// the caller is in.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct EvalScopeInfo {
+    /// The caller's code is strict mode code (strictCaller).
+    pub strict: bool,
+    /// The caller is in a function, so `new.target` is allowed (inFunction).
+    pub in_function: bool,
+    /// The caller is in a method, so `super.x` is allowed (inMethod).
+    pub in_method: bool,
+    /// The caller is in a derived constructor, so `super()` is allowed.
+    pub in_derived_constructor: bool,
+    /// The caller is in a class field initializer, so `arguments` is not
+    /// allowed (inClassFieldInitializer).
+    pub in_class_field_initializer: bool,
+    /// The scopes that have an environment object, innermost first: each is
+    /// one `GetEnvParent` hop from the one before, the first being the
+    /// call's `env` operand.
+    pub scopes: Vec<EvalScope>,
+}
+
+/// One scope of [`EvalScopeInfo`].
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct EvalScope {
+    /// What kind of scope it is.
+    pub kind: EvalScopeKind,
+    /// For a function scope of sloppy code that calls direct eval: the slot
+    /// of its environment object that holds the variable object, which the
+    /// declarations of sloppy eval code are properties of.
+    pub var_object: Option<u32>,
+    /// The names the scope binds, each with its slot.
+    pub names: Vec<EvalName>,
+}
+
+/// What kind of scope an [`EvalScope`] is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum EvalScopeKind {
+    /// The script's.
+    Script,
+    /// A module's: every binding of the module scope.
+    Module,
+    /// A function's: its parameters, `var`s and top-level declarations.
+    Function,
+    /// A block, `for`, `switch` or `catch` scope.
+    Block,
+    /// A class's scope: its name and private names.
+    Class,
+    /// A `with` statement's: slot 0 holds the object.
+    With,
+}
+
+/// A name bound in an [`EvalScope`], in a slot of its environment object.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct EvalName {
+    /// The name, as UTF-16 code units (a private name keeps its `#`; the
+    /// compiler's own bindings have an empty name and a kind that says what
+    /// they are).
+    pub name: Vec<u16>,
+    /// The slot in the scope's environment object.
+    pub slot: u32,
+    /// What declared it.
+    pub kind: EvalBinding,
+}
+
+/// What declared an [`EvalName`] (`scope::BKind`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum EvalBinding {
+    /// A parameter, a `var` or a function declaration of a function.
+    Var,
+    /// A `let` or a function declared in a block (a temporal dead zone).
+    Let,
+    /// A `const`.
+    Const,
+    /// A `catch` parameter.
+    Catch,
+    /// A function expression's own name (immutable).
+    FuncName,
+    /// The `arguments` object.
+    Arguments,
+    /// The caller's `this`.
+    This,
+    /// The caller's `this` in a derived constructor (the hole before `super()`).
+    DerivedThis,
+    /// The caller's `new.target`.
+    NewTarget,
+    /// The caller's function, for `super`.
+    Callee,
+    /// A private name of a class.
+    PrivateName,
+    /// A named or default import: an indirect binding, read with
+    /// [`Instr::GetImportBinding`].
+    Import,
+}
+
+/// The source text and the flags of one regular expression literal
+/// (§13.2.7.3†): what `RegExpCreate` takes. The crate does not compile the
+/// pattern, which the parser has checked (§13.2.7.2†).
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct RegExpSite {
+    /// The text between the slashes, as UTF-16 code units (BodyText).
+    pub pattern: Vec<u16>,
+    /// The flags after the closing slash (FlagText).
+    pub flags: Vec<u16>,
 }
 
 /// The strings of one template literal (§13.2.8.3† TemplateStrings).
@@ -321,6 +453,9 @@ pub struct Handler {
 pub enum FunctionKind {
     /// The script's own code.
     Script,
+    /// A module's body (see [`crate::module`]): run with the module
+    /// environment as its callee environment and `this` undefined.
+    Module,
     /// A function declaration or expression.
     Normal,
     /// An arrow function.
@@ -334,6 +469,23 @@ pub enum FunctionKind {
     Derived,
 }
 
+/// Whether a function is a generator, an async function or both: the fact
+/// about a template that decides what a call does with the frame (a generator's
+/// call returns at [`Instr::GeneratorStart`] with its generator object, an async
+/// function's call returns a promise that the body settles), and what `yield`
+/// and `await` are.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Flavor {
+    /// An ordinary function.
+    Plain,
+    /// A generator function (§15.5).
+    Generator,
+    /// An async function or async arrow function (§15.8, §15.9).
+    Async,
+    /// An async generator function (§15.6).
+    AsyncGenerator,
+}
+
 /// One function's code (`spec::Code` and the facts about the template the
 /// module header lists).
 #[derive(Clone, Debug, PartialEq)]
@@ -343,6 +495,8 @@ pub struct FunctionCode {
     pub name: Vec<u16>,
     /// What kind of function it is.
     pub kind: FunctionKind,
+    /// Whether it is a generator, an async function or both.
+    pub flavor: Flavor,
     /// Whether the code is strict mode code.
     pub strict: bool,
     /// The span of the whole function in the source text.
@@ -622,6 +776,71 @@ pub fn check_function(f: &FunctionCode, nfuncs: usize) -> Result<(), &'static st
             | Instr::CreateRestArray { dst, .. } => reg_ok(f, dst),
             Instr::ConstructResult { dst, val, this } => {
                 reg_ok(f, dst) && reg_ok(f, val) && reg_ok(f, this)
+            }
+            Instr::GeneratorStart => true,
+            Instr::YieldDelegate { src, value, mode } => {
+                reg_ok(f, src) && reg_ok(f, value) && reg_ok(f, mode)
+            }
+            Instr::GetAsyncIterator { dst, src }
+            | Instr::IterValue { dst, result: src }
+            | Instr::ToObject { dst, src } => reg_ok(f, dst) && reg_ok(f, src),
+            Instr::IterCallMethod {
+                dst,
+                found,
+                iter,
+                arg,
+                which,
+            } => {
+                reg_ok(f, dst) && reg_ok(f, found) && reg_ok(f, iter) && reg_ok(f, arg) && which < 5
+            }
+            Instr::IterComplete { done, result } => reg_ok(f, done) && reg_ok(f, result),
+            Instr::ThrowIfNotObject { src } => reg_ok(f, src),
+            Instr::WithHas { dst, obj, key } | Instr::WithDelete { dst, obj, key } => {
+                reg_ok(f, dst) && reg_ok(f, obj) && konst(key)
+            }
+            Instr::WithGet { dst, obj, key, .. } => reg_ok(f, dst) && reg_ok(f, obj) && konst(key),
+            Instr::WithSet { obj, key, val, .. } => reg_ok(f, obj) && konst(key) && reg_ok(f, val),
+            Instr::DeleteGlobal { dst, key } => reg_ok(f, dst) && konst(key),
+            Instr::DirectEval {
+                dst,
+                callee,
+                this,
+                args,
+                argc,
+                env,
+                k,
+            } => {
+                reg_ok(f, dst)
+                    && reg_ok(f, callee)
+                    && reg_ok(f, this)
+                    && regs_ok(f, args, argc)
+                    && reg_ok(f, env)
+                    && matches!(f.consts.get(k as usize), Some(Const::EvalScope(_)))
+            }
+            Instr::GetImportBinding { dst, env, .. } => reg_ok(f, dst) && reg_ok(f, env),
+            Instr::ImportCall {
+                dst,
+                specifier,
+                options,
+            } => reg_ok(f, dst) && reg_ok(f, specifier) && reg_ok(f, options),
+            Instr::ImportMeta { dst } => reg_ok(f, dst),
+            Instr::DirectEvalSpread {
+                dst,
+                callee,
+                this,
+                args,
+                env,
+                k,
+            } => {
+                reg_ok(f, dst)
+                    && reg_ok(f, callee)
+                    && reg_ok(f, this)
+                    && reg_ok(f, args)
+                    && reg_ok(f, env)
+                    && matches!(f.consts.get(k as usize), Some(Const::EvalScope(_)))
+            }
+            Instr::NewRegExp { dst, k } => {
+                reg_ok(f, dst) && matches!(f.consts.get(k as usize), Some(Const::RegExp(_)))
             }
             Instr::CreateMappedArguments { dst, env, k } => {
                 reg_ok(f, dst)

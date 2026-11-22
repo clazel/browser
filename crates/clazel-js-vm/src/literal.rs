@@ -72,6 +72,32 @@ pub fn template_at(
     }
 }
 
+/// The body and the flags of the regular expression literal `src[start..end]`
+/// (`/body/flags`, §12.9.5†): the text between the first slash and the last,
+/// and the text after the last, as UTF-16 code units. The flags contain no
+/// slash, so the last slash closes the body even when the body has a `/` in a
+/// class.
+pub fn regex_at(
+    src: &[u32],
+    start: usize,
+    end: usize,
+) -> Result<(Vec<u16>, Vec<u16>), CompileError> {
+    let text = src
+        .get(start..end)
+        .ok_or(CompileError::Internal("regular expression out of range"))?;
+    let slash = u32::from(b'/');
+    let last = text
+        .iter()
+        .rposition(|&c| c == slash)
+        .ok_or(CompileError::Internal("regular expression without a slash"))?;
+    if text.first() != Some(&slash) || last == 0 {
+        return Err(CompileError::Internal("malformed regular expression"));
+    }
+    let body = text.get(1..last).unwrap_or(&[]);
+    let flags = text.get(last.saturating_add(1)..).unwrap_or(&[]);
+    Ok((to_utf16(body), to_utf16(flags)))
+}
+
 /// Code points to UTF-16 code units (§6.1.4: a code point above U+FFFF is a
 /// surrogate pair; a lone surrogate is kept).
 pub fn to_utf16(cps: &[u32]) -> Vec<u16> {

@@ -14,8 +14,10 @@
 //!   the executable form of `spec::code_wf`;
 //! - [`scope`]: scope analysis, which bindings are captured (item 7.7);
 //! - [`compile`]: [`compile::compile_script`], the compiler from the AST of
-//!   `clazel-js-syntax` to bytecode (item 7.7, first and second slice: its
+//!   `clazel-js-syntax` to bytecode (item 7.7, first to fourth slice: its
 //!   module header lists what it compiles and what it does not yet);
+//! - [`module`]: the static record of a compiled module ([`module::ModuleProgram`]),
+//!   which [`compile::compile_module`] produces and the runtime (7.8) links;
 //! - [`literal`]: the values of names and literals, which the AST leaves in
 //!   the source text.
 //!
@@ -31,6 +33,7 @@ pub mod compile;
 pub mod examples;
 pub mod lemmas;
 pub mod literal;
+pub mod module;
 pub mod ops;
 pub mod scope;
 pub mod spec;
