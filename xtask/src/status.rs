@@ -74,6 +74,7 @@ const PLACES: &[(&str, Place)] = &[
     ("clazel-js-lexer", Place::Renderer),
     ("clazel-js", Place::Renderer),
     ("clazel-js-vm", Place::Renderer),
+    ("clazel-js-heap", Place::Renderer),
     ("clazel-js-syntax", Place::Renderer),
     ("clazel-style", Place::Renderer),
     ("clazel-font", Place::Renderer),
@@ -108,6 +109,7 @@ const PLACES: &[(&str, Place)] = &[
 /// crate cannot skip the rule by being left out.
 const ENGINE: &[&str] = &[
     "clazel-js",
+    "clazel-js-heap",
     "clazel-js-lexer",
     "clazel-js-regexp",
     "clazel-js-syntax",
