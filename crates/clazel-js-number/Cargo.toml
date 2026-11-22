@@ -4,7 +4,7 @@ version = "0.0.0"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "ECMAScript Number conversions (phase-7.md item 7.11): StringToNumber, Number::toString, toFixed, toPrecision and toExponential, with our own big-integer arithmetic. BigInt parsing and printing are not here yet."
+description = "ECMAScript Number conversions (phase-7.md item 7.11): StringToNumber, Number::toString, toFixed, toPrecision and toExponential, with our own big-integer arithmetic. And BigInt parsing and printing (StringToBigInt, BigInt::toString)."
 
 # No dependencies: the parsers and the arithmetic are ours (CLAUDE.md rule 8).
 # The differential tests use Rust's own `f64` parsing and formatting.
