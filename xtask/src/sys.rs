@@ -865,6 +865,9 @@ fn check_with(
         ..File::default()
     };
     walk(&tokens, None, &lines, &mut file);
+    if file.code_entry_allowed {
+        check_run_use(&tokens, false, &mut file);
+    }
     file.violations.sort();
     Ok(file)
 }
@@ -1293,6 +1296,72 @@ fn code_entry_abi(body: &[TokenTree]) -> Option<&'static str> {
     })
 }
 
+/// In a code-entry file (rule 10), `run` is named only by its own `fn run`
+/// and by one call in the body of `fn enter`: no other function, `use`, test
+/// or value can reach the function that calls the stub. `in_enter` is whether
+/// `tokens` are inside the body of `fn enter`.
+fn check_run_use(tokens: &[TokenTree], in_enter: bool, file: &mut File) {
+    let mut enter_body_next = false;
+    for (i, tt) in tokens.iter().enumerate() {
+        let before = |n: usize| i.checked_sub(n).and_then(|j| tokens.get(j));
+        match tt {
+            TokenTree::Ident(id) if *id == "enter" && ident_is(before(1), "fn") => {
+                enter_body_next = true;
+            }
+            TokenTree::Ident(id) if *id == "run" && !ident_is(before(1), "fn") => {
+                let called = matches!(
+                    tokens.get(i.saturating_add(1)),
+                    Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Parenthesis
+                );
+                if !in_enter {
+                    flag(
+                        file,
+                        line_of(tt),
+                        "`run` is named outside the body of `fn enter`: only `enter` may call it",
+                    );
+                } else if !called {
+                    flag(
+                        file,
+                        line_of(tt),
+                        "`run` may only be called, not named as a value",
+                    );
+                }
+            }
+            TokenTree::Group(g) => {
+                let body: Vec<TokenTree> = g.stream().into_iter().collect();
+                if enter_body_next && g.delimiter() == Delimiter::Brace {
+                    enter_body_next = false;
+                    let before_len = file.violations.len();
+                    check_run_use(&body, true, file);
+                    let calls = count_run_calls(&body);
+                    if calls != 1 && file.violations.len() == before_len {
+                        flag(
+                            file,
+                            line_of(tt),
+                            format!("`fn enter` must call `run` exactly once, found {calls}"),
+                        );
+                    }
+                } else {
+                    check_run_use(&body, in_enter, file);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// The identifiers `run` in `tokens`, at any depth.
+fn count_run_calls(tokens: &[TokenTree]) -> usize {
+    tokens
+        .iter()
+        .map(|tt| match tt {
+            TokenTree::Ident(id) if *id == "run" => 1usize,
+            TokenTree::Group(g) => count_run_calls(&g.stream().into_iter().collect::<Vec<_>>()),
+            _ => 0,
+        })
+        .fold(0usize, usize::saturating_add)
+}
+
 /// In a code-entry file, `fn run` at `k` must be exactly
 /// `fn run(stub: usize, ctx: *mut u8, entry: usize, len: usize) { .. }`: no
 /// return type, so the four names the code entry uses are its parameters.
@@ -1316,6 +1385,18 @@ fn check_run_signature(tokens: &[TokenTree], k: usize, file: &mut File) {
     {
         let at = first.span().start();
         file.run_bodies.push((at.line, at.column));
+    }
+    // Private: `pub fn run`, `pub(crate) fn run` and the like are refused.
+    let before = |n: usize| k.checked_sub(n).and_then(|j| tokens.get(j));
+    if ident_is(before(1), "pub")
+        || (matches!(before(1), Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Parenthesis)
+            && ident_is(before(2), "pub"))
+    {
+        flag(
+            file,
+            line,
+            "`fn run` of a code-entry file must be private: only `enter` may call it",
+        );
     }
     if params != "stub:usize,ctx:*mutu8,entry:usize,len:usize" || !has_body {
         flag(
@@ -1344,7 +1425,7 @@ pub fn code_use_violations(source: &str) -> Result<Vec<(usize, String)>, String>
     if mentions_ident(&tokens, "clazel_sys") {
         let mut names = vec!["clazel_sys".to_owned()];
         collect_sys_aliases(&tokens, &mut names);
-        scan_code_use(&tokens, (false, false), &names, &mut out);
+        scan_code_use(&tokens, (false, false, false), &names, &mut out);
     }
     out.sort();
     Ok(out)
@@ -1402,14 +1483,15 @@ fn path_starts_at(tokens: &[TokenTree], i: usize, names: &[String]) -> bool {
 }
 
 /// [`code_use_violations`]'s walk. `state` is (a `use` statement is open, it
-/// starts at `clazel_sys` or an alias); `names` is `clazel_sys` and its aliases.
+/// starts at `clazel_sys` or an alias, it has a visibility: it re-exports);
+/// `names` is `clazel_sys` and its aliases.
 fn scan_code_use(
     tokens: &[TokenTree],
-    state: (bool, bool),
+    state: (bool, bool, bool),
     names: &[String],
     out: &mut Vec<(usize, String)>,
 ) {
-    let (mut in_use, mut sys_use) = state;
+    let (mut in_use, mut sys_use, mut pub_use) = state;
     for (i, tt) in tokens.iter().enumerate() {
         let before = |n: usize| i.checked_sub(n).and_then(|j| tokens.get(j));
         match tt {
@@ -1424,6 +1506,32 @@ fn scan_code_use(
                         other => other,
                     };
                     sys_use = matches!(first, Some(TokenTree::Ident(f)) if names.contains(&f.to_string()));
+                    // `pub use`, `pub(crate) use`, `pub(in path) use`.
+                    pub_use = ident_is(before(1), "pub")
+                        || (matches!(before(1), Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Parenthesis)
+                            && ident_is(before(2), "pub"));
+                    // `pub use clazel_sys;` hands the crate itself on.
+                    let after_root = if matches!(tokens.get(i.saturating_add(1)), Some(TokenTree::Punct(p)) if p.as_char() == ':')
+                    {
+                        4
+                    } else {
+                        2
+                    };
+                    if sys_use && pub_use && is_punct(tokens.get(i.saturating_add(after_root)), ';')
+                    {
+                        out.push((
+                            line_of(tt),
+                            "re-exporting `clazel_sys` itself hands its code-region API on"
+                                .to_owned(),
+                        ));
+                    }
+                }
+                if name == "clazel_sys" && ident_is(tokens.get(i.saturating_add(1)), "as") {
+                    out.push((
+                        line_of(tt),
+                        "an alias of `clazel_sys` hides what a path reaches (`clazel_sys as x`)"
+                            .to_owned(),
+                    ));
                 }
                 if CODE_NAMES.contains(&name.as_str()) {
                     out.push((
@@ -1441,6 +1549,7 @@ fn scan_code_use(
             TokenTree::Punct(p) if p.as_char() == ';' => {
                 in_use = false;
                 sys_use = false;
+                pub_use = false;
             }
             TokenTree::Punct(p)
                 if p.as_char() == '*' && in_use && sys_use && is_punct(before(1), ':') =>
@@ -1453,7 +1562,30 @@ fn scan_code_use(
             }
             TokenTree::Group(g) => {
                 let body: Vec<TokenTree> = g.stream().into_iter().collect();
-                scan_code_use(&body, (in_use, sys_use), names, out);
+                // `use clazel_sys::{self as s}` or `pub use clazel_sys::{self}`:
+                // the crate itself, aliased or re-exported. (`self` of a
+                // submodule, `clazel_sys::macos::window::{self as sys}`, is
+                // not the crate.)
+                let at_root = in_use
+                    && sys_use
+                    && g.delimiter() == Delimiter::Brace
+                    && is_punct(before(1), ':')
+                    && is_punct(before(2), ':')
+                    && matches!(before(3), Some(TokenTree::Ident(r)) if names.contains(&r.to_string()));
+                if at_root {
+                    for (j, t) in body.iter().enumerate() {
+                        if ident_is(Some(t), "self")
+                            && (pub_use || ident_is(body.get(j.saturating_add(1)), "as"))
+                        {
+                            out.push((
+                                line_of(t),
+                                "`self` of `clazel_sys` re-exported or aliased in a `use` group"
+                                    .to_owned(),
+                            ));
+                        }
+                    }
+                }
+                scan_code_use(&body, (in_use, sys_use, pub_use), names, out);
             }
             _ => {}
         }
@@ -3025,6 +3157,49 @@ mod tests {
         Ok(())
     }
 
+    /// The accepted file: `run` private, called once, by `enter`.
+    fn enter_file(extra: &str) -> String {
+        format!(
+            "{}pub fn enter() {{\n    run(1, std::ptr::null_mut(), 2, 3);\n}}\n{extra}",
+            entry_src(&entry("sysv64"))
+        )
+    }
+
+    #[test]
+    fn run_is_private_and_called_only_by_enter() -> Result<(), String> {
+        assert_eq!(
+            violations_in(ENTER_FILE, &enter_file(""))?,
+            Vec::<String>::new()
+        );
+        let bad = [
+            // Visible.
+            enter_file("").replace("fn run(", "pub fn run("),
+            enter_file("").replace("fn run(", "pub(crate) fn run("),
+            enter_file("").replace("fn run(", "pub(super) fn run("),
+            // Called or named elsewhere.
+            enter_file("pub fn other() { run(1, std::ptr::null_mut(), 2, 3); }"),
+            enter_file("fn other() { let f = run; }"),
+            enter_file("mod tests { fn t() { super::run(1, std::ptr::null_mut(), 2, 3); } }"),
+            enter_file("use self::run as go;"),
+            enter_file("pub use self::run;"),
+            // Named as a value, not called, in `enter`.
+            enter_file("").replace("run(1, std::ptr::null_mut(), 2, 3);", "let _f = run;"),
+            // Not called, or called twice, in `enter`.
+            enter_file("").replace("run(1, std::ptr::null_mut(), 2, 3);", ""),
+            enter_file("").replace(
+                "run(1, std::ptr::null_mut(), 2, 3);",
+                "run(1, std::ptr::null_mut(), 2, 3); run(1, std::ptr::null_mut(), 2, 3);",
+            ),
+        ];
+        for src in bad {
+            assert!(
+                !violations_in(ENTER_FILE, &src)?.is_empty(),
+                "accepted: {src}"
+            );
+        }
+        Ok(())
+    }
+
     // ------------------------------------------------------- code-region users
 
     #[test]
@@ -3047,6 +3222,64 @@ mod tests {
                 !super::code_use_violations(src)?.is_empty(),
                 "accepted: {src}"
             );
+        }
+        Ok(())
+    }
+
+    /// Audit finding 4 of PR 272: aliases and re-exports of `clazel_sys` that a
+    /// path in another file reaches without naming it. The file that makes the
+    /// alias is the one refused, so the file that uses it never needs judging.
+    #[test]
+    fn rule_11_refuses_aliases_and_reexports_of_clazel_sys() -> Result<(), String> {
+        let bad = [
+            // `crate::a::s::Validated::new(..)` and `crate::a::s::enter(..)`
+            // elsewhere reach through this one.
+            "pub use clazel_sys as s;",
+            "pub(crate) use clazel_sys as s;",
+            "pub(super) use clazel_sys as s;",
+            "pub(in crate::a) use clazel_sys as s;",
+            "pub use ::clazel_sys as s;",
+            // `self::s::enter` and `crate::s::enter` after a private alias.
+            "use clazel_sys as s;",
+            "extern crate clazel_sys as s;",
+            "use clazel_sys as _;",
+            "use ::clazel_sys as s;",
+            "mod m { use clazel_sys as s; }",
+            // The crate itself handed on without a new name.
+            "pub use clazel_sys;",
+            "pub(crate) use ::clazel_sys;",
+            "pub use clazel_sys::{self};",
+            "pub use clazel_sys::{self, Errno};",
+            "use clazel_sys::{self as s, Errno};",
+            "pub use clazel_sys::*;",
+            // The gated items under another name.
+            "pub use clazel_sys::enter as go;",
+            "pub use clazel_sys::Validated as V;",
+            "use clazel_sys::{enter as go};",
+            "type V = clazel_sys::Validated;",
+        ];
+        for src in bad {
+            assert!(
+                !super::code_use_violations(src)?.is_empty(),
+                "accepted: {src}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn rule_11_leaves_a_plain_reexport_of_a_harmless_item_alone() -> Result<(), String> {
+        for src in [
+            "pub use clazel_sys::Errno;",
+            "pub use clazel_sys::{Errno, fill_random};",
+            "use clazel_sys::Errno as E;",
+            // `self` of a submodule is not the crate.
+            "use clazel_sys::macos::window::{self as sys, App};",
+            "pub use clazel_sys::macos::window::{self};",
+            "use clazel_sys::{fill_random as random};",
+        ] {
+            let v = super::code_use_violations(src)?;
+            assert!(v.is_empty(), "flagged: {src}: {v:?}");
         }
         Ok(())
     }
