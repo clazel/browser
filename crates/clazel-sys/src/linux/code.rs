@@ -12,14 +12,26 @@
 //! the renderer fault; `F_SEAL_WRITE` is not used, because the writer's
 //! mapping is writable by design.
 //!
-//! Instruction-cache maintenance is the enter stub's first instructions
-//! (`crate::code`), not a system call. Nothing here decides a size or what
-//! to write: the caller does.
+//! Instruction-cache maintenance is the enter stub's first instructions on
+//! A64 (`crate::code`: `dc cvau` and `ic ivau` over the region, then `dsb` and
+//! `isb`), not a system call. Nothing here decides a size or what to write:
+//! the caller does.
+//!
+//! `vm.memfd_noexec` (Linux 6.3 and later): at 0 (the default) a `memfd` can
+//! be mapped executable; at 1 a plain `memfd_create` makes a no-exec file, so
+//! [`SharedCode::create`] passes `MFD_EXEC` to say what it needs; at 2
+//! `MFD_EXEC` is refused (`EACCES`), the region cannot exist, and `create`
+//! fails with that error. On a kernel before 6.3 `MFD_EXEC` is an unknown flag
+//! (`EINVAL`) and `create` retries without it.
 
 use std::ffi::c_void;
 
-use crate::CodeError;
 use crate::code::{STUB, check_size, write_range};
+use crate::{CodeError, Errno};
+
+/// `MFD_EXEC` (linux/memfd.h, Linux 6.3): the file may be made executable.
+/// Not in `libc` 0.2.190.
+const MFD_EXEC: libc::c_uint = 0x0010;
 
 /// A sealed anonymous file the code lives in. It owns its descriptor and
 /// closes it on drop.
@@ -60,16 +72,12 @@ impl SharedCode {
     pub fn create(len: usize) -> Result<SharedCode, CodeError> {
         check_size(len)?;
         let size = libc::off_t::try_from(len).map_err(|_| CodeError::BadSize)?;
-        let flags: libc::c_uint = libc::MFD_CLOEXEC | libc::MFD_ALLOW_SEALING;
-        let name: *const libc::c_char = c"clazel-code".as_ptr();
-        // SAFETY: man 2 memfd_create: `memfd_create(name, flags)` creates an
-        // anonymous file and returns its descriptor, or -1 and sets errno; the
-        // name is only a debugging label and must be a NUL-terminated string
-        // of at most 249 bytes, and MFD_CLOEXEC | MFD_ALLOW_SEALING are valid
-        // flags. The `libc::memfd_create(*const c_char, c_uint) -> c_int`
-        // declaration matches. `name` points to the NUL-terminated string
-        // literal `c"clazel-code"`, which lives for the whole program.
-        let fd = unsafe { libc::memfd_create(name, flags) };
+        let base: libc::c_uint = libc::MFD_CLOEXEC | libc::MFD_ALLOW_SEALING;
+        let mut fd = memfd(base | MFD_EXEC);
+        if fd < 0 && Errno::last().0 == libc::EINVAL {
+            // Before Linux 6.3 MFD_EXEC is an unknown flag.
+            fd = memfd(base);
+        }
         if fd < 0 {
             return Err(CodeError::os("memfd_create"));
         }
@@ -101,37 +109,49 @@ impl SharedCode {
         Ok(shared)
     }
 
-    /// Take over a descriptor of a region that [`SharedCode::create`] made
-    /// (the renderer receives one from the writer, by inheritance or over a
-    /// socket). Checked: the file must be sealed against growing and
-    /// shrinking, which is how its size can be trusted. The caller hands the
-    /// number over and must not use it again: it is closed when the
-    /// [`SharedCode`] is dropped. Call [`SharedCode::map_executable`], then drop
-    /// this value, before the seccomp filter goes on.
+    /// Use the region behind descriptor number `fd`, which a region
+    /// [`SharedCode::create`] made (the renderer receives the number from the
+    /// writer, by inheritance). Checked: the file must be sealed against
+    /// growing and shrinking, which is how its size can be trusted.
+    ///
+    /// The number is **borrowed, not taken over**: this duplicates it
+    /// (`F_DUPFD_CLOEXEC`) and owns only the duplicate, closing it on drop and
+    /// on every error path; `fd` itself is left open and never closed, as
+    /// `Inherited::open` does on Windows. So a wrong number (`1`, say) or the
+    /// number of a value that is still alive cannot be closed twice. Call
+    /// [`SharedCode::map_executable`], then drop this value, before the seccomp
+    /// filter goes on.
     ///
     /// # Errors
     ///
     /// [`CodeError::NotACodeRegion`] if the descriptor is not sealed as
-    /// above or its size is not larger than the stub; the descriptor is
-    /// still closed. The failing call's `errno` if it is not open.
+    /// above or its size is not larger than the stub. The failing call's
+    /// `errno` if it is not open.
     pub fn adopt(fd: libc::c_int) -> Result<SharedCode, CodeError> {
-        let mut shared = SharedCode { fd, len: 0 };
+        let lowest: libc::c_int = 3;
+        // SAFETY: man 2 fcntl: `fcntl(fd, F_DUPFD_CLOEXEC, lowest)` returns a
+        // new close-on-exec descriptor for the same open file, the lowest
+        // free number at least `lowest`, or -1 and sets errno (EBADF if `fd`
+        // is not open). The variadic `libc::fcntl(c_int, c_int, ...) -> c_int`
+        // declaration matches: `F_DUPFD_CLOEXEC` is the command and `lowest`
+        // is a `c_int`, the type it reads. `fd` is only a number; the call
+        // neither reads nor writes memory, and it changes nothing about `fd`.
+        let dup = unsafe { libc::fcntl(fd, libc::F_DUPFD_CLOEXEC, lowest) };
+        if dup < 0 {
+            return Err(CodeError::os("fcntl"));
+        }
+        // From here `shared` owns the duplicate, which nothing else knows, and
+        // closes it on any early return.
+        let mut shared = SharedCode { fd: dup, len: 0 };
         // SAFETY: man 2 fcntl, "File sealing": `fcntl(fd, F_GET_SEALS)` returns
         // the seals of the file as a non-negative `int`, or -1 and sets errno
-        // (EBADF if `fd` is not open, EINVAL if the file does not support
-        // sealing). The variadic `libc::fcntl(c_int, c_int, ...) -> c_int`
-        // declaration matches: the command takes no further argument. `fd` is
-        // only a number; nothing is read or written through it.
+        // (EINVAL if the file does not support sealing). The variadic
+        // `libc::fcntl(c_int, c_int, ...) -> c_int` declaration matches: the
+        // command takes no further argument. `shared.fd` is the open duplicate
+        // this value owns; nothing is read or written through it.
         let seals = unsafe { libc::fcntl(shared.fd, libc::F_GET_SEALS) };
         if seals < 0 {
-            // Not open (EBADF): there is nothing to close.
-            let e = CodeError::os("fcntl");
-            if let CodeError::Os { errno, .. } = e
-                && errno.0 == libc::EBADF
-            {
-                shared.fd = -1;
-            }
-            return Err(e);
+            return Err(CodeError::os("fcntl"));
         }
         if seals & SEALS != SEALS {
             return Err(CodeError::NotACodeRegion);
@@ -139,7 +159,7 @@ impl SharedCode {
         // SAFETY: man 2 lseek: `lseek(fd, 0, SEEK_END)` returns the size of the
         // file as the new offset (a regular file or memfd), or -1 and sets
         // errno. The `libc::lseek(c_int, off_t, c_int) -> off_t` declaration
-        // matches. `fd` is open (the call above succeeded).
+        // matches. `shared.fd` is open (the call above succeeded).
         let end = unsafe { libc::lseek(shared.fd, 0, libc::SEEK_END) };
         if end < 0 {
             return Err(CodeError::os("lseek"));
@@ -162,7 +182,9 @@ impl SharedCode {
 
     /// Clear close-on-exec on the descriptor and return its number, so that
     /// the one child the caller starts next inherits it at that number. The
-    /// caller is the launcher; this makes no other change.
+    /// number stays owned by this value (it is only a number to hand to the
+    /// child, which gives it to [`SharedCode::adopt`]); the caller is the
+    /// launcher; this makes no other change.
     ///
     /// # Errors
     ///
@@ -240,14 +262,28 @@ impl SharedCode {
 
 impl Drop for SharedCode {
     fn drop(&mut self) {
-        if self.fd >= 0 {
-            // SAFETY: man 2 close: `close(fd)` closes the descriptor. The
-            // `libc::close(c_int) -> c_int` declaration matches. `fd` is open and
-            // owned by this value, which is being dropped, so it is closed once.
-            // The result is ignored: nothing can be done about a failed close.
-            let _ = unsafe { libc::close(self.fd) };
-        }
+        // SAFETY: man 2 close: `close(fd)` closes the descriptor. The
+        // `libc::close(c_int) -> c_int` declaration matches. `fd` is open and
+        // owned by this value (made by `memfd_create` or duplicated by `adopt`,
+        // and never handed out as an owned number), which is being dropped, so
+        // it is closed once. The result is ignored: nothing can be done about a
+        // failed close.
+        let _ = unsafe { libc::close(self.fd) };
     }
+}
+
+/// `memfd_create` with `flags`; the descriptor, or -1 with `errno` set.
+fn memfd(flags: libc::c_uint) -> libc::c_int {
+    let name: *const libc::c_char = c"clazel-code".as_ptr();
+    // SAFETY: man 2 memfd_create: `memfd_create(name, flags)` creates an
+    // anonymous file and returns its descriptor, or -1 and sets errno; the
+    // name is only a debugging label and must be a NUL-terminated string of at
+    // most 249 bytes, and the flags are those of `create` (MFD_CLOEXEC,
+    // MFD_ALLOW_SEALING, and MFD_EXEC, which a kernel before 6.3 refuses with
+    // EINVAL). The `libc::memfd_create(*const c_char, c_uint) -> c_int`
+    // declaration matches. `name` points to the NUL-terminated string literal
+    // `c"clazel-code"`, which lives for the whole program.
+    unsafe { libc::memfd_create(name, flags) }
 }
 
 impl CodeWriter {
@@ -361,7 +397,7 @@ fn unmap(base: usize, len: usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::code::EXIT_42;
+    use crate::code::{EXIT_42, exit_with};
     use crate::{CODE_START, Context, Exit, Validated, enter};
 
     /// A multiple of every page size Linux uses.
@@ -404,6 +440,23 @@ mod tests {
             enter(&region, Validated::new(CODE_START), &mut ctx)?,
             Exit(42)
         );
+        Ok(())
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore = "foreign calls cannot run under Miri")]
+    fn a_blob_replaced_in_place_runs_as_replaced() -> Result<(), CodeError> {
+        let shared = SharedCode::create(SIZE)?;
+        let mut writer = shared.map_writable()?;
+        let region = shared.map_executable()?;
+        for code in [1u8, 2, 3, 1, 7] {
+            writer.write(CODE_START, &exit_with(code))?;
+            let mut ctx = Context::new();
+            assert_eq!(
+                enter(&region, Validated::new(CODE_START), &mut ctx)?,
+                Exit(u64::from(code))
+            );
+        }
         Ok(())
     }
 
@@ -483,21 +536,31 @@ mod tests {
             SharedCode::adopt(-1),
             Err(CodeError::Os { call: "fcntl", .. })
         ));
-        // An open, sealed one, handed over by number as an inheriting child
-        // would get it. The original must not close it too, so it is leaked.
+        // An open descriptor that is not a code region: stdin is borrowed
+        // (duplicated, the duplicate closed) and stays open.
+        assert!(SharedCode::adopt(0).is_err());
+        assert!(SharedCode::adopt(0).is_err());
+        // An open, sealed one, by number as an inheriting child would get it,
+        // while the original is alive: each is closed once.
         let shared = SharedCode::create(SIZE)?;
         let n = shared.inheritable_fd()?;
         let mut writer = shared.map_writable()?;
         writer.write(CODE_START, EXIT_42)?;
-        std::mem::forget(shared);
         let adopted = SharedCode::adopt(n)?;
         assert_eq!(adopted.len(), SIZE);
         let region = adopted.map_executable()?;
+        drop(adopted);
         let mut ctx = Context::new();
         assert_eq!(
             enter(&region, Validated::new(CODE_START), &mut ctx)?,
             Exit(42)
         );
+        // The original is still open after the adopted one closed its duplicate.
+        assert!(shared.map_executable().is_ok());
+        // Adopting twice from one number is fine too.
+        let a = SharedCode::adopt(n)?;
+        let b = SharedCode::adopt(n)?;
+        assert_eq!(a.len(), b.len());
         Ok(())
     }
 }

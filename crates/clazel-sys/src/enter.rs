@@ -8,7 +8,8 @@
 //! stub (`crate::code::STUB`, written at offset 0 of every region) is the only
 //! code that meets the platform ABI: it saves the callee-saved registers, sets
 //! the context register, calls the blob, and returns when the blob's exit
-//! sequence executes `ret`.
+//! sequence executes `ret`. On A64 it first does the instruction-cache
+//! maintenance over the region, which is why it also takes the region's length.
 //!
 //! The ABIs: `sysv64` (x86-64 on Linux and macOS), `win64` (x86-64 on
 //! Windows) and `C` (AArch64, whose `C` is AAPCS64 on Linux, macOS and
@@ -58,7 +59,7 @@ pub fn enter(region: &CodeRegion, entry: Validated, ctx: &mut Context) -> Result
     let stub = region.base();
     let entry = stub.checked_add(offset).ok_or(CodeError::OutOfRange)?;
     let raw: *mut u8 = std::ptr::from_mut(&mut *ctx).cast();
-    run(stub, raw, entry);
+    run(stub, raw, entry, region.len());
     // The blob stored the exit code through `raw`, which was derived from
     // this reference and is not used again, so reading through `ctx` is fine.
     Ok(Exit(ctx.exit_code()))
@@ -66,57 +67,67 @@ pub fn enter(region: &CodeRegion, entry: Validated, ctx: &mut Context) -> Result
 
 /// The one block for x86-64 System V (Linux and macOS).
 #[cfg(all(target_arch = "x86_64", not(windows)))]
-fn run(stub: usize, ctx: *mut u8, entry: usize) {
+fn run(stub: usize, ctx: *mut u8, entry: usize, len: usize) {
     // SAFETY: man 2 mmap and man 2 mprotect (W^X): `stub` is the base address
     // of a mapping this crate made read-execute and whose first bytes it
     // checked to be `crate::code::STUB`, a function with the System V x86-64
     // ABI (System V psABI, "Function Calling Sequence"): `void (*)(void *ctx,
-    // uintptr_t entry)`, first argument in rdi, second in rsi, which preserves
-    // every callee-saved register and returns once. `transmute::<usize,
-    // unsafe extern "sysv64" fn(*mut u8, usize)>` has the size of a function
-    // pointer; `ctx` points to the caller's live 512-byte `Context`, and
-    // `entry` is the address of a blob `clazel-codecheck` accepted
-    // (`Validated`), inside the same mapping, whose `ret` returns to the stub.
+    // uintptr_t entry, size_t len)`, arguments in rdi, rsi and rdx (the third
+    // is not used by this stub), which preserves every callee-saved register
+    // and returns once. `transmute::<usize, unsafe extern "sysv64" fn(*mut u8,
+    // usize, usize)>` has the size of a function pointer; `ctx` points to the
+    // caller's live 512-byte `Context`, `entry` is the address of a blob
+    // `clazel-codecheck` accepted (`Validated`), inside the same mapping,
+    // whose `ret` returns to the stub, and `len` is the mapping's length.
     unsafe {
-        (std::mem::transmute::<usize, unsafe extern "sysv64" fn(*mut u8, usize)>(stub))(ctx, entry)
+        (std::mem::transmute::<usize, unsafe extern "sysv64" fn(*mut u8, usize, usize)>(stub))(
+            ctx, entry, len,
+        )
     }
 }
 
 /// The one block for x86-64 on Windows.
 #[cfg(all(target_arch = "x86_64", windows))]
-fn run(stub: usize, ctx: *mut u8, entry: usize) {
-    // SAFETY: docs MapViewOfFile2 (the view is mapped PAGE_EXECUTE_READ and its
+fn run(stub: usize, ctx: *mut u8, entry: usize, len: usize) {
+    // SAFETY: docs MapViewOfFile3 (the view is mapped PAGE_EXECUTE_READ and its
     // first bytes were checked to be `crate::code::STUB`) and docs
     // VirtualProtect (W^X): `stub` is the base of that view, a function with the
     // Windows x64 calling convention (Microsoft Learn, "x64 calling
-    // convention"): `void (*)(void *ctx, uintptr_t entry)`, first argument in
-    // rcx, second in rdx, which preserves rbx, rbp, rdi, rsi, r12-r15 and
-    // xmm6-xmm15, reserves the 32 bytes of shadow space and returns once.
-    // `transmute::<usize, unsafe extern "win64" fn(*mut u8, usize)>` has the
-    // size of a function pointer; `ctx` points to the caller's live 512-byte
-    // `Context`, and `entry` is the address of a blob `clazel-codecheck`
-    // accepted (`Validated`), inside the same view, whose `ret` returns to the
-    // stub.
+    // convention"): `void (*)(void *ctx, uintptr_t entry, size_t len)`,
+    // arguments in rcx, rdx and r8 (the third is not used by this stub), which
+    // preserves rbx, rbp, rdi, rsi, r12-r15 and xmm6-xmm15, reserves the 32
+    // bytes of shadow space and returns once. `transmute::<usize, unsafe
+    // extern "win64" fn(*mut u8, usize, usize)>` has the size of a function
+    // pointer; `ctx` points to the caller's live 512-byte `Context`, `entry` is
+    // the address of a blob `clazel-codecheck` accepted (`Validated`), inside
+    // the same view, whose `ret` returns to the stub, and `len` is the view's
+    // length.
     unsafe {
-        (std::mem::transmute::<usize, unsafe extern "win64" fn(*mut u8, usize)>(stub))(ctx, entry)
+        (std::mem::transmute::<usize, unsafe extern "win64" fn(*mut u8, usize, usize)>(stub))(
+            ctx, entry, len,
+        )
     }
 }
 
 /// The one block for AArch64 (AAPCS64 on Linux, macOS and Windows).
 #[cfg(target_arch = "aarch64")]
-fn run(stub: usize, ctx: *mut u8, entry: usize) {
-    // SAFETY: man 2 mmap and man 2 mprotect (W^X; on macOS man 3 pthread_jit_write_protect_np):
-    // `stub` is the base address of a mapping this crate made executable and
-    // whose first bytes it checked to be `crate::code::STUB`, a function with
-    // the AAPCS64 ABI (Arm "Procedure Call Standard for the Arm 64-bit
-    // Architecture"): `void (*)(void *ctx, uintptr_t entry)`, first argument in
-    // x0, second in x1, which preserves x19-x30, x18 and d8-d15 and returns once
-    // through x30. `transmute::<usize, unsafe extern "C" fn(*mut u8, usize)>`
-    // has the size of a function pointer; `ctx` points to the caller's live
-    // 512-byte `Context`, and `entry` is the address of a blob
-    // `clazel-codecheck` accepted (`Validated`), inside the same mapping, a
-    // multiple of 4, whose `ret` returns to the stub through x30.
+fn run(stub: usize, ctx: *mut u8, entry: usize, len: usize) {
+    // SAFETY: man 2 mmap and man 2 mprotect (W^X; on macOS man 3
+    // pthread_jit_write_protect_np): `stub` is the base address of a mapping
+    // this crate made executable and whose first bytes it checked to be
+    // `crate::code::STUB`, a function with the AAPCS64 ABI (Arm "Procedure Call
+    // Standard for the Arm 64-bit Architecture"): `void (*)(void *ctx,
+    // uintptr_t entry, size_t len)`, arguments in x0, x1 and x2, which
+    // preserves x19-x30, x18 and d8-d15 (and clobbers only x9-x16, the
+    // temporaries it uses for cache maintenance) and returns once through x30.
+    // `transmute::<usize, unsafe extern "C" fn(*mut u8, usize, usize)>` has the
+    // size of a function pointer; `ctx` points to the caller's live 512-byte
+    // `Context`, `entry` is the address of a blob `clazel-codecheck` accepted
+    // (`Validated`), inside the same mapping, a multiple of 4, whose `ret`
+    // returns to the stub through x30, and `len` is the mapping's length.
     unsafe {
-        (std::mem::transmute::<usize, unsafe extern "C" fn(*mut u8, usize)>(stub))(ctx, entry)
+        (std::mem::transmute::<usize, unsafe extern "C" fn(*mut u8, usize, usize)>(stub))(
+            ctx, entry, len,
+        )
     }
 }

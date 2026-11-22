@@ -190,7 +190,7 @@ impl Drop for CodeRegion {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::code::EXIT_42;
+    use crate::code::{EXIT_42, exit_with};
     use crate::{CODE_START, Context, Exit, Validated, enter};
 
     #[test]
@@ -218,6 +218,21 @@ mod tests {
             enter(&region, Validated::new(CODE_START), &mut again)?,
             Exit(42)
         );
+        Ok(())
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore = "foreign calls cannot run under Miri")]
+    fn a_blob_replaced_in_place_runs_as_replaced() -> Result<(), CodeError> {
+        let mut region = CodeRegion::new(16_384)?;
+        for code in [1u8, 2, 3, 1, 7] {
+            region.write(CODE_START, &exit_with(code))?;
+            let mut ctx = Context::new();
+            assert_eq!(
+                enter(&region, Validated::new(CODE_START), &mut ctx)?,
+                Exit(u64::from(code))
+            );
+        }
         Ok(())
     }
 

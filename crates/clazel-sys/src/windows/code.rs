@@ -19,16 +19,19 @@
 //!
 //! None of the functions are in `libc`, `windows-sys` is not a dependency, and
 //! so they are declared here, as `windows.rs` does; handles are `isize`.
-//! `MapViewOfFile3` and `UnmapViewOfFile2` are linked `raw-dylib` from
-//! `kernel32.dll` (they are exports of it since Windows 10 1703 and are not in
-//! every SDK's `kernel32.lib`). The citations are Microsoft Learn pages,
-//! `docs <function>`.
+//! `MapViewOfFile3` and `UnmapViewOfFile2` are linked `raw-dylib` from the API
+//! sets Microsoft's metadata binds them to (as `windows-sys` does, and as for
+//! `VirtualAlloc2`): `api-ms-win-core-memory-l1-1-6.dll` and
+//! `api-ms-win-core-memory-l1-1-5.dll`. They are not in every SDK's
+//! `kernel32.lib`, and not exports of `kernel32.dll` by that name here. The
+//! citations are Microsoft Learn pages, `docs <function>`.
 //!
 //! **This module has not been run by its author** (no Windows machine); the
 //! x86-64 stub, the declarations and the tests are checked by CI only.
 
 use std::ffi::c_void;
 use std::os::windows::io::AsRawHandle;
+use std::sync::{Mutex, PoisonError};
 
 use crate::CodeError;
 use crate::code::{STUB, check_size, write_range};
@@ -50,24 +53,18 @@ struct MemoryBasicInformation {
     kind: Dword,
 }
 
-#[link(name = "kernel32", kind = "raw-dylib")]
+#[link(name = "kernel32")]
 // SAFETY: docs CreateFileMappingW (kernel32, winbase.h: `HANDLE
 // CreateFileMappingW(HANDLE hFile, LPSECURITY_ATTRIBUTES, DWORD flProtect, DWORD
 // dwMaximumSizeHigh, DWORD dwMaximumSizeLow, LPCWSTR lpName)`); docs
-// MapViewOfFile3 (memoryapi.h, the function MapViewOfFile2 calls: `PVOID
-// MapViewOfFile3(HANDLE FileMapping, HANDLE Process, PVOID BaseAddress, ULONG64
-// Offset, SIZE_T ViewSize, ULONG AllocationType, ULONG PageProtection,
-// MEM_EXTENDED_PARAMETER *ExtendedParameters, ULONG ParameterCount)`); docs
-// UnmapViewOfFile2 (memoryapi.h: `BOOL UnmapViewOfFile2(HANDLE Process, PVOID
-// BaseAddress, ULONG UnmapFlags)`); docs FlushInstructionCache (processthreadsapi.h:
-// `BOOL FlushInstructionCache(HANDLE hProcess, LPCVOID lpBaseAddress, SIZE_T
-// dwSize)`); docs VirtualQuery (memoryapi.h: `SIZE_T VirtualQuery(LPCVOID
-// lpAddress, PMEMORY_BASIC_INFORMATION lpBuffer, SIZE_T dwLength)`); docs
-// CloseHandle (handleapi.h: `BOOL CloseHandle(HANDLE)`). `HANDLE` and `SIZE_T`
-// are pointer-sized (`isize`, `usize`), `DWORD` and `ULONG` are `u32`, `ULONG64`
-// is `u64`, `BOOL` is `i32`, `LPCWSTR` is `*const u16`, and `system` is the
-// calling convention. None is `pub` or `safe`, so every call needs its own
-// `unsafe` block.
+// FlushInstructionCache (processthreadsapi.h: `BOOL FlushInstructionCache(HANDLE
+// hProcess, LPCVOID lpBaseAddress, SIZE_T dwSize)`); docs VirtualQuery
+// (memoryapi.h: `SIZE_T VirtualQuery(LPCVOID lpAddress, PMEMORY_BASIC_INFORMATION
+// lpBuffer, SIZE_T dwLength)`); docs CloseHandle (handleapi.h: `BOOL
+// CloseHandle(HANDLE)`). `HANDLE` and `SIZE_T` are pointer-sized (`isize`,
+// `usize`), `DWORD` is `u32`, `BOOL` is `i32`, `LPCWSTR` is `*const u16`, and
+// `system` is the calling convention. None is `pub` or `safe`, so every call
+// needs its own `unsafe` block.
 unsafe extern "system" {
     fn CreateFileMappingW(
         file: Handle,
@@ -77,6 +74,26 @@ unsafe extern "system" {
         size_low: Dword,
         name: *const u16,
     ) -> Handle;
+    fn FlushInstructionCache(process: Handle, base: *const c_void, size: usize) -> Bool;
+    fn VirtualQuery(
+        address: *const c_void,
+        buffer: *mut MemoryBasicInformation,
+        length: usize,
+    ) -> usize;
+    fn CloseHandle(handle: Handle) -> Bool;
+}
+
+// Microsoft's metadata (as carried by `windows-sys`) binds `MapViewOfFile3` to
+// the API set `api-ms-win-core-memory-l1-1-6.dll`, so that is the DLL imported
+// from, by name (`raw-dylib`).
+#[link(name = "api-ms-win-core-memory-l1-1-6", kind = "raw-dylib")]
+// SAFETY: docs MapViewOfFile3 (memoryapi.h, the function MapViewOfFile2 calls:
+// `PVOID MapViewOfFile3(HANDLE FileMapping, HANDLE Process, PVOID BaseAddress,
+// ULONG64 Offset, SIZE_T ViewSize, ULONG AllocationType, ULONG PageProtection,
+// MEM_EXTENDED_PARAMETER *ExtendedParameters, ULONG ParameterCount)`). `HANDLE`
+// and `SIZE_T` are pointer-sized (`isize`, `usize`), `ULONG` is `u32`, `ULONG64`
+// is `u64`, and `system` is the calling convention. Not `pub`, not `safe`.
+unsafe extern "system" {
     fn MapViewOfFile3(
         section: Handle,
         process: Handle,
@@ -88,14 +105,16 @@ unsafe extern "system" {
         parameters: *mut c_void,
         parameter_count: Dword,
     ) -> *mut c_void;
+}
+
+// `UnmapViewOfFile2` is bound to `api-ms-win-core-memory-l1-1-5.dll`.
+#[link(name = "api-ms-win-core-memory-l1-1-5", kind = "raw-dylib")]
+// SAFETY: docs UnmapViewOfFile2 (memoryapi.h: `BOOL UnmapViewOfFile2(HANDLE
+// Process, PVOID BaseAddress, ULONG UnmapFlags)`). `HANDLE` is `isize`, `ULONG`
+// is `u32`, `BOOL` is `i32`, and `system` is the calling convention. Not `pub`,
+// not `safe`.
+unsafe extern "system" {
     fn UnmapViewOfFile2(process: Handle, base: *mut c_void, flags: Dword) -> Bool;
-    fn FlushInstructionCache(process: Handle, base: *const c_void, size: usize) -> Bool;
-    fn VirtualQuery(
-        address: *const c_void,
-        buffer: *mut MemoryBasicInformation,
-        length: usize,
-    ) -> usize;
-    fn CloseHandle(handle: Handle) -> Bool;
 }
 
 // SAFETY: docs C runtime `memcpy` (Microsoft Learn, C runtime library
@@ -134,12 +153,48 @@ pub struct CodeWriter {
     len: usize,
 }
 
-/// A read-execute view in this process. Unmapped on drop. [`crate::enter`] runs
-/// code in it.
+/// A read-execute view in this process. [`crate::enter`] runs code in it.
+///
+/// A view made by [`SharedCode::map_executable`] is **owned**: it is unmapped on
+/// drop. A view taken over with [`CodeRegion::adopt`] is **not owned** and
+/// is never unmapped by this crate (it was mapped by another process, which
+/// lives as long as the renderer wants it), so adopting the same view twice
+/// is harmless and dropping one value cannot leave another dangling.
 #[derive(Debug)]
 pub struct CodeRegion {
     base: usize,
     len: usize,
+    owned: bool,
+}
+
+/// The bases of the owned views that are mapped now, so that
+/// [`CodeRegion::adopt`] refuses them: an adopted value never unmaps, and an
+/// owned one does, so adopting an owned view could leave the adopted value
+/// dangling when the owner drops.
+static OWNED_VIEWS: Mutex<Vec<usize>> = Mutex::new(Vec::new());
+
+/// Record `base` as an owned view.
+fn register_owned(base: usize) {
+    OWNED_VIEWS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .push(base);
+}
+
+/// Forget `base`; whether it was recorded.
+fn unregister_owned(base: usize) -> bool {
+    let mut views = OWNED_VIEWS.lock().unwrap_or_else(PoisonError::into_inner);
+    let before = views.len();
+    views.retain(|b| *b != base);
+    views.len() != before
+}
+
+/// Whether `base` is an owned view mapped now.
+fn is_owned(base: usize) -> bool {
+    OWNED_VIEWS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .contains(&base)
 }
 
 /// A read-execute view that [`SharedCode::map_into`] made in another process:
@@ -229,9 +284,12 @@ impl SharedCode {
     /// The failing call's `GetLastError`, or [`CodeError::NotACodeRegion`].
     pub fn map_executable(&self) -> Result<CodeRegion, CodeError> {
         let base = self.map(CURRENT_PROCESS, PAGE_EXECUTE_READ)?;
+        // From here `region` owns the view and unmaps it on any early return.
+        register_owned(base);
         let region = CodeRegion {
             base,
             len: self.len,
+            owned: true,
         };
         region.check_stub()?;
         Ok(region)
@@ -389,13 +447,15 @@ impl Drop for CodeWriter {
 }
 
 impl CodeRegion {
-    /// Take over the read-execute view at `address` in this process that
+    /// Use the read-execute view at `address` in this process that
     /// [`SharedCode::map_into`] made in the writer: the renderer calls this with
     /// the address it received over IPC. Checked, with `VirtualQuery`: the
     /// address is the start of a committed, **mapped** (not private) allocation
     /// of at least `len` bytes, whose protection is exactly `PAGE_EXECUTE_READ`;
-    /// and its first bytes are the enter stub. The view is unmapped when the
-    /// value is dropped.
+    /// it is not a view this crate owns (see [`CodeRegion`]); and its first
+    /// bytes are the enter stub. The returned value does **not** own the view
+    /// and never unmaps it, so the same view can be adopted more than once and
+    /// no drop can leave another value dangling.
     ///
     /// What this cannot check is that the writer is the code process: the
     /// renderer must have got `address` and `len` from it (jit.md J.0(b)).
@@ -406,6 +466,9 @@ impl CodeRegion {
     /// call's `GetLastError`.
     pub fn adopt(address: usize, len: usize) -> Result<CodeRegion, CodeError> {
         check_size(len)?;
+        if is_owned(address) {
+            return Err(CodeError::NotACodeRegion);
+        }
         let mut info = MemoryBasicInformation {
             base_address: std::ptr::null_mut(),
             allocation_base: std::ptr::null_mut(),
@@ -439,7 +502,11 @@ impl CodeRegion {
         if !exact {
             return Err(CodeError::NotACodeRegion);
         }
-        let region = CodeRegion { base: address, len };
+        let region = CodeRegion {
+            base: address,
+            len,
+            owned: false,
+        };
         region.check_stub()?;
         Ok(region)
     }
@@ -493,7 +560,9 @@ impl CodeRegion {
 
 impl Drop for CodeRegion {
     fn drop(&mut self) {
-        unmap(self.base);
+        if self.owned && unregister_owned(self.base) {
+            unmap(self.base);
+        }
     }
 }
 
@@ -511,7 +580,7 @@ fn unmap(base: usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::code::EXIT_42;
+    use crate::code::{EXIT_42, exit_with};
     use crate::{CODE_START, Context, Exit, Validated, enter};
 
     /// A multiple of the page and allocation granularity.
@@ -538,6 +607,24 @@ mod tests {
             enter(&region, Validated::new(CODE_START), &mut again)?,
             Exit(42)
         );
+        Ok(())
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore = "foreign calls cannot run under Miri")]
+    fn a_blob_replaced_in_place_runs_as_replaced() -> Result<(), CodeError> {
+        let shared = SharedCode::create(SIZE)?;
+        let mut writer = shared.map_writable()?;
+        let region = shared.map_executable()?;
+        for code in [1u8, 2, 3, 1, 7] {
+            writer.write(CODE_START, &exit_with(code))?;
+            region.flush()?;
+            let mut ctx = Context::new();
+            assert_eq!(
+                enter(&region, Validated::new(CODE_START), &mut ctx)?,
+                Exit(u64::from(code))
+            );
+        }
         Ok(())
     }
 
@@ -572,6 +659,15 @@ mod tests {
         Ok(())
     }
 
+    /// The current process, as the pseudo-handle `MapViewOfFile3` accepts.
+    struct CurrentProcess;
+
+    impl AsRawHandle for CurrentProcess {
+        fn as_raw_handle(&self) -> std::os::windows::io::RawHandle {
+            CURRENT_PROCESS as std::os::windows::io::RawHandle
+        }
+    }
+
     #[test]
     #[cfg_attr(miri, ignore = "foreign calls cannot run under Miri")]
     fn adopt_accepts_only_a_read_execute_mapped_view_with_the_stub() -> Result<(), CodeError> {
@@ -582,13 +678,27 @@ mod tests {
             CodeRegion::adopt(writer.base, SIZE).err(),
             Some(CodeError::NotACodeRegion)
         );
-        // A read-execute view of this section is accepted when taken over by
-        // address (the original is leaked so that only one value unmaps it).
-        let view = shared.map_executable()?;
-        let base = view.base();
-        std::mem::forget(view);
-        let adopted = CodeRegion::adopt(base, SIZE)?;
-        assert_eq!(adopted.base(), base);
+        // A view this crate owns is refused: the owner would unmap it.
+        let owned = shared.map_executable()?;
+        assert_eq!(
+            CodeRegion::adopt(owned.base(), SIZE).err(),
+            Some(CodeError::NotACodeRegion)
+        );
+        // A view made in "another process" (here this one, by pseudo-handle) is
+        // adopted, any number of times, and no drop unmaps it.
+        let remote = shared.map_into(&CurrentProcess)?;
+        let first = CodeRegion::adopt(remote.address, SIZE)?;
+        let second = CodeRegion::adopt(remote.address, SIZE)?;
+        assert_eq!(first.base(), second.base());
+        drop(first);
+        let mut ctx = Context::new();
+        let mut w = shared.map_writable()?;
+        w.write(CODE_START, EXIT_42)?;
+        remote.flush(&CurrentProcess)?;
+        assert_eq!(
+            enter(&second, Validated::new(CODE_START), &mut ctx)?,
+            Exit(42)
+        );
         // Nowhere near a view.
         assert!(CodeRegion::adopt(0, SIZE).is_err());
         // A stack address is private memory.
