@@ -29,5 +29,6 @@ pub mod independent;
 pub mod lemmas;
 pub mod scan_proofs;
 pub mod spec;
+pub mod string_proofs;
 pub mod unicode;
 pub mod unicode_data;

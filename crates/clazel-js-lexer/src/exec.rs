@@ -51,6 +51,8 @@ use super::equivalence::*;
 use super::independent::*;
 #[cfg(verus_only)]
 use super::scan_proofs::*;
+#[cfg(verus_only)]
+use super::string_proofs::*;
 #[allow(unused_imports)]
 use super::spec::*;
 #[allow(unused_imports)]
@@ -97,13 +99,14 @@ pub open spec fn kind_proven(kind: ElementKind, html: bool) -> bool {
     kind == ElementKind::WhiteSpace || kind == ElementKind::LineTerminator || kind
         == ElementKind::HashbangComment || kind == ElementKind::DivPunctuator || kind
         == ElementKind::RightBracePunctuator || kind == ElementKind::Punctuator || (kind
-        == ElementKind::Comment && !html) || kind == ElementKind::NumericLiteral
+        == ElementKind::Comment && !html) || kind == ElementKind::NumericLiteral || kind
+        == ElementKind::StringLiteral
 }
 
 /// The kinds whose value is proven to be the spec's
 /// ([`super::contract::element_value_agrees`]).
 pub open spec fn value_proven(kind: ElementKind) -> bool {
-    kind == ElementKind::NumericLiteral
+    kind == ElementKind::NumericLiteral || kind == ElementKind::StringLiteral
 }
 
 /// For the kinds of [`value_proven`], the value is the one the standard
@@ -628,6 +631,8 @@ fn line_terminator_sequence_end(src: &[u32], k: usize) -> (r: usize)
         is_line_terminator(src@[k as int]),
     ensures
         k < r <= src.len(),
+        line_terminator_sequence(src@, k as int, r as int),
+        forall|r2: int| line_terminator_sequence(src@, k as int, r2) ==> r2 == r,
 {
     if peek(src, k) == 0x0D && peek(src, k.saturating_add(1)) == 0x0A {
         k.saturating_add(2)
@@ -642,12 +647,20 @@ fn line_terminator_sequence_end(src: &[u32], k: usize) -> (r: usize)
 
 /// The MV of the `HexDigits[~Sep]` that start at `k` (all of them), capped
 /// at 0x110000 (any value above U+10FFFF is `NotCodePoint`), and the end.
+///
+/// Proven: the end is where the run of hex digits ends, and the value is
+/// the spec's [`hex_digits_mv`] of the run when that is at most U+10FFFF
+/// (and above U+10FFFF otherwise).
 fn scan_hex_digits(src: &[u32], k: usize) -> (r: (u32, usize))
     requires
         k <= src.len(),
     ensures
         r.0 <= 0x110000,
         k <= r.1 <= src.len(),
+        r.1 as int == ind_hex_run_end(src@, k as int),
+        r.0 <= 0x10FFFF ==> r.0 as int == hex_digits_mv(src@, k as int, r.1 as int),
+        r.0 > 0x10FFFF ==> hex_digits_mv(src@, k as int, r.1 as int) > 0x10FFFF,
+        forall|t: int| k <= t < r.1 ==> is_hex_digit(#[trigger] src@[t]),
 {
     let mut j = k;
     let mut v: u32 = 0;
@@ -655,11 +668,19 @@ fn scan_hex_digits(src: &[u32], k: usize) -> (r: (u32, usize))
         invariant
             k <= j <= src.len(),
             v <= 0x110000,
+            ind_hex_run_end(src@, k as int) == ind_hex_run_end(src@, j as int),
+            forall|t: int| k <= t < j ==> is_hex_digit(#[trigger] src@[t]),
+            v <= 0x10FFFF ==> v as int == hex_digits_mv(src@, k as int, j as int),
+            v > 0x10FFFF ==> hex_digits_mv(src@, k as int, j as int) > 0x10FFFF,
         decreases src.len() - j,
     {
         let c = peek(src, j);
         if is_hex(c) {
             let d = hex_val(c);
+            proof {
+                reveal_with_fuel(hex_digits_mv, 2);
+                assert(ind_hex_run_end(src@, j as int) == ind_hex_run_end(src@, j as int + 1));
+            }
             if v <= 0x10FFFF {
                 let w = v.saturating_mul(16).saturating_add(d);
                 v = if w > 0x10FFFF {
@@ -676,25 +697,48 @@ fn scan_hex_digits(src: &[u32], k: usize) -> (r: (u32, usize))
 }
 
 /// §12.9.4 `Hex4Digits` at `k`: its MV.
+///
+/// Proven: `Some(v)` when four hex digits start at `k`, and then `v` is
+/// their [`hex_digits_mv`]; `None` when they do not.
 fn scan_hex4(src: &[u32], k: usize) -> (r: Option<u32>)
     requires
         k <= src.len(),
     ensures
         match r {
-            Some(v) => k + 4 <= src.len() && v <= 0xFFFF,
-            None => true,
+            Some(v) => k + 4 <= src.len() && v <= 0xFFFF && ind_hex_run_end(src@, k as int) >= k
+                + 4 && v as int == hex_digits_mv(src@, k as int, k as int + 4),
+            None => ind_hex_run_end(src@, k as int) < k + 4,
         },
 {
     let a = peek(src, k);
     let b = peek(src, k.saturating_add(1));
     let c = peek(src, k.saturating_add(2));
     let d = peek(src, k.saturating_add(3));
+    proof {
+        lemma_hex_run_end(src@, k as int);
+    }
     if is_hex(a) && is_hex(b) && is_hex(c) && is_hex(d) {
         let v = hex_val(a).saturating_mul(0x1000).saturating_add(
             hex_val(b).saturating_mul(0x100),
         ).saturating_add(hex_val(c).saturating_mul(0x10)).saturating_add(hex_val(d));
+        proof {
+            reveal_with_fuel(hex_digits_mv, 5);
+            let end = ind_hex_run_end(src@, k as int);
+            if end < k + 4 {
+                assert(ind_hex(src@[end]));
+            }
+        }
         Some(v)
     } else {
+        proof {
+            let end = ind_hex_run_end(src@, k as int);
+            if end >= k + 4 {
+                assert(ind_hex(src@[k as int]));
+                assert(ind_hex(src@[k as int + 1]));
+                assert(ind_hex(src@[k as int + 2]));
+                assert(ind_hex(src@[k as int + 3]));
+            }
+        }
         None
     }
 }
@@ -702,13 +746,22 @@ fn scan_hex4(src: &[u32], k: usize) -> (r: Option<u32>)
 /// §12.9.4 `UnicodeEscapeSequence :: u Hex4Digits | u{ CodePoint }` at `k`
 /// (after the backslash): its code point (§12.7.1.3 IdentifierCodePoint)
 /// and its end.
+///
+/// Proven: `Some((cp, e))` is the one `UnicodeEscapeSequence` the spec
+/// derives at `k` (the deterministic reading [`ind_escape_end`] of
+/// `independent.rs`, which `equivalence.rs` proves equal to the spec's) and
+/// `cp` is its code point; `None` means the spec derives none.
 fn scan_unicode_escape(src: &[u32], k: usize) -> (r: Option<(u32, usize)>)
     requires
         k <= src.len(),
     ensures
         match r {
-            Some((cp, e)) => k < e <= src.len() && cp <= 0x10FFFF,
-            None => true,
+            Some((cp, e)) => k < e <= src.len() && cp <= 0x10FFFF && ind_escape_end(
+                src@,
+                k as int,
+            ) == e as int && cp as int == unicode_escape_code_point(src@, k as int, e as int) && ((
+            k + 1 < src.len() && src@[k as int + 1] != 0x7B) ==> cp <= 0xFFFF),
+            None => ind_escape_end(src@, k as int) == -1,
         },
 {
     if peek(src, k) != 0x75 {
@@ -718,8 +771,16 @@ fn scan_unicode_escape(src: &[u32], k: usize) -> (r: Option<(u32, usize)>)
         // 2. `u{` CodePoint `}`, with CodePoint's MV at most 0x10FFFF.
         let (v, e) = scan_hex_digits(src, k.saturating_add(2));
         if e > k.saturating_add(2) && v <= 0x10FFFF && peek(src, e) == 0x7D {
+            proof {
+                lemma_hex_value_equiv(src@, k as int + 2, e as int);
+            }
             Some((v, e.saturating_add(1)))
         } else {
+            proof {
+                if v > 0x10FFFF {
+                    lemma_hex_value_equiv(src@, k as int + 2, e as int);
+                }
+            }
             None
         }
     } else {
@@ -1475,12 +1536,23 @@ fn numeric_follow_error(src: &[u32], j: usize) -> (r: bool)
 /// octal digit: its MV, pushed as one code unit, and its end. The
 /// lookaheads make it the longest run its first digit allows: three digits
 /// after `0` to `3`, two after `4` to `7`.
+///
+/// Proven: it is the `LegacyOctalEscapeSequence` the spec derives at `k`
+/// (given that a leading `0` has an octal digit after it, the other cases
+/// being `0` alone), and the code unit pushed is its MV.
 fn scan_legacy_octal_escape(src: &[u32], k: usize, units: &mut Vec<u16>) -> (r: usize)
     requires
         k < src.len(),
         is_octal_digit(src@[k as int]),
+        src@[k as int] != 0x30 || (k + 1 < src.len() && is_octal_digit(src@[k as int + 1])),
     ensures
         k < r <= src.len(),
+        legacy_octal_escape_sequence(src@, k as int, r as int),
+        final(units)@ =~= old(units)@ + seq![legacy_octal_escape_sequence_mv(
+            src@,
+            k as int,
+            r as int,
+        ) as u16],
 {
     let d = peek(src, k);
     let mut v: u32 = d.saturating_sub(0x30);
@@ -1501,23 +1573,51 @@ fn scan_legacy_octal_escape(src: &[u32], k: usize, units: &mut Vec<u16>) -> (r: 
 
 /// §12.9.4 `\ EscapeSequence` or `LineContinuation`, the backslash at
 /// `k`: appends the SV (§12.9.4.2) and returns the end.
+///
+/// Proven: `Some(e)` is the one end of a `StringCharacter` (an escape) at
+/// `k` that the spec derives, and what is appended is its SV; `None` means
+/// the spec derives none.
 fn scan_string_escape(src: &[u32], k: usize, units: &mut Vec<u16>) -> (r: Option<usize>)
     requires
         k < src.len(),
+        src@[k as int] == 0x5C,
     ensures
         match r {
-            Some(e) => k + 1 < e <= src.len(),
-            None => true,
+            Some(e) => k + 1 < e <= src.len() && exists|v: Seq<u16>|
+                string_character_sv(src@, k as int, e as int, 0x22, v) && final(units)@
+                    =~= old(units)@ + v,
+            None => forall|e: int, v: Seq<u16>| !string_character_sv(src@, k as int, e, 0x22, v),
         },
 {
     let m = k.saturating_add(1);
     let d = peek(src, m);
+    proof {
+        lemma_is_lit(src@, m as int, m as int + 2, seq!['u', '{']);
+    }
     if is_lt(d) {
         // LineContinuation: the empty String.
-        Some(line_terminator_sequence_end(src, m))
+        let e = line_terminator_sequence_end(src, m);
+        proof {
+            assert(line_continuation(src@, k as int, e as int));
+            assert(string_character_sv(
+                src@,
+                k as int,
+                e as int,
+                0x22,
+                Seq::<u16>::empty(),
+            ));
+            assert(units@ =~= old(units)@ + Seq::<u16>::empty());
+        }
+        Some(e)
     } else if d == 0x27 || d == 0x22 || d == 0x5C {
         // SingleEscapeCharacter ' " \: the character itself.
         units.push(d as u16);
+        proof {
+            let v = seq![d as u16];
+            assert(character_escape_sequence_sv(src@, m as int, m as int + 1, v));
+            assert(string_character_sv(src@, k as int, m as int + 1, 0x22, v));
+            assert(units@ =~= old(units)@ + v);
+        }
         Some(m.saturating_add(1))
     } else if d == 0x62 || d == 0x66 || d == 0x6E || d == 0x72 || d == 0x74 || d == 0x76 {
         // SingleEscapeCharacter b f n r t v (Table "String Single Character
@@ -1536,21 +1636,55 @@ fn scan_string_escape(src: &[u32], k: usize, units: &mut Vec<u16>) -> (r: Option
             0x0D
         };
         units.push(u);
+        proof {
+            let v = seq![u];
+            assert(u == single_escape_code_unit(d));
+            assert(character_escape_sequence_sv(src@, m as int, m as int + 1, v));
+            assert(string_character_sv(src@, k as int, m as int + 1, 0x22, v));
+            assert(units@ =~= old(units)@ + v);
+        }
         Some(m.saturating_add(1))
     } else if d == 0x30 && !is_dec(peek(src, m.saturating_add(1))) {
         // `0` [lookahead ∉ DecimalDigit]: 0x0000.
         units.push(0);
+        proof {
+            let v = seq![0u16];
+            assert(template_escape_sequence_sv(src@, m as int, m as int + 1, v));
+            assert(string_character_sv(src@, k as int, m as int + 1, 0x22, v));
+            assert(units@ =~= old(units)@ + v);
+        }
         Some(m.saturating_add(1))
     } else if d == 0x30 && !is_oct(peek(src, m.saturating_add(1))) {
         // LegacyOctalEscapeSequence :: `0` [lookahead ∈ { 8, 9 }]: 0.
         units.push(0);
+        proof {
+            let v = seq![0u16];
+            assert(legacy_octal_escape_sequence(src@, m as int, m as int + 1));
+            assert(legacy_octal_escape_sequence_mv(src@, m as int, m as int + 1) == 0);
+            assert(escape_sequence_sv(src@, m as int, m as int + 1, v));
+            assert(string_character_sv(src@, k as int, m as int + 1, 0x22, v));
+            assert(units@ =~= old(units)@ + v);
+        }
         Some(m.saturating_add(1))
     } else if is_oct(d) {
         // LegacyOctalEscapeSequence, the other alternatives.
-        Some(scan_legacy_octal_escape(src, m, units))
+        let e = scan_legacy_octal_escape(src, m, units);
+        proof {
+            let v = seq![legacy_octal_escape_sequence_mv(src@, m as int, e as int) as u16];
+            assert(escape_sequence_sv(src@, m as int, e as int, v));
+            assert(string_character_sv(src@, k as int, e as int, 0x22, v));
+            assert(units@ =~= old(units)@ + v);
+        }
+        Some(e)
     } else if d == 0x38 || d == 0x39 {
         // NonOctalDecimalEscapeSequence: 0x0038 or 0x0039.
         units.push(d as u16);
+        proof {
+            let v = seq![d as u16];
+            assert(escape_sequence_sv(src@, m as int, m as int + 1, v));
+            assert(string_character_sv(src@, k as int, m as int + 1, 0x22, v));
+            assert(units@ =~= old(units)@ + v);
+        }
         Some(m.saturating_add(1))
     } else if d == 0x78 {
         // HexEscapeSequence :: x HexDigit HexDigit
@@ -1558,8 +1692,25 @@ fn scan_string_escape(src: &[u32], k: usize, units: &mut Vec<u16>) -> (r: Option
         let b = peek(src, m.saturating_add(2));
         if is_hex(a) && is_hex(b) {
             units.push(hex_val(a).saturating_mul(16).saturating_add(hex_val(b)) as u16);
+            proof {
+                let s = src@;
+                reveal_with_fuel(hex_digits_mv, 3);
+                let v = seq![hex_digits_mv(s, m as int + 1, m as int + 3) as u16];
+                assert(hex_escape_sequence(s, m as int, m as int + 3));
+                assert(escape_sequence_sv(s, m as int, m as int + 3, v));
+                assert(string_character_sv(s, k as int, m as int + 3, 0x22, v));
+                assert(units@ =~= old(units)@ + v);
+            }
             Some(m.saturating_add(3))
         } else {
+            proof {
+                assert forall|e: int, v: Seq<u16>| !string_character_sv(src@, k as int, e, 0x22, v) by {
+                    if string_character_sv(src@, k as int, e, 0x22, v) {
+                        assert(!hex_escape_sequence(src@, m as int, e));
+                        assert(!line_continuation(src@, k as int, e));
+                    }
+                }
+            }
             None
         }
     } else if d == 0x75 {
@@ -1567,61 +1718,163 @@ fn scan_string_escape(src: &[u32], k: usize, units: &mut Vec<u16>) -> (r: Option
         match scan_unicode_escape(src, m) {
             Some((cp, e)) => {
                 push_utf16(units, cp);
+                proof {
+                    let s = src@;
+                    lemma_unicode_escape_equiv(s, m as int, e as int);
+                    let v = utf16_encode_code_point(cp as int);
+                    assert(unicode_escape_sequence(s, m as int, e as int));
+                    assert(v =~= unicode_escape_sv(s, m as int, e as int)) by {
+                        if s[m as int + 1] != 0x7B {
+                            assert(cp <= 0xFFFF);
+                        }
+                    }
+                    assert(escape_sequence_sv(s, m as int, e as int, v));
+                    assert(string_character_sv(s, k as int, e as int, 0x22, v));
+                    assert(units@ =~= old(units)@ + v);
+                }
                 Some(e)
             },
-            None => None,
+            None => {
+                proof {
+                    assert forall|e: int, v: Seq<u16>|
+                        !string_character_sv(src@, k as int, e, 0x22, v) by {
+                        lemma_unicode_escape_equiv(src@, m as int, e);
+                        if string_character_sv(src@, k as int, e, 0x22, v) {
+                            assert(!line_continuation(src@, k as int, e));
+                        }
+                    }
+                }
+                None
+            },
         }
     } else if is_src(d) {
         // NonEscapeCharacter: the code point.
         push_utf16(units, d);
+        proof {
+            let v = utf16_encode_code_point(d as int);
+            assert(character_escape_sequence_sv(src@, m as int, m as int + 1, v));
+            assert(string_character_sv(src@, k as int, m as int + 1, 0x22, v));
+            assert(units@ =~= old(units)@ + v);
+        }
         Some(m.saturating_add(1))
     } else {
+        proof {
+            assert forall|e: int, v: Seq<u16>| !string_character_sv(src@, k as int, e, 0x22, v) by {
+                if string_character_sv(src@, k as int, e, 0x22, v) {
+                    assert(!line_continuation(src@, k as int, e));
+                }
+            }
+        }
         None
     }
 }
 
 /// §12.9.4 `StringLiteral` at `k` (a quote): its SV and its end.
+///
+/// Proven: `Some((units, e))` is the one `StringLiteral` the spec derives at
+/// `k`, and `units` is its SV ([`string_literal_sv`]); `None` means the
+/// spec derives none.
 fn scan_string(src: &[u32], k: usize) -> (r: Option<(Vec<u16>, usize)>)
     requires
         k < src.len(),
         src@[k as int] == 0x22 || src@[k as int] == 0x27,
     ensures
         match r {
-            Some((_, e)) => k + 2 <= e <= src.len(),
-            None => true,
+            Some((units, e)) => k + 2 <= e <= src.len() && string_literal_sv(
+                src@,
+                k as int,
+                e as int,
+                units@,
+            ) && (forall|j: int| string_literal(src@, k as int, j) ==> j == e),
+            None => forall|j: int| !string_literal(src@, k as int, j),
         },
 {
     let quote = peek(src, k);
     let mut units: Vec<u16> = Vec::new();
     let mut j = k.saturating_add(1);
+    proof {
+        lemma_str_init(src@, k as int + 1, quote);
+    }
     loop
         invariant
             k < j <= src.len(),
+            quote == src@[k as int],
             quote == 0x22 || quote == 0x27,
+            str_inv(src@, k as int + 1, j as int, quote, units@),
         decreases src.len() - j,
     {
         let c = peek(src, j);
         if c == quote {
+            proof {
+                lemma_str_quote(src@, k as int + 1, j as int, quote, units@, k as int);
+            }
             return Some((units, j.saturating_add(1)));
         } else if c == 0x5C {
+            let ghost before = units@;
             match scan_string_escape(src, j, &mut units) {
                 Some(e) => {
+                    proof {
+                        let v = choose|v: Seq<u16>|
+                            string_character_sv(src@, j as int, e as int, 0x22, v) && units@
+                                =~= before + v;
+                        lemma_esc_q_free(src@, j as int, e as int, 0x22, quote, v);
+                        lemma_str_step(src@, k as int + 1, j as int, e as int, quote, before, v);
+                    }
                     j = e;
                 },
                 None => {
+                    proof {
+                        assert forall|m: int, v: Seq<u16>|
+                            !string_character_sv(src@, j as int, m, quote, v) by {
+                            if string_character_sv(src@, j as int, m, quote, v) {
+                                lemma_esc_q_free(src@, j as int, m, quote, 0x22, v);
+                            }
+                        }
+                        lemma_str_no_char(src@, k as int + 1, j as int, quote, before, k as int);
+                    }
                     return None;
                 },
             }
         } else if c == 0x2028 || c == 0x2029 {
             // <LS>, <PS>: the code unit.
+            let ghost before = units@;
             units.push(c as u16);
+            proof {
+                assert(string_character_sv(
+                    src@,
+                    j as int,
+                    j as int + 1,
+                    quote,
+                    seq![c as u16],
+                ));
+                assert(units@ =~= before + seq![c as u16]);
+                lemma_str_step(
+                    src@,
+                    k as int + 1,
+                    j as int,
+                    j as int + 1,
+                    quote,
+                    before,
+                    seq![c as u16],
+                );
+            }
             j = j.saturating_add(1);
         } else if is_line_char(c) {
             // SourceCharacter but not one of the quote or \ or
             // LineTerminator.
+            let ghost before = units@;
             push_utf16(&mut units, c);
+            proof {
+                let v = utf16_encode_code_point(c as int);
+                assert(string_character_sv(src@, j as int, j as int + 1, quote, v));
+                assert(units@ =~= before + v);
+                lemma_str_step(src@, k as int + 1, j as int, j as int + 1, quote, before, v);
+            }
             j = j.saturating_add(1);
         } else {
+            proof {
+                lemma_str_no_char(src@, k as int + 1, j as int, quote, units@, k as int);
+            }
             return None;
         }
     }
@@ -2147,6 +2400,7 @@ proof fn lemma_comment_plain_equiv(s: Seq<u32>, i: int, j: int)
 
 /// Every alternative of `goal` that can start with the code point at
 /// `pos`, the longest of them.
+#[verifier::rlimit(200)]
 fn lex_common(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Candidate>)
     requires
         pos < src.len(),
