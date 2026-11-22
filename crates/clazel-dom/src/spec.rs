@@ -1251,12 +1251,22 @@ pub open spec fn clone_requires(doc: Document, node: NodeId) -> bool {
 //   fragment "create an element" made ([`clone_node`], shallow); its source
 //   is the source's contents, and its children are copies of that
 //   fragment's children, which is how every node is related to its source.
-// - **A refusal changes nothing** (`contract::clone_deep_ensures`): the arena is
-//   rolled back to what it was. The contract states the rollback, and that
-//   a clone that succeeds is within the node limit (it is [`wf`]). It does
-//   not state that the clone cannot fit whenever it refuses (an
-//   implementation that always refused would meet it; the conformance test
-//   shows ours clones).
+// - **A refusal changes nothing, and happens only when the copy cannot
+//   fit** (`contract::clone_deep_ensures`): the arena is rolled back to what
+//   it was, and a refusal is allowed only if the arena cannot hold
+//   [`subtree_size`] more nodes. A clone that succeeds is [`wf`], so within
+//   the node limit, and adds exactly [`subtree_size`] nodes: the copy is the
+//   unfolding of the source's host-including subtree, nothing more.
+// - **The source arena must be host-acyclic** ([`host_acyclic`], required by
+//   `contract::clone_deep_requires`). [`wf`] forbids a cycle of parents but
+//   not one through a template's host (a template that is a descendant of
+//   its own contents); the unfolding of such a subtree is infinite, so a
+//   clone of it can only be refused although [`subtree_size`] (a count of
+//   nodes) is small. The arenas the DOM algorithms build never have one (the
+//   pre-insertion check refuses to insert a host-including inclusive
+//   ancestor of the parent); this crate does not yet prove that they keep
+//   [`host_acyclic`], which is why it is a precondition and not part of
+//   [`wf`].
 // - **A fragment that is cloned directly** (a template's contents is the
 //   only kind) gets no host: "any other node: do nothing" (§4.4† step 3).
 
@@ -1350,6 +1360,60 @@ pub open spec fn deep_clone_src(doc: Document, node: NodeId, out: Document, src:
 pub open spec fn deep_clone(doc: Document, node: NodeId, out: Document, copy: NodeId) -> bool {
     &&& copy == doc.nodes.len()
     &&& exists|src: Seq<NodeId>| deep_clone_src(doc, node, out, src)
+}
+
+/// A ranking of the arena's nodes that grows along every parent edge and
+/// every host edge, at node `i`: its rank is below the node count, and above
+/// the rank of its parent and, if it is a fragment with a host, of that host.
+pub open spec fn ranked_at(doc: Document, rank: Seq<nat>, i: int) -> bool {
+    let n = doc.nodes.len();
+    let node = doc.nodes[i];
+    &&& rank[i] < n
+    &&& node.parent is Some ==> node.parent->Some_0 < n && rank[node.parent->Some_0 as int] < rank[i]
+    &&& (node.kind is DocumentFragment && node.kind->DocumentFragment_host is Some) ==> {
+        let h = node.kind->DocumentFragment_host->Some_0;
+        h < n && rank[h as int] < rank[i]
+    }
+}
+
+/// `rank` ranks every node of the arena ([`ranked_at`]).
+pub open spec fn host_ranked(doc: Document, rank: Seq<nat>) -> bool {
+    &&& rank.len() == doc.nodes.len()
+    &&& forall|i: int| 0 <= i < doc.nodes.len() ==> #[trigger] ranked_at(doc, rank, i)
+}
+
+/// The arena has no cycle through parents and template hosts: following a
+/// node's parent, or a parentless fragment's host, never returns to it
+/// (witnessed by a ranking that grows along every such step, with ranks
+/// below the node count). [`wf`] gives the parent half
+/// (its `paths`); the host half is not part of it (see the modelling
+/// choices of deep cloning).
+pub open spec fn host_acyclic(doc: Document) -> bool {
+    exists|rank: Seq<nat>| host_ranked(doc, rank)
+}
+
+/// How many of the first `k` nodes of the arena are host-including
+/// descendants of `node`, counting `node` itself: `node` is a
+/// host-including inclusive ancestor of them (DOM §4.2).
+pub open spec fn subtree_count(doc: Document, node: NodeId, k: nat) -> nat
+    decreases k,
+{
+    if k == 0 {
+        0
+    } else {
+        subtree_count(doc, node, (k - 1) as nat) + if is_host_including_inclusive_ancestor(doc, node, (k - 1) as NodeId) {
+            1nat
+        } else {
+            0nat
+        }
+    }
+}
+
+/// The size of `node`'s host-including subtree: the nodes a deep clone of
+/// `node` copies (its descendants, and those of a template's contents,
+/// which HTML §4.12.3's cloning steps copy too, and the contents).
+pub open spec fn subtree_size(doc: Document, node: NodeId) -> nat {
+    subtree_count(doc, node, doc.nodes.len())
 }
 
 // ---------------------------------------------------------------------

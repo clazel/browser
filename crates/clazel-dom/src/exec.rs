@@ -2044,7 +2044,7 @@ impl Arena {
     #[verifier::rlimit(20)]
     pub fn clone_deep(&mut self, node: usize) -> (r: Option<usize>)
         requires
-            clone_requires(old(self)@, node),
+            clone_deep_requires(old(self)@, node),
         ensures
             clone_deep_ensures(old(self)@, node, final(self)@, r),
     {

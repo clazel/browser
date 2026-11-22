@@ -199,14 +199,36 @@ pub open spec fn clone_node_ensures(doc: Document, node: NodeId, out: Document, 
     }
 }
 
+/// Precondition of `Arena::clone_deep(node)`: [`clone_requires`], and an
+/// arena with no cycle through template hosts ([`host_acyclic`]; [`wf`]
+/// does not give it, and the unfolding of such a cycle is infinite).
+pub open spec fn clone_deep_requires(doc: Document, node: NodeId) -> bool {
+    &&& clone_requires(doc, node)
+    &&& host_acyclic(doc)
+}
+
+/// The arena `out` grew by exactly [`subtree_size`] nodes: the copy is the
+/// whole host-including subtree of `node`, and nothing else.
+pub open spec fn clone_deep_grew(doc: Document, node: NodeId, out: Document) -> bool {
+    out.nodes.len() == doc.nodes.len() + subtree_size(doc, node)
+}
+
+/// A refusal of `Arena::clone_deep(node)`: the arena is exactly as it was,
+/// and it could not have held the copy ([`subtree_size`] more nodes).
+pub open spec fn clone_deep_refused(doc: Document, node: NodeId, out: Document) -> bool {
+    &&& out == doc
+    &&& !can_create(doc, subtree_size(doc, node))
+}
+
 /// Contract for `Arena::clone_deep(node) -> Option<usize>`, under
-/// [`clone_requires`]: refused (`None`) leaves the arena exactly as it was,
-/// and otherwise the arena is well formed and holds [`deep_clone`] of
-/// `node`, whose copy is the id returned.
+/// [`clone_deep_requires`]: refused (`None`) only if the copy does not fit
+/// ([`clone_deep_refused`]), and then the arena is exactly as it was;
+/// otherwise the arena is well formed, holds [`deep_clone`] of `node`, whose
+/// copy is the id returned, and grew by [`subtree_size`] nodes.
 pub open spec fn clone_deep_ensures(doc: Document, node: NodeId, out: Document, id: Option<NodeId>) -> bool {
     match id {
-        Some(copy) => wf(out) && deep_clone(doc, node, out, copy),
-        None => out == doc,
+        Some(copy) => wf(out) && deep_clone(doc, node, out, copy) && clone_deep_grew(doc, node, out),
+        None => clone_deep_refused(doc, node, out),
     }
 }
 
