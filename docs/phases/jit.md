@@ -582,6 +582,14 @@ runner.
 - Hostile pages: huge functions, deep recursion, inline-cache churn, a flood
   of compilations. None may crash a renderer or exceed its bounds.
 
+*Status (first slice):* `clazel-jit`'s `cache`, `tier`, `limits` and
+`governor` modules hold the code cache (budget invariant proven in Verus), the
+tiering policy, the per-function and per-page bounds with stated fallback
+reasons, and the measurement counters (compile time is passed in, no clock is
+read). Nothing is mapped or entered yet (that needs `clazel-sys`'s code
+regions), the thresholds and budgets are starting values and not
+measurements, and the IPC and break-even measurements are not done.
+
 ### J.12 Status, README, VERIFICATION.md (S)
 
 - The TCB lists the instruction-set semantics' faithfulness, the enter stub,

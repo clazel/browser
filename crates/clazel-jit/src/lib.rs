@@ -125,6 +125,27 @@
 //! The A64 back end's control flow, memory and emitter are the same slice
 //! over `clazel-a64`, proven likewise: see [`a64`].
 //!
+//! # The code cache and the page's bounds (J.11, first slice)
+//!
+//! Pure safe Rust, with nothing mapped and nothing entered (that waits for
+//! `clazel-sys`'s code regions, open PR #272).
+//!
+//! - [`cache`]: the code cache, a byte-budgeted store of compiled blobs keyed
+//!   by bytecode function id and version, generic over [`cache::Region`].
+//!   **Proven in Verus (no axiom, no assumption):** the resident bytes are
+//!   the sum of the regions' own lengths and never exceed the budget; keys
+//!   are unique; a rejected insert changes nothing; an evicted region leaves
+//!   the cache by value, and no resident key is an evicted one. See its
+//!   header for the statement.
+//! - [`tier`]: when to compile (entry and back-edge thresholds, with backoff
+//!   per eviction), as plain functions with tests.
+//! - [`limits`]: the hostile-page bounds (per-function size, per-page budget,
+//!   compile quota, tracked functions), the [`limits::Fallback`] reasons and
+//!   the measurement counters ([`limits::Stats`]; no clock is read).
+//! - [`governor`]: the three together, with tests that a flood of compile
+//!   requests stays within the budget (arithmetic on counters, tested, not
+//!   proven).
+//!
 //! # What is not (of the first slice)
 //!
 //! - **That the validator accepts every blob of the first slice's own
@@ -153,6 +174,7 @@ pub mod a64;
 pub mod agree;
 pub mod alu;
 pub mod api;
+pub mod cache;
 pub mod cfaccept;
 pub mod cfalg;
 pub mod cfblobacc;
@@ -193,6 +215,8 @@ pub mod contract;
 pub mod emit;
 pub mod exit;
 pub mod flags;
+pub mod governor;
+pub mod limits;
 pub mod memlemmas;
 pub mod mid;
 pub mod proofs;
@@ -202,4 +226,5 @@ pub mod skel;
 pub mod spec;
 pub mod steps;
 pub mod templates;
+pub mod tier;
 pub mod tlemmas;
