@@ -212,35 +212,87 @@ pub open spec fn handler_index(h: js::HandlerId) -> nat {
         js::HandlerId::LooseEq => 21,
         js::HandlerId::Not => 22,
         js::HandlerId::ToNumeric => 23,
-        js::HandlerId::ToBoolean => 24,
-        js::HandlerId::Terminate => 25,
-        js::HandlerId::ThrowHole => 26,
-        js::HandlerId::GetProp => 27,
-        js::HandlerId::SetProp => 28,
-        js::HandlerId::GetElem => 29,
-        js::HandlerId::SetElem => 30,
-        js::HandlerId::Call => 31,
-        js::HandlerId::Return => 32,
-        js::HandlerId::EnvAccess => 33,
-        js::HandlerId::TypeOf => 34,
-        js::HandlerId::InstanceOf => 35,
-        js::HandlerId::HasProperty => 36,
-        js::HandlerId::DeleteProp => 37,
-        js::HandlerId::GetGlobal => 38,
-        js::HandlerId::SetGlobal => 39,
-        js::HandlerId::NewObject => 40,
-        js::HandlerId::NewArray => 41,
-        js::HandlerId::NewEnv => 42,
-        js::HandlerId::NewClosure => 43,
-        js::HandlerId::New => 44,
-        js::HandlerId::CallSpread => 45,
-        js::HandlerId::GetIterator => 46,
-        js::HandlerId::IterNext => 47,
-        js::HandlerId::IterClose => 48,
-        js::HandlerId::Yield => 49,
-        js::HandlerId::Await => 50,
-        js::HandlerId::Throw => 51,
-        js::HandlerId::ThrowError => 52,
+        js::HandlerId::ToNumber => 24,
+        js::HandlerId::ToBoolean => 25,
+        js::HandlerId::Terminate => 26,
+        js::HandlerId::ThrowHole => 27,
+        js::HandlerId::GetProp => 28,
+        js::HandlerId::SetProp => 29,
+        js::HandlerId::GetElem => 30,
+        js::HandlerId::SetElem => 31,
+        js::HandlerId::Call => 32,
+        js::HandlerId::Return => 33,
+        js::HandlerId::EnvAccess => 34,
+        js::HandlerId::TypeOf => 35,
+        js::HandlerId::InstanceOf => 36,
+        js::HandlerId::HasProperty => 37,
+        js::HandlerId::DeleteProp => 38,
+        js::HandlerId::GetGlobal => 39,
+        js::HandlerId::SetGlobal => 40,
+        js::HandlerId::GetGlobalOrUndefined => 41,
+        js::HandlerId::DeclareGlobals => 42,
+        js::HandlerId::DefineProp => 43,
+        js::HandlerId::DefineElem => 44,
+        js::HandlerId::SetLiteralProto => 45,
+        js::HandlerId::NewObject => 46,
+        js::HandlerId::NewArray => 47,
+        js::HandlerId::NewEnv => 48,
+        js::HandlerId::NewClosure => 49,
+        js::HandlerId::New => 50,
+        js::HandlerId::CallSpread => 51,
+        js::HandlerId::GetIterator => 52,
+        js::HandlerId::IterNext => 53,
+        js::HandlerId::IterClose => 54,
+        js::HandlerId::Yield => 55,
+        js::HandlerId::Await => 56,
+        js::HandlerId::Throw => 57,
+        js::HandlerId::ThrowError => 58,
+        js::HandlerId::ToPropertyKey => 59,
+        js::HandlerId::ToString => 60,
+        js::HandlerId::CopyDataProperties => 61,
+        js::HandlerId::GetTemplateObject => 62,
+        js::HandlerId::NewSpread => 63,
+        js::HandlerId::SuperCall => 64,
+        js::HandlerId::SuperCallSpread => 65,
+        js::HandlerId::InitInstance => 66,
+        js::HandlerId::ClassSetup => 67,
+        js::HandlerId::DefineMethod => 68,
+        js::HandlerId::SetHomeObject => 69,
+        js::HandlerId::SetInstanceInit => 70,
+        js::HandlerId::NewPrivateName => 71,
+        js::HandlerId::GetPrivate => 72,
+        js::HandlerId::SetPrivate => 73,
+        js::HandlerId::DefinePrivate => 74,
+        js::HandlerId::HasPrivate => 75,
+        js::HandlerId::GetSuperBase => 76,
+        js::HandlerId::GetSuper => 77,
+        js::HandlerId::SetSuper => 78,
+        js::HandlerId::GetNewTarget => 79,
+        js::HandlerId::ConstructResult => 80,
+        js::HandlerId::CreateUnmappedArguments => 81,
+        js::HandlerId::CreateMappedArguments => 82,
+        js::HandlerId::CreateRestArray => 83,
+        js::HandlerId::ForInIterator => 84,
+        js::HandlerId::InitGlobalLexical => 85,
+        js::HandlerId::NewRegExp => 86,
+        js::HandlerId::GeneratorStart => 87,
+        js::HandlerId::YieldDelegate => 88,
+        js::HandlerId::GetAsyncIterator => 89,
+        js::HandlerId::IterCallMethod => 90,
+        js::HandlerId::IterComplete => 91,
+        js::HandlerId::IterValue => 92,
+        js::HandlerId::ThrowIfNotObject => 93,
+        js::HandlerId::ToObject => 94,
+        js::HandlerId::WithHas => 95,
+        js::HandlerId::WithGet => 96,
+        js::HandlerId::WithSet => 97,
+        js::HandlerId::WithDelete => 98,
+        js::HandlerId::DeleteGlobal => 99,
+        js::HandlerId::DirectEval => 100,
+        js::HandlerId::GetImportBinding => 101,
+        js::HandlerId::ImportCall => 102,
+        js::HandlerId::ImportMeta => 103,
+        js::HandlerId::DirectEvalSpread => 104,
     }
 }
 
@@ -296,63 +348,167 @@ pub open spec fn handler_of_index(n: nat) -> Option<js::HandlerId> {
     } else if n == 23 {
         Some(js::HandlerId::ToNumeric)
     } else if n == 24 {
-        Some(js::HandlerId::ToBoolean)
+        Some(js::HandlerId::ToNumber)
     } else if n == 25 {
-        Some(js::HandlerId::Terminate)
+        Some(js::HandlerId::ToBoolean)
     } else if n == 26 {
-        Some(js::HandlerId::ThrowHole)
+        Some(js::HandlerId::Terminate)
     } else if n == 27 {
-        Some(js::HandlerId::GetProp)
+        Some(js::HandlerId::ThrowHole)
     } else if n == 28 {
-        Some(js::HandlerId::SetProp)
+        Some(js::HandlerId::GetProp)
     } else if n == 29 {
-        Some(js::HandlerId::GetElem)
+        Some(js::HandlerId::SetProp)
     } else if n == 30 {
-        Some(js::HandlerId::SetElem)
+        Some(js::HandlerId::GetElem)
     } else if n == 31 {
-        Some(js::HandlerId::Call)
+        Some(js::HandlerId::SetElem)
     } else if n == 32 {
-        Some(js::HandlerId::Return)
+        Some(js::HandlerId::Call)
     } else if n == 33 {
-        Some(js::HandlerId::EnvAccess)
+        Some(js::HandlerId::Return)
     } else if n == 34 {
-        Some(js::HandlerId::TypeOf)
+        Some(js::HandlerId::EnvAccess)
     } else if n == 35 {
-        Some(js::HandlerId::InstanceOf)
+        Some(js::HandlerId::TypeOf)
     } else if n == 36 {
-        Some(js::HandlerId::HasProperty)
+        Some(js::HandlerId::InstanceOf)
     } else if n == 37 {
-        Some(js::HandlerId::DeleteProp)
+        Some(js::HandlerId::HasProperty)
     } else if n == 38 {
-        Some(js::HandlerId::GetGlobal)
+        Some(js::HandlerId::DeleteProp)
     } else if n == 39 {
-        Some(js::HandlerId::SetGlobal)
+        Some(js::HandlerId::GetGlobal)
     } else if n == 40 {
-        Some(js::HandlerId::NewObject)
+        Some(js::HandlerId::SetGlobal)
     } else if n == 41 {
-        Some(js::HandlerId::NewArray)
+        Some(js::HandlerId::GetGlobalOrUndefined)
     } else if n == 42 {
-        Some(js::HandlerId::NewEnv)
+        Some(js::HandlerId::DeclareGlobals)
     } else if n == 43 {
-        Some(js::HandlerId::NewClosure)
+        Some(js::HandlerId::DefineProp)
     } else if n == 44 {
-        Some(js::HandlerId::New)
+        Some(js::HandlerId::DefineElem)
     } else if n == 45 {
-        Some(js::HandlerId::CallSpread)
+        Some(js::HandlerId::SetLiteralProto)
     } else if n == 46 {
-        Some(js::HandlerId::GetIterator)
+        Some(js::HandlerId::NewObject)
     } else if n == 47 {
-        Some(js::HandlerId::IterNext)
+        Some(js::HandlerId::NewArray)
     } else if n == 48 {
-        Some(js::HandlerId::IterClose)
+        Some(js::HandlerId::NewEnv)
     } else if n == 49 {
-        Some(js::HandlerId::Yield)
+        Some(js::HandlerId::NewClosure)
     } else if n == 50 {
-        Some(js::HandlerId::Await)
+        Some(js::HandlerId::New)
     } else if n == 51 {
-        Some(js::HandlerId::Throw)
+        Some(js::HandlerId::CallSpread)
     } else if n == 52 {
+        Some(js::HandlerId::GetIterator)
+    } else if n == 53 {
+        Some(js::HandlerId::IterNext)
+    } else if n == 54 {
+        Some(js::HandlerId::IterClose)
+    } else if n == 55 {
+        Some(js::HandlerId::Yield)
+    } else if n == 56 {
+        Some(js::HandlerId::Await)
+    } else if n == 57 {
+        Some(js::HandlerId::Throw)
+    } else if n == 58 {
         Some(js::HandlerId::ThrowError)
+    } else if n == 59 {
+        Some(js::HandlerId::ToPropertyKey)
+    } else if n == 60 {
+        Some(js::HandlerId::ToString)
+    } else if n == 61 {
+        Some(js::HandlerId::CopyDataProperties)
+    } else if n == 62 {
+        Some(js::HandlerId::GetTemplateObject)
+    } else if n == 63 {
+        Some(js::HandlerId::NewSpread)
+    } else if n == 64 {
+        Some(js::HandlerId::SuperCall)
+    } else if n == 65 {
+        Some(js::HandlerId::SuperCallSpread)
+    } else if n == 66 {
+        Some(js::HandlerId::InitInstance)
+    } else if n == 67 {
+        Some(js::HandlerId::ClassSetup)
+    } else if n == 68 {
+        Some(js::HandlerId::DefineMethod)
+    } else if n == 69 {
+        Some(js::HandlerId::SetHomeObject)
+    } else if n == 70 {
+        Some(js::HandlerId::SetInstanceInit)
+    } else if n == 71 {
+        Some(js::HandlerId::NewPrivateName)
+    } else if n == 72 {
+        Some(js::HandlerId::GetPrivate)
+    } else if n == 73 {
+        Some(js::HandlerId::SetPrivate)
+    } else if n == 74 {
+        Some(js::HandlerId::DefinePrivate)
+    } else if n == 75 {
+        Some(js::HandlerId::HasPrivate)
+    } else if n == 76 {
+        Some(js::HandlerId::GetSuperBase)
+    } else if n == 77 {
+        Some(js::HandlerId::GetSuper)
+    } else if n == 78 {
+        Some(js::HandlerId::SetSuper)
+    } else if n == 79 {
+        Some(js::HandlerId::GetNewTarget)
+    } else if n == 80 {
+        Some(js::HandlerId::ConstructResult)
+    } else if n == 81 {
+        Some(js::HandlerId::CreateUnmappedArguments)
+    } else if n == 82 {
+        Some(js::HandlerId::CreateMappedArguments)
+    } else if n == 83 {
+        Some(js::HandlerId::CreateRestArray)
+    } else if n == 84 {
+        Some(js::HandlerId::ForInIterator)
+    } else if n == 85 {
+        Some(js::HandlerId::InitGlobalLexical)
+    } else if n == 86 {
+        Some(js::HandlerId::NewRegExp)
+    } else if n == 87 {
+        Some(js::HandlerId::GeneratorStart)
+    } else if n == 88 {
+        Some(js::HandlerId::YieldDelegate)
+    } else if n == 89 {
+        Some(js::HandlerId::GetAsyncIterator)
+    } else if n == 90 {
+        Some(js::HandlerId::IterCallMethod)
+    } else if n == 91 {
+        Some(js::HandlerId::IterComplete)
+    } else if n == 92 {
+        Some(js::HandlerId::IterValue)
+    } else if n == 93 {
+        Some(js::HandlerId::ThrowIfNotObject)
+    } else if n == 94 {
+        Some(js::HandlerId::ToObject)
+    } else if n == 95 {
+        Some(js::HandlerId::WithHas)
+    } else if n == 96 {
+        Some(js::HandlerId::WithGet)
+    } else if n == 97 {
+        Some(js::HandlerId::WithSet)
+    } else if n == 98 {
+        Some(js::HandlerId::WithDelete)
+    } else if n == 99 {
+        Some(js::HandlerId::DeleteGlobal)
+    } else if n == 100 {
+        Some(js::HandlerId::DirectEval)
+    } else if n == 101 {
+        Some(js::HandlerId::GetImportBinding)
+    } else if n == 102 {
+        Some(js::HandlerId::ImportCall)
+    } else if n == 103 {
+        Some(js::HandlerId::ImportMeta)
+    } else if n == 104 {
+        Some(js::HandlerId::DirectEvalSpread)
     } else {
         None
     }
