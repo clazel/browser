@@ -132,22 +132,12 @@ pub fn new_object_with(vm: &mut Vm, proto: Value, kind: ObjKind) -> Result<Value
     Ok(vm.heap_mut().new_object(proto, kind)?)
 }
 
-/// The list of values as a JS "array": until arrays exist (the heap's
-/// elements are an open pull request) an ordinary object with `length` and
-/// the index properties, and `%Object.prototype%` as prototype. The one
-/// place to change when `ArrayCreate` (§10.4.2.2†) exists.
+/// The list of values as an array: CreateArrayFromList, §7.3.18†.
 ///
 /// # Errors
 /// [`Abrupt::OutOfMemory`].
 pub fn new_array_like(vm: &mut Vm, items: &[Value]) -> Result<Value, Abrupt> {
-    let o = vm.new_object()?;
-    for (i, v) in items.iter().enumerate() {
-        define(vm, o, &i.to_string(), *v, Attrs::ALL)?;
-    }
-    let n = i32::try_from(items.len()).map_err(|_| Abrupt::OutOfMemory)?;
-    // An array's `length` is writable, not enumerable, not configurable.
-    define(vm, o, "length", Value::int32(n), Attrs(Attrs::WRITABLE))?;
-    Ok(o)
+    vm.create_array_from_list(items)
 }
 
 /// The Number a value is, if it is one.

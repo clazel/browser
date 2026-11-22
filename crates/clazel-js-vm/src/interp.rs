@@ -150,10 +150,17 @@ pub enum Intrinsic {
     NumberPrototype,
     /// `%String.prototype%`.
     StringPrototype,
+    /// `%Array.prototype%`.
+    ArrayPrototype,
+    /// `%Array%`.
+    ArrayConstructor,
 }
 
+/// The most natives that may run one inside another.
+const MAX_NATIVE_DEPTH: u32 = 150;
+
 /// How many [`Intrinsic`]s there are.
-const INTRINSICS: usize = 10;
+const INTRINSICS: usize = 12;
 
 /// The hint of ToPrimitive (§7.1.1†).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -281,6 +288,9 @@ pub struct Vm {
     pub(crate) intrinsics: [Value; INTRINSICS],
     pub(crate) new_target: Value,
     pub(crate) active: Value,
+    /// How many natives are running, one inside another (each re-enters the
+    /// interpreter or another native on the host stack).
+    pub(crate) native_depth: u32,
     pub(crate) terminator: Terminator,
     pub(crate) budget: u64,
     pub(crate) atoms: Atoms,
@@ -349,6 +359,7 @@ impl Vm {
             }),
             new_target: Value::UNDEFINED,
             active: Value::UNDEFINED,
+            native_depth: 0,
             terminator: Terminator::new(),
             budget: u64::MAX,
             atoms,
@@ -549,9 +560,16 @@ impl Vm {
         new_target: Value,
     ) -> Result<Value, Abrupt> {
         let (f, _) = self.native(i)?;
+        // Natives nest on the host stack (`join` of an array that holds
+        // itself): a bound keeps that from overflowing it.
+        if self.native_depth >= MAX_NATIVE_DEPTH {
+            return Err(self.range_error("Maximum call stack size exceeded"));
+        }
         let saved = (self.active, self.new_target);
         (self.active, self.new_target) = (callee, new_target);
+        self.native_depth = self.native_depth.saturating_add(1);
         let r = f(self, this, args);
+        self.native_depth = self.native_depth.saturating_sub(1);
         (self.active, self.new_target) = saved;
         r
     }
@@ -1057,15 +1075,42 @@ impl Vm {
             Instr::DefineProp { obj, key, val } => {
                 let (o, v) = (self.r(obj)?, self.r(val)?);
                 let key = self.key_const(key)?;
-                self.heap.define(o, key, v, Attrs::ALL)?;
+                if self.heap.is_array_object(o) {
+                    self.create_data_property_or_throw(o, key, v)?;
+                } else {
+                    self.heap.define(o, key, v, Attrs::ALL)?;
+                }
             }
             Instr::DefineElem { obj, idx, val } => {
                 let (o, k, v) = (self.r(obj)?, self.r(idx)?, self.r(val)?);
                 // An elision is the hole: no property.
                 if v != Value::HOLE {
                     let key = self.coerce_property_key(k)?;
-                    self.heap.define(o, key, v, Attrs::ALL)?;
+                    if self.heap.is_array_object(o) {
+                        self.create_data_property_or_throw(o, key, v)?;
+                    } else {
+                        self.heap.define(o, key, v, Attrs::ALL)?;
+                    }
                 }
+            }
+            // ArrayCreate(0), §10.4.2.2†: `len` is only a capacity hint (the
+            // elements are ordinary properties of the shape).
+            Instr::NewArray { dst, len: _ } => {
+                let a = self.array_create(0.0, None)?;
+                self.w(dst, a)?;
+            }
+            // `delete obj[idx]`, §13.5.1.2† step 5: ToObject(base), then
+            // `[[Delete]]`; false is a TypeError in strict code.
+            Instr::DeleteProp { dst, obj, idx } => {
+                let (base, k) = (self.r(obj)?, self.r(idx)?);
+                let o = self.to_object(base)?;
+                let key = self.coerce_property_key(k)?;
+                let ok = self.delete_property(o, key)?;
+                if !ok && self.strict() {
+                    let name = self.key_text(key);
+                    return Err(self.type_error(&format!("Cannot delete property '{name}'")));
+                }
+                self.w(dst, Value::boolean(ok))?;
             }
             Instr::SetLiteralProto { obj, val } => {
                 let (o, v) = (self.r(obj)?, self.r(val)?);

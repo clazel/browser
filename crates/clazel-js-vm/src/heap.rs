@@ -46,6 +46,12 @@ pub enum ObjKind {
     /// primitive as `[[BooleanData]]`, `[[NumberData]]` or `[[StringData]]`
     /// (§20.3†, §21.1†, §22.1†).
     Primitive(Value),
+    /// An Array exotic object (§10.4.2†). Its `length` is the first property
+    /// (slot 0), made by [`Heap::new_array`] and never removed, so reading it
+    /// is one slot access. The index properties are ordinary data properties
+    /// in the shape, because `clazel-js-heap`'s elements (#211) are not on
+    /// this base.
+    Array,
 }
 
 /// An object: properties by shape, a prototype and a kind.
@@ -138,16 +144,26 @@ pub struct Heap {
     arena: Arena<Cell>,
     shapes: Shapes,
     keys: Interner,
+    /// The interned `length`, which an array keeps in slot 0.
+    length_key: Key,
 }
 
 impl Heap {
     /// An empty heap whose arena holds at most `limit` cells.
     #[must_use]
     pub fn new(limit: usize) -> Self {
+        let mut keys = Interner::new();
+        // "length" is 6 code units: it fits the string limit, so the
+        // interner cannot refuse it; the fallback key is never used.
+        let length_key = JsString::from_rust_str("length")
+            .ok()
+            .and_then(|s| keys.intern(&s).ok())
+            .unwrap_or(Key(0));
         Self {
             arena: Arena::with_limit(limit),
             shapes: Shapes::new(),
-            keys: Interner::new(),
+            keys,
+            length_key,
         }
     }
 
@@ -193,6 +209,102 @@ impl Heap {
             proto,
             kind,
         }))
+    }
+
+    /// Allocates an Array exotic object whose `length` is `len`: the
+    /// property is writable, not enumerable, not configurable
+    /// (§10.4.2.2† ArrayCreate steps 6 to 8). `len` must already be checked
+    /// against 2^32 - 1.
+    ///
+    /// # Errors
+    /// [`HeapError::Full`] if the arena is full.
+    pub fn new_array(&mut self, proto: Value, len: u32) -> Result<Value, HeapError> {
+        let a = self.new_object(proto, ObjKind::Array)?;
+        let k = self.length_key;
+        self.define(a, k, length_value(len), Attrs(Attrs::WRITABLE))?;
+        Ok(a)
+    }
+
+    /// The `length` of an Array exotic object, with whether it is writable.
+    #[must_use]
+    pub fn array_length(&self, arr: Value) -> Option<(u32, bool)> {
+        let o = self.obj(arr)?;
+        if !matches!(o.kind, ObjKind::Array) {
+            return None;
+        }
+        let (slot, attrs) = self.shapes.lookup(o.shape, self.length_key)?;
+        let v = o.slots.get(usize::try_from(slot).ok()?).copied()?;
+        let d = crate::numeric::num(v)?.to_f64();
+        let n = d as u32;
+        (f64::from(n) == d).then_some((n, attrs.0 & Attrs::WRITABLE != 0))
+    }
+
+    /// Stores `len` as the `length` of an array (the caller has checked that
+    /// the property is writable, or is applying a definition).
+    ///
+    /// # Errors
+    /// [`HeapError::Corrupt`] if `arr` is not an array.
+    pub fn set_array_length(&mut self, arr: Value, len: u32) -> Result<(), HeapError> {
+        let o = self.obj(arr).ok_or(HeapError::Corrupt)?;
+        let (slot, _) = self
+            .shapes
+            .lookup(o.shape, self.length_key)
+            .ok_or(HeapError::Corrupt)?;
+        self.set_slot(arr, slot, length_value(len))
+    }
+
+    /// Whether a value is an Array exotic object.
+    #[must_use]
+    pub fn is_array_object(&self, v: Value) -> bool {
+        self.obj(v)
+            .is_some_and(|o| matches!(o.kind, ObjKind::Array))
+    }
+
+    /// The array index a key names (§6.1.7†), if it names one.
+    #[must_use]
+    pub fn key_index(&self, k: Key) -> Option<u32> {
+        self.keys.resolve(k).and_then(canonical_index)
+    }
+
+    /// Removes the own properties `keys` of `obj` (a key it does not have is
+    /// ignored): the shape is rebuilt from the root without them, so the
+    /// others keep their order and get consecutive slots. A shared shape
+    /// reuses its transitions; a dictionary shape (an object with more than
+    /// 128 properties) gets a new dictionary shape each time, which stays in
+    /// the shape table until the collector of #236 frees it.
+    ///
+    /// # Errors
+    /// [`HeapError::Corrupt`] if `obj` is not an object, [`HeapError::Full`]
+    /// on overflow.
+    pub fn remove_properties(&mut self, obj: Value, keys: &[Key]) -> Result<(), HeapError> {
+        let o = self.obj(obj).ok_or(HeapError::Corrupt)?;
+        let props = self.shapes.properties(o.shape);
+        if !props.iter().any(|(k, _, _)| keys.contains(k)) {
+            return Ok(());
+        }
+        let old_slots = o.slots.clone();
+        let mut shape = ROOT;
+        let mut slots: Vec<Value> = Vec::with_capacity(props.len());
+        for (k, slot, a) in props {
+            if keys.contains(&k) {
+                continue;
+            }
+            let v = usize::try_from(slot)
+                .ok()
+                .and_then(|i| old_slots.get(i))
+                .copied()
+                .ok_or(HeapError::Corrupt)?;
+            let (next, new_slot) = self.shapes.add_property(shape, k, a)?;
+            if usize::try_from(new_slot).ok() != Some(slots.len()) {
+                return Err(HeapError::Corrupt);
+            }
+            shape = next;
+            slots.push(v);
+        }
+        let o = self.obj_mut(obj).ok_or(HeapError::Corrupt)?;
+        o.shape = shape;
+        o.slots = slots;
+        Ok(())
     }
 
     /// The live cell a value refers to.
@@ -456,6 +568,15 @@ impl Heap {
     #[must_use]
     pub fn proto_of(&self, obj: Value) -> Option<Value> {
         self.obj(obj).map(|o| o.proto)
+    }
+}
+
+/// A `length` value: an int32 when it fits, else a double.
+#[must_use]
+pub fn length_value(len: u32) -> Value {
+    match i32::try_from(len) {
+        Ok(i) => Value::int32(i),
+        Err(_) => Value::double(f64::from(len)),
     }
 }
 

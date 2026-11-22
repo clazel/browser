@@ -15,17 +15,27 @@
 //!   `clazel-js-number`;
 //! - [`string`]: `String` (§22.1†) with `charAt`, `charCodeAt`, `indexOf`,
 //!   `slice`, `substring`;
+//! - [`array`]: `Array` (§23.1†), `Array.isArray`, `Array.of` and the core of
+//!   `Array.prototype` (`push`, `pop`, `shift`, `unshift`, `slice`, `splice`,
+//!   `concat`, `join`, `toString`, `indexOf`, `lastIndexOf`, `includes`,
+//!   `reverse`, `fill`, `forEach`, `map`, `filter`, `some`, `every`, `reduce`,
+//!   `reduceRight`, `find`, `findIndex`, `sort`);
+//! - [`json`]: `JSON.parse` and `JSON.stringify` (§25.5†) over `clazel-json`;
 //! - [`math`]: the pure functions of `Math` (§21.3†);
 //! - [`global`]: `globalThis`, `isNaN`, `isFinite`, `parseInt`, `parseFloat`
 //!   (§19†).
 //!
 //! # What this slice does not have, all listed
 //!
-//! - **No arrays yet** (the heap's elements are an open pull request).
-//!   `Object.keys` returns an ordinary array-like object (`length` and index
-//!   properties, `%Object.prototype%` as prototype) through one function,
-//!   [`util::new_array_like`], which becomes `ArrayCreate` with arrays. It is
-//!   a deviation: `Array.isArray` of it would be false.
+//! - **Array iteration is missing**: `Array.from`, `entries`, `keys`,
+//!   `values` and `@@iterator` wait for Symbols and iterators; so does array
+//!   spread (`GetIterator` is `NotYet`). `@@species` and
+//!   `@@isConcatSpreadable` are not consulted: `ArraySpeciesCreate` uses the
+//!   receiver's `constructor` itself. Not yet: `at`, `copyWithin`, `flat`,
+//!   `flatMap`, `findLast`, `findLastIndex`, `toLocaleString`, the change-by-
+//!   copy methods. Array elements are ordinary shape properties (the heap's
+//!   elements are an open pull request), so a huge sparse index or a long
+//!   `shift` is slow, not wrong.
 //! - **No Symbols**, so `@@toPrimitive`, `@@toStringTag` and `@@hasInstance`
 //!   are not consulted; `Object.prototype.toString` tags by internal slot
 //!   only.
@@ -46,10 +56,12 @@
 //! Tier: see `[package.metadata.clazel]` in `Cargo.toml` and
 //! `docs/VERIFICATION.md`.
 
+pub mod array;
 pub mod boolean;
 pub mod error;
 pub mod function;
 pub mod global;
+pub mod json;
 pub mod math;
 pub mod number;
 pub mod object;
@@ -66,10 +78,12 @@ use clazel_js_vm::interp::{Abrupt, Vm};
 pub fn install(vm: &mut Vm) -> Result<(), Abrupt> {
     object::install(vm)?;
     function::install(vm)?;
+    array::install(vm)?;
     error::install(vm)?;
     boolean::install(vm)?;
     number::install(vm)?;
     string::install(vm)?;
     math::install(vm)?;
+    json::install(vm)?;
     global::install(vm)
 }

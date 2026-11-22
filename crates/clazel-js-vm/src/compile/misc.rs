@@ -673,6 +673,29 @@ impl<'a> Cg<'a> {
             )?;
             self.release(m);
         }
+        // Trailing elisions leave no element: ArrayAccumulation (§13.2.4.1†)
+        // for an Elision adds to the length only, so `length` is stored
+        // after the last element.
+        if let Some(&last) = nd.children.last()
+            && self.node(last)?.kind == NodeKind::Elision
+        {
+            let m = self.mark();
+            let idx = self.alloc()?;
+            let imm = i32::try_from(len).map_err(|_| CompileError::TooLarge("array literal"))?;
+            self.load_int(idx, imm, sp)?;
+            let k = self.str_const("length")?;
+            let ic = self.ic();
+            self.emit(
+                Instr::SetProp {
+                    obj: d,
+                    key: k,
+                    val: idx,
+                    ic,
+                },
+                sp,
+            )?;
+            self.release(m);
+        }
         Ok(())
     }
 
