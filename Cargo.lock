@@ -390,6 +390,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "clazel-jit"
+version = "0.0.0"
+dependencies = [
+ "clazel-a64",
+ "clazel-codecheck",
+ "clazel-lir",
+ "clazel-x64",
+ "vstd",
+]
+
+[[package]]
 name = "clazel-js"
 version = "0.0.0"
 

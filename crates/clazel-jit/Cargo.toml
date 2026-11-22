@@ -1,0 +1,31 @@
+[package]
+name = "clazel-jit"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "The JIT's back ends (docs/phases/jit.md item J.9): LIR to x86-64 with no register allocation, each LIR instruction a fixed template over scratch registers, with a Verus refinement proof per template. First slice: straight-line integer code, for x86-64 (crate root) and A64 (`a64`). No JS front end. Also the code cache, its budget and the tiering policy (J.11, first slice; nothing mapped or entered yet)."
+
+[dependencies]
+vstd = "=0.0.0-2026-10-04-0306"
+# The source language, the target instruction subset, and the validator whose
+# ABI (context register, region table, exit sequence) the templates follow.
+clazel-lir = { path = "../clazel-lir" }
+clazel-x64 = { path = "../clazel-x64" }
+clazel-a64 = { path = "../clazel-a64" }
+clazel-codecheck = { path = "../clazel-codecheck" }
+
+# Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
+# shipped code today: nothing is claimed until CI's full verification of this
+# crate is green (CLAUDE.md rule 7), and the crate has no independent
+# transcription or mutation file yet. `target-tier` is what jit.md's "Crates"
+# table sets.
+[package.metadata.clazel]
+tier = 0
+target-tier = 2
+
+[package.metadata.verus]
+verify = true
+
+[lints]
+workspace = true
