@@ -21,7 +21,7 @@ vstd = "=0.0.0-2026-10-04-0306"
 # 18.0.0 table, with no axiom, and the lookups are proven to be them. The
 # tier-2 evidence around the spec exists in part: an independent
 # transcription of part of the grammar proven equal to the spec
-# (src/independent.rs, src/equivalence.rs), 30 certified mutation kills
+# (src/independent.rs, src/equivalence.rs), 28 certified mutation kills
 # (mutations.json) and Test262 conformance suites
 # (tests/conformance_test262.rs). The tier stays 0 until CI's full
 # verification passes on the pull request that raises it (CLAUDE.md rule 7).

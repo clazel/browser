@@ -328,6 +328,8 @@ pub proof fn example_html_comment_boundaries()
         !single_line_post_asterisk_comment_chars(seq![0x2Fu32], 0, 1),
         !single_line_delimited_comment_chars(seq![0x0Au32], 0, 1),
         single_line_delimited_comment_chars(seq![0x61u32], 0, 1),
+        white_space_sequence(seq![0x20u32, 0x09], 0, 2),
+        !white_space_sequence(seq![0x41u32], 0, 1),
         html_close_comment_split(seq![0x2Du32, 0x2D, 0x3E], 0, 0, 0, 3),
         !html_close_comment_split(seq![0x2Du32, 0x2D, 0x2D], 0, 0, 0, 3),
         single_line_html_open_comment(seq![0x3Cu32, 0x21, 0x2D, 0x2D], 0, 4),
@@ -335,6 +337,10 @@ pub proof fn example_html_comment_boundaries()
         annex_b_multi_line_comment_split(seq![0x2Fu32, 0x2A, 0x0A, 0x2A, 0x2F], 0, 2, 3, 5),
         !annex_b_multi_line_comment_split(seq![0x2Fu32, 0x2A, 0x20, 0x2A, 0x2F], 0, 2, 3, 5),
 {
+    let w = seq![0x20u32, 0x09];
+    assert(white_space(w, 0, 1) && white_space(w, 1, 2));
+    assert(white_space_sequence(w, 1, 2));
+    assert(white_space_sequence(w, 0, 2));
     let a = seq![0x2Du32, 0x2D, 0x3E];
     assert(is_lit(a, 0, 3, seq!['-', '-', '>']));
     assert(html_close_comment_split(a, 0, 0, 0, 3));

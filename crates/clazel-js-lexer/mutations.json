@@ -6,6 +6,7 @@
       "find": "c == 0x000A || c == 0x000D || c == 0x2028 || c == 0x2029",
       "replace": "c == 0x000A || c == 0x000D || c == 0x2029",
       "expect": "killed",
+      "module": "examples",
       "reason": "Drops <LS> from LineTerminator (§12.3): U+2028 would no longer end a line or trigger ASI, so example_line_terminators is false.",
       "certificate": {
         "file": "src/examples.rs",
@@ -33,6 +34,7 @@
       "find": "c as int - 0x61 + 10",
       "replace": "c as int - 0x61",
       "expect": "killed",
+      "module": "examples",
       "reason": "Gives `b` the MV 1 instead of 11 (§12.9.3.1), so `\\x62`-style escapes and `0xb` would get the wrong value: example_hex_digit_values is false.",
       "certificate": {
         "file": "src/examples.rs",
@@ -46,6 +48,7 @@
       "find": "        || (i + 2 < j && is_octal_digit(s[j - 1]) && legacy_octal_integer_literal(s, i, j - 1)))",
       "replace": "        )",
       "expect": "killed",
+      "module": "examples",
       "reason": "Drops the recursive alternative `LegacyOctalIntegerLiteral OctalDigit` (§12.9.3, Annex B), so `010` is no longer a LegacyOctalIntegerLiteral: example_legacy_numeric_literals is false.",
       "certificate": {
         "file": "src/examples.rs",
@@ -202,6 +205,7 @@
       "find": "    } else if c == 0x6E {\n        0x000A\n",
       "replace": "    } else if c == 0x6E {\n        0x000D\n",
       "expect": "killed",
+      "module": "examples",
       "reason": "The SV of `\\n` in a string (§12.9.4.2, Table 'String Single Character Escape Sequences') is <CR> instead of <LF>: example_single_escapes is false.",
       "certificate": {
         "file": "src/examples.rs",
@@ -215,6 +219,7 @@
       "find": "        // <CR> <LF>: \"the code unit 0x000A (LINE FEED)\"\n        seq![0x000Au16]",
       "replace": "        // <CR> <LF>: \"the code unit 0x000A (LINE FEED)\"\n        seq![0x000Du16]",
       "expect": "killed",
+      "module": "examples",
       "reason": "The TRV of <CR><LF> in a template (§12.9.6.2) is <CR> instead of <LF>: example_trv_crlf is false.",
       "certificate": {
         "file": "src/examples.rs",
@@ -228,6 +233,7 @@
       "find": "pub open spec fn is_regexp_non_terminator(c: u32) -> bool {\n    is_not_line_terminator(c)",
       "replace": "pub open spec fn is_regexp_non_terminator(c: u32) -> bool {\n    is_source_character(c)",
       "expect": "killed",
+      "module": "examples",
       "reason": "RegularExpressionNonTerminator (§12.9.5) accepts <LF>, so a regular expression literal could span lines: example_regexp_non_terminator is false.",
       "certificate": {
         "file": "src/examples.rs",
@@ -241,6 +247,7 @@
       "find": "|| kind == ElementKind::Comment || kind == ElementKind::HashbangComment",
       "replace": "|| kind == ElementKind::HashbangComment",
       "expect": "killed",
+      "module": "examples",
       "reason": "A Comment would reach the syntactic grammar (§12: 'Comments behave like white space and are discarded'): example_trivia is false.",
       "certificate": {
         "file": "src/examples.rs",
@@ -254,6 +261,7 @@
       "find": "is_ascii_letter(c)\n    } else {\n        unicode_id_start_non_ascii(c)",
       "replace": "is_ascii_letter(c) || c == 0x5F\n    } else {\n        unicode_id_start_non_ascii(c)",
       "expect": "killed",
+      "module": "examples",
       "reason": "Puts `_` in ID_Start (§12.7: it is an IdentifierStartChar, not a UnicodeIDStart): example_unicode_id_anchors is false. The witness is ASCII because the table's predicate is an existential, which compute_only cannot evaluate; the table's own anchors are proven in the same lemma.",
       "certificate": {
         "file": "src/examples.rs",
@@ -267,6 +275,7 @@
       "find": "is_ascii_letter(c) || is_decimal_digit(c) || c == 0x5F\n    } else {\n        unicode_id_continue_non_ascii(c)",
       "replace": "is_ascii_letter(c) || is_decimal_digit(c)\n    } else {\n        unicode_id_continue_non_ascii(c)",
       "expect": "killed",
+      "module": "examples",
       "reason": "Drops `_` from ID_Continue (§12.7, UAX #31): example_unicode_id_anchors is false.",
       "certificate": {
         "file": "src/examples.rs",
@@ -280,6 +289,7 @@
       "find": "nonempty(s, i, j) && j == i + 2 && s[i] == 0x5C && is_regexp_non_terminator(s[i + 1])",
       "replace": "nonempty(s, i, j) && j == i + 2 && s[i] == 0x5C",
       "expect": "killed",
+      "module": "examples",
       "reason": "A RegularExpressionBackslashSequence (§12.9.5) would take a line terminator, so an escaped newline would not end the literal's line: example_regexp_char_boundaries is false.",
       "certificate": {
         "file": "src/examples.rs",
@@ -293,6 +303,7 @@
       "find": "(j == i + 1 && is_regexp_non_terminator(s[i]) && s[i] != 0x5D\n            && s[i] != 0x5C)",
       "replace": "(j == i + 1 && is_regexp_non_terminator(s[i]) && s[i] != 0x5C)",
       "expect": "killed",
+      "module": "examples",
       "reason": "`]` would be a RegularExpressionClassChar (§12.9.5), so a class would have no unique end (the closing `]` through classes and escapes): example_regexp_char_boundaries is false.",
       "certificate": {
         "file": "src/examples.rs",
@@ -306,6 +317,7 @@
       "find": "(j == i + 1 && is_regexp_non_terminator(s[i]) && s[i] != 0x5C\n            && s[i] != 0x2F && s[i] != 0x5B)",
       "replace": "(j == i + 1 && is_regexp_non_terminator(s[i]) && s[i] != 0x5C\n            && s[i] != 0x5B)",
       "expect": "killed",
+      "module": "examples",
       "reason": "`/` would be a RegularExpressionChar outside a class (§12.9.5), so a body would not end at its first unescaped `/`: example_regexp_char_boundaries is false.",
       "certificate": {
         "file": "src/examples.rs",
@@ -319,6 +331,7 @@
       "find": "is_regexp_non_terminator(s[i]) && s[i] != 0x2A\n            && s[i] != 0x5C",
       "replace": "is_regexp_non_terminator(s[i])\n            && s[i] != 0x5C",
       "expect": "killed",
+      "module": "examples",
       "reason": "`*` would start a regular expression body (§12.9.5 RegularExpressionFirstChar), so `/*` would not be a comment: example_regexp_char_boundaries is false.",
       "certificate": {
         "file": "src/examples.rs",
@@ -332,6 +345,7 @@
       "find": "(is_not_line_terminator(s[i]) && s[i] != 0x2F && s[i] != 0x2A\n            && (j == i + 1 || single_line_delimited_comment_chars(s, i + 1, j)))",
       "replace": "(is_not_line_terminator(s[i]) && s[i] != 0x2A\n            && (j == i + 1 || single_line_delimited_comment_chars(s, i + 1, j)))",
       "expect": "killed",
+      "module": "examples",
       "reason": "SingleLinePostAsteriskCommentChars (Annex B.1.1) stops excluding `/` after a `*`, so `*/` would no longer end a delimited comment: example_html_comment_boundaries is false.",
       "certificate": {
         "file": "src/examples.rs",
@@ -345,6 +359,7 @@
       "find": "(is_not_line_terminator(s[i]) && s[i] != 0x2A\n            && (j == i + 1 || single_line_delimited_comment_chars(s, i + 1, j)))\n        // 2. `*` SingleLinePostAsteriskCommentChars?",
       "replace": "(is_source_character(s[i]) && s[i] != 0x2A\n            && (j == i + 1 || single_line_delimited_comment_chars(s, i + 1, j)))\n        // 2. `*` SingleLinePostAsteriskCommentChars?",
       "expect": "killed",
+      "module": "examples",
       "reason": "SingleLineDelimitedCommentChars (Annex B.1.1) would take a line terminator, so a delimited comment could span lines and a `/* */` before `-->` would no longer be on one line: example_html_comment_boundaries is false.",
       "certificate": {
         "file": "src/examples.rs",
@@ -353,42 +368,17 @@
       }
     },
     {
-      "id": "html-close-comment-arrow-wrong-last-code-point",
+      "id": "white-space-sequence-takes-any-code-point",
       "file": "src/spec.rs",
-      "find": "&& is_lit(s, b, b + 3, seq!['-', '-', '>'])",
-      "replace": "&& is_lit(s, b, b + 3, seq!['-', '-', '-'])",
+      "find": "    nonempty(s, i, j) && white_space(s, i, i + 1)\n        && (j == i + 1 || white_space_sequence(s, i + 1, j))",
+      "replace": "    nonempty(s, i, j)\n        && (j == i + 1 || white_space_sequence(s, i + 1, j))",
       "expect": "killed",
-      "reason": "HTMLCloseComment (Annex B.1.1) would end its code before `---` instead of `-->`: example_html_comment_boundaries is false.",
+      "module": "examples",
+      "reason": "WhiteSpaceSequence (Annex B.1.1) would take any code point, so the white space before the `-->` of an HTMLCloseComment would not be white space: example_html_comment_boundaries is false.",
       "certificate": {
         "file": "src/examples.rs",
         "lemma": "example_html_comment_boundaries()",
-        "witness": "html_close_comment_split(seq![0x2Du32, 0x2D, 0x2D], 0, 0, 0, 3)"
-      }
-    },
-    {
-      "id": "html-open-comment-wrong-last-code-point",
-      "file": "src/spec.rs",
-      "find": "is_lit(s, i, i + 4, seq!['<', '!', '-', '-']) && j >= i + 4",
-      "replace": "is_lit(s, i, i + 4, seq!['<', '!', '-', '<']) && j >= i + 4",
-      "expect": "killed",
-      "reason": "SingleLineHTMLOpenComment (Annex B.1.1) would start with `<!-<` instead of `<!--`: example_html_comment_boundaries is false.",
-      "certificate": {
-        "file": "src/examples.rs",
-        "lemma": "example_html_comment_boundaries()",
-        "witness": "single_line_html_open_comment(seq![0x3Cu32, 0x21, 0x2D, 0x3C], 0, 4)"
-      }
-    },
-    {
-      "id": "annex-b-multi-line-comment-needs-no-line-terminator",
-      "file": "src/spec.rs",
-      "find": "        && line_terminator(s, a, a + 1)\n        && opt(a + 1, c, multi_line_comment_chars(s, a + 1, c))",
-      "replace": "        && opt(a + 1, c, multi_line_comment_chars(s, a + 1, c))",
-      "expect": "killed",
-      "reason": "Annex B's MultiLineComment (B.1.1) would not need its LineTerminator, so `/* */` would be one and could be followed by an HTMLCloseComment: example_html_comment_boundaries is false.",
-      "certificate": {
-        "file": "src/examples.rs",
-        "lemma": "example_html_comment_boundaries()",
-        "witness": "annex_b_multi_line_comment_split(seq![0x2Fu32, 0x2A, 0x20, 0x2A, 0x2F], 0, 2, 3, 5)"
+        "witness": "white_space_sequence(seq![0x41u32], 0, 1)"
       }
     }
   ]

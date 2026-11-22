@@ -44,6 +44,7 @@ pub open spec fn range_ok(r: Range) -> bool {
 
 /// A row of the `ID_START` table is non-empty and within U+0080..U+10FFFF, and
 /// each row ends before the next begins: sorted and disjoint.
+#[verifier::opaque]
 pub open spec fn id_start_sorted() -> bool {
     (forall|i: int| 0 <= i < ID_START_LEN ==> range_ok(#[trigger] id_start_at(i)))
         && (forall|i: int|
@@ -82,6 +83,7 @@ pub proof fn lemma_id_start_sorted()
     ensures
         id_start_sorted(),
 {
+    reveal(id_start_sorted);
     lemma_id_start_chunk_0();
     lemma_id_start_chunk_1();
     lemma_id_start_join_0();
@@ -103,12 +105,26 @@ pub proof fn lemma_id_start_ordered(i: int, j: int)
         (id_start_at(i)).last < id_start_at(j).first,
     decreases j - i,
 {
+    reveal(id_start_sorted);
     if j == i + 1 {
     } else {
         lemma_id_start_ordered(i, j - 1);
         assert(range_ok(id_start_at(j - 1)));
         assert((id_start_at(j - 1)).last < id_start_at(j).first);
     }
+}
+
+/// Every row of the `ID_START` table is well formed (kept opaque with the
+/// rest of [`id_start_sorted`], so that its chain of rows is not unfolded
+/// where it is not needed).
+pub proof fn lemma_id_start_range_ok(i: int)
+    requires
+        id_start_sorted(),
+        0 <= i < ID_START_LEN,
+    ensures
+        range_ok(id_start_at(i)),
+{
+    reveal(id_start_sorted);
 }
 
 /// Whether a row of the `ID_START` table holds `c`, by bisection: the spec's
@@ -138,7 +154,7 @@ fn find_id_start(c: u32) -> (r: bool)
                 assert forall|j: int| mid <= j < ID_START_LEN implies c < (#[trigger] id_start_at(j)).first by {
                     if j > mid {
                         lemma_id_start_ordered(mid as int, j);
-                        assert(range_ok(id_start_at(mid as int)));
+                        lemma_id_start_range_ok(mid as int);
                     }
                 }
             }
@@ -148,7 +164,7 @@ fn find_id_start(c: u32) -> (r: bool)
                 assert forall|j: int| 0 <= j <= mid implies (#[trigger] id_start_at(j)).last < c by {
                     if j < mid {
                         lemma_id_start_ordered(j, mid as int);
-                        assert(range_ok(id_start_at(mid as int)));
+                        lemma_id_start_range_ok(mid as int);
                     }
                 }
             }
@@ -343,8 +359,8 @@ pub proof fn lemma_id_start_gap(k: int, c: u32)
         } else if i > k + 1 {
             lemma_id_start_ordered(k + 1, i);
         }
-        assert(range_ok(id_start_at(k)));
-        assert(range_ok(id_start_at(k + 1)));
+        lemma_id_start_range_ok(k);
+        lemma_id_start_range_ok(k + 1);
     }
 }
 
@@ -361,7 +377,7 @@ pub proof fn lemma_id_start_below(c: u32)
         let _ = id_start_at(i);
         if i > 0 {
             lemma_id_start_ordered(0, i);
-            assert(range_ok(id_start_at(0)));
+            lemma_id_start_range_ok(0);
         }
     }
 }
@@ -419,7 +435,7 @@ pub fn id_start_non_ascii(c: u32) -> (r: bool)
         if r {
             let i = choose|i: int|
                 0 <= i < ID_START_LEN && (#[trigger] id_start_at(i)).first <= c <= id_start_at(i).last;
-            assert(range_ok(id_start_at(i)));
+            lemma_id_start_range_ok(i);
         }
     }
     r
