@@ -8,7 +8,9 @@
 //
 // What the generator derives: for each of ID_Start and ID_Continue, the
 // code points above U+007F that DerivedCoreProperties.txt lists with it, as
-// maximal ranges (first, last), sorted and disjoint.
+// maximal ranges (first, last), sorted and disjoint. Each table is split
+// into constant arrays of at most 350 rows; `<name>_at(i)` is row `i` as the
+// spec sees it and `<name>_at_exec(i)` returns it, proven equal.
 
 use super::unicode::Range;
 #[allow(unused_imports)]
@@ -16,9 +18,12 @@ use vstd::prelude::*;
 
 verus! {
 
-/// `ID_Start` above U+007F (DerivedCoreProperties.txt), as maximal ranges.
+/// The number of rows in the id_start table.
+pub const ID_START_LEN: usize = 693;
+
+/// `ID_Start` above U+007F (DerivedCoreProperties.txt), as maximal ranges. (rows 0 to 349.)
 #[verifier::opaque]
-pub const ID_START: [Range; 693] = [
+pub const ID_START_0: [Range; 350] = [
     Range { first: 0xAA, last: 0xAA },
     Range { first: 0xB5, last: 0xB5 },
     Range { first: 0xBA, last: 0xBA },
@@ -369,6 +374,11 @@ pub const ID_START: [Range; 693] = [
     Range { first: 0xAB70, last: 0xABE2 },
     Range { first: 0xAC00, last: 0xD7A3 },
     Range { first: 0xD7B0, last: 0xD7C6 },
+];
+
+/// `ID_Start` above U+007F (DerivedCoreProperties.txt), as maximal ranges. (rows 350 to 692.)
+#[verifier::opaque]
+pub const ID_START_1: [Range; 343] = [
     Range { first: 0xD7CB, last: 0xD7FB },
     Range { first: 0xF900, last: 0xFA6D },
     Range { first: 0xFA70, last: 0xFAD9 },
@@ -714,9 +724,46 @@ pub const ID_START: [Range; 693] = [
     Range { first: 0x3D000, last: 0x3FC3F },
 ];
 
-/// `ID_Continue` above U+007F (DerivedCoreProperties.txt), as maximal ranges.
+/// Row `i` of the id_start table: `ID_Start` above U+007F (DerivedCoreProperties.txt), as maximal ranges. Outside the table, a fixed dummy row.
+pub open spec fn id_start_at(i: int) -> Range {
+    if i < 0 || i >= ID_START_LEN {
+        Range { first: 0, last: 0 }
+    } else if i < 350 {
+        ID_START_0@[i - 0]
+    } else {
+        ID_START_1@[i - 350]
+    }
+}
+
+/// Row `i` of the id_start table.
+pub fn id_start_at_exec(i: usize) -> (r: Range)
+    ensures
+        r == id_start_at(i as int),
+{
+    if i >= ID_START_LEN {
+        Range { first: 0, last: 0 }
+    } else if i < 350 {
+        let chunk: &[_] = &ID_START_0;
+        match chunk.get(i.saturating_sub(0)) {
+            Some(r) => *r,
+            None => Range { first: 0, last: 0 },
+        }
+    } else {
+        let chunk: &[_] = &ID_START_1;
+        match chunk.get(i.saturating_sub(350)) {
+            Some(r) => *r,
+            None => Range { first: 0, last: 0 },
+        }
+    }
+}
+
+
+/// The number of rows in the id_continue table.
+pub const ID_CONTINUE_LEN: usize = 810;
+
+/// `ID_Continue` above U+007F (DerivedCoreProperties.txt), as maximal ranges. (rows 0 to 349.)
 #[verifier::opaque]
-pub const ID_CONTINUE: [Range; 810] = [
+pub const ID_CONTINUE_0: [Range; 350] = [
     Range { first: 0xAA, last: 0xAA },
     Range { first: 0xB5, last: 0xB5 },
     Range { first: 0xB7, last: 0xB7 },
@@ -1067,6 +1114,11 @@ pub const ID_CONTINUE: [Range; 810] = [
     Range { first: 0x3400, last: 0x4DBF },
     Range { first: 0x4E00, last: 0xA48C },
     Range { first: 0xA4D0, last: 0xA4FD },
+];
+
+/// `ID_Continue` above U+007F (DerivedCoreProperties.txt), as maximal ranges. (rows 350 to 699.)
+#[verifier::opaque]
+pub const ID_CONTINUE_1: [Range; 350] = [
     Range { first: 0xA500, last: 0xA60C },
     Range { first: 0xA610, last: 0xA62B },
     Range { first: 0xA640, last: 0xA66F },
@@ -1417,6 +1469,11 @@ pub const ID_CONTINUE: [Range; 810] = [
     Range { first: 0x1D250, last: 0x1D252 },
     Range { first: 0x1D25B, last: 0x1D25C },
     Range { first: 0x1D25F, last: 0x1D25F },
+];
+
+/// `ID_Continue` above U+007F (DerivedCoreProperties.txt), as maximal ranges. (rows 700 to 809.)
+#[verifier::opaque]
+pub const ID_CONTINUE_2: [Range; 110] = [
     Range { first: 0x1D280, last: 0x1D281 },
     Range { first: 0x1D400, last: 0x1D454 },
     Range { first: 0x1D456, last: 0x1D49C },
@@ -1528,5 +1585,46 @@ pub const ID_CONTINUE: [Range; 810] = [
     Range { first: 0x3D000, last: 0x3FC3F },
     Range { first: 0xE0100, last: 0xE01EF },
 ];
+
+/// Row `i` of the id_continue table: `ID_Continue` above U+007F (DerivedCoreProperties.txt), as maximal ranges. Outside the table, a fixed dummy row.
+pub open spec fn id_continue_at(i: int) -> Range {
+    if i < 0 || i >= ID_CONTINUE_LEN {
+        Range { first: 0, last: 0 }
+    } else if i < 350 {
+        ID_CONTINUE_0@[i - 0]
+    } else if i < 700 {
+        ID_CONTINUE_1@[i - 350]
+    } else {
+        ID_CONTINUE_2@[i - 700]
+    }
+}
+
+/// Row `i` of the id_continue table.
+pub fn id_continue_at_exec(i: usize) -> (r: Range)
+    ensures
+        r == id_continue_at(i as int),
+{
+    if i >= ID_CONTINUE_LEN {
+        Range { first: 0, last: 0 }
+    } else if i < 350 {
+        let chunk: &[_] = &ID_CONTINUE_0;
+        match chunk.get(i.saturating_sub(0)) {
+            Some(r) => *r,
+            None => Range { first: 0, last: 0 },
+        }
+    } else if i < 700 {
+        let chunk: &[_] = &ID_CONTINUE_1;
+        match chunk.get(i.saturating_sub(350)) {
+            Some(r) => *r,
+            None => Range { first: 0, last: 0 },
+        }
+    } else {
+        let chunk: &[_] = &ID_CONTINUE_2;
+        match chunk.get(i.saturating_sub(700)) {
+            Some(r) => *r,
+            None => Range { first: 0, last: 0 },
+        }
+    }
+}
 
 } // verus!

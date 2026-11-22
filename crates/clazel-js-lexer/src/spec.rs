@@ -87,15 +87,23 @@
 //! - **Unicode properties.** The spec needs three properties of code points:
 //!   `Space_Separator` (Zs), `ID_Start` and `ID_Continue`. Zs is a closed
 //!   list of 17 code points that has not changed since Unicode 6.3, and is
-//!   written out ([`unicode_space_separator`]). `ID_Start` and `ID_Continue`
-//!   are large and change with every Unicode version; the standard says "the
-//!   latest version of the Unicode Standard", with later additions
-//!   permitted, so they are uninterpreted functions of the non-ASCII code
-//!   points ([`unicode_id_start_non_ascii`] and
-//!   [`unicode_id_continue_non_ascii`]), and the ASCII part, which does not
-//!   change, is defined. The implementation (phase-7.md 7.2, second half)
-//!   fixes a Unicode version in a generated table and has to tie it to
-//!   these two functions; until then nothing is claimed about them.
+//!   written out ([`unicode_space_separator`]). For `ID_Start` and
+//!   `ID_Continue` the standard says "the latest version of the Unicode
+//!   Standard" (with later additions permitted); this spec fixes that
+//!   version at Unicode 18.0.0. The predicates above U+007F
+//!   ([`unicode_id_start_non_ascii`], [`unicode_id_continue_non_ascii`]) are
+//!   the generated table (`unicode_data.rs`, from `xtask/src/js_idents.rs`):
+//!   a code point has the property if and only if some row of the table
+//!   holds it. The ASCII part, which does not change, is defined. **That the
+//!   table equals the property in `DerivedCoreProperties.txt` is not
+//!   proven.** The evidence is: `cargo xtask check` reruns the generator,
+//!   with the file's SHA-256 pinned (`SOURCE.md` of
+//!   `clazel-js-regexp/tests/data/ucd-regexp`); `tests/unicode_tables.rs`
+//!   derives a bitmap from the same file with its own parser and compares
+//!   every code point U+0080..U+10FFFF with both lookups; `examples.rs`
+//!   proves anchor code points (U+00E9, U+65E5, U+0300, U+200C, U+200D,
+//!   U+00D7, U+2028, U+2E2F); and Test262's identifier tests run in
+//!   `tests/conformance_test262.rs`.
 //! - **The longest input element** (§12 intro: "repeatedly taking the
 //!   longest possible sequence of code points as the next input element") is
 //!   [`longest_len`], the largest length for which some alternative of the
@@ -135,6 +143,8 @@
 //!   code points; whether a given escape-free name is one is for the parser
 //!   (§12.7.2: the early errors of §13.1.1).
 
+#[cfg(verus_only)]
+use super::unicode_data::{ID_CONTINUE_LEN, ID_START_LEN, id_continue_at, id_start_at};
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
@@ -717,12 +727,21 @@ pub open spec fn is_ascii_letter(c: u32) -> bool {
 }
 
 /// The code points above U+007F with Unicode property "ID_Start" (§12.7
-/// `UnicodeIDStart`). Uninterpreted: see the modelling choices.
-pub uninterp spec fn unicode_id_start_non_ascii(c: u32) -> bool;
+/// `UnicodeIDStart`), as of Unicode 18.0.0: the code points some row of the
+/// generated table holds. See the modelling choices.
+pub open spec fn unicode_id_start_non_ascii(c: u32) -> bool {
+    exists|i: int|
+        0 <= i < ID_START_LEN && (#[trigger] id_start_at(i)).first <= c <= id_start_at(i).last
+}
 
 /// The code points above U+007F with Unicode property "ID_Continue" (§12.7
-/// `UnicodeIDContinue`). Uninterpreted.
-pub uninterp spec fn unicode_id_continue_non_ascii(c: u32) -> bool;
+/// `UnicodeIDContinue`), as of Unicode 18.0.0: the code points some row of
+/// the generated table holds.
+pub open spec fn unicode_id_continue_non_ascii(c: u32) -> bool {
+    exists|i: int|
+        0 <= i < ID_CONTINUE_LEN && (#[trigger] id_continue_at(i)).first <= c
+            <= id_continue_at(i).last
+}
 
 /// §12.7 `UnicodeIDStart :: any Unicode code point with the Unicode property
 /// "ID_Start"`. In ASCII, the letters.
@@ -1561,6 +1580,7 @@ pub open spec fn template_characters(s: Src, i: int, j: int, tv: Tv, trv: Seq<u1
         template_character(s, i, j, tv, trv)
         // 2. TemplateCharacter TemplateCharacters
         || exists|k: int, tv1: Option<Seq<u16>>, trv1: Seq<u16>, tv2: Option<Seq<u16>>, trv2: Seq<u16>|
+            #![trigger template_character(s, i, k, tv1, trv1), tv_concat(tv1, tv2), trv1 + trv2]
             i < k < j && template_character(s, i, k, tv1, trv1)
                 && template_characters(s, k, j, tv2, trv2) && tv =~= tv_concat(tv1, tv2)
                 && trv =~= trv1 + trv2)

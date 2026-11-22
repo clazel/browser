@@ -642,8 +642,14 @@ fn u32_table<'a>(name: &'a str, doc: &'a str, values: &[u32]) -> Table<'a> {
 /// constants, not statics, in specs). `<name>_at(i)` is the spec's view of
 /// row `i`, and `<name>_at_exec(i)` returns it, proven equal.
 pub(crate) fn emit(out: &mut String, t: &Table<'_>) {
-    let upper = t.name.to_ascii_uppercase();
     let per_chunk = 16_000usize.checked_div(t.row_bytes).unwrap_or(1).max(1);
+    emit_chunked(out, t, per_chunk);
+}
+
+/// [`emit`] with at most `per_chunk` rows in each constant array.
+pub(crate) fn emit_chunked(out: &mut String, t: &Table<'_>, per_chunk: usize) {
+    let upper = t.name.to_ascii_uppercase();
+    let per_chunk = per_chunk.max(1);
     let chunks: Vec<&[String]> = t.rows.chunks(per_chunk).collect();
     let _ = writeln!(out, "/// The number of rows in the {} table.", t.name);
     let _ = writeln!(out, "pub const {upper}_LEN: usize = {};\n", t.rows.len());
@@ -729,6 +735,7 @@ fn dummy(row_type: &str) -> String {
         "CompositionRow" => "CompositionRow { first: 0, second: 0, composite: 0 }".into(),
         "ClassRow" => "ClassRow { first: 0, last: 0, class: 0 }".into(),
         "RangeRow" => "RangeRow { first: 0, last: 0 }".into(),
+        "Range" => "Range { first: 0, last: 0 }".into(),
         "BidiRow" => "BidiRow { first: 0, last: 0, class: BidiClass::LeftToRight }".into(),
         _ => "JoiningRow { first: 0, last: 0, joining_type: JoiningType::Transparent }".into(),
     }

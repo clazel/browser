@@ -8,6 +8,10 @@
 
 #[allow(unused_imports)]
 use super::spec::*;
+#[cfg(verus_only)]
+use super::unicode::{lemma_id_continue_gap, lemma_id_start_gap};
+#[cfg(verus_only)]
+use super::unicode_data::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
@@ -263,6 +267,197 @@ pub proof fn example_regexp_literal()
         assert(is_identifier_part_char(s[7]));
         assert(is_identifier_part_char(s[8]));
     }
+}
+
+
+/// §12.9.4.2 Table "String Single Character Escape Sequences": `\b` is
+/// U+0008, `\t` U+0009, `\n` U+000A, `\v` U+000B, `\f` U+000C, `\r`
+/// U+000D, and `\"` is `"`.
+pub proof fn example_single_escapes()
+    ensures
+        single_escape_code_unit(0x62u32) == 0x0008u16,
+        single_escape_code_unit(0x74u32) == 0x0009u16,
+        single_escape_code_unit(0x6Eu32) == 0x000Au16,
+        single_escape_code_unit(0x76u32) == 0x000Bu16,
+        single_escape_code_unit(0x66u32) == 0x000Cu16,
+        single_escape_code_unit(0x72u32) == 0x000Du16,
+        single_escape_code_unit(0x22u32) == 0x0022u16,
+{
+}
+
+/// §12.9.6.2: the TRV of `<CR><LF>` is the one code unit `<LF>`.
+pub proof fn example_trv_crlf()
+    ensures
+        line_terminator_sequence_trv(seq![0x0Du32, 0x0Au32], 0, 2) =~= seq![0x000Au16],
+{
+}
+
+/// §12.9.5: a `RegularExpressionNonTerminator` is a `SourceCharacter` but
+/// not a `LineTerminator`: `a` is one, <LF> is not.
+pub proof fn example_regexp_non_terminator()
+    ensures
+        is_regexp_non_terminator(0x61u32),
+        !is_regexp_non_terminator(0x000Au32),
+{
+}
+
+/// §12.9.5: what ends or does not end a regular expression's characters.
+/// Backslash takes any code point but a line terminator; `]` is not a class
+/// character (it closes the class) but `/` is; `/` is not a body character
+/// outside a class (it closes the body); `*` does not start a body.
+pub proof fn example_regexp_char_boundaries()
+    ensures
+        !regexp_backslash_sequence(seq![0x5Cu32, 0x0Au32], 0, 2),
+        regexp_backslash_sequence(seq![0x5Cu32, 0x2Fu32], 0, 2),
+        !regexp_class_char(seq![0x5Du32], 0, 1),
+        regexp_class_char(seq![0x2Fu32], 0, 1),
+        !regexp_char(seq![0x2Fu32], 0, 1),
+        regexp_char(seq![0x61u32], 0, 1),
+        !regexp_first_char(seq![0x2Au32], 0, 1),
+        regexp_char(seq![0x2Au32], 0, 1),
+{
+}
+
+/// Annex B.1.1: a `/` right after the `*` of a delimited comment is not a
+/// comment character (it ends the comment), nor is a line terminator; the
+/// `-->` of an `HTMLCloseComment` and the `<!--` of a
+/// `SingleLineHTMLOpenComment` are those four and three code points; and a
+/// `MultiLineComment` holds a line terminator before its `*/`.
+pub proof fn example_html_comment_boundaries()
+    ensures
+        !single_line_post_asterisk_comment_chars(seq![0x2Fu32], 0, 1),
+        !single_line_delimited_comment_chars(seq![0x0Au32], 0, 1),
+        single_line_delimited_comment_chars(seq![0x61u32], 0, 1),
+        white_space_sequence(seq![0x20u32, 0x09], 0, 2),
+        !white_space_sequence(seq![0x41u32], 0, 1),
+        html_close_comment_split(seq![0x2Du32, 0x2D, 0x3E], 0, 0, 0, 3),
+        !html_close_comment_split(seq![0x2Du32, 0x2D, 0x2D], 0, 0, 0, 3),
+        single_line_html_open_comment(seq![0x3Cu32, 0x21, 0x2D, 0x2D], 0, 4),
+        !single_line_html_open_comment(seq![0x3Cu32, 0x21, 0x2D, 0x3C], 0, 4),
+        annex_b_multi_line_comment_split(seq![0x2Fu32, 0x2A, 0x0A, 0x2A, 0x2F], 0, 2, 3, 5),
+        !annex_b_multi_line_comment_split(seq![0x2Fu32, 0x2A, 0x20, 0x2A, 0x2F], 0, 2, 3, 5),
+{
+    let w = seq![0x20u32, 0x09];
+    assert(white_space(w, 0, 1) && white_space(w, 1, 2));
+    assert(white_space_sequence(w, 1, 2));
+    assert(white_space_sequence(w, 0, 2));
+    let a = seq![0x2Du32, 0x2D, 0x3E];
+    assert(is_lit(a, 0, 3, seq!['-', '-', '>']));
+    assert(html_close_comment_split(a, 0, 0, 0, 3));
+    let o = seq![0x3Cu32, 0x21, 0x2D, 0x2D];
+    assert(is_lit(o, 0, 4, seq!['<', '!', '-', '-']));
+    assert(single_line_html_open_comment(o, 0, 4));
+    let m = seq![0x2Fu32, 0x2A, 0x0A, 0x2A, 0x2F];
+    assert(is_lit(m, 0, 2, seq!['/', '*']));
+    assert(is_lit(m, 3, 5, seq!['*', '/']));
+    assert(annex_b_multi_line_comment_split(m, 0, 2, 3, 5));
+    let n = seq![0x2Fu32, 0x2A, 0x20, 0x2A, 0x2F];
+    assert(!line_terminator(n, 2, 3));
+    let b = seq![0x2Du32, 0x2D, 0x2D];
+    assert(!is_lit(b, 0, 3, seq!['-', '-', '>'])) by {
+        assert(b.subrange(0, 3)[2] == 0x2Du32);
+        assert(seq!['-', '-', '>'].map_values(|c: char| c as u32)[2] == 0x3Eu32);
+    }
+    let p = seq![0x3Cu32, 0x21, 0x2D, 0x3C];
+    assert(!is_lit(p, 0, 4, seq!['<', '!', '-', '-'])) by {
+        assert(p.subrange(0, 4)[3] == 0x3Cu32);
+        assert(seq!['<', '!', '-', '-'].map_values(|c: char| c as u32)[3] == 0x2Du32);
+    }
+}
+
+/// §12: comments, white space and line terminators are discarded by the
+/// syntactic grammar; an identifier is not.
+pub proof fn example_trivia()
+    ensures
+        is_trivia(ElementKind::WhiteSpace),
+        is_trivia(ElementKind::LineTerminator),
+        is_trivia(ElementKind::Comment),
+        is_trivia(ElementKind::HashbangComment),
+        !is_trivia(ElementKind::IdentifierName),
+{
+}
+
+/// Rows of the generated `ID_Start` table that the anchors below use
+/// (Unicode 18.0.0): read from the table's contents.
+proof fn fact_id_start_rows()
+    ensures
+        id_start_at(3).last == 0xD6 && id_start_at(4).first == 0xD8 && id_start_at(4).last == 0xF6,
+        id_start_at(9).last == 0x2EE && id_start_at(10).first == 0x370,
+        id_start_at(249).last == 0x1FFC && id_start_at(250).first == 0x2071,
+        id_start_at(282).last == 0x2DDE && id_start_at(283).first == 0x3005,
+        id_start_at(296).first == 0x4E00 && id_start_at(296).last == 0xA48C,
+{
+    reveal(ID_START_0);
+}
+
+/// Rows of the generated `ID_Continue` table that the anchors below use.
+proof fn fact_id_continue_rows()
+    ensures
+        id_continue_at(4).last == 0xD6 && id_continue_at(5).first == 0xD8,
+        id_continue_at(11).first == 0x300 && id_continue_at(11).last == 0x374,
+        id_continue_at(297).first == 0x200C && id_continue_at(297).last == 0x200D,
+        id_continue_at(298).first == 0x203F,
+        id_continue_at(335).last == 0x2DFF && id_continue_at(336).first == 0x3005,
+{
+    reveal(ID_CONTINUE_0);
+}
+
+/// §12.7 and the Unicode 18.0.0 `ID_Start` / `ID_Continue` of code points
+/// above U+007F, as the generated table gives them (anchors; the table's
+/// equality with `DerivedCoreProperties.txt` is not proven): U+00E9 and
+/// U+65E5 are `ID_Start`; U+0300, U+200C and U+200D are `ID_Continue` and
+/// not `ID_Start`; U+00D7, U+2028 and U+2E2F are neither.
+pub proof fn example_unicode_id_anchors()
+    ensures
+        unicode_id_start(0xE9u32) && unicode_id_continue(0xE9u32),
+        unicode_id_start(0x65E5u32) && unicode_id_continue(0x65E5u32),
+        unicode_id_continue(0x0300u32) && !unicode_id_start(0x0300u32),
+        unicode_id_continue(0x200Cu32) && !unicode_id_start(0x200Cu32),
+        unicode_id_continue(0x200Du32) && !unicode_id_start(0x200Du32),
+        !unicode_id_start(0x00D7u32) && !unicode_id_continue(0x00D7u32),
+        !unicode_id_start(0x2028u32) && !unicode_id_continue(0x2028u32),
+        !unicode_id_start(0x2E2Fu32) && !unicode_id_continue(0x2E2Fu32),
+        unicode_id_start(0x61u32) && !unicode_id_start(0x5Fu32) && !unicode_id_start(0x30u32),
+        unicode_id_continue(0x30u32) && unicode_id_continue(0x5Fu32) && !unicode_id_continue(
+            0x24u32,
+        ),
+{
+    fact_id_start_rows();
+    fact_id_continue_rows();
+    // Positive: a row holds the code point.
+    assert(unicode_id_start_non_ascii(0xE9u32)) by {
+        let _ = id_start_at(4);
+    }
+    assert(unicode_id_start_non_ascii(0x65E5u32)) by {
+        let _ = id_start_at(296);
+    }
+    assert(unicode_id_continue_non_ascii(0xE9u32)) by {
+        reveal(ID_CONTINUE_0);
+        let _ = id_continue_at(5);
+    }
+    assert(unicode_id_continue_non_ascii(0x65E5u32)) by {
+        reveal(ID_CONTINUE_0);
+        let _ = id_continue_at(348);
+    }
+    assert(unicode_id_continue_non_ascii(0x0300u32)) by {
+        let _ = id_continue_at(11);
+    }
+    assert(unicode_id_continue_non_ascii(0x200Cu32)) by {
+        let _ = id_continue_at(297);
+    }
+    assert(unicode_id_continue_non_ascii(0x200Du32)) by {
+        let _ = id_continue_at(297);
+    }
+    // Negative: the code point lies strictly between two adjacent rows.
+    lemma_id_start_gap(9, 0x300u32);
+    lemma_id_start_gap(249, 0x200Cu32);
+    lemma_id_start_gap(249, 0x200Du32);
+    lemma_id_start_gap(3, 0xD7u32);
+    lemma_id_start_gap(249, 0x2028u32);
+    lemma_id_start_gap(282, 0x2E2Fu32);
+    lemma_id_continue_gap(4, 0xD7u32);
+    lemma_id_continue_gap(297, 0x2028u32);
+    lemma_id_continue_gap(335, 0x2E2Fu32);
 }
 
 } // verus!
