@@ -162,7 +162,6 @@ pub proof fn lemma_inner_replace(
 /// The inner loop keeps [`mk`], and formattingElement in the list while it
 /// runs.
 #[verifier::spinoff_prover]
-#[verifier::rlimit(100)]
 pub proof fn lemma_aa_inner(p: Parser, fe: Elem, ca: Elem, node_idx: int, last_node: Elem, counter: nat, bookmark: Bookmark)
     ensures
         mk(p, aa_inner(p, fe, ca, node_idx, last_node, counter, bookmark).0),
@@ -172,6 +171,8 @@ pub proof fn lemma_aa_inner(p: Parser, fe: Elem, ca: Elem, node_idx: int, last_n
         ),
     decreases node_idx,
 {
+    hide(dom::insert);
+    hide(dom::remove);
     hide(aa_inner);
     hide(create_element_for_token);
     hide(dom_insert);

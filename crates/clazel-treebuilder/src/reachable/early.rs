@@ -229,7 +229,6 @@ pub proof fn lemma_initial_reach(env: EncFns, p: Parser, t: Tok)
 
 /// The `html` element "before html" creates and pushes.
 #[verifier::spinoff_prover]
-#[verifier::rlimit(400)]
 pub proof fn lemma_before_html_push(p: Parser, tt: TagTok)
     requires
         reach_core(p),
@@ -247,6 +246,11 @@ pub proof fn lemma_before_html_push(p: Parser, tt: TagTok)
             q.stopped || (reach_core(q) && modes_ok(q))
         }),
 {
+    // Everything this proof needs of DOM "insert" is in the ensures of
+    // `lemma_insert_len` and `lemma_dom_insert_extends`. Its body (adopt,
+    // remove, two arena updates and the insertion and removing steps hooks)
+    // only gives the solver terms to instantiate `wf`'s quantifiers on.
+    hide(dom::insert);
     let (p1, e) = create_element_for_token(p, tt, Namespace::Html, 0);
     let p2 = insert_element_at(p1, e.id, Some(document_location()));
     let l = adjusted_location(p1, Some(document_location()));
@@ -319,7 +323,6 @@ pub proof fn lemma_before_html_reach(env: EncFns, p: Parser, t: Tok)
 // "before head"
 
 /// Insert the `head` element and switch to "in head".
-#[verifier::rlimit(100)]
 pub proof fn lemma_insert_head(p: Parser, tt: TagTok)
     requires
         reach_core(p),
@@ -336,6 +339,8 @@ pub proof fn lemma_insert_head(p: Parser, tt: TagTok)
             q.stopped || (reach_core(q) && modes_ok(q))
         }),
 {
+    hide(dom::insert);
+    hide(dom::remove);
     lemma_insert_html_keeps(p, tt);
     let (p1, e) = insert_html_element(p, tt);
     let q = Parser { head: Some(e.id), mode: Mode::InHead, ..p1 };

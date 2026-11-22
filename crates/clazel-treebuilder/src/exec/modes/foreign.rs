@@ -232,7 +232,6 @@ pub fn foreign_content_exec<E: EncFnsExec>(_env: &E, p: &mut ParserBuf, t: ExecT
 
 /// [`foreign_content`] for a start tag (split from [`foreign_content_exec`]
 /// to keep each proof small).
-#[verifier::rlimit(100)]
 fn foreign_start_exec<E: EncFnsExec>(_env: &E, p: &mut ParserBuf, tt: ExecTagTok) -> (o: ExecOutcome)
     requires
         parser_inv(old(p)@),
@@ -243,6 +242,8 @@ fn foreign_start_exec<E: EncFnsExec>(_env: &E, p: &mut ParserBuf, tt: ExecTagTok
         outcome_view(o, final(p)@) == foreign_content(_env.enc(), old(p)@, Tok::Start(tt@)),
         parser_inv(final(p)@),
 {
+        hide(dom::insert);
+        hide(dom::remove);
         if is_breakout_tag_exec(&tt.tag) || (matches!(tt.tag, Tag::Font) && has_font_breakout_attr_exec(&tt)) {
             // 7.
             breakout_exec(p);
