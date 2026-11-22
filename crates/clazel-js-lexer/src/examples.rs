@@ -353,6 +353,10 @@ pub proof fn example_unicode_id_anchors()
         !unicode_id_start(0x00D7u32) && !unicode_id_continue(0x00D7u32),
         !unicode_id_start(0x2028u32) && !unicode_id_continue(0x2028u32),
         !unicode_id_start(0x2E2Fu32) && !unicode_id_continue(0x2E2Fu32),
+        unicode_id_start(0x61u32) && !unicode_id_start(0x5Fu32) && !unicode_id_start(0x30u32),
+        unicode_id_continue(0x30u32) && unicode_id_continue(0x5Fu32) && !unicode_id_continue(
+            0x24u32,
+        ),
 {
     fact_id_start_rows();
     fact_id_continue_rows();
