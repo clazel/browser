@@ -22,6 +22,8 @@
 //! | 10 | renderer to kernel | `Display` | title (text), text (text), links (array of text) |
 //! | 11 | renderer to kernel | `Title` | title (text) |
 //! | 14 | renderer to kernel | `FetchStyle` | request (unsigned), url (text) |
+//! | 16 | renderer to kernel | `FetchScript` | request (unsigned), url (text) |
+//! | 17 | renderer to kernel | `UpdateUrl` | replace (bool), url (text) |
 //! | 15 | GPU process to kernel | `FrameReady` | buffer (unsigned), width (unsigned), height (unsigned) |
 //! | 18 | GPU process to kernel | `GpuReady` | software (bool) |
 //! | 19 | GPU process to kernel | `GpuRefused` | |
@@ -39,6 +41,10 @@
 //! | 112 | kernel to renderer | `StyleEnd` | request (unsigned) |
 //! | 113 | kernel to renderer | `StyleFailed` | request (unsigned) |
 //! | 114 | kernel to GPU process | `GpuViewport` | width (unsigned), height (unsigned), scale (unsigned) |
+//! | 115 | kernel to renderer | `ScriptResponse` | request (unsigned), content type (bytes) |
+//! | 116 | kernel to renderer | `ScriptBody` | request (unsigned), bytes (bytes, at most [`max_script_chunk`]) |
+//! | 117 | kernel to renderer | `ScriptEnd` | request (unsigned) |
+//! | 118 | kernel to renderer | `ScriptFailed` | request (unsigned) |
 //!
 //! `StorageLengthValue` is not in the plan's list, which has no reply for
 //! `StorageLength`; the schema needs one.
@@ -77,6 +83,20 @@
 //! field value, or empty), zero or more `StyleBody` and `StyleEnd`, or with
 //! `StyleFailed`, each naming that `request`. The request id is the
 //! renderer's own number for its fetch, not an identity: it names nobody.
+//!
+//! Phase 7 item 7.16 adds the script fetch and the URL update.
+//! `FetchScript` has 5.19's request shape: a committed renderer asks the
+//! kernel to fetch `url` (resolved against its committed URL) under
+//! `request`, an id the renderer chose, and the kernel answers with
+//! `ScriptResponse`, zero or more `ScriptBody` and `ScriptEnd`, or with
+//! `ScriptFailed`, each naming that `request`, exactly as it does for
+//! `FetchStyle` (the two differ only in their tags, so that a renderer never
+//! reads a script's bytes as a sheet's). `UpdateUrl` is `pushState` (`replace`
+//! false) and `replaceState` (`replace` true): it names the URL the renderer
+//! wants its document to have, as written (resolved by the kernel against
+//! the committed URL, as `Navigate`'s is), and the kernel decides whether the
+//! address bar changes. The tags 16 and 17 are the first free ones below 100;
+//! 115 to 118 follow 114.
 //!
 //! Two rules are part of the schema's spec ([`message_fields`], and
 //! `lemmas::lemma_no_identity_fields`):
@@ -242,6 +262,46 @@ pub enum Message {
         /// The renderer's id for the fetch.
         request: u64,
     },
+    /// Renderer to kernel: fetch a script (item 7.16), with 5.19's request
+    /// shape.
+    FetchScript {
+        /// The renderer's id for this fetch.
+        request: u64,
+        /// The script's URL, as the document wrote it.
+        url: Seq<u8>,
+    },
+    /// Renderer to kernel: `history.pushState` or `history.replaceState`
+    /// (item 7.16).
+    UpdateUrl {
+        /// Whether it is `replaceState` (`pushState` otherwise).
+        replace: bool,
+        /// The URL the document asks to have, as the script wrote it.
+        url: Seq<u8>,
+    },
+    /// Kernel to renderer: the script's response arrived (item 7.16).
+    ScriptResponse {
+        /// The renderer's id for the fetch.
+        request: u64,
+        /// The response's combined `Content-Type` field value, or empty.
+        content_type: Seq<u8>,
+    },
+    /// Kernel to renderer: the next part of the script's body.
+    ScriptBody {
+        /// The renderer's id for the fetch.
+        request: u64,
+        /// The octets.
+        bytes: Seq<u8>,
+    },
+    /// Kernel to renderer: the script's body is complete.
+    ScriptEnd {
+        /// The renderer's id for the fetch.
+        request: u64,
+    },
+    /// Kernel to renderer: the script fetch failed (or was refused).
+    ScriptFailed {
+        /// The renderer's id for the fetch.
+        request: u64,
+    },
     /// Kernel to renderer: a document is committed; its body follows in
     /// `Body` frames, then `BodyEnd`.
     Commit {
@@ -332,6 +392,16 @@ pub open spec fn max_style_chunk() -> nat {
     (crate::frame::spec::MAX_FRAME - 17) as nat
 }
 
+/// The most octets one `ScriptBody` carries: `MAX_FRAME` minus the rest of
+/// its payload, which is the array's head (1 octet), the tag 116 (2 octets),
+/// the request id (at most 9 octets) and the byte string's head (at most 5
+/// octets below 2^32), so that every `ScriptBody` of at most this many octets
+/// fits one frame (item 7.16). That is [`max_style_chunk`] (a `StyleBody`'s
+/// payload has the same shape, with the tag 111 in place of 116).
+pub open spec fn max_script_chunk() -> nat {
+    max_style_chunk()
+}
+
 /// Whether `m` is sent by a renderer to the kernel.
 pub open spec fn is_from_renderer(m: Message) -> bool {
     match m {
@@ -344,6 +414,8 @@ pub open spec fn is_from_renderer(m: Message) -> bool {
         | Message::StorageKey { .. }
         | Message::StorageLength
         | Message::Navigate { .. }
+        | Message::FetchScript { .. }
+        | Message::UpdateUrl { .. }
         | Message::Display { .. }
         | Message::Title { .. }
         | Message::FetchStyle { .. } => true,
@@ -411,8 +483,11 @@ pub enum Field {
     Delta,
     /// A key code.
     KeyCode,
-    /// The renderer's own id for a style sheet fetch (item 5.19).
+    /// The renderer's own id for a style sheet or script fetch (items 5.19
+    /// and 7.16).
     Request,
+    /// Whether a URL update replaces the current history entry (item 7.16).
+    Replace,
     /// A claimed origin. No message has one.
     Origin,
     /// A renderer id. No message has one.
@@ -459,6 +534,12 @@ pub open spec fn message_fields(m: Message) -> Seq<Field> {
         Message::StyleBody { .. } => seq![Field::Request, Field::BodyBytes],
         Message::StyleEnd { .. } => seq![Field::Request],
         Message::StyleFailed { .. } => seq![Field::Request],
+        Message::FetchScript { .. } => seq![Field::Request, Field::Url],
+        Message::UpdateUrl { .. } => seq![Field::Replace, Field::Url],
+        Message::ScriptResponse { .. } => seq![Field::Request, Field::ContentType],
+        Message::ScriptBody { .. } => seq![Field::Request, Field::BodyBytes],
+        Message::ScriptEnd { .. } => seq![Field::Request],
+        Message::ScriptFailed { .. } => seq![Field::Request],
     }
 }
 
@@ -534,6 +615,12 @@ pub open spec fn message_tokens(m: Message) -> Seq<Token> {
         Message::StyleBody { request, bytes } => seq![Token::Array(3), Token::Uint(111), Token::Uint(request), Token::Bytes(bytes)],
         Message::StyleEnd { request } => seq![Token::Array(2), Token::Uint(112), Token::Uint(request)],
         Message::StyleFailed { request } => seq![Token::Array(2), Token::Uint(113), Token::Uint(request)],
+        Message::FetchScript { request, url } => seq![Token::Array(3), Token::Uint(16), Token::Uint(request), Token::Text(url)],
+        Message::UpdateUrl { replace, url } => seq![Token::Array(3), Token::Uint(17), Token::Bool(replace), Token::Text(url)],
+        Message::ScriptResponse { request, content_type } => seq![Token::Array(3), Token::Uint(115), Token::Uint(request), Token::Bytes(content_type)],
+        Message::ScriptBody { request, bytes } => seq![Token::Array(3), Token::Uint(116), Token::Uint(request), Token::Bytes(bytes)],
+        Message::ScriptEnd { request } => seq![Token::Array(2), Token::Uint(117), Token::Uint(request)],
+        Message::ScriptFailed { request } => seq![Token::Array(2), Token::Uint(118), Token::Uint(request)],
     }
 }
 
@@ -580,6 +667,20 @@ pub open spec fn parse_fields(tag: u64, f: Seq<Token>) -> Option<Message> {
         if f.len() == 3 {
             match (f[0], f[1], f[2]) {
                 (Token::Uint(b), Token::Uint(w), Token::Uint(h)) => Some(Message::FrameReady { buffer: b, width: w, height: h }),
+                _ => None,
+            }
+        } else { None }
+    } else if tag == 16 {
+        if f.len() == 2 {
+            match (f[0], f[1]) {
+                (Token::Uint(r), Token::Text(u)) => Some(Message::FetchScript { request: r, url: u }),
+                _ => None,
+            }
+        } else { None }
+    } else if tag == 17 {
+        if f.len() == 2 {
+            match (f[0], f[1]) {
+                (Token::Bool(b), Token::Text(u)) => Some(Message::UpdateUrl { replace: b, url: u }),
                 _ => None,
             }
         } else { None }
@@ -647,6 +748,24 @@ pub open spec fn parse_fields(tag: u64, f: Seq<Token>) -> Option<Message> {
         if f.len() == 1 { match f[0] { Token::Uint(r) => Some(Message::StyleEnd { request: r }), _ => None } } else { None }
     } else if tag == 113 {
         if f.len() == 1 { match f[0] { Token::Uint(r) => Some(Message::StyleFailed { request: r }), _ => None } } else { None }
+    } else if tag == 115 {
+        if f.len() == 2 {
+            match (f[0], f[1]) {
+                (Token::Uint(r), Token::Bytes(c)) => Some(Message::ScriptResponse { request: r, content_type: c }),
+                _ => None,
+            }
+        } else { None }
+    } else if tag == 116 {
+        if f.len() == 2 {
+            match (f[0], f[1]) {
+                (Token::Uint(r), Token::Bytes(b)) => Some(Message::ScriptBody { request: r, bytes: b }),
+                _ => None,
+            }
+        } else { None }
+    } else if tag == 117 {
+        if f.len() == 1 { match f[0] { Token::Uint(r) => Some(Message::ScriptEnd { request: r }), _ => None } } else { None }
+    } else if tag == 118 {
+        if f.len() == 1 { match f[0] { Token::Uint(r) => Some(Message::ScriptFailed { request: r }), _ => None } } else { None }
     } else if tag == 114 {
         if f.len() == 3 {
             match (f[0], f[1], f[2]) {
