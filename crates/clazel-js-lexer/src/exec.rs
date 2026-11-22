@@ -188,8 +188,11 @@ pub open spec fn next_input_element_proven(
 }
 
 /// What [`next_token`] is proven to return: the token is after `pos`,
-/// inside the source text and not trivia, and the flag is set only by a
-/// line terminator code point between `pos` and the token.
+/// inside the source text and not trivia, and the flag is exactly whether a
+/// line terminator code point is between `pos` and the token (which is
+/// [`skip_trivia`]'s flag for the trivia that end there, by
+/// [`super::lemmas::lemma_skip_trivia_flag`]; that the trivia end where
+/// [`skip_trivia`] says is the longest-match property, not proven).
 pub open spec fn next_token_proven(
     src: Seq<u32>,
     pos: usize,
@@ -199,7 +202,7 @@ pub open spec fn next_token_proven(
 ) -> bool {
     match r {
         Err(_) => pos < src.len(),
-        Ok(Next::Eof { newline_before }) => newline_before ==> contains_line_terminator(
+        Ok(Next::Eof { newline_before }) => newline_before == contains_line_terminator(
             src,
             pos as int,
             src.len() as int,
@@ -209,8 +212,11 @@ pub open spec fn next_token_proven(
             && kind_agrees_proven(goal, html, src, tok.element) && value_agrees_proven(
             src,
             tok.element,
-        ) && (tok.newline_before
-            ==> contains_line_terminator(src, pos as int, tok.element.start as int)),
+        ) && tok.newline_before == contains_line_terminator(
+            src,
+            pos as int,
+            tok.element.start as int,
+        ),
     }
 }
 
@@ -2896,7 +2902,7 @@ pub fn next_token(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Result
     loop
         invariant
             pos <= p <= src.len(),
-            newline ==> contains_line_terminator(src@, pos as int, p as int),
+            newline == contains_line_terminator(src@, pos as int, p as int),
         decreases src.len() - p,
     {
         match next_input_element(src, p, goal, html) {
@@ -2908,6 +2914,14 @@ pub fn next_token(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Result
             },
             Ok(Step::Element(el)) => {
                 if trivia(el.kind) {
+                    proof {
+                        super::lemmas::lemma_contains_lt_split(
+                            src@,
+                            pos as int,
+                            p as int,
+                            el.end as int,
+                        );
+                    }
                     if range_has_lt(src, el.start, el.end) {
                         newline = true;
                     }

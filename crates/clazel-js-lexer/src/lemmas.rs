@@ -107,6 +107,58 @@ pub proof fn lemma_skip_trivia_bounds(goal: Goal, html: bool, s: Src, i: int)
     }
 }
 
+/// [`contains_line_terminator`] of a range is that of its two halves.
+pub proof fn lemma_contains_lt_split(s: Src, a: int, b: int, c: int)
+    requires
+        a <= b <= c,
+    ensures
+        contains_line_terminator(s, a, c) <==> (contains_line_terminator(s, a, b)
+            || contains_line_terminator(s, b, c)),
+{
+    if contains_line_terminator(s, a, c) {
+        let k = choose|k: int| a <= k < c && is_line_terminator(#[trigger] s[k]);
+        if k < b {
+            assert(contains_line_terminator(s, a, b));
+        } else {
+            assert(contains_line_terminator(s, b, c));
+        }
+    }
+    if contains_line_terminator(s, a, b) {
+        let k = choose|k: int| a <= k < b && is_line_terminator(#[trigger] s[k]);
+        assert(a <= k < c);
+    }
+    if contains_line_terminator(s, b, c) {
+        let k = choose|k: int| b <= k < c && is_line_terminator(#[trigger] s[k]);
+        assert(a <= k < c);
+    }
+}
+
+/// The line-terminator flag of [`skip_trivia`] is whether a `LineTerminator`
+/// code point is in the range it skips: the trivia elements tile that range,
+/// and the flag is the union of theirs. (So `newline_before` is a property of
+/// where the trivia end, [`skip_trivia`]'s first component, and nothing else.)
+pub proof fn lemma_skip_trivia_flag(goal: Goal, html: bool, s: Src, i: int)
+    requires
+        0 <= i <= s.len(),
+    ensures
+        skip_trivia(goal, html, s, i).1 == contains_line_terminator(
+            s,
+            i,
+            skip_trivia(goal, html, s, i).0,
+        ),
+    decreases s.len() - i,
+{
+    let n = trivia_len(goal, html, s, i);
+    if 0 < n && i + n <= s.len() {
+        lemma_skip_trivia_flag(goal, html, s, i + n);
+        lemma_skip_trivia_bounds(goal, html, s, i + n);
+        let end = skip_trivia(goal, html, s, i + n).0;
+        lemma_contains_lt_split(s, i, i + n, end);
+    } else {
+        assert(!contains_line_terminator(s, i, i));
+    }
+}
+
 /// Introduction rules for [`string_characters_sv`], for the single-character
 /// and the character-then-characters alternatives.
 pub proof fn lemma_string_characters_one(s: Src, i: int, j: int, quote: u32, v: Seq<u16>)
