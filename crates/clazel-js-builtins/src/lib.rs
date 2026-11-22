@@ -46,6 +46,7 @@
 //! Tier: see `[package.metadata.clazel]` in `Cargo.toml` and
 //! `docs/VERIFICATION.md`.
 
+pub mod array;
 pub mod boolean;
 pub mod error;
 pub mod function;
@@ -66,6 +67,7 @@ use clazel_js_vm::interp::{Abrupt, Vm};
 pub fn install(vm: &mut Vm) -> Result<(), Abrupt> {
     object::install(vm)?;
     function::install(vm)?;
+    array::install(vm)?;
     error::install(vm)?;
     boolean::install(vm)?;
     number::install(vm)?;

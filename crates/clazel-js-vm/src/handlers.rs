@@ -346,7 +346,7 @@ impl Vm {
     }
 
     /// IsStrictlyEqual, §7.2.14.
-    pub(crate) fn strict_equals(&self, x: Value, y: Value) -> bool {
+    pub fn strict_equals(&self, x: Value, y: Value) -> bool {
         if let (Some(a), Some(b)) = (num(x), num(y)) {
             return numeric::equal(a, b);
         }
@@ -442,7 +442,8 @@ impl Vm {
         let Some(o) = self.heap.obj_mut(base) else {
             return false;
         };
-        if o.shape.0 != e.shape {
+        // An array's `length` is not an ordinary data property (§10.4.2.4†).
+        if o.shape.0 != e.shape || matches!(o.kind, ObjKind::Array) {
             return false;
         }
         let Some(slot) = usize::try_from(e.slot)
@@ -648,8 +649,25 @@ impl Vm {
             }
             return Ok(());
         }
+        let array_key = self.heap.is_array_object(base)
+            && (key == self.atoms.k_length || self.heap.key_index(key).is_some());
         let ok = match self.heap.find(base, key)? {
             Some(f) if f.attrs.0 & Attrs::WRITABLE == 0 => false,
+            // OrdinarySetWithOwnDescriptor (§10.1.9.2†) step 2.c.ii: an
+            // existing own data property of an array is changed with
+            // `[[DefineOwnProperty]]` { [[Value]]: V }, which ArraySetLength
+            // (§10.4.2.4†) handles for `length`.
+            Some(f) if f.own && array_key && key == self.atoms.k_length => {
+                let d = crate::props::PropDesc {
+                    value: Some(v),
+                    ..crate::props::PropDesc::default()
+                };
+                self.define_own_property(base, key, &d)?
+            }
+            // Step 2.d: no own property, so CreateDataProperty(Receiver, P, V),
+            // which for an array index may grow `length` (§10.4.2.1†).
+            None if array_key => self.create_data_property(base, key, v)?,
+            Some(f) if !f.own && array_key => self.create_data_property(base, key, v)?,
             Some(f) if f.own => {
                 self.heap.set_slot(base, f.slot, v)?;
                 if !self.heap.is_dictionary(f.shape) {

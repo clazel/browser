@@ -4,12 +4,13 @@
 
 use crate::util::{
     arg, constructor, has_own_property, has_property, key, method, new_array_like, new_object_with,
-    same_value, string,
+    string,
 };
 use clazel_js_heap::shape::Attrs;
 use clazel_js_heap::value::{Decoded, Value};
 use clazel_js_vm::heap::ObjKind;
 use clazel_js_vm::interp::{Abrupt, Intrinsic, Vm};
+use clazel_js_vm::props::PropDesc;
 
 /// Installs `Object`, `Object.prototype` and their methods.
 ///
@@ -62,7 +63,7 @@ fn has_own_property_fn(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value
 /// 2. If the this value is null, return "[object Null]".
 /// 3. Let O be ! ToObject(this value).
 /// 4. Let isArray be ? IsArray(O).
-/// 5. If isArray is true, let builtinTag be "Array" (no arrays yet).
+/// 5. If isArray is true, let builtinTag be "Array".
 /// 6. to 14. Otherwise builtinTag is "Arguments", "Function" (O has
 ///    [[Call]]), "Error" ([[ErrorData]]), "Boolean", "Number" or "String"
 ///    ([[BooleanData]], [[NumberData]], [[StringData]]), "Date", "RegExp",
@@ -81,6 +82,7 @@ fn to_string(vm: &mut Vm, this: Value, _args: &[Value]) -> Result<Value, Abrupt>
         "Function"
     } else {
         match vm.heap().obj(o).map(|o| o.kind) {
+            Some(ObjKind::Array) => "Array",
             Some(ObjKind::Error) => "Error",
             Some(ObjKind::Primitive(p)) => match p.decode() {
                 Decoded::Bool(_) => "Boolean",
@@ -258,73 +260,20 @@ fn define_property(vm: &mut Vm, _this: Value, args: &[Value]) -> Result<Value, A
     Ok(o)
 }
 
-/// DefinePropertyOrThrow, §7.3.8†, over OrdinaryDefineOwnProperty
-/// (§10.1.6.1†) and ValidateAndApplyPropertyDescriptor (§10.1.6.3†) for
-/// data properties of an extensible object:
-/// 2. If current is undefined, then (extensible is true) create the data
-///    property, with each absent field its default (`undefined`, `false`).
-/// 4 to 6. If every field of Desc is absent, or each field present equals
-///    the current one, return true (the result is unchanged).
-/// 5. If current.[[Configurable]] is false, then a. If Desc.[[Configurable]]
-///    is true, return false. b. If Desc has [[Enumerable]] and it differs,
-///    return false. (c and d: accessor/data kind change: not reachable.)
-///    e. If current.[[Writable]] is false: if Desc.[[Writable]] is true,
-///    return false; if Desc has [[Value]] and not SameValue, return false.
-/// 6. The fields present in Desc replace those of the property.
-/// A false result is a TypeError.
+/// DefinePropertyOrThrow, §7.3.8†, over `[[DefineOwnProperty]]`
+/// (`Vm::define_own_property`: OrdinaryDefineOwnProperty §10.1.6.1† and the
+/// Array exotic object's §10.4.2.1†); a false result is a TypeError.
 fn define_property_or_throw(
     vm: &mut Vm,
     obj: Value,
     k: clazel_js_heap::string::Key,
     desc: &Descriptor,
 ) -> Result<(), Abrupt> {
-    let current = vm.heap().find(obj, k)?.filter(|f| f.own);
-    let Some(cur) = current else {
-        let mut bits = 0;
-        for (flag, bit) in [
-            (desc.writable, Attrs::WRITABLE),
-            (desc.enumerable, Attrs::ENUMERABLE),
-            (desc.configurable, Attrs::CONFIGURABLE),
-        ] {
-            if flag == Some(true) {
-                bits |= bit;
-            }
-        }
-        let v = desc.value.unwrap_or(Value::UNDEFINED);
-        return Ok(vm.heap_mut().define(obj, k, v, Attrs(bits))?);
+    let d = PropDesc {
+        value: desc.value,
+        writable: desc.writable,
+        enumerable: desc.enumerable,
+        configurable: desc.configurable,
     };
-    let cur_value = vm
-        .heap()
-        .slot(cur.holder, cur.slot)
-        .ok_or(Abrupt::Internal("property slot"))?;
-    let flag = |bit: u8| cur.attrs.0 & bit != 0;
-    if !flag(Attrs::CONFIGURABLE) {
-        let bad = desc.configurable == Some(true)
-            || desc
-                .enumerable
-                .is_some_and(|e| e != flag(Attrs::ENUMERABLE))
-            || (!flag(Attrs::WRITABLE)
-                && (desc.writable == Some(true)
-                    || desc.value.is_some_and(|v| !same_value(vm, v, cur_value))));
-        if bad {
-            let name = vm
-                .heap()
-                .key_string(k)
-                .map(clazel_js_heap::string::JsString::to_string_lossy)
-                .unwrap_or_default();
-            return Err(vm.type_error(&format!("Cannot redefine property: {name}")));
-        }
-    }
-    let mut bits = 0;
-    for (new, bit) in [
-        (desc.writable, Attrs::WRITABLE),
-        (desc.enumerable, Attrs::ENUMERABLE),
-        (desc.configurable, Attrs::CONFIGURABLE),
-    ] {
-        if new.unwrap_or_else(|| flag(bit)) {
-            bits |= bit;
-        }
-    }
-    let v = desc.value.unwrap_or(cur_value);
-    Ok(vm.heap_mut().redefine(obj, k, v, Attrs(bits))?)
+    vm.define_property_or_throw(obj, k, &d)
 }

@@ -281,6 +281,7 @@ impl Heap {
         if !props.iter().any(|(k, _, _)| keys.contains(k)) {
             return Ok(());
         }
+        let old_slots = o.slots.clone();
         let mut shape = ROOT;
         let mut slots: Vec<Value> = Vec::with_capacity(props.len());
         for (k, slot, a) in props {
@@ -289,7 +290,7 @@ impl Heap {
             }
             let v = usize::try_from(slot)
                 .ok()
-                .and_then(|i| o.slots.get(i))
+                .and_then(|i| old_slots.get(i))
                 .copied()
                 .ok_or(HeapError::Corrupt)?;
             let (next, new_slot) = self.shapes.add_property(shape, k, a)?;
