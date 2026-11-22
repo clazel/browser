@@ -72,6 +72,27 @@ pub proof fn lemma_longest_len(goal: Goal, html: bool, s: Src, i: int)
     lemma_longest_len_upto(goal, html, s, i, s.len() - i);
 }
 
+/// An element of any kind that derives `s[i..j)` makes `s[i..j)` derived by
+/// some alternative of the goal ([`any_element_matches`]).
+pub proof fn lemma_kind_implies_any(goal: Goal, html: bool, kind: ElementKind, s: Src, i: int, j: int)
+    requires
+        element_matches(goal, html, kind, s, i, j),
+    ensures
+        any_element_matches(goal, html, s, i, j),
+{
+    match kind {
+        ElementKind::Template(k) => {
+            match k {
+                TemplateKind::NoSubstitution => {},
+                TemplateKind::Head => {},
+                TemplateKind::Middle => {},
+                TemplateKind::Tail => {},
+            }
+        },
+        _ => {},
+    }
+}
+
 /// [`skip_trivia`] goes forward and stays inside the source text.
 pub proof fn lemma_skip_trivia_bounds(goal: Goal, html: bool, s: Src, i: int)
     requires
