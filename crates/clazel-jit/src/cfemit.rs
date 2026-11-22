@@ -41,6 +41,8 @@ use super::spec::*;
 #[cfg(verus_only)]
 use crate::cfcompose::lemma_shift_index;
 #[cfg(verus_only)]
+use crate::cfblobacc::{emit_cf_blob_accepted_ensures, emitted_bytes, lemma_emitter_accepted};
+#[cfg(verus_only)]
 use crate::cfcontract::*;
 #[cfg(verus_only)]
 use crate::cflens::*;
@@ -1420,6 +1422,18 @@ pub fn emit_cf_blob(n: &Node, nl: usize, exit_code: u32) -> (r: Option<Vec<u8>>)
             Some(v) => Some(v@),
             None => None,
         }),
+        // **Exactly** the template bytes: `crate::cfblobacc::emitted_bytes`
+        // (an addition to the contract, which says only that some body
+        // refines; the validator-acceptance theorem is about these bytes).
+        match r {
+            Some(v) => v@ == emitted_bytes(*n, nl as nat, exit_code),
+            None => true,
+        },
+        // **The validator accepts it** (J.9): `crate::cfblobacc::theorem_blob_accepted`.
+        emit_cf_blob_accepted_ensures(*n, nl, exit_code, match r {
+            Some(v) => Some(v@),
+            None => None,
+        }),
 {
     proof {
         crate::tlemmas::lemma_abi_consts_t();
@@ -1465,6 +1479,23 @@ pub fn emit_cf_blob(n: &Node, nl: usize, exit_code: u32) -> (r: Option<Vec<u8>>)
         }
     }
     let bytes = encode_code(body.as_slice());
+    proof {
+        let offs = offs_of(labs@, 0);
+        assert(offs =~= seq![size as int]);
+        assert(csize(*n, nl as nat, 0, 1) == size);
+        assert(body_seq =~= ctmpl(*n, nl as nat, 0, offs)) by {
+            assert(Seq::<x64::Instr>::empty() + ctmpl(*n, nl as nat, 0, offs) =~= ctmpl(
+                *n,
+                nl as nat,
+                0,
+                offs,
+            ));
+        }
+        assert(body@ =~= body_seq + exit_seq(exit_code));
+        assert(bytes@ == emitted_bytes(*n, nl as nat, exit_code));
+        assert(emit_cf_blob_ensures(*n, nl, exit_code, Some(bytes@)));
+        lemma_emitter_accepted(*n, nl, exit_code, bytes@);
+    }
     Some(bytes)
 }
 
