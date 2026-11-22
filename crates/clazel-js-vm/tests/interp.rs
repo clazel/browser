@@ -85,7 +85,11 @@ fn arithmetic() -> Result<(), String> {
     expect_double("var r = -2147483648 - 1;", -2_147_483_649.0)?;
     expect_double("var r = 0 * -1;", -0.0)?;
     expect_double("var r = -0 + 0;", 0.0)?;
-    expect_double("var r = 2 ** 10;", 1024.0)?;
+    // Miri deliberately perturbs libm results such as powf, so the exact
+    // value is checked only natively.
+    if !cfg!(miri) {
+        expect_double("var r = 2 ** 10;", 1024.0)?;
+    }
     expect_int("var r = 5 & 3;", 1)?;
     expect_int("var r = 5 | 3;", 7)?;
     expect_int("var r = 5 ^ 3;", 6)?;
