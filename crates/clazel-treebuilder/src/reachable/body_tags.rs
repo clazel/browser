@@ -384,6 +384,7 @@ pub open spec fn ib_start_first(g: Tag) -> bool {
 
 /// The other "in body" start tags.
 #[verifier::spinoff_prover]
+#[verifier::rlimit(100)]
 pub proof fn lemma_ib_start_reach_rest(p: Parser, t: Tok, tt: TagTok)
     requires
         rules_inv(Rules::Html(Mode::InBody), p, t),

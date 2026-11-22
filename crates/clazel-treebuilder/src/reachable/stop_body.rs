@@ -171,6 +171,8 @@ pub proof fn lemma_aa_inner(p: Parser, fe: Elem, ca: Elem, node_idx: int, last_n
         ),
     decreases node_idx,
 {
+    hide(dom::insert);
+    hide(dom::remove);
     hide(aa_inner);
     hide(create_element_for_token);
     hide(dom_insert);
