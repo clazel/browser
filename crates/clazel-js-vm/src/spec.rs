@@ -1151,7 +1151,7 @@ pub open spec fn op_wf(c: Code, op: Op) -> bool {
             reg_ok(c, dst) && reg_ok(c, a) && reg_ok(c, b),
         Op::Neg { dst, src } | Op::Inc { dst, src } | Op::Dec { dst, src }
         | Op::BitNot { dst, src } | Op::Not { dst, src } | Op::ToNumeric { dst, src }
-        | Op::TypeOf { dst, src } | Op::GetIterator { dst, src } =>
+        | Op::ToNumber { dst, src } | Op::TypeOf { dst, src } | Op::GetIterator { dst, src } =>
             reg_ok(c, dst) && reg_ok(c, src),
         Op::JumpIfTrue { cond, target } | Op::JumpIfFalse { cond, target } =>
             reg_ok(c, cond) && target < nops,
@@ -1173,6 +1173,11 @@ pub open spec fn op_wf(c: Code, op: Op) -> bool {
         Op::DeleteProp { dst, obj, idx } => reg_ok(c, dst) && reg_ok(c, obj) && reg_ok(c, idx),
         Op::GetGlobal { dst, key, ic } => reg_ok(c, dst) && key < c.consts.len() && ic < c.nics,
         Op::SetGlobal { key, src, ic } => key < c.consts.len() && reg_ok(c, src) && ic < c.nics,
+        Op::GetGlobalOrUndefined { dst, key } => reg_ok(c, dst) && key < c.consts.len(),
+        Op::DeclareGlobals { k } => k < c.consts.len() && value_wf(c.consts[k as int]),
+        Op::DefineProp { obj, key, val } => reg_ok(c, obj) && key < c.consts.len() && reg_ok(c, val),
+        Op::DefineElem { obj, idx, val } => reg_ok(c, obj) && reg_ok(c, idx) && reg_ok(c, val),
+        Op::SetLiteralProto { obj, val } => reg_ok(c, obj) && reg_ok(c, val),
         Op::NewObject { dst } => reg_ok(c, dst),
         Op::NewArray { dst, .. } => reg_ok(c, dst),
         Op::NewEnv { dst, parent, .. } => reg_ok(c, dst) && reg_ok(c, parent),
@@ -1188,6 +1193,33 @@ pub open spec fn op_wf(c: Code, op: Op) -> bool {
             reg_ok(c, src) && reg_ok(c, value) && reg_ok(c, mode),
         Op::Throw { src } => reg_ok(c, src),
         Op::ThrowError { msg, .. } => msg < c.consts.len(),
+        Op::InitGlobalLexical { key, src, .. } => key < c.consts.len() && reg_ok(c, src),
+        Op::ToPropertyKey { dst, src, .. } => reg_ok(c, dst) && reg_ok(c, src),
+        Op::ToString { dst, src, .. } => reg_ok(c, dst) && reg_ok(c, src),
+        Op::CopyDataProperties { obj, src, excl, nexcl, .. } => reg_ok(c, obj) && reg_ok(c, src) && regs_ok(c, excl, nexcl),
+        Op::GetTemplateObject { dst, k, .. } => reg_ok(c, dst) && k < c.consts.len() && value_wf(c.consts[k as int]),
+        Op::NewSpread { dst, callee, args, .. } => reg_ok(c, dst) && reg_ok(c, callee) && reg_ok(c, args),
+        Op::SuperCall { dst, func, newtarget, this, args, argc, .. } => reg_ok(c, dst) && reg_ok(c, func) && reg_ok(c, newtarget) && reg_ok(c, this) && regs_ok(c, args, argc),
+        Op::SuperCallSpread { dst, func, newtarget, this, args, .. } => reg_ok(c, dst) && reg_ok(c, func) && reg_ok(c, newtarget) && reg_ok(c, this) && reg_ok(c, args),
+        Op::InitInstance { obj, func, .. } => reg_ok(c, obj) && reg_ok(c, func),
+        Op::ClassSetup { ctor, proto, heritage, .. } => reg_ok(c, ctor) && reg_ok(c, proto) && reg_ok(c, heritage),
+        Op::DefineMethod { obj, key, func, form, .. } => reg_ok(c, obj) && reg_ok(c, key) && reg_ok(c, func) && form < 3,
+        Op::SetHomeObject { func, obj, .. } => reg_ok(c, func) && reg_ok(c, obj),
+        Op::SetInstanceInit { ctor, init, .. } => reg_ok(c, ctor) && reg_ok(c, init),
+        Op::NewPrivateName { dst, k, .. } => reg_ok(c, dst) && k < c.consts.len(),
+        Op::GetPrivate { dst, obj, name, .. } => reg_ok(c, dst) && reg_ok(c, obj) && reg_ok(c, name),
+        Op::SetPrivate { obj, name, val, .. } => reg_ok(c, obj) && reg_ok(c, name) && reg_ok(c, val),
+        Op::DefinePrivate { obj, name, val, form, .. } => reg_ok(c, obj) && reg_ok(c, name) && reg_ok(c, val) && form < 4,
+        Op::HasPrivate { dst, name, obj, .. } => reg_ok(c, dst) && reg_ok(c, name) && reg_ok(c, obj),
+        Op::GetSuperBase { dst, func, .. } => reg_ok(c, dst) && reg_ok(c, func),
+        Op::GetSuper { dst, base, key, this, .. } => reg_ok(c, dst) && reg_ok(c, base) && reg_ok(c, key) && reg_ok(c, this),
+        Op::SetSuper { base, key, val, this, .. } => reg_ok(c, base) && reg_ok(c, key) && reg_ok(c, val) && reg_ok(c, this),
+        Op::GetNewTarget { dst, .. } => reg_ok(c, dst),
+        Op::ConstructResult { dst, val, this, .. } => reg_ok(c, dst) && reg_ok(c, val) && reg_ok(c, this),
+        Op::CreateUnmappedArguments { dst, .. } => reg_ok(c, dst),
+        Op::CreateMappedArguments { dst, env, k, .. } => reg_ok(c, dst) && reg_ok(c, env) && k < c.consts.len() && value_wf(c.consts[k as int]),
+        Op::CreateRestArray { dst, .. } => reg_ok(c, dst),
+        Op::ForInIterator { dst, src, .. } => reg_ok(c, dst) && reg_ok(c, src),
     }
 }
 
@@ -1375,6 +1407,8 @@ pub open spec fn fast_path(s: State, op: Op) -> bool {
             is_number(reg(s, a)) && is_number(reg(s, b)),
         Op::Neg { src, .. } | Op::Inc { src, .. } | Op::Dec { src, .. }
         | Op::BitNot { src, .. } | Op::ToNumeric { src, .. } => is_number(reg(s, src)),
+        // ToNumber §7.1.4† step 1: a Number is returned as it is; everything else is the handler's.
+        Op::ToNumber { src, .. } => is_number(reg(s, src)),
         Op::StrictEq { a, b, .. } | Op::StrictNe { a, b, .. } =>
             strict_eq_fast(reg(s, a), reg(s, b)) is Some,
         Op::Not { src, .. } => to_boolean_fast(reg(s, src)) is Some,
@@ -1504,6 +1538,8 @@ pub open spec fn fast_step(s: State, op: Op) -> State {
         Op::Not { dst, src } => next(set_reg(s, dst,
             enc_bool(match to_boolean_fast(reg(s, src)) { Some(r) => !r, None => false }))),
         Op::ToNumeric { dst, src } => next(set_reg(s, dst, reg(s, src))),
+        // ToNumber §7.1.4† step 1: "If argument is a Number, return argument."
+        Op::ToNumber { dst, src } => next(set_reg(s, dst, reg(s, src))),
         Op::JumpIfTrue { cond, target } =>
             if to_boolean_fast(reg(s, cond)) == Some(true) { jump(s, target) } else { next(s) },
         Op::JumpIfFalse { cond, target } =>

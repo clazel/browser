@@ -1,6 +1,8 @@
 //! The JIT's code validators (docs/phases/jit.md item J.6): the x86-64 one
-//! in this module's root, and the A64 one in [`a64`]. The second, independent
-//! validators (dataflow analyses) and the confinement theorem are later work.
+//! in this module's root, the A64 one in [`a64`], and the second, independent
+//! x86-64 validator (a dataflow analysis, proven to accept only what the
+//! first accepts) in [`dataflow`]. The A64 dataflow validator and the
+//! confinement theorem are later work.
 //!
 //! This is the first part of item J.6: the specification of what the
 //! validator accepts and the contract of its entry point, written before any
@@ -33,9 +35,9 @@
 //! (each unit check equal to its spec function) and [`scan_exec`] (the scan
 //! equal to the spec's recursive `scan`). The tier stays 0 until CI's full
 //! verification runs (CLAUDE.md rule 7). The theorem of jit.md exit criterion 2
-//! (an accepted blob
-//! is confined) is not stated or proven here; see the end of [`spec`]'s
-//! header.
+//! (an accepted blob is confined) is stated and proven for x86-64 in
+//! [`confine`], not in [`spec`] or [`validate`]: it is about the semantics of
+//! `clazel-x64`, over the acceptance spec defined here.
 //!
 //! The A64 validator ([`a64`]) has the same shape and the same status: a spec
 //! and contract committed first, then [`a64::validate::validate`], proven sound
@@ -49,7 +51,9 @@
 pub mod a64;
 pub mod acc_lemmas;
 pub mod api;
+pub mod confine;
 pub mod contract;
+pub mod dataflow;
 pub mod decode_all;
 pub mod examples;
 pub mod lemmas;

@@ -45,6 +45,33 @@ pub fn string_at(src: &[u32], start: usize) -> Result<Vec<u16>, CompileError> {
     }
 }
 
+/// The template value (TV, §12.9.6.1) and the template raw value (TRV,
+/// §12.9.6.2) of the template component (`TemplateElement`) that starts at
+/// `start`: a head or a no-substitution template starts at its `` ` ``, a middle
+/// or a tail at its `}`.
+pub fn template_at(
+    src: &[u32],
+    start: usize,
+) -> Result<(Option<Vec<u16>>, Vec<u16>), CompileError> {
+    if start > src.len() {
+        return Err(CompileError::Internal("span outside the source text"));
+    }
+    let goal = if src.get(start).copied() == Some(u32::from(b'}')) {
+        Goal::InputElementTemplateTail
+    } else {
+        Goal::InputElementDiv
+    };
+    match next_token(src, start, goal, false) {
+        Ok(Next::Token(t)) => match t.element.value {
+            Value::Template { cooked, raw } => Ok((cooked, raw)),
+            _ => Err(CompileError::Internal(
+                "a template node does not start a template",
+            )),
+        },
+        _ => Err(CompileError::Internal("no token at a node's start")),
+    }
+}
+
 /// Code points to UTF-16 code units (§6.1.4: a code point above U+FFFF is a
 /// surrogate pair; a lone surrogate is kept).
 pub fn to_utf16(cps: &[u32]) -> Vec<u16> {

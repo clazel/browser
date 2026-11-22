@@ -1,18 +1,28 @@
-//! The compiler from the AST to bytecode (phase-7.md item 7.7, first slice):
-//! [`compile_script`].
+//! The compiler from the AST to bytecode (phase-7.md item 7.7, first and second
+//! slice): [`compile_script`].
 //!
 //! # What it compiles
 //!
 //! - **Expressions:** literals (numbers, BigInts, strings, `true`, `false`,
 //!   `null`), identifiers, `this`, the unary, binary, logical, conditional and
-//!   comma operators, assignment (simple, compound and logical), `++` and `--`,
-//!   calls, `new`, member access, object literals (data properties and methods;
-//!   `__proto__:` excepted) and array literals without spread, and function
-//!   and arrow function expressions.
-//! - **Statements:** `var`, `let` and `const` with temporal-dead-zone checks,
-//!   blocks, `if`, `while`, `do`-`while` and `for`, `switch`, labels, `break`,
-//!   `continue`, `return`, `throw`, `try`/`catch`/`finally`, and function
-//!   declarations, with Annex B.3.3's block-level hoisting.
+//!   comma operators, assignment (simple, compound, logical and destructuring),
+//!   `++` and `--`, calls and `new` (with spread arguments), member access,
+//!   optional chaining, object literals (data properties, methods, accessors,
+//!   computed names, spread and `__proto__:`) and array literals (with spread),
+//!   template literals and tagged templates, function and arrow function
+//!   expressions, class expressions, `super` properties and `super()`,
+//!   `new.target`, private names (`o.#x`, `#x in o`); `typeof` of a global,
+//!   unary `+` as `ToNumber`.
+//! - **Statements:** `var`, `let` and `const` with temporal-dead-zone checks and
+//!   binding patterns, blocks, `if`, `while`, `do`-`while` and `for`, `for`-`in`
+//!   and `for`-`of` (with iterator closing), `switch`, labels, `break`,
+//!   `continue`, `return`, `throw`, `try`/`catch`/`finally` (with a pattern as the
+//!   `catch` parameter), function and class declarations, with Annex B.3.3's
+//!   block-level hoisting.
+//! - **Functions:** default and rest parameters and patterns as parameters, the
+//!   mapped and unmapped `arguments` object; classes with fields, methods,
+//!   accessors, static members and blocks, private names, `extends` and the
+//!   default constructors.
 //! - **Closures:** scope analysis ([`crate::scope`]) puts a binding that no
 //!   inner function refers to in a register and a captured one in a slot of an
 //!   environment object that its scope creates on entry.
@@ -20,15 +30,31 @@
 //! # What it does not compile yet
 //!
 //! It returns [`CompileError::NotYetCompiled`] with a stated feature, never a
-//! panic: destructuring, spread, rest and default parameters, classes and
-//! `super`, generators and async functions, `with` and direct `eval`, modules,
-//! template literals, regular expression literals, optional chaining, accessors,
-//! `for`-`in` and `for`-`of`, the `arguments` object, `new.target`, and the few
-//! forms listed on [`CompileError::NotYetCompiled`]'s users in this file
-//! (`typeof` or `delete` of a global variable, `__proto__:` in an object
-//! literal, a function declaration as the body of an `if` or a label). The
-//! full list, and the gaps of the op list that cause some of them, are in the
-//! pull request that adds this file.
+//! panic: generators and async functions (and generator and async methods,
+//! `for await`), `with` and direct `eval`, modules, regular expression
+//! literals, dynamic `import()`, and the few forms listed on
+//! [`CompileError::NotYetCompiled`]'s users in this file (`delete` of a variable
+//! or of an optional chain, a function declaration as the body of an `if` or a
+//! label).
+//!
+//! # Known gaps in what it compiles
+//!
+//! - A function with a non-simple parameter list has one scope for its
+//!   parameters and its body, where §10.2.11† step 28 has a separate
+//!   environment for the body's `var`s: a closure in a default value sees
+//!   the body's declarations.
+//! - NamedEvaluation (§8.4.5†) of an anonymous function or class assigned to a
+//!   name is not done (only a function's own name, and a class constructor's
+//!   name, are in its template).
+//! - `super()` reads the active function's prototype when the op runs, after
+//!   the arguments are evaluated, where §13.3.7.1† step 5 reads it before; the
+//!   difference shows only if an argument expression changes that prototype.
+//! - `var arguments` in a function body does not share the `arguments`
+//!   object's binding (§10.2.11† step 27.b).
+//! - A member expression's computed key is converted when the access runs, as
+//!   §13.3.3† (ES2024) has it; a computed property name of a literal, a class or
+//!   a pattern is converted when it is evaluated, by
+//!   [`crate::bytecode::Instr::ToPropertyKey`].
 //!
 //! # Conventions of the output
 //!
@@ -60,15 +86,24 @@
 //! CreatePerIterationEnvironment, §14.12.4 (switch evaluation), §9.1.1.1.5
 //! SetMutableBinding steps 3 to 6, §9.1.1.1.6 GetBindingValue step 2 (TDZ),
 //! §15.2.5 InstantiateOrdinaryFunctionExpression, §10.2.11
-//! FunctionDeclarationInstantiation, and Annex B.3.3.1.
+//! FunctionDeclarationInstantiation, §13.15.5 and §14.3.3 (destructuring),
+//! §14.7.5 (`for`-`in` and `for`-`of`), §15.7.14 ClassDefinitionEvaluation,
+//! §13.2.8 (templates), §13.3.9 (optional chains), and Annex B.3.3.1. Section
+//! numbers marked † are from memory (phase-7.md's convention).
 
 use crate::bytecode::{
-    Const, ErrorKind, FunctionCode, FunctionKind, Handler, Instr, LIMIT, Program, Reg, Span,
+    Const, ErrorKind, FunctionCode, FunctionKind, GlobalDecls, Handler, Instr, LIMIT, Program, Reg,
+    Span, TemplateSite, VarScoped,
 };
 use crate::literal::{self, Number};
 use crate::scope::{self, Analysis, BKind, NONE, SKind, Target, span_of};
 use clazel_js_syntax::ast::{Ast, Node, NodeKind, Op as AOp};
 use std::collections::HashMap;
+
+mod classes;
+mod loops;
+mod misc;
+mod patterns;
 
 /// Why a script was not compiled.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -164,6 +199,7 @@ fn compile_inner(ast: &Ast, src: &[u32]) -> Result<Program, CompileError> {
         out: Vec::new(),
         loc: vec![None; an.bindings.len()],
         eval_name,
+        name_override: None,
         f: FnState::new(FunctionKind::Script, false, Span { start: 0, end: 0 }, 0),
     };
     let main = cg.compile_function(root, FunctionKind::Script)?;
@@ -195,6 +231,9 @@ enum Ctl {
         labels: Vec<u32>,
         brk: usize,
         cont: usize,
+        /// For a `for`-`of` loop: the iterator register, and the label of the
+        /// stub that rethrows (see [`Cg::emit_iter_close`]).
+        close: Option<(Reg, usize)>,
     },
     Switch {
         labels: Vec<u32>,
@@ -236,6 +275,12 @@ struct FnState {
     env_regs: HashMap<u32, Reg>,
     /// The register watermark at each entered scope.
     scope_marks: Vec<Reg>,
+    /// The number of parameters (registers `0..nparams` hold the arguments).
+    nparams: u32,
+    /// The function's own scope.
+    fscope: u32,
+    /// The parameter list is a simple one (plain identifiers).
+    simple_params: bool,
 }
 
 impl FnState {
@@ -258,8 +303,20 @@ impl FnState {
             base_env: 0,
             env_regs: HashMap::new(),
             scope_marks: Vec::new(),
+            nparams,
+            fscope: NONE,
+            simple_params: true,
         }
     }
+}
+
+/// The facts about a function that its code generation does not produce.
+struct FnMeta {
+    name: Vec<u16>,
+    kind: FunctionKind,
+    nparams: u32,
+    length: u32,
+    span: Span,
 }
 
 /// The code generator.
@@ -272,6 +329,9 @@ struct Cg<'a> {
     loc: Vec<Option<Reg>>,
     /// The interned name `eval`, or [`NONE`].
     eval_name: u32,
+    /// The name the next compiled function gets instead of its own (a class
+    /// constructor is named for its class).
+    name_override: Option<Vec<u16>>,
     f: FnState,
 }
 
@@ -288,6 +348,7 @@ fn final_op_kind(k: NodeKind) -> bool {
             | NodeKind::BooleanLiteral
             | NodeKind::ThisExpression
             | NodeKind::IdentifierReference
+            | NodeKind::NewTarget
             | NodeKind::FunctionExpression
             | NodeKind::ArrowFunction
             | NodeKind::MemberExpression
@@ -348,6 +409,11 @@ enum Prop {
     Named(u32),
     /// `[expr]`: the register holding the key.
     Computed(Reg),
+    /// `.#name`: the register holding the Private Name.
+    Private(Reg),
+    /// `super.name` or `super[expr]`: the registers of the super base, the key
+    /// and the receiver (`this`).
+    Super { base: Reg, key: Reg, this: Reg },
 }
 
 impl<'a> Cg<'a> {
@@ -641,7 +707,19 @@ impl<'a> Cg<'a> {
             return Ok(None);
         }
         let bd = self.binding(b)?;
-        if bd.captured || matches!(bd.kind, BKind::Const | BKind::FuncName | BKind::This) {
+        if bd.captured
+            || matches!(
+                bd.kind,
+                BKind::Const
+                    | BKind::FuncName
+                    | BKind::This
+                    | BKind::DerivedThis
+                    | BKind::NewTarget
+                    | BKind::Callee
+                    | BKind::PrivateName
+                    | BKind::Hidden
+            )
+        {
             return Ok(None);
         }
         let start = self.node(n)?.start;
@@ -740,6 +818,20 @@ impl<'a> Cg<'a> {
                 self.init_binding(b, src, sp)
             }
         }
+    }
+
+    /// Initializes the binding that declaration target `n` (a `BindingIdentifier`)
+    /// names: a scope's binding, or, for a top-level `let`, `const` or `class`
+    /// of a script, the global declarative record's
+    /// ([`Instr::InitGlobalLexical`]).
+    pub(super) fn init_ident(&mut self, n: u32, src: Reg, sp: Span) -> R<()> {
+        let b = self.res(n);
+        if b != NONE {
+            return self.init_binding(b, src, sp);
+        }
+        let name = self.name_of(n);
+        let key = self.konst(Const::String(self.name_units(name)?))?;
+        self.emit(Instr::InitGlobalLexical { key, src }, sp)
     }
 
     /// Throws if binding `b` currently holds the hole.
@@ -879,6 +971,64 @@ impl<'a> Cg<'a> {
                     self.init_binding(b, t, sp)?;
                     self.release(m);
                 }
+                BKind::DerivedThis => {
+                    // The hole until `super()` returns (§9.1.1.3.1† BindThisValue);
+                    // a captured binding's slot is a hole already.
+                    if !bd.captured {
+                        let r = self.reg_of(b)?;
+                        self.emit(Instr::LoadHole { dst: r }, sp)?;
+                    }
+                }
+                BKind::NewTarget => {
+                    let m = self.mark();
+                    let t = self.alloc()?;
+                    self.emit(Instr::GetNewTarget { dst: t }, sp)?;
+                    self.init_binding(b, t, sp)?;
+                    self.release(m);
+                }
+                BKind::Callee => {
+                    let m = self.mark();
+                    let t = self.alloc()?;
+                    self.emit(Instr::GetCallee { dst: t }, sp)?;
+                    self.init_binding(b, t, sp)?;
+                    self.release(m);
+                }
+                BKind::Arguments => {
+                    let m = self.mark();
+                    let t = self.alloc()?;
+                    if !sc.strict && self.f.simple_params {
+                        // §10.4.4.7†: the parameters live in the environment
+                        // object, and the map says which slot each one has.
+                        let mut map: Vec<Option<u32>> = vec![None; self.f.nparams as usize];
+                        for &pb in &sc.bindings {
+                            let pd = self.binding(pb)?;
+                            if pd.param != NONE
+                                && let Some(e) = map.get_mut(pd.param as usize)
+                            {
+                                *e = Some(pd.slot);
+                            }
+                        }
+                        let k = self.konst(Const::ArgumentsMap(map))?;
+                        // With no parameter there is no environment object, and
+                        // the map is empty: the callee's own environment stands in.
+                        let env = self.f.env_regs.get(&s).copied().unwrap_or(self.f.base_env);
+                        self.emit(Instr::CreateMappedArguments { dst: t, env, k }, sp)?;
+                    } else {
+                        self.emit(Instr::CreateUnmappedArguments { dst: t }, sp)?;
+                    }
+                    self.init_binding(b, t, sp)?;
+                    self.release(m);
+                }
+                BKind::PrivateName => {
+                    let m = self.mark();
+                    let t = self.alloc()?;
+                    let desc = self.name_units(bd.name)?;
+                    let k = self.konst(Const::String(desc))?;
+                    self.emit(Instr::NewPrivateName { dst: t, k }, sp)?;
+                    self.init_binding(b, t, sp)?;
+                    self.release(m);
+                }
+                BKind::Hidden => {}
             }
         }
         // Hoisted function declarations, in source order.
@@ -887,13 +1037,10 @@ impl<'a> Cg<'a> {
             let name_node = self.child(fnn, 0)?;
             let name = self.name_of(name_node);
             let m = self.mark();
-            if sc.kind == SKind::Script {
-                let t = self.alloc()?;
-                self.make_closure(fnode, t, FunctionKind::Normal)?;
-                let key = self.konst(Const::String(self.name_units(name)?))?;
-                let ic = self.ic();
-                self.emit(Instr::SetGlobal { key, src: t, ic }, self.sp(fnode))?;
-            } else if let Some(&b) = sc.names.get(&name)
+            // A script's functions were created by `DeclareGlobals` (§16.1.7†
+            // step 16), before this prologue.
+            if sc.kind != SKind::Script
+                && let Some(&b) = sc.names.get(&name)
                 && self.binding(b)?.decl_fn == fnode
             {
                 let t = self.alloc()?;
@@ -934,32 +1081,37 @@ impl<'a> Cg<'a> {
             u32::try_from(self.out.len()).map_err(|_| CompileError::TooLarge("functions"))?;
         self.out.push(None);
         // Parameters, name and body.
-        let (nparams, body): (u32, Option<u32>) = match nd.kind {
-            NodeKind::Script => (0, None),
+        let (nparams, length, body): (u32, u32, Option<u32>) = match nd.kind {
+            NodeKind::Script => (0, 0, None),
+            NodeKind::ClassStaticBlock => (0, 0, Some(self.child(nd, 0)?)),
             NodeKind::ArrowFunction => {
                 let p = self.child(nd, 0)?;
                 let pn = self.node(p)?;
-                let np = if pn.kind == NodeKind::FormalParameters {
-                    pn.children.len()
+                let (np, len) = if pn.kind == NodeKind::FormalParameters {
+                    self.param_counts(p)?
                 } else {
-                    1
+                    (1, 1)
                 };
-                (
-                    u32::try_from(np).map_err(|_| CompileError::TooLarge("parameters"))?,
-                    Some(self.child(nd, 1)?),
-                )
+                (np, len, Some(self.child(nd, 1)?))
             }
             _ => {
                 let p = self.child(nd, 1)?;
-                let np = self.node(p)?.children.len();
-                (
-                    u32::try_from(np).map_err(|_| CompileError::TooLarge("parameters"))?,
-                    Some(self.child(nd, 2)?),
-                )
+                let (np, len) = self.param_counts(p)?;
+                (np, len, Some(self.child(nd, 2)?))
             }
         };
+        let override_name = self.name_override.take();
         let name: Vec<u16> = match nd.kind {
+            _ if override_name.is_some() => override_name.unwrap_or_default(),
             NodeKind::FunctionDeclaration | NodeKind::FunctionExpression => {
+                let nm = self.child(nd, 0)?;
+                if self.node(nm)?.kind == NodeKind::BindingIdentifier {
+                    self.name_units(self.name_of(nm))?
+                } else {
+                    Vec::new()
+                }
+            }
+            NodeKind::ClassDeclaration | NodeKind::ClassExpression => {
                 let nm = self.child(nd, 0)?;
                 if self.node(nm)?.kind == NodeKind::BindingIdentifier {
                     self.name_units(self.name_of(nm))?
@@ -982,10 +1134,45 @@ impl<'a> Cg<'a> {
             start: nd.start,
             end: nd.end,
         };
-        let saved = std::mem::replace(&mut self.f, FnState::new(kind, sc.strict, span, nparams));
+        let mut fresh = FnState::new(kind, sc.strict, span, nparams);
+        fresh.fscope = sc_id;
+        fresh.simple_params = match nd.kind {
+            NodeKind::Script | NodeKind::ClassStaticBlock => true,
+            NodeKind::ArrowFunction => {
+                let p = self.child(nd, 0)?;
+                self.node(p)?.kind != NodeKind::FormalParameters
+                    || scope::is_simple_params(self.ast, p)?
+            }
+            _ => scope::is_simple_params(self.ast, self.child(nd, 1)?)?,
+        };
+        let saved = std::mem::replace(&mut self.f, fresh);
         let r = self.function_body(nd, sc_id, body);
         let st = std::mem::replace(&mut self.f, saved);
         r?;
+        self.finish_function(
+            index,
+            st,
+            FnMeta {
+                name,
+                kind,
+                nparams,
+                length,
+                span,
+            },
+        )?;
+        Ok(index)
+    }
+
+    /// Resolves labels and stores the function that `st` compiled as entry
+    /// `index` of the program.
+    fn finish_function(&mut self, index: u32, st: FnState, meta: FnMeta) -> R<()> {
+        let FnMeta {
+            name,
+            kind,
+            nparams,
+            length,
+            span,
+        } = meta;
         let mut instrs = st.instrs;
         let spans = st.spans;
         // Resolve labels to op indices.
@@ -1016,6 +1203,7 @@ impl<'a> Cg<'a> {
             strict: st.strict,
             span,
             nparams,
+            length,
             nregs: st.max_reg.saturating_sub(nparams),
             nics: st.nics,
             instrs,
@@ -1026,7 +1214,55 @@ impl<'a> Cg<'a> {
         if let Some(slot) = self.out.get_mut(index as usize) {
             *slot = Some(code);
         }
-        Ok(index)
+        Ok(())
+    }
+
+    /// §16.1.7† GlobalDeclarationInstantiation, as the script's first op:
+    /// `DeclareGlobals` over a record of the script's `var`s (the
+    /// VarScopedDeclarations, step 5), its top-level functions (compiled here,
+    /// to templates), the functions Annex B.3.2.2† hoists out of blocks (step
+    /// 12) and its top-level `let`, `const` and `class` names (the
+    /// LexicallyScopedDeclarations, step 13: bindings of the global declarative
+    /// record, read and written as globals and initialized by
+    /// [`Instr::InitGlobalLexical`]). No op when the script declares none of
+    /// them.
+    fn declare_globals(&mut self, sc_id: u32, sp: Span) -> R<()> {
+        let sc = self.scope(sc_id)?;
+        let mut entries: Vec<(usize, VarScoped)> = Vec::new();
+        for &v in &self.an.global_vars {
+            let vn = self.node(v)?;
+            let name = self.name_units(self.name_of(v))?;
+            entries.push((vn.start, VarScoped::Var(name)));
+        }
+        for &fnode in &sc.funcs {
+            let fnn = self.node(fnode)?;
+            let name_node = self.child(fnn, 0)?;
+            let name = self.name_units(self.name_of(name_node))?;
+            let func = self.compile_function(fnode, FunctionKind::Normal)?;
+            entries.push((fnn.start, VarScoped::Function { name, func }));
+        }
+        entries.sort_by_key(|e| e.0);
+        let mut annexb: Vec<(usize, Vec<u16>)> = Vec::new();
+        for (&fnode, target) in &self.an.annexb {
+            if let Target::Global(g) = *target {
+                annexb.push((self.node(fnode)?.start, self.name_units(g)?));
+            }
+        }
+        annexb.sort_by_key(|e| e.0);
+        let mut lexical = Vec::new();
+        for &(name, is_const) in &self.an.global_lexicals {
+            lexical.push((self.name_units(name)?, is_const));
+        }
+        let decls = GlobalDecls {
+            lexical,
+            var_scoped: entries.into_iter().map(|e| e.1).collect(),
+            annexb: annexb.into_iter().map(|e| e.1).collect(),
+        };
+        if decls.var_scoped.is_empty() && decls.annexb.is_empty() && decls.lexical.is_empty() {
+            return Ok(());
+        }
+        let k = self.konst(Const::GlobalDeclarations(decls))?;
+        self.emit(Instr::DeclareGlobals { k }, sp)
     }
 
     /// The prologue, the body and the implicit return of function `nd`.
@@ -1048,7 +1284,11 @@ impl<'a> Cg<'a> {
         } else {
             self.emit(Instr::GetCalleeEnv { dst: base }, start)?;
         }
+        if self.f.kind == FunctionKind::Script {
+            self.declare_globals(sc_id, start)?;
+        }
         self.enter_scope(sc_id, start)?;
+        self.function_prologue(nd, start)?;
         match nd.kind {
             NodeKind::Script => {
                 for &c in &nd.children {
@@ -1067,7 +1307,7 @@ impl<'a> Cg<'a> {
                     // returned).
                     let m = self.mark();
                     let r = self.expr_any(b)?;
-                    self.emit(Instr::Return { src: r }, self.sp(b))?;
+                    self.emit_return(r, self.sp(b))?;
                     self.release(m);
                 }
             }
@@ -1075,7 +1315,7 @@ impl<'a> Cg<'a> {
         let m = self.mark();
         let t = self.alloc()?;
         self.emit(Instr::LoadUndefined { dst: t }, end)?;
-        self.emit(Instr::Return { src: t }, end)?;
+        self.emit_return(t, end)?;
         self.release(m);
         Ok(())
     }
@@ -1148,6 +1388,10 @@ impl<'a> Cg<'a> {
             NodeKind::WhileStatement => self.while_stmt(nd, sp, labels),
             NodeKind::DoWhileStatement => self.do_while_stmt(nd, sp, labels),
             NodeKind::ForStatement => self.for_stmt(n, nd, sp, labels),
+            NodeKind::ForInStatement | NodeKind::ForOfStatement => {
+                self.for_in_of(n, nd, sp, labels)
+            }
+            NodeKind::ClassDeclaration => self.class_declaration(n),
             NodeKind::SwitchStatement => self.switch_stmt(n, nd, sp, labels),
             NodeKind::LabelledStatement => {
                 let lab = self.child(nd, 0)?;
@@ -1159,6 +1403,8 @@ impl<'a> Cg<'a> {
                     NodeKind::WhileStatement
                     | NodeKind::DoWhileStatement
                     | NodeKind::ForStatement
+                    | NodeKind::ForInStatement
+                    | NodeKind::ForOfStatement
                     | NodeKind::SwitchStatement
                     | NodeKind::LabelledStatement => self.stmt(body, &all),
                     _ => {
@@ -1222,6 +1468,9 @@ impl<'a> Cg<'a> {
         if self.node(init)?.kind == NodeKind::Absent {
             return Ok(());
         }
+        if self.is_pattern(target)? {
+            return self.destructure_init(target, init, patterns::Mode::Write);
+        }
         self.assign_to_ident(target, init, false)
     }
 
@@ -1232,13 +1481,15 @@ impl<'a> Cg<'a> {
         let (target, init) = (self.child(nd, 0)?, self.child(nd, 1)?);
         if self.node(init)?.kind == NodeKind::Absent {
             // `let a;` initializes to undefined (§14.3.1.2 step 3.b).
-            let b = self.res(target);
             let m = self.mark();
             let t = self.alloc()?;
             self.emit(Instr::LoadUndefined { dst: t }, self.sp(d))?;
-            self.init_binding(b, t, self.sp(d))?;
+            self.init_ident(target, t, self.sp(d))?;
             self.release(m);
             return Ok(());
+        }
+        if self.is_pattern(target)? {
+            return self.destructure_init(target, init, patterns::Mode::Init);
         }
         self.assign_to_ident(target, init, true)
     }
@@ -1258,7 +1509,7 @@ impl<'a> Cg<'a> {
         let m = self.mark();
         let v = self.expr_any(init)?;
         if is_init {
-            self.init_binding(b, v, sp)?;
+            self.init_ident(target, v, sp)?;
         } else {
             self.write_ident(target, v)?;
         }
@@ -1309,6 +1560,7 @@ impl<'a> Cg<'a> {
             labels: labels.to_vec(),
             brk: end,
             cont: top,
+            close: None,
         });
         self.stmt(body, &[])?;
         self.f.ctl.pop();
@@ -1326,6 +1578,7 @@ impl<'a> Cg<'a> {
             labels: labels.to_vec(),
             brk: end,
             cont,
+            close: None,
         });
         self.stmt(body, &[])?;
         self.f.ctl.pop();
@@ -1375,6 +1628,7 @@ impl<'a> Cg<'a> {
             labels: labels.to_vec(),
             brk: end,
             cont,
+            close: None,
         });
         self.stmt(body, &[])?;
         self.f.ctl.pop();
@@ -1573,14 +1827,21 @@ impl<'a> Cg<'a> {
                     self.load_int(ctype, code, sp)?;
                     return self.jump(fin, sp);
                 }
-                Ctl::Loop { brk, cont, .. } => {
-                    let target = match exit {
-                        Exit::Break(t) if t == idx => Some(*brk),
-                        Exit::Continue(t) if t == idx => Some(*cont),
-                        _ => None,
-                    };
-                    if let Some(l) = target {
-                        return self.jump(l, sp);
+                Ctl::Loop {
+                    brk, cont, close, ..
+                } => {
+                    let (brk, cont, close) = (*brk, *cont, *close);
+                    match exit {
+                        Exit::Continue(t) if t == idx => return self.jump(cont, sp),
+                        Exit::Break(t) if t == idx => {
+                            self.emit_iter_close(close, sp)?;
+                            return self.jump(brk, sp);
+                        }
+                        // Leaving the loop some other way (an outer `break` or
+                        // `continue`, or `return`): close the iterator first
+                        // (§14.7.5.7† ForIn/OfBodyEvaluation step 6.l: IteratorClose
+                        // of the abrupt completion).
+                        _ => self.emit_iter_close(close, sp)?,
                     }
                 }
                 Ctl::Switch { brk, .. } | Ctl::Labelled { brk, .. } => {
@@ -1594,7 +1855,7 @@ impl<'a> Cg<'a> {
             }
         }
         match (exit, val) {
-            (Exit::Return, Some(v)) => self.emit(Instr::Return { src: v }, sp),
+            (Exit::Return, Some(v)) => self.emit_return(v, sp),
             _ => Err(CompileError::Internal("exit without a target")),
         }
     }
@@ -1658,6 +1919,8 @@ impl<'a> Cg<'a> {
                 if let Some(&b) = self.scope(cs)?.names.get(&name) {
                     self.init_binding(b, e, self.sp(param))?;
                 }
+            } else if self.is_pattern(param)? {
+                self.destructure(param, e, patterns::Mode::Init)?;
             }
             self.stmt(cblock, &[])?;
             self.exit_scope(cs)?;
@@ -1851,6 +2114,20 @@ impl<'a> Cg<'a> {
 
     /// Everything but assignment, update and the comma operator, into `d`.
     fn expr_value(&mut self, n: u32, nd: &Node, d: Reg, sp: Span) -> R<()> {
+        // §13.10.1† `#x in obj`: the left side is a private name, not an expression.
+        if nd.kind == NodeKind::RelationalExpression
+            && nd.op == AOp::In
+            && self.node(self.child(nd, 0)?)?.kind == NodeKind::PrivateIdentifier
+        {
+            let (l, r) = (self.child(nd, 0)?, self.child(nd, 1)?);
+            let m = self.mark();
+            let name = self.alloc()?;
+            self.read_private_name(l, name)?;
+            let obj = self.expr_any(r)?;
+            self.emit(Instr::HasPrivate { dst: d, name, obj }, sp)?;
+            self.release(m);
+            return Ok(());
+        }
         match nd.kind {
             NodeKind::NumericLiteral => self.load_number(d, nd, false, sp),
             NodeKind::StringLiteral => {
@@ -1865,11 +2142,7 @@ impl<'a> Cg<'a> {
             }
             NodeKind::ThisExpression => {
                 let b = self.res(n);
-                if b == NONE {
-                    self.emit(Instr::GetThis { dst: d }, sp)
-                } else {
-                    self.read_binding(b, nd.start, d, sp)
-                }
+                self.read_this(b, d, sp)
             }
             NodeKind::IdentifierReference => self.read_ident(n, d),
             NodeKind::FunctionExpression => self.make_closure(n, d, FunctionKind::Normal),
@@ -1877,29 +2150,26 @@ impl<'a> Cg<'a> {
             NodeKind::MemberExpression => {
                 let (obj, prop) = (self.child(nd, 0)?, self.child(nd, 1)?);
                 let o = self.operand(obj, &[prop])?;
-                match self.property(nd, prop)? {
-                    Prop::Named(key) => {
-                        let ic = self.ic();
-                        self.emit(
-                            Instr::GetProp {
-                                dst: d,
-                                obj: o,
-                                key,
-                                ic,
-                            },
-                            sp,
-                        )
-                    }
-                    Prop::Computed(idx) => self.emit(
-                        Instr::GetElem {
-                            dst: d,
-                            obj: o,
-                            idx,
-                        },
-                        sp,
-                    ),
+                let key = self.property(nd, prop)?;
+                self.load_prop(d, o, &key, sp)
+            }
+            NodeKind::SuperProperty => {
+                let (o, key) = self.place(n, &[])?;
+                self.load_prop(d, o, &key, sp)
+            }
+            NodeKind::SuperCall => self.super_call(n, nd, d, sp),
+            NodeKind::NewTarget => {
+                let b = self.res(n);
+                if b == NONE {
+                    self.emit(Instr::GetNewTarget { dst: d }, sp)
+                } else {
+                    self.read_binding(b, nd.start, d, sp)
                 }
             }
+            NodeKind::TemplateLiteral => self.template_literal(nd, d, sp),
+            NodeKind::TaggedTemplate => self.tagged_template(nd, d, sp),
+            NodeKind::OptionalExpression => self.optional_chain(n, d, None, sp),
+            NodeKind::ClassExpression => self.class_definition(n, d),
             NodeKind::CallExpression => self.call(nd, d, sp),
             NodeKind::NewExpression => self.new_expr(nd, d, sp),
             NodeKind::UnaryExpression => self.unary(nd, d, sp),
@@ -1968,7 +2238,12 @@ impl<'a> Cg<'a> {
                 Ok(Prop::Named(self.konst(Const::String(units))?))
             }
             AOp::Bracket => Ok(Prop::Computed(self.expr_any(prop)?)),
-            _ => self.not_yet("private member access", prop),
+            AOp::PrivateDot | AOp::ChainPrivateDot => {
+                let r = self.alloc()?;
+                self.read_private_name(prop, r)?;
+                Ok(Prop::Private(r))
+            }
+            _ => Err(CompileError::Internal("unknown member access")),
         }
     }
 
@@ -1985,22 +2260,9 @@ impl<'a> Cg<'a> {
                 self.emit(Instr::Neg { dst: d, src: r }, sp)?;
             }
             AOp::Plus => {
-                // §13.5.4.1: ToNumber(x). `x * 1` is the same on every
-                // operand: Number, ToPrimitive then ToNumber, and a TypeError
-                // for a Symbol and for a BigInt (§6.1.6.2.4 BigInt::multiply
-                // of a BigInt and a Number is a TypeError, as ToNumber of a
-                // BigInt is).
+                // §13.5.4.1†: "Return ? ToNumber(? GetValue(expr))".
                 let r = self.expr_any(operand)?;
-                let one = self.alloc()?;
-                self.load_int(one, 1, sp)?;
-                self.emit(
-                    Instr::Mul {
-                        dst: d,
-                        a: r,
-                        b: one,
-                    },
-                    sp,
-                )?;
+                self.emit(Instr::ToNumber { dst: d, src: r }, sp)?;
             }
             AOp::BitNot => {
                 let r = self.expr_any(operand)?;
@@ -2020,266 +2282,24 @@ impl<'a> Cg<'a> {
                     && self.res(inner) == NONE
                 {
                     // §13.5.3.1 step 2.a: `typeof` of an unresolvable reference is
-                    // "undefined", and GetGlobal throws for one.
-                    return self.not_yet("typeof of a global variable", inner);
-                }
-                let r = self.expr_any(operand)?;
-                self.emit(Instr::TypeOf { dst: d, src: r }, sp)?;
-            }
-            AOp::Delete => {
-                let inner = self.unparen(operand)?;
-                let inn = self.node(inner)?;
-                match inn.kind {
-                    NodeKind::MemberExpression => {
-                        let (obj, prop) = (self.child(inn, 0)?, self.child(inn, 1)?);
-                        let o = self.operand(obj, &[prop])?;
-                        let idx = match self.property(inn, prop)? {
-                            Prop::Computed(r) => r,
-                            Prop::Named(k) => {
-                                let r = self.alloc()?;
-                                self.emit(Instr::LoadConst { dst: r, k }, sp)?;
-                                r
-                            }
-                        };
-                        self.emit(
-                            Instr::DeleteProp {
-                                dst: d,
-                                obj: o,
-                                idx,
-                            },
-                            sp,
-                        )?;
-                    }
-                    NodeKind::IdentifierReference => {
-                        return self.not_yet("delete of a variable", inner);
-                    }
-                    _ => {
-                        // §13.5.1.2 step 5: `delete` of a non-reference is true,
-                        // after evaluating the operand.
-                        self.expr_to(operand, None, true)?;
-                        self.emit(Instr::LoadBool { dst: d, flag: true }, sp)?;
-                    }
+                    // "undefined", and GetGlobal throws for one; step 3 is
+                    // GetValue otherwise.
+                    let name = self.name_of(inner);
+                    let key = self.konst(Const::String(self.name_units(name)?))?;
+                    let m = self.mark();
+                    let t = self.alloc()?;
+                    self.emit(Instr::GetGlobalOrUndefined { dst: t, key }, self.sp(inner))?;
+                    self.emit(Instr::TypeOf { dst: d, src: t }, sp)?;
+                    self.release(m);
+                } else {
+                    let r = self.expr_any(operand)?;
+                    self.emit(Instr::TypeOf { dst: d, src: r }, sp)?;
                 }
             }
+            AOp::Delete => self.delete_expr(operand, d, sp)?,
             _ => return Err(CompileError::Internal("unknown unary operator")),
         }
         self.release(m);
-        Ok(())
-    }
-
-    /// §13.3.6 calls: the callee, `this`, then the arguments in consecutive
-    /// registers. A member callee passes its object as `this`
-    /// (§13.3.6.1 EvaluateCall step 1: the reference's base).
-    fn call(&mut self, nd: &Node, d: Reg, sp: Span) -> R<()> {
-        let (callee, args) = (self.child(nd, 0)?, self.child(nd, 1)?);
-        let cn_id = self.unparen(callee)?;
-        let cn = self.node(cn_id)?;
-        if cn.kind == NodeKind::IdentifierReference
-            && callee == cn_id
-            && self.eval_name != NONE
-            && self.name_of(cn_id) == self.eval_name
-        {
-            return self.not_yet("direct eval", cn_id);
-        }
-        let m = self.mark();
-        let (fr, this) = (self.alloc()?, self.alloc()?);
-        if cn.kind == NodeKind::MemberExpression {
-            let (obj, prop) = (self.child(cn, 0)?, self.child(cn, 1)?);
-            self.expr_to(obj, Some(this), true)?;
-            match self.property(cn, prop)? {
-                Prop::Named(key) => {
-                    let ic = self.ic();
-                    self.emit(
-                        Instr::GetProp {
-                            dst: fr,
-                            obj: this,
-                            key,
-                            ic,
-                        },
-                        self.sp(cn_id),
-                    )?;
-                }
-                Prop::Computed(idx) => {
-                    self.emit(
-                        Instr::GetElem {
-                            dst: fr,
-                            obj: this,
-                            idx,
-                        },
-                        self.sp(cn_id),
-                    )?;
-                }
-            }
-        } else {
-            self.expr_to(cn_id, Some(fr), true)?;
-            self.emit(Instr::LoadUndefined { dst: this }, sp)?;
-        }
-        let (base, argc) = self.arguments(args)?;
-        self.emit(
-            Instr::Call {
-                dst: d,
-                callee: fr,
-                this,
-                args: base,
-                argc,
-            },
-            sp,
-        )?;
-        self.release(m);
-        Ok(())
-    }
-
-    /// Evaluates an `Arguments` node into consecutive registers: the first
-    /// register and the count (`this`'s register is not used: the caller
-    /// passes one when there are none).
-    fn arguments(&mut self, args: u32) -> R<(Reg, u32)> {
-        let an = self.node(args)?;
-        let argc =
-            u32::try_from(an.children.len()).map_err(|_| CompileError::TooLarge("arguments"))?;
-        let base = self.alloc_n(argc)?;
-        for (i, &a) in an.children.iter().enumerate() {
-            let r = base
-                .saturating_add(u32::try_from(i).map_err(|_| CompileError::TooLarge("arguments"))?);
-            self.expr_to(a, Some(r), true)?;
-        }
-        Ok((base, argc))
-    }
-
-    /// §13.3.5.1 `new`.
-    fn new_expr(&mut self, nd: &Node, d: Reg, sp: Span) -> R<()> {
-        let (callee, args) = (self.child(nd, 0)?, self.child(nd, 1)?);
-        let m = self.mark();
-        let fr = self.alloc()?;
-        self.expr_to(callee, Some(fr), true)?;
-        let (base, argc) = if self.node(args)?.kind == NodeKind::Absent {
-            (fr, 0)
-        } else {
-            self.arguments(args)?
-        };
-        self.emit(
-            Instr::New {
-                dst: d,
-                callee: fr,
-                args: base,
-                argc,
-            },
-            sp,
-        )?;
-        self.release(m);
-        Ok(())
-    }
-
-    /// §13.2.4.1: `NewArray` and one `SetElem` per element; an elision stores
-    /// the hole.
-    fn array_literal(&mut self, nd: &Node, d: Reg, sp: Span) -> R<()> {
-        let len = u32::try_from(nd.children.len())
-            .map_err(|_| CompileError::TooLarge("array literal"))?;
-        self.emit(Instr::NewArray { dst: d, len }, sp)?;
-        for (i, &e) in nd.children.iter().enumerate() {
-            let m = self.mark();
-            let esp = self.sp(e);
-            let idx = self.alloc()?;
-            let imm = i32::try_from(i).map_err(|_| CompileError::TooLarge("array literal"))?;
-            self.load_int(idx, imm, esp)?;
-            let v = if self.node(e)?.kind == NodeKind::Elision {
-                let t = self.alloc()?;
-                self.emit(Instr::LoadHole { dst: t }, esp)?;
-                t
-            } else {
-                self.expr_any(e)?
-            };
-            self.emit(
-                Instr::SetElem {
-                    obj: d,
-                    idx,
-                    val: v,
-                },
-                esp,
-            )?;
-            self.release(m);
-        }
-        Ok(())
-    }
-
-    /// §13.2.5.4 object literals: `NewObject` and one `SetProp` or `SetElem`
-    /// per property. (The standard's CreateDataPropertyOrThrow is not `Set`:
-    /// the op list has no define op, so a setter or a read-only property on
-    /// the prototype chain is seen here. See the pull request.)
-    fn object_literal(&mut self, nd: &Node, d: Reg, sp: Span) -> R<()> {
-        self.emit(Instr::NewObject { dst: d }, sp)?;
-        for &p in &nd.children {
-            let pn = self.node(p)?;
-            let psp = self.sp(p);
-            let m = self.mark();
-            let (key_node, value_node, is_method) = match pn.kind {
-                NodeKind::PropertyDefinition => match pn.op {
-                    AOp::Shorthand => (self.child(pn, 0)?, self.child(pn, 0)?, false),
-                    AOp::KeyValue => (self.child(pn, 0)?, self.child(pn, 1)?, false),
-                    _ => return self.not_yet("spread", p),
-                },
-                NodeKind::MethodDefinition => (self.child(pn, 0)?, p, true),
-                _ => return Err(CompileError::Internal("unexpected object literal member")),
-            };
-            let kn = self.node(key_node)?;
-            let plain_key: Option<Vec<u16>> = match kn.kind {
-                NodeKind::IdentifierName | NodeKind::IdentifierReference => {
-                    Some(literal::name_units_at(self.src, kn.start)?)
-                }
-                NodeKind::StringLiteral => Some(literal::string_at(self.src, kn.start)?),
-                _ => None,
-            };
-            let proto: Vec<u16> = "__proto__".encode_utf16().collect();
-            if pn.op == AOp::KeyValue && plain_key.as_deref() == Some(proto.as_slice()) {
-                return self.not_yet("__proto__ in an object literal", p);
-            }
-            // The key first (§13.2.5.5 PropertyDefinitionEvaluation: the property
-            // name is evaluated before the value).
-            let key = match plain_key {
-                Some(units) => Prop::Named(self.konst(Const::String(units))?),
-                None => {
-                    let r = self.alloc()?;
-                    if kn.kind == NodeKind::NumericLiteral {
-                        self.load_number(r, kn, false, self.sp(key_node))?;
-                    } else if kn.kind == NodeKind::ComputedPropertyName {
-                        let inner = self.child(kn, 0)?;
-                        self.expr_to(inner, Some(r), true)?;
-                    } else {
-                        return Err(CompileError::Internal("unexpected property name"));
-                    }
-                    Prop::Computed(r)
-                }
-            };
-            let v = if is_method {
-                let t = self.alloc()?;
-                self.make_closure(p, t, FunctionKind::Method)?;
-                t
-            } else {
-                self.expr_any(value_node)?
-            };
-            match key {
-                Prop::Named(k) => {
-                    let ic = self.ic();
-                    self.emit(
-                        Instr::SetProp {
-                            obj: d,
-                            key: k,
-                            val: v,
-                            ic,
-                        },
-                        psp,
-                    )?;
-                }
-                Prop::Computed(idx) => self.emit(
-                    Instr::SetElem {
-                        obj: d,
-                        idx,
-                        val: v,
-                    },
-                    psp,
-                )?,
-            }
-            self.release(m);
-        }
         Ok(())
     }
 
@@ -2356,29 +2376,18 @@ impl<'a> Cg<'a> {
                     result = out;
                 }
             }
-            NodeKind::MemberExpression if matches!(tn.op, AOp::Dot | AOp::Bracket) => {
-                let (obj, prop) = (self.child(tn, 0)?, self.child(tn, 1)?);
-                let o = self.operand(obj, &[prop, value])?;
-                let key = match self.property(tn, prop)? {
-                    Prop::Computed(r) => {
-                        // Protect a key held in a variable from the right side.
-                        if self
-                            .an
-                            .contains_assign
-                            .get(value as usize)
-                            .copied()
-                            .unwrap_or(false)
-                            && r < m
-                        {
-                            let c = self.alloc()?;
-                            self.emit(Instr::Move { dst: c, src: r }, sp)?;
-                            Prop::Computed(c)
-                        } else {
-                            Prop::Computed(r)
-                        }
-                    }
-                    k => k,
-                };
+            NodeKind::ObjectAssignmentPattern | NodeKind::ArrayAssignmentPattern
+                if nd.op == AOp::Assign =>
+            {
+                // §13.15.2 step 1.a: destructuring assignment; the value of the
+                // expression is the right side's.
+                let v = self.alloc()?;
+                self.expr_to(value, Some(v), true)?;
+                self.destructure(t, v, patterns::Mode::Write)?;
+                result = v;
+            }
+            NodeKind::MemberExpression | NodeKind::SuperProperty => {
+                let (o, key) = self.place(t, &[value])?;
                 if nd.op == AOp::Assign {
                     let v = self.alloc()?;
                     self.expr_to(value, Some(v), true)?;
@@ -2451,6 +2460,16 @@ impl<'a> Cg<'a> {
                 self.emit(Instr::GetProp { dst, obj, key, ic }, sp)
             }
             Prop::Computed(idx) => self.emit(Instr::GetElem { dst, obj, idx }, sp),
+            Prop::Private(name) => self.emit(Instr::GetPrivate { dst, obj, name }, sp),
+            Prop::Super { base, key, this } => self.emit(
+                Instr::GetSuper {
+                    dst,
+                    base,
+                    key,
+                    this,
+                },
+                sp,
+            ),
         }
     }
 
@@ -2461,6 +2480,16 @@ impl<'a> Cg<'a> {
                 self.emit(Instr::SetProp { obj, key, val, ic }, sp)
             }
             Prop::Computed(idx) => self.emit(Instr::SetElem { obj, idx, val }, sp),
+            Prop::Private(name) => self.emit(Instr::SetPrivate { obj, name, val }, sp),
+            Prop::Super { base, key, this } => self.emit(
+                Instr::SetSuper {
+                    base,
+                    key,
+                    val,
+                    this,
+                },
+                sp,
+            ),
         }
     }
 
@@ -2504,10 +2533,8 @@ impl<'a> Cg<'a> {
                     result = if prefix { new } else { old };
                 }
             }
-            NodeKind::MemberExpression if matches!(tn.op, AOp::Dot | AOp::Bracket) => {
-                let (obj, prop) = (self.child(tn, 0)?, self.child(tn, 1)?);
-                let o = self.operand(obj, &[prop])?;
-                let key = self.property(tn, prop)?;
+            NodeKind::MemberExpression | NodeKind::SuperProperty => {
+                let (o, key) = self.place(t, &[])?;
                 let cur = self.alloc()?;
                 self.load_prop(cur, o, &key, sp)?;
                 let (old, new) = self.step_values(cur, wanted_old, &step, sp)?;

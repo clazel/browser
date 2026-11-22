@@ -18,9 +18,10 @@
 //! A source that does not parse is counted apart (the parser's own test
 //! tracks those).
 
+use clazel_js_syntax::ast::{Ast, NodeKind, Op as AOp};
 use clazel_js_syntax::exec::parse;
 use clazel_js_syntax::spec::SourceGoal;
-use clazel_js_vm::bytecode::check_program;
+use clazel_js_vm::bytecode::{Instr, check_program};
 use clazel_js_vm::compile::{CompileError, compile_script};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -69,7 +70,50 @@ struct Counts {
     failed: usize,
     no_parse: usize,
     features: BTreeMap<&'static str, usize>,
+    /// For each construct, the number of compiled sources that use it.
+    constructs: BTreeMap<&'static str, usize>,
     failures: Vec<String>,
+}
+
+/// The constructs of the compiler's second slice that `ast` uses.
+fn constructs_of(ast: &Ast) -> Vec<&'static str> {
+    let mut found = std::collections::BTreeSet::new();
+    for (i, n) in ast.nodes.iter().enumerate() {
+        let name = match n.kind {
+            NodeKind::ObjectBindingPattern
+            | NodeKind::ArrayBindingPattern
+            | NodeKind::ObjectAssignmentPattern
+            | NodeKind::ArrayAssignmentPattern => "destructuring",
+            NodeKind::FunctionRestParameter => "rest parameters",
+            NodeKind::BindingElement
+                if n.children.get(1).is_some_and(|&c| {
+                    ast.nodes
+                        .get(c as usize)
+                        .is_some_and(|x| x.kind != NodeKind::Absent)
+                }) && ast.nodes.iter().any(|p| {
+                    p.kind == NodeKind::FormalParameters && p.children.contains(&(i as u32))
+                }) =>
+            {
+                "default parameters"
+            }
+            NodeKind::SpreadElement => "spread",
+            NodeKind::PropertyDefinition if n.op == AOp::Spread => "spread",
+            NodeKind::TemplateLiteral | NodeKind::TaggedTemplate => "template literals",
+            NodeKind::ClassDeclaration | NodeKind::ClassExpression => "classes",
+            NodeKind::FieldDefinition => "class fields",
+            NodeKind::ClassStaticBlock => "static blocks",
+            NodeKind::SuperProperty | NodeKind::SuperCall => "super",
+            NodeKind::PrivateIdentifier => "private names",
+            NodeKind::NewTarget => "new.target",
+            NodeKind::ForInStatement => "for-in",
+            NodeKind::ForOfStatement => "for-of",
+            NodeKind::OptionalExpression => "optional chaining",
+            NodeKind::MethodDefinition if matches!(n.op, AOp::Getter | AOp::Setter) => "accessors",
+            _ => continue,
+        };
+        found.insert(name);
+    }
+    found.into_iter().collect()
 }
 
 impl Counts {
@@ -80,7 +124,27 @@ impl Counts {
         };
         match compile_script(&ast, src) {
             Ok(p) => match check_program(&p) {
-                Ok(()) => self.compiled = self.compiled.saturating_add(1),
+                Ok(()) => {
+                    self.compiled = self.compiled.saturating_add(1);
+                    for c in constructs_of(&ast) {
+                        let n = self.constructs.entry(c).or_insert(0);
+                        *n = n.saturating_add(1);
+                    }
+                    // The `arguments` object is in the bytecode, not in the AST.
+                    let args = p.functions.iter().any(|f| {
+                        f.instrs.iter().any(|i| {
+                            matches!(
+                                i,
+                                Instr::CreateMappedArguments { .. }
+                                    | Instr::CreateUnmappedArguments { .. }
+                            )
+                        })
+                    });
+                    if args {
+                        let n = self.constructs.entry("arguments object").or_insert(0);
+                        *n = n.saturating_add(1);
+                    }
+                }
                 Err(e) => {
                     self.failed = self.failed.saturating_add(1);
                     self.failures
@@ -174,6 +238,9 @@ fn test262_compiles() -> Result<(), String> {
     by_count.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
     for (feature, n) in by_count {
         println!("  not yet: {n:6}  {feature}");
+    }
+    for (construct, n) in &counts.constructs {
+        println!("  compiled with: {n:6}  {construct}");
     }
     assert!(harness > 20, "the harness files were not found");
     assert!(counts.compiled > 0);

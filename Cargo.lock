@@ -405,6 +405,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "clazel-js-number"
+version = "0.0.0"
+
+[[package]]
 name = "clazel-js-regexp"
 version = "0.0.0"
 dependencies = [
@@ -425,6 +429,13 @@ version = "0.0.0"
 dependencies = [
  "clazel-js-lexer",
  "clazel-js-syntax",
+ "vstd",
+]
+
+[[package]]
+name = "clazel-json"
+version = "0.0.0"
+dependencies = [
  "vstd",
 ]
 
