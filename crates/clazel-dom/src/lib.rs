@@ -20,6 +20,10 @@
 //!   and is refused only if the copy does not fit.
 //! - [`host_acyclic_contract`]: what the raw insert and reparent need to keep
 //!   `host_acyclic`.
+//! - [`host_acyclic_lemmas`]: every operation keeps `host_acyclic`, the one
+//!   thing `wf` does not say (no cycle through a template's host).
+//! - [`host_acyclic_mutation_lemmas`]: the kill certificates of the
+//!   mutations of the host-including ancestor check.
 //! - [`deep_clone_size_mutation_lemmas`]: the kill certificates of the
 //!   mutations of the size and refusal specs.
 //! - [`ops_mutation_lemmas`]: the kill certificates of the mutations of those.
@@ -48,3 +52,5 @@ pub mod validity_mutation_lemmas;
 // failing proofs of the validity mutations (mutations.json) depends on where
 // these modules are declared, and they are slow to refute if these come first.
 pub mod host_acyclic_contract;
+pub mod host_acyclic_lemmas;
+pub mod host_acyclic_mutation_lemmas;

@@ -1119,6 +1119,34 @@
         "witness": "ranked_at(ds_leaf(), seq![5nat, 0nat], 0)"
       },
       "module": "deep_clone_size_lemmas"
+    },
+    {
+      "id": "validity-inclusive-ancestor-only",
+      "file": "src/spec.rs",
+      "find": "    else if is_host_including_inclusive_ancestor(doc, node, parent) {\n        Some(DomError::HierarchyRequest)\n    }\n    // 3.\n    else if child is Some &&",
+      "replace": "    else if is_inclusive_ancestor(doc, node, parent) {\n        Some(DomError::HierarchyRequest)\n    }\n    // 3.\n    else if child is Some &&",
+      "expect": "killed",
+      "reason": "Step 2 of \"ensure pre-insertion validity\" checks only inclusive ancestors, not host-including ones, so a template can be inserted into its own contents and make a cycle through the host: theorem_pre_insert_host_acyclic (pre-insert keeps host_acyclic) is false.",
+      "certificate": {
+        "file": "src/host_acyclic_mutation_lemmas.rs",
+        "lemma": "ml_host_cycle_refused()",
+        "witness": "pre_insert_error(ds_tmpl(), 1, 2, None) is None"
+      },
+      "module": "host_acyclic_lemmas"
+    },
+    {
+      "id": "host-including-ignores-hosts",
+      "file": "src/spec.rs",
+      "find": "NodeKind::DocumentFragment { host: Some(h) } => host_including_within(doc, a, h, (fuel - 1) as nat),",
+      "replace": "NodeKind::DocumentFragment { host: Some(h) } => false,",
+      "expect": "killed",
+      "reason": "A host-including ancestor follows parents only, so step 2 of pre-insertion validity cannot see a template's contents' host: theorem_pre_insert_host_acyclic is false (the same arena as for validity-inclusive-ancestor-only), and lemma_hi_unfold, relating it to the step up, no longer holds.",
+      "certificate": {
+        "file": "src/host_acyclic_mutation_lemmas.rs",
+        "lemma": "ml_host_cycle_refused()",
+        "witness": "pre_insert_error(ds_tmpl(), 1, 2, None) is None"
+      },
+      "module": "deep_clone_size_lemmas"
     }
   ]
 }

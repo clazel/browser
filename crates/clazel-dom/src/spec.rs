@@ -1264,9 +1264,12 @@ pub open spec fn clone_requires(doc: Document, node: NodeId) -> bool {
 //   clone of it can only be refused although [`subtree_size`] (a count of
 //   nodes) is small. The arenas the DOM algorithms build never have one (the
 //   pre-insertion check refuses to insert a host-including inclusive
-//   ancestor of the parent); this crate does not yet prove that they keep
-//   [`host_acyclic`], which is why it is a precondition and not part of
-//   [`wf`].
+//   ancestor of the parent), and `host_acyclic_lemmas` proves it: every
+//   operation keeps [`host_acyclic`], so it is an invariant that a caller
+//   gets from [`new_document`] and the operations. It is not part of [`wf`]
+//   because the parser's raw [`insert`] and [`reparent_children`] check only
+//   the inclusive-ancestor half of step 2, and `clazel-treebuilder` has not
+//   been proven to exclude the host half.
 // - **A fragment that is cloned directly** (a template's contents is the
 //   only kind) gets no host: "any other node: do nothing" (§4.4† step 3).
 
@@ -1387,7 +1390,8 @@ pub open spec fn host_ranked(doc: Document, rank: Seq<nat>) -> bool {
 /// (witnessed by a ranking that grows along every such step, with ranks
 /// below the node count). [`wf`] gives the parent half
 /// (its `paths`); the host half is not part of it (see the modelling
-/// choices of deep cloning).
+/// choices of deep cloning). Every operation keeps it
+/// (`host_acyclic_lemmas`).
 pub open spec fn host_acyclic(doc: Document) -> bool {
     exists|rank: Seq<nat>| host_ranked(doc, rank)
 }

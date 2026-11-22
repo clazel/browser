@@ -41,7 +41,11 @@ carry machine-checked proofs.
   the host-including subtree, proven), and a refusal needs the arena to be
   unable to hold that many more. It requires a host-acyclic arena
   (`host_acyclic`): `wf` forbids a cycle of parents but not one through a
-  template's host, whose unfolding is infinite. Document-children
+  template's host, whose unfolding is infinite. Every operation keeps
+  `host_acyclic` (`src/host_acyclic_lemmas.rs`), so it is an invariant of
+  the tree and a caller that starts from `new_document` has it for free;
+  `wf` itself is not strengthened: the tree builder's raw inserts would
+  then each need the host half of the check proven. Document-children
   rules (step 6 of validity) and the Text/doctype rule (step 5) are covered
   by `tests/operations.rs` only: no theorem says them, so no mutation of
   them is certified.
@@ -86,6 +90,19 @@ not the tier. The conformance evidence is the crate's own
   only well-formedness do not carry them. The twenty-six theorems are listed
   in `Cargo.toml` (nine of them, in `src/ops_lemmas.rs`, are Phase 7
   item 7.13's).
+- **Proven (`src/host_acyclic_lemmas.rs`):** every operation keeps
+  `host_acyclic`, the one thing `wf` does not say (no cycle through a
+  template's host): creating a node or template contents, attribute and
+  mode changes, `remove`, `adopt`, pre-insert, replace, replace all, shallow
+  and deep clone. Pre-insert, replace and replace all need nothing but
+  `host_acyclic` of their input: DOM's "host-including inclusive ancestor"
+  check (step 2 of validity) is what refuses a cycle. The raw `insert`,
+  `append`, `insert_before` and `reparent_children`, which the parser calls
+  after its own checks, carry only the inclusive-ancestor half of that
+  check, which is not enough (a template inserted below a node of its own
+  contents passes it), so they additionally need `parent` not to be below
+  `node` through hosts (`host_acyclic_contract::insert_acyclic_requires`,
+  `host_acyclic_contract::reparent_children_acyclic_requires`).
 - **Proven (`src/exec.rs`):** the executable arena equals the spec, for
   every operation and reader (the contracts are `src/contract.rs`). It is
   safe Rust with no recursion; a node's children are edited in place, and
