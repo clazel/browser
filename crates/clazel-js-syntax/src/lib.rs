@@ -71,3 +71,6 @@ pub mod parser;
 pub mod spec;
 pub mod stmt;
 pub mod token;
+
+#[cfg(kani)]
+mod proofs;
