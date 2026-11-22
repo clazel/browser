@@ -116,6 +116,7 @@ const PLACES: &[(&str, Place)] = &[
 /// crate cannot skip the rule by being left out.
 const ENGINE: &[&str] = &[
     "clazel-js",
+    "clazel-js-builtins",
     "clazel-js-heap",
     "clazel-js-lexer",
     "clazel-js-number",
