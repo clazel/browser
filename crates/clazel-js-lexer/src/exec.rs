@@ -131,6 +131,8 @@ use super::scan_proofs::*;
 use super::spec::*;
 #[cfg(verus_only)]
 use super::string_proofs::*;
+#[cfg(verus_only)]
+use super::template_proofs::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
@@ -782,14 +784,22 @@ fn push_utf16(out: &mut Vec<u16>, cp: u32)
 fn push_range_utf16(out: &mut Vec<u16>, src: &[u32], i: usize, j: usize)
     requires
         i <= j <= src.len(),
+        forall|t: int| i <= t < j ==> src@[t] <= 0x10FFFF,
+    ensures
+        final(out)@ =~= old(out)@ + utf16_of(src@, i as int, j as int),
 {
     let mut k = i;
     while k < j
         invariant
             i <= k <= j <= src.len(),
+            forall|t: int| i <= t < j ==> src@[t] <= 0x10FFFF,
+            out@ =~= old(out)@ + utf16_of(src@, i as int, k as int),
         decreases j - k,
     {
         let c = peek(src, k);
+        proof {
+            lemma_utf16_of_push(src@, i as int, k as int);
+        }
         if c <= 0x10FFFF {
             push_utf16(out, c);
         }
@@ -2508,20 +2518,53 @@ struct TemplateValues {
     raw: Vec<u16>,
 }
 
+/// The TV a [`TemplateValues`] stands for.
+spec fn tv_of(v: TemplateValues) -> Tv {
+    if v.defined {
+        Some(v.cooked@)
+    } else {
+        None
+    }
+}
+
+/// What a successful [`scan_template_escape`] from `k` to `e` establishes: a
+/// `TemplateCharacter` of the spec on `k..e`, and the TV and TRV grew by its
+/// TV and TRV.
+spec fn tesc_ok(s: Seq<u32>, k: int, e: int, old_v: TemplateValues, new_v: TemplateValues) -> bool {
+    k + 1 < e <= s.len() && exists|tv: Tv, trv: Seq<u16>|
+        #![trigger template_character(s, k, e, tv, trv)]
+        template_character(s, k, e, tv, trv) && tv_of(new_v) =~= tv_concat(tv_of(old_v), tv)
+            && new_v.raw@ =~= old_v.raw@ + trv
+}
+
 /// §12.9.6 `\ TemplateEscapeSequence`, `\ NotEscapeSequence` or
 /// `LineContinuation`, the backslash at `k`: appends the TV and TRV
 /// (§12.9.6.1, §12.9.6.2) and returns the end.
+///
+/// Proven: `Some(e)` is a `TemplateCharacter` of the spec at `k` (an escape
+/// of one of the three kinds; it has one length and value,
+/// [`lemma_tchar_det`]), and the TV and TRV grew by its TV and TRV;
+/// `None` means the spec derives no `TemplateCharacter` at `k`.
 fn scan_template_escape(src: &[u32], k: usize, values: &mut TemplateValues) -> (r: Option<usize>)
     requires
         k < src.len(),
+        src@[k as int] == 0x5C,
     ensures
-        match r {
-            Some(e) => k + 1 < e <= src.len(),
-            None => true,
-        },
+        r is Some ==> tesc_ok(src@, k as int, r.unwrap() as int, *old(values), *final(values)),
+        r is None ==> forall|e: int, tv: Tv, trv: Seq<u16>|
+            !template_character(src@, k as int, e, tv, trv),
 {
     let m = k.saturating_add(1);
     let d = peek(src, m);
+    let ghost s = src@;
+    let ghost old_tv = tv_of(*values);
+    let ghost old_raw = values.raw@;
+    let ghost old_cooked = values.cooked@;
+    let ghost old_defined = values.defined;
+    let ghost old_values = *values;
+    proof {
+        lemma_is_lit(s, m as int, m as int + 2, seq!['u', '{']);
+    }
     if is_lt(d) {
         // LineContinuation: TV is empty; TRV is \ and the TRV of the
         // LineTerminatorSequence (<CR><LF> and <CR> are <LF>).
@@ -2532,13 +2575,29 @@ fn scan_template_escape(src: &[u32], k: usize, values: &mut TemplateValues) -> (
         } else {
             values.raw.push(0x0A);
         }
+        proof {
+            let trv = seq![0x005Cu16] + line_terminator_sequence_trv(s, m as int, e as int);
+            assert(line_continuation(s, k as int, e as int));
+            assert(template_character(s, k as int, e as int, Some(Seq::<u16>::empty()), trv));
+            assert(tv_of(*values) =~= tv_concat(old_tv, Some(Seq::<u16>::empty())));
+            assert(values.raw@ =~= old_raw + trv);
+            assert(tesc_ok(s, k as int, e as int, old_values, *values));
+        }
         return Some(e);
     }
     // In every other case the TRV is the UTF-16 of the matched code points.
     let e: usize;
+    let ghost tvg: Tv;
     if d == 0x27 || d == 0x22 || d == 0x5C {
         values.cooked.push(d as u16);
         e = m.saturating_add(1);
+        proof {
+            let v = seq![d as u16];
+            assert(character_escape_sequence_sv(s, m as int, e as int, v));
+            assert(template_escape_sequence_sv(s, m as int, e as int, v));
+            tvg = Some(v);
+            assert(values.cooked@ =~= old_cooked + v && values.defined == old_defined);
+        }
     } else if d == 0x62 || d == 0x66 || d == 0x6E || d == 0x72 || d == 0x74 || d == 0x76 {
         let u: u16 = if d == 0x62 {
             0x08
@@ -2555,20 +2614,44 @@ fn scan_template_escape(src: &[u32], k: usize, values: &mut TemplateValues) -> (
         };
         values.cooked.push(u);
         e = m.saturating_add(1);
+        proof {
+            let v = seq![u];
+            assert(u == single_escape_code_unit(d));
+            assert(character_escape_sequence_sv(s, m as int, e as int, v));
+            assert(template_escape_sequence_sv(s, m as int, e as int, v));
+            tvg = Some(v);
+            assert(values.cooked@ =~= old_cooked + v && values.defined == old_defined);
+        }
     } else if d == 0x30 {
         if is_dec(peek(src, m.saturating_add(1))) {
             // NotEscapeSequence :: 0 DecimalDigit
             values.defined = false;
             e = m.saturating_add(2);
+            proof {
+                assert(not_escape_sequence(s, m as int, e as int));
+                tvg = None;
+                assert(!values.defined);
+            }
         } else {
             // TemplateEscapeSequence :: 0 [lookahead ∉ DecimalDigit]
             values.cooked.push(0);
             e = m.saturating_add(1);
+            proof {
+                let v = seq![0u16];
+                assert(template_escape_sequence_sv(s, m as int, e as int, v));
+                tvg = Some(v);
+            assert(values.cooked@ =~= old_cooked + v && values.defined == old_defined);
+            }
         }
     } else if is_dec(d) {
         // NotEscapeSequence :: DecimalDigit but not 0
         values.defined = false;
         e = m.saturating_add(1);
+        proof {
+            assert(not_escape_sequence(s, m as int, e as int));
+            tvg = None;
+                assert(!values.defined);
+        }
     } else if d == 0x78 {
         let a = peek(src, m.saturating_add(1));
         let b = peek(src, m.saturating_add(2));
@@ -2576,14 +2659,34 @@ fn scan_template_escape(src: &[u32], k: usize, values: &mut TemplateValues) -> (
             // HexEscapeSequence
             values.cooked.push(hex_val(a).saturating_mul(16).saturating_add(hex_val(b)) as u16);
             e = m.saturating_add(3);
+            proof {
+                reveal_with_fuel(hex_digits_mv, 3);
+                let v = seq![hex_digits_mv(s, m as int + 1, m as int + 3) as u16];
+                assert(hex_escape_sequence(s, m as int, e as int));
+                assert(template_escape_sequence_sv(s, m as int, e as int, v));
+                tvg = Some(v);
+            assert(values.cooked@ =~= old_cooked + v && values.defined == old_defined);
+            }
         } else if is_hex(a) {
             // NotEscapeSequence :: x HexDigit [lookahead ∉ HexDigit]
             values.defined = false;
             e = m.saturating_add(2);
+            proof {
+                assert(!at_hex_digit(s, m as int + 2));
+                assert(not_escape_sequence(s, m as int, e as int));
+                tvg = None;
+                assert(!values.defined);
+            }
         } else {
             // NotEscapeSequence :: x [lookahead ∉ HexDigit]
             values.defined = false;
             e = m.saturating_add(1);
+            proof {
+                assert(!at_hex_digit(s, m as int + 1));
+                assert(not_escape_sequence(s, m as int, e as int));
+                tvg = None;
+                assert(!values.defined);
+            }
         }
     } else if d == 0x75 {
         match scan_unicode_escape(src, m) {
@@ -2591,25 +2694,101 @@ fn scan_template_escape(src: &[u32], k: usize, values: &mut TemplateValues) -> (
                 // UnicodeEscapeSequence
                 push_utf16(&mut values.cooked, cp);
                 e = end;
+                proof {
+                    lemma_unicode_escape_equiv(s, m as int, e as int);
+                    let v = utf16_encode_code_point(cp as int);
+                    assert(unicode_escape_sequence(s, m as int, e as int));
+                    assert(v =~= unicode_escape_sv(s, m as int, e as int)) by {
+                        if s[m as int + 1] != 0x7B {
+                            assert(cp <= 0xFFFF);
+                        }
+                    }
+                    assert(template_escape_sequence_sv(s, m as int, e as int, v));
+                    tvg = Some(v);
+            assert(values.cooked@ =~= old_cooked + v && values.defined == old_defined);
+                }
             },
             None => {
                 // NotEscapeSequence, alternatives 5 to 11: `u` and the hex
                 // digits that follow (up to three), or `u{` and all of
                 // them; each ends where no further hex digit follows.
                 values.defined = false;
+                proof {
+                    lemma_unicode_escape_equiv(s, m as int, m as int + 1);
+                    lemma_hex_run_end(s, m as int + 1);
+                }
                 if peek(src, m.saturating_add(1)) == 0x7B {
-                    let (_, h) = scan_hex_digits(src, m.saturating_add(2));
+                    let (hv, h) = scan_hex_digits(src, m.saturating_add(2));
                     e = h;
-                } else {
-                    let mut h = m.saturating_add(1);
-                    while is_hex(peek(src, h)) && h < m.saturating_add(4)
-                        invariant
-                            m < h <= src.len(),
-                        decreases src.len() - h,
-                    {
-                        h = h.saturating_add(1);
+                    proof {
+                        lemma_hex_run_end(s, m as int + 2);
+                        assert(s[m as int] == 0x75 && s[m as int + 1] == 0x7B);
+                        assert(ind_escape_end(s, m as int) == -1);
+                        lemma_hex_value_equiv(s, m as int + 2, h as int);
+                        assert(!at_hex_digit(s, h as int)) by {
+                            lemma_hex_run_end(s, m as int + 2);
+                            if h < s.len() {
+                                lemma_digit_class_equiv(16, s[h as int]);
+                            }
+                        }
+                        if h > m + 2 {
+                            lemma_plain_digits_equiv(16, s, m as int + 2, h as int);
+                            assert forall|t: int| m + 2 <= t < h implies ind_hex(#[trigger] s[t])
+                                by {
+                                lemma_digit_class_equiv(16, s[t]);
+                            }
+                            assert(ind_plain_digits(16, s, m as int + 2, h as int));
+                            assert(hex_digits(false, s, m as int + 2, h as int));
+                            if hv > 0x10FFFF {
+                                assert(not_code_point(s, m as int + 2, h as int));
+                                assert(not_escape_sequence(s, m as int, h as int));
+                            } else {
+                                assert(!ind_is(s, h as int, 0x7D));
+                                assert(code_point(s, m as int + 2, h as int));
+                                assert(!at(s, h as int, '}'));
+                                assert(not_escape_sequence(s, m as int, h as int));
+                            }
+                        } else {
+                            assert(h == m + 2);
+                            assert(not_escape_sequence(s, m as int, h as int));
+                        }
+                        tvg = None;
+                assert(!values.defined);
                     }
-                    e = h;
+                } else {
+                    let a = peek(src, m.saturating_add(1));
+                    let b = peek(src, m.saturating_add(2));
+                    let c3 = peek(src, m.saturating_add(3));
+                    if !is_hex(a) {
+                        e = m.saturating_add(1);
+                    } else if !is_hex(b) {
+                        e = m.saturating_add(2);
+                    } else if !is_hex(c3) {
+                        e = m.saturating_add(3);
+                    } else {
+                        e = m.saturating_add(4);
+                    }
+                    proof {
+                        assert(!at(s, m as int + 1, '{'));
+                        assert(ind_escape_end(s, m as int) == -1);
+                        // The digits that were counted are hex digits, and the
+                        // code point that stopped the count is not one.
+                        if e == m + 4 {
+                            lemma_digit_class_equiv(16, s[m as int + 1]);
+                            lemma_digit_class_equiv(16, s[m as int + 2]);
+                            lemma_digit_class_equiv(16, s[m as int + 3]);
+                            assert(ind_hex_run_end(s, m as int + 1) >= m as int + 4);
+                            assert(!at_hex_digit(s, m as int + 4)) by {
+                                if m + 4 < s.len() && is_hex_digit(s[m as int + 4]) {
+                                    lemma_digit_class_equiv(16, s[m as int + 4]);
+                                    assert(ind_hex(s[m as int + 4]));
+                                }
+                            }
+                        }
+                        assert(not_escape_sequence(s, m as int, e as int));
+                        tvg = None;
+                assert(!values.defined);
+                    }
                 }
             },
         }
@@ -2617,10 +2796,59 @@ fn scan_template_escape(src: &[u32], k: usize, values: &mut TemplateValues) -> (
         // CharacterEscapeSequence :: NonEscapeCharacter
         push_utf16(&mut values.cooked, d);
         e = m.saturating_add(1);
+        proof {
+            let v = utf16_encode_code_point(d as int);
+            assert(character_escape_sequence_sv(s, m as int, e as int, v));
+            assert(template_escape_sequence_sv(s, m as int, e as int, v));
+            tvg = Some(v);
+            assert(values.cooked@ =~= old_cooked + v && values.defined == old_defined);
+        }
     } else {
+        proof {
+            assert forall|e: int, tv: Tv, trv: Seq<u16>|
+                !template_character(s, k as int, e, tv, trv) by {
+                if template_character(s, k as int, e, tv, trv) {
+                    assert(!line_continuation(s, k as int, e));
+                }
+            }
+        }
         return None;
     }
+    proof {
+        let trv = utf16_of(s, k as int, e as int);
+        assert(k + 1 < e <= src.len());
+        match tvg {
+            Some(v) => {
+                assert(template_escape_sequence_sv(s, m as int, e as int, v));
+                assert(template_character(s, k as int, e as int, Some(v), trv));
+                lemma_tchar_src(s, k as int, e as int, Some(v), trv);
+            },
+            None => {
+                assert(not_escape_sequence(s, m as int, e as int));
+                assert(template_character(s, k as int, e as int, None::<Seq<u16>>, trv));
+                lemma_tchar_src(s, k as int, e as int, None::<Seq<u16>>, trv);
+            },
+        }
+    }
     push_range_utf16(&mut values.raw, src, k, e);
+    proof {
+        let trv = utf16_of(s, k as int, e as int);
+        match tvg {
+            Some(v) => {
+                assert(template_character(s, k as int, e as int, Some(v), trv));
+                assert(tv_of(*values) =~= tv_concat(old_tv, Some(v)));
+            },
+            None => {
+                assert(template_character(s, k as int, e as int, None::<Seq<u16>>, trv));
+                assert(tv_of(*values) =~= tv_concat(old_tv, None::<Seq<u16>>));
+            },
+        }
+        assert(template_character(s, k as int, e as int, tvg, trv));
+        assert(tv_of(*values) =~= tv_concat(old_tv, tvg));
+        assert(values.raw@ =~= old_raw + trv);
+        assert(k + 1 < e <= src.len());
+        assert(tesc_ok(s, k as int, e as int, old_values, *values));
+    }
     Some(e)
 }
 

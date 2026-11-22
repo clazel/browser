@@ -514,4 +514,91 @@ pub proof fn lemma_tc_end_unique(s: Seq<u32>, a: int, b: int, d: int)
     }
 }
 
+// ---------------------------------------------------------------------
+// The code points of a TemplateCharacter are SourceCharacters, and the
+// TRV is built by appending.
+// ---------------------------------------------------------------------
+
+/// Digits of any radix (with or without separators) are ASCII, so source
+/// characters.
+pub proof fn lemma_digits_src(radix: int, sep: bool, s: Seq<u32>, i: int, j: int)
+    requires
+        radix == 2 || radix == 8 || radix == 10 || radix == 16,
+        digits(radix, sep, s, i, j),
+    ensures
+        forall|t: int| i <= t < j ==> s[t] <= 0x10FFFF,
+    decreases j - i,
+{
+    if j == i + 1 && is_radix_digit(radix, s[i]) {
+        assert(s[i] <= 0x10FFFF);
+    } else if i + 1 < j && is_radix_digit(radix, s[j - 1]) && digits(radix, sep, s, i, j - 1) {
+        lemma_digits_src(radix, sep, s, i, j - 1);
+        assert forall|t: int| i <= t < j implies s[t] <= 0x10FFFF by {
+            if t < j - 1 {
+                assert(s[t] <= 0x10FFFF);
+            } else {
+                assert(s[j - 1] <= 0x10FFFF);
+            }
+        }
+    } else {
+        lemma_digits_src(radix, true, s, i, j - 2);
+        assert forall|t: int| i <= t < j implies s[t] <= 0x10FFFF by {
+            if t < j - 2 {
+                assert(s[t] <= 0x10FFFF);
+            }
+        }
+    }
+}
+
+/// A `TemplateCharacter` consists of SourceCharacters.
+pub proof fn lemma_tchar_src(s: Seq<u32>, i: int, j: int, tv: Tv, trv: Seq<u16>)
+    requires
+        template_character(s, i, j, tv, trv),
+    ensures
+        forall|t: int| i <= t < j ==> s[t] <= 0x10FFFF,
+{
+    lemma_is_lit(s, i + 1, i + 3, seq!['u', '{']);
+    if s[i] == 0x5C {
+        if exists|v: Seq<u16>| #[trigger] template_escape_sequence_sv(s, i + 1, j, v) {
+            let v = choose|v: Seq<u16>| #[trigger] template_escape_sequence_sv(s, i + 1, j, v);
+            if unicode_escape_sequence(s, i + 1, j) {
+                if !(s[i + 1] == 0x75 && hex4_digits(s, i + 2, j)) {
+                    lemma_digits_src(16, false, s, i + 3, j - 1);
+                }
+            }
+        } else if not_escape_sequence(s, i + 1, j) {
+            if i + 3 < j && s[i + 1] == 0x75 && s[i + 2] == 0x7B {
+                if not_code_point(s, i + 3, j) || code_point(s, i + 3, j) {
+                    lemma_digits_src(16, false, s, i + 3, j);
+                }
+            }
+        }
+    }
+}
+
+/// The UTF-16 of a range extends by the encoding of the next code point.
+pub proof fn lemma_utf16_of_push(s: Seq<u32>, i: int, k: int)
+    requires
+        0 <= i <= k < s.len(),
+    ensures
+        utf16_of(s, i, k + 1) =~= utf16_of(s, i, k) + utf16_encode_code_point(s[k] as int),
+    decreases k - i,
+{
+    if i < k {
+        lemma_utf16_of_push(s, i + 1, k);
+        assert(utf16_of(s, i, k + 1) == utf16_encode_code_point(s[i] as int) + utf16_of(
+            s,
+            i + 1,
+            k + 1,
+        ));
+        assert(utf16_of(s, i, k) == utf16_encode_code_point(s[i] as int) + utf16_of(s, i + 1, k));
+    } else {
+        assert(utf16_of(s, k, k + 1) =~= utf16_encode_code_point(s[k] as int) + utf16_of(
+            s,
+            k + 1,
+            k + 1,
+        ));
+    }
+}
+
 } // verus!
