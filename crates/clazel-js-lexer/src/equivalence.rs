@@ -23,6 +23,7 @@
 //! assumption shared by the two files is the uninterpreted `ID_Start` and
 //! `ID_Continue` of code points above U+007F.
 
+#[cfg(verus_only)]
 use super::independent::*;
 #[allow(unused_imports)]
 use super::spec::*;
