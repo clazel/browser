@@ -193,11 +193,15 @@ fn define_properties(vm: &mut Vm, obj: Value, props: Value) -> Result<(), Abrupt
 /// A property descriptor for a data property (§6.2.6†): each field present or
 /// absent.
 #[derive(Clone, Copy, Debug)]
-struct Descriptor {
-    value: Option<Value>,
-    writable: Option<bool>,
-    enumerable: Option<bool>,
-    configurable: Option<bool>,
+pub struct Descriptor {
+    /// `[[Value]]`.
+    pub value: Option<Value>,
+    /// `[[Writable]]`.
+    pub writable: Option<bool>,
+    /// `[[Enumerable]]`.
+    pub enumerable: Option<bool>,
+    /// `[[Configurable]]`.
+    pub configurable: Option<bool>,
 }
 
 /// ToPropertyDescriptor ( Obj ), §6.2.6.5†:
@@ -272,7 +276,10 @@ fn define_property(vm: &mut Vm, _this: Value, args: &[Value]) -> Result<Value, A
 ///    return false; if Desc has [[Value]] and not SameValue, return false.
 /// 6. The fields present in Desc replace those of the property.
 /// A false result is a TypeError.
-fn define_property_or_throw(
+///
+/// # Errors
+/// A `TypeError` when the definition is refused, [`Abrupt::OutOfMemory`].
+pub fn define_property_or_throw(
     vm: &mut Vm,
     obj: Value,
     k: clazel_js_heap::string::Key,
