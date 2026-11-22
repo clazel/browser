@@ -56,10 +56,7 @@ pub fn parse_checked_early(
     })
 }
 
-fn parse_inner(
-    src: &[u32],
-    goal: SourceGoal,
-) -> Result<(Ast, Derivation, Derivation), ParseError> {
+fn parse_inner(src: &[u32], goal: SourceGoal) -> Result<(Ast, Derivation, Derivation), ParseError> {
     let module = goal == SourceGoal::Module;
     let mut p = Parser::new(src, module)?;
     let root = p.parse_program()?;

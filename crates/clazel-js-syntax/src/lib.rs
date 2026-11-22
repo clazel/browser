@@ -61,11 +61,11 @@
 
 pub mod api;
 pub mod arena_d;
-pub mod arena_e;
 pub mod arena_decls;
+pub mod arena_e;
 pub mod arena_early;
-pub mod arena_names;
 pub mod arena_m;
+pub mod arena_names;
 pub mod ast;
 pub mod check;
 pub mod contract;

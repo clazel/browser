@@ -140,7 +140,6 @@ var c;",
         "for (const i = 0;;) c;",
         "for (var i = 0 + 1 * 2;;) ;",
         "for (x of y) z;",
-        
         "for (let x in o) z;",
         "for (x in o) ;",
         "for (const a of b.c) { d }",
@@ -372,7 +371,10 @@ fn other_early_rules_are_unsupported_not_failed() {
         "switch (a) { case 1: }",
     ] {
         let r = early(s);
-        assert!(r != Some(Derivation::Verified) && r != Some(Derivation::Failed), "{s}");
+        assert!(
+            r != Some(Derivation::Verified) && r != Some(Derivation::Failed),
+            "{s}"
+        );
     }
 }
 
@@ -395,7 +397,10 @@ fn covered_sloppy_programs_are_verified() {
 
 #[test]
 fn other_programs_are_unsupported_not_failed() {
-    for s in ["for (var i = class { x = 1 };;) ;", "for (var i = class { #p; };;) ;"] {
+    for s in [
+        "for (var i = class { x = 1 };;) ;",
+        "for (var i = class { #p; };;) ;",
+    ] {
         assert!(
             derivation(s, SourceGoal::Script) == Some(Derivation::Unsupported),
             "{s}"
