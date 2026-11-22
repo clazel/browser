@@ -48,7 +48,11 @@ fn r_of(src: &str) -> Result<String, String> {
 
 /// Runs each `(script, expected ToString of r)`.
 fn check(cases: &[(&str, &str)]) -> Result<(), String> {
-    for (src, want) in cases {
+    // Each case builds a VM and installs every built-in, which Miri runs
+    // slowly (object_constructor_and_prototype took 298 s there, at xtask's
+    // 300 s limit), so under Miri every third case runs. Natively, all do.
+    let stride = if cfg!(miri) { 3 } else { 1 };
+    for (src, want) in cases.iter().step_by(stride) {
         let got = r_of(src)?;
         if got != *want {
             return Err(format!("{src}: expected {want:?}, got {got:?}"));
