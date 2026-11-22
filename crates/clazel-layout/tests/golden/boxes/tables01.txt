@@ -68,9 +68,7 @@ root
   block <html>
     block <body>
       block (anonymous)
-        inline <select>
-          inline <option>
-            text "3"
+        replaced <select> inline Select { rows: 1, chars: 1 }
       table-wrapper <table>
         table <table>
 
@@ -80,7 +78,7 @@ root
   block <html>
     block <body>
       block (anonymous)
-        inline <select>
+        replaced <select> inline Select { rows: 1, chars: 1 }
       table-wrapper <table>
         table <table>
       table-wrapper <table>
@@ -92,7 +90,7 @@ root
   block <html>
     block <body>
       block (anonymous)
-        inline <select>
+        replaced <select> inline Select { rows: 1, chars: 1 }
       table-wrapper <table>
         table <table>
 
@@ -102,9 +100,7 @@ root
   block <html>
     block <body>
       block (anonymous)
-        inline <select>
-          inline <option>
-            text "A"
+        replaced <select> inline Select { rows: 1, chars: 1 }
       table-wrapper <table>
         table <table>
           table-row-group <tbody>
@@ -209,7 +205,7 @@ root
         block (anonymous)
           inline <svg>
             inline <foreignObject>
-              inline <select>
+              replaced <select> inline Select { rows: 1, chars: 1 }
         table-wrapper <table>
           table <table>
         block (anonymous)

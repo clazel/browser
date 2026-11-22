@@ -1,0 +1,7 @@
+root
+  block <html>
+    block <body>
+      block <form>
+        block <div>
+          replaced <select> inline Select { rows: 3, chars: 5 }
+          replaced <select> inline Select { rows: 3, chars: 5 }

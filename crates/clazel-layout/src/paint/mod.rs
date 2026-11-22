@@ -155,5 +155,5 @@ mod proofs;
 #[cfg(test)]
 mod tests;
 
-pub use order::paint;
+pub use order::{Target, paint, paint_with_controls};
 pub use state::{DeviceRect, DisplayList, HitRegion, Item, PlacedGlyph, TextItem};

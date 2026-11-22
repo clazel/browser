@@ -24,17 +24,14 @@ root
 root
   block <html>
     block <body>
-      inline <select>
-        inline <svg>
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 4
 #data "<!DOCTYPE html><body><select><option><svg></svg></option></select>"
 root
   block <html>
     block <body>
-      inline <select>
-        inline <option>
-          inline <svg>
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 5
 #data "<!DOCTYPE html><body><table><svg></svg></table>"
@@ -220,17 +217,7 @@ root
           table-row-group <tbody>
             table-row <tr>
               table-cell <td>
-                block (anonymous)
-                  inline <select> first
-                    inline <svg>
-                      inline <g>
-                        text "foo"
-                      inline <g>
-                        text "bar"
-                block <p>
-                  text "baz"
-                block (anonymous)
-                  inline <select> last
+                replaced <select> inline Select { rows: 1, chars: 1 }
       block <p>
         text "quux"
 
@@ -240,16 +227,7 @@ root
   block <html>
     block <body>
       block (anonymous)
-        inline <select> first
-          inline <svg>
-            inline <g>
-              text "foo"
-            inline <g>
-              text "bar"
-      block <p>
-        text "baz"
-      block (anonymous)
-        inline <select> last
+        replaced <select> inline Select { rows: 1, chars: 1 }
       table-wrapper <table>
         table <table>
       block <p>

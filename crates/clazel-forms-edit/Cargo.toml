@@ -1,0 +1,35 @@
+[package]
+name = "clazel-forms-edit"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Form controls' behaviour (Phase 6 item 6.15): focus, text field editing, checkbox and radio toggling, select, implicit submission and the required constraint, over clazel-forms' control state table; the controls' look is clazel-layout's."
+
+[dependencies]
+# The node tree the controls are read from.
+clazel-dom = { path = "../clazel-dom" }
+# The control state table (`ExecControl`), "a form control's value",
+# `disabled`, the form's controls and the submit-button test (items 6.13 and
+# 6.14), which editing writes to and the submission reads from.
+clazel-forms = { path = "../clazel-forms" }
+# The fixed look, and the geometry of a control's text that a click needs.
+clazel-layout = { path = "../clazel-layout" }
+# The computed style the geometry hands to the layout.
+clazel-style = { path = "../clazel-style" }
+
+# The tests parse HTML with our tree builder, cascade, lay out and paint
+# (tests/*.rs only).
+[dev-dependencies]
+clazel-treebuilder = { path = "../clazel-treebuilder", version = "=0.0.0" }
+clazel-url = { path = "../clazel-url", version = "=0.0.0" }
+clazel-encoding = { path = "../clazel-encoding", version = "=0.0.0" }
+
+# Verification tier (docs/VERIFICATION.md). Tier 0: tests only; the policy's
+# tier for editing is 0 (phase-6.md 6.0(b)).
+[package.metadata.clazel]
+tier = 0
+target-tier = 0
+
+[lints]
+workspace = true

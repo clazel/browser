@@ -254,8 +254,10 @@ root (anonymous) 0,0 800x600
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      line 8,8 784x18.640625 base=22.859375
-        text "X" x=8 base=22.859375 w=11.390625
+      line 8,8 784x26.421875 base=30.640625
+        atomic <select>
+        text "X" x=46.234375 base=30.640625 w=11.390625
+      replaced <select> 8,8 38.234375x22.640625
 
 #case 30
 #data "<a><table><td><a><table></table><a></tr><a></table><b>X</b>C<a>Y"
@@ -352,16 +354,16 @@ root (anonymous) 0,0 800x600
 #case 34
 #data "<!DOCTYPE html>A<option>B<optgroup>C<select>D</option>E"
 root (anonymous) 0,0 800x600
-  block <html> 0,0 800x34.640625
-    block <body> 8,8 784x18.640625 m=8,8,8,8
-      line 8,8 784x18.640625 base=22.859375
-        inline <option> 19.5625,8 11.765625x18.640625 start end
-        inline <optgroup> 31.328125,8 36.765625x18.640625 start end
-        inline <select> 43.578125,8 24.515625x18.640625 start end
-        text "A" x=8 base=22.859375 w=11.5625
-        text "B" x=19.5625 base=22.859375 w=11.765625
-        text "C" x=31.328125 base=22.859375 w=12.25
-        text "DE" x=43.578125 base=22.859375 w=24.515625
+  block <html> 0,0 800x42.421875
+    block <body> 8,8 784x26.421875 m=8,8,8,8
+      line 8,8 784x26.421875 base=30.640625
+        inline <option> 19.5625,15.78125 11.765625x18.640625 start end
+        inline <optgroup> 31.328125,15.78125 50.484375x18.640625 start end
+        text "A" x=8 base=30.640625 w=11.5625
+        text "B" x=19.5625 base=30.640625 w=11.765625
+        text "C" x=31.328125 base=30.640625 w=12.25
+        atomic <select>
+        replaced <select> 43.578125,8 38.234375x22.640625
 
 #case 35
 #data "<"
@@ -1071,6 +1073,9 @@ root (anonymous) 0,0 800x600
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x22.640625 base=30.640625
+        atomic <select>
+      replaced <select> 8,8 38.234375x22.640625
 
 #case 100
 #data "<html><head><title></title><body></body></html>"

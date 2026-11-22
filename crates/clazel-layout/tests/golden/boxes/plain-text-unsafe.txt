@@ -41,7 +41,7 @@ root
 root
   block <html>
     block <body>
-      inline <select>
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 7
 #data "\0"
