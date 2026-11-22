@@ -24,7 +24,7 @@
 
 use clazel_js_heap::value::Value;
 use clazel_js_vm::bytecode::{
-    Const, FunctionCode, FunctionKind, Instr, Program, Span, check_program,
+    Const, Flavor, FunctionCode, FunctionKind, Instr, Program, Span, check_program,
 };
 use clazel_js_vm::interp::{Config, Vm};
 
@@ -493,6 +493,7 @@ fn generate(seed: u64, len: usize) -> (Program, [u64; NREGS as usize]) {
         functions: vec![FunctionCode {
             name: Vec::new(),
             kind: FunctionKind::Script,
+            flavor: Flavor::Plain,
             strict: false,
             span: Span { start: 0, end: 0 },
             nparams: 0,

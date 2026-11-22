@@ -433,9 +433,11 @@ impl Vm {
                     (ConstVal::Value(self.heap.new_string(s)?), Some(key))
                 }
                 Const::BigInt(_) => (ConstVal::Unsupported("BigInt literals"), None),
-                Const::GlobalDeclarations(_) | Const::Template(_) | Const::ArgumentsMap(_) => {
-                    (ConstVal::Record, None)
-                }
+                Const::RegExp(_) => (ConstVal::Unsupported("RegExp literals"), None),
+                Const::GlobalDeclarations(_)
+                | Const::Template(_)
+                | Const::ArgumentsMap(_)
+                | Const::EvalScope(_) => (ConstVal::Record, None),
             };
             consts.push(cv);
             keys.push(key);
