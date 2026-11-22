@@ -1,0 +1,25 @@
+[package]
+name = "clazel-json"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "ECMA-404 JSON text to values (ECMA-262 JSON.parse), and QuoteJSONString."
+
+[dependencies]
+vstd = "=0.0.0-2026-10-04-0306"
+
+# Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
+# the shipped code today; `target-tier` is what the policy requires. Tier 2
+# needs the parser and the quoter proven to meet their contracts, an
+# independent transcription (RFC 8259), certified mutations and conformance
+# tests; none is complete yet, so the crate stays at tier 0.
+[package.metadata.clazel]
+tier = 0
+target-tier = 2
+
+[package.metadata.verus]
+verify = true
+
+[lints]
+workspace = true
