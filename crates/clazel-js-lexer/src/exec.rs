@@ -187,14 +187,14 @@ pub open spec fn kind_proven(kind: ElementKind, html: bool) -> bool {
         == ElementKind::RightBracePunctuator || kind == ElementKind::Punctuator || (kind
         == ElementKind::Comment && !html) || kind == ElementKind::NumericLiteral || kind
         == ElementKind::StringLiteral || kind == ElementKind::IdentifierName || kind
-        == ElementKind::PrivateIdentifier
+        == ElementKind::PrivateIdentifier || kind is Template
 }
 
 /// The kinds whose value is proven to be the spec's
 /// ([`super::contract::element_value_agrees`]).
 pub open spec fn value_proven(kind: ElementKind) -> bool {
     kind == ElementKind::NumericLiteral || kind == ElementKind::StringLiteral || kind
-        == ElementKind::IdentifierName || kind == ElementKind::PrivateIdentifier
+        == ElementKind::IdentifierName || kind == ElementKind::PrivateIdentifier || kind is Template
 }
 
 /// For the kinds of [`value_proven`], the value is the one the standard
@@ -3607,34 +3607,46 @@ fn lex_brace(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Cand
         None
     };
     proof {
-        assert forall|j: int|
-            pos < j <= src.len() && #[trigger] element_matches(
+        let s = src@;
+        let e = cand_end(pos, r);
+        assert forall|k: ElementKind, j: int|
+            pos < j <= s.len() && kind_proven(k, html) && k != ElementKind::HashbangComment && (k
+                == ElementKind::RightBracePunctuator || k == ElementKind::Template(
+                TemplateKind::Middle,
+            ) || k == ElementKind::Template(TemplateKind::Tail)) && #[trigger] element_matches(
                 goal,
                 html,
-                ElementKind::RightBracePunctuator,
-                src@,
+                k,
+                s,
                 pos as int,
                 j,
-            ) implies j <= cand_end(pos, r) by {
-            // Only the goals with `RightBracePunctuator` derive it, and then `r` is it.
-            assert(gr);
-            assert(!gt);
-            lemma_right_brace_equiv(src@, pos as int, j);
+            ) implies j <= e by {
+            if k == ElementKind::RightBracePunctuator {
+                // Only the goals with `RightBracePunctuator` derive it, and then `r` is it.
+                assert(gr);
+                assert(!gt);
+                lemma_right_brace_equiv(s, pos as int, j);
+            } else {
+                // Only the goals with `TemplateSubstitutionTail` derive these.
+                assert(gt);
+                match k {
+                    ElementKind::Template(tk) => {
+                        let (tv, trv) = choose|tv: Tv, trv: Seq<u16>|
+                            template_part(s, pos as int, j, tk, tv, trv);
+                    },
+                    _ => {},
+                }
+            }
         }
-        assert forall|k: ElementKind|
-            kind_proven(k, html) && k != ElementKind::HashbangComment && k
-                != ElementKind::RightBracePunctuator implies !start_ok(
-            k,
-            src@,
-            pos as int,
-        ) by {}
-        lemma_pk_one(
+        lemma_pk_three(
             goal,
             html,
-            src@,
+            s,
             pos as int,
-            cand_end(pos, r),
+            e,
             ElementKind::RightBracePunctuator,
+            ElementKind::Template(TemplateKind::Middle),
+            ElementKind::Template(TemplateKind::Tail),
         );
     }
     r
@@ -3656,13 +3668,30 @@ fn lex_backtick(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<C
     // NoSubstitutionTemplate / TemplateHead
     let r = lex_template(src, pos, false);
     proof {
-        assert forall|k: ElementKind|
-            kind_proven(k, html) && k != ElementKind::HashbangComment implies !start_ok(
-            k,
-            src@,
+        let s = src@;
+        let e = cand_end(pos, r);
+        assert forall|k: ElementKind, j: int|
+            pos < j <= s.len() && kind_proven(k, html) && k != ElementKind::HashbangComment && (k
+                == ElementKind::Template(TemplateKind::NoSubstitution) || k == ElementKind::Template(
+                TemplateKind::Head,
+            )) && #[trigger] element_matches(goal, html, k, s, pos as int, j) implies j <= e by {
+            match k {
+                ElementKind::Template(tk) => {
+                    let (tv, trv) = choose|tv: Tv, trv: Seq<u16>|
+                        template_part(s, pos as int, j, tk, tv, trv);
+                },
+                _ => {},
+            }
+        }
+        lemma_pk_only(
+            goal,
+            html,
+            s,
             pos as int,
-        ) by {}
-        lemma_pk_none(goal, html, src@, pos as int, cand_end(pos, r));
+            e,
+            ElementKind::Template(TemplateKind::NoSubstitution),
+            ElementKind::Template(TemplateKind::Head),
+        );
     }
     r
 }
@@ -4161,6 +4190,10 @@ fn lex_common(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Can
 /// A template component at `pos`: `NoSubstitutionTemplate` or
 /// `TemplateHead` after `` ` ``, `TemplateTail` or `TemplateMiddle` after
 /// `}` (`substitution_tail`).
+///
+/// Proven: the candidate is the one template component of the spec at `pos`
+/// (its range, kind, TV and TRV, [`scan_template`]); `None` means the spec
+/// derives none.
 fn lex_template(src: &[u32], pos: usize, substitution_tail: bool) -> (r: Option<Candidate>)
     requires
         pos < src.len(),
@@ -4168,8 +4201,17 @@ fn lex_template(src: &[u32], pos: usize, substitution_tail: bool) -> (r: Option<
         !substitution_tail ==> src@[pos as int] == 0x60,
     ensures
         match r {
-            Some(c) => candidate_ok(src@, pos, c) && c.0.kind is Template,
-            None => true,
+            Some(c) => candidate_ok(src@, pos, c) && c.0.kind is Template && c.1 is None
+                && super::contract::element_value_agrees(src@, c.0) && (forall|
+                j: int,
+                kind2: TemplateKind,
+                tv2: Tv,
+                trv2: Seq<u16>,
+            |
+                #[trigger] template_part(src@, pos as int, j, kind2, tv2, trv2) ==> (j
+                    == c.0.end as int && ElementKind::Template(kind2) == c.0.kind)),
+            None => forall|j: int, kind2: TemplateKind, tv2: Tv, trv2: Seq<u16>|
+                !#[trigger] template_part(src@, pos as int, j, kind2, tv2, trv2),
         },
 {
     match scan_template(src, pos) {
@@ -4187,6 +4229,9 @@ fn lex_template(src: &[u32], pos: usize, substitution_tail: bool) -> (r: Option<
                     TemplateKind::Head
                 }
             };
+            proof {
+                assert(kind == tpart_kind(src@, pos as int, closes));
+            }
             Some(
                 (
                     Element {

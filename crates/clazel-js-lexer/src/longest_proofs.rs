@@ -23,6 +23,8 @@ use super::ident_proofs::*;
 use super::independent::*;
 #[allow(unused_imports)]
 use super::spec::*;
+#[cfg(verus_only)]
+use super::template_proofs::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
@@ -58,6 +60,10 @@ pub open spec fn start_ok(k: ElementKind, s: Seq<u32>, i: int) -> bool {
         ElementKind::RightBracePunctuator => s[i] == 0x7D,
         ElementKind::IdentifierName => s[i] == 0x5C || is_identifier_start_char(s[i]),
         ElementKind::PrivateIdentifier => s[i] == 0x23,
+        ElementKind::Template(tk) => match tk {
+            TemplateKind::NoSubstitution | TemplateKind::Head => s[i] == 0x60,
+            TemplateKind::Middle | TemplateKind::Tail => s[i] == 0x7D,
+        },
         _ => true,
     }
 }
@@ -155,6 +161,10 @@ pub proof fn lemma_first_cp(
             lemma_ident_start(s, i, j);
         },
         ElementKind::PrivateIdentifier => {},
+        ElementKind::Template(tk) => {
+            let (tv, trv) = choose|tv: Tv, trv: Seq<u16>| template_part(s, i, j, tk, tv, trv);
+            lemma_part_shape(s, i, j, tk, tv, trv);
+        },
         _ => {},
     }
 }
@@ -238,6 +248,47 @@ pub proof fn lemma_pk_only(
         }
     }
     if k1 != ElementKind::NumericLiteral && k2 != ElementKind::NumericLiteral {
+        assert(kind_proven(ElementKind::NumericLiteral, html));
+        assert(!start_ok(ElementKind::NumericLiteral, s, pos));
+        lemma_numeric_absent_from_class(s, pos);
+    }
+}
+
+/// Three proven kinds `k1`, `k2` and `k3` bounded by `e` (the rest, other
+/// than `HashbangComment`, cannot start with the code point at `pos`).
+pub proof fn lemma_pk_three(
+    goal: Goal,
+    html: bool,
+    s: Seq<u32>,
+    pos: int,
+    e: int,
+    k1: ElementKind,
+    k2: ElementKind,
+    k3: ElementKind,
+)
+    requires
+        0 <= pos < s.len(),
+        forall|k: ElementKind, j: int|
+            pos < j <= s.len() && kind_proven(k, html) && k != ElementKind::HashbangComment && (k
+                == k1 || k == k2 || k == k3) && #[trigger] element_matches(goal, html, k, s, pos, j)
+                ==> j <= e,
+        forall|k: ElementKind|
+            kind_proven(k, html) && k != ElementKind::HashbangComment && !(k == k1 || k == k2 || k
+                == k3) ==> !start_ok(k, s, pos),
+    ensures
+        pk_bounded(goal, html, s, pos, e),
+        (k1 != ElementKind::NumericLiteral && k2 != ElementKind::NumericLiteral && k3
+            != ElementKind::NumericLiteral) ==> numeric_absent(s, pos),
+{
+    assert forall|k: ElementKind, j: int|
+        pos < j <= s.len() && kind_proven(k, html) && k != ElementKind::HashbangComment
+            && #[trigger] element_matches(goal, html, k, s, pos, j) implies j <= e by {
+        if !(k == k1 || k == k2 || k == k3) {
+            lemma_first_cp(goal, html, k, s, pos, j);
+        }
+    }
+    if k1 != ElementKind::NumericLiteral && k2 != ElementKind::NumericLiteral && k3
+        != ElementKind::NumericLiteral {
         assert(kind_proven(ElementKind::NumericLiteral, html));
         assert(!start_ok(ElementKind::NumericLiteral, s, pos));
         lemma_numeric_absent_from_class(s, pos);
