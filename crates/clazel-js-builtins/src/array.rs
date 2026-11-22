@@ -432,8 +432,8 @@ fn unshift(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
 ///     exception.
 /// 12. Let A be ? ArraySpeciesCreate(O, actualDeleteCount).
 /// 13. Let k be 0.
-/// 14. Repeat, while k < actualDeleteCount, a. Let from be ! ToString(𝔽(actualStart
-///     + k)). b. If ? HasProperty(O, from) is true, then i. Let fromValue be ?
+/// 14. Repeat, while k < actualDeleteCount, a. Let from be !
+///     ToString(𝔽(actualStart plus k)). b. If ? HasProperty(O, from) is true, then i. Let fromValue be ?
 ///     Get(O, from). ii. Perform ? CreateDataPropertyOrThrow(A, ! ToString(𝔽(k)),
 ///     fromValue). c. Set k to k + 1.
 /// 15. Perform ? Set(A, "length", 𝔽(actualDeleteCount), true).

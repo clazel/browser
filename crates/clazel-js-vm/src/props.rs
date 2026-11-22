@@ -175,10 +175,10 @@ impl Vm {
     ///    false.
     ///    f. Let succeeded be ! OrdinaryDefineOwnProperty(A, P, Desc).
     ///    g. If succeeded is false, return false.
-    ///    h. If index >= length, then i. Set lengthDesc.[[Value]] to index +
-    ///    1. ii. Set succeeded to ! OrdinaryDefineOwnProperty(A, "length",
-    ///    lengthDesc). iii. (Assert: succeeded is true.)
-    ///    i. Return true.
+    ///    h. If index >= length, then i. Set lengthDesc.[[Value]] to
+    ///    index + 1. ii. Set succeeded to ! OrdinaryDefineOwnProperty(A,
+    ///    "length", lengthDesc). iii. (Assert: succeeded is true.)
+    ///    j. Return true.
     /// 3. Return ? OrdinaryDefineOwnProperty(A, P, Desc).
     ///
     /// # Errors
@@ -287,7 +287,7 @@ impl Vm {
             .filter_map(|(k, _, _)| self.heap.key_index(k).map(|i| (i, k)))
             .filter(|(i, _)| *i >= new_len)
             .collect();
-        doomed.sort_by(|x, y| y.0.cmp(&x.0));
+        doomed.sort_by_key(|x| std::cmp::Reverse(x.0));
         for (i, k) in &doomed {
             let configurable = self
                 .get_own_property(a, *k)?
