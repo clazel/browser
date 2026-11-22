@@ -114,9 +114,11 @@ const ENGINE: &[&str] = &[
     "clazel-js",
     "clazel-js-heap",
     "clazel-js-lexer",
+    "clazel-js-number",
     "clazel-js-regexp",
     "clazel-js-syntax",
     "clazel-js-vm",
+    "clazel-json",
 ];
 
 /// The crates an engine crate must never reach (phase-7.md, "The boundary").
