@@ -238,6 +238,52 @@ pub proof fn lemma_unproven_absent(goal: Goal, s: Seq<u32>, pos: int, e: int)
     }
 }
 
+/// In `html` mode the only kind that is not proven ([`kind_proven`]) is
+/// `Comment`, so [`unproven_bounded`] is that no `Comment` from `pos` ends at
+/// or after `e`.
+pub proof fn lemma_unproven_html(goal: Goal, s: Seq<u32>, pos: int, e: int)
+    requires
+        forall|j: int|
+            e <= j <= s.len() ==> !#[trigger] element_matches(
+                goal,
+                true,
+                ElementKind::Comment,
+                s,
+                pos,
+                j,
+            ),
+    ensures
+        unproven_bounded(goal, true, s, pos, e),
+{
+    assert forall|k: ElementKind, j: int|
+        e <= j <= s.len() && !kind_proven(k, true) && #[trigger] element_matches(
+            goal,
+            true,
+            k,
+            s,
+            pos,
+            j,
+        ) implies false by {
+        match k {
+            ElementKind::Template(tk) => {},
+            _ => {},
+        }
+    }
+}
+
+/// The kind that is not proven ([`kind_proven`]) is `Comment`, in `html` mode.
+pub proof fn lemma_unproven_kind(k: ElementKind, html: bool)
+    requires
+        !kind_proven(k, html),
+    ensures
+        k == ElementKind::Comment && html,
+{
+    match k {
+        ElementKind::Template(tk) => {},
+        _ => {},
+    }
+}
+
 /// If the kinds `k1` and `k2` are bounded by `e` and every other proven kind
 /// (not `HashbangComment`) cannot start with the code point at `pos`, all of
 /// them are bounded by `e`.

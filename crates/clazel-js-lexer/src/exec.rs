@@ -142,6 +142,8 @@
 #[cfg(verus_only)]
 use super::equivalence::*;
 #[cfg(verus_only)]
+use super::html_proofs::*;
+#[cfg(verus_only)]
 use super::ident_proofs::*;
 #[cfg(verus_only)]
 use super::independent::*;
@@ -266,7 +268,8 @@ pub open spec fn next_input_element_proven(
             src,
             pos as int,
             pos as int,
-        )) && (e == LexError::IdentifierAfterNumericLiteral ==> exists|end: int|
+        ) && unproven_bounded(goal, html, src, pos as int, pos as int + 1)) && (e
+            == LexError::IdentifierAfterNumericLiteral ==> exists|end: int|
             pos < end <= src.len() && #[trigger] element_matches(
                 goal,
                 html,
@@ -274,35 +277,42 @@ pub open spec fn next_input_element_proven(
                 src,
                 pos as int,
                 end,
-            ) && proven_bounded(goal, html, src, pos as int, end) && numeric_literal_follow_error(
-                src,
-                end,
-            )) && (e == LexError::InvalidIdentifierEscape ==> exists|end: int|
-            pos < end <= src.len() && proven_bounded(goal, html, src, pos as int, end)
-                && numeric_absent(src, pos as int) && #[trigger] invalid_identifier_at(
+            ) && proven_bounded(goal, html, src, pos as int, end) && unproven_bounded(
                 goal,
                 html,
                 src,
                 pos as int,
-                end,
-            )),
+                end + 1,
+            ) && numeric_literal_follow_error(src, end)) && (e
+            == LexError::InvalidIdentifierEscape ==> exists|end: int|
+            pos < end <= src.len() && proven_bounded(goal, html, src, pos as int, end)
+                && unproven_bounded(goal, html, src, pos as int, end + 1) && numeric_absent(
+                src,
+                pos as int,
+            ) && #[trigger] invalid_identifier_at(goal, html, src, pos as int, end)),
         Ok(Step::Eof) => pos == src.len(),
         Ok(Step::Element(el)) => pos < src.len() && el.start == pos && pos < el.end && el.end
             <= src.len() && value_shape_agrees(el) && kind_agrees_proven(goal, html, src, el)
-            && value_agrees_proven(src, el) && (kind_proven(el.kind, html) ==> proven_bounded(
+            && value_agrees_proven(src, el) && (el.kind == ElementKind::Comment ==> element_matches(
+            goal,
+            html,
+            ElementKind::Comment,
+            src,
+            pos as int,
+            el.end as int,
+        )) && proven_bounded(goal, html, src, pos as int, el.end as int) && unproven_bounded(
             goal,
             html,
             src,
             pos as int,
-            el.end as int,
-        )) && (kind_proven(el.kind, html) && el.kind != ElementKind::NumericLiteral
-            ==> numeric_absent(src, pos as int)) && (el.kind == ElementKind::NumericLiteral
-            ==> !numeric_literal_follow_error(src, el.end as int)) && (kind_proven(el.kind, html)
-            && el.kind != ElementKind::IdentifierName ==> ident_absent(src, pos as int)) && (
-        kind_proven(el.kind, html) && el.kind != ElementKind::PrivateIdentifier ==> private_absent(
+            el.end as int + 1,
+        ) && (el.kind != ElementKind::NumericLiteral ==> numeric_absent(src, pos as int)) && (
+        el.kind == ElementKind::NumericLiteral ==> !numeric_literal_follow_error(
             src,
-            pos as int,
-        )) && (el.kind == ElementKind::IdentifierName ==> identifier_name_valid(
+            el.end as int,
+        )) && (el.kind != ElementKind::IdentifierName ==> ident_absent(src, pos as int)) && (
+        el.kind != ElementKind::PrivateIdentifier ==> private_absent(src, pos as int)) && (el.kind
+            == ElementKind::IdentifierName ==> identifier_name_valid(
             src,
             pos as int,
             el.end as int,
@@ -449,13 +459,10 @@ pub proof fn lemma_contract_implies_proven(
     }
 }
 
-/// The full contract for an element that [`next_input_element`] returns of
-/// a proven kind, **given** that no element of a kind that is not proven
-/// ([`unproven_bounded`]: in `html` mode, a comment, as long as this one or
-/// longer) is derived at `pos`.
-///
-/// This is the part of the longest-match property and of the errors
-/// ([`lex_error`]) that does not depend on the unproven kinds.
+/// The full contract for an element that [`next_input_element`] returns:
+/// the longest length (from [`proven_bounded`], and [`unproven_bounded`],
+/// which in `html` mode is the bound on Annex B.1.1's `Comment`), the errors
+/// of [`lex_error`], and the value.
 pub proof fn lemma_element_meets_contract(
     src: Seq<u32>,
     pos: usize,
@@ -465,16 +472,17 @@ pub proof fn lemma_element_meets_contract(
 )
     requires
         next_input_element_proven(src, pos, goal, html, Ok(Step::Element(el))),
-        kind_proven(el.kind, html),
-        unproven_bounded(goal, html, src, pos as int, el.end as int),
     ensures
         super::contract::next_input_element_ensures(src, pos, goal, html, Ok(Step::Element(el))),
 {
     let i = pos as int;
     let e = el.end as int;
-    assert(element_matches(goal, html, el.kind, src, i, e));
+    assert(element_matches(goal, html, el.kind, src, i, e)) by {
+        if !kind_proven(el.kind, html) {
+            lemma_unproven_kind(el.kind, html);
+        }
+    }
     super::lemmas::lemma_kind_implies_any(goal, html, el.kind, src, i, e);
-    assert(unproven_bounded(goal, html, src, i, e + 1));
     lemma_longest_from_bounds(goal, html, src, i, e);
     let n = longest_len(goal, html, src, i);
     assert(n == e - i);
@@ -514,8 +522,7 @@ pub proof fn lemma_element_meets_contract(
     }
 }
 
-/// The contract for [`LexError::NoInputElement`], given that no element of
-/// a kind that is not proven starts at `pos`.
+/// The contract for [`LexError::NoInputElement`].
 pub proof fn lemma_no_input_element_meets_contract(
     src: Seq<u32>,
     pos: usize,
@@ -524,7 +531,6 @@ pub proof fn lemma_no_input_element_meets_contract(
 )
     requires
         next_input_element_proven(src, pos, goal, html, Err(LexError::NoInputElement)),
-        unproven_bounded(goal, html, src, pos as int, pos as int + 1),
     ensures
         super::contract::next_input_element_ensures(
             src,
@@ -537,8 +543,7 @@ pub proof fn lemma_no_input_element_meets_contract(
     lemma_longest_zero(goal, html, src, pos as int);
 }
 
-/// The contract for [`LexError::IdentifierAfterNumericLiteral`], given that
-/// no element of a kind that is not proven is longer than the literal.
+/// The contract for [`LexError::IdentifierAfterNumericLiteral`].
 pub proof fn lemma_numeric_error_meets_contract(
     src: Seq<u32>,
     pos: usize,
@@ -547,13 +552,6 @@ pub proof fn lemma_numeric_error_meets_contract(
     end: int,
 )
     requires
-        next_input_element_proven(
-            src,
-            pos,
-            goal,
-            html,
-            Err(LexError::IdentifierAfterNumericLiteral),
-        ),
         pos < end <= src.len(),
         element_matches(goal, html, ElementKind::NumericLiteral, src, pos as int, end),
         proven_bounded(goal, html, src, pos as int, end),
@@ -579,8 +577,7 @@ pub proof fn lemma_numeric_error_meets_contract(
     lemma_longest_from_bounds(goal, html, src, pos as int, end);
 }
 
-/// The contract for [`LexError::InvalidIdentifierEscape`], given that no
-/// element of a kind that is not proven is longer than the identifier.
+/// The contract for [`LexError::InvalidIdentifierEscape`].
 pub proof fn lemma_invalid_identifier_meets_contract(
     src: Seq<u32>,
     pos: usize,
@@ -589,13 +586,6 @@ pub proof fn lemma_invalid_identifier_meets_contract(
     end: int,
 )
     requires
-        next_input_element_proven(
-            src,
-            pos,
-            goal,
-            html,
-            Err(LexError::InvalidIdentifierEscape),
-        ),
         pos < end <= src.len(),
         proven_bounded(goal, html, src, pos as int, end),
         numeric_absent(src, pos as int),
@@ -624,96 +614,58 @@ pub proof fn lemma_invalid_identifier_meets_contract(
     assert(!element_matches(goal, html, ElementKind::NumericLiteral, src, i, i + n));
 }
 
-/// The full contract for an element outside `html` mode: every kind is
-/// proven there ([`lemma_unproven_absent`]), so the hypothesis of
-/// [`lemma_element_meets_contract`] holds.
-pub proof fn lemma_element_meets_contract_no_html(
+/// What [`next_input_element`] is proven to return meets the contract: the
+/// whole of [`super::contract::next_input_element_ensures`], for every
+/// source text, position, goal and `html`.
+pub proof fn lemma_next_input_element_meets_contract(
     src: Seq<u32>,
     pos: usize,
     goal: Goal,
-    el: Element,
+    html: bool,
+    r: Result<Step, LexError>,
 )
     requires
-        next_input_element_proven(src, pos, goal, false, Ok(Step::Element(el))),
-        kind_proven(el.kind, false),
+        pos <= src.len(),
+        next_input_element_proven(src, pos, goal, html, r),
     ensures
-        super::contract::next_input_element_ensures(src, pos, goal, false, Ok(Step::Element(el))),
+        super::contract::next_input_element_ensures(src, pos, goal, html, r),
 {
-    lemma_unproven_absent(goal, src, pos as int, el.end as int);
-    lemma_element_meets_contract(src, pos, goal, false, el);
-}
-
-/// The contract for [`LexError::NoInputElement`] outside `html` mode.
-pub proof fn lemma_no_input_element_no_html(src: Seq<u32>, pos: usize, goal: Goal)
-    requires
-        next_input_element_proven(src, pos, goal, false, Err(LexError::NoInputElement)),
-    ensures
-        super::contract::next_input_element_ensures(
-            src,
-            pos,
-            goal,
-            false,
-            Err(LexError::NoInputElement),
-        ),
-{
-    lemma_unproven_absent(goal, src, pos as int, pos as int + 1);
-    lemma_no_input_element_meets_contract(src, pos, goal, false);
-}
-
-/// The contract for [`LexError::IdentifierAfterNumericLiteral`] outside
-/// `html` mode.
-pub proof fn lemma_numeric_error_no_html(src: Seq<u32>, pos: usize, goal: Goal, end: int)
-    requires
-        next_input_element_proven(
-            src,
-            pos,
-            goal,
-            false,
-            Err(LexError::IdentifierAfterNumericLiteral),
-        ),
-        pos < end <= src.len(),
-        element_matches(goal, false, ElementKind::NumericLiteral, src, pos as int, end),
-        proven_bounded(goal, false, src, pos as int, end),
-        numeric_literal_follow_error(src, end),
-    ensures
-        super::contract::next_input_element_ensures(
-            src,
-            pos,
-            goal,
-            false,
-            Err(LexError::IdentifierAfterNumericLiteral),
-        ),
-{
-    lemma_unproven_absent(goal, src, pos as int, end + 1);
-    lemma_numeric_error_meets_contract(src, pos, goal, false, end);
-}
-
-/// The contract for [`LexError::InvalidIdentifierEscape`] outside `html`
-/// mode.
-pub proof fn lemma_invalid_identifier_no_html(src: Seq<u32>, pos: usize, goal: Goal, end: int)
-    requires
-        next_input_element_proven(
-            src,
-            pos,
-            goal,
-            false,
-            Err(LexError::InvalidIdentifierEscape),
-        ),
-        pos < end <= src.len(),
-        proven_bounded(goal, false, src, pos as int, end),
-        numeric_absent(src, pos as int),
-        invalid_identifier_at(goal, false, src, pos as int, end),
-    ensures
-        super::contract::next_input_element_ensures(
-            src,
-            pos,
-            goal,
-            false,
-            Err(LexError::InvalidIdentifierEscape),
-        ),
-{
-    lemma_unproven_absent(goal, src, pos as int, end + 1);
-    lemma_invalid_identifier_meets_contract(src, pos, goal, false, end);
+    match r {
+        Ok(Step::Eof) => {},
+        Ok(Step::Element(el)) => {
+            lemma_element_meets_contract(src, pos, goal, html, el);
+        },
+        Err(LexError::NoInputElement) => {
+            lemma_no_input_element_meets_contract(src, pos, goal, html);
+        },
+        Err(LexError::IdentifierAfterNumericLiteral) => {
+            let end = choose|end: int|
+                pos < end <= src.len() && #[trigger] element_matches(
+                    goal,
+                    html,
+                    ElementKind::NumericLiteral,
+                    src,
+                    pos as int,
+                    end,
+                ) && proven_bounded(goal, html, src, pos as int, end) && unproven_bounded(
+                    goal,
+                    html,
+                    src,
+                    pos as int,
+                    end + 1,
+                ) && numeric_literal_follow_error(src, end);
+            lemma_numeric_error_meets_contract(src, pos, goal, html, end);
+        },
+        Err(LexError::InvalidIdentifierEscape) => {
+            let end = choose|end: int|
+                pos < end <= src.len() && proven_bounded(goal, html, src, pos as int, end)
+                    && unproven_bounded(goal, html, src, pos as int, end + 1) && numeric_absent(
+                    src,
+                    pos as int,
+                ) && #[trigger] invalid_identifier_at(goal, html, src, pos as int, end);
+            lemma_invalid_identifier_meets_contract(src, pos, goal, html, end);
+        },
+    }
 }
 
 // ---------------------------------------------------------------------
@@ -1045,17 +997,21 @@ fn scan_block_comment(src: &[u32], k: usize, multi_line: bool) -> (r: Option<(us
     }
 }
 
-/// Annex B.1.1 `WhiteSpaceSequence?` from `k`.
+/// Annex B.1.1 `WhiteSpaceSequence?` from `k`: the first index at or after
+/// `k` that is not white space.
 fn scan_ws(src: &[u32], k: usize) -> (r: usize)
     requires
         k <= src.len(),
     ensures
         k <= r <= src.len(),
+        forall|m: int| k <= m < r ==> #[trigger] white_space(src@, m, m + 1),
+        r < src.len() ==> !white_space(src@, r as int, r as int + 1),
 {
     let mut j = k;
     loop
         invariant
             k <= j <= src.len(),
+            forall|m: int| k <= m < j ==> #[trigger] white_space(src@, m, m + 1),
         decreases src.len() - j,
     {
         if is_ws(peek(src, j)) {
@@ -1066,21 +1022,35 @@ fn scan_ws(src: &[u32], k: usize) -> (r: usize)
     }
 }
 
-/// Annex B.1.1 the end of `-->` SingleLineCommentChars? at `k`.
+/// Annex B.1.1 the end of `-->` SingleLineCommentChars? at `k`: if `-->` is
+/// there, the end of the line (the first index at or after the `-->` that is
+/// not a `SingleLineCommentChar`).
 fn scan_html_arrow(src: &[u32], k: usize) -> (r: Option<usize>)
     requires
         k <= src.len(),
     ensures
         match r {
-            Some(e) => k + 3 <= e <= src.len(),
-            None => true,
+            Some(e) => arrow_at(src@, k as int) && k + 3 <= e <= src.len() && no_lt_src(
+                src@,
+                k as int + 3,
+                e as int,
+            ) && (e < src.len() ==> !is_not_line_terminator(src@[e as int])),
+            None => !arrow_at(src@, k as int),
         },
 {
     if peek(src, k) == 0x2D && peek(src, k.saturating_add(1)) == 0x2D && peek(
         src,
         k.saturating_add(2),
     ) == 0x3E {
-        Some(scan_line_chars(src, k.saturating_add(3)))
+        let e = scan_line_chars(src, k.saturating_add(3));
+        proof {
+            assert(no_lt_src(src@, k as int + 3, e as int)) by {
+                assert forall|m: int| k as int + 3 <= m < e implies is_not_line_terminator(
+                    #[trigger] src@[m],
+                ) by {}
+            }
+        }
+        Some(e)
     } else {
         None
     }
@@ -1091,33 +1061,115 @@ fn scan_html_arrow(src: &[u32], k: usize) -> (r: Option<usize>)
 /// Each part is determined by the code point that starts it (white space,
 /// `/*` or `-->`), so the parse is the only one, and it ends where the
 /// line does.
+///
+/// Proven: `Some(e)` is the longest range `s[k..e)` that `HTMLCloseComment`
+/// derives, and `None` means it derives none.
 fn scan_html_close(src: &[u32], k: usize) -> (r: Option<usize>)
     requires
         k <= src.len(),
     ensures
         match r {
-            Some(e) => k + 3 <= e <= src.len(),
-            None => true,
+            Some(e) => html_close_comment(src@, k as int, e as int) && forall|j: int|
+                html_close_comment(src@, k as int, j) ==> j <= e,
+            None => forall|j: int| !html_close_comment(src@, k as int, j),
         },
 {
     let mut j = scan_ws(src, k);
+    proof {
+        lemma_hc_ws_run(src@, k as int, j as int);
+    }
     loop
         invariant
             k <= j <= src.len(),
+            hc_pre(src@, k as int, j as int),
+            j < src.len() ==> !white_space(src@, j as int, j as int + 1),
         decreases src.len() - j,
     {
         if peek(src, j) == 0x2F && peek(src, j.saturating_add(1)) == 0x2A {
             // SingleLineDelimitedComment WhiteSpaceSequence?
             match scan_block_comment(src, j.saturating_add(2), false) {
                 Some((e, _)) => {
-                    j = scan_ws(src, e);
+                    proof {
+                        lemma_sldc_equiv(src@, j as int, e as int);
+                        lemma_hc_sldc(src@, j as int, e as int);
+                        lemma_hc_cat(src@, k as int, j as int, e as int);
+                    }
+                    let j2 = scan_ws(src, e);
+                    proof {
+                        lemma_hc_ws_run(src@, e as int, j2 as int);
+                        lemma_hc_cat(src@, k as int, e as int, j2 as int);
+                    }
+                    j = j2;
                 },
                 None => {
+                    proof {
+                        // No delimited comment starts at `j`, so the `-->` of any
+                        // derivation would have to be at `j`, where `/` is.
+                        assert forall|a: int| !single_line_delimited_comment(src@, j as int, a) by {
+                            lemma_sldc_equiv(src@, j as int, a);
+                        }
+                        assert forall|j2: int| !html_close_comment(src@, k as int, j2) by {
+                            lemma_html_close_equiv(src@, k as int, j2);
+                            if html_close_comment(src@, k as int, j2) {
+                                let b = choose|b: int|
+                                    #![trigger arrow_at(src@, b)]
+                                    hc_pre(src@, k as int, b) && arrow_at(src@, b) && hc_tail(
+                                        src@,
+                                        b,
+                                        j2,
+                                    );
+                                lemma_hc_stuck(src@, k as int, j as int, b);
+                            }
+                        }
+                    }
                     return None;
                 },
             }
         } else {
-            return scan_html_arrow(src, j);
+            let r = scan_html_arrow(src, j);
+            proof {
+                assert forall|a: int| !single_line_delimited_comment(src@, j as int, a) by {
+                    lemma_sldc_equiv(src@, j as int, a);
+                }
+                match r {
+                    Some(e) => {
+                        assert(hc_tail(src@, j as int, e as int));
+                        lemma_html_close_equiv(src@, k as int, e as int);
+                        assert forall|j2: int| html_close_comment(src@, k as int, j2) implies j2
+                            <= e by {
+                            lemma_html_close_equiv(src@, k as int, j2);
+                            let b = choose|b: int|
+                                #![trigger arrow_at(src@, b)]
+                                hc_pre(src@, k as int, b) && arrow_at(src@, b) && hc_tail(
+                                    src@,
+                                    b,
+                                    j2,
+                                );
+                            lemma_hc_stuck(src@, k as int, j as int, b);
+                            if j2 > e {
+                                assert(no_lt_src(src@, j as int + 3, j2 as int));
+                                assert(is_not_line_terminator(src@[e as int]));
+                            }
+                        }
+                    },
+                    None => {
+                        assert forall|j2: int| !html_close_comment(src@, k as int, j2) by {
+                            lemma_html_close_equiv(src@, k as int, j2);
+                            if html_close_comment(src@, k as int, j2) {
+                                let b = choose|b: int|
+                                    #![trigger arrow_at(src@, b)]
+                                    hc_pre(src@, k as int, b) && arrow_at(src@, b) && hc_tail(
+                                        src@,
+                                        b,
+                                        j2,
+                                    );
+                                lemma_hc_stuck(src@, k as int, j as int, b);
+                            }
+                        }
+                    },
+                }
+            }
+            return r;
         }
     }
 }
@@ -3402,17 +3454,25 @@ fn longer(a: Option<Candidate>, b: Option<Candidate>) -> (r: Option<Candidate>)
 /// Annex B.1.1's `SingleLineDelimitedComment`, or its `MultiLineComment`
 /// with an optional `HTMLCloseComment` after the `*/` when the comment
 /// holds a `LineTerminator`).
+///
+/// Proven: the candidate is a `Comment` of the spec ([`comment`], with
+/// `html`'s alternatives), the longest from `pos`; `None` means there is
+/// none.
 fn lex_slash_comment(src: &[u32], pos: usize, html: bool) -> (r: Option<Candidate>)
     requires
         pos < src.len(),
         src@[pos as int] == 0x2F,
     ensures
         match r {
-            Some(c) => candidate_ok(src@, pos, c) && c.0.kind == ElementKind::Comment && (!html
-                ==> (comment(src@, pos as int, c.0.end as int, false) && forall|j: int|
-                j <= src.len() && #[trigger] comment(src@, pos as int, j, false) ==> j
-                    <= c.0.end)),
-            None => !html ==> forall|j: int| !comment(src@, pos as int, j, false),
+            Some(c) => candidate_ok(src@, pos, c) && c.0.kind == ElementKind::Comment && comment(
+                src@,
+                pos as int,
+                c.0.end as int,
+                html,
+            ) && forall|j: int|
+                j <= src.len() && #[trigger] comment(src@, pos as int, j, html) ==> j
+                    <= c.0.end,
+            None => forall|j: int| !#[trigger] comment(src@, pos as int, j, html),
         },
 {
     let c1 = peek(src, pos.saturating_add(1));
@@ -3421,10 +3481,18 @@ fn lex_slash_comment(src: &[u32], pos: usize, html: bool) -> (r: Option<Candidat
         proof {
             // `//` and no LineTerminator: `SingleLineComment`; and it cannot
             // be longer, since `src[e]` is a LineTerminator or past the end.
+            assert forall|j: int| #[trigger] comment(src@, pos as int, j, html) <==> comment(
+                src@,
+                pos as int,
+                j,
+                false,
+            ) by {
+                lemma_html_cm_slash_slash(src@, pos as int, j, html);
+            }
             lemma_single_line_comment_equiv(src@, pos as int, e as int);
             lemma_comment_plain_equiv(src@, pos as int, e as int);
             assert(ind_single_line_comment(src@, pos as int, e as int));
-            assert forall|j: int| j <= src.len() && #[trigger] comment(src@, pos as int, j, false)
+            assert forall|j: int| j <= src.len() && #[trigger] comment(src@, pos as int, j, html)
                 implies j <= e by {
                 lemma_comment_plain_equiv(src@, pos as int, j);
                 lemma_single_line_comment_equiv(src@, pos as int, j);
@@ -3446,39 +3514,90 @@ fn lex_slash_comment(src: &[u32], pos: usize, html: bool) -> (r: Option<Candidat
     } else if c1 == 0x2A {
         match scan_block_comment(src, pos.saturating_add(2), true) {
             Some((e, lt)) => {
+                let hc = if html && lt {
+                    scan_html_close(src, e)
+                } else {
+                    None
+                };
+                let end = match hc {
+                    Some(f) => f,
+                    None => e,
+                };
                 proof {
-                    lemma_multi_line_comment_equiv(src@, pos as int, e as int);
-                    lemma_comment_plain_equiv(src@, pos as int, e as int);
-                    assert(ind_multi_line_comment(src@, pos as int, e as int));
-                    assert forall|j: int|
-                        j <= src.len() && #[trigger] comment(src@, pos as int, j, false)
-                            implies j <= e by {
-                        lemma_comment_plain_equiv(src@, pos as int, j);
-                        lemma_multi_line_comment_equiv(src@, pos as int, j);
-                        lemma_single_line_comment_equiv(src@, pos as int, j);
-                        if ind_multi_line_comment(src@, pos as int, j) {
-                            assert(block_close_ok(src@, pos as int + 2, j, true));
+                    if !html {
+                        assert(end == e);
+                        lemma_multi_line_comment_equiv(src@, pos as int, e as int);
+                        lemma_comment_plain_equiv(src@, pos as int, e as int);
+                        assert(ind_multi_line_comment(src@, pos as int, e as int));
+                        assert forall|j: int|
+                            j <= src.len() && #[trigger] comment(src@, pos as int, j, html)
+                                implies j <= e by {
+                            lemma_comment_plain_equiv(src@, pos as int, j);
+                            lemma_multi_line_comment_equiv(src@, pos as int, j);
+                            lemma_single_line_comment_equiv(src@, pos as int, j);
+                            if ind_multi_line_comment(src@, pos as int, j) {
+                                assert(block_close_ok(src@, pos as int + 2, j, true));
+                            }
+                        }
+                    } else {
+                        // Annex B.1.1: a delimited comment ends at the `*/`; a
+                        // multi-line one ends there, or after an `HTMLCloseComment`.
+                        assert forall|j: int|
+                            #[trigger] comment(src@, pos as int, j, true) <==> (if lt {
+                                e <= j && j <= src.len() && opt(
+                                    e as int,
+                                    j,
+                                    html_close_comment(src@, e as int, j),
+                                )
+                            } else {
+                                j == e
+                            }) by {
+                            lemma_html_cm_slash_star(src@, pos as int, e as int, j);
+                        }
+                        if lt {
+                            match hc {
+                                Some(f) => {
+                                    assert(e < f);
+                                    assert(opt(
+                                        e as int,
+                                        f as int,
+                                        html_close_comment(src@, e as int, f as int),
+                                    ));
+                                },
+                                None => {
+                                    assert(opt(
+                                        e as int,
+                                        e as int,
+                                        html_close_comment(src@, e as int, e as int),
+                                    ));
+                                },
+                            }
+                        }
+                        assert forall|j: int|
+                            j <= src.len() && #[trigger] comment(src@, pos as int, j, true)
+                                implies j <= end by {
+                            if lt && j != e {
+                                assert(html_close_comment(src@, e as int, j));
+                            }
                         }
                     }
                 }
-                let end = if html && lt {
-                    match scan_html_close(src, e) {
-                        Some(f) => f,
-                        None => e,
-                    }
-                } else {
-                    e
-                };
                 Some((plain(ElementKind::Comment, pos, end), None))
             },
             None => {
                 proof {
-                    assert forall|j: int| !comment(src@, pos as int, j, false) by {
-                        lemma_comment_plain_equiv(src@, pos as int, j);
-                        lemma_multi_line_comment_equiv(src@, pos as int, j);
-                        lemma_single_line_comment_equiv(src@, pos as int, j);
-                        if ind_multi_line_comment(src@, pos as int, j) {
-                            assert(block_close_ok(src@, pos as int + 2, j, true));
+                    if html {
+                        assert forall|j: int| !#[trigger] comment(src@, pos as int, j, true) by {
+                            lemma_html_cm_slash_star_none(src@, pos as int, j);
+                        }
+                    } else {
+                        assert forall|j: int| !#[trigger] comment(src@, pos as int, j, false) by {
+                            lemma_comment_plain_equiv(src@, pos as int, j);
+                            lemma_multi_line_comment_equiv(src@, pos as int, j);
+                            lemma_single_line_comment_equiv(src@, pos as int, j);
+                            if ind_multi_line_comment(src@, pos as int, j) {
+                                assert(block_close_ok(src@, pos as int + 2, j, true));
+                            }
                         }
                     }
                 }
@@ -3487,10 +3606,14 @@ fn lex_slash_comment(src: &[u32], pos: usize, html: bool) -> (r: Option<Candidat
         }
     } else {
         proof {
-            assert forall|j: int| !comment(src@, pos as int, j, false) by {
-                lemma_comment_plain_equiv(src@, pos as int, j);
-                lemma_multi_line_comment_equiv(src@, pos as int, j);
-                lemma_single_line_comment_equiv(src@, pos as int, j);
+            assert forall|j: int| !#[trigger] comment(src@, pos as int, j, html) by {
+                if html {
+                    lemma_html_cm_slash_other(src@, pos as int, j);
+                } else {
+                    lemma_comment_plain_equiv(src@, pos as int, j);
+                    lemma_multi_line_comment_equiv(src@, pos as int, j);
+                    lemma_single_line_comment_equiv(src@, pos as int, j);
+                }
             }
         }
         None
@@ -3536,6 +3659,54 @@ pub open spec fn lex_result_ok(
     ))
 }
 
+/// What the dispatch proves of Annex B.1.1's `Comment`, which is not a
+/// proven kind ([`kind_proven`]): with `html`, a candidate that is a
+/// `Comment` is a [`comment`] of the spec (Annex B's), and no [`comment`]
+/// from `pos` is longer than the candidate. (`Comment`s that only the start
+/// of the source text has, `HTMLCloseComment`, are [`lex_start`]'s.)
+pub open spec fn cm_ok(src: Seq<u32>, pos: usize, html: bool, r: Option<Candidate>) -> bool {
+    html ==> ((match r {
+        Some(c) => c.0.kind == ElementKind::Comment ==> comment(
+            src,
+            pos as int,
+            c.0.end as int,
+            true,
+        ),
+        None => true,
+    }) && forall|j: int|
+        cand_end(pos, r) < j <= src.len() ==> !#[trigger] comment(src, pos as int, j, true))
+}
+
+/// The code point at `pos` cannot start one of Annex B's `Comment`s: it is
+/// not `/`, not a `LineTerminator`, and `<!--` does not start there.
+pub open spec fn cm_free(src: Seq<u32>, pos: usize) -> bool {
+    src[pos as int] != 0x2F && !is_line_terminator(src[pos as int]) && !(pos + 3 < src.len()
+        && src[pos as int] == 0x3C && src[pos as int + 1] == 0x21 && src[pos as int + 2] == 0x2D
+        && src[pos as int + 3] == 0x2D)
+}
+
+/// A position where no `Comment` can start and a candidate that is not one
+/// satisfy [`cm_ok`].
+proof fn lemma_cm_ok_free(src: Seq<u32>, pos: usize, html: bool, r: Option<Candidate>)
+    requires
+        pos < src.len(),
+        html ==> cm_free(src, pos),
+        r is Some ==> r.unwrap().0.kind != ElementKind::Comment,
+    ensures
+        cm_ok(src, pos, html, r),
+{
+    if html {
+        assert forall|j: int| cand_end(pos, r) < j <= src.len() implies !#[trigger] comment(
+            src,
+            pos as int,
+            j,
+            true,
+        ) by {
+            lemma_html_cm_free(src, pos as int, j);
+        }
+    }
+}
+
 /// A `WhiteSpace` at `pos` (§12.2).
 fn lex_ws(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Candidate>)
     requires
@@ -3543,6 +3714,8 @@ fn lex_ws(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Candida
         start_ok(ElementKind::WhiteSpace, src@, pos as int),
     ensures
         lex_result_ok(src@, pos, goal, html, r),
+        r is Some ==> r.unwrap().0.kind != ElementKind::Comment,
+        cm_ok(src@, pos, html, r),
 {
     let _ = (src, goal, html);
     // WhiteSpace
@@ -3579,6 +3752,7 @@ fn lex_ws(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Candida
         lemma_pk_one(goal, html, src@, pos as int, pos as int + 1, ElementKind::WhiteSpace);
         lemma_ident_absent_from_class(src@, pos as int);
         lemma_private_absent_from_class(src@, pos as int);
+        lemma_cm_ok_free(src@, pos, html, ws);
     }
     ws
 }
@@ -3591,6 +3765,7 @@ fn lex_lt(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Candida
         start_ok(ElementKind::LineTerminator, src@, pos as int),
     ensures
         lex_result_ok(src@, pos, goal, html, r),
+        cm_ok(src@, pos, html, r),
 {
     let _ = (goal, html);
     // LineTerminator; with `html`, Annex B.1.1's
@@ -3612,13 +3787,28 @@ fn lex_lt(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Candida
             assert(line_terminator(src@, pos as int, j));
         }
     }
-    let r = if html {
-        let s = line_terminator_sequence_end(src, pos);
-        longer(lt, html_close_candidate(src, pos, s))
+    let s = line_terminator_sequence_end(src, pos);
+    let hcc = if html {
+        html_close_candidate(src, pos, s)
     } else {
-        lt
+        None
     };
+    let r = longer(lt, hcc);
     proof {
+        if html {
+            // Annex B.1.1: a `Comment` that starts with a line terminator is a
+            // `SingleLineHTMLCloseComment`: the `LineTerminatorSequence`, then
+            // an `HTMLCloseComment`, which `hcc` is the longest of.
+            assert forall|j: int|
+                #[trigger] comment(src@, pos as int, j, true) <==> (s < j && j <= src.len()
+                    && html_close_comment(src@, s as int, j)) by {
+                lemma_html_cm_lt(src@, pos as int, s as int, j);
+            }
+            assert(cm_ok(src@, pos, html, r));
+        }
+        if !html {
+            assert(cm_ok(src@, pos, html, r));
+        }
         assert forall|j: int|
             pos < j <= src.len() && #[trigger] element_matches(
                 goal,
@@ -3656,6 +3846,7 @@ fn lex_slash(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Cand
         src@[pos as int] == 0x2F,
     ensures
         lex_result_ok(src@, pos, goal, html, r),
+        cm_ok(src@, pos, html, r),
 {
     let _ = (goal, html);
     proof {
@@ -3804,6 +3995,25 @@ fn lex_slash(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Cand
             ElementKind::DivPunctuator,
             ElementKind::RegularExpressionLiteral,
         );
+        if html {
+            // Annex B.1.1: the comment candidate is the longest `Comment` from
+            // `pos`, and it is the only candidate that can be a `Comment`.
+            assert forall|j: int| e < j <= src.len() implies !#[trigger] comment(
+                src@,
+                pos as int,
+                j,
+                true,
+            ) by {
+                if comment(src@, pos as int, j, true) {
+                    assert(cmt is Some);
+                    assert(j <= cmt_end);
+                }
+            }
+            if r is Some && r.unwrap().0.kind == ElementKind::Comment {
+                assert(r == cmt);
+            }
+        }
+        assert(cm_ok(src@, pos, html, r));
     }
     r
 }
@@ -3816,6 +4026,7 @@ fn lex_brace(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Cand
         src@[pos as int] == 0x7D,
     ensures
         lex_result_ok(src@, pos, goal, html, r),
+        r is Some ==> r.unwrap().0.kind != ElementKind::Comment,
 {
     let _ = (goal, html);
     proof {
@@ -3905,6 +4116,7 @@ fn lex_backtick(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<C
         src@[pos as int] == 0x60,
     ensures
         lex_result_ok(src@, pos, goal, html, r),
+        r is Some ==> r.unwrap().0.kind != ElementKind::Comment,
 {
     let _ = (goal, html);
     proof {
@@ -3949,6 +4161,7 @@ fn lex_string(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Can
         src@[pos as int] == 0x22 || src@[pos as int] == 0x27,
     ensures
         lex_result_ok(src@, pos, goal, html, r),
+        r is Some ==> r.unwrap().0.kind != ElementKind::Comment,
 {
     let _ = (goal, html);
     proof {
@@ -4035,6 +4248,7 @@ fn lex_hash(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Candi
         src@[pos as int] == 0x23,
     ensures
         lex_result_ok(src@, pos, goal, html, r),
+        r is Some ==> r.unwrap().0.kind != ElementKind::Comment,
 {
     let _ = (goal, html);
     // PrivateIdentifier :: # IdentifierName
@@ -4116,6 +4330,7 @@ fn lex_numeric(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Ca
         start_ok(ElementKind::NumericLiteral, src@, pos as int),
     ensures
         lex_result_ok(src@, pos, goal, html, r),
+        r is Some ==> r.unwrap().0.kind != ElementKind::Comment,
 {
     let _ = (goal, html);
     proof {
@@ -4203,6 +4418,7 @@ fn lex_ident(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Cand
         src@[pos as int] == 0x5C || is_identifier_start_char(src@[pos as int]),
     ensures
         lex_result_ok(src@, pos, goal, html, r),
+        r is Some ==> r.unwrap().0.kind != ElementKind::Comment,
 {
     let _ = (goal, html);
     // IdentifierName
@@ -4292,6 +4508,7 @@ fn lex_html_open(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<
         src@[pos as int + 3] == 0x2D,
     ensures
         lex_result_ok(src@, pos, goal, html, r),
+        cm_ok(src@, pos, html, r),
 {
     let _ = (goal, html);
     proof {
@@ -4317,7 +4534,32 @@ fn lex_html_open(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<
                 != ElementKind::Punctuator implies !start_ok(k, src@, pos as int) by {}
         lemma_pk_one(goal, html, src@, pos as int, e as int, ElementKind::Punctuator);
     }
-    Some((plain(ElementKind::Comment, pos, e), None))
+    let r = Some((plain(ElementKind::Comment, pos, e), None));
+    proof {
+        // A `Comment` that starts with `<!--` is a `SingleLineHTMLOpenComment`:
+        // no line terminator up to its end, which `e` is the last of.
+        assert forall|j: int|
+            #[trigger] comment(src@, pos as int, j, true) <==> (pos + 4 <= j && j <= src.len()
+                && no_lt_src(src@, pos as int + 4, j)) by {
+            lemma_html_cm_open(src@, pos as int, j);
+        }
+        assert(no_lt_src(src@, pos as int + 4, e as int)) by {
+            assert forall|m: int| pos as int + 4 <= m < e implies is_not_line_terminator(
+                #[trigger] src@[m],
+            ) by {}
+        }
+        assert forall|j: int| cand_end(pos, r) < j <= src.len() implies !#[trigger] comment(
+            src@,
+            pos as int,
+            j,
+            true,
+        ) by {
+            if comment(src@, pos as int, j, true) {
+                assert(is_not_line_terminator(src@[e as int]));
+            }
+        }
+    }
+    r
 }
 
 /// A `Punctuator` at `pos`, where no other proven kind can start.
@@ -4327,8 +4569,11 @@ fn lex_punct(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Cand
         forall|k: ElementKind|
             kind_proven(k, html) && k != ElementKind::HashbangComment && k
                 != ElementKind::Punctuator ==> !start_ok(k, src@, pos as int),
+        html ==> !(pos + 3 < src.len() && src@[pos as int] == 0x3C && src@[pos as int + 1] == 0x21
+            && src@[pos as int + 2] == 0x2D && src@[pos as int + 3] == 0x2D),
     ensures
         lex_result_ok(src@, pos, goal, html, r),
+        r is Some ==> r.unwrap().0.kind != ElementKind::Comment,
 {
     let _ = (goal, html);
     proof {
@@ -4394,9 +4639,12 @@ fn lex_common(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Can
         pos < src.len(),
     ensures
         lex_result_ok(src@, pos, goal, html, r),
+        cm_ok(src@, pos, html, r),
 {
     let c = peek(src, pos);
     let c1 = peek(src, pos.saturating_add(1));
+    let c2 = peek(src, pos.saturating_add(2));
+    let c3 = peek(src, pos.saturating_add(3));
     proof {
         assert(at_decimal_digit(src@, pos as int + 1) == is_decimal_digit(c1));
     }
@@ -4407,29 +4655,65 @@ fn lex_common(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Can
     } else if c == 0x2F {
         lex_slash(src, pos, goal, html)
     } else if c == 0x7D {
-        lex_brace(src, pos, goal, html)
+        let r = lex_brace(src, pos, goal, html);
+        proof {
+            lemma_cm_ok_free(src@, pos, html, r);
+        }
+        r
     } else if c == 0x60 {
-        lex_backtick(src, pos, goal, html)
+        let r = lex_backtick(src, pos, goal, html);
+        proof {
+            lemma_cm_ok_free(src@, pos, html, r);
+        }
+        r
     } else if c == 0x22 || c == 0x27 {
-        lex_string(src, pos, goal, html)
+        let r = lex_string(src, pos, goal, html);
+        proof {
+            lemma_cm_ok_free(src@, pos, html, r);
+        }
+        r
     } else if c == 0x23 {
-        lex_hash(src, pos, goal, html)
+        let r = lex_hash(src, pos, goal, html);
+        proof {
+            lemma_cm_ok_free(src@, pos, html, r);
+        }
+        r
     } else if is_dec(c) || (c == 0x2E && is_dec(c1)) {
-        lex_numeric(src, pos, goal, html)
+        let r = lex_numeric(src, pos, goal, html);
+        proof {
+            lemma_cm_ok_free(src@, pos, html, r);
+        }
+        r
     } else if c == 0x5C || id_start_char(c) {
-        lex_ident(src, pos, goal, html)
-    } else if html && c == 0x3C && c1 == 0x21 && peek(src, pos.saturating_add(2)) == 0x2D && peek(
-        src,
-        pos.saturating_add(3),
-    ) == 0x2D {
+        let r = lex_ident(src, pos, goal, html);
+        proof {
+            if is_line_terminator(src@[pos as int]) {
+                lemma_ws_lt_not_id_start(src@[pos as int]);
+            }
+            lemma_cm_ok_free(src@, pos, html, r);
+        }
+        r
+    } else if html && c == 0x3C && c1 == 0x21 && c2 == 0x2D && c3 == 0x2D {
         lex_html_open(src, pos, goal, html)
     } else {
         proof {
             assert forall|k: ElementKind|
                 kind_proven(k, html) && k != ElementKind::HashbangComment && k
                     != ElementKind::Punctuator implies !start_ok(k, src@, pos as int) by {}
+            if html {
+                assert(!(pos + 3 < src.len() && src@[pos as int] == 0x3C && src@[pos as int + 1]
+                    == 0x21 && src@[pos as int + 2] == 0x2D && src@[pos as int + 3] == 0x2D));
+            }
         }
-        lex_punct(src, pos, goal, html)
+        let r = lex_punct(src, pos, goal, html);
+        proof {
+            assert(kind_proven(ElementKind::DivPunctuator, html));
+            assert(kind_proven(ElementKind::LineTerminator, html));
+            assert(!start_ok(ElementKind::DivPunctuator, src@, pos as int));
+            assert(!start_ok(ElementKind::LineTerminator, src@, pos as int));
+            lemma_cm_ok_free(src@, pos, html, r);
+        }
+        r
     }
 }
 
@@ -4510,6 +4794,13 @@ fn lex_start(src: &[u32], html: bool) -> (r: Option<Candidate>)
             && 1 < src@.len() && src@[1] == 0x21,
         r is Some ==> r.unwrap().0.kind == ElementKind::HashbangComment || (r.unwrap().0.kind
             == ElementKind::Comment && html),
+        html ==> forall|j: int|
+            0 < j <= src.len() && #[trigger] html_close_comment(src@, 0, j) ==> j <= cand_end(0, r),
+        (r is Some && r.unwrap().0.kind == ElementKind::Comment) ==> (html_close_comment(
+            src@,
+            0,
+            r.unwrap().0.end as int,
+        ) && (white_space(src@, 0, 1) || src@[0] == 0x2F || src@[0] == 0x2D)),
 {
     let hashbang = if peek(src, 0) == 0x23 && peek(src, 1) == 0x21 {
         // §12.5 HashbangComment :: `#!` SingleLineCommentChars?
@@ -4543,19 +4834,30 @@ fn lex_start(src: &[u32], html: bool) -> (r: Option<Candidate>)
             assert(hashbang is Some);
             assert(j <= hb_end);
         }
+        // Annex B.1.1: `HTMLCloseComment` at the start of the source text; `close`
+        // is the longest, and the only candidate that can be a `Comment`.
+        if r is Some && r.unwrap().0.kind == ElementKind::Comment {
+            assert(r == close);
+            lemma_html_close_start(src@, 0, r.unwrap().0.end as int);
+        }
     }
     r
 }
 
 /// A `Comment` from `pos` to the end of the Annex B.1.1 `HTMLCloseComment`
 /// at `k`, if one is there.
+///
+/// Proven: the candidate ends at the longest `HTMLCloseComment` from `k`,
+/// and `None` means there is none.
 fn html_close_candidate(src: &[u32], pos: usize, k: usize) -> (r: Option<Candidate>)
     requires
         pos <= k <= src.len(),
     ensures
         match r {
-            Some(c) => candidate_ok(src@, pos, c) && c.0.kind == ElementKind::Comment,
-            None => true,
+            Some(c) => candidate_ok(src@, pos, c) && c.0.kind == ElementKind::Comment
+                && html_close_comment(src@, k as int, c.0.end as int) && forall|j: int|
+                html_close_comment(src@, k as int, j) ==> j <= c.0.end,
+            None => forall|j: int| !html_close_comment(src@, k as int, j),
         },
 {
     let e = scan_html_close(src, k)?;
@@ -4648,10 +4950,29 @@ fn regexp_candidate(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Opti
 /// The next input element of `goal` at `pos`, trivia included (§12): the
 /// longest alternative, then the checks [`lex_error`] makes of it.
 ///
-/// Proven: [`next_input_element_proven`] (totality, span coverage, and
-/// agreement with the spec for the proven kinds). Not proven: the rest of
-/// [`super::contract::next_input_element_ensures`]; see the module header.
+/// Proven: [`next_input_element_proven`], and with it the full contract
+/// [`super::contract::next_input_element_ensures`]
+/// ([`lemma_next_input_element_meets_contract`]).
 pub fn next_input_element(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Result<
+    Step,
+    LexError,
+>)
+    requires
+        pos <= src.len(),
+    ensures
+        next_input_element_proven(src@, pos, goal, html, r),
+        super::contract::next_input_element_ensures(src@, pos, goal, html, r),
+{
+    let r = next_input_element_proven_only(src, pos, goal, html);
+    proof {
+        lemma_next_input_element_meets_contract(src@, pos, goal, html, r);
+    }
+    r
+}
+
+/// [`next_input_element`] and what is proven of it before the contract's
+/// longest-match and error clauses are derived.
+fn next_input_element_proven_only(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Result<
     Step,
     LexError,
 >)
@@ -4694,27 +5015,53 @@ pub fn next_input_element(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r
             assert(use_start);
             assert(j <= se);
         }
-        if best is Some && kind_proven(best.unwrap().0.kind, html) && best.unwrap().0.kind
-            != ElementKind::NumericLiteral {
-            if best == common {
-                assert(numeric_absent(src@, pos as int));
-            } else {
-                // `start`'s candidate: a hashbang comment, which starts with `#`.
-                assert(best == start);
-                assert(use_start);
-                assert(src@[0] == 0x23);
-                lemma_numeric_absent_from_class(src@, 0);
+        // No `Comment` (the one kind that is not proven in `html` mode) is longer
+        // than the candidate: `comment`s by the dispatch, an `HTMLCloseComment`
+        // (only the start of the source text has one, as an element) by `lex_start`.
+        if html {
+            assert forall|j: int|
+                be + 1 <= j <= src.len() implies !#[trigger] element_matches(
+                goal,
+                true,
+                ElementKind::Comment,
+                src@,
+                pos as int,
+                j,
+            ) by {
+                if element_matches(goal, true, ElementKind::Comment, src@, pos as int, j) {
+                    if !comment(src@, pos as int, j, true) {
+                        assert(goal == Goal::InputElementHashbangOrRegExp && pos == 0
+                            && html_close_comment(src@, pos as int, j));
+                        assert(use_start);
+                        assert(j <= se);
+                    }
+                }
             }
+            lemma_unproven_html(goal, src@, pos as int, be + 1);
+        } else {
+            lemma_unproven_absent(goal, src@, pos as int, be + 1);
         }
-        if best is Some && kind_proven(best.unwrap().0.kind, html) {
-            if best != common {
-                // `start`'s candidate: a hashbang comment, `#!`.
-                assert(best == start);
-                assert(use_start);
+        // What the dispatch says of the other kinds' absence at `pos`, for the
+        // candidate `start` has (a hashbang comment, or an `HTMLCloseComment`).
+        if best is Some && best != common {
+            assert(best == start);
+            assert(use_start);
+            let k = best.unwrap().0.kind;
+            if k == ElementKind::HashbangComment {
                 assert(src@[0] == 0x23 && 1 < src@.len() && src@[1] == 0x21);
+                lemma_numeric_absent_from_class(src@, 0);
                 lemma_ident_absent_from_class(src@, 0);
                 lemma_ident_absent_from_class(src@, 1);
                 lemma_private_absent_from_next(src@, 0);
+            } else {
+                assert(k == ElementKind::Comment && html);
+                let c0 = src@[0];
+                if white_space(src@, 0, 1) {
+                    lemma_ws_lt_not_id_start(c0);
+                }
+                lemma_numeric_absent_from_class(src@, 0);
+                lemma_ident_absent_from_class(src@, 0);
+                lemma_private_absent_from_class(src@, 0);
             }
         }
     }
@@ -4738,23 +5085,20 @@ pub fn next_input_element(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r
                 assert(candidate_ok(src@, pos, (el, None::<LexError>)));
                 assert(kind_agrees_proven(goal, html, src@, el));
                 assert(value_agrees_proven(src@, el));
-                assert(kind_proven(el.kind, html) ==> proven_bounded(
-                    goal,
-                    html,
+                assert(proven_bounded(goal, html, src@, pos as int, el.end as int));
+                assert(el.kind != ElementKind::NumericLiteral ==> numeric_absent(
                     src@,
                     pos as int,
-                    el.end as int,
                 ));
-                assert(kind_proven(el.kind, html) && el.kind != ElementKind::NumericLiteral
-                    ==> numeric_absent(src@, pos as int));
                 assert(el.kind == ElementKind::NumericLiteral ==> !numeric_literal_follow_error(
                     src@,
                     el.end as int,
                 ));
-                assert(kind_proven(el.kind, html) && el.kind != ElementKind::IdentifierName
-                    ==> ident_absent(src@, pos as int));
-                assert(kind_proven(el.kind, html) && el.kind != ElementKind::PrivateIdentifier
-                    ==> private_absent(src@, pos as int));
+                assert(el.kind != ElementKind::IdentifierName ==> ident_absent(src@, pos as int));
+                assert(el.kind != ElementKind::PrivateIdentifier ==> private_absent(
+                    src@,
+                    pos as int,
+                ));
                 assert(el.kind == ElementKind::IdentifierName ==> identifier_name_valid(
                     src@,
                     pos as int,
@@ -4765,6 +5109,20 @@ pub fn next_input_element(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r
                     pos as int + 1,
                     el.end as int,
                 ));
+                // A `Comment` derives its range: by the dispatch, or (an
+                // `HTMLCloseComment`) as the start of the source text's alternative.
+                if el.kind == ElementKind::Comment {
+                    if best == common {
+                        if html {
+                            assert(comment(src@, pos as int, el.end as int, true));
+                        }
+                    } else {
+                        assert(best == start);
+                        assert(use_start);
+                        assert(html && html_close_comment(src@, 0, el.end as int));
+                    }
+                    assert(element_matches(goal, html, ElementKind::Comment, src@, pos as int, el.end as int));
+                }
             }
             Ok(Step::Element(el))
         },
@@ -4785,6 +5143,7 @@ pub fn next_input_element(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r
                         end,
                     ));
                     assert(proven_bounded(goal, html, src@, pos as int, end));
+                    assert(unproven_bounded(goal, html, src@, pos as int, end + 1));
                     assert(numeric_literal_follow_error(src@, end));
                 }
                 if e == LexError::InvalidIdentifierEscape {
@@ -4796,6 +5155,7 @@ pub fn next_input_element(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r
                     assert(pos < end <= src.len());
                     assert(element_matches(goal, html, el.kind, src@, pos as int, end));
                     assert(proven_bounded(goal, html, src@, pos as int, end));
+                    assert(unproven_bounded(goal, html, src@, pos as int, end + 1));
                     assert(numeric_absent(src@, pos as int));
                     assert(invalid_identifier_at(goal, html, src@, pos as int, end));
                 }
