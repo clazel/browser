@@ -5,12 +5,14 @@ engine. The browser embeds it, and so can a command-line runtime, a
 Node-style server, or another Rust program. This is phase-7.md item 7.8, and
 "The engine as a library" in that file is the plan this README works out.
 
-**Status: the contract, and nothing else.** The types and signatures here are
-the proposal, and the doc comments carry examples that compile (`no_run`,
-because there is nothing to run). Every operation that needs the engine returns
-`Error::NotImplemented`. Tier 0, no proofs. The contract is written first, as
-the plan says, so that people can review it before `clazel-webidl` and
-`clazel-web` build on it. What to review is below, in "Open questions".
+**Status: the contract, and its first implementation.** The types and
+signatures here are the proposal. The contract was written first, as the plan
+says, so that people can review it before `clazel-webidl` and `clazel-web`
+build on it; the first part of the implementation is on top of it without
+changing a signature, over the interpreter (`clazel-js-vm`) and the built-ins
+(`clazel-js-builtins`). What the VM does not have yet still returns
+`Error::NotImplemented`; "What is implemented" below lists each item and why.
+Tier 0, no proofs. What to review is in "Open questions".
 
 Read the API in `src/`, one file per topic: `runtime.rs` (Runtime, limits,
 Terminator), `value.rs` (the four ways to hold a value), `scope.rs` (all the
@@ -18,12 +20,69 @@ operations), `code.rs` (realms, source, scripts, modules), `native.rs`
 (native functions, host objects), `host.rs` (the `Host` trait), `error.rs`.
 `cargo doc -p clazel-js --no-deps --open` shows the same with the examples.
 
+## What is implemented
+
+Works now, with tests that use the public API only (`tests/api.rs`, and
+the doctests): `Runtime::new` (VM, built-ins, host), `scope`, `run_jobs`,
+`terminator` (the interpreter's own flag), `limits`, `heap_used` (an estimate);
+primitives and strings (UTF-16 exact), `kind` and the `as_*`, `to_*` and `is_*`
+conversions, `strict_equals`, `same_value`, `instance_of`; `new_object`, `get`,
+`set`, `has_property`, `define_property` (data properties),
+`get_prototype_of`, `set_prototype_of`, `get_method`, `call`, `construct`;
+`function`, `define_method`, `Args`, `new_host_object` with `host_data`,
+`get_prototype_from_constructor`, `host_mut`, `check_terminated`; errors,
+`new_exception`, `throw_error`, `throw`, `report`, `Error::Thrown`;
+`create_realm` (once), `global`, realm and script host data; `compile_script`,
+`run_script`, `eval_script`; `Handle`, `Weak`, `Member`; `gc` and
+`clear_kept_objects` as no-ops.
+
+Still `NotImplemented`, each because the VM lacks the feature: arrays
+(`new_array*`), promises (`new_promise` and the rest), `iterate` and symbols
+(`new_symbol`, `well_known_symbol`), BigInt, ArrayBuffer, `delete_property`
+(the heap cannot remove a property), accessor descriptors in `define_property`,
+modules and synthetic modules (the compiler's module goal and the runtime's
+module records), a second realm and `RealmOptions::global`, `construct` with a
+`new_target` other than the constructor, `instance_of` of a bound function,
+`ErrorKind::EvalError` and `UriError`. The infallible constructors for the
+missing values (`new_symbol`, `well_known_symbol`, `bigint_from_*`) cannot
+return an error, so they record it and the next fallible call returns it.
+
+**Where it deviates, so reviewers see it:**
+
+- **No completion value.** `run_script` and `eval_script` return `undefined`
+  because the compiler's script has no completion value. Results go out
+  through globals or native functions.
+- **Re-entrance.** A native closure that JavaScript re-enters while it runs
+  gets `Error::Busy`, because the closures are stored in the VM they borrow
+  (the table is where a plain function pointer can find it). Open question 14.
+- **Rooting.** There is no collector in this tree (open pull requests), so
+  nothing is ever freed: `Local`, `Handle`, `Weak` and `Member` are checked
+  (the runtime they belong to, the arena's generation) but root nothing;
+  `Weak::upgrade` is always `Some`, `HostObject::trace` and `Host::trace_roots`
+  are never called, `Scope::nested` releases nothing, and a `Handle` drop does
+  nothing. The API is written so that a collector can start rooting without a
+  signature change: every value passes through `Scope`, `Handle` is the only
+  long-lived root, and `Member` is reported by its owner.
+- **The `Host` hooks.** None is called: they are what promises, modules,
+  `Date`, `eval` of strings and `FinalizationRegistry` call, and the VM has
+  none of them. The engine's job queue works (`Scope::enqueue_job_internal`,
+  `run_job`, `run_jobs`) but nothing makes a job yet, so `run_jobs` returns 0.
+- **Exotic hooks of `HostObject`** are not called: a host object is an
+  ordinary object with its data beside it.
+- **Limits.** `heap_bytes` and `value_stack_bytes` map to the arena's cell
+  limit and the frame region's slots (estimates), the heap limit gives
+  `OutOfMemory` and not a `RangeError`, `native_depth` counts only closures
+  made by `Scope::function`, the rest are not used (see `Runtime::new`).
+- **Stack traces.** `ErrorReport::stack` is empty and `Source::start_line` is
+  not used: the VM keeps no source positions.
+
 ## The boundary
 
 - Engine crates depend on no browser crate. `cargo xtask check` enforces it
   with the `ENGINE` list in `xtask/src/status.rs`, which holds this crate.
-- `clazel-js` has no dependencies yet. It will re-export the types the API needs
-  from other engine crates (the heap's value and arena types) and no more.
+- `clazel-js` depends on the engine's `clazel-js-vm`, `clazel-js-builtins`,
+  `clazel-js-syntax` and `clazel-js-heap` and no other crate. No type of
+  theirs is in its public API: a `Local` is private data over the heap's value.
 - The browser uses only this public API. A binding that needs something the API
   lacks gets it added here, not a private path.
 - The Test262 runner (`clazel-js-shell`, a later item) is a second embedder and
@@ -48,14 +107,18 @@ A `Runtime` is one ECMAScript agent: a heap, a job queue, limits and a `Host`.
 Configuration is a `Config` of `Limits` and a `JitMode` (only `Off` until jit.md's
 crate exists), and a `Host`:
 
-```rust,no_run
-use clazel_js::{Config, DefaultHost, Limits, RealmOptions, Runtime, Source};
+```rust
+use clazel_js::{Config, DefaultHost, Key, Limits, RealmOptions, Runtime, Source};
 
 fn main() -> Result<(), clazel_js::Error> {
     let mut rt = Runtime::new(Config::new(Limits::unlimited()), DefaultHost::new())?;
     let realm = rt.scope(|scope| scope.create_realm(RealmOptions::default()))?;
     let sum = rt.scope(|scope| {
-        let value = scope.eval_script(&realm, Source::new("sum.js", "1 + 2"))?;
+        // The script's completion value is not produced yet (see "What is
+        // implemented"), so the result goes out through a global.
+        scope.eval_script(&realm, Source::new("sum.js", "var sum = 1 + 2;"))?;
+        let global = scope.global(&realm)?;
+        let value = scope.get(global, Key::from("sum"))?;
         Ok(scope.as_number(value))
     })?;
     assert_eq!(sum, Some(3.0));
@@ -189,7 +252,8 @@ engine's and cannot be caught by JavaScript:
   allocated. Rare.
 - `StaleHandle`, `WrongRuntime`, `WrongType`, `Busy`: misuse of the API,
   caught and reported, never undefined behaviour.
-- `NotImplemented`: this contract's stubs, until 7.8 builds the bodies.
+- `NotImplemented`: something the VM does not have yet; see "What is
+  implemented".
 
 A native function returns errors of either kind with `?`. To throw:
 `return Err(scope.throw_error(ErrorKind::TypeError, "..."))`, or
@@ -323,3 +387,20 @@ look at each.
     `RangeError`. This contract keeps `OutOfMemory` for when even that cannot
     be allocated. If that case can be avoided by reserving room for one
     error object, the variant can go.
+14. **Native closures and re-entrance.** `Scope::function` takes `Fn + Send`.
+    Re-entering a running closure needs it shared with the call that is
+    running, which for a `Send` runtime means `Fn + Send + Sync` (an `Arc`),
+    or a runtime that is not `Send`. With `Send` alone the implementation
+    stores each closure in the VM's embedder slot and takes it out while it
+    runs, so a re-entrant call is `Error::Busy`. Proposal: add `Sync` to the
+    bound (the browser's closures hold ids, not `Rc`s, as open question 3
+    already asks of the host).
+15. **Infallible constructors that cannot work yet.** `bigint_from_*`,
+    `new_symbol` and `well_known_symbol` return a `Local`, not a `Result`, so
+    when the VM lacks the type the error is held for the next fallible call.
+    Proposal: make them return `Result` (they allocate, so `string` and
+    `string_utf16` could fail the same way, with `OutOfMemory`, which is also
+    held today).
+16. **Script completion value.** `run_script` documents the value of the last
+    expression statement; the compiler does not produce it yet. No signature
+    change, but embedders should not rely on it until the compiler does.

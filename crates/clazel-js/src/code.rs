@@ -20,6 +20,9 @@ use crate::value::Handle;
 ///   native function, [`Scope::current_realm`](crate::Scope::current_realm)
 ///   is the realm of the function being called.
 ///
+/// This stays `no_run`: the VM has one global environment, so a second
+/// `create_realm` is `NotImplemented`.
+///
 /// ```no_run
 /// use clazel_js::{Runtime, RealmOptions, Source};
 ///
@@ -44,6 +47,10 @@ pub struct Realm {
 }
 
 impl Realm {
+    pub(crate) fn new(root: Handle) -> Realm {
+        Realm { root }
+    }
+
     /// The root that keeps the realm alive.
     pub fn as_handle(&self) -> &Handle {
         &self.root
@@ -53,7 +60,10 @@ impl Realm {
 /// How to build a realm. The default is an ordinary global object with the
 /// standard built-ins.
 ///
-/// ```no_run
+/// A host-object global is `NotImplemented` yet (the VM's global is an
+/// ordinary object), so this only builds the options:
+///
+/// ```
 /// use clazel_js::{Exotic, HostObject, RealmOptions};
 ///
 /// /// The browser's `Window`: a host object serving as the global object.
@@ -88,7 +98,7 @@ pub struct RealmOptions {
 ///   given back by [`Scope::host_defined`](crate::Scope::host_defined)
 ///   and to the [`Host`](crate::Host) hooks as part of a [`Referrer`].
 ///
-/// ```no_run
+/// ```
 /// use clazel_js::Source;
 ///
 /// struct BaseUrl(String);
@@ -130,6 +140,10 @@ impl<'a> Source<'a> {
         self
     }
 
+    pub(crate) fn into_host_defined(self) -> Option<Box<dyn Any + Send>> {
+        self.host_defined
+    }
+
     /// The name.
     pub fn name(&self) -> &str {
         self.name
@@ -160,8 +174,8 @@ impl<'a> Source<'a> {
 /// more than once; top-level `var`s and functions are created in the realm
 /// each time it runs, as for a script run twice.
 ///
-/// ```no_run
-/// use clazel_js::{Realm, Runtime, Script, Source};
+/// ```
+/// use clazel_js::{Key, Realm, Runtime, Script, Source};
 ///
 /// fn compile_then_run(rt: &mut Runtime, realm: &Realm) -> clazel_js::Result<()> {
 ///     let script: Script = rt.scope(|scope| {
@@ -173,13 +187,33 @@ impl<'a> Source<'a> {
 ///         Ok(())
 ///     })
 /// }
+/// # let mut rt = clazel_js::Runtime::new(clazel_js::Config::new(clazel_js::Limits::unlimited()), clazel_js::DefaultHost::new())?;
+/// # let realm = rt.scope(|scope| scope.create_realm(clazel_js::RealmOptions::default()))?;
+/// # compile_then_run(&mut rt, &realm)?;
+/// # let n = rt.scope(|scope| {
+/// #     let global = scope.global(&realm)?;
+/// #     let n = scope.get(global, Key::from("n"))?;
+/// #     Ok(scope.as_number(n))
+/// # })?;
+/// # assert_eq!(n, Some(1.0));
+/// # Ok::<(), clazel_js::Error>(())
 /// ```
 #[derive(Clone, Debug)]
 pub struct Script {
     root: Handle,
+    /// The index of the script's code in the VM's table.
+    main: u32,
 }
 
 impl Script {
+    pub(crate) fn new(root: Handle, main: u32) -> Script {
+        Script { root, main }
+    }
+
+    pub(crate) fn main(&self) -> u32 {
+        self.main
+    }
+
     /// The root that keeps the script alive.
     pub fn as_handle(&self) -> &Handle {
         &self.root
@@ -192,6 +226,9 @@ impl Script {
 /// [`Scope`](crate::Scope) name: parse, load requested modules (the host
 /// supplies each import through [`Host::load_imported_module`](crate::Host::load_imported_module)),
 /// link, evaluate. `Module` is a root, `Clone`, `Send` and `Sync`.
+///
+/// This stays `no_run`: modules return `NotImplemented` until the VM has
+/// them.
 ///
 /// ```no_run
 /// use clazel_js::{ModuleStatus, Realm, Runtime, Source};

@@ -4,6 +4,8 @@
 use core::any::Any;
 use core::marker::PhantomData;
 
+use clazel_js_heap::value::Value;
+
 use crate::error::Result;
 use crate::scope::Scope;
 use crate::value::{Key, Local, Member, PropertyDescriptor};
@@ -14,8 +16,8 @@ use crate::value::{Key, Local, Member, PropertyDescriptor};
 /// function can use them freely and cannot keep them. A missing argument is
 /// `undefined`, as for any JavaScript function.
 ///
-/// ```no_run
-/// use clazel_js::{Args, Local, Result, Scope};
+/// ```
+/// use clazel_js::{Args, Callable, Key, Local, Result, Scope};
 ///
 /// /// `add(a, b)` as JavaScript sees it.
 /// fn add<'s>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
@@ -23,22 +25,47 @@ use crate::value::{Key, Local, Member, PropertyDescriptor};
 ///     let b = scope.to_number(args.get(1))?;
 ///     Ok(scope.number(a + b))
 /// }
+/// # let mut rt = clazel_js::Runtime::new(clazel_js::Config::new(clazel_js::Limits::unlimited()), clazel_js::DefaultHost::new())?;
+/// # let sum = rt.scope(|scope| {
+/// #     let function = scope.function("add", 2, Callable::Function, add)?;
+/// #     let this = scope.undefined();
+/// #     let (a, b) = (scope.number(40.0), scope.number(2.0));
+/// #     let sum = scope.call(function, this, &[a, b])?;
+/// #     // A missing argument is `undefined`, which is NaN as a number.
+/// #     let missing = scope.call(function, this, &[a])?;
+/// #     assert!(scope.as_number(missing).is_some_and(f64::is_nan));
+/// #     let _ = Key::from("unused");
+/// #     Ok(scope.as_number(sum))
+/// # })?;
+/// # assert_eq!(sum, Some(42.0));
+/// # Ok::<(), clazel_js::Error>(())
 /// ```
 #[derive(Clone, Copy, Debug)]
 pub struct Args<'s> {
-    _scope: PhantomData<&'s ()>,
+    runtime: usize,
+    this: Value,
+    args: &'s [Value],
+    new_target: Value,
 }
 
 impl<'s> Args<'s> {
+    pub(crate) fn new(runtime: usize, this: Value, args: &'s [Value], new_target: Value) -> Self {
+        Args {
+            runtime,
+            this,
+            args,
+            new_target,
+        }
+    }
+
     /// The `this` value.
     pub fn this(&self) -> Local<'s> {
-        // Implementation arrives with the frame layout (item 7.8).
-        Local::placeholder()
+        Local::new(self.this, self.runtime)
     }
 
     /// How many arguments the caller passed.
     pub fn len(&self) -> usize {
-        0
+        self.args.len()
     }
 
     /// Whether the caller passed no arguments.
@@ -48,15 +75,15 @@ impl<'s> Args<'s> {
 
     /// Argument `index`, or `undefined` if the caller passed fewer.
     pub fn get(&self, index: usize) -> Local<'s> {
-        let _ = index;
-        Local::placeholder()
+        let value = self.args.get(index).copied().unwrap_or(Value::UNDEFINED);
+        Local::new(value, self.runtime)
     }
 
     /// `new.target`: `Some` when the function was called with `new` (or by
     /// `Reflect.construct`), and the constructor `new` was applied to, which
     /// may be a subclass. `None` for an ordinary call.
     pub fn new_target(&self) -> Option<Local<'s>> {
-        None
+        (self.new_target != Value::UNDEFINED).then(|| Local::new(self.new_target, self.runtime))
     }
 }
 
@@ -121,7 +148,10 @@ pub enum Exotic<T> {
 /// - **Which hooks exist** is an open question in the README: these four are
 ///   what WebIDL §3.9 and §3.10 appear to need and the list may grow.
 ///
-/// ```no_run
+/// The hooks are not called yet (the VM has no exotic dispatch), so this
+/// example only compiles and runs its type checks:
+///
+/// ```
 /// use clazel_js::{Exotic, HostObject, Key, Local, PropertyDescriptor, Result, Runtime, Scope};
 ///
 /// /// The data of a `NodeList` wrapper: the ids of the nodes it holds.

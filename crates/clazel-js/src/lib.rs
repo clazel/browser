@@ -1,12 +1,16 @@
 //! The JavaScript engine's embedding API (phase-7.md item 7.8, "The engine as
 //! a library").
 //!
-//! **This crate is the contract and nothing else.** Every type and signature
-//! is the proposed API, and every operation that needs the engine returns
-//! [`Error::NotImplemented`]. The README states the rules in prose (threads,
-//! rooting, termination, what is left out) and lists the open questions; the
-//! doc comments here carry examples that compile (`no_run`, since nothing
-//! runs yet). The contract is for review before the bindings build on it.
+//! **This is the contract, and its first implementation** (phase-7.md item
+//! 7.8, first part), over `clazel-js-vm`'s interpreter and
+//! `clazel-js-builtins`. Every type and signature is the reviewed contract;
+//! what the VM does not have yet (arrays, promises, symbols, BigInt,
+//! ArrayBuffer, modules, a second realm, a collector) returns
+//! [`Error::NotImplemented`], and the README's "What is implemented" section
+//! lists each item with its reason. The README also states the rules in prose
+//! (threads, rooting, termination, what is left out) and lists the open
+//! questions. The doc comments carry examples that run, except the few that
+//! need what is not there yet, which stay `no_run` and say so.
 //!
 //! The pieces, in the order a program meets them:
 //!
@@ -27,6 +31,7 @@ mod host;
 mod native;
 mod runtime;
 mod scope;
+mod state;
 mod value;
 
 pub use code::{
