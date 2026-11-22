@@ -239,6 +239,7 @@ dependencies = [
 name = "clazel-codecheck"
 version = "0.0.0"
 dependencies = [
+ "clazel-a64",
  "clazel-x64",
  "vstd",
 ]
@@ -447,6 +448,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "clazel-js-heap"
+version = "0.0.0"
+
+[[package]]
 name = "clazel-js-lexer"
 version = "0.0.0"
 dependencies = [
@@ -454,8 +459,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "clazel-js-number"
+version = "0.0.0"
+
+[[package]]
 name = "clazel-js-regexp"
 version = "0.0.0"
+dependencies = [
+ "clazel-js-lexer",
+]
 
 [[package]]
 name = "clazel-js-syntax"
@@ -467,6 +479,15 @@ dependencies = [
 
 [[package]]
 name = "clazel-js-vm"
+version = "0.0.0"
+dependencies = [
+ "clazel-js-lexer",
+ "clazel-js-syntax",
+ "vstd",
+]
+
+[[package]]
+name = "clazel-json"
 version = "0.0.0"
 dependencies = [
  "vstd",

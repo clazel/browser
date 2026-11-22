@@ -8,14 +8,17 @@ description = "The JavaScript engine's bytecode and its semantics for Clazel's P
 
 [dependencies]
 vstd = "=0.0.0-2026-10-04-0306"
+clazel-js-lexer = { path = "../clazel-js-lexer" }
+clazel-js-syntax = { path = "../clazel-js-syntax" }
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
-# shipped code today: nothing, since this crate holds only the specification
-# of item 7.4 (the handlers, compiler and interpreter loop come later, in 7.7
-# and 7.8). `target-tier` is 0 for the shipped code, as the Crates table of
-# phase-7.md states; the spec itself is written to Tier 2 standards (Verus
-# checks it and the lemmas in src/lemmas.rs), because the JIT's front-end
-# proofs (jit.md J.10) refine `step`.
+# shipped code today: nothing. The crate holds the specification of item 7.4
+# and the compiler of item 7.7 (first and second slice, plain Rust: its evidence
+# is unit tests and the Test262 sources it compiles, tests/); the handlers and the
+# interpreter loop come later, in 7.8. `target-tier` is 0 for the shipped
+# code, as the Crates table of phase-7.md states; the spec itself is written
+# to Tier 2 standards (Verus checks it and the lemmas in src/lemmas.rs),
+# because the JIT's front-end proofs (jit.md J.10) refine `step`.
 [package.metadata.clazel]
 tier = 0
 target-tier = 0
