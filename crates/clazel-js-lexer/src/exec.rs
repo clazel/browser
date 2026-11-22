@@ -23,24 +23,57 @@
 //! - **The value's shape:** [`value_shape_agrees`]: an element has the
 //!   kind of `Value` its kind has (a `StringLiteral` a `Value::String`, and
 //!   so on), and a regular expression's `body_end` is inside it.
-//! - **The derivation of the simple kinds:** [`kind_agrees_proven`]: a
-//!   `WhiteSpace`, `LineTerminator`, `HashbangComment`, `DivPunctuator` or
-//!   `RightBracePunctuator` element is derived by its kind in the goal
-//!   ([`element_matches`]).
+//! - **Agreement with the spec, for the kinds of [`kind_proven`]:**
+//!   [`kind_agrees_proven`]: the element's kind derives its range in the
+//!   goal ([`element_matches`]), and no longer range inside the source text
+//!   is derived by an element of that kind. The kinds are `WhiteSpace`,
+//!   `LineTerminator`, `HashbangComment`, `DivPunctuator`,
+//!   `RightBracePunctuator`, `Punctuator`, `NumericLiteral`,
+//!   `StringLiteral`, and `Comment` outside Annex B's `html` mode (a `//`
+//!   or `/* */` comment).
+//! - **Values, for the kinds of [`value_proven`]:** [`value_agrees_proven`]:
+//!   a `NumericLiteral`'s `bigint` and `legacy` flags and a
+//!   `StringLiteral`'s SV are the spec's relations
+//!   ([`super::contract::element_value_agrees`]).
+//! - **The scanners that carry these:** `scan_punctuator`, `scan_numeric`
+//!   (with `scan_digits_sep`, `scan_exponent`, `scan_decimal_tail`),
+//!   `scan_string` (with `scan_string_escape`, `scan_legacy_octal_escape`,
+//!   `scan_unicode_escape`, `scan_hex_digits`, `scan_hex4`) and
+//!   `scan_block_comment` each state, in their `ensures`, that the end they
+//!   return is a range the spec derives, that no longer range is, and that
+//!   `None` means the spec derives none. The proofs reduce the spec's
+//!   productions to the closed forms of [`super::independent`] through
+//!   [`super::equivalence`], and reason about the closed forms in
+//!   [`super::scan_proofs`] and [`super::string_proofs`].
 //! - **Single code points:** the classifiers (`is_ws`, `is_lt`, the digit
 //!   classes, `hex_val`) equal the spec's, and `push_utf16` is
 //!   UTF16EncodeCodePoint (§11.1.1).
 //!
 //! It is **not** proven that the results agree with [`super::spec`]
-//! otherwise: that the kind derives the range for the other kinds
-//! (comments, names, punctuators, literals, templates, regular
-//! expressions), that no longer element exists ([`longest_len`]), that the
-//! errors are [`lex_error`]'s, that `newline_before` is [`skip_trivia`]'s,
-//! and that the values are the spec's relations. These are the rest of
-//! [`super::contract`], which the functions here do not claim, so they do
-//! not implement [`super::api::JsLexer`]. Their agreement with the spec is
-//! tested (`tests/`), not proven. [`lemma_contract_implies_proven`] shows
-//! that what is proven is implied by the full contract.
+//! otherwise, so these functions do not implement [`super::api::JsLexer`]:
+//!
+//! - **Longest element across kinds** ([`longest_len`]): that no element of
+//!   *another* kind is longer than the one returned. Only "no longer element
+//!   of the same kind" is proven.
+//! - **The errors** of [`lex_error`] (`NoInputElement` follows from the
+//!   longest element; the two checks of §12.9.3 and §12.7.1.1 are not
+//!   proven to be the spec's), and `newline_before` being [`skip_trivia`]'s.
+//! - **Annex B.1.1 comments** (`html` mode: `<!--`, `-->`, a multi-line
+//!   comment with an `HTMLCloseComment`): `Comment` is claimed only with
+//!   `html == false`.
+//! - **Identifiers and private identifiers, regular expression literals
+//!   (their flags are `IdentifierPartChar`s), the `ReservedWord` rule, and
+//!   the checks that read `IdentifierStart`**: nothing ties the table of
+//!   [`super::unicode`] to the spec's uninterpreted `ID_Start` and
+//!   `ID_Continue` of code points above U+007F
+//!   ([`super::spec::unicode_id_start_non_ascii`]), so the agreement of
+//!   anything that tests them cannot be stated until it is tied (an axiom
+//!   in an `axioms.rs`, CLAUDE.md rule 4, or an interpretation of the spec).
+//! - **Template literals** (their TV and TRV).
+//!
+//! Their agreement with the spec is tested (`tests/`), not proven.
+//! [`lemma_contract_implies_proven`] shows that what is proven is implied
+//! by the full contract.
 //!
 //! Non-ASCII `ID_Start` and `ID_Continue` come from [`super::unicode`],
 //! which the spec leaves uninterpreted: nothing is claimed about them.
@@ -51,10 +84,10 @@ use super::equivalence::*;
 use super::independent::*;
 #[cfg(verus_only)]
 use super::scan_proofs::*;
-#[cfg(verus_only)]
-use super::string_proofs::*;
 #[allow(unused_imports)]
 use super::spec::*;
+#[cfg(verus_only)]
+use super::string_proofs::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
