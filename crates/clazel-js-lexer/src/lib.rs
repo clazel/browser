@@ -13,14 +13,19 @@
 //!   proven; its agreement with [`spec`] (the rest of [`contract`]) is
 //!   tested, not proven, so it does not implement [`api::JsLexer`] yet
 //!   (see the module's header for exactly what is proven).
+//! - [`independent`]: a second transcription of part of the lexical grammar
+//!   from UAX #31 and ECMA-262 Annex A in closed form; [`equivalence`] proves
+//!   it equal to [`spec`] on every input it covers.
 //! - [`unicode`], [`unicode_data`]: `ID_Start` and `ID_Continue` above
 //!   U+007F, from a table generated from Unicode 18.0.0. The spec leaves
 //!   them uninterpreted, and nothing ties the two.
 
 pub mod api;
 pub mod contract;
+pub mod equivalence;
 pub mod examples;
 pub mod exec;
+pub mod independent;
 pub mod lemmas;
 pub mod spec;
 pub mod unicode;
