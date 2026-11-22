@@ -39,14 +39,18 @@
 //! parse ([`contract::parse_ensures`]). So [`exec::parse`] does not implement
 //! [`api::JsParser`], and the crate stays at Tier 0. The first steps towards
 //! that proof are in [`arena_d`], a proven check of `spec::d` over the whole arena
-//! against the tokens the parser consumed, for the productions it covers (a
-//! `Script` or `Module` of empty and expression statements over literals,
-//! parentheses and `+ - * / % < >`), run by [`exec::parse_checked`]; and in [`derive`]: rule lemmas that a node of the shape the parser
-//! builds is derived by [`spec::d`] (literals, names, keywords, unary, binary,
-//! conditional, assignment, parenthesized and member-dot expressions), and
-//! `check_leaf`, a checked leaf against the executable tokens. They are not yet
-//! applied to the parser's output, and they assume the tokens are the lexer
-//! specification's, which the executable lexer does not meet yet.
+//! against the tokens the parser consumed, for the productions it covers (every
+//! statement and nearly every expression, function, class and pattern; the list is
+//! at the top of the module, and 1568 of the 1568 vendored positive Test262 runs
+//! are covered end to end), run by [`exec::parse_checked`]; and in [`derive`]: rule
+//! lemmas that a node of the shape the parser builds is derived by [`spec::d`].
+//! The check assumes the tokens are the lexer specification's, which the
+//! executable lexer does not meet yet, and that inserted `;` are justified.
+//! [`arena_e`] and [`arena_m`] cover the rest of the script grammar and every
+//! `import` and `export` form. [`arena_early`] is the same for the early errors:
+//! a proven check of `spec::early` over the arena for a growing set of rules (the
+//! list is at the top of the module), run by [`exec::parse_checked_early`]; where
+//! both checks say `Verified`, `spec::is_valid_parse` holds, modulo the assumptions.
 //!
 //! Where the parser differs from the specification, on purpose or not:
 //!
@@ -57,6 +61,11 @@
 
 pub mod api;
 pub mod arena_d;
+pub mod arena_decls;
+pub mod arena_e;
+pub mod arena_early;
+pub mod arena_m;
+pub mod arena_names;
 pub mod ast;
 pub mod check;
 pub mod contract;

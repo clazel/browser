@@ -251,6 +251,9 @@ pub fn dtok_of(t: &Tok) -> crate::arena_d::DTok {
         end: t.end,
         nl: t.nl,
         escaped: t.escaped,
+        legacy: t.legacy,
+        invalid_escape: t.invalid_escape,
+        name: t.name.clone(),
     }
 }
 
