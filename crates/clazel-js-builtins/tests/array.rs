@@ -91,7 +91,7 @@ fn array_exotic_objects() -> Result<(), String> {
         // A non-configurable element stops the truncation (step 16.b).
         (
             "var a = [1, 2]; Object.defineProperty(a, 2, { value: 5 }); a.length = 0; var r = a.length + ',' + a[0] + ',' + a[2];",
-            "3,undefined,5",
+            "3,1,5",
         ),
         // `length` is not enumerable, writable, not configurable.
         (
@@ -115,7 +115,7 @@ fn array_exotic_objects() -> Result<(), String> {
             "var r = Array.isArray({ length: 0 }) + ',' + Array.isArray([]);",
             "false,true",
         ),
-        ("var r = [] instanceof Object;", "true"),
+        ("var r = Object.getPrototypeOf([]) === Array.prototype;", "true"),
         // Object.keys returns an array now.
         ("var r = Array.isArray(Object.keys({ a: 1 }));", "true"),
         (
