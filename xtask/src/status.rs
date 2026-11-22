@@ -89,6 +89,8 @@ const PLACES: &[(&str, Place)] = &[
     ("clazel-idna", Place::Primitive),
     ("clazel-percent", Place::Primitive),
     ("clazel-base64", Place::Primitive),
+    // JSON text to values and QuoteJSONString (phase 7 item 7.11).
+    ("clazel-json", Place::Primitive),
     ("clazel-mime", Place::Primitive),
     // The JIT's instruction-set layer (docs/phases/jit.md item J.2 creates them empty).
     ("clazel-x64", Place::Primitive),

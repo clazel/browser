@@ -429,6 +429,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "clazel-json"
+version = "0.0.0"
+dependencies = [
+ "vstd",
+]
+
+[[package]]
 name = "clazel-kernel"
 version = "0.0.0"
 dependencies = [
