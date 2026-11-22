@@ -4,7 +4,7 @@ version = "0.0.0"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "The web platform's script-facing APIs: window, document and node APIs, events, timers, event loop, fetch and XHR, storage, history (phase-7.md items 7.13 to 7.17). So far only the HTML serializer; it also holds the vendored WPT tests and TodoMVC."
+description = "The web platform's script-facing APIs: window, document and node APIs, events, timers, event loop, fetch and XHR, storage, history (phase-7.md items 7.13 to 7.17). So far the HTML serializer and the selector queries (querySelector, querySelectorAll, matches, closest); it also holds the vendored WPT tests and TodoMVC."
 
 # The node tree the serializer (`src/serialize.rs`) reads (phase-7.md item
 # 7.13). The rest of the implementation arrives with the items named in
@@ -12,13 +12,18 @@ description = "The web platform's script-facing APIs: window, document and node 
 [dependencies]
 clazel-dom = { path = "../clazel-dom", version = "=0.0.0" }
 
+# The selectors that `querySelector`, `querySelectorAll`, `matches` and
+# `closest` match with (`src/selectors.rs`), and the parser's input limit.
+clazel-selectors = { path = "../clazel-selectors", version = "=0.0.0" }
+clazel-css = { path = "../clazel-css", version = "=0.0.0" }
+
 # The parser that the serializer's round-trip tests feed
 # (`tests/conformance_round_trip.rs`).
 [dev-dependencies]
 clazel-treebuilder = { path = "../clazel-treebuilder", version = "=0.0.0" }
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
-# the shipped code today (the serializer, tested; nothing else yet); `target-tier` is what
+# the shipped code today (the serializer and the selector queries, tested; nothing else yet); `target-tier` is what
 # phase-7.md's "Crates" table sets.
 [package.metadata.clazel]
 tier = 0

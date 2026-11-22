@@ -647,7 +647,9 @@ dependencies = [
 name = "clazel-web"
 version = "0.0.0"
 dependencies = [
+ "clazel-css",
  "clazel-dom",
+ "clazel-selectors",
  "clazel-treebuilder",
 ]
 
