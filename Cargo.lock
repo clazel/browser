@@ -390,6 +390,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "clazel-js"
+version = "0.0.0"
+
+[[package]]
 name = "clazel-js-heap"
 version = "0.0.0"
 
