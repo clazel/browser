@@ -149,6 +149,118 @@
         "lemma": "lemma_slot_imm(0)",
         "witness": "slot_imm(0) == 66u16"
       }
+    },
+    {
+      "id": "mem-access-index-is-scaled",
+      "module": "cfmemvalid",
+      "file": "src/cftemplates.rs",
+      "find": "index: Some(x64::Index { reg: rcx(), scale: 0 })",
+      "replace": "index: Some(x64::Index { reg: rcx(), scale: 1 })",
+      "expect": "killed",
+      "reason": "The access `[rsi + 2 rcx]` would scale the checked index, which reaches past the region; the validator refuses any scale but 1. `cfmemvalid::lemma_access_accepted` (the validator's `access_ok` admits `[rsi + rcx]` after the check) is false for the mutant at region 0, 8 bytes, a load.",
+      "certificate": {
+        "file": "src/cfmemvalid.rs",
+        "lemma": "lemma_access_accepted(0, 8, 8, false)",
+        "witness": "!clazel_codecheck::spec::access_ok(seq![clazel_codecheck::spec::Binding { reg: 6, fact: clazel_codecheck::spec::Fact::Base(0) }, clazel_codecheck::spec::Binding { reg: 2, fact: clazel_codecheck::spec::Fact::Unknown }, clazel_codecheck::spec::Binding { reg: 0, fact: clazel_codecheck::spec::Fact::Unknown }, clazel_codecheck::spec::Binding { reg: 1, fact: clazel_codecheck::spec::Fact::Idx(0, 8) }], clazel_codecheck::spec::Access { mem: ix_mem(), size: 8, store: false })"
+      }
+    },
+    {
+      "id": "mem-access-base-register",
+      "module": "cfmemvalid",
+      "file": "src/cftemplates.rs",
+      "find": "x64::Mem { base: rsi(), index: Some(",
+      "replace": "x64::Mem { base: rdi(), index: Some(",
+      "expect": "killed",
+      "reason": "The access would use `rdi` as the base, which is not known to hold the region's base. `cfmemvalid::lemma_access_accepted` (the validator's `access_ok` admits `[rsi + rcx]` after the check) is false for the mutant at region 0, 8 bytes, a load.",
+      "certificate": {
+        "file": "src/cfmemvalid.rs",
+        "lemma": "lemma_access_accepted(0, 8, 8, false)",
+        "witness": "!clazel_codecheck::spec::access_ok(seq![clazel_codecheck::spec::Binding { reg: 6, fact: clazel_codecheck::spec::Fact::Base(0) }, clazel_codecheck::spec::Binding { reg: 2, fact: clazel_codecheck::spec::Fact::Unknown }, clazel_codecheck::spec::Binding { reg: 0, fact: clazel_codecheck::spec::Fact::Unknown }, clazel_codecheck::spec::Binding { reg: 1, fact: clazel_codecheck::spec::Fact::Idx(0, 8) }], clazel_codecheck::spec::Access { mem: ix_mem(), size: 8, store: false })"
+      }
+    },
+    {
+      "id": "mem-access-index-register",
+      "module": "cfmemvalid",
+      "file": "src/cftemplates.rs",
+      "find": "Index { reg: rcx(), scale: 0 }",
+      "replace": "Index { reg: rdx(), scale: 0 }",
+      "expect": "killed",
+      "reason": "The access would use `rdx`, the check's scratch register, not the checked and masked index. `cfmemvalid::lemma_access_accepted` (the validator's `access_ok` admits `[rsi + rcx]` after the check) is false for the mutant at region 0, 8 bytes, a load.",
+      "certificate": {
+        "file": "src/cfmemvalid.rs",
+        "lemma": "lemma_access_accepted(0, 8, 8, false)",
+        "witness": "!clazel_codecheck::spec::access_ok(seq![clazel_codecheck::spec::Binding { reg: 6, fact: clazel_codecheck::spec::Fact::Base(0) }, clazel_codecheck::spec::Binding { reg: 2, fact: clazel_codecheck::spec::Fact::Unknown }, clazel_codecheck::spec::Binding { reg: 0, fact: clazel_codecheck::spec::Fact::Unknown }, clazel_codecheck::spec::Binding { reg: 1, fact: clazel_codecheck::spec::Fact::Idx(0, 8) }], clazel_codecheck::spec::Access { mem: ix_mem(), size: 8, store: false })"
+      }
+    },
+    {
+      "id": "mem-access-displacement",
+      "module": "cfmemvalid",
+      "file": "src/cftemplates.rs",
+      "find": "scale: 0 }), disp: 0 }",
+      "replace": "scale: 0 }), disp: 8 }",
+      "expect": "killed",
+      "reason": "The access would have a displacement of 8, which the validator refuses (it checked `i + n`, not `i + 8 + n`). `cfmemvalid::lemma_access_accepted` (the validator's `access_ok` admits `[rsi + rcx]` after the check) is false for the mutant at region 0, 8 bytes, a load.",
+      "certificate": {
+        "file": "src/cfmemvalid.rs",
+        "lemma": "lemma_access_accepted(0, 8, 8, false)",
+        "witness": "!clazel_codecheck::spec::access_ok(seq![clazel_codecheck::spec::Binding { reg: 6, fact: clazel_codecheck::spec::Fact::Base(0) }, clazel_codecheck::spec::Binding { reg: 2, fact: clazel_codecheck::spec::Fact::Unknown }, clazel_codecheck::spec::Binding { reg: 0, fact: clazel_codecheck::spec::Fact::Unknown }, clazel_codecheck::spec::Binding { reg: 1, fact: clazel_codecheck::spec::Fact::Idx(0, 8) }], clazel_codecheck::spec::Access { mem: ix_mem(), size: 8, store: false })"
+      }
+    },
+    {
+      "id": "i32-access-reads-eight-bytes",
+      "module": "cfmemvalid",
+      "file": "src/cftemplates.rs",
+      "find": "MTy::I32 => x64::Size::W32,",
+      "replace": "MTy::I32 => x64::Size::W64,",
+      "expect": "killed",
+      "reason": "An `i32` load or store would move 8 bytes after a check of 4, reading or overwriting 4 bytes of the next element. `cfmemvalid::lemma_mty_sz_bytes` (the operand size moves as many bytes as the type has) is false for the mutant at `i32`.",
+      "certificate": {
+        "file": "src/cfmemvalid.rs",
+        "lemma": "lemma_mty_sz_bytes(MTy::I32)",
+        "witness": "x64::nbytes(mty_sz(MTy::I32)) != MTy::I32.size()"
+      }
+    },
+    {
+      "id": "f64-access-is-four-bytes",
+      "module": "cfmemvalid",
+      "file": "src/cfspec.rs",
+      "find": "MTy::F64 => 8,",
+      "replace": "MTy::F64 => 4,",
+      "expect": "killed",
+      "reason": "An `f64` access would be checked for 4 bytes and move 8 (in the statement's `MTy::size`, which the check's size is taken from). `cfmemvalid::lemma_mty_size_is_lir` (the access size is LIR's `ty_size`) is false for the mutant at `f64`.",
+      "certificate": {
+        "file": "src/cfmemvalid.rs",
+        "lemma": "lemma_mty_size_is_lir(MTy::F64)",
+        "witness": "lir::ty_size(MTy::F64.lir_ty()) != MTy::F64.size()"
+      }
+    },
+    {
+      "id": "bounds-check-exits-with-zero",
+      "module": "cfmemvalid",
+      "file": "src/cftemplates.rs",
+      "find": "MemOp::BoundsCheck { code, .. } => code,",
+      "replace": "MemOp::BoundsCheck { code, .. } => 0,",
+      "expect": "killed",
+      "reason": "A failing `bounds_check` would exit with code 0, not its own code, which LIR's `Exit` carries. `cfmemvalid::lemma_bc_exit_code` is false for the mutant at code 9.",
+      "certificate": {
+        "file": "src/cfmemvalid.rs",
+        "lemma": "lemma_bc_exit_code(0, 1, 9)",
+        "witness": "mem_exit_code(MemOp::BoundsCheck { region: 0, size: 1, code: 9 }) != 9u32"
+      }
+    },
+    {
+      "id": "br-table-chain-jumps-on-not-equal",
+      "module": "cfmemvalid",
+      "file": "src/cftemplates.rs",
+      "find": "jcc_i(4, rel),",
+      "replace": "jcc_i(5, rel),",
+      "expect": "killed",
+      "reason": "A `br_table` entry would jump when the index differs from the entry's number (`jne` for `je`), so it would take the first target for every index but 0. `cfmemvalid::lemma_brt_cc` (the entry's condition code is `eq`'s) is false for the mutant.",
+      "certificate": {
+        "file": "src/cfmemvalid.rs",
+        "lemma": "lemma_brt_cc(0, 0)",
+        "witness": "brt_entry(0, 0)[2]->Jcc_cc != crate::templates::cc_of(lir::ICmp::Eq)"
+      }
     }
   ]
 }

@@ -137,4 +137,68 @@ pub proof fn lemma_brt_valid(ls: Seq<usize>, d: usize, nl: nat, h: nat, offs: Se
     lemma_valid_cat(a + brt_entries(ls, offs, p0, 0), jm);
 }
 
+/// **The validator accepts the access.** After `mov rsi, [r15 + 16 k]` and
+/// the bounds check of `n` bytes on `rcx`, the facts the validator holds
+/// ([`clazel_codecheck::spec::check_facts`]: `rsi` is region `k`'s base, `rdx`
+/// and `rax` are unknown, `rcx` is checked for `n` bytes) admit `[rsi + rcx]`
+/// for an access of at most `n` bytes, a load or a store
+/// ([`clazel_codecheck::spec::access_ok`]).
+pub proof fn lemma_access_accepted(k: int, n: int, size: int, store: bool)
+    requires
+        size <= n,
+    ensures
+        clazel_codecheck::spec::access_ok(
+            seq![
+                clazel_codecheck::spec::Binding {
+                    reg: 6,
+                    fact: clazel_codecheck::spec::Fact::Base(k),
+                },
+                clazel_codecheck::spec::Binding {
+                    reg: 2,
+                    fact: clazel_codecheck::spec::Fact::Unknown,
+                },
+                clazel_codecheck::spec::Binding {
+                    reg: 0,
+                    fact: clazel_codecheck::spec::Fact::Unknown,
+                },
+                clazel_codecheck::spec::Binding {
+                    reg: 1,
+                    fact: clazel_codecheck::spec::Fact::Idx(k, n),
+                },
+            ],
+            clazel_codecheck::spec::Access { mem: ix_mem(), size: size, store: store },
+        ),
+{
+    reveal_with_fuel(clazel_codecheck::spec::fact_of, 6);
+}
+
+/// The operand size of an access writes or reads as many bytes as its type
+/// has (so the access is within the `n` bytes the check admitted).
+pub proof fn lemma_mty_sz_bytes(ty: MTy)
+    ensures
+        x64::nbytes(mty_sz(ty)) == ty.size(),
+{
+}
+
+/// The access size of a type is LIR's.
+pub proof fn lemma_mty_size_is_lir(ty: MTy)
+    ensures
+        lir::ty_size(ty.lir_ty()) == ty.size(),
+{
+}
+
+/// A `bounds_check`'s stub exits with the instruction's own code.
+pub proof fn lemma_bc_exit_code(region: usize, size: usize, code: u32)
+    ensures
+        mem_exit_code(MemOp::BoundsCheck { region, size, code }) == code,
+{
+}
+
+/// The chain's entry jumps on equal (`je`: the condition code of LIR's `eq`).
+pub proof fn lemma_brt_cc(i: nat, rel: int)
+    ensures
+        brt_entry(i, rel)[2]->Jcc_cc == crate::templates::cc_of(lir::ICmp::Eq),
+{
+}
+
 } // verus!
