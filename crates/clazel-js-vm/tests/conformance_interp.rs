@@ -373,10 +373,16 @@ const NATIVE_INCLUDES: [&str; 2] = ["assert.js", "sta.js"];
 
 /// Tests that run and give a different result for a known reason, each with
 /// its reason: expected failures.
-const KNOWN_GAPS: &[(&str, &str)] = &[(
-    "language/identifier-resolution/assign-to-global-undefined.js",
-    "strict assignment to an unresolvable reference throws before the right-hand side runs (§13.15.2 step 1.a, ResolveBinding first); SetGlobal checks when it runs, after it, and the op list has no resolve-first op",
-)];
+const KNOWN_GAPS: &[(&str, &str)] = &[
+    (
+        "language/identifier-resolution/assign-to-global-undefined.js",
+        "strict assignment to an unresolvable reference throws before the right-hand side runs (§13.15.2 step 1.a, ResolveBinding first); SetGlobal checks when it runs, after it, and the op list has no resolve-first op",
+    ),
+    (
+        "language/comments/S7.4_A5.js",
+        "calls eval, which is not there yet (a built-in, 7.9); the test's own catch turns the ReferenceError into a bare Test262Error, so the runner cannot class it by name (reached since array literals run, #290)",
+    ),
+];
 
 /// Classifies a test that is not run, or `None` if it should be.
 fn not_run(case: &Case) -> Option<String> {
