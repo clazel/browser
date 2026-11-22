@@ -71,7 +71,7 @@ fn slot_imm_exec(j: usize) -> (d: u16)
     add_u(j, 33) as u16
 }
 
-fn ex_load(dst: u8, j: usize) -> (i: isa::Instr)
+pub(crate) fn ex_load(dst: u8, j: usize) -> (i: isa::Instr)
     requires
         j < 31,
     ensures
@@ -89,7 +89,7 @@ fn ex_load(dst: u8, j: usize) -> (i: isa::Instr)
     }
 }
 
-fn ex_store(j: usize, src: u8) -> (i: isa::Instr)
+pub(crate) fn ex_store(j: usize, src: u8) -> (i: isa::Instr)
     requires
         j < 31,
     ensures
@@ -349,7 +349,7 @@ fn un_supported_exec(u: &lir::UnOp) -> (r: bool)
     }
 }
 
-fn pops_exec(op: &Op) -> (r: usize)
+pub(crate) fn pops_exec(op: &Op) -> (r: usize)
     ensures
         r == crate::spec::pops(*op),
 {
@@ -366,7 +366,7 @@ fn pops_exec(op: &Op) -> (r: usize)
     }
 }
 
-fn pushes_exec(op: &Op) -> (r: usize)
+pub(crate) fn pushes_exec(op: &Op) -> (r: usize)
     ensures
         r == crate::spec::pushes(*op),
 {
@@ -383,7 +383,7 @@ fn pushes_exec(op: &Op) -> (r: usize)
     }
 }
 
-fn op_ok_exec(op: &Op, nl: usize, h: usize) -> (r: bool)
+pub(crate) fn op_ok_exec(op: &Op, nl: usize, h: usize) -> (r: bool)
     ensures
         r == op_ok(*op, nl as nat, h as nat),
 {
@@ -417,7 +417,7 @@ fn op_ok_exec(op: &Op, nl: usize, h: usize) -> (r: bool)
 // ----------------------------------------------------------------------------
 
 #[verifier::rlimit(1000)]
-fn emit_op(op: &Op, nl: usize, h: usize, out: &mut Vec<isa::Instr>)
+pub(crate) fn emit_op(op: &Op, nl: usize, h: usize, out: &mut Vec<isa::Instr>)
     requires
         op_ok(*op, nl as nat, h as nat),
     ensures
@@ -885,7 +885,7 @@ fn emit_body_impl(ops: &[Op], nl: usize) -> (r: Option<Vec<isa::Instr>>)
     Some(out)
 }
 
-fn emit_exit(code: &mut Vec<isa::Instr>, exit_code: u16)
+pub(crate) fn emit_exit(code: &mut Vec<isa::Instr>, exit_code: u16)
     ensures
         final(code)@ == old(code)@ + exit_seq(exit_code),
 {
