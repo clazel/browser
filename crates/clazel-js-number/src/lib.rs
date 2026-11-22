@@ -12,7 +12,7 @@
 //! - [`number_to_string`]: the shortest digits that round-trip, by Ryū
 //!   ([`shortest`]), laid out as the spec says ([`format`]).
 //! - [`to_fixed`], [`to_exponential`], [`to_precision`]: exact, by big
-//!   integers ([`format`], [`bigint`]).
+//!   integers ([`format`], [`fixed`]).
 //!
 //! - [`string_to_bigint`], [`bigint_literal_value`] and
 //!   [`BigInt::to_string_radix`]: StringToBigInt §7.1.14†, the value of a
@@ -27,6 +27,7 @@
 //! Kani harnesses (compiled only under `cargo kani`).
 
 pub mod bigint;
+pub mod fixed;
 pub mod format;
 pub mod js_bigint;
 pub mod parse;

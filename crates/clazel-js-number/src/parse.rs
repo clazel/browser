@@ -35,7 +35,7 @@
 //! - The numeric separator `_` is not accepted (the grammar uses
 //!   `DecimalDigits[~Sep]`).
 
-use crate::bigint::Big;
+use crate::fixed::{BIG_LIMBS_PARSE, FixedBig};
 use crate::tables::{EL_MAX_Q, EL_MIN_Q, Tables, tables};
 
 /// The significant digits a decimal is cut to for the exact path.
@@ -311,7 +311,15 @@ pub(crate) fn leading_digits(d: &Decimal<'_>) -> (u64, i64, bool) {
 /// The nearest `f64` to `d` (not negative), by exact big-integer arithmetic.
 #[must_use]
 pub fn decimal_exact(d: &Decimal<'_>) -> f64 {
-    let mut big = Big::zero();
+    decimal_exact_in::<BIG_LIMBS_PARSE>(d)
+}
+
+/// [`decimal_exact`] with `N` limbs of big integer. `N` is a parameter so
+/// that the Kani harnesses run the same code at a small `N`; with fewer
+/// limbs than the input needs the answer is wrong but defined.
+#[must_use]
+pub fn decimal_exact_in<const N: usize>(d: &Decimal<'_>) -> f64 {
+    let mut big = FixedBig::<N>::zero();
     let mut taken: usize = 0;
     let mut dropped: i64 = 0;
     let mut sticky = false;
@@ -360,7 +368,7 @@ pub fn decimal_exact(d: &Decimal<'_>) -> f64 {
         let (hi, st) = big.shr(bl.saturating_sub(64));
         return round_to_f64(hi.low_u128() as u64, bl.saturating_sub(64) as i64, st);
     }
-    let p = Big::pow10(u32::try_from(e10.saturating_neg()).unwrap_or(0));
+    let p = FixedBig::<N>::pow10(u32::try_from(e10.saturating_neg()).unwrap_or(0));
     // Scale so the quotient has 55 or 56 bits, more than a double needs.
     let s = (p.bit_len() as i64)
         .saturating_sub(big.bit_len() as i64)
@@ -370,13 +378,20 @@ pub fn decimal_exact(d: &Decimal<'_>) -> f64 {
     } else {
         (big, p.shl(s.unsigned_abs()))
     };
-    let (quo, rem) = Big::divrem(&num, &den);
+    let (quo, rem) = FixedBig::<N>::divrem(&num, &den);
     round_to_f64(quo.low_u128() as u64, s.saturating_neg(), !rem.is_zero())
 }
 
 /// The nearest `f64` to `d` (not negative), using `t` for Eisel–Lemire.
 #[must_use]
 pub fn decimal_to_f64(d: &Decimal<'_>, t: &Tables) -> f64 {
+    decimal_to_f64_in::<BIG_LIMBS_PARSE>(d, t)
+}
+
+/// [`decimal_to_f64`] with `N` limbs for the exact path (see
+/// [`decimal_exact_in`]).
+#[must_use]
+pub fn decimal_to_f64_in<const N: usize>(d: &Decimal<'_>, t: &Tables) -> f64 {
     let (w, q, truncated) = leading_digits(d);
     if w == 0 {
         return 0.0;
@@ -410,7 +425,19 @@ pub fn decimal_to_f64(d: &Decimal<'_>, t: &Tables) -> f64 {
             }
         }
     }
-    decimal_exact(d)
+    decimal_exact_in::<N>(d)
+}
+
+/// The value of the ASCII digit `c` (`0-9`, `a-f`, `A-F`) if it is below
+/// `radix`: `char::to_digit` for the radixes 2 to 16, on bytes.
+fn digit_in_radix(c: u8, radix: u32) -> Option<u32> {
+    let v = match c {
+        b'0'..=b'9' => u32::from(c.wrapping_sub(b'0')),
+        b'a'..=b'f' => u32::from(c.wrapping_sub(b'a')).saturating_add(10),
+        b'A'..=b'F' => u32::from(c.wrapping_sub(b'A')).saturating_add(10),
+        _ => return None,
+    };
+    (v < radix).then_some(v)
 }
 
 /// The value of the digits of `b` in radix `1 << bits` (`bits` in 1..=4),
@@ -425,7 +452,7 @@ pub(crate) fn radix_value(b: &[u8], bits: u32) -> Option<f64> {
     let mut sticky = false;
     let mut full = false;
     for &c in b {
-        let v = char::from(c).to_digit(radix)?;
+        let v = digit_in_radix(c, radix)?;
         if full {
             sticky |= v != 0;
             exp2 = exp2.saturating_add(i64::from(bits));
@@ -449,7 +476,69 @@ pub(crate) fn radix_value(b: &[u8], bits: u32) -> Option<f64> {
 /// StringToNumber (§7.1.4.1.1†): the Number value of `s`, or NaN.
 #[must_use]
 pub fn string_to_number(s: &str) -> f64 {
-    let t = s.trim_matches(is_str_whitespace).as_bytes();
+    string_to_number_bytes::<BIG_LIMBS_PARSE>(s.as_bytes(), tables())
+}
+
+/// The length in bytes of the StrWhiteSpace character at the start of `b`
+/// (UTF-8), or 0 if there is none: the code points of [`is_str_whitespace`].
+fn leading_whitespace(b: &[u8]) -> usize {
+    match b {
+        [0x09..=0x0D | 0x20, ..] => 1,
+        [0xC2, 0xA0, ..] => 2,
+        [0xE1, 0x9A, 0x80, ..]
+        | [0xE2, 0x80, 0x80..=0x8A | 0xA8 | 0xA9 | 0xAF, ..]
+        | [0xE2, 0x81, 0x9F, ..]
+        | [0xE3, 0x80, 0x80, ..]
+        | [0xEF, 0xBB, 0xBF, ..] => 3,
+        _ => 0,
+    }
+}
+
+/// The length in bytes of the StrWhiteSpace character at the end of `b`.
+fn trailing_whitespace(b: &[u8]) -> usize {
+    match b {
+        [.., 0x09..=0x0D | 0x20] => 1,
+        [.., 0xC2, 0xA0] => 2,
+        [.., 0xE1, 0x9A, 0x80]
+        | [.., 0xE2, 0x80, 0x80..=0x8A | 0xA8 | 0xA9 | 0xAF]
+        | [.., 0xE2, 0x81, 0x9F]
+        | [.., 0xE3, 0x80, 0x80]
+        | [.., 0xEF, 0xBB, 0xBF] => 3,
+        _ => 0,
+    }
+}
+
+/// `b` (the UTF-8 of a string) without its leading and trailing
+/// StrWhiteSpace: `str::trim_matches(is_str_whitespace)` on bytes, so that
+/// the conversion below is a function of bytes and Kani never meets `char`
+/// decoding. (The tests compare the two on every code point.)
+#[must_use]
+pub fn trim_str_whitespace(b: &[u8]) -> &[u8] {
+    let mut t = b;
+    loop {
+        let n = leading_whitespace(t);
+        if n == 0 {
+            break;
+        }
+        t = t.get(n..).unwrap_or(&[]);
+    }
+    loop {
+        let n = trailing_whitespace(t);
+        if n == 0 {
+            break;
+        }
+        t = t.get(..t.len().saturating_sub(n)).unwrap_or(&[]);
+    }
+    t
+}
+
+/// StringToNumber on the UTF-8 bytes of the string, with `t` for
+/// Eisel–Lemire and `N` limbs for the exact path ([`decimal_exact_in`]).
+/// Bytes that are not UTF-8 are not whitespace and not part of a literal,
+/// so they give NaN, as `string_to_number` would for the same text.
+#[must_use]
+pub fn string_to_number_bytes<const N: usize>(s: &[u8], tbl: &Tables) -> f64 {
+    let t = trim_str_whitespace(s);
     if t.is_empty() {
         return 0.0;
     }
@@ -474,7 +563,7 @@ pub fn string_to_number(s: &str) -> f64 {
         f64::INFINITY
     } else {
         match scan_decimal(body) {
-            Some(d) => decimal_to_f64(&d, tables()),
+            Some(d) => decimal_to_f64_in::<N>(&d, tbl),
             None => return f64::NAN,
         }
     };
