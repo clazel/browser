@@ -17,7 +17,7 @@
 //! 5. **Controls**: the validator does refuse a blob whose bounds check is
 //!    broken, whose jump lands inside the check, or whose last byte is cut.
 //!
-//! This is evidence, not proof (see the header of `clazel_jit::cfemit`).
+//! That the validator accepts the blobs is evidence, not proof; that the emitter returns the templates is proven (`clazel_jit::cfemit`).
 
 use clazel_codecheck::validate::validate;
 use clazel_jit::cfemit::emit_cf_blob;

@@ -261,6 +261,34 @@
         "lemma": "lemma_brt_cc(0, 0)",
         "witness": "brt_entry(0, 0)[2]->Jcc_cc != crate::templates::cc_of(lir::ICmp::Eq)"
       }
+    },
+    {
+      "id": "emitter-max-size-differs-from-spec",
+      "module": "cfemit",
+      "file": "src/cfemit.rs",
+      "find": "pub const MAX_SIZE: usize = 0x2000_0000;",
+      "replace": "pub const MAX_SIZE: usize = 0x4000_0000;",
+      "expect": "killed",
+      "reason": "The emitter would translate bodies up to 2^30 bytes where the spec's `cf_prog_ok` stops at `max_size` (2^29), so it would return a blob for a program the contract says has no translation, and a displacement could leave the range `labels_fit` covers. `cfemit::lemma_emitter_limits` (the emitter's limit is the spec's) is false for the mutant.",
+      "certificate": {
+        "file": "src/cfemit.rs",
+        "lemma": "lemma_emitter_limits()",
+        "witness": "MAX_SIZE as nat != max_size()"
+      }
+    },
+    {
+      "id": "emitter-max-targets-differs-from-spec",
+      "module": "cfemit",
+      "file": "src/cfemit.rs",
+      "find": "pub const MAX_TARGETS: usize = 0x10000;",
+      "replace": "pub const MAX_TARGETS: usize = 0x20000;",
+      "expect": "killed",
+      "reason": "The emitter would accept a `br_table` of up to 2^17 targets where `cf_flow` refuses more than `max_targets` (2^16). `cfemit::lemma_emitter_limits` is false for the mutant.",
+      "certificate": {
+        "file": "src/cfemit.rs",
+        "lemma": "lemma_emitter_limits()",
+        "witness": "MAX_TARGETS as nat != max_targets()"
+      }
     }
   ]
 }

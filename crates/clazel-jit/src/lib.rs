@@ -89,14 +89,18 @@
 //!     the default, by induction on the entry;
 //!   - that the validator's access rule admits the access the template
 //!     makes ([`cfmemvalid::lemma_access_accepted`]).
-//! - **The emitter** [`cfemit::emit_cf_blob`] is **not proven** equal to
-//!   [`cftemplates::ctmpl`] (Verus has no spec for the signed `checked_*`
-//!   operators or `i32::try_from(i64)`, so [`cfcontract::emit_cf_blob_ensures`]
-//!   is not discharged). `tests/validator_cf.rs` checks that the
+//! - **The emitter** [`cfemit::emit_cf_blob`] is **proven equal to the
+//!   templates**: [`cfcontract::emit_cf_blob_ensures`] is its postcondition.
+//!   The bytes are the encoding of [`cftemplates::ctmpl`] (with the return
+//!   label at the end) and the exit sequence, and it answers `None` exactly
+//!   when [`cftemplates::cf_prog_ok`] refuses, so every emitted blob refines
+//!   its program ([`cfemit::lemma_emitted_refines`], with
+//!   [`cfproofs::lemma_ctmpl_refines`]). No signed arithmetic is needed:
+//!   positions are `usize`, a backward displacement is `!(end - target - 1)`
+//!   on a `u32`. `tests/validator_cf.rs` additionally checks that the
 //!   validator accepts every memory template, `br_table`, and 1500 generated
 //!   programs with control flow and memory.
 //! - **Not done:**
-//!   - [`cfcontract::emit_cf_blob_ensures`] (above);
 //!   - that the validator's `check_unit_at` recognizes the template's check
 //!     as a unit and every blob is accepted: the code is `check_seq`
 //!     itself and the test accepts it, but there is no theorem;
