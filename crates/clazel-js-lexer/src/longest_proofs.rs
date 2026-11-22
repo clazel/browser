@@ -18,6 +18,8 @@ use super::equivalence::*;
 #[cfg(verus_only)]
 use super::exec::kind_proven;
 #[cfg(verus_only)]
+use super::ident_proofs::*;
+#[cfg(verus_only)]
 use super::independent::*;
 #[allow(unused_imports)]
 use super::spec::*;
@@ -54,6 +56,8 @@ pub open spec fn start_ok(k: ElementKind, s: Seq<u32>, i: int) -> bool {
         ElementKind::StringLiteral => s[i] == 0x22 || s[i] == 0x27,
         ElementKind::DivPunctuator => s[i] == 0x2F,
         ElementKind::RightBracePunctuator => s[i] == 0x7D,
+        ElementKind::IdentifierName => s[i] == 0x5C || is_identifier_start_char(s[i]),
+        ElementKind::PrivateIdentifier => s[i] == 0x23,
         _ => true,
     }
 }
@@ -147,6 +151,10 @@ pub proof fn lemma_first_cp(
         ElementKind::RightBracePunctuator => {
             lemma_right_brace_equiv(s, i, j);
         },
+        ElementKind::IdentifierName => {
+            lemma_ident_start(s, i, j);
+        },
+        ElementKind::PrivateIdentifier => {},
         _ => {},
     }
 }
@@ -318,7 +326,15 @@ pub proof fn lemma_pk_none(goal: Goal, html: bool, s: Seq<u32>, pos: int, e: int
         pk_bounded(goal, html, s, pos, e),
         numeric_absent(s, pos),
 {
-    lemma_pk_only(goal, html, s, pos, e, ElementKind::IdentifierName, ElementKind::IdentifierName);
+    lemma_pk_only(
+        goal,
+        html,
+        s,
+        pos,
+        e,
+        ElementKind::RegularExpressionLiteral,
+        ElementKind::RegularExpressionLiteral,
+    );
 }
 
 /// A monotone bound.

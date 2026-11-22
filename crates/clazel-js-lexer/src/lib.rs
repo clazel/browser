@@ -32,6 +32,7 @@ pub mod contract;
 pub mod equivalence;
 pub mod examples;
 pub mod exec;
+pub mod ident_proofs;
 pub mod independent;
 pub mod lemmas;
 pub mod longest_proofs;

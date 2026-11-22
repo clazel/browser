@@ -120,6 +120,8 @@
 #[cfg(verus_only)]
 use super::equivalence::*;
 #[cfg(verus_only)]
+use super::ident_proofs::*;
+#[cfg(verus_only)]
 use super::independent::*;
 #[cfg(verus_only)]
 use super::longest_proofs::*;
@@ -167,6 +169,14 @@ pub open spec fn value_shape_agrees(el: Element) -> bool {
     }
 }
 
+/// The code points of a `Name` value (empty for any other).
+pub open spec fn value_name_cps(v: Value) -> Seq<u32> {
+    match v {
+        Value::Name { code_points, .. } => code_points@,
+        _ => Seq::empty(),
+    }
+}
+
 /// The kinds whose agreement with the spec is proven (see
 /// [`kind_agrees_proven`]).
 pub open spec fn kind_proven(kind: ElementKind, html: bool) -> bool {
@@ -174,13 +184,15 @@ pub open spec fn kind_proven(kind: ElementKind, html: bool) -> bool {
         == ElementKind::HashbangComment || kind == ElementKind::DivPunctuator || kind
         == ElementKind::RightBracePunctuator || kind == ElementKind::Punctuator || (kind
         == ElementKind::Comment && !html) || kind == ElementKind::NumericLiteral || kind
-        == ElementKind::StringLiteral
+        == ElementKind::StringLiteral || kind == ElementKind::IdentifierName || kind
+        == ElementKind::PrivateIdentifier
 }
 
 /// The kinds whose value is proven to be the spec's
 /// ([`super::contract::element_value_agrees`]).
 pub open spec fn value_proven(kind: ElementKind) -> bool {
-    kind == ElementKind::NumericLiteral || kind == ElementKind::StringLiteral
+    kind == ElementKind::NumericLiteral || kind == ElementKind::StringLiteral || kind
+        == ElementKind::IdentifierName || kind == ElementKind::PrivateIdentifier
 }
 
 /// For the kinds of [`value_proven`], the value is the one the standard
@@ -234,8 +246,18 @@ pub open spec fn next_input_element_proven(
                 src,
                 pos as int,
                 end,
-            ) && proven_bounded(goal, html, src, pos as int, end) && ((end >= src.len() || src[end]
-                < 0x80) ==> numeric_literal_follow_error(src, end))),
+            ) && proven_bounded(goal, html, src, pos as int, end) && numeric_literal_follow_error(
+                src,
+                end,
+            )) && (e == LexError::InvalidIdentifierEscape ==> exists|end: int|
+            pos < end <= src.len() && proven_bounded(goal, html, src, pos as int, end)
+                && numeric_absent(src, pos as int) && #[trigger] invalid_identifier_at(
+                goal,
+                html,
+                src,
+                pos as int,
+                end,
+            )),
         Ok(Step::Eof) => pos == src.len(),
         Ok(Step::Element(el)) => pos < src.len() && el.start == pos && pos < el.end && el.end
             <= src.len() && value_shape_agrees(el) && kind_agrees_proven(goal, html, src, el)
@@ -246,12 +268,37 @@ pub open spec fn next_input_element_proven(
             pos as int,
             el.end as int,
         )) && (kind_proven(el.kind, html) && el.kind != ElementKind::NumericLiteral
-            ==> numeric_absent(src, pos as int)) && (el.kind == ElementKind::NumericLiteral && (
-        el.end >= src.len() || src[el.end as int] < 0x80) ==> !numeric_literal_follow_error(
+            ==> numeric_absent(src, pos as int)) && (el.kind == ElementKind::NumericLiteral
+            ==> !numeric_literal_follow_error(src, el.end as int)) && (kind_proven(el.kind, html)
+            && el.kind != ElementKind::IdentifierName ==> ident_absent(src, pos as int)) && (
+        kind_proven(el.kind, html) && el.kind != ElementKind::PrivateIdentifier ==> private_absent(
             src,
+            pos as int,
+        )) && (el.kind == ElementKind::IdentifierName ==> identifier_name_valid(
+            src,
+            pos as int,
+            el.end as int,
+        )) && (el.kind == ElementKind::PrivateIdentifier ==> identifier_name_valid(
+            src,
+            pos as int + 1,
             el.end as int,
         )),
     }
+}
+
+/// An identifier or private identifier over `pos..end` with an early error
+/// (§12.7.1.1), and no other kind of that error possible at `pos`.
+pub open spec fn invalid_identifier_at(
+    goal: Goal,
+    html: bool,
+    src: Seq<u32>,
+    pos: int,
+    end: int,
+) -> bool {
+    (element_matches(goal, html, ElementKind::IdentifierName, src, pos, end)
+        && !identifier_name_valid(src, pos, end) && private_absent(src, pos))
+        || (element_matches(goal, html, ElementKind::PrivateIdentifier, src, pos, end)
+        && !identifier_name_valid(src, pos + 1, end) && ident_absent(src, pos))
 }
 
 /// What [`next_token`] is proven to return: the token is after `pos`,
@@ -395,8 +442,6 @@ pub proof fn lemma_element_meets_contract(
         next_input_element_proven(src, pos, goal, html, Ok(Step::Element(el))),
         kind_proven(el.kind, html),
         unproven_bounded(goal, html, src, pos as int, el.end as int),
-        el.kind == ElementKind::NumericLiteral ==> (el.end >= src.len() || src[el.end as int]
-            < 0x80),
     ensures
         super::contract::next_input_element_ensures(src, pos, goal, html, Ok(Step::Element(el))),
 {
@@ -418,8 +463,20 @@ pub proof fn lemma_element_meets_contract(
             assert(numeric_absent(src, i));
         }
     }
-    assert(!(element_matches(goal, html, ElementKind::IdentifierName, src, i, i + n)));
-    assert(!(element_matches(goal, html, ElementKind::PrivateIdentifier, src, i, i + n)));
+    assert(!(element_matches(goal, html, ElementKind::IdentifierName, src, i, i + n)
+        && !identifier_name_valid(src, i, i + n))) by {
+        if el.kind != ElementKind::IdentifierName {
+            reveal(ident_absent);
+            assert(ident_absent(src, i));
+        }
+    }
+    assert(!(element_matches(goal, html, ElementKind::PrivateIdentifier, src, i, i + n)
+        && !identifier_name_valid(src, i + 1, i + n))) by {
+        if el.kind != ElementKind::PrivateIdentifier {
+            reveal(private_absent);
+            assert(private_absent(src, i));
+        }
+    }
     assert(lex_error(goal, html, src, i) is None);
     // The value is the standard's: for the kinds whose value is proven, as
     // proven; for the others there is none.
@@ -476,8 +533,7 @@ pub proof fn lemma_numeric_error_meets_contract(
         pos < end <= src.len(),
         element_matches(goal, html, ElementKind::NumericLiteral, src, pos as int, end),
         proven_bounded(goal, html, src, pos as int, end),
-        end < src.len() ==> src[end] < 0x80,
-        (end >= src.len() || src[end] < 0x80) ==> numeric_literal_follow_error(src, end),
+        numeric_literal_follow_error(src, end),
         unproven_bounded(goal, html, src, pos as int, end + 1),
     ensures
         super::contract::next_input_element_ensures(
@@ -497,6 +553,51 @@ pub proof fn lemma_numeric_error_meets_contract(
         end,
     );
     lemma_longest_from_bounds(goal, html, src, pos as int, end);
+}
+
+/// The contract for [`LexError::InvalidIdentifierEscape`], given that no
+/// element of a kind that is not proven is longer than the identifier.
+pub proof fn lemma_invalid_identifier_meets_contract(
+    src: Seq<u32>,
+    pos: usize,
+    goal: Goal,
+    html: bool,
+    end: int,
+)
+    requires
+        next_input_element_proven(
+            src,
+            pos,
+            goal,
+            html,
+            Err(LexError::InvalidIdentifierEscape),
+        ),
+        pos < end <= src.len(),
+        proven_bounded(goal, html, src, pos as int, end),
+        numeric_absent(src, pos as int),
+        invalid_identifier_at(goal, html, src, pos as int, end),
+        unproven_bounded(goal, html, src, pos as int, end + 1),
+    ensures
+        super::contract::next_input_element_ensures(
+            src,
+            pos,
+            goal,
+            html,
+            Err(LexError::InvalidIdentifierEscape),
+        ),
+{
+    let i = pos as int;
+    let kind = if element_matches(goal, html, ElementKind::IdentifierName, src, i, end) {
+        ElementKind::IdentifierName
+    } else {
+        ElementKind::PrivateIdentifier
+    };
+    super::lemmas::lemma_kind_implies_any(goal, html, kind, src, i, end);
+    lemma_longest_from_bounds(goal, html, src, i, end);
+    let n = longest_len(goal, html, src, i);
+    assert(n == end - i);
+    reveal(numeric_absent);
+    assert(!element_matches(goal, html, ElementKind::NumericLiteral, src, i, i + n));
 }
 
 // ---------------------------------------------------------------------
@@ -623,10 +724,10 @@ fn hex_val(c: u32) -> (r: u32)
 }
 
 /// §12.7 `IdentifierStartChar :: UnicodeIDStart | $ | _`. Above U+007F,
-/// [`super::unicode`]'s table, about which nothing is claimed.
+/// [`super::unicode`]'s table, which the spec's predicate is.
 fn id_start_char(c: u32) -> (r: bool)
     ensures
-        c < 0x80 ==> r == is_identifier_start_char(c),
+        r == is_identifier_start_char(c),
         r ==> c <= 0x10FFFF,
         r ==> c != 0x5C,
 {
@@ -640,7 +741,7 @@ fn id_start_char(c: u32) -> (r: bool)
 /// §12.7 `IdentifierPartChar :: UnicodeIDContinue | $`.
 fn id_part_char(c: u32) -> (r: bool)
     ensures
-        c < 0x80 ==> r == is_identifier_part_char(c),
+        r == is_identifier_part_char(c),
         r ==> c <= 0x10FFFF,
         r ==> c != 0x5C,
 {
@@ -1067,13 +1168,31 @@ fn scan_unicode_escape(src: &[u32], k: usize) -> (r: Option<(u32, usize)>)
 /// determined by its first code point, so the longest derivation is the
 /// greedy one): IdentifierCodePoints (§12.7.1.2), whether an escape was
 /// used, whether the §12.7.1.1 early errors pass, and the end.
+///
+/// Proven: `Some` is the longest `IdentifierName` the spec derives at `k`
+/// (it is read left to right as [`super::independent`]'s units, so no
+/// derivation is longer: [`name_end`]), the code points are the spec's
+/// IdentifierCodePoints of it, `escaped` is whether it has an escape, and
+/// `valid` is whether it has no early error; `None` means the spec derives
+/// none.
 fn scan_identifier(src: &[u32], k: usize) -> (r: Option<(Vec<u32>, bool, bool, usize)>)
     requires
         k <= src.len(),
     ensures
         match r {
-            Some((_, _, _, e)) => k < e <= src.len(),
-            None => true,
+            Some((cps, escaped, valid, e)) => k < e <= src.len() && ind_name_from(
+                src@,
+                k as int,
+                e as int,
+                true,
+            ) && name_end(src@, k as int, true) == e as int && identifier_name_cps(
+                src@,
+                k as int,
+                e as int,
+                cps@,
+            ) && escaped == identifier_has_escape(src@, k as int, e as int) && valid
+                == identifier_early_errors_ok(cps@),
+            None => ind_unit_end(src@, k as int, true) < 0,
         },
 {
     let mut cps: Vec<u32> = Vec::new();
@@ -1088,6 +1207,19 @@ fn scan_identifier(src: &[u32], k: usize) -> (r: Option<(Vec<u32>, bool, bool, u
         // lexical grammar production."
         match scan_unicode_escape(src, k.saturating_add(1)) {
             Some((cp, e)) => {
+                proof {
+                    let s = src@;
+                    assert(s[k as int] == 0x5C);
+                    assert(ind_unit_end(s, k as int, true) == e as int);
+                    lemma_unit_equiv(s, k as int, e as int);
+                    assert(identifier_start(s, k as int, e as int));
+                    assert(identifier_code_point(s, k as int, e as int) == cp);
+                    lemma_cps_start(s, k as int, e as int);
+                    assert(ind_name_from(s, e as int, e as int, false));
+                    lemma_name_end_step(s, k as int, e as int, true);
+                    lemma_early_one(cp);
+                    lemma_has_escape_esc(s, k as int, k as int, e as int);
+                }
                 cps.push(cp);
                 escaped = true;
                 valid = id_start_char(cp);
@@ -1099,14 +1231,38 @@ fn scan_identifier(src: &[u32], k: usize) -> (r: Option<(Vec<u32>, bool, bool, u
         }
     } else if id_start_char(c) {
         // IdentifierStart :: IdentifierStartChar
+        proof {
+            let s = src@;
+            assert(k < s.len() && c == s[k as int]);
+            lemma_id_char_equiv(c);
+            assert(ind_unit_end(s, k as int, true) == k as int + 1);
+            lemma_unit_equiv(s, k as int, k as int + 1);
+            assert(identifier_start(s, k as int, k as int + 1));
+            lemma_cps_start(s, k as int, k as int + 1);
+            assert(ind_name_from(s, k as int + 1, k as int + 1, false));
+            lemma_name_end_step(s, k as int, k as int + 1, true);
+            lemma_early_one(c);
+            lemma_has_escape_plain(s, k as int, k as int);
+        }
         cps.push(c);
         j = k.saturating_add(1);
     } else {
+        proof {
+            let s = src@;
+            if k < s.len() {
+                lemma_id_char_equiv(s[k as int]);
+            }
+        }
         return None;
     }
     loop
         invariant
             k < j <= src.len(),
+            ind_name_from(src@, k as int, j as int, true),
+            name_end(src@, k as int, true) == name_end(src@, j as int, false),
+            identifier_name_cps(src@, k as int, j as int, cps@),
+            escaped == identifier_has_escape(src@, k as int, j as int),
+            valid == identifier_early_errors_ok(cps@),
         decreases src.len() - j,
     {
         let c = peek(src, j);
@@ -1115,6 +1271,20 @@ fn scan_identifier(src: &[u32], k: usize) -> (r: Option<(Vec<u32>, bool, bool, u
             // rule for IdentifierPartChar.
             match scan_unicode_escape(src, j.saturating_add(1)) {
                 Some((cp, e)) => {
+                    proof {
+                        let s = src@;
+                        assert(s[j as int] == 0x5C);
+                        assert(ind_unit_end(s, j as int, false) == e as int);
+                        lemma_unit_equiv(s, j as int, e as int);
+                        assert(identifier_part(s, j as int, e as int));
+                        assert(identifier_code_point(s, j as int, e as int) == cp);
+                        lemma_cps_extend(s, k as int, j as int, e as int, cps@);
+                        lemma_name_from_append(s, k as int, j as int, e as int, true);
+                        lemma_name_end_step(s, j as int, e as int, false);
+                        lemma_cps_nonempty(s, k as int, j as int, cps@);
+                        lemma_early_push(cps@, cp);
+                        lemma_has_escape_esc(s, k as int, j as int, e as int);
+                    }
                     cps.push(cp);
                     escaped = true;
                     if !id_part_char(cp) {
@@ -1123,14 +1293,45 @@ fn scan_identifier(src: &[u32], k: usize) -> (r: Option<(Vec<u32>, bool, bool, u
                     j = e;
                 },
                 None => {
+                    proof {
+                        let s = src@;
+                        assert(s[j as int] == 0x5C);
+                        assert(ind_unit_end(s, j as int, false) < 0);
+                        lemma_name_end_stop(s, j as int);
+                        lemma_name_end_derives(s, k as int, true);
+                    }
                     return Some((cps, escaped, valid, j));
                 },
             }
         } else if id_part_char(c) {
             // IdentifierPart :: IdentifierPartChar
+            proof {
+                let s = src@;
+                assert(j < s.len() && c == s[j as int]);
+                lemma_id_char_equiv(c);
+                assert(ind_unit_end(s, j as int, false) == j as int + 1);
+                lemma_unit_equiv(s, j as int, j as int + 1);
+                assert(identifier_part(s, j as int, j as int + 1));
+                assert(identifier_code_point(s, j as int, j as int + 1) == c);
+                lemma_cps_extend(s, k as int, j as int, j as int + 1, cps@);
+                lemma_name_from_append(s, k as int, j as int, j as int + 1, true);
+                lemma_name_end_step(s, j as int, j as int + 1, false);
+                lemma_cps_nonempty(s, k as int, j as int, cps@);
+                lemma_early_push(cps@, c);
+                lemma_has_escape_plain(s, k as int, j as int);
+            }
             cps.push(c);
             j = j.saturating_add(1);
         } else {
+            proof {
+                let s = src@;
+                if j < s.len() {
+                    lemma_id_char_equiv(s[j as int]);
+                }
+                assert(ind_unit_end(s, j as int, false) < 0);
+                lemma_name_end_stop(s, j as int);
+                lemma_name_end_derives(s, k as int, true);
+            }
             return Some((cps, escaped, valid, j));
         }
     }
@@ -1788,24 +1989,19 @@ fn scan_numeric(src: &[u32], k: usize) -> (r: Option<(usize, bool, bool)>)
 /// §12.9.3: "The SourceCharacter immediately following a NumericLiteral
 /// must not be an IdentifierStart or DecimalDigit."
 ///
-/// Proven: it is [`numeric_literal_follow_error`] when the code point after
-/// the literal is below U+0080 or there is none (an `IdentifierStart` that
-/// is a `UnicodeEscapeSequence` included). Above U+007F, `id_start_char` is
-/// the table of [`super::unicode`], which nothing ties to the spec's
-/// uninterpreted `ID_Start`: nothing is claimed.
+/// Proven: it is [`numeric_literal_follow_error`] (an `IdentifierStart`
+/// that is a `UnicodeEscapeSequence` included; above U+007F, the spec's
+/// `ID_Start` is the table of [`super::unicode`]).
 fn numeric_follow_error(src: &[u32], j: usize) -> (r: bool)
     requires
         j <= src.len(),
     ensures
-        (j >= src.len() || src@[j as int] < 0x80) ==> r == numeric_literal_follow_error(
-            src@,
-            j as int,
-        ),
+        r == numeric_literal_follow_error(src@, j as int),
 {
     let c = peek(src, j);
     proof {
         let s = src@;
-        if j < s.len() && s[j as int] < 0x80 {
+        if j < s.len() {
             assert(c == s[j as int]);
             if is_decimal_digit(c) {
                 assert(numeric_literal_follow_error(s, j as int));
@@ -1815,7 +2011,7 @@ fn numeric_follow_error(src: &[u32], j: usize) -> (r: bool)
     if is_dec(c) || id_start_char(c) {
         proof {
             let s = src@;
-            if j < s.len() && s[j as int] < 0x80 && !is_decimal_digit(c) {
+            if j < s.len() && !is_decimal_digit(c) {
                 assert(identifier_start(s, j as int, j as int + 1));
             }
         }
@@ -1840,8 +2036,9 @@ fn numeric_follow_error(src: &[u32], j: usize) -> (r: bool)
     } else {
         proof {
             let s = src@;
-            if j < s.len() && s[j as int] < 0x80 {
-                assert forall|k: int| !(j < k <= s.len() && identifier_start(s, j as int, k)) by {}
+            assert forall|k: int| !(j < k <= s.len() && identifier_start(s, j as int, k)) by {}
+            if j < s.len() {
+                assert(!is_decimal_digit(s[j as int]));
             }
         }
         false
@@ -2566,11 +2763,14 @@ pub open spec fn candidate_ok(src: Seq<u32>, pos: usize, c: (Element, Option<Lex
     c.0.start == pos && pos < c.0.end <= src.len() && value_shape_agrees(c.0) && c.1
         != Some(LexError::NoInputElement) && (c.1 == Some(LexError::IdentifierAfterNumericLiteral)
         ==> c.0.kind == ElementKind::NumericLiteral) && (c.0.kind == ElementKind::NumericLiteral
-        && (c.0.end >= src.len() || src[c.0.end as int] < 0x80) ==> ((c.1 == Some(
-        LexError::IdentifierAfterNumericLiteral)) == numeric_literal_follow_error(
-        src,
-        c.0.end as int,
-    )))
+        ==> ((c.1 == Some(LexError::IdentifierAfterNumericLiteral))
+        == numeric_literal_follow_error(src, c.0.end as int))) && (c.1 == Some(
+        LexError::InvalidIdentifierEscape) ==> (c.0.kind == ElementKind::IdentifierName
+        || c.0.kind == ElementKind::PrivateIdentifier)) && (c.0.kind
+        == ElementKind::IdentifierName ==> ((c.1 == Some(LexError::InvalidIdentifierEscape))
+        == !identifier_name_valid(src, pos as int, c.0.end as int))) && (c.0.kind
+        == ElementKind::PrivateIdentifier ==> ((c.1 == Some(LexError::InvalidIdentifierEscape))
+        == !identifier_name_valid(src, pos as int + 1, c.0.end as int)))
 }
 
 /// The end of a candidate, or `pos` if there is none.
@@ -2751,6 +2951,13 @@ pub open spec fn lex_result_ok(
         None => true,
     }) && pk_bounded(goal, html, src, pos as int, cand_end(pos, r)) && ((r is None
         || r.unwrap().0.kind != ElementKind::NumericLiteral) ==> numeric_absent(src, pos as int))
+        && ((r is None || r.unwrap().0.kind != ElementKind::IdentifierName) ==> ident_absent(
+        src,
+        pos as int,
+    )) && ((r is None || r.unwrap().0.kind != ElementKind::PrivateIdentifier) ==> private_absent(
+        src,
+        pos as int,
+    ))
 }
 
 /// A `WhiteSpace` at `pos` (§12.2).
@@ -2789,10 +2996,13 @@ fn lex_ws(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Candida
             ) implies j <= pos + 1 by {
             assert(white_space(src@, pos as int, j));
         }
+        lemma_ws_lt_not_id_start(src@[pos as int]);
         assert forall|k: ElementKind|
             kind_proven(k, html) && k != ElementKind::HashbangComment && k
                 != ElementKind::WhiteSpace implies !start_ok(k, src@, pos as int) by {}
         lemma_pk_one(goal, html, src@, pos as int, pos as int + 1, ElementKind::WhiteSpace);
+        lemma_ident_absent_from_class(src@, pos as int);
+        lemma_private_absent_from_class(src@, pos as int);
     }
     ws
 }
@@ -2844,6 +3054,9 @@ fn lex_lt(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Candida
             ) implies j <= pos + 1 by {
             assert(line_terminator(src@, pos as int, j));
         }
+        lemma_ws_lt_not_id_start(src@[pos as int]);
+        lemma_ident_absent_from_class(src@, pos as int);
+        lemma_private_absent_from_class(src@, pos as int);
         assert forall|k: ElementKind|
             kind_proven(k, html) && k != ElementKind::HashbangComment && k
                 != ElementKind::LineTerminator implies !start_ok(k, src@, pos as int) by {}
@@ -2869,6 +3082,10 @@ fn lex_slash(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Cand
         lex_result_ok(src@, pos, goal, html, r),
 {
     let _ = (goal, html);
+    proof {
+        lemma_ident_absent_from_class(src@, pos as int);
+        lemma_private_absent_from_class(src@, pos as int);
+    }
     let c1 = peek(src, pos.saturating_add(1));
     // Comment, RegularExpressionLiteral or DivPunctuator.
     let cmt = lex_slash_comment(src, pos, html);
@@ -3001,6 +3218,10 @@ fn lex_brace(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Cand
         lex_result_ok(src@, pos, goal, html, r),
 {
     let _ = (goal, html);
+    proof {
+        lemma_ident_absent_from_class(src@, pos as int);
+        lemma_private_absent_from_class(src@, pos as int);
+    }
     // TemplateMiddle / TemplateTail or RightBracePunctuator.
     let gt = goal_template_tail(goal);
     let gr = goal_right_brace(goal);
@@ -3074,6 +3295,10 @@ fn lex_backtick(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<C
         lex_result_ok(src@, pos, goal, html, r),
 {
     let _ = (goal, html);
+    proof {
+        lemma_ident_absent_from_class(src@, pos as int);
+        lemma_private_absent_from_class(src@, pos as int);
+    }
     // NoSubstitutionTemplate / TemplateHead
     let r = lex_template(src, pos, false);
     proof {
@@ -3097,6 +3322,10 @@ fn lex_string(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Can
         lex_result_ok(src@, pos, goal, html, r),
 {
     let _ = (goal, html);
+    proof {
+        lemma_ident_absent_from_class(src@, pos as int);
+        lemma_private_absent_from_class(src@, pos as int);
+    }
     // StringLiteral
     match scan_string(src, pos) {
         Some((units, e)) => {
@@ -3202,13 +3431,51 @@ fn lex_hash(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Candi
         None => None,
     };
     proof {
+        let s = src@;
         assert forall|k: ElementKind|
-            kind_proven(k, html) && k != ElementKind::HashbangComment implies !start_ok(
-            k,
-            src@,
-            pos as int,
-        ) by {}
-        lemma_pk_none(goal, html, src@, pos as int, cand_end(pos, r));
+            kind_proven(k, html) && k != ElementKind::HashbangComment && k
+                != ElementKind::PrivateIdentifier implies !start_ok(k, s, pos as int) by {}
+        lemma_ident_absent_from_class(s, pos as int);
+        match r {
+            Some((ref el, ref err)) => {
+                let e = el.end as int;
+                let cps = value_name_cps(el.value);
+                assert(identifier_name_cps(s, pos as int + 1, e, cps));
+                lemma_name_valid_iff(s, pos as int + 1, e, cps);
+                assert(identifier_name(s, pos as int + 1, e));
+                assert(private_identifier(s, pos as int, e));
+                assert forall|j: int|
+                    pos < j <= src.len() && #[trigger] element_matches(
+                        goal,
+                        html,
+                        ElementKind::PrivateIdentifier,
+                        s,
+                        pos as int,
+                        j,
+                    ) implies j <= e by {
+                    lemma_name_longest(s, pos as int + 1, j, e);
+                }
+                lemma_pk_one(goal, html, s, pos as int, e, ElementKind::PrivateIdentifier);
+            },
+            None => {
+                assert forall|j: int|
+                    pos < j <= src.len() && #[trigger] element_matches(
+                        goal,
+                        html,
+                        ElementKind::PrivateIdentifier,
+                        s,
+                        pos as int,
+                        j,
+                    ) implies j <= pos by {
+                    lemma_ident_absent_from_scan(s, pos as int + 1);
+                    reveal(ident_absent);
+                    assert(identifier_name(s, pos as int + 1, j));
+                }
+                lemma_pk_one(goal, html, s, pos as int, pos as int, ElementKind::PrivateIdentifier);
+                lemma_ident_absent_from_scan(s, pos as int + 1);
+                lemma_private_absent_from_next(s, pos as int);
+            },
+        }
     }
     r
 }
@@ -3222,6 +3489,10 @@ fn lex_numeric(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Ca
         lex_result_ok(src@, pos, goal, html, r),
 {
     let _ = (goal, html);
+    proof {
+        lemma_ident_absent_from_class(src@, pos as int);
+        lemma_private_absent_from_class(src@, pos as int);
+    }
     // NumericLiteral
     proof {
             lemma_numeric_derivable(src@, pos as int);
@@ -3295,16 +3566,12 @@ fn lex_numeric(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Ca
     }
 }
 
-/// An `IdentifierName` at `pos`, where no proven kind can start.
+/// An `IdentifierName` at `pos`, if the code point there is `\` or an
+/// `IdentifierStartChar`.
 fn lex_ident(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Candidate>)
     requires
         pos < src.len(),
-        forall|k: ElementKind|
-            kind_proven(k, html) && k != ElementKind::HashbangComment ==> !start_ok(
-                k,
-                src@,
-                pos as int,
-            ),
+        src@[pos as int] == 0x5C || is_identifier_start_char(src@[pos as int]),
     ensures
         lex_result_ok(src@, pos, goal, html, r),
 {
@@ -3332,7 +3599,54 @@ fn lex_ident(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Cand
         None => None,
     };
     proof {
-        lemma_pk_none(goal, html, src@, pos as int, cand_end(pos, r));
+        let s = src@;
+        assert forall|k: ElementKind|
+            kind_proven(k, html) && k != ElementKind::HashbangComment && k
+                != ElementKind::IdentifierName implies !start_ok(k, s, pos as int) by {
+            if start_ok(k, s, pos as int) {
+                if k == ElementKind::WhiteSpace || k == ElementKind::LineTerminator {
+                    lemma_ws_lt_not_id_start(s[pos as int]);
+                }
+            }
+        }
+        lemma_private_absent_from_class(s, pos as int);
+        match r {
+            Some((ref el, ref err)) => {
+                let e = el.end as int;
+                let cps = value_name_cps(el.value);
+                assert(identifier_name_cps(s, pos as int, e, cps));
+                lemma_name_valid_iff(s, pos as int, e, cps);
+                assert(identifier_name(s, pos as int, e));
+                assert forall|j: int|
+                    pos < j <= src.len() && #[trigger] element_matches(
+                        goal,
+                        html,
+                        ElementKind::IdentifierName,
+                        s,
+                        pos as int,
+                        j,
+                    ) implies j <= e by {
+                    lemma_name_longest(s, pos as int, j, e);
+                }
+                lemma_pk_one(goal, html, s, pos as int, e, ElementKind::IdentifierName);
+            },
+            None => {
+                lemma_ident_absent_from_scan(s, pos as int);
+                assert forall|j: int|
+                    pos < j <= src.len() && #[trigger] element_matches(
+                        goal,
+                        html,
+                        ElementKind::IdentifierName,
+                        s,
+                        pos as int,
+                        j,
+                    ) implies j <= pos by {
+                    reveal(ident_absent);
+                    assert(identifier_name(s, pos as int, j));
+                }
+                lemma_pk_one(goal, html, s, pos as int, pos as int, ElementKind::IdentifierName);
+            },
+        }
     }
     r
 }
@@ -3351,6 +3665,10 @@ fn lex_html_open(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<
         lex_result_ok(src@, pos, goal, html, r),
 {
     let _ = (goal, html);
+    proof {
+        lemma_ident_absent_from_class(src@, pos as int);
+        lemma_private_absent_from_class(src@, pos as int);
+    }
     // Annex B.1.1 SingleLineHTMLOpenComment :: <!-- SingleLineCommentChars?
     let e = scan_line_chars(src, pos.saturating_add(4));
     proof {
@@ -3384,6 +3702,16 @@ fn lex_punct(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Cand
         lex_result_ok(src@, pos, goal, html, r),
 {
     let _ = (goal, html);
+    proof {
+        assert(kind_proven(ElementKind::IdentifierName, html));
+        assert(kind_proven(ElementKind::PrivateIdentifier, html));
+        let _ = start_ok(ElementKind::IdentifierName, src@, pos as int);
+        let _ = start_ok(ElementKind::PrivateIdentifier, src@, pos as int);
+        assert(!start_ok(ElementKind::IdentifierName, src@, pos as int));
+        assert(!start_ok(ElementKind::PrivateIdentifier, src@, pos as int));
+        lemma_ident_absent_from_class(src@, pos as int);
+        lemma_private_absent_from_class(src@, pos as int);
+    }
     // Punctuator
     let e = scan_punctuator(src, pos);
     let r = if e > pos {
@@ -3460,14 +3788,6 @@ fn lex_common(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Can
     } else if is_dec(c) || (c == 0x2E && is_dec(c1)) {
         lex_numeric(src, pos, goal, html)
     } else if c == 0x5C || id_start_char(c) {
-        proof {
-            assert forall|k: ElementKind|
-                kind_proven(k, html) && k != ElementKind::HashbangComment implies !start_ok(
-                k,
-                src@,
-                pos as int,
-            ) by {}
-        }
         lex_ident(src, pos, goal, html)
     } else if html && c == 0x3C && c1 == 0x21 && peek(src, pos.saturating_add(2)) == 0x2D && peek(
         src,
@@ -3539,7 +3859,8 @@ fn lex_start(src: &[u32], html: bool) -> (r: Option<Candidate>)
             None => true,
         },
         hb_bounded(Goal::InputElementHashbangOrRegExp, html, src@, 0, cand_end(0, r)),
-        (r is Some && r.unwrap().0.kind == ElementKind::HashbangComment) ==> src@[0] == 0x23,
+        (r is Some && r.unwrap().0.kind == ElementKind::HashbangComment) ==> src@[0] == 0x23
+            && 1 < src@.len() && src@[1] == 0x21,
         r is Some ==> r.unwrap().0.kind == ElementKind::HashbangComment || (r.unwrap().0.kind
             == ElementKind::Comment && html),
 {
@@ -3680,6 +4001,17 @@ pub fn next_input_element(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r
                 lemma_numeric_absent_from_class(src@, 0);
             }
         }
+        if best is Some && kind_proven(best.unwrap().0.kind, html) {
+            if best != common {
+                // `start`'s candidate: a hashbang comment, `#!`.
+                assert(best == start);
+                assert(use_start);
+                assert(src@[0] == 0x23 && 1 < src@.len() && src@[1] == 0x21);
+                lemma_ident_absent_from_class(src@, 0);
+                lemma_ident_absent_from_class(src@, 1);
+                lemma_private_absent_from_next(src@, 0);
+            }
+        }
     }
     match best {
         None => {
@@ -3710,8 +4042,24 @@ pub fn next_input_element(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r
                 ));
                 assert(kind_proven(el.kind, html) && el.kind != ElementKind::NumericLiteral
                     ==> numeric_absent(src@, pos as int));
-                assert(el.kind == ElementKind::NumericLiteral && (el.end >= src.len() || src@[el.end
-                    as int] < 0x80) ==> !numeric_literal_follow_error(src@, el.end as int));
+                assert(el.kind == ElementKind::NumericLiteral ==> !numeric_literal_follow_error(
+                    src@,
+                    el.end as int,
+                ));
+                assert(kind_proven(el.kind, html) && el.kind != ElementKind::IdentifierName
+                    ==> ident_absent(src@, pos as int));
+                assert(kind_proven(el.kind, html) && el.kind != ElementKind::PrivateIdentifier
+                    ==> private_absent(src@, pos as int));
+                assert(el.kind == ElementKind::IdentifierName ==> identifier_name_valid(
+                    src@,
+                    pos as int,
+                    el.end as int,
+                ));
+                assert(el.kind == ElementKind::PrivateIdentifier ==> identifier_name_valid(
+                    src@,
+                    pos as int + 1,
+                    el.end as int,
+                ));
             }
             Ok(Step::Element(el))
         },
@@ -3732,10 +4080,19 @@ pub fn next_input_element(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r
                         end,
                     ));
                     assert(proven_bounded(goal, html, src@, pos as int, end));
-                    assert((end >= src.len() || src@[end] < 0x80) ==> numeric_literal_follow_error(
-                        src@,
-                        end,
-                    ));
+                    assert(numeric_literal_follow_error(src@, end));
+                }
+                if e == LexError::InvalidIdentifierEscape {
+                    // The candidate is the identifier, and the bound is the one of `best`.
+                    assert(el.kind == ElementKind::IdentifierName || el.kind
+                        == ElementKind::PrivateIdentifier);
+                    assert(kind_proven(el.kind, html));
+                    let end = el.end as int;
+                    assert(pos < end <= src.len());
+                    assert(element_matches(goal, html, el.kind, src@, pos as int, end));
+                    assert(proven_bounded(goal, html, src@, pos as int, end));
+                    assert(numeric_absent(src@, pos as int));
+                    assert(invalid_identifier_at(goal, html, src@, pos as int, end));
                 }
             }
             proof {

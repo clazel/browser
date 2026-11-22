@@ -348,6 +348,24 @@ pub proof fn lemma_id_start_gap(k: int, c: u32)
     }
 }
 
+/// No row of the `ID_START` table holds a code point below the first row.
+pub proof fn lemma_id_start_below(c: u32)
+    requires
+        0 < ID_START_LEN,
+        c < id_start_at(0).first,
+    ensures
+        !spec::unicode_id_start_non_ascii(c),
+{
+    lemma_id_start_sorted();
+    assert forall|i: int| 0 <= i < ID_START_LEN implies !((#[trigger] id_start_at(i)).first <= c <= (id_start_at(i)).last) by {
+        let _ = id_start_at(i);
+        if i > 0 {
+            lemma_id_start_ordered(0, i);
+            assert(range_ok(id_start_at(0)));
+        }
+    }
+}
+
 /// No row of the `ID_CONTINUE` table holds a code point strictly between the
 /// end of row `k` and the start of row `k + 1`.
 pub proof fn lemma_id_continue_gap(k: int, c: u32)
@@ -367,6 +385,24 @@ pub proof fn lemma_id_continue_gap(k: int, c: u32)
         }
         assert(range_ok(id_continue_at(k)));
         assert(range_ok(id_continue_at(k + 1)));
+    }
+}
+
+/// No row of the `ID_CONTINUE` table holds a code point below the first row.
+pub proof fn lemma_id_continue_below(c: u32)
+    requires
+        0 < ID_CONTINUE_LEN,
+        c < id_continue_at(0).first,
+    ensures
+        !spec::unicode_id_continue_non_ascii(c),
+{
+    lemma_id_continue_sorted();
+    assert forall|i: int| 0 <= i < ID_CONTINUE_LEN implies !((#[trigger] id_continue_at(i)).first <= c <= (id_continue_at(i)).last) by {
+        let _ = id_continue_at(i);
+        if i > 0 {
+            lemma_id_continue_ordered(0, i);
+            assert(range_ok(id_continue_at(0)));
+        }
     }
 }
 
