@@ -15,7 +15,12 @@ vstd = "=0.0.0-2026-10-04-0306"
 # contracts are written (item 7.2, first half, CLAUDE.md rule 3), and the
 # implementation (src/exec.rs) is proven total, panic-free and to tile its
 # input, but not to agree with the spec: it does not meet src/contract.rs
-# yet, and there is no independent transcription or mutation set.
+# yet. The tier-2 evidence around the spec exists in part: an independent
+# transcription of part of the grammar proven equal to the spec
+# (src/independent.rs, src/equivalence.rs), 19 certified mutation kills
+# (mutations.json) and Test262 conformance suites (tests/conformance_test262.rs).
+# The tier stays 0 until the implementation is proven to meet the contract
+# and CI's full verification passes.
 [package.metadata.clazel]
 tier = 0
 target-tier = 2
