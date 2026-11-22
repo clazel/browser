@@ -143,7 +143,7 @@
 //!   code points; whether a given escape-free name is one is for the parser
 //!   (§12.7.2: the early errors of §13.1.1).
 
-#[allow(unused_imports)]
+#[cfg(verus_only)]
 use super::unicode_data::{ID_CONTINUE_LEN, ID_START_LEN, id_continue_at, id_start_at};
 #[allow(unused_imports)]
 use vstd::prelude::*;
