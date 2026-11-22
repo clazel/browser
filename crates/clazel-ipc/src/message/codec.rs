@@ -111,6 +111,44 @@ pub enum Msg {
         /// The renderer's id for the fetch.
         request: u64,
     },
+    /// Renderer to kernel: fetch a script (item 7.16).
+    FetchScript {
+        /// The renderer's id for this fetch.
+        request: u64,
+        /// The script's URL, as the document wrote it.
+        url: Vec<u8>,
+    },
+    /// Renderer to kernel: `pushState` or `replaceState` (item 7.16).
+    UpdateUrl {
+        /// Whether it is `replaceState`.
+        replace: bool,
+        /// The URL, as the script wrote it.
+        url: Vec<u8>,
+    },
+    /// Kernel to renderer: the script's response arrived.
+    ScriptResponse {
+        /// The renderer's id for the fetch.
+        request: u64,
+        /// The response's combined `Content-Type` field value, or empty.
+        content_type: Vec<u8>,
+    },
+    /// Kernel to renderer: the next part of the script's body.
+    ScriptBody {
+        /// The renderer's id for the fetch.
+        request: u64,
+        /// The octets.
+        bytes: Vec<u8>,
+    },
+    /// Kernel to renderer: the script's body is complete.
+    ScriptEnd {
+        /// The renderer's id for the fetch.
+        request: u64,
+    },
+    /// Kernel to renderer: the script fetch failed (or was refused).
+    ScriptFailed {
+        /// The renderer's id for the fetch.
+        request: u64,
+    },
     /// Kernel to renderer: a document is committed; its body follows in
     /// `Body` frames, then `BodyEnd`.
     Commit {
@@ -205,6 +243,17 @@ pub proof fn lemma_max_style_chunk()
 {
 }
 
+/// [`max_script_chunk`]: the most octets one `ScriptBody` carries,
+/// `MAX_FRAME` minus 17 (item 7.16).
+pub const MAX_SCRIPT_CHUNK: usize = 1_048_559;
+
+/// [`MAX_SCRIPT_CHUNK`] is the spec's [`max_script_chunk`].
+pub proof fn lemma_max_script_chunk()
+    ensures
+        MAX_SCRIPT_CHUNK as nat == max_script_chunk(),
+{
+}
+
 /// The view of a list of strings.
 pub open spec fn strings_view(v: Seq<Vec<u8>>) -> Seq<Seq<u8>> {
     v.map_values(|s: Vec<u8>| s@)
@@ -259,6 +308,12 @@ impl View for Msg {
             Msg::StyleBody { request, bytes } => Message::StyleBody { request: *request, bytes: bytes@ },
             Msg::StyleEnd { request } => Message::StyleEnd { request: *request },
             Msg::StyleFailed { request } => Message::StyleFailed { request: *request },
+            Msg::FetchScript { request, url } => Message::FetchScript { request: *request, url: url@ },
+            Msg::UpdateUrl { replace, url } => Message::UpdateUrl { replace: *replace, url: url@ },
+            Msg::ScriptResponse { request, content_type } => Message::ScriptResponse { request: *request, content_type: content_type@ },
+            Msg::ScriptBody { request, bytes } => Message::ScriptBody { request: *request, bytes: bytes@ },
+            Msg::ScriptEnd { request } => Message::ScriptEnd { request: *request },
+            Msg::ScriptFailed { request } => Message::ScriptFailed { request: *request },
         }
     }
 }
@@ -405,6 +460,20 @@ fn parse_fields(tag: u64, toks: &[Tok]) -> (r: Option<Msg>)
                 _ => None,
             }
         } else { None }
+    } else if tag == 16 {
+        if k == 2 {
+            match (uint_at(toks, 2), text_at(toks, 3)) {
+                (Some(a), Some(b)) => Some(Msg::FetchScript { request: a, url: b }),
+                _ => None,
+            }
+        } else { None }
+    } else if tag == 17 {
+        if k == 2 {
+            match (bool_at(toks, 2), text_at(toks, 3)) {
+                (Some(a), Some(b)) => Some(Msg::UpdateUrl { replace: a, url: b }),
+                _ => None,
+            }
+        } else { None }
     } else if tag == 15 {
         if k == 3 {
             match (uint_at(toks, 2), uint_at(toks, 3), uint_at(toks, 4)) {
@@ -497,6 +566,30 @@ fn parse_fields(tag: u64, toks: &[Tok]) -> (r: Option<Msg>)
         if k == 1 {
             let a = uint_at(toks, 2)?;
             Some(Msg::StyleFailed { request: a })
+        } else { None }
+    } else if tag == 115 {
+        if k == 2 {
+            match (uint_at(toks, 2), bytes_at(toks, 3)) {
+                (Some(a), Some(b)) => Some(Msg::ScriptResponse { request: a, content_type: b }),
+                _ => None,
+            }
+        } else { None }
+    } else if tag == 116 {
+        if k == 2 {
+            match (uint_at(toks, 2), bytes_at(toks, 3)) {
+                (Some(a), Some(b)) => Some(Msg::ScriptBody { request: a, bytes: b }),
+                _ => None,
+            }
+        } else { None }
+    } else if tag == 117 {
+        if k == 1 {
+            let a = uint_at(toks, 2)?;
+            Some(Msg::ScriptEnd { request: a })
+        } else { None }
+    } else if tag == 118 {
+        if k == 1 {
+            let a = uint_at(toks, 2)?;
+            Some(Msg::ScriptFailed { request: a })
         } else { None }
     } else if tag == 114 {
         if k == 3 {
@@ -652,6 +745,8 @@ pub fn is_from_renderer(m: &Msg) -> (r: bool)
             | Msg::Display { .. }
             | Msg::Title { .. }
             | Msg::FetchStyle { .. }
+            | Msg::FetchScript { .. }
+            | Msg::UpdateUrl { .. }
     )
 }
 
@@ -847,6 +942,12 @@ fn message_tokens(m: &Msg) -> (t: Vec<Tok>)
         Msg::StyleBody { request, bytes } => toks4(Tok::Array(3), Tok::Uint(111), Tok::Uint(*request), Tok::Bytes(copy(bytes.as_slice()))),
         Msg::StyleEnd { request } => toks3(Tok::Array(2), Tok::Uint(112), Tok::Uint(*request)),
         Msg::StyleFailed { request } => toks3(Tok::Array(2), Tok::Uint(113), Tok::Uint(*request)),
+        Msg::FetchScript { request, url } => toks4(Tok::Array(3), Tok::Uint(16), Tok::Uint(*request), Tok::Text(copy(url.as_slice()))),
+        Msg::UpdateUrl { replace, url } => toks4(Tok::Array(3), Tok::Uint(17), Tok::Bool(*replace), Tok::Text(copy(url.as_slice()))),
+        Msg::ScriptResponse { request, content_type } => toks4(Tok::Array(3), Tok::Uint(115), Tok::Uint(*request), Tok::Bytes(copy(content_type.as_slice()))),
+        Msg::ScriptBody { request, bytes } => toks4(Tok::Array(3), Tok::Uint(116), Tok::Uint(*request), Tok::Bytes(copy(bytes.as_slice()))),
+        Msg::ScriptEnd { request } => toks3(Tok::Array(2), Tok::Uint(117), Tok::Uint(*request)),
+        Msg::ScriptFailed { request } => toks3(Tok::Array(2), Tok::Uint(118), Tok::Uint(*request)),
     }
 }
 
