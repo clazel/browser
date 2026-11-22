@@ -36,6 +36,16 @@ pub enum ObjKind {
     },
     /// A native function: its index in the VM's native table.
     Native(u32),
+    /// A bound function exotic object (§10.4.1†): its index in the VM's
+    /// table of bound targets, `this` values and arguments.
+    Bound(u32),
+    /// An object with `[[ErrorData]]` (§20.5†): made by an `Error`
+    /// constructor or thrown by the VM.
+    Error,
+    /// A Boolean, Number or String wrapper object: the object holds the
+    /// primitive as `[[BooleanData]]`, `[[NumberData]]` or `[[StringData]]`
+    /// (§20.3†, §21.1†, §22.1†).
+    Primitive(Value),
 }
 
 /// An object: properties by shape, a prototype and a kind.
@@ -253,8 +263,12 @@ impl Heap {
     /// Whether a value is a reference to a callable object.
     #[must_use]
     pub fn is_callable(&self, v: Value) -> bool {
-        self.obj(v)
-            .is_some_and(|o| matches!(o.kind, ObjKind::Closure { .. } | ObjKind::Native(_)))
+        self.obj(v).is_some_and(|o| {
+            matches!(
+                o.kind,
+                ObjKind::Closure { .. } | ObjKind::Native(_) | ObjKind::Bound(_)
+            )
+        })
     }
 
     /// The interned key of a string.
@@ -364,11 +378,105 @@ impl Heap {
         Ok(())
     }
 
+    /// The own properties of an object in the order `[[OwnPropertyKeys]]`
+    /// gives them (§10.1.11.1†): the array indices in ascending order, then
+    /// the other string keys in the order they were created. (Symbols and
+    /// exotic objects' keys come with the later slices.)
+    #[must_use]
+    pub fn own_properties(&self, obj: Value) -> Vec<(Key, Attrs, Value)> {
+        let Some(o) = self.obj(obj) else {
+            return Vec::new();
+        };
+        let mut indices: Vec<(u32, Key, Attrs, Value)> = Vec::new();
+        let mut names: Vec<(Key, Attrs, Value)> = Vec::new();
+        for (k, slot, a) in self.shapes.properties(o.shape) {
+            let Some(v) = usize::try_from(slot)
+                .ok()
+                .and_then(|i| o.slots.get(i))
+                .copied()
+            else {
+                continue;
+            };
+            match self.keys.resolve(k).and_then(canonical_index) {
+                Some(i) => indices.push((i, k, a, v)),
+                None => names.push((k, a, v)),
+            }
+        }
+        indices.sort_by_key(|e| e.0);
+        let mut out: Vec<(Key, Attrs, Value)> =
+            indices.into_iter().map(|(_, k, a, v)| (k, a, v)).collect();
+        out.extend(names);
+        out
+    }
+
+    /// Changes the value and attributes of the own property `key` (adding it
+    /// if there is none): the shape is rebuilt from the root with the same
+    /// order, so the property keeps its place in the key order.
+    ///
+    /// # Errors
+    /// [`HeapError::Corrupt`] if `obj` is not an object, [`HeapError::Full`]
+    /// on overflow.
+    pub fn redefine(
+        &mut self,
+        obj: Value,
+        key: Key,
+        value: Value,
+        attrs: Attrs,
+    ) -> Result<(), HeapError> {
+        let o = self.obj(obj).ok_or(HeapError::Corrupt)?;
+        let Some((slot, old)) = self.shapes.lookup(o.shape, key) else {
+            return self.define(obj, key, value, attrs);
+        };
+        if old == attrs {
+            return self.set_slot(obj, slot, value);
+        }
+        let props = self.shapes.properties(o.shape);
+        let mut shape = ROOT;
+        for (k, _, a) in props {
+            let a = if k == key { attrs } else { a };
+            let (next, _) = self.shapes.add_property(shape, k, a)?;
+            shape = next;
+        }
+        self.set_slot(obj, slot, value)?;
+        self.obj_mut(obj).ok_or(HeapError::Corrupt)?.shape = shape;
+        Ok(())
+    }
+
+    /// Changes the `[[Prototype]]` of an object (no cycle check: the callers
+    /// only pass fresh objects).
+    ///
+    /// # Errors
+    /// [`HeapError::Corrupt`] if `obj` is not an object.
+    pub fn set_proto(&mut self, obj: Value, proto: Value) -> Result<(), HeapError> {
+        self.obj_mut(obj).ok_or(HeapError::Corrupt)?.proto = proto;
+        Ok(())
+    }
+
     /// The `[[Prototype]]` of an object.
     #[must_use]
     pub fn proto_of(&self, obj: Value) -> Option<Value> {
         self.obj(obj).map(|o| o.proto)
     }
+}
+
+/// The array index a string names (§6.1.7†): decimal digits, no leading
+/// zero except `0` itself, below 2^32 - 1.
+fn canonical_index(s: &JsString) -> Option<u32> {
+    let mut n: u64 = 0;
+    let mut len = 0usize;
+    let mut first = 0u16;
+    for u in s.units() {
+        let d = u.checked_sub(u16::from(b'0')).filter(|d| *d < 10)?;
+        if len == 0 {
+            first = u;
+        }
+        n = n.checked_mul(10)?.checked_add(u64::from(d))?;
+        len = len.checked_add(1)?;
+    }
+    if len == 0 || (len > 1 && first == u16::from(b'0')) || n >= 4_294_967_295 {
+        return None;
+    }
+    u32::try_from(n).ok()
 }
 
 #[cfg(test)]
@@ -409,6 +517,43 @@ mod tests {
         h.define(x, k, Value::TRUE, Attrs::ALL)?;
         h.define(y, k, Value::FALSE, Attrs::ALL)?;
         assert_eq!(h.obj(x).map(|o| o.shape), h.obj(y).map(|o| o.shape));
+        Ok(())
+    }
+
+    #[test]
+    fn own_properties_list_indices_first_and_redefine_keeps_order() -> Result<(), HeapError> {
+        let mut h = heap();
+        let o = h.new_object(Value::NULL, ObjKind::Plain)?;
+        let names = ["b", "10", "a", "2"];
+        for (i, n) in names.iter().enumerate() {
+            let k = h.intern_str(n)?;
+            h.define(
+                o,
+                k,
+                Value::int32(i32::try_from(i).unwrap_or(0)),
+                Attrs::ALL,
+            )?;
+        }
+        let listed = |h: &Heap| -> Vec<String> {
+            h.own_properties(o)
+                .iter()
+                .map(|(k, _, _)| {
+                    h.key_string(*k)
+                        .map(JsString::to_string_lossy)
+                        .unwrap_or_default()
+                })
+                .collect()
+        };
+        assert_eq!(listed(&h), ["2", "10", "b", "a"]);
+        let a = h.intern_str("a")?;
+        h.redefine(o, a, Value::int32(9), Attrs(Attrs::WRITABLE))?;
+        assert_eq!(listed(&h), ["2", "10", "b", "a"]);
+        let found = h.find(o, a)?.ok_or(HeapError::Corrupt)?;
+        assert_eq!(found.attrs, Attrs(Attrs::WRITABLE));
+        assert_eq!(h.slot(o, found.slot), Some(Value::int32(9)));
+        let b = h.intern_str("b")?;
+        let fb = h.find(o, b)?.ok_or(HeapError::Corrupt)?;
+        assert_eq!(h.slot(o, fb.slot), Some(Value::int32(0)));
         Ok(())
     }
 

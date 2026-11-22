@@ -330,6 +330,17 @@ fn run_one(case: &Case, src: &[u32], goal: SourceGoal) -> Outcome {
                         .into(),
                 );
             }
+            if name.as_deref() == Some("TypeError")
+                && let Some(m) = &msg
+                && m == "Cannot convert object to primitive value"
+            {
+                // ToPrimitive (§7.1.1) runs, but this VM has no
+                // `Object.prototype`, so no object has `valueOf` or `toString`.
+                return Outcome::Xfail(
+                    "an object reaches ToPrimitive and has no valueOf or toString (the built-ins of 7.9 are not installed in this runner)"
+                        .into(),
+                );
+            }
             match negative {
                 Some((_, ty)) => Outcome::Fail(format!("expected {ty}, got {}", vm.describe(e))),
                 None => Outcome::Fail(vm.describe(e)),

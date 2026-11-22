@@ -536,3 +536,60 @@ fn constructors_and_prototypes() -> Result<(), String> {
         "TypeError",
     )
 }
+
+fn make_native_object(vm: &mut Vm, _this: Value, _args: &[Value]) -> Result<Value, Abrupt> {
+    // A constructor sees `new_target` set; a call sees `undefined`.
+    let o = vm.new_object()?;
+    let called_as_new = vm.new_target() != Value::UNDEFINED;
+    vm.define_property(o, "viaNew", Value::boolean(called_as_new))?;
+    let me = vm.active_function();
+    vm.define_property(o, "me", me)?;
+    Ok(o)
+}
+
+#[test]
+fn native_constructors_and_bound_functions() -> Result<(), String> {
+    let c = cps("var a = new Ctor(); var b = Ctor();
+         var e = ''; try { new Plain(); } catch (x) { e = x.name; }
+         var made = new BoundCtor();");
+    let ast = parse(&c, SourceGoal::Script).map_err(|_| "parse".to_string())?;
+    let p = compile_script(&ast, &c).map_err(|e| e.to_string())?;
+    let mut vm = Vm::new(Config::default()).map_err(|e| format!("{e:?}"))?;
+    let ctor = vm
+        .new_native_constructor("Ctor", 0, make_native_object)
+        .map_err(|e| format!("{e:?}"))?;
+    let plain = vm
+        .new_native("Plain", 0, make_native_object)
+        .map_err(|e| format!("{e:?}"))?;
+    vm.define_global("Ctor", ctor)
+        .map_err(|e| format!("{e:?}"))?;
+    vm.define_global("Plain", plain)
+        .map_err(|e| format!("{e:?}"))?;
+    let bound_ctor = vm
+        .new_bound_function(ctor, Value::UNDEFINED, Vec::new())
+        .map_err(|e| format!("{e:?}"))?;
+    vm.define_global("BoundCtor", bound_ctor)
+        .map_err(|e| format!("{e:?}"))?;
+    let script = vm.load(&p).map_err(|e| format!("{e:?}"))?;
+    vm.run(&script).map_err(|e| format!("{e:?}"))?;
+    let g = vm.global();
+    let get = |vm: &mut Vm, o: Value, n: &str| vm.get_named(o, n).map_err(|e| format!("{e:?}"));
+    let (a, b) = (get(&mut vm, g, "a")?, get(&mut vm, g, "b")?);
+    assert_eq!(get(&mut vm, a, "viaNew")?, Value::TRUE);
+    assert_eq!(get(&mut vm, a, "me")?, ctor);
+    assert_eq!(get(&mut vm, b, "viaNew")?, Value::FALSE);
+    // `new` of a native without [[Construct]] is a TypeError.
+    let e = get(&mut vm, g, "e")?;
+    assert_eq!(vm.string_text(e).as_deref(), Some("TypeError"));
+    // A bound native constructor constructs its target.
+    let made = get(&mut vm, g, "made")?;
+    assert_eq!(get(&mut vm, made, "viaNew")?, Value::TRUE);
+    // The embedding entry points agree with the ops.
+    let direct = vm
+        .construct_value(ctor, &[])
+        .map_err(|e| format!("{e:?}"))?;
+    assert_eq!(get(&mut vm, direct, "viaNew")?, Value::TRUE);
+    assert!(vm.is_constructor(ctor) && !vm.is_constructor(plain));
+    assert!(vm.is_constructor(bound_ctor));
+    Ok(())
+}

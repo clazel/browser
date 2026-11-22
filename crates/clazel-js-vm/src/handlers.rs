@@ -8,16 +8,19 @@
 //! and Number to String through `clazel-js-number`; `typeof`; property get
 //! and set on ordinary objects with inline caches; globals (the global object
 //! and the global declarative record, `DeclareGlobals`); closures; and the
-//! creation of the errors the VM throws. An operation that needs an object
-//! converted to a primitive (`ToPrimitive`, which calls `valueOf` and
-//! `toString`: the built-ins) is [`Abrupt::NotYet`], never a wrong answer.
+//! creation of the errors the VM throws. ToPrimitive and OrdinaryToPrimitive
+//! (§7.1.1) call `valueOf` and `toString`, so an object converts only as
+//! far as its methods exist: `clazel-js-builtins` (item 7.9) installs them,
+//! and without it an object has none and the conversion is a `TypeError`.
+//! The natives' own needs (a native constructor's `NewTarget`, the
+//! intrinsics table, bound functions, wrapper objects) are here too.
 //!
 //! Each handler's contract is the clause of ECMA-262 it cites; the evidence is
 //! the Test262 run in `tests/test262_run.rs`.
 
 use crate::bytecode::{Const, ErrorKind, FunctionKind, VarScoped};
 use crate::heap::{Cell, ObjKind};
-use crate::interp::{Abrupt, ArithOp, Rel, Vm};
+use crate::interp::{Abrupt, ArithOp, Hint, Intrinsic, Rel, Vm};
 use crate::numeric::{self, Num, num};
 use clazel_js_heap::shape::Attrs;
 use clazel_js_heap::string::{JsString, Key};
@@ -53,34 +56,51 @@ impl Vm {
         }
     }
 
+    /// A new error object. When the realm has the error constructors
+    /// (`clazel-js-builtins` installed them), it is what `new TypeError(msg)`
+    /// makes (§20.5.6.1.1† steps 2 to 4): `[[ErrorData]]`, the native error's
+    /// prototype and an own non-enumerable `message`. Without them it is an
+    /// ordinary object with own `name` and `message`.
     fn make_error(&mut self, name: &str, msg: &str) -> Result<Value, Abrupt> {
+        let which = match name {
+            "TypeError" => Intrinsic::TypeErrorPrototype,
+            "RangeError" => Intrinsic::RangeErrorPrototype,
+            "SyntaxError" => Intrinsic::SyntaxErrorPrototype,
+            _ => Intrinsic::ReferenceErrorPrototype,
+        };
+        let proto = self.intrinsic(which);
+        let msg_v = self.heap.new_str(msg)?;
+        let (kn, km) = (self.atoms.k_name, self.atoms.k_message);
+        if self.heap.is_object(proto) {
+            let o = self.heap.new_object(proto, ObjKind::Error)?;
+            self.heap.define(o, km, msg_v, WRITABLE_CONFIGURABLE)?;
+            return Ok(o);
+        }
         let proto = self.atoms.object_proto;
         let o = self.heap.new_object(proto, ObjKind::Plain)?;
         let name_v = self.heap.new_str(name)?;
-        let msg_v = self.heap.new_str(msg)?;
-        let (kn, km) = (self.atoms.k_name, self.atoms.k_message);
         self.heap.define(o, kn, name_v, WRITABLE_CONFIGURABLE)?;
         self.heap.define(o, km, msg_v, WRITABLE_CONFIGURABLE)?;
         Ok(o)
     }
 
-    /// A thrown `TypeError`.
-    pub(crate) fn type_error(&mut self, msg: &str) -> Abrupt {
+    /// A thrown `TypeError`. (Also for natives: `Err(vm.type_error(..))`.)
+    pub fn type_error(&mut self, msg: &str) -> Abrupt {
         self.throw_kind(ErrorKind::TypeError, msg)
     }
 
     /// A thrown `ReferenceError`.
-    pub(crate) fn reference_error(&mut self, msg: &str) -> Abrupt {
+    pub fn reference_error(&mut self, msg: &str) -> Abrupt {
         self.throw_kind(ErrorKind::ReferenceError, msg)
     }
 
     /// A thrown `RangeError`.
-    pub(crate) fn range_error(&mut self, msg: &str) -> Abrupt {
+    pub fn range_error(&mut self, msg: &str) -> Abrupt {
         self.throw_kind(ErrorKind::RangeError, msg)
     }
 
     /// A thrown `SyntaxError`.
-    pub(crate) fn syntax_error(&mut self, msg: &str) -> Abrupt {
+    pub fn syntax_error(&mut self, msg: &str) -> Abrupt {
         self.throw_kind(ErrorKind::SyntaxError, msg)
     }
 
@@ -89,7 +109,8 @@ impl Vm {
     // -----------------------------------------------------------------
 
     /// ToBoolean, §7.1.2.
-    pub(crate) fn to_boolean(&self, v: Value) -> bool {
+    #[must_use]
+    pub fn to_boolean(&self, v: Value) -> bool {
         match v.decode() {
             Decoded::Undefined | Decoded::Null | Decoded::Hole | Decoded::Raw(_) => false,
             Decoded::Bool(b) => b,
@@ -99,7 +120,99 @@ impl Vm {
         }
     }
 
-    /// ToNumber, §7.1.4†, for primitives; an object needs ToPrimitive.
+    /// ToPrimitive, §7.1.1†, and OrdinaryToPrimitive, §7.1.1.1†. A primitive
+    /// is its own result (step 2). For an object, `@@toPrimitive` is not
+    /// consulted (Symbols are a later slice); the hint `string` tries
+    /// `toString` then `valueOf`, any other hint the reverse; the first
+    /// callable that returns a non-object wins, and none is a TypeError.
+    ///
+    /// # Errors
+    /// The exceptions of the methods it calls, or a `TypeError`.
+    pub fn to_primitive(&mut self, v: Value, hint: Hint) -> Result<Value, Abrupt> {
+        if !self.heap.is_object(v) {
+            return Ok(v);
+        }
+        let names = if hint == Hint::String {
+            ["toString", "valueOf"]
+        } else {
+            ["valueOf", "toString"]
+        };
+        for name in names {
+            // Step 2.a: Get(O, name); step 2.b: IsCallable(method).
+            let method = self.get_named(v, name)?;
+            if self.heap.is_callable(method) {
+                let result = self.call(method, v, &[])?;
+                if !self.heap.is_object(result) {
+                    return Ok(result);
+                }
+            }
+        }
+        Err(self.type_error("Cannot convert object to primitive value"))
+    }
+
+    /// ToObject, §7.1.18†: `undefined` and `null` are a TypeError, a
+    /// Boolean, Number or String gets its wrapper object (with the
+    /// intrinsic prototype, or `%Object.prototype%` when the realm has no
+    /// wrappers), an object is itself.
+    ///
+    /// # Errors
+    /// A `TypeError` for `undefined` and `null`.
+    pub fn to_object(&mut self, v: Value) -> Result<Value, Abrupt> {
+        let which = match v.decode() {
+            Decoded::Undefined | Decoded::Null => {
+                return Err(self.type_error("Cannot convert undefined or null to object"));
+            }
+            Decoded::Bool(_) => Intrinsic::BooleanPrototype,
+            Decoded::Int32(_) | Decoded::Double(_) => Intrinsic::NumberPrototype,
+            Decoded::Ref(_) if self.heap.is_string(v) => Intrinsic::StringPrototype,
+            Decoded::Ref(_) => return Ok(v),
+            Decoded::Hole | Decoded::Raw(_) => {
+                return Err(Abrupt::Internal("an internal value reached ToObject"));
+            }
+        };
+        let proto = self.intrinsic(which);
+        let proto = if self.heap.is_object(proto) {
+            proto
+        } else {
+            self.atoms.object_proto
+        };
+        self.new_wrapper(v, proto)
+    }
+
+    /// A wrapper object for a primitive with the given prototype: for a
+    /// String, with the own `length` that §10.4.3.5† StringCreate step 6
+    /// defines (non-writable, non-enumerable, non-configurable).
+    ///
+    /// # Errors
+    /// [`Abrupt::OutOfMemory`].
+    pub fn new_wrapper(&mut self, prim: Value, proto: Value) -> Result<Value, Abrupt> {
+        let o = self.heap.new_object(proto, ObjKind::Primitive(prim))?;
+        if let Some(s) = self.heap.string(prim) {
+            let n = i32::try_from(s.len()).map_err(|_| Abrupt::OutOfMemory)?;
+            let kl = self.atoms.k_length;
+            self.heap.define(o, kl, Value::int32(n), Attrs(0))?;
+        }
+        Ok(o)
+    }
+
+    /// ToNumber as an `f64`, §7.1.4†.
+    ///
+    /// # Errors
+    /// The exceptions of ToPrimitive.
+    pub fn to_number(&mut self, v: Value) -> Result<f64, Abrupt> {
+        Ok(self.coerce_number(v)?.to_f64())
+    }
+
+    /// ToString, §7.1.17†.
+    ///
+    /// # Errors
+    /// The exceptions of ToPrimitive.
+    pub fn to_js_string(&mut self, v: Value) -> Result<JsString, Abrupt> {
+        self.coerce_js_string(v)
+    }
+
+    /// ToNumber, §7.1.4†: a primitive directly, an object through
+    /// ToPrimitive with the hint `number`.
     pub(crate) fn coerce_number(&mut self, v: Value) -> Result<Num, Abrupt> {
         match v.decode() {
             Decoded::Int32(i) => Ok(Num::I(i)),
@@ -111,7 +224,10 @@ impl Vm {
                 Some(s) => Ok(numeric::narrow(clazel_js_number::string_to_number(
                     &s.to_string_lossy(),
                 ))),
-                None => Err(Abrupt::NotYet("ToPrimitive of an object".into())),
+                None => {
+                    let p = self.to_primitive(v, Hint::Number)?;
+                    self.coerce_number(p)
+                }
             },
             Decoded::Hole | Decoded::Raw(_) => {
                 Err(Abrupt::Internal("an internal value reached ToNumber"))
@@ -128,8 +244,8 @@ impl Vm {
         }
     }
 
-    /// ToString, §7.1.17†, for primitives.
-    pub(crate) fn coerce_js_string(&mut self, v: Value) -> Result<JsString, Abrupt> {
+    /// ToString, §7.1.17†.
+    pub fn coerce_js_string(&mut self, v: Value) -> Result<JsString, Abrupt> {
         let text = match v.decode() {
             Decoded::Undefined => "undefined".to_string(),
             Decoded::Null => "null".to_string(),
@@ -139,7 +255,10 @@ impl Vm {
             Decoded::Ref(_) => {
                 return match self.heap.string(v) {
                     Some(s) => Ok(s.clone()),
-                    None => Err(Abrupt::NotYet("ToPrimitive of an object".into())),
+                    None => {
+                        let p = self.to_primitive(v, Hint::String)?;
+                        self.coerce_js_string(p)
+                    }
                 };
             }
             Decoded::Hole | Decoded::Raw(_) => {
@@ -158,8 +277,9 @@ impl Vm {
         Ok(self.heap.new_string(s)?)
     }
 
-    /// ToPropertyKey, §7.1.19†, for primitives (no Symbols yet).
-    pub(crate) fn coerce_property_key(&mut self, v: Value) -> Result<Key, Abrupt> {
+    /// ToPropertyKey, §7.1.19†: ToPrimitive with the hint `string`, then
+    /// ToString (no Symbols yet).
+    pub fn coerce_property_key(&mut self, v: Value) -> Result<Key, Abrupt> {
         let s = self.coerce_js_string(v)?;
         Ok(self.heap.intern(&s)?)
     }
@@ -172,7 +292,11 @@ impl Vm {
     /// a string on either side concatenates the two ToStrings.
     pub(crate) fn add_slow(&mut self, x: Value, y: Value) -> Result<Value, Abrupt> {
         if self.heap.is_object(x) || self.heap.is_object(y) {
-            return Err(Abrupt::NotYet("ToPrimitive of an object".into()));
+            // Steps 1.a and 1.b of §13.15.3: ToPrimitive of the left then the
+            // right operand, with the hint `default`.
+            let p = self.to_primitive(x, Hint::Default)?;
+            let q = self.to_primitive(y, Hint::Default)?;
+            return self.add_slow(p, q);
         }
         if self.heap.is_string(x) || self.heap.is_string(y) {
             let (a, b) = (self.coerce_js_string(x)?, self.coerce_js_string(y)?);
@@ -196,7 +320,11 @@ impl Vm {
     /// `<`, `<=`, `>`, `>=` off the Number path: IsLessThan, §7.2.12.
     pub(crate) fn relational(&mut self, op: Rel, x: Value, y: Value) -> Result<bool, Abrupt> {
         if self.heap.is_object(x) || self.heap.is_object(y) {
-            return Err(Abrupt::NotYet("ToPrimitive of an object".into()));
+            // Steps 1 and 2 of IsLessThan: ToPrimitive with the hint `number`,
+            // the left operand (as written in the source) first.
+            let p = self.to_primitive(x, Hint::Number)?;
+            let q = self.to_primitive(y, Hint::Number)?;
+            return self.relational(op, p, q);
         }
         if let (Some(a), Some(b)) = (self.heap.string(x), self.heap.string(y)) {
             // Step 3: both Strings: code unit order.
@@ -240,7 +368,14 @@ impl Vm {
             return Ok(nullish(x) && nullish(y)); // Steps 2 to 4.
         }
         if ox || oy {
-            return Err(Abrupt::NotYet("ToPrimitive of an object".into()));
+            // Steps 12 and 13: an Object against a String, Number or Boolean
+            // compares its ToPrimitive (hint `default`).
+            let (p, q) = if ox {
+                (self.to_primitive(x, Hint::Default)?, y)
+            } else {
+                (x, self.to_primitive(y, Hint::Default)?)
+            };
+            return self.loose_equals(p, q);
         }
         let (sx, sy) = (self.heap.is_string(x), self.heap.is_string(y));
         if sx && sy {
@@ -378,13 +513,80 @@ impl Vm {
                             let c = JsString::from_units(&[u]).map_err(|_| Abrupt::OutOfMemory)?;
                             Ok(self.heap.new_string(c)?)
                         }
-                        None => Err(Abrupt::NotYet("property of a String primitive".into())),
+                        None => self.get_from_primitive_proto(Intrinsic::StringPrototype, key),
                     }
                 }
                 _ => Err(Abrupt::Internal("property get on an internal cell")),
             },
+            Decoded::Bool(_) => self.get_from_primitive_proto(Intrinsic::BooleanPrototype, key),
+            Decoded::Int32(_) | Decoded::Double(_) => {
+                self.get_from_primitive_proto(Intrinsic::NumberPrototype, key)
+            }
             _ => Err(Abrupt::NotYet("property of a primitive".into())),
         }
+    }
+
+    /// `[[Get]]` on a primitive base: GetValue step 3.a makes ToObject(base)
+    /// the object the property is looked up on, so the lookup is on the
+    /// wrapper's prototype (the wrapper has no own properties but a String's
+    /// `length` and indices, which the caller has handled). The properties
+    /// are data properties, so the receiver does not matter. `NotYet` while
+    /// the realm has no such prototype.
+    fn get_from_primitive_proto(&mut self, which: Intrinsic, key: Key) -> Result<Value, Abrupt> {
+        let proto = self.intrinsic(which);
+        if !self.heap.is_object(proto) {
+            return Err(Abrupt::NotYet("property of a primitive".into()));
+        }
+        match self.heap.find(proto, key)? {
+            Some(f) => self
+                .heap
+                .slot(f.holder, f.slot)
+                .ok_or(Abrupt::Internal("property slot")),
+            None => Ok(Value::UNDEFINED),
+        }
+    }
+
+    /// `base[key]`, GetValue §6.2.5.5† (an own or inherited data property;
+    /// a primitive base is looked up on its wrapper's prototype).
+    ///
+    /// # Errors
+    /// A `TypeError` for `undefined` and `null`, [`Abrupt::OutOfMemory`].
+    pub fn get_value(&mut self, base: Value, key: Key) -> Result<Value, Abrupt> {
+        self.get_property(base, key, None)
+    }
+
+    /// `base[key] = v`, PutValue §6.2.5.6† (OrdinarySet for data
+    /// properties), failing as strict code does when `throw` is set.
+    ///
+    /// # Errors
+    /// A `TypeError` when the property is read-only and `throw`, or the base
+    /// is `undefined` or `null`.
+    pub fn put_value(
+        &mut self,
+        base: Value,
+        key: Key,
+        v: Value,
+        throw: bool,
+    ) -> Result<(), Abrupt> {
+        if self.heap.is_object(base)
+            && let Some(f) = self.heap.find(base, key)?
+            && f.attrs.0 & Attrs::WRITABLE == 0
+        {
+            if throw {
+                let name = self.key_text(key);
+                return Err(
+                    self.type_error(&format!("Cannot assign to read only property '{name}'"))
+                );
+            }
+            return Ok(());
+        }
+        self.set_property(base, key, v, None)
+    }
+
+    /// The heap, mutably: natives define properties and allocate objects
+    /// through it.
+    pub fn heap_mut(&mut self) -> &mut crate::heap::Heap {
+        &mut self.heap
     }
 
     /// `obj[idx]`: a string's character at an integer index, else
@@ -540,16 +742,39 @@ impl Vm {
     /// (OrdinaryCreateFromConstructor, §10.1.13); the body runs in a frame of
     /// kind construct, whose return gives the object. Class constructors and
     /// native constructors are not yet.
+    ///
+    /// A native constructor runs at once ([`NativeFn`](crate::interp::NativeFn)
+    /// with `new_target` set) and its result is `Some`; a bound function
+    /// constructs its target (§10.4.1.2†); a closure enters a frame and the
+    /// result is `None`.
     pub(crate) fn construct(
         &mut self,
         f: Value,
         args: &[Value],
         ret: Option<usize>,
-    ) -> Result<(), Abrupt> {
+    ) -> Result<Option<Value>, Abrupt> {
+        let mut f = f;
+        let mut all_args: Option<Vec<Value>> = None;
+        // §10.4.1.2 [[Construct]] of a bound function: the target, with the
+        // bound arguments first; step 5, NewTarget is the target when it was
+        // the bound function.
+        while let Some(ObjKind::Bound(i)) = self.heap.obj(f).map(|o| o.kind) {
+            let b = self.bound_fn(i)?;
+            let mut all = b.args;
+            all.extend_from_slice(all_args.as_deref().unwrap_or(args));
+            all_args = Some(all);
+            f = b.target;
+        }
+        let args = all_args.as_deref().unwrap_or(args);
         let code = match self.heap.obj(f).map(|o| o.kind) {
             Some(ObjKind::Closure { code, .. }) => code,
-            Some(ObjKind::Native(_)) => {
-                return Err(Abrupt::NotYet("constructing a native function".into()));
+            Some(ObjKind::Native(i)) => {
+                if !self.native(i)?.1 {
+                    return Err(self.type_error("value is not a constructor"));
+                }
+                self.charge()?;
+                let v = self.invoke_native(i, f, Value::UNDEFINED, args, f)?;
+                return Ok(Some(v));
             }
             _ => return Err(self.type_error("value is not a constructor")),
         };
@@ -575,7 +800,77 @@ impl Vm {
             _ => self.atoms.object_proto,
         };
         let this = self.heap.new_object(proto, ObjKind::Plain)?;
-        self.enter_closure(f, code, this, args, ret, crate::frame::KIND_CONSTRUCT)
+        self.enter_closure(f, code, this, args, ret, crate::frame::KIND_CONSTRUCT)?;
+        Ok(None)
+    }
+
+    /// `new f(...args)` for a native: [[Construct]] to completion.
+    ///
+    /// # Errors
+    /// A `TypeError` if `f` is not a constructor, or what the constructor
+    /// throws.
+    pub fn construct_value(&mut self, f: Value, args: &[Value]) -> Result<Value, Abrupt> {
+        let saved = (self.fp, self.pc, self.cur, self.top);
+        let result = match self.construct(f, args, None) {
+            Ok(Some(v)) => Ok(v),
+            Ok(None) => self.execute(),
+            Err(e) => Err(e),
+        };
+        (self.fp, self.pc, self.cur, self.top) = saved;
+        result
+    }
+
+    /// Whether `f` has `[[Construct]]`: a `function` closure, a native
+    /// made as a constructor, or a bound function of a constructor.
+    #[must_use]
+    pub fn is_constructor(&self, f: Value) -> bool {
+        match self.heap.obj(f).map(|o| o.kind) {
+            Some(ObjKind::Closure { code, .. }) => usize::try_from(code)
+                .ok()
+                .and_then(|i| self.codes.get(i))
+                .is_some_and(|c| {
+                    matches!(
+                        c.code.kind,
+                        FunctionKind::Normal | FunctionKind::Class | FunctionKind::Derived
+                    )
+                }),
+            Some(ObjKind::Native(i)) => self.native(i).is_ok_and(|n| n.1),
+            Some(ObjKind::Bound(i)) => self
+                .bound_fn(i)
+                .is_ok_and(|b| self.is_constructor(b.target)),
+            _ => false,
+        }
+    }
+
+    /// OrdinaryCreateFromConstructor, §10.1.13†: a new ordinary object
+    /// whose prototype is the `prototype` of `new_target` if that is an
+    /// object, else `fallback`'s intrinsic.
+    ///
+    /// # Errors
+    /// [`Abrupt::OutOfMemory`].
+    pub fn create_from_constructor(
+        &mut self,
+        new_target: Value,
+        fallback: Intrinsic,
+        kind: ObjKind,
+    ) -> Result<Value, Abrupt> {
+        let kp = self.atoms.k_prototype;
+        let proto = if self.heap.is_object(new_target) {
+            self.get_property(new_target, kp, None)?
+        } else {
+            Value::UNDEFINED
+        };
+        let proto = if self.heap.is_object(proto) {
+            proto
+        } else {
+            let p = self.intrinsic(fallback);
+            if self.heap.is_object(p) {
+                p
+            } else {
+                self.atoms.object_proto
+            }
+        };
+        Ok(self.heap.new_object(proto, kind)?)
     }
 
     // -----------------------------------------------------------------
@@ -799,8 +1094,33 @@ impl Vm {
         length: i32,
         f: crate::interp::NativeFn,
     ) -> Result<Value, Abrupt> {
+        self.new_native_with(name, length, f, false)
+    }
+
+    /// A new native function that has `[[Construct]]`: `new` runs `f` with
+    /// [`Vm::new_target`] set to the constructor and `this` `undefined`; the
+    /// result of `f` is the result of `new`. `prototype` is not made here.
+    ///
+    /// # Errors
+    /// [`Abrupt::OutOfMemory`].
+    pub fn new_native_constructor(
+        &mut self,
+        name: &str,
+        length: i32,
+        f: crate::interp::NativeFn,
+    ) -> Result<Value, Abrupt> {
+        self.new_native_with(name, length, f, true)
+    }
+
+    fn new_native_with(
+        &mut self,
+        name: &str,
+        length: i32,
+        f: crate::interp::NativeFn,
+        constructor: bool,
+    ) -> Result<Value, Abrupt> {
         let index = u32::try_from(self.natives.len()).map_err(|_| Abrupt::OutOfMemory)?;
-        self.natives.push(f);
+        self.natives.push((f, constructor));
         let proto = self.atoms.function_proto;
         let o = self.heap.new_object(proto, ObjKind::Native(index))?;
         let name_v = self.heap.new_str(name)?;
@@ -809,6 +1129,25 @@ impl Vm {
             .define(o, kl, Value::int32(length), CONFIGURABLE_ONLY)?;
         self.heap.define(o, kn, name_v, CONFIGURABLE_ONLY)?;
         Ok(o)
+    }
+
+    /// BoundFunctionCreate, §10.4.1.3†, without the `length` and `name`
+    /// (the caller defines them): a callable that calls `target` with
+    /// `this` and `args` first. Its prototype is the target's.
+    ///
+    /// # Errors
+    /// [`Abrupt::OutOfMemory`].
+    pub fn new_bound_function(
+        &mut self,
+        target: Value,
+        this: Value,
+        args: Vec<Value>,
+    ) -> Result<Value, Abrupt> {
+        let index = u32::try_from(self.bound.len()).map_err(|_| Abrupt::OutOfMemory)?;
+        self.bound
+            .push(crate::interp::BoundFn { target, this, args });
+        let proto = self.heap.proto_of(target).unwrap_or(Value::NULL);
+        Ok(self.heap.new_object(proto, ObjKind::Bound(index))?)
     }
 
     /// Defines (or overwrites) a writable, enumerable, configurable data

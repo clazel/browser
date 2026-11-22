@@ -117,8 +117,62 @@ impl From<HeapError> for Abrupt {
     }
 }
 
-/// A native function: `this`, the arguments, the result.
+/// A native function: `this`, the arguments, the result. While it runs,
+/// [`Vm::active_function`] is its own function object and [`Vm::new_target`]
+/// is `undefined` for a call and the constructor for a `new`.
 pub type NativeFn = fn(&mut Vm, Value, &[Value]) -> Result<Value, Abrupt>;
+
+/// The objects a realm's built-ins share (§6.1.7.4† "Well-Known Intrinsic
+/// Objects"). [`Vm::new`] makes the first two; `clazel-js-builtins` installs
+/// the others with [`Vm::set_intrinsic`]. The VM reads them where the
+/// standard names an intrinsic: the prototype of a thrown error, of a
+/// wrapper object, of a primitive's property lookup.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Intrinsic {
+    /// `%Object.prototype%`.
+    ObjectPrototype,
+    /// `%Function.prototype%`.
+    FunctionPrototype,
+    /// `%Error.prototype%`.
+    ErrorPrototype,
+    /// `%TypeError.prototype%`.
+    TypeErrorPrototype,
+    /// `%RangeError.prototype%`.
+    RangeErrorPrototype,
+    /// `%SyntaxError.prototype%`.
+    SyntaxErrorPrototype,
+    /// `%ReferenceError.prototype%`.
+    ReferenceErrorPrototype,
+    /// `%Boolean.prototype%`.
+    BooleanPrototype,
+    /// `%Number.prototype%`.
+    NumberPrototype,
+    /// `%String.prototype%`.
+    StringPrototype,
+}
+
+/// How many [`Intrinsic`]s there are.
+const INTRINSICS: usize = 10;
+
+/// The hint of ToPrimitive (§7.1.1†).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Hint {
+    /// `default`.
+    Default,
+    /// `number`.
+    Number,
+    /// `string`.
+    String,
+}
+
+/// The state of a bound function exotic object (§10.4.1†):
+/// `[[BoundTargetFunction]]`, `[[BoundThis]]`, `[[BoundArguments]]`.
+#[derive(Clone, Debug)]
+pub(crate) struct BoundFn {
+    pub(crate) target: Value,
+    pub(crate) this: Value,
+    pub(crate) args: Vec<Value>,
+}
 
 /// A constant of a loaded function.
 #[derive(Clone, Copy, Debug)]
@@ -220,7 +274,12 @@ pub struct Vm {
     pub(crate) global_lex: HashMap<Key, (Value, bool)>,
     /// The `VarNames` of the global environment record.
     pub(crate) var_names: HashSet<Key>,
-    pub(crate) natives: Vec<NativeFn>,
+    /// The native functions, and whether each has `[[Construct]]`.
+    pub(crate) natives: Vec<(NativeFn, bool)>,
+    pub(crate) bound: Vec<BoundFn>,
+    pub(crate) intrinsics: [Value; INTRINSICS],
+    pub(crate) new_target: Value,
+    pub(crate) active: Value,
     pub(crate) terminator: Terminator,
     pub(crate) budget: u64,
     pub(crate) atoms: Atoms,
@@ -275,6 +334,18 @@ impl Vm {
             global_lex: HashMap::new(),
             var_names: HashSet::new(),
             natives: Vec::new(),
+            bound: Vec::new(),
+            intrinsics: std::array::from_fn(|i| {
+                if i == Intrinsic::ObjectPrototype as usize {
+                    object_proto
+                } else if i == Intrinsic::FunctionPrototype as usize {
+                    function_proto
+                } else {
+                    Value::UNDEFINED
+                }
+            }),
+            new_target: Value::UNDEFINED,
+            active: Value::UNDEFINED,
             terminator: Terminator::new(),
             budget: u64::MAX,
             atoms,
@@ -408,9 +479,12 @@ impl Vm {
     pub fn call(&mut self, callee: Value, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
         let kind = self.heap.obj(callee).map(|o| o.kind);
         match kind {
-            Some(ObjKind::Native(i)) => {
-                let f = self.native(i)?;
-                f(self, this, args)
+            Some(ObjKind::Native(i)) => self.invoke_native(i, callee, this, args, Value::UNDEFINED),
+            Some(ObjKind::Bound(i)) => {
+                let b = self.bound_fn(i)?;
+                let mut all = b.args;
+                all.extend_from_slice(args);
+                self.call(b.target, b.this, &all)
             }
             Some(ObjKind::Closure { code, .. }) => {
                 let saved = (self.fp, self.pc, self.cur, self.top);
@@ -426,12 +500,61 @@ impl Vm {
         }
     }
 
-    pub(crate) fn native(&self, i: u32) -> Result<NativeFn, Abrupt> {
+    pub(crate) fn native(&self, i: u32) -> Result<(NativeFn, bool), Abrupt> {
         usize::try_from(i)
             .ok()
             .and_then(|i| self.natives.get(i))
             .copied()
             .ok_or(Abrupt::Internal("native index"))
+    }
+
+    /// Runs native `i`, which is function object `callee`, with `new_target`
+    /// the constructor for a `new` and `undefined` for a call; the previous
+    /// active function and new target come back afterwards.
+    pub(crate) fn invoke_native(
+        &mut self,
+        i: u32,
+        callee: Value,
+        this: Value,
+        args: &[Value],
+        new_target: Value,
+    ) -> Result<Value, Abrupt> {
+        let (f, _) = self.native(i)?;
+        let saved = (self.active, self.new_target);
+        (self.active, self.new_target) = (callee, new_target);
+        let r = f(self, this, args);
+        (self.active, self.new_target) = saved;
+        r
+    }
+
+    /// The function object of the running native: the callee a native does
+    /// not otherwise know (one native serves several constructors).
+    #[must_use]
+    pub fn active_function(&self) -> Value {
+        self.active
+    }
+
+    /// `NewTarget` of the running native: `undefined` when it was called, the
+    /// constructor when it was constructed.
+    #[must_use]
+    pub fn new_target(&self) -> Value {
+        self.new_target
+    }
+
+    /// An intrinsic of the realm, `undefined` until it is installed.
+    #[must_use]
+    pub fn intrinsic(&self, which: Intrinsic) -> Value {
+        self.intrinsics
+            .get(which as usize)
+            .copied()
+            .unwrap_or(Value::UNDEFINED)
+    }
+
+    /// Installs an intrinsic.
+    pub fn set_intrinsic(&mut self, which: Intrinsic, v: Value) {
+        if let Some(slot) = self.intrinsics.get_mut(which as usize) {
+            *slot = v;
+        }
     }
 
     pub(crate) fn code_of(&self, callee: Value) -> Result<usize, Abrupt> {
@@ -441,6 +564,14 @@ impl Vm {
             }
             _ => Err(Abrupt::Internal("frame callee is not a closure")),
         }
+    }
+
+    pub(crate) fn bound_fn(&self, i: u32) -> Result<BoundFn, Abrupt> {
+        usize::try_from(i)
+            .ok()
+            .and_then(|i| self.bound.get(i))
+            .cloned()
+            .ok_or(Abrupt::Internal("bound function index"))
     }
 
     fn func(&self, code: usize) -> Result<&LoadedFn, Abrupt> {
@@ -490,9 +621,8 @@ impl Vm {
         } else if self.heap.is_object(this) {
             this
         } else {
-            return Err(Abrupt::NotYet(
-                "this coercion of a primitive in sloppy code".into(),
-            ));
+            // Step 6.b: ToObject(thisArgument), the wrapper object.
+            self.to_object(this)?
         };
         self.charge()?;
         let size = frame_size(nparams, nregs).ok_or(Abrupt::Internal("frame size"))?;
@@ -542,7 +672,7 @@ impl Vm {
 
     /// Runs the running frame (which has no caller in the region) until it
     /// returns, unwinding exceptions through the frames above it.
-    fn execute(&mut self) -> Result<Value, Abrupt> {
+    pub(crate) fn execute(&mut self) -> Result<Value, Abrupt> {
         loop {
             match self.step() {
                 Ok(Flow::Continue) => {}
@@ -1000,14 +1130,24 @@ impl Vm {
                 args,
                 argc,
             } => {
-                let f = self.r(callee)?;
-                let t = self.r(this)?;
+                let mut f = self.r(callee)?;
+                let mut t = self.r(this)?;
                 let mut vals = Vec::with_capacity(usize::try_from(argc).unwrap_or(0));
                 for i in 0..argc {
                     let reg = args
                         .checked_add(i)
                         .ok_or(Abrupt::Internal("argument register"))?;
                     vals.push(self.r(reg)?);
+                }
+                // §10.4.1.1 [[Call]] of a bound function: the target, with
+                // the bound `this` and the bound arguments first.
+                while let Some(ObjKind::Bound(i)) = self.heap.obj(f).map(|o| o.kind) {
+                    let b = self.bound_fn(i)?;
+                    f = b.target;
+                    t = b.this;
+                    let mut all = b.args;
+                    all.extend_from_slice(&vals);
+                    vals = all;
                 }
                 match self.heap.obj(f).map(|o| o.kind) {
                     Some(ObjKind::Closure { code, .. }) => {
@@ -1016,8 +1156,7 @@ impl Vm {
                     }
                     Some(ObjKind::Native(i)) => {
                         self.charge()?;
-                        let native = self.native(i)?;
-                        let v = native(self, t, &vals)?;
+                        let v = self.invoke_native(i, f, t, &vals, Value::UNDEFINED)?;
                         self.w(dst, v)?;
                     }
                     _ => {
@@ -1028,7 +1167,7 @@ impl Vm {
                 }
             }
             Instr::New {
-                dst: _,
+                dst,
                 callee,
                 args,
                 argc,
@@ -1041,8 +1180,12 @@ impl Vm {
                         .ok_or(Abrupt::Internal("argument register"))?;
                     vals.push(self.r(reg)?);
                 }
-                self.construct(f, &vals, Some(self.pc))?;
-                return Ok(Flow::Continue);
+                match self.construct(f, &vals, Some(self.pc))? {
+                    // A native constructor finished at once.
+                    Some(v) => self.w(dst, v)?,
+                    // A frame was entered; its return writes `dst`.
+                    None => return Ok(Flow::Continue),
+                }
             }
             Instr::Return { src } => {
                 let v = self.r(src)?;
