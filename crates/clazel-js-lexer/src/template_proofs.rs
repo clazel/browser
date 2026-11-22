@@ -4,19 +4,15 @@
 //! `lemma_delim_no_char`).
 //!
 //! These are the consumption half of what the executable lexer's template
-//! scanner needs. The production half (that the scanner's range *is* derived
-//! by `template_characters`, and its TV and TRV are the standard's) is open:
-//! `template_characters` of the spec is a recursive relation whose
-//! existential has the automatically chosen trigger
-//! `template_character(s, i, k, ..) && template_characters(s, k, j, ..)`, and
-//! Verus unfolds a recursive spec function to a different fuel than the one
-//! its own call sites have, so the call never matches that trigger: a
-//! `template_characters` of two or more characters cannot be derived from
-//! its parts (the one-character case, `lemma_template_characters_one`,
-//! needs no existential). Giving the existential a trigger on its other
-//! terms, as `string_characters_sv` has by `#![auto]`, would let the proof
-//! go through; `spec.rs` is not changed to make a proof go through
-//! (CLAUDE.md), so this is left for a maintainer to decide.
+//! scanner needs. The production half is
+//! [`lemma_tc_extend`]: a `template_characters` extends by one more
+//! `TemplateCharacter` at its end, which `spec.rs`'s explicit trigger on the
+//! existential of `template_characters` makes provable (with the automatic
+//! trigger `template_character(s, i, k, ..) && template_characters(s, k, j,
+//! ..)`, a `template_characters` of two or more characters could not be
+//! derived from its parts), and [`lemma_tc_end_unique`]: two derivations of
+//! `template_characters` from the same start, each followed by a place no
+//! `TemplateCharacter` starts at, end at the same place.
 
 #[cfg(verus_only)]
 use super::equivalence::*;
@@ -242,6 +238,279 @@ pub proof fn lemma_delim_no_char(s: Seq<u32>, p: int)
                 assert(m == p + 1 ==> at(s, m, '{'));
             }
         }
+    }
+}
+
+// ---------------------------------------------------------------------
+// TemplateCharacters: extension at the end, and unique end.
+// ---------------------------------------------------------------------
+
+/// `tv_concat` is associative.
+pub proof fn lemma_tv_assoc(a: Tv, b: Tv, c: Tv)
+    ensures
+        tv_concat(tv_concat(a, b), c) =~= tv_concat(a, tv_concat(b, c)),
+{
+    match (a, b, c) {
+        (Some(x), Some(y), Some(z)) => {
+            assert((x + y) + z =~= x + (y + z));
+        },
+        _ => {},
+    }
+}
+
+/// A `template_characters` over more than one character is one character
+/// and `template_characters` of the rest.
+pub proof fn lemma_tc_unfold(s: Seq<u32>, i: int, j: int, tv: Tv, trv: Seq<u16>)
+    requires
+        template_characters(s, i, j, tv, trv),
+        !template_character(s, i, j, tv, trv),
+    ensures
+        exists|k: int, tv1: Tv, trv1: Seq<u16>, tv2: Tv, trv2: Seq<u16>|
+            #![trigger template_character(s, i, k, tv1, trv1), tv_concat(tv1, tv2), trv1 + trv2]
+            i < k < j && template_character(s, i, k, tv1, trv1) && template_characters(
+                s,
+                k,
+                j,
+                tv2,
+                trv2,
+            ) && tv =~= tv_concat(tv1, tv2) && trv =~= trv1 + trv2,
+{
+    reveal_with_fuel(template_characters, 2);
+}
+
+/// `TemplateCharacters` extends at the end by one `TemplateCharacter`.
+pub proof fn lemma_tc_extend(
+    s: Seq<u32>,
+    i: int,
+    m: int,
+    j: int,
+    tv1: Tv,
+    trv1: Seq<u16>,
+    tv2: Tv,
+    trv2: Seq<u16>,
+)
+    requires
+        i < m < j,
+        template_characters(s, i, m, tv1, trv1),
+        template_character(s, m, j, tv2, trv2),
+    ensures
+        template_characters(s, i, j, tv_concat(tv1, tv2), trv1 + trv2),
+    decreases m - i,
+{
+    reveal(template_characters);
+    if template_character(s, i, m, tv1, trv1) {
+        assert(template_characters(s, m, j, tv2, trv2));
+        let tvc = tv_concat(tv1, tv2);
+        let trvc = trv1 + trv2;
+        assert(i < m < j && template_character(s, i, m, tv1, trv1) && template_characters(
+            s,
+            m,
+            j,
+            tv2,
+            trv2,
+        ) && tvc =~= tv_concat(tv1, tv2) && trvc =~= trv1 + trv2);
+    } else {
+        lemma_tc_unfold(s, i, m, tv1, trv1);
+        let (k0, tva, trva, tvb, trvb) = choose|
+            k0: int,
+            tva: Tv,
+            trva: Seq<u16>,
+            tvb: Tv,
+            trvb: Seq<u16>,
+        |
+            #![trigger template_character(s, i, k0, tva, trva), tv_concat(tva, tvb), trva + trvb]
+            i < k0 < m && template_character(s, i, k0, tva, trva) && template_characters(
+                s,
+                k0,
+                m,
+                tvb,
+                trvb,
+            ) && tv1 =~= tv_concat(tva, tvb) && trv1 =~= trva + trvb;
+        lemma_tc_extend(s, k0, m, j, tvb, trvb, tv2, trv2);
+        let tvx = tv_concat(tvb, tv2);
+        let trvx = trvb + trv2;
+        lemma_tv_assoc(tva, tvb, tv2);
+        assert(trv1 + trv2 =~= trva + trvx);
+        assert(tv_concat(tv1, tv2) =~= tv_concat(tva, tvx)) by {
+            assert(tv1 =~= tv_concat(tva, tvb));
+        }
+        assert(i < k0 < j && template_character(s, i, k0, tva, trva) && template_characters(
+            s,
+            k0,
+            j,
+            tvx,
+            trvx,
+        ) && tv_concat(tv1, tv2) =~= tv_concat(tva, tvx) && (trv1 + trv2) =~= trva + trvx);
+    }
+}
+
+/// No `TemplateCharacter` starts at `d`: the end of the characters of a
+/// component, whether at a closing delimiter or where the scan is stuck.
+pub open spec fn no_char(s: Seq<u32>, d: int) -> bool {
+    forall|m: int, tv: Tv, trv: Seq<u16>| !template_character(s, d, m, tv, trv)
+}
+
+/// A closing delimiter is such a place.
+pub proof fn lemma_delim_no_char_spec(s: Seq<u32>, p: int)
+    requires
+        delim_at(s, p),
+    ensures
+        no_char(s, p),
+{
+    lemma_delim_no_char(s, p);
+}
+
+/// `TemplateCharacters` starts with a `TemplateCharacter`.
+pub proof fn lemma_tc_has_char(s: Seq<u32>, i: int, j: int, tv: Tv, trv: Seq<u16>)
+    requires
+        template_characters(s, i, j, tv, trv),
+    ensures
+        exists|m: int, tv1: Tv, trv1: Seq<u16>| template_character(s, i, m, tv1, trv1),
+{
+    if template_character(s, i, j, tv, trv) {
+    } else {
+        lemma_tc_unfold(s, i, j, tv, trv);
+        let (k, tv1, trv1, tv2, trv2) = choose|
+            k: int,
+            tv1: Tv,
+            trv1: Seq<u16>,
+            tv2: Tv,
+            trv2: Seq<u16>,
+        |
+            #![trigger template_character(s, i, k, tv1, trv1), tv_concat(tv1, tv2), trv1 + trv2]
+            i < k < j && template_character(s, i, k, tv1, trv1) && template_characters(
+                s,
+                k,
+                j,
+                tv2,
+                trv2,
+            ) && tv =~= tv_concat(tv1, tv2) && trv =~= trv1 + trv2;
+        assert(template_character(s, i, k, tv1, trv1));
+    }
+}
+
+/// Two derivations of `TemplateCharacters` from the same start, each
+/// followed by a place no `TemplateCharacter` starts at, end at the same
+/// place.
+pub proof fn lemma_tc_pair(
+    s: Seq<u32>,
+    a: int,
+    b: int,
+    d: int,
+    tv1: Tv,
+    trv1: Seq<u16>,
+    tv2: Tv,
+    trv2: Seq<u16>,
+)
+    requires
+        template_characters(s, a, b, tv1, trv1),
+        no_char(s, b),
+        template_characters(s, a, d, tv2, trv2),
+        no_char(s, d),
+    ensures
+        b == d,
+    decreases b - a,
+{
+    if template_character(s, a, b, tv1, trv1) {
+        if template_character(s, a, d, tv2, trv2) {
+            lemma_tchar_det(s, a, b, d, tv1, tv2, trv1, trv2);
+        } else {
+            lemma_tc_unfold(s, a, d, tv2, trv2);
+            let (k1, tva, trva, tvb, trvb) = choose|
+                k1: int,
+                tva: Tv,
+                trva: Seq<u16>,
+                tvb: Tv,
+                trvb: Seq<u16>,
+            |
+                #![trigger template_character(s, a, k1, tva, trva), tv_concat(tva, tvb), trva + trvb]
+                a < k1 < d && template_character(s, a, k1, tva, trva) && template_characters(
+                    s,
+                    k1,
+                    d,
+                    tvb,
+                    trvb,
+                ) && tv2 =~= tv_concat(tva, tvb) && trv2 =~= trva + trvb;
+            lemma_tchar_det(s, a, b, k1, tv1, tva, trv1, trva);
+            lemma_tc_has_char(s, k1, d, tvb, trvb);
+            let (m, tvx, trvx) = choose|m: int, tvx: Tv, trvx: Seq<u16>|
+                template_character(s, k1, m, tvx, trvx);
+            assert(!template_character(s, b, m, tvx, trvx));
+        }
+    } else {
+        lemma_tc_unfold(s, a, b, tv1, trv1);
+        let (k0, tva, trva, tvb, trvb) = choose|
+            k0: int,
+            tva: Tv,
+            trva: Seq<u16>,
+            tvb: Tv,
+            trvb: Seq<u16>,
+        |
+            #![trigger template_character(s, a, k0, tva, trva), tv_concat(tva, tvb), trva + trvb]
+            a < k0 < b && template_character(s, a, k0, tva, trva) && template_characters(
+                s,
+                k0,
+                b,
+                tvb,
+                trvb,
+            ) && tv1 =~= tv_concat(tva, tvb) && trv1 =~= trva + trvb;
+        if template_character(s, a, d, tv2, trv2) {
+            lemma_tchar_det(s, a, k0, d, tva, tv2, trva, trv2);
+            lemma_tc_has_char(s, k0, b, tvb, trvb);
+            let (m, tvx, trvx) = choose|m: int, tvx: Tv, trvx: Seq<u16>|
+                template_character(s, k0, m, tvx, trvx);
+            assert(!template_character(s, d, m, tvx, trvx));
+        } else {
+            lemma_tc_unfold(s, a, d, tv2, trv2);
+            let (k1, tvc, trvc, tvd, trvd) = choose|
+                k1: int,
+                tvc: Tv,
+                trvc: Seq<u16>,
+                tvd: Tv,
+                trvd: Seq<u16>,
+            |
+                #![trigger template_character(s, a, k1, tvc, trvc), tv_concat(tvc, tvd), trvc + trvd]
+                a < k1 < d && template_character(s, a, k1, tvc, trvc) && template_characters(
+                    s,
+                    k1,
+                    d,
+                    tvd,
+                    trvd,
+                ) && tv2 =~= tv_concat(tvc, tvd) && trv2 =~= trvc + trvd;
+            lemma_tchar_det(s, a, k0, k1, tva, tvc, trva, trvc);
+            lemma_tc_pair(s, k0, b, d, tvb, trvb, tvd, trvd);
+        }
+    }
+}
+
+/// Two derivations of a (possibly empty) run of `TemplateCharacters` from
+/// `a`, each followed by a place no `TemplateCharacter` starts at, end at
+/// the same place. (The run is empty when it ends where it starts.)
+pub proof fn lemma_tc_end_unique(s: Seq<u32>, a: int, b: int, d: int)
+    requires
+        b == a || exists|tv: Tv, trv: Seq<u16>| template_characters(s, a, b, tv, trv),
+        d == a || exists|tv: Tv, trv: Seq<u16>| template_characters(s, a, d, tv, trv),
+        no_char(s, b),
+        no_char(s, d),
+    ensures
+        b == d,
+{
+    if b != a && d != a {
+        let (tv1, trv1) = choose|tv: Tv, trv: Seq<u16>| template_characters(s, a, b, tv, trv);
+        let (tv2, trv2) = choose|tv: Tv, trv: Seq<u16>| template_characters(s, a, d, tv, trv);
+        lemma_tc_pair(s, a, b, d, tv1, trv1, tv2, trv2);
+    } else if b != a {
+        let (tv1, trv1) = choose|tv: Tv, trv: Seq<u16>| template_characters(s, a, b, tv, trv);
+        lemma_tc_has_char(s, a, b, tv1, trv1);
+        let (m, tvx, trvx) = choose|m: int, tvx: Tv, trvx: Seq<u16>|
+            template_character(s, a, m, tvx, trvx);
+        assert(!template_character(s, d, m, tvx, trvx));
+    } else if d != a {
+        let (tv2, trv2) = choose|tv: Tv, trv: Seq<u16>| template_characters(s, a, d, tv, trv);
+        lemma_tc_has_char(s, a, d, tv2, trv2);
+        let (m, tvx, trvx) = choose|m: int, tvx: Tv, trvx: Seq<u16>|
+            template_character(s, a, m, tvx, trvx);
+        assert(!template_character(s, b, m, tvx, trvx));
     }
 }
 
