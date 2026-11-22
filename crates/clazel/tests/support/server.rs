@@ -58,9 +58,9 @@ pub fn field(head: &[u8], name: &str) -> String {
         .unwrap_or_default()
 }
 
-/// Read one request head, up to 64 KiB, waiting at most 10 s.
+/// Read one request head, up to 64 KiB, waiting at most 60 s (a guard against a client that never sends).
 fn read_head(s: &mut TcpStream) -> Vec<u8> {
-    let _ = s.set_read_timeout(Some(Duration::from_secs(10)));
+    let _ = s.set_read_timeout(Some(Duration::from_secs(60)));
     let mut got = Vec::new();
     let mut buf = [0u8; 4096];
     while !got.ends_with(b"\r\n\r\n") && got.len() < 65536 {

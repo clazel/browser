@@ -95,15 +95,28 @@ impl Render for Headless {
             Command::new(&self.clazel)
                 .args(["--headless"])
                 .arg(&self.out)
-                .args(["--size", "800x600", &url])
+                .args([
+                    "--size",
+                    "800x600",
+                    "--wait",
+                    crate::HEADLESS_WAIT_SECONDS,
+                    &url,
+                ])
                 .env("CLAZEL_RENDERER", &self.renderer)
                 .env("CLAZEL_GPU", &self.gpu),
         )
         .map_err(|e| format!("{path}: browse: {e}"))?;
         if !ran.status.success() {
+            // The last line is only the program's verdict ("cannot open ...", "no frame
+            // ..."); what led to it (a renderer or a GPU process that died, and how) is in
+            // the lines before it, so the failure carries the tail of the log.
             let err = String::from_utf8_lossy(&ran.stderr);
-            let last = err.lines().last().unwrap_or("").to_owned();
-            return Err(format!("{path}: browse --headless: {}: {last}", ran.status));
+            let lines: Vec<&str> = err.lines().collect();
+            let tail = lines
+                .get(lines.len().saturating_sub(20)..)
+                .unwrap_or_default()
+                .join(" | ");
+            return Err(format!("{path}: browse --headless: {}: {tail}", ran.status));
         }
         let file = std::fs::read(&self.out).map_err(|e| format!("{path}: {e}"))?;
         // `browse --headless` writes RGB; the runner's images are RGBA.
@@ -146,6 +159,7 @@ fn browse_headless_renders_reftests() {
     if !crate::runs() {
         return;
     }
+    let _one = crate::one_at_a_time();
     let f = fixture("reftest-plumbing");
     assert!(f.is_ok(), "{:?}", f.as_ref().err());
     let Ok(f) = f else { return };
@@ -204,6 +218,7 @@ fn the_vendored_wpt_reftests_are_run_and_counted() {
     if !crate::runs() {
         return;
     }
+    let _one = crate::one_at_a_time();
     let f = fixture("reftest-wpt");
     assert!(f.is_ok(), "{:?}", f.as_ref().err());
     let Ok(f) = f else { return };
