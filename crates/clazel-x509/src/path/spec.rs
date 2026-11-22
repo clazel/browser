@@ -105,6 +105,14 @@
 //! - **(=) §6.1.4 (k)**: "Conforming implementations may choose to reject all
 //!   version 1 and version 2 intermediate certificates", and this does: no
 //!   out-of-band means is offered.
+//! - **basicConstraints' criticality is not read.** RFC 5280 §4.2.1.9
+//!   "Conforming CAs MUST mark the extension as critical" binds the issuer;
+//!   §6.1.4 (k) reads only cA, and so does this. Refusing a non-critical one
+//!   would refuse Go Daddy Class 2 CA and Starfield Class 2 CA (cA TRUE,
+//!   non-critical, in NSS `certdata.txt`; the Go Daddy one is still sent in
+//!   real chains, 3.5g corpus). Chrome (BoringSSL `ParsedCertificate`) and
+//!   rustls-webpki do not read the flag either. Limbo
+//!   `rfc5280::root-non-critical-basic-constraints` stays an expected failure.
 //! - **pathLenConstraint and requireExplicitPolicy are numbers**
 //!   (`parsed::spec::skip_certs_value`, big-endian), unbounded. A value of at
 //!   least n has no effect, so no size cap is needed here.
@@ -198,7 +206,8 @@ pub enum PathError {
     /// on the target.
     ExtendedKeyUsage,
     /// `profile.rs`: the target fails the leaf checks (identity, key usage,
-    /// role, validity; `leaf::spec::check_extensions`).
+    /// role, validity; `leaf::spec::check_extensions`), or (R) its subject
+    /// is empty and its subjectAltName is not critical (RFC 5280 §4.1.2.6).
     Leaf,
     /// `profile.rs`, (R): the target carries nameConstraints.
     LeafNameConstraints,

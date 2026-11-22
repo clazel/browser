@@ -550,6 +550,33 @@ fn leaf_profile(leaf: &PathCert<'_>, reference: ReferenceIdentity<'_>, now: &Cer
     if leaf.eku.is_none() { return Err(PathError::ExtendedKeyUsage); }
     // 3. (R) nameConstraints absent.
     if leaf.name_constraints.is_some() { return Err(PathError::LeafNameConstraints); }
+    // 4. (R) RFC 5280 §4.1.2.6: an empty subject needs a critical subjectAltName.
+    let subject = leaf.tbs.subject_der;
+    let empty = subject.len() == 2 && subject.first() == Some(&0x30u8) && subject.get(1) == Some(&0x00u8);
+    proof {
+        let v = super::parsed::exec::view_path_cert(leaf);
+        assert(v.tbs.subject_der == subject@);
+        if empty { assert(subject@ =~= seq![0x30u8, 0x00]); }
+        else if subject@ =~= seq![0x30u8, 0x00] { assert(subject@[0] == 0x30u8 && subject@[1] == 0x00u8); }
+        assert(empty == super::profile::subject_is_empty(v));
+    }
+    if empty {
+        let oid = crate::leaf::exec::san_oid();
+        let found = crate::leaf::exec::find_extension_index(leaf.extensions.as_slice(), oid.as_slice());
+        let critical = match found {
+            Some(i) => match leaf.extensions.get(i) { Some(e) => e.critical, None => false },
+            None => false,
+        };
+        proof {
+            let v = super::parsed::exec::view_path_cert(leaf);
+            assert(v.extensions == crate::extensions::exec::view_extensions(leaf.extensions@));
+            if let Some(i) = found {
+                assert(v.extensions[i as int] == crate::extensions::exec::view_extension(&leaf.extensions@[i as int]));
+            }
+            assert(critical == super::profile::san_is_critical(v));
+        }
+        if !critical { return Err(PathError::Leaf); }
+    }
     Ok(())
 }
 
