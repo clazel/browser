@@ -10,6 +10,10 @@
 //! Every mutation keeps [`wf`]; that is proven once about the spec
 //! (`lemmas`: `theorem_insert_wf`, …), so the exec functions need only be
 //! equal to the spec functions.
+//!
+//! Every mutation also keeps `host_acyclic`, the one thing [`wf`] does not
+//! say (no cycle through a template's host): see `host_acyclic_contract` and
+//! `host_acyclic_lemmas`.
 
 #[allow(unused_imports)]
 use super::spec::*;

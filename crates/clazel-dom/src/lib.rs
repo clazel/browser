@@ -18,6 +18,8 @@
 //!   relational spec; what the relation says.
 //! - [`deep_clone_size_lemmas`]: a deep clone adds exactly the subtree's size,
 //!   and is refused only if the copy does not fit.
+//! - [`host_acyclic_contract`]: what the raw insert and reparent need to keep
+//!   `host_acyclic`.
 //! - [`deep_clone_size_mutation_lemmas`]: the kill certificates of the
 //!   mutations of the size and refusal specs.
 //! - [`ops_mutation_lemmas`]: the kill certificates of the mutations of those.
@@ -42,3 +44,7 @@ pub mod ops_mutation_lemmas;
 pub mod spec;
 pub mod validity_lemmas;
 pub mod validity_mutation_lemmas;
+// Declared after every other module on purpose: the solver's behavior on the
+// failing proofs of the validity mutations (mutations.json) depends on where
+// these modules are declared, and they are slow to refute if these come first.
+pub mod host_acyclic_contract;
