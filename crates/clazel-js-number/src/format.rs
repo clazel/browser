@@ -21,7 +21,11 @@
 //!   `toPrecision` are slow paths, not the hot path of number printing.)
 //! - Number::toString's shortest digits come from [`crate::shortest`].
 
-use crate::bigint::{Big, push_u64};
+use crate::bigint::push_u64;
+use crate::fixed::{BIG_LIMBS_FORMAT, FixedBig};
+
+/// The big integer of the exact formatting arithmetic.
+type Big = FixedBig<BIG_LIMBS_FORMAT>;
 use crate::shortest::{log10_pow2, shortest_digits};
 
 /// A `RangeError`: an argument outside the range the spec allows.

@@ -19,7 +19,10 @@
 //!   (Ulf Adams, "Ryu: fast float-to-string conversion", PLDI 2018, section
 //!   3, `d2s_full_table.h`.)
 
-use crate::bigint::Big;
+use crate::fixed::{BIG_LIMBS_FORMAT, FixedBig};
+
+/// The big integer the tables are computed with.
+type Big = FixedBig<BIG_LIMBS_FORMAT>;
 use std::sync::OnceLock;
 
 /// The smallest decimal exponent the Eisel–Lemire table covers.

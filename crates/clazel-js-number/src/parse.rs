@@ -35,7 +35,10 @@
 //! - The numeric separator `_` is not accepted (the grammar uses
 //!   `DecimalDigits[~Sep]`).
 
-use crate::bigint::Big;
+use crate::fixed::{BIG_LIMBS_PARSE, FixedBig};
+
+/// The big integer of the exact path.
+type Big = FixedBig<BIG_LIMBS_PARSE>;
 use crate::tables::{EL_MAX_Q, EL_MIN_Q, Tables, tables};
 
 /// The significant digits a decimal is cut to for the exact path.

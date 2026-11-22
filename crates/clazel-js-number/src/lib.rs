@@ -27,6 +27,7 @@
 //! Kani harnesses (compiled only under `cargo kani`).
 
 pub mod bigint;
+pub mod fixed;
 pub mod format;
 pub mod js_bigint;
 pub mod parse;
