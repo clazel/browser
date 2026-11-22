@@ -277,8 +277,9 @@ pub enum Flow {
 /// - `block`, `loop`: the body, one label deeper, leaves the height it
 ///   entered with or is dead.
 /// - `if`: needs the condition; each arm is a body at the height below it.
-/// - `br l`, `br_if l`, `br_table`: every label is in scope; `br_if` needs
-///   its condition.
+/// - `br l`, `br_if l`, `br_table`: every label is in scope; `br_if` and
+///   `br_table` need their condition, and a `br_table` has at most
+///   [`max_targets`] targets.
 /// - `exit` needs its `k` operands and a code below `2^32` (a `u32`).
 pub open spec fn cf_flow(n: Node, nl: nat, h: nat, depth: nat) -> Option<Flow>
     decreases n,
@@ -358,8 +359,8 @@ pub open spec fn cf_flow(n: Node, nl: nat, h: nat, depth: nat) -> Option<Flow>
         } else {
             None
         },
-        Node::BrTable(ls, d) => if d < depth && 1 <= h && nl + h <= max_slots() && (forall|i: int|
-            0 <= i < ls@.len() ==> #[trigger] ls@[i] < depth) {
+        Node::BrTable(ls, d) => if d < depth && 1 <= h && nl + h <= max_slots() && ls@.len()
+            <= max_targets() && (forall|i: int| 0 <= i < ls@.len() ==> #[trigger] ls@[i] < depth) {
             Some(Flow::Dead)
         } else {
             None
@@ -380,23 +381,30 @@ pub open spec fn flow_fits(f: Flow, h: nat) -> bool {
     }
 }
 
-/// The node has a template in this slice. **Not** the memory instructions
-/// (`bounds_check`, `load`, `store`) or `br_table`, which are in [`Node`]
-/// and [`cf_flow`] (the statement is made for them) but have no proven
-/// template yet; everything else has one.
+/// The most targets (not counting the default) of a `br_table` that has a
+/// translation: each is a compare and a `je` in the chain (choice 10), and a
+/// target's index is a 32-bit immediate. A larger table is refused, as a
+/// frame beyond 31 slots is.
+pub open spec fn max_targets() -> nat {
+    0x10000
+}
+
+/// The node has a template in this slice: every node of [`Node`] has one
+/// (the memory instructions `bounds_check`, `load`, `store` and `br_table`
+/// included).
 pub open spec fn templated(n: Node) -> bool
     decreases n,
 {
     match n {
         Node::Op(_) => true,
-        Node::Mem(_) => false,
+        Node::Mem(_) => true,
         Node::Then(a, b) => templated(*a) && templated(*b),
         Node::Block(b) => templated(*b),
         Node::Loop(b) => templated(*b),
         Node::If(t, e) => templated(*t) && templated(*e),
         Node::Br(_) => true,
         Node::BrIf(_) => true,
-        Node::BrTable(_, _) => false,
+        Node::BrTable(_, _) => true,
         Node::Exit(_, _) => true,
     }
 }

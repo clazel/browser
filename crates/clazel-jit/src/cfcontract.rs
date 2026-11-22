@@ -249,9 +249,8 @@ pub open spec fn exit_ops_refines(c: u32, k: nat, nl: nat) -> bool {
 // The emitter's contract for control flow (the executable back end)
 // ----------------------------------------------------------------------------
 
-/// Postcondition of the control-flow emitter's `emit_blob`. **Not discharged:
-/// no emitter is written yet** (see [`crate::cftemplates::ctmpl`] for the code
-/// it must return): the bytes are the
+/// Postcondition of the control-flow emitter's `emit_blob` (the code it must
+/// return is [`crate::cftemplates::ctmpl`]): the bytes are the
 /// canonical encodings of a body that refines the program `n` with the
 /// function's return label at the end of the body (a `br` to it, and falling
 /// off the end, reach the exit sequence that follows), followed by the exit
