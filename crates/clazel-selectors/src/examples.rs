@@ -69,12 +69,19 @@ pub open spec fn doc(mode: DocumentMode) -> Document {
     }
 }
 
-/// True if `source` parses and matches node `x` of the document in `mode`.
-pub open spec fn matches(mode: DocumentMode, source: Seq<u32>, x: NodeId) -> bool {
+/// True if `source` parses and matches node `x` of the document in `mode`, with the scoping
+/// root `scope`.
+pub open spec fn matches_scoped(mode: DocumentMode, source: Seq<u32>, scope: Option<NodeId>, x: NodeId) -> bool {
     match parse_a_selector(source) {
-        Some(list) => match_a_selector_against_an_element(doc(mode), list, x),
+        Some(list) => match_a_selector_against_an_element(doc(mode), scope, list, x),
         None => false,
     }
+}
+
+/// True if `source` parses and matches node `x` of the document in `mode`, with no scoping
+/// root.
+pub open spec fn matches(mode: DocumentMode, source: Seq<u32>, x: NodeId) -> bool {
+    matches_scoped(mode, source, None, x)
 }
 
 /// True if `source` is a valid selector.
@@ -941,6 +948,62 @@ pub proof fn lemma_example_serialize_hover()
         same_seq(serialized(seq![0x61u32, 0x3A, 0x68, 0x6F, 0x76, 0x65, 0x72]), seq![0x61u32, 0x3A, 0x68, 0x6F, 0x76, 0x65, 0x72]),
 {
     assert(same_seq(serialized(seq![0x61u32, 0x3A, 0x68, 0x6F, 0x76, 0x65, 0x72]), seq![0x61u32, 0x3A, 0x68, 0x6F, 0x76, 0x65, 0x72])) by (compute_only);
+}
+
+/// `:scope`, with the scoping root node 3, matches node 3. §9.4: ":scope represents this scoping root".
+pub proof fn lemma_example_scope_is_the_root()
+    ensures
+        matches_scoped(DocumentMode::NoQuirks, seq![0x3Au32, 0x73, 0x63, 0x6F, 0x70, 0x65], Some(3usize), 3),
+{
+    assert(matches_scoped(DocumentMode::NoQuirks, seq![0x3Au32, 0x73, 0x63, 0x6F, 0x70, 0x65], Some(3usize), 3)) by (compute_only);
+}
+
+/// `:scope`, with the scoping root node 3, does not match node 5. §9.4: it represents the scoping root, and nothing else.
+pub proof fn lemma_example_scope_only_the_root()
+    ensures
+        !matches_scoped(DocumentMode::NoQuirks, seq![0x3Au32, 0x73, 0x63, 0x6F, 0x70, 0x65], Some(3usize), 5),
+{
+    assert(!matches_scoped(DocumentMode::NoQuirks, seq![0x3Au32, 0x73, 0x63, 0x6F, 0x70, 0x65], Some(3usize), 5)) by (compute_only);
+}
+
+/// `:scope`, with no scoping root, matches node 1. §9.4: "If there is no scoping root then :scope represents … :root", html.
+pub proof fn lemma_example_scope_is_root_without_one()
+    ensures
+        matches(DocumentMode::NoQuirks, seq![0x3Au32, 0x73, 0x63, 0x6F, 0x70, 0x65], 1),
+{
+    assert(matches(DocumentMode::NoQuirks, seq![0x3Au32, 0x73, 0x63, 0x6F, 0x70, 0x65], 1)) by (compute_only);
+}
+
+/// `:scope`, with no scoping root, does not match node 3. §9.4: with no scoping root it is :root, which div is not.
+pub proof fn lemma_example_scope_without_one_only_root()
+    ensures
+        !matches(DocumentMode::NoQuirks, seq![0x3Au32, 0x73, 0x63, 0x6F, 0x70, 0x65], 3),
+{
+    assert(!matches(DocumentMode::NoQuirks, seq![0x3Au32, 0x73, 0x63, 0x6F, 0x70, 0x65], 3)) by (compute_only);
+}
+
+/// `:scope > p`, with the scoping root node 2, matches node 5. §9.4 and §16.2: the scoping root is body, and p is its child.
+pub proof fn lemma_example_scope_in_combinator()
+    ensures
+        matches_scoped(DocumentMode::NoQuirks, seq![0x3Au32, 0x73, 0x63, 0x6F, 0x70, 0x65, 0x20, 0x3E, 0x20, 0x70], Some(2usize), 5),
+{
+    assert(matches_scoped(DocumentMode::NoQuirks, seq![0x3Au32, 0x73, 0x63, 0x6F, 0x70, 0x65, 0x20, 0x3E, 0x20, 0x70], Some(2usize), 5)) by (compute_only);
+}
+
+/// `:is(:scope)`, with the scoping root node 3, matches node 3. §4.2 and §9.4: the scoping root reaches the argument of :is().
+pub proof fn lemma_example_scope_in_is()
+    ensures
+        matches_scoped(DocumentMode::NoQuirks, seq![0x3Au32, 0x69, 0x73, 0x28, 0x3A, 0x73, 0x63, 0x6F, 0x70, 0x65, 0x29], Some(3usize), 3),
+{
+    assert(matches_scoped(DocumentMode::NoQuirks, seq![0x3Au32, 0x69, 0x73, 0x28, 0x3A, 0x73, 0x63, 0x6F, 0x70, 0x65, 0x29], Some(3usize), 3)) by (compute_only);
+}
+
+/// `:SCOPE` is a valid selector. §3.7 and §9.4: pseudo-class names are ASCII case-insensitive, and :scope is one.
+pub proof fn lemma_example_scope_name_parses()
+    ensures
+        parses(seq![0x3Au32, 0x53, 0x43, 0x4F, 0x50, 0x45]),
+{
+    assert(parses(seq![0x3Au32, 0x53, 0x43, 0x4F, 0x50, 0x45])) by (compute_only);
 }
 
 } // verus!

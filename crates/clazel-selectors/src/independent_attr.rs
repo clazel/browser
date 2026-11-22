@@ -569,12 +569,12 @@ pub proof fn lemma_class_same(doc: Document, x: NodeId, class: Seq<u32>)
 // ------------------------------------------------------------------------------------
 
 /// A type or universal selector matches as the spec says.
-pub proof fn lemma_type_same(doc: Document, x: NodeId, s: Simple, t: IType)
+pub proof fn lemma_type_same(doc: Document, scope: Option<NodeId>, x: NodeId, s: Simple, t: IType)
     requires
         is_element(doc, x),
         rel_type(s, t),
     ensures
-        simple_matches(doc, s, x) == i_type_matches(doc, x, t),
+        simple_matches(doc, scope, s, x) == i_type_matches(doc, x, t),
 {
     lemma_lowercase_same(match s {
         Simple::Type { name, .. } => name,

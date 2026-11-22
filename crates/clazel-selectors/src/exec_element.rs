@@ -296,11 +296,25 @@ pub fn root(arena: &Arena, x: usize) -> (r: bool)
     requires
         x < arena@.nodes.len(),
     ensures
-        r == pseudo_class_matches(arena@, PseudoClass::Root, x),
+        r == pseudo_class_matches(arena@, None, PseudoClass::Root, x),
 {
     match arena.parent(x) {
         Some(p) => p < arena.len() && matches!(arena.kind(p), ExecKind::Document { .. }),
         None => false,
+    }
+}
+
+/// The `:scope` test, with the scoping root `scope` if there is one: the scoping root itself,
+/// or `:root` if there is none.
+pub fn scope_matches(arena: &Arena, scope: Option<usize>, x: usize) -> (r: bool)
+    requires
+        x < arena@.nodes.len(),
+    ensures
+        r == pseudo_class_matches(arena@, scope, PseudoClass::Scope, x),
+{
+    match scope {
+        Some(scoping_root) => x == scoping_root,
+        None => root(arena, x),
     }
 }
 
@@ -309,7 +323,7 @@ pub fn empty(arena: &Arena, x: usize) -> (r: bool)
     requires
         x < arena@.nodes.len(),
     ensures
-        r == pseudo_class_matches(arena@, PseudoClass::Empty, x),
+        r == pseudo_class_matches(arena@, None, PseudoClass::Empty, x),
 {
     let kids = arena.children(x);
     let ghost doc = arena@;
