@@ -116,6 +116,174 @@
         "lemma": "lemma_plain_ok_safe(no_facts(), Instr::Ret)",
         "witness": "plain_ok(no_facts(), Instr::Ret) is Some"
       }
+    },
+    {
+      "id": "a64-index-fact-ignored",
+      "module": "a64::lemmas",
+      "file": "src/a64/spec.rs",
+      "find": "(Fact::Base(k), Fact::Idx(k2, n)) => k == k2 && a.size <= n,",
+      "replace": "(Fact::Base(k), _) => true,",
+      "expect": "killed",
+      "reason": "Accepts a region access through any base register, whatever is known of the index (J.6: an index register compared against the region's bound): a load through an index no bounds check touched would be accepted, so lemma_region_access_facts is false.",
+      "certificate": {
+        "file": "src/a64/lemmas.rs",
+        "lemma": "lemma_region_access_facts(cx_base2(), cx_load())",
+        "witness": "access_ok(cx_base2(), cx_load()) && !(fact_of(cx_base2(), 1) is Idx)"
+      }
+    },
+    {
+      "id": "a64-check-size-order-reversed",
+      "module": "a64::lemmas",
+      "file": "src/a64/spec.rs",
+      "find": "k == k2 && a.size <= n,",
+      "replace": "k == k2 && n <= a.size,",
+      "expect": "killed",
+      "reason": "Reverses the comparison of the checked size and the access size, so a check for 4 bytes would license an 8-byte access and the last 4 bytes could lie outside the region: lemma_region_access_facts is false.",
+      "certificate": {
+        "file": "src/a64/lemmas.rs",
+        "lemma": "lemma_region_access_facts(cx_idx4(), cx_load())",
+        "witness": "access_ok(cx_idx4(), cx_load()) && !idx_covers(fact_of(cx_idx4(), 1), 8)"
+      }
+    },
+    {
+      "id": "a64-check-region-not-compared",
+      "module": "a64::lemmas",
+      "file": "src/a64/spec.rs",
+      "find": "k == k2 && a.size <= n,",
+      "replace": "a.size <= n,",
+      "expect": "killed",
+      "reason": "Does not compare the region of the base register with the region the index was checked against, so an index checked against a small region could be used with a large region's base: lemma_region_access_facts is false.",
+      "certificate": {
+        "file": "src/a64/lemmas.rs",
+        "lemma": "lemma_region_access_facts(cx_idx_region2(), cx_load())",
+        "witness": "access_ok(cx_idx_region2(), cx_load()) && !same_region(fact_of(cx_idx_region2(), 2), fact_of(cx_idx_region2(), 1))"
+      }
+    },
+    {
+      "id": "a64-shifted-index-allowed",
+      "module": "a64::lemmas",
+      "file": "src/a64/spec.rs",
+      "find": "Some(m) => !a.scaled && a.off == 0 && match (",
+      "replace": "Some(m) => a.off == 0 && match (",
+      "expect": "killed",
+      "reason": "Lets a region access scale its index register by the access size, so a byte index that was checked against the bound would reach 8 times as far: lemma_region_access_facts is false.",
+      "certificate": {
+        "file": "src/a64/lemmas.rs",
+        "lemma": "lemma_region_access_facts(cx_checked(), cx_scaled_load())",
+        "witness": "access_ok(cx_checked(), cx_scaled_load())"
+      }
+    },
+    {
+      "id": "a64-link-register-not-reserved",
+      "module": "a64::lemmas",
+      "file": "src/a64/spec.rs",
+      "find": "r == ctx_reg() || r == link_reg()",
+      "replace": "r == ctx_reg()",
+      "expect": "killed",
+      "reason": "Lets the code write the link register (J.6: reserved registers are written only in the fixed prologue and epilogue), which would make the exit sequence's ret return anywhere: lemma_plain_ok_safe is false.",
+      "certificate": {
+        "file": "src/a64/lemmas.rs",
+        "lemma": "lemma_plain_ok_safe(no_facts(), cx_mov_lr())",
+        "witness": "plain_ok(no_facts(), cx_mov_lr()) is Some"
+      }
+    },
+    {
+      "id": "a64-stack-pointer-write-allowed",
+      "module": "a64::lemmas",
+      "file": "src/a64/spec.rs",
+      "find": "writes_sp(i) || match written_gpr(i) {",
+      "replace": "false || match written_gpr(i) {",
+      "expect": "killed",
+      "reason": "Lets ADD/SUB (immediate) write SP (J.6: the stack pointer is written only in the fixed prologue and epilogue), which would move the native stack under the enter stub: lemma_plain_ok_safe is false.",
+      "certificate": {
+        "file": "src/a64/lemmas.rs",
+        "lemma": "lemma_plain_ok_safe(no_facts(), cx_add_sp())",
+        "witness": "plain_ok(no_facts(), cx_add_sp()) is Some"
+      }
+    },
+    {
+      "id": "a64-targets-not-boundaries",
+      "module": "a64::lemmas",
+      "file": "src/a64/spec.rs",
+      "find": "Some(starts) => subset_of(all_targets(ins, entries), starts),",
+      "replace": "Some(starts) => true,",
+      "expect": "killed",
+      "reason": "Drops the rule that every direct target is the start of a unit (J.6: every direct target is a decoded boundary inside the blob): a branch into the middle of a bounds check, skipping its first instructions, would be accepted, so lemma_policy_targets_are_unit_starts is false. (example_jump_into_check_rejected is false too.)",
+      "certificate": {
+        "file": "src/a64/lemmas.rs",
+        "lemma": "lemma_policy_targets_are_unit_starts(super::examples::prog_jump_into_check(), seq![0int])",
+        "witness": "policy(super::examples::prog_jump_into_check(), seq![0int]) && !subset_of(all_targets(super::examples::prog_jump_into_check(), seq![0int]), unit_starts(super::examples::prog_jump_into_check(), seq![0int]))"
+      }
+    },
+    {
+      "id": "a64-facts-kept-at-targets",
+      "module": "a64::lemmas",
+      "file": "src/a64/spec.rs",
+      "find": "let fs0 = if seq_has(tg, here) {",
+      "replace": "let fs0 = if false && seq_has(tg, here) {",
+      "expect": "killed",
+      "reason": "Keeps what is known about registers at a branch target, though the target can be reached without the instructions that established it (J.6: earlier in the same basic block): a branch past a bounds check to the access would be accepted, so lemma_scan_forgets_at_targets is false. (example_jump_over_check_rejected is false too.)",
+      "certificate": {
+        "file": "src/a64/lemmas.rs",
+        "lemma": "lemma_scan_forgets_at_targets(super::examples::prog_jump_over_check(), all_targets(super::examples::prog_jump_over_check(), seq![0int]), 9, cx_checked())",
+        "witness": "seq_has(all_targets(super::examples::prog_jump_over_check(), seq![0int]), start_of(super::examples::prog_jump_over_check(), 9)) && scan(super::examples::prog_jump_over_check(), all_targets(super::examples::prog_jump_over_check(), seq![0int]), 9, cx_checked()) is Some && scan(super::examples::prog_jump_over_check(), all_targets(super::examples::prog_jump_over_check(), seq![0int]), 9, no_facts()) is None"
+      }
+    },
+    {
+      "id": "a64-region-table-writable",
+      "module": "a64::lemmas",
+      "file": "src/a64/spec.rs",
+      "find": "|| abi::exit_code_off() <= a.off)",
+      "replace": "|| true)",
+      "expect": "killed",
+      "reason": "Lets a store go anywhere in the context, including the region table: the code could rewrite a region's base or bound, then pass its own bounds check against the forged bound. lemma_ctx_store_in_exit_area is false.",
+      "certificate": {
+        "file": "src/a64/lemmas.rs",
+        "lemma": "lemma_ctx_store_in_exit_area(no_facts(), cx_table_store())",
+        "witness": "access_ok(no_facts(), cx_table_store())"
+      }
+    },
+    {
+      "id": "a64-end-of-blob-not-checked",
+      "module": "a64::lemmas",
+      "file": "src/a64/spec.rs",
+      "find": "(ins.last() is Ret || ins.last() is B) && match scan(",
+      "replace": "true && match scan(",
+      "expect": "killed",
+      "reason": "Drops the rule that the last instruction is ret or b (J.6: every path ends in the exit sequence or a branch): control could run past the end of the blob into whatever follows. lemma_policy_ends is false.",
+      "certificate": {
+        "file": "src/a64/lemmas.rs",
+        "lemma": "lemma_policy_ends(cx_falls_off(), seq![0int])",
+        "witness": "policy(cx_falls_off(), seq![0int])"
+      }
+    },
+    {
+      "id": "a64-bare-ret-allowed",
+      "module": "a64::lemmas",
+      "file": "src/a64/spec.rs",
+      "find": "if i is Ret {",
+      "replace": "if i is Ret && false {",
+      "expect": "killed",
+      "reason": "Accepts a ret that is not the end of an exit sequence (J.6: no indirect branch except the exit sequence): the blob could return without having stored an exit code. lemma_plain_ok_safe is false.",
+      "certificate": {
+        "file": "src/a64/lemmas.rs",
+        "lemma": "lemma_plain_ok_safe(no_facts(), Instr::Ret)",
+        "witness": "plain_ok(no_facts(), Instr::Ret) is Some"
+      }
+    },
+    {
+      "id": "a64-branch-relative-to-next",
+      "module": "a64::lemmas",
+      "file": "src/a64/spec.rs",
+      "find": "Some(r) => seq![start_of(ins, j) + r],",
+      "replace": "Some(r) => seq![start_of(ins, j + 1) + r],",
+      "expect": "killed",
+      "reason": "Computes a branch target from the next instruction, as x86-64 does, instead of from the branch itself as A64 does (BranchTo(PC + offset)): every target would be one word off, so a branch could be taken for one that lands on a unit start while really landing inside a bounds check. lemma_b_target_is_pc_relative is false.",
+      "certificate": {
+        "file": "src/a64/lemmas.rs",
+        "lemma": "lemma_b_target_is_pc_relative(cx_branch(), 0, 3)",
+        "witness": "jump_targets(cx_branch(), 0)[0] == 16"
+      }
     }
   ]
 }
