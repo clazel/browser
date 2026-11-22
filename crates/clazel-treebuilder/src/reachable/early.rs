@@ -229,6 +229,7 @@ pub proof fn lemma_initial_reach(env: EncFns, p: Parser, t: Tok)
 
 /// The `html` element "before html" creates and pushes.
 #[verifier::spinoff_prover]
+#[verifier::rlimit(400)]
 pub proof fn lemma_before_html_push(p: Parser, tt: TagTok)
     requires
         reach_core(p),
@@ -318,6 +319,7 @@ pub proof fn lemma_before_html_reach(env: EncFns, p: Parser, t: Tok)
 // "before head"
 
 /// Insert the `head` element and switch to "in head".
+#[verifier::rlimit(100)]
 pub proof fn lemma_insert_head(p: Parser, tt: TagTok)
     requires
         reach_core(p),

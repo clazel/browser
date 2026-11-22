@@ -232,6 +232,7 @@ pub fn foreign_content_exec<E: EncFnsExec>(_env: &E, p: &mut ParserBuf, t: ExecT
 
 /// [`foreign_content`] for a start tag (split from [`foreign_content_exec`]
 /// to keep each proof small).
+#[verifier::rlimit(100)]
 fn foreign_start_exec<E: EncFnsExec>(_env: &E, p: &mut ParserBuf, tt: ExecTagTok) -> (o: ExecOutcome)
     requires
         parser_inv(old(p)@),

@@ -1057,6 +1057,7 @@ pub proof fn lemma_af_unfold(p: Parser, fe: Elem, fb: Elem, ca: Elem, last: Elem
 }
 
 /// Steps 4.17 to 4.21 ([`place_last`]).
+#[verifier::rlimit(100)]
 fn aa_place_last_node(p: &mut ParserBuf, ca: &ExecElem, last_id: usize)
     requires
         parser_inv(old(p)@),
