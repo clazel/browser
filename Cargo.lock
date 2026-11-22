@@ -406,6 +406,16 @@ name = "clazel-js"
 version = "0.0.0"
 
 [[package]]
+name = "clazel-js-builtins"
+version = "0.0.0"
+dependencies = [
+ "clazel-js-heap",
+ "clazel-js-number",
+ "clazel-js-syntax",
+ "clazel-js-vm",
+]
+
+[[package]]
 name = "clazel-js-heap"
 version = "0.0.0"
 
@@ -439,7 +449,9 @@ dependencies = [
 name = "clazel-js-vm"
 version = "0.0.0"
 dependencies = [
+ "clazel-js-heap",
  "clazel-js-lexer",
+ "clazel-js-number",
  "clazel-js-syntax",
  "vstd",
 ]
