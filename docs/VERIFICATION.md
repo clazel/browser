@@ -300,6 +300,12 @@ precisely. "Audited" means two things, neither of them a human approval:
      cites a man page;
    - no raw pointer arithmetic and no dereference inside a block, and every
      `pub fn` is safe;
+   - the one **code entry** (jit.md J.0(a)): `enter` in `enter.rs` is the only
+     place that calls generated code, as exactly `(transmute::<usize, unsafe
+     extern "ABI" fn(*mut u8, usize)>(stub))(ctx, entry)`, one block per ABI,
+     where `stub` is the base of a code region the crate mapped and checked
+     (the enter stub is the only code that meets the platform ABI), and
+     `transmute` is rejected everywhere else;
    - the README states the measured number of `unsafe` blocks and lines, and
      the generated status table lists them per crate.
 2. **An LLM audit** of every change, by a session other than the one that

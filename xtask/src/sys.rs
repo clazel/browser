@@ -50,7 +50,19 @@
 //!    audit must: that each slot's type is the header's, and that the receiver
 //!    is a live interface pointer of that vtable's interface;
 //! 9. the latest row of `docs/SYS-AUDITS.md` carries the SHA-256 of the
-//!    crate's source ([`source_hash`]), so every change is audited.
+//!    crate's source ([`source_hash`]), so every change is audited;
+//! 10. a **code entry** (jit.md J.0(a), decision E1) is the one call that runs
+//!     generated code, in the files of [`CODE_ENTRY_FILES`] only (`enter.rs`). It is
+//!     an `unsafe` block holding exactly `(std::mem::transmute::<usize, unsafe
+//!     extern "ABI" fn(*mut u8, usize)>(stub))(ctx, entry)`, with `ABI` one of
+//!     [`CODE_ENTRY_ABIS`] (one block per ABI), and the `// SAFETY:` comment above it
+//!     cites a man page (or `docs <Function>`) like any other. `stub` is the base
+//!     address of a region the crate mapped and checked to start with its own enter
+//!     stub, so the function called is that fixed stub, which meets the platform ABI
+//!     and calls the validated blob; `transmute` is rejected everywhere else. What
+//!     the checker cannot see, and the audit must: that the stub's bytes are right
+//!     for the ABI, and that the entry is checked against the region before the
+//!     block.
 //!
 //! And the README's memory-safety sentence states the measured `unsafe` count
 //! ([`readme_problems`]).
@@ -92,6 +104,54 @@ const LINUX: &[&str] = &[
     // `clazel_sys::linux::clear_close_on_exec` (items 5.18 and 5.23), as on
     // macOS: only `F_SETFD` with 0, on a descriptor the caller borrows.
     "fcntl",
+];
+
+/// What `crates/clazel-sys/src/linux/code.rs` may call (jit.md item J.7): a sealed
+/// `memfd` of two mappings. `memfd_create`, `ftruncate` and `fcntl` (only
+/// `F_ADD_SEALS`, `F_GET_SEALS` and `F_SETFD` with 0) make and seal it and clear
+/// close-on-exec, `lseek` (only `SEEK_END`, for the size of an adopted
+/// descriptor) and `close` own it, `mmap` and `munmap` map it read-write for the
+/// writer and read-execute for the renderer, and `memcpy` is the one copy into the
+/// writer's mapping and the one copy of the stub out of the executable mapping
+/// (there is no pointer arithmetic and no dereference).
+const LINUX_CODE: &[&str] = &[
+    "memfd_create",
+    "ftruncate",
+    "fcntl",
+    "lseek",
+    "close",
+    "mmap",
+    "munmap",
+    "memcpy",
+];
+
+/// What `crates/clazel-sys/src/macos/code.rs` may declare and call (jit.md item
+/// J.7): an anonymous `MAP_JIT` mapping (`mmap`, `munmap`), the copy into it
+/// (`memcpy`) with the thread writable (`pthread_jit_write_protect_np`, Apple
+/// silicon only) and the instruction cache made coherent
+/// (`sys_icache_invalidate`).
+const MACOS_CODE: &[&str] = &[
+    "mmap",
+    "munmap",
+    "memcpy",
+    "pthread_jit_write_protect_np",
+    "sys_icache_invalidate",
+];
+
+/// What `crates/clazel-sys/src/windows/code.rs` may declare and call (jit.md item
+/// J.7): a pagefile-backed section (`CreateFileMappingW`, `CloseHandle`), views of
+/// it in this process or another (`MapViewOfFile3`, which the documented inline
+/// `MapViewOfFile2` calls, and `UnmapViewOfFile2`), the check that an address is a
+/// read-execute mapped view (`VirtualQuery`), the instruction cache
+/// (`FlushInstructionCache`) and the copies (`memcpy`).
+const WINDOWS_CODE: &[&str] = &[
+    "CreateFileMappingW",
+    "MapViewOfFile3",
+    "UnmapViewOfFile2",
+    "FlushInstructionCache",
+    "VirtualQuery",
+    "CloseHandle",
+    "memcpy",
 ];
 
 /// What `crates/clazel-sys/src/linux/vulkan.rs` may declare and call: Vulkan
@@ -353,6 +413,15 @@ pub const DISPATCH_CASTS: &[(&str, &[&str])] = &[
     ("crates/clazel-sys/src/macos/metal.rs", METAL_CASTS),
     ("crates/clazel-sys/src/macos/window.rs", APPKIT_CASTS),
 ];
+
+/// The files that may contain a **code entry** (rule 10): the one place the crate
+/// calls generated code (jit.md J.0(a), decision E1).
+pub const CODE_ENTRY_FILES: &[&str] = &["crates/clazel-sys/src/enter.rs"];
+
+/// The ABIs a code entry may be written with: x86-64 System V, x86-64 Windows,
+/// and AArch64 (`"C"`, which is AAPCS64 there). The enter stub of
+/// `crates/clazel-sys/src/code.rs` has one version for each.
+const CODE_ENTRY_ABIS: &[&str] = &["sysv64", "win64", "C"];
 
 /// One COM vtable: its `struct`'s name, and its slots in the header's order.
 pub type Vtable = (&'static str, &'static [&'static str]);
@@ -646,6 +715,9 @@ pub const VTABLES: &[(&str, &[Vtable])] = &[
 pub const FOREIGN_FUNCTIONS: &[(&str, &[&str])] = &[
     ("crates/clazel-sys/src/linux.rs", LINUX),
     ("crates/clazel-sys/src/linux/vulkan.rs", VULKAN),
+    ("crates/clazel-sys/src/linux/code.rs", LINUX_CODE),
+    ("crates/clazel-sys/src/macos/code.rs", MACOS_CODE),
+    ("crates/clazel-sys/src/windows/code.rs", WINDOWS_CODE),
     ("crates/clazel-sys/src/macos.rs", MACOS),
     ("crates/clazel-sys/src/windows.rs", WINDOWS),
     ("crates/clazel-sys/src/windows/window.rs", WINDOW),
@@ -723,6 +795,10 @@ pub struct File {
     pub dispatcher_casts: usize,
     /// Calls through a listed vtable (each in its own `unsafe` block).
     pub vtable_calls: usize,
+    /// Code entries (rule 10), each in its own `unsafe` block.
+    pub code_entries: usize,
+    /// Whether this file may contain a code entry ([`CODE_ENTRY_FILES`]).
+    code_entry_allowed: bool,
     /// The foreign functions this file may use.
     permitted: &'static [&'static str],
     /// The dispatcher casts this file may define and call through.
@@ -745,7 +821,7 @@ pub fn check_source(path: &str, source: &str) -> Result<File, String> {
 
 /// [`check_source`] with the file's lists given.
 fn check_with(
-    _path: &str,
+    path: &str,
     source: &str,
     permitted: &'static [&'static str],
     casts: &'static [&'static str],
@@ -760,6 +836,7 @@ fn check_with(
         permitted,
         casts,
         vtables,
+        code_entry_allowed: CODE_ENTRY_FILES.contains(&path),
         ..File::default()
     };
     walk(&tokens, None, &lines, &mut file);
@@ -977,6 +1054,15 @@ fn walk(tokens: &[TokenTree], mut block: Option<&mut Block>, lines: &[&str], fil
                 // The one accepted form is a vtable call (rule 8).
                 if let Some(TokenTree::Group(args)) = next
                     && let Some(b) = block.as_deref_mut()
+                    && file.code_entry_allowed
+                    && code_entry_call(callee, args, b, file)
+                {
+                    // The callee and the arguments are fixed tokens, checked whole.
+                    k = k.saturating_add(2);
+                    continue;
+                }
+                if let Some(TokenTree::Group(args)) = next
+                    && let Some(b) = block.as_deref_mut()
                     && vtable_call(callee, args, line, b, file)
                 {
                     let body: Vec<TokenTree> = args.stream().into_iter().collect();
@@ -1100,6 +1186,44 @@ fn vtable_call(
     block.calls.push(method);
     file.vtable_calls = file.vtable_calls.saturating_add(1);
     true
+}
+
+/// A **code entry** (rule 10), inside an `unsafe` block of a file in
+/// [`CODE_ENTRY_FILES`]: `callee` is the first group and `args` the second of
+/// exactly
+///
+/// ```text
+/// (std::mem::transmute::<usize, unsafe extern "ABI" fn(*mut u8, usize)>(stub))(ctx, entry)
+/// ```
+///
+/// with `ABI` one of [`CODE_ENTRY_ABIS`]. True, and counted as the block's one
+/// call, if it is exactly that (compared with whitespace removed); false, and
+/// not flagged here, otherwise (the caller then treats it as any other call
+/// through an expression). The fixed names are the point: the address called is
+/// a `usize` named `stub`, the first address of a region the crate mapped and
+/// checked, never one computed in the block, and the arguments are two plain
+/// variables, so the block holds no expression.
+fn code_entry_call(callee: &Group, args: &Group, block: &mut Block, file: &mut File) -> bool {
+    let squash = |ts: TokenStream| -> String {
+        ts.to_string()
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .collect()
+    };
+    let callee = squash(callee.stream());
+    let args = squash(args.stream());
+    let matches = args == "ctx,entry"
+        && CODE_ENTRY_ABIS.iter().any(|abi| {
+            callee
+                == format!(
+                    "std::mem::transmute::<usize,unsafeextern\"{abi}\"fn(*mutu8,usize)>(stub)"
+                )
+        });
+    if matches {
+        block.calls.push("code entry".to_owned());
+        file.code_entries = file.code_entries.saturating_add(1);
+    }
+    matches
 }
 
 /// `pub(crate)`: the two tokens.
@@ -2476,6 +2600,109 @@ mod tests {
                 assert!(name.ends_with("Vtbl"), "{file}: {name}");
             }
         }
+    }
+
+    // ------------------------------------------------------------ code entry
+
+    const ENTER_FILE: &str = "crates/clazel-sys/src/enter.rs";
+
+    fn entry_src(call: &str) -> String {
+        format!(
+            "fn run(stub: usize, ctx: *mut u8, entry: usize) {{\n    \
+             // SAFETY: man 2 mmap; the stub's ABI.\n    unsafe {{ {call} }}\n}}\n"
+        )
+    }
+
+    fn entry(abi: &str) -> String {
+        format!(
+            "(std::mem::transmute::<usize, unsafe extern \"{abi}\" fn(*mut u8, usize)>(stub))(ctx, entry)"
+        )
+    }
+
+    #[test]
+    fn accepts_the_code_entry_for_each_abi() -> Result<(), String> {
+        for abi in ["sysv64", "win64", "C"] {
+            let f = check_source(ENTER_FILE, &entry_src(&entry(abi)))?;
+            assert_eq!(f.violations, Vec::new(), "{abi}");
+            assert_eq!(f.code_entries, 1, "{abi}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn a_code_entry_is_only_for_the_enter_file() -> Result<(), String> {
+        let src = entry_src(&entry("sysv64"));
+        for file in [LINUX_FILE, MACOS_FILE, "crates/clazel-sys/src/code.rs"] {
+            let v = violations_in(file, &src)?;
+            assert!(!v.is_empty(), "{file} accepted a code entry");
+            assert_eq!(check_source(file, &src)?.code_entries, 0);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn planted_code_entries_that_differ_are_rejected() -> Result<(), String> {
+        let bad = [
+            // Another ABI, another signature, another name, another call shape.
+            entry("stdcall"),
+            entry("sysv64").replace("*mut u8, usize", "*mut u8, usize, usize"),
+            entry("sysv64").replace("(stub)", "(stub + 8)"),
+            entry("sysv64").replace("usize,", "u64,"),
+            entry("sysv64").replace("(ctx, entry)", "(ctx, entry, 1)"),
+            entry("sysv64").replace("(ctx, entry)", "(ctx, entry + 1)"),
+            entry("sysv64").replace("fn(*mut u8, usize)", "fn(*mut u8, usize) -> u64"),
+            "(std::mem::transmute::<usize, unsafe extern \"sysv64\" fn(*mut u8, usize)>(other))(ctx, entry)"
+                .to_owned(),
+            "(std::mem::transmute::<usize, unsafe fn(*mut u8, usize)>(stub))(ctx, entry)".to_owned(),
+            "(std::mem::transmute(stub))(ctx, entry)".to_owned(),
+            "(std::mem::transmute_copy::<usize, unsafe extern \"sysv64\" fn(*mut u8, usize)>(&stub))(ctx, entry)"
+                .to_owned(),
+            // The pointer made elsewhere, then called.
+            "let g = std::mem::transmute::<usize, unsafe extern \"sysv64\" fn(*mut u8, usize)>(stub); g(ctx, entry)"
+                .to_owned(),
+        ];
+        for call in bad {
+            let v = violations_in(ENTER_FILE, &entry_src(&call))?;
+            assert!(!v.is_empty(), "accepted: {call}");
+            assert_eq!(
+                check_source(ENTER_FILE, &entry_src(&call))?.code_entries,
+                0,
+                "{call}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn a_code_entry_needs_its_own_block_and_comment() -> Result<(), String> {
+        let call = entry("sysv64");
+        let no_comment = format!(
+            "fn run(stub: usize, ctx: *mut u8, entry: usize) {{\n    unsafe {{ {call} }}\n}}\n"
+        );
+        assert!(
+            violations_in(ENTER_FILE, &no_comment)?
+                .iter()
+                .any(|m| m.contains("without a `// SAFETY:` comment"))
+        );
+        let two = entry_src(&format!("{call}; {call}"));
+        assert!(
+            violations_in(ENTER_FILE, &two)?
+                .iter()
+                .any(|m| m.contains("exactly one foreign call, found 2"))
+        );
+        let with_other = entry_src(&format!("{call}; libc::prctl(1)"));
+        assert!(!violations_in(ENTER_FILE, &with_other)?.is_empty());
+        // Outside an `unsafe` block it is just a call through an expression.
+        let outside = format!(
+            "fn run(stub: usize, ctx: *mut u8, entry: usize) {{ {} }}",
+            entry("sysv64")
+        );
+        assert!(
+            violations_in(ENTER_FILE, &outside)?
+                .iter()
+                .any(|m| m.contains("`transmute` is only allowed"))
+        );
+        Ok(())
     }
 
     // ------------------------------------------------------- dispatcher casts
