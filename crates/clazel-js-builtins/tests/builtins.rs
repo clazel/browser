@@ -639,8 +639,8 @@ fn math_builtin() -> Result<(), String> {
             "7,2",
         ),
         (
-            "var r = Math.pow(2, 10) + ',' + Math.pow(2, -1) + ',' + Math.pow(NaN, 0) + ',' + Math.pow(1, Infinity) + ',' + Math.pow(-8, 1 / 3) + ',' + Math.pow(0, -1);",
-            "1024,0.5,1,NaN,NaN,Infinity",
+            "var r = Math.pow(NaN, 0) + ',' + Math.pow(1, Infinity) + ',' + Math.pow(-8, 1 / 3) + ',' + Math.pow(0, -1);",
+            "1,NaN,NaN,Infinity",
         ),
         (
             "var r = Math.sqrt(16) + ',' + Math.sqrt(2) + ',' + Math.sqrt(-1) + ',' + 1 / Math.sqrt(-0) + ',' + Math.sqrt(Infinity);",
@@ -660,6 +660,18 @@ fn math_builtin() -> Result<(), String> {
             "2,2,1",
         ),
     ])
+}
+
+/// `Math.pow` is the C library's `pow`, whose last digit the standard leaves
+/// to the implementation (§21.3.2.26†); Miri deliberately perturbs it, so
+/// the exact-value cases do not run there.
+#[test]
+#[cfg_attr(miri, ignore = "Miri perturbs libm results such as pow")]
+fn math_pow_exact_values() -> Result<(), String> {
+    check(&[(
+        "var r = Math.pow(2, 10) + ',' + Math.pow(2, -1) + ',' + Math.pow(10, 2);",
+        "1024,0.5,100",
+    )])
 }
 
 #[test]
