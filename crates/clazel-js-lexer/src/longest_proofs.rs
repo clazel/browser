@@ -7,12 +7,11 @@
 //! executable lexer on the first code point then shows no other proven kind
 //! derives a longer range than the one it returns ([`pk_bounded`]).
 //!
-//! What is not proven is that no element of an *unproven* kind (regular
-//! expression literal, and Annex B's HTML-like comments in `html` mode) is
-//! longer; [`unproven_bounded`] states exactly that, and
+//! What is not proven is that no element of an *unproven* kind (Annex B's
+//! HTML-like comments in `html` mode) is longer; [`unproven_bounded`] states exactly that, and
 //! [`lemma_longest_from_bounds`] shows that with it the returned end is
 //! [`super::spec::longest_len`]. [`lemma_unproven_absent`] discharges it
-//! where the first code point is not `/`, outside `html` mode.
+//! outside `html` mode.
 
 #[cfg(verus_only)]
 use super::equivalence::*;
@@ -58,6 +57,7 @@ pub open spec fn start_ok(k: ElementKind, s: Seq<u32>, i: int) -> bool {
         )),
         ElementKind::StringLiteral => s[i] == 0x22 || s[i] == 0x27,
         ElementKind::DivPunctuator => s[i] == 0x2F,
+        ElementKind::RegularExpressionLiteral => s[i] == 0x2F,
         ElementKind::RightBracePunctuator => s[i] == 0x7D,
         ElementKind::IdentifierName => s[i] == 0x5C || is_identifier_start_char(s[i]),
         ElementKind::PrivateIdentifier => s[i] == 0x23,
@@ -65,7 +65,6 @@ pub open spec fn start_ok(k: ElementKind, s: Seq<u32>, i: int) -> bool {
             TemplateKind::NoSubstitution | TemplateKind::Head => s[i] == 0x60,
             TemplateKind::Middle | TemplateKind::Tail => s[i] == 0x7D,
         },
-        _ => true,
     }
 }
 
@@ -162,11 +161,13 @@ pub proof fn lemma_first_cp(
             lemma_ident_start(s, i, j);
         },
         ElementKind::PrivateIdentifier => {},
+        ElementKind::RegularExpressionLiteral => {
+            let b = choose|b: int| regexp_literal(s, i, j, b);
+        },
         ElementKind::Template(tk) => {
             let (tv, trv) = choose|tv: Tv, trv: Seq<u16>| template_part(s, i, j, tk, tv, trv);
             lemma_part_shape(s, i, j, tk, tv, trv);
         },
-        _ => {},
     }
 }
 
@@ -213,15 +214,11 @@ pub open spec fn unproven_bounded(goal: Goal, html: bool, s: Seq<u32>, pos: int,
         ) ==> false
 }
 
-/// Outside Annex B's `html` mode the only kind that is not proven is the
-/// regular expression literal, which starts with `/`: where the code point
-/// is not `/`, nothing unproven is derived at all, so [`unproven_bounded`]
-/// holds for every `e`. This discharges the hypothesis of
-/// `exec::lemma_element_meets_contract` for those positions.
+/// Outside Annex B's `html` mode every kind is proven ([`kind_proven`]), so
+/// nothing unproven is derived at all and [`unproven_bounded`] holds for
+/// every `e`. This discharges the hypothesis of
+/// `exec::lemma_element_meets_contract` outside `html` mode.
 pub proof fn lemma_unproven_absent(goal: Goal, s: Seq<u32>, pos: int, e: int)
-    requires
-        0 <= pos < s.len(),
-        s[pos] != 0x2F,
     ensures
         unproven_bounded(goal, false, s, pos, e),
 {
@@ -234,8 +231,10 @@ pub proof fn lemma_unproven_absent(goal: Goal, s: Seq<u32>, pos: int, e: int)
             pos,
             j,
         ) implies false by {
-        assert(k == ElementKind::RegularExpressionLiteral);
-        let b = choose|b: int| regexp_literal(s, pos, j, b);
+        match k {
+            ElementKind::Template(tk) => {},
+            _ => {},
+        }
     }
 }
 
@@ -404,15 +403,13 @@ pub proof fn lemma_pk_none(goal: Goal, html: bool, s: Seq<u32>, pos: int, e: int
         pk_bounded(goal, html, s, pos, e),
         numeric_absent(s, pos),
 {
-    lemma_pk_only(
-        goal,
-        html,
-        s,
-        pos,
-        e,
-        ElementKind::RegularExpressionLiteral,
-        ElementKind::RegularExpressionLiteral,
-    );
+    assert forall|k: ElementKind, j: int|
+        pos < j <= s.len() && kind_proven(k, html) && k != ElementKind::HashbangComment
+            && #[trigger] element_matches(goal, html, k, s, pos, j) implies j <= e by {
+        lemma_first_cp(goal, html, k, s, pos, j);
+    }
+    assert(kind_proven(ElementKind::NumericLiteral, html));
+    lemma_numeric_absent_from_class(s, pos);
 }
 
 /// A monotone bound.

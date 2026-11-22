@@ -18,7 +18,7 @@
 //!   [`contract`] (regular expression literals, Annex B HTML-like comments)
 //!   is tested, not proven, so it does not implement [`api::JsLexer`] yet.
 //! - [`scan_proofs`], [`string_proofs`], [`ident_proofs`],
-//!   [`template_proofs`], [`longest_proofs`]: lemmas the proofs of [`exec`]
+//!   [`template_proofs`], [`regexp_proofs`], [`longest_proofs`]: lemmas the proofs of [`exec`]
 //!   use, about [`independent`]'s closed forms, [`spec`]'s string, identifier
 //!   and template relations, and the longest match across kinds.
 //! - [`independent`]: a second transcription of part of the lexical grammar
@@ -39,6 +39,7 @@ pub mod ident_proofs;
 pub mod independent;
 pub mod lemmas;
 pub mod longest_proofs;
+pub mod regexp_proofs;
 pub mod scan_proofs;
 pub mod spec;
 pub mod string_proofs;

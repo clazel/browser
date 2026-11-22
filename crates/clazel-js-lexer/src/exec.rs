@@ -32,12 +32,14 @@
 //!   `LineTerminator`, `HashbangComment`, `DivPunctuator`,
 //!   `RightBracePunctuator`, `Punctuator`, `NumericLiteral`,
 //!   `StringLiteral`, `IdentifierName`, `PrivateIdentifier`, the four
-//!   template components, and `Comment` outside Annex B's `html` mode (a
-//!   `//` or `/* */` comment).
+//!   template components, `RegularExpressionLiteral` (body and flags), and
+//!   `Comment` outside Annex B's `html` mode (a `//` or `/* */` comment).
+//!   So outside `html` mode every kind is proven.
 //! - **Values, for the kinds of [`value_proven`]:** [`value_agrees_proven`]:
 //!   a `NumericLiteral`'s `bigint` and `legacy` flags, a `StringLiteral`'s
-//!   SV, an identifier's IdentifierCodePoints and escape flag, and a
-//!   template's TV and TRV are the spec's relations
+//!   SV, an identifier's IdentifierCodePoints and escape flag, a
+//!   template's TV and TRV, and a regular expression's `body_end` (the index
+//!   of its closing `/`) are the spec's relations
 //!   ([`super::contract::element_value_agrees`]).
 //! - **Longest match across the proven kinds** ([`proven_bounded`]): when
 //!   the element is of a [`kind_proven`] kind, no derivation, from `pos`, of
@@ -62,34 +64,45 @@
 //!   which the spec's predicate is).
 //! - **The contract, for a proven kind, given what is not proven**
 //!   ([`lemma_element_meets_contract`]): if no derivation of a kind that is
-//!   not proven ([`super::longest_proofs::unproven_bounded`]: regular
-//!   expression literals, and in `html` mode comments) is as long as the
-//!   element, then [`super::contract::next_input_element_ensures`] holds for
-//!   it in full (the longest length, the errors of [`lex_error`], the
-//!   value). [`lemma_no_input_element_meets_contract`],
+//!   not proven ([`super::longest_proofs::unproven_bounded`]: in `html` mode,
+//!   comments) is as long as the element, then
+//!   [`super::contract::next_input_element_ensures`] holds for it in full
+//!   (the longest length, the errors of [`lex_error`], the value).
+//!   [`lemma_no_input_element_meets_contract`],
 //!   [`lemma_numeric_error_meets_contract`] and
 //!   [`lemma_invalid_identifier_meets_contract`] do the same for
 //!   [`LexError::NoInputElement`],
 //!   [`LexError::IdentifierAfterNumericLiteral`] and
 //!   [`LexError::InvalidIdentifierEscape`]. **The hypothesis is discharged
-//!   where the first code point is not `/`, outside `html` mode**
-//!   ([`super::longest_proofs::lemma_unproven_absent`]: a regular expression
-//!   literal starts with `/`), by [`lemma_element_meets_contract_not_slash`],
-//!   [`lemma_no_input_element_not_slash`],
-//!   [`lemma_numeric_error_not_slash`] and
-//!   [`lemma_invalid_identifier_not_slash`].
+//!   for every position outside `html` mode**
+//!   ([`super::longest_proofs::lemma_unproven_absent`]: every kind is
+//!   proven there), so **outside `html` mode the full contract holds**, for
+//!   elements, `NoInputElement` and the two other errors, by
+//!   [`lemma_element_meets_contract_no_html`],
+//!   [`lemma_no_input_element_no_html`],
+//!   [`lemma_numeric_error_no_html`] and
+//!   [`lemma_invalid_identifier_no_html`].
 //! - **The scanners that carry these:** `scan_punctuator`, `scan_numeric`
 //!   (with `scan_digits_sep`, `scan_exponent`, `scan_decimal_tail`),
 //!   `scan_string` (with `scan_string_escape`, `scan_legacy_octal_escape`,
 //!   `scan_unicode_escape`, `scan_hex_digits`, `scan_hex4`),
-//!   `scan_block_comment`, `scan_identifier` and `scan_template` (with
-//!   `scan_template_escape` and `push_range_utf16`) each state, in their
+//!   `scan_block_comment`, `scan_identifier`, `scan_template` (with
+//!   `scan_template_escape` and `push_range_utf16`) and `scan_regexp` (with
+//!   `scan_regexp_class`) each state, in their
 //!   `ensures`, that the end they return is a range the spec derives, that
 //!   no longer range is, and that `None` means the spec derives none. The
 //!   proofs reduce the spec's productions to the closed forms of
 //!   [`super::independent`] through [`super::equivalence`], and reason about
 //!   the closed forms in [`super::scan_proofs`], [`super::string_proofs`],
-//!   [`super::ident_proofs`] and [`super::template_proofs`].
+//!   [`super::ident_proofs`] and [`super::template_proofs`]. A regular
+//!   expression is the exception: the spec's `regexp_chars` is built left to
+//!   right, one character at a time, and the scan is shown to walk along
+//!   every derivation of a class or a body ([`class_scan`], [`body_scan`]),
+//!   so the first `]` (resp. `/`) that is not escaped (and, for `/`, not in
+//!   a class) ends it, whatever the derivation
+//!   ([`super::regexp_proofs::lemma_literal_unique`]); the flags are the
+//!   longest run of `IdentifierPartChar`s (the Unicode table's, as for
+//!   identifiers).
 //! - **Single code points:** the classifiers (`is_ws`, `is_lt`, the digit
 //!   classes, `hex_val`, `id_start_char`, `id_part_char`) equal the spec's,
 //!   and `push_utf16` is UTF16EncodeCodePoint (§11.1.1).
@@ -97,26 +110,20 @@
 //! It is **not** proven that the results agree with [`super::spec`]
 //! otherwise, so these functions do not implement [`super::api::JsLexer`]:
 //!
-//! - **Regular expression literals** (`scan_regexp`, `scan_regexp_class`,
-//!   their flags, which are `IdentifierPartChar`s): nothing is proven about
-//!   their range or `body_end`, and so the longest match against them is the
-//!   open hypothesis of [`lemma_element_meets_contract`] wherever the first
-//!   code point is `/`. (The spec's `regexp_chars` is built left to right and
-//!   extends by one `RegularExpressionChar` with no change to its
-//!   triggers; what is not done is the scanners' proof and the uniqueness of
-//!   the closing `/` through classes and escapes.)
+//! - **Annex B.1.1 comments** (`html` mode: `<!--`, `-->`, a multi-line
+//!   comment with an `HTMLCloseComment`): `Comment` is claimed only with
+//!   `html == false`, and with `html == true` the longest match against a
+//!   comment is the open hypothesis
+//!   ([`super::longest_proofs::unproven_bounded`]) of
+//!   [`lemma_element_meets_contract`]. Not done: it needs the determinism
+//!   of `HTMLCloseComment`'s split (its `WhiteSpaceSequence?` and
+//!   `SingleLineDelimitedCommentSequence?` before `-->`) and the longest
+//!   range of an Annex B `MultiLineComment` followed by one.
 //! - **`newline_before` being [`skip_trivia`]'s**: the flag is proven to be
 //!   the line terminators in the range, and [`skip_trivia`]'s to be the same
 //!   for its range; that the two ranges end at the same place is the
-//!   longest-match property for each trivia element, which holds only given
-//!   the hypothesis above (for a `//` or `/* */` comment no regular
-//!   expression can start where it does, but this link is not stated).
-//! - **Annex B.1.1 comments** (`html` mode: `<!--`, `-->`, a multi-line
-//!   comment with an `HTMLCloseComment`): `Comment` is claimed only with
-//!   `html == false`. Not done: it needs the determinism of
-//!   `HTMLCloseComment`'s split (its `WhiteSpaceSequence?` and
-//!   `SingleLineDelimitedCommentSequence?` before `-->`) and the longest
-//!   range of an Annex B `MultiLineComment` followed by one.
+//!   longest-match property for each trivia element, proven for every kind
+//!   outside `html` mode, but the link to [`skip_trivia`] is not stated.
 //! - **`ReservedWord`**: there is nothing to prove of it in this module. The
 //!   executable lexer returns an identifier's code points and its escape
 //!   flag ([`Value::Name`]), and whether a name is a `ReservedWord`
@@ -140,6 +147,8 @@ use super::ident_proofs::*;
 use super::independent::*;
 #[cfg(verus_only)]
 use super::longest_proofs::*;
+#[cfg(verus_only)]
+use super::regexp_proofs::*;
 #[cfg(verus_only)]
 use super::scan_proofs::*;
 #[allow(unused_imports)]
@@ -202,7 +211,8 @@ pub open spec fn kind_proven(kind: ElementKind, html: bool) -> bool {
         == ElementKind::RightBracePunctuator || kind == ElementKind::Punctuator || (kind
         == ElementKind::Comment && !html) || kind == ElementKind::NumericLiteral || kind
         == ElementKind::StringLiteral || kind == ElementKind::IdentifierName || kind
-        == ElementKind::PrivateIdentifier || kind is Template
+        == ElementKind::PrivateIdentifier || kind is Template || kind
+        == ElementKind::RegularExpressionLiteral
 }
 
 /// The kinds whose value is proven to be the spec's
@@ -210,6 +220,7 @@ pub open spec fn kind_proven(kind: ElementKind, html: bool) -> bool {
 pub open spec fn value_proven(kind: ElementKind) -> bool {
     kind == ElementKind::NumericLiteral || kind == ElementKind::StringLiteral || kind
         == ElementKind::IdentifierName || kind == ElementKind::PrivateIdentifier || kind is Template
+        || kind == ElementKind::RegularExpressionLiteral
 }
 
 /// For the kinds of [`value_proven`], the value is the one the standard
@@ -440,8 +451,8 @@ pub proof fn lemma_contract_implies_proven(
 
 /// The full contract for an element that [`next_input_element`] returns of
 /// a proven kind, **given** that no element of a kind that is not proven
-/// ([`unproven_bounded`]: a regular expression literal or, in `html` mode,
-/// a comment, as long as this one or longer) is derived at `pos`.
+/// ([`unproven_bounded`]: in `html` mode, a comment, as long as this one or
+/// longer) is derived at `pos`.
 ///
 /// This is the part of the longest-match property and of the errors
 /// ([`lex_error`]) that does not depend on the unproven kinds.
@@ -613,11 +624,10 @@ pub proof fn lemma_invalid_identifier_meets_contract(
     assert(!element_matches(goal, html, ElementKind::NumericLiteral, src, i, i + n));
 }
 
-/// The full contract for an element of a proven kind outside `html` mode
-/// whose first code point is not `/`: no regular expression literal can
-/// start there ([`lemma_unproven_absent`]), so the hypothesis of
+/// The full contract for an element outside `html` mode: every kind is
+/// proven there ([`lemma_unproven_absent`]), so the hypothesis of
 /// [`lemma_element_meets_contract`] holds.
-pub proof fn lemma_element_meets_contract_not_slash(
+pub proof fn lemma_element_meets_contract_no_html(
     src: Seq<u32>,
     pos: usize,
     goal: Goal,
@@ -626,7 +636,6 @@ pub proof fn lemma_element_meets_contract_not_slash(
     requires
         next_input_element_proven(src, pos, goal, false, Ok(Step::Element(el))),
         kind_proven(el.kind, false),
-        src[pos as int] != 0x2F,
     ensures
         super::contract::next_input_element_ensures(src, pos, goal, false, Ok(Step::Element(el))),
 {
@@ -634,12 +643,10 @@ pub proof fn lemma_element_meets_contract_not_slash(
     lemma_element_meets_contract(src, pos, goal, false, el);
 }
 
-/// The contract for [`LexError::NoInputElement`] outside `html` mode at a
-/// code point that is not `/`.
-pub proof fn lemma_no_input_element_not_slash(src: Seq<u32>, pos: usize, goal: Goal)
+/// The contract for [`LexError::NoInputElement`] outside `html` mode.
+pub proof fn lemma_no_input_element_no_html(src: Seq<u32>, pos: usize, goal: Goal)
     requires
         next_input_element_proven(src, pos, goal, false, Err(LexError::NoInputElement)),
-        src[pos as int] != 0x2F,
     ensures
         super::contract::next_input_element_ensures(
             src,
@@ -654,9 +661,8 @@ pub proof fn lemma_no_input_element_not_slash(src: Seq<u32>, pos: usize, goal: G
 }
 
 /// The contract for [`LexError::IdentifierAfterNumericLiteral`] outside
-/// `html` mode at a code point that is not `/` (a numeric literal starts
-/// with a digit or `.`).
-pub proof fn lemma_numeric_error_not_slash(src: Seq<u32>, pos: usize, goal: Goal, end: int)
+/// `html` mode.
+pub proof fn lemma_numeric_error_no_html(src: Seq<u32>, pos: usize, goal: Goal, end: int)
     requires
         next_input_element_proven(
             src,
@@ -669,7 +675,6 @@ pub proof fn lemma_numeric_error_not_slash(src: Seq<u32>, pos: usize, goal: Goal
         element_matches(goal, false, ElementKind::NumericLiteral, src, pos as int, end),
         proven_bounded(goal, false, src, pos as int, end),
         numeric_literal_follow_error(src, end),
-        src[pos as int] != 0x2F,
     ensures
         super::contract::next_input_element_ensures(
             src,
@@ -684,8 +689,8 @@ pub proof fn lemma_numeric_error_not_slash(src: Seq<u32>, pos: usize, goal: Goal
 }
 
 /// The contract for [`LexError::InvalidIdentifierEscape`] outside `html`
-/// mode at a code point that is not `/`.
-pub proof fn lemma_invalid_identifier_not_slash(src: Seq<u32>, pos: usize, goal: Goal, end: int)
+/// mode.
+pub proof fn lemma_invalid_identifier_no_html(src: Seq<u32>, pos: usize, goal: Goal, end: int)
     requires
         next_input_element_proven(
             src,
@@ -698,7 +703,6 @@ pub proof fn lemma_invalid_identifier_not_slash(src: Seq<u32>, pos: usize, goal:
         proven_bounded(goal, false, src, pos as int, end),
         numeric_absent(src, pos as int),
         invalid_identifier_at(goal, false, src, pos as int, end),
-        src[pos as int] != 0x2F,
     ensures
         super::contract::next_input_element_ensures(
             src,
@@ -2522,32 +2526,57 @@ fn scan_string(src: &[u32], k: usize) -> (r: Option<(Vec<u16>, usize)>)
 // ---------------------------------------------------------------------
 
 /// §12.9.5 `RegularExpressionClass` at `k` (a `[`): its end.
+///
+/// Proven: the end is a `RegularExpressionClass` of the spec, and it is the
+/// only one that starts at `k` ([`class_scan`]); `None` means the spec
+/// derives none.
 fn scan_regexp_class(src: &[u32], k: usize) -> (r: Option<usize>)
     requires
         k < src.len(),
+        src@[k as int] == 0x5B,
     ensures
         match r {
-            Some(e) => k < e <= src.len(),
-            None => true,
+            Some(e) => k < e <= src.len() && regexp_class(src@, k as int, e as int) && class_scan(
+                src@,
+                k as int + 1,
+            ) == Some(e as int),
+            None => class_scan(src@, k as int + 1) is None,
         },
 {
     let mut j = k.saturating_add(1);
     loop
         invariant
             k < j <= src.len(),
+            src@[k as int] == 0x5B,
+            regexp_class_chars(src@, k as int + 1, j as int),
+            class_scan(src@, k as int + 1) == class_scan(src@, j as int),
         decreases src.len() - j,
     {
         let c = peek(src, j);
         if c == 0x5D {
+            // `]`: RegularExpressionClass :: `[` RegularExpressionClassChars `]`
+            proof {
+                assert(src@[j as int] == 0x5D);
+                assert(class_scan(src@, j as int) == Some(j as int + 1));
+                assert(regexp_class(src@, k as int, j as int + 1));
+            }
             return Some(j.saturating_add(1));
         } else if c == 0x5C {
             // RegularExpressionBackslashSequence
             if is_line_char(peek(src, j.saturating_add(1))) {
+                proof {
+                    assert(regexp_class_char(src@, j as int, j as int + 2));
+                    lemma_class_chars_ext(src@, k as int + 1, j as int, j as int + 2);
+                }
                 j = j.saturating_add(2);
             } else {
                 return None;
             }
         } else if is_line_char(c) {
+            proof {
+                assert(regexp_class_char(src@, j as int, j as int + 1));
+                lemma_class_chars_ext(src@, k as int + 1, j as int, j as int + 1);
+            }
             j = j.saturating_add(1);
         } else {
             return None;
@@ -2557,60 +2586,142 @@ fn scan_regexp_class(src: &[u32], k: usize) -> (r: Option<usize>)
 
 /// §12.9.5 `RegularExpressionLiteral` at `k` (a `/`): the index of the
 /// closing `/` and the end of the flags.
+///
+/// Proven: the result is a `RegularExpressionLiteral` of the spec (the
+/// closing `/` is the first one outside a class and an escape, the flags
+/// are the longest run of `IdentifierPartChar`s), every literal the spec
+/// derives from `k` has that closing `/` and ends at or before the result
+/// ([`lemma_literal_unique`]), and `None` means the spec derives none.
 fn scan_regexp(src: &[u32], k: usize) -> (r: Option<(usize, usize)>)
     requires
         k < src.len(),
+        src@[k as int] == 0x2F,
     ensures
         match r {
-            Some((b, e)) => k + 1 < b < e <= src.len(),
-            None => true,
+            Some((b, e)) => k + 1 < b < e <= src.len() && regexp_literal(
+                src@,
+                k as int,
+                e as int,
+                b as int,
+            ) && forall|b2: int, j2: int|
+                #[trigger] regexp_literal(src@, k as int, j2, b2) ==> b2 == b && j2 <= e,
+            None => forall|b2: int, j2: int| !#[trigger] regexp_literal(src@, k as int, j2, b2),
         },
 {
     let first = peek(src, k.saturating_add(1));
     // RegularExpressionFirstChar is not `*` or `/`.
     if first == 0x2A || first == 0x2F {
+        proof {
+            assert forall|b2: int, j2: int| !#[trigger] regexp_literal(src@, k as int, j2, b2) by {
+                if regexp_literal(src@, k as int, j2, b2) {
+                    lemma_literal_scan(src@, k as int, j2, b2);
+                }
+            }
+        }
         return None;
     }
     let mut j = k.saturating_add(1);
     loop
         invariant
             k < j <= src.len(),
-            j == k + 1 ==> (k + 1 >= src.len() || src@[(k + 1) as int] != 0x2F),
+            src@[k as int] == 0x2F,
+            j == k + 1 || regexp_body(src@, k as int + 1, j as int),
+            j == k + 1 ==> (k + 1 >= src.len() || (src@[(k + 1) as int] != 0x2F && src@[(k
+                + 1) as int] != 0x2A)),
+            body_scan(src@, k as int + 1) == body_scan(src@, j as int),
         decreases src.len() - j,
     {
         let c = peek(src, j);
         if c == 0x2F {
             // The closing `/`, then RegularExpressionFlags.
             let mut f = j.saturating_add(1);
+            proof {
+                assert(j > k + 1);
+            }
             loop
                 invariant
                     k + 1 < j < f <= src.len(),
+                    src@[k as int] == 0x2F,
+                    j < src.len(),
+                    src@[j as int] == 0x2F,
+                    regexp_body(src@, k as int + 1, j as int),
+                    body_scan(src@, k as int + 1) == Some(j as int),
+                    forall|m: int| j < m < f ==> is_identifier_part_char(src@[m]),
                 decreases src.len() - f,
             {
                 if id_part_char(peek(src, f)) {
                     f = f.saturating_add(1);
                 } else {
+                    proof {
+                        assert(regexp_flags(src@, j as int + 1, f as int)) by {
+                            assert forall|m: int| j as int + 1 <= m < f implies #[trigger]
+                            is_identifier_part_char(src@[m]) by {}
+                        }
+                        assert(nonempty(src@, k as int, f as int));
+                        assert(src@[k as int] == 0x2F);
+                        assert(regexp_body(src@, k as int + 1, j as int));
+                        assert(regexp_literal(src@, k as int, f as int, j as int));
+                        assert forall|b2: int, j2: int|
+                            #[trigger] regexp_literal(src@, k as int, j2, b2) implies b2 == j
+                            as int && j2 <= f by {
+                            lemma_literal_scan(src@, k as int, j2, b2);
+                            if j2 > f {
+                                assert(src@[f as int] == src@[f as int]);
+                                assert(is_identifier_part_char(src@[f as int]));
+                            }
+                        }
+                    }
                     return Some((j, f));
                 }
             }
         } else if c == 0x5C {
             if is_line_char(peek(src, j.saturating_add(1))) {
+                proof {
+                    assert(regexp_char(src@, j as int, j as int + 2));
+                    lemma_body_extend(src@, k as int + 1, j as int, j as int + 2);
+                    assert(rx_next(src@, j as int) == Some(j as int + 2));
+                    lemma_body_scan_step(src@, j as int, j as int + 2);
+                }
                 j = j.saturating_add(2);
             } else {
+                proof {
+                    assert(rx_next(src@, j as int) is None);
+                    lemma_no_literal(src@, k as int);
+                }
                 return None;
             }
         } else if c == 0x5B {
             match scan_regexp_class(src, j) {
                 Some(e) => {
+                    proof {
+                        assert(regexp_char(src@, j as int, e as int));
+                        lemma_body_extend(src@, k as int + 1, j as int, e as int);
+                        assert(rx_next(src@, j as int) == Some(e as int));
+                        lemma_body_scan_step(src@, j as int, e as int);
+                    }
                     j = e;
                 },
                 None => {
+                    proof {
+                        assert(rx_next(src@, j as int) is None);
+                        lemma_no_literal(src@, k as int);
+                    }
                     return None;
                 },
             }
         } else if is_line_char(c) {
+            proof {
+                assert(regexp_char(src@, j as int, j as int + 1));
+                lemma_body_extend(src@, k as int + 1, j as int, j as int + 1);
+                assert(rx_next(src@, j as int) == Some(j as int + 1));
+                lemma_body_scan_step(src@, j as int, j as int + 1);
+            }
             j = j.saturating_add(1);
         } else {
+            proof {
+                assert(rx_next(src@, j as int) is None);
+                lemma_no_literal(src@, k as int);
+            }
             return None;
         }
     }
@@ -3575,7 +3686,7 @@ fn lex_slash(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Cand
     }
     let ghost cmt_end: int = cand_end(pos, cmt);
     let regexp = if goal_regexp(goal) {
-        regexp_candidate(src, pos)
+        regexp_candidate(src, pos, goal, html)
     } else {
         None
     };
@@ -3648,19 +3759,42 @@ fn lex_slash(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Cand
             assert(comment(src@, pos as int, j, false));
             assert(cmt_end >= j);
         }
+        assert forall|j: int|
+            pos < j <= src.len() && #[trigger] element_matches(
+                goal,
+                html,
+                ElementKind::RegularExpressionLiteral,
+                src@,
+                pos as int,
+                j,
+            ) implies j <= e by {
+            // The goal has the literal, and the scan found no longer one.
+            assert(goal == Goal::InputElementRegExp || goal
+                == Goal::InputElementRegExpOrTemplateTail || goal
+                == Goal::InputElementHashbangOrRegExp);
+            assert(regexp is Some);
+            assert(j <= cand_end(pos, regexp));
+        }
         assert forall|k: ElementKind, j: int|
             pos < j <= src.len() && kind_proven(k, html) && k != ElementKind::HashbangComment
-                && (k == ElementKind::Comment || k == ElementKind::DivPunctuator)
-                && #[trigger] element_matches(goal, html, k, src@, pos as int, j) implies j
-            <= e by {}
+                && (k == ElementKind::Comment || k == ElementKind::DivPunctuator || k
+                == ElementKind::RegularExpressionLiteral) && #[trigger] element_matches(
+                goal,
+                html,
+                k,
+                src@,
+                pos as int,
+                j,
+            ) implies j <= e by {}
         assert forall|k: ElementKind|
             kind_proven(k, html) && k != ElementKind::HashbangComment && !(k
-                == ElementKind::Comment || k == ElementKind::DivPunctuator) implies !start_ok(
+                == ElementKind::Comment || k == ElementKind::DivPunctuator || k
+                == ElementKind::RegularExpressionLiteral) implies !start_ok(
             k,
             src@,
             pos as int,
         ) by {}
-        lemma_pk_only(
+        lemma_pk_three(
             goal,
             html,
             src@,
@@ -3668,6 +3802,7 @@ fn lex_slash(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Cand
             e,
             ElementKind::Comment,
             ElementKind::DivPunctuator,
+            ElementKind::RegularExpressionLiteral,
         );
     }
     r
@@ -4427,29 +4562,87 @@ fn html_close_candidate(src: &[u32], pos: usize, k: usize) -> (r: Option<Candida
     Some((plain(ElementKind::Comment, pos, e), None))
 }
 
-/// A `RegularExpressionLiteral` at `pos`, if one is there.
-fn regexp_candidate(src: &[u32], pos: usize) -> (r: Option<Candidate>)
+/// A `RegularExpressionLiteral` at `pos`, if one is there (the goal has it).
+fn regexp_candidate(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Candidate>)
     requires
         pos < src.len(),
+        src@[pos as int] == 0x2F,
+        goal == Goal::InputElementRegExp || goal == Goal::InputElementRegExpOrTemplateTail || goal
+            == Goal::InputElementHashbangOrRegExp,
     ensures
         match r {
-            Some(c) => candidate_ok(src@, pos, c) && c.0.kind
+            Some(c) => candidate_agrees(goal, html, src@, pos, c) && c.0.kind
                 == ElementKind::RegularExpressionLiteral,
-            None => true,
+            None => forall|j: int|
+                !#[trigger] element_matches(
+                    goal,
+                    html,
+                    ElementKind::RegularExpressionLiteral,
+                    src@,
+                    pos as int,
+                    j,
+                ),
         },
 {
-    let (b, e) = scan_regexp(src, pos)?;
-    Some(
-        (
-            Element {
+    let _ = (goal, html);
+    match scan_regexp(src, pos) {
+        None => {
+            proof {
+                assert forall|j: int|
+                    !#[trigger] element_matches(
+                        goal,
+                        html,
+                        ElementKind::RegularExpressionLiteral,
+                        src@,
+                        pos as int,
+                        j,
+                    ) by {
+                    if element_matches(
+                        goal,
+                        html,
+                        ElementKind::RegularExpressionLiteral,
+                        src@,
+                        pos as int,
+                        j,
+                    ) {
+                        let b = choose|b: int| regexp_literal(src@, pos as int, j, b);
+                    }
+                }
+            }
+            None
+        },
+        Some((b, e)) => {
+            let el = Element {
                 kind: ElementKind::RegularExpressionLiteral,
                 start: pos,
                 end: e,
                 value: Value::RegExp { body_end: b },
-            },
-            None,
-        ),
-    )
+            };
+            proof {
+                assert(regexp_literal(src@, pos as int, e as int, b as int));
+                assert(element_matches(
+                    goal,
+                    html,
+                    ElementKind::RegularExpressionLiteral,
+                    src@,
+                    pos as int,
+                    e as int,
+                ));
+                assert forall|j: int|
+                    j <= src.len() && #[trigger] element_matches(
+                        goal,
+                        html,
+                        ElementKind::RegularExpressionLiteral,
+                        src@,
+                        pos as int,
+                        j,
+                    ) implies j <= e by {
+                    let b2 = choose|b2: int| regexp_literal(src@, pos as int, j, b2);
+                }
+            }
+            Some((el, None))
+        },
+    }
 }
 
 /// The next input element of `goal` at `pos`, trivia included (§12): the
