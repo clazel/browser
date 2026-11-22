@@ -301,6 +301,23 @@ pub proof fn example_regexp_non_terminator()
 {
 }
 
+/// §12.9.5: what ends or does not end a regular expression's characters.
+/// Backslash takes any code point but a line terminator; `]` is not a class
+/// character (it closes the class) but `/` is; `/` is not a body character
+/// outside a class (it closes the body); `*` does not start a body.
+pub proof fn example_regexp_char_boundaries()
+    ensures
+        !regexp_backslash_sequence(seq![0x5Cu32, 0x0Au32], 0, 2),
+        regexp_backslash_sequence(seq![0x5Cu32, 0x2Fu32], 0, 2),
+        !regexp_class_char(seq![0x5Du32], 0, 1),
+        regexp_class_char(seq![0x2Fu32], 0, 1),
+        !regexp_char(seq![0x2Fu32], 0, 1),
+        regexp_char(seq![0x61u32], 0, 1),
+        !regexp_first_char(seq![0x2Au32], 0, 1),
+        regexp_char(seq![0x2Au32], 0, 1),
+{
+}
+
 /// §12: comments, white space and line terminators are discarded by the
 /// syntactic grammar; an identifier is not.
 pub proof fn example_trivia()

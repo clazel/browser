@@ -272,6 +272,58 @@
         "lemma": "example_unicode_id_anchors()",
         "witness": "!unicode_id_continue(0x5Fu32)"
       }
+    },
+    {
+      "id": "regexp-backslash-takes-line-terminator",
+      "file": "src/spec.rs",
+      "find": "nonempty(s, i, j) && j == i + 2 && s[i] == 0x5C && is_regexp_non_terminator(s[i + 1])",
+      "replace": "nonempty(s, i, j) && j == i + 2 && s[i] == 0x5C",
+      "expect": "killed",
+      "reason": "A RegularExpressionBackslashSequence (§12.9.5) would take a line terminator, so an escaped newline would not end the literal's line: example_regexp_char_boundaries is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_regexp_char_boundaries()",
+        "witness": "regexp_backslash_sequence(seq![0x5Cu32, 0x0Au32], 0, 2)"
+      }
+    },
+    {
+      "id": "regexp-class-char-allows-close-bracket",
+      "file": "src/spec.rs",
+      "find": "(j == i + 1 && is_regexp_non_terminator(s[i]) && s[i] != 0x5D\n            && s[i] != 0x5C)",
+      "replace": "(j == i + 1 && is_regexp_non_terminator(s[i]) && s[i] != 0x5C)",
+      "expect": "killed",
+      "reason": "`]` would be a RegularExpressionClassChar (§12.9.5), so a class would have no unique end (the closing `]` through classes and escapes): example_regexp_char_boundaries is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_regexp_char_boundaries()",
+        "witness": "regexp_class_char(seq![0x5Du32], 0, 1)"
+      }
+    },
+    {
+      "id": "regexp-char-allows-slash",
+      "file": "src/spec.rs",
+      "find": "(j == i + 1 && is_regexp_non_terminator(s[i]) && s[i] != 0x5C\n            && s[i] != 0x2F && s[i] != 0x5B)",
+      "replace": "(j == i + 1 && is_regexp_non_terminator(s[i]) && s[i] != 0x5C\n            && s[i] != 0x5B)",
+      "expect": "killed",
+      "reason": "`/` would be a RegularExpressionChar outside a class (§12.9.5), so a body would not end at its first unescaped `/`: example_regexp_char_boundaries is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_regexp_char_boundaries()",
+        "witness": "regexp_char(seq![0x2Fu32], 0, 1)"
+      }
+    },
+    {
+      "id": "regexp-first-char-allows-star",
+      "file": "src/spec.rs",
+      "find": "is_regexp_non_terminator(s[i]) && s[i] != 0x2A\n            && s[i] != 0x5C",
+      "replace": "is_regexp_non_terminator(s[i])\n            && s[i] != 0x5C",
+      "expect": "killed",
+      "reason": "`*` would start a regular expression body (§12.9.5 RegularExpressionFirstChar), so `/*` would not be a comment: example_regexp_char_boundaries is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_regexp_char_boundaries()",
+        "witness": "regexp_first_char(seq![0x2Au32], 0, 1)"
+      }
     }
   ]
 }
