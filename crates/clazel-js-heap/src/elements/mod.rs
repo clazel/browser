@@ -392,7 +392,11 @@ mod tests {
     #[test]
     fn matches_the_spec_on_random_sequences() {
         let mut rng = Lcg(0x5EED);
-        for _ in 0..300 {
+        // Miri interprets every step: 300 sequences took 3013 s there, over
+        // xtask's 300 s limit, so it runs the first 10 of the same sequence
+        // (about 100 s). The full count runs in the normal test job.
+        let sequences = if cfg!(miri) { 10 } else { 300 };
+        for _ in 0..sequences {
             let mut e = Elements::new();
             let mut s = Spec::new(0);
             for _ in 0..200 {
