@@ -797,6 +797,160 @@
         "witness": "replace_error(vm_s6(), 6, 4, 0) is Some"
       },
       "module": "validity_lemmas"
+    },
+    {
+      "id": "deep-copy-keeps-form-owner",
+      "file": "src/spec.rs",
+      "find": "&&& n.kind->Element_form_owner is None",
+      "replace": "&&& true",
+      "expect": "killed",
+      "reason": "A deep clone copies the form owner: theorem_deep_copy_kind_fields (the copy has none) is false.",
+      "certificate": {
+        "file": "src/deep_clone_mutation_lemmas.rs",
+        "lemma": "dm_form_owner()",
+        "witness": "deep_copy_kind(dm_doc(), dm_out(dm_doc(), dm_el(seq![], seq![], Some(0), None)), seq![1usize], 0)"
+      },
+      "module": "deep_clone_lemmas"
+    },
+    {
+      "id": "deep-copy-attributes-free",
+      "file": "src/spec.rs",
+      "find": "&&& n.kind->Element_attributes == attributes",
+      "replace": "&&& true",
+      "expect": "killed",
+      "reason": "A copy may have other attributes than its source: theorem_deep_copy_kind_fields is false.",
+      "certificate": {
+        "file": "src/deep_clone_mutation_lemmas.rs",
+        "lemma": "dm_attributes()",
+        "witness": "deep_copy_kind(dm_doc(), dm_out(dm_doc(), dm_el(seq![], seq![dm_attr()], None, None)), seq![1usize], 0)"
+      },
+      "module": "deep_clone_lemmas"
+    },
+    {
+      "id": "deep-copy-local-name-free",
+      "file": "src/spec.rs",
+      "find": "&&& n.kind->Element_local_name == local_name",
+      "replace": "&&& true",
+      "expect": "killed",
+      "reason": "A copy may have another local name than its source: theorem_deep_copy_kind_fields is false.",
+      "certificate": {
+        "file": "src/deep_clone_mutation_lemmas.rs",
+        "lemma": "dm_local_name()",
+        "witness": "deep_copy_kind(dm_doc(), dm_out(dm_doc(), dm_el(seq![1u32], seq![], None, None)), seq![1usize], 0)"
+      },
+      "module": "deep_clone_lemmas"
+    },
+    {
+      "id": "deep-copy-namespace-free",
+      "file": "src/spec.rs",
+      "find": "&&& n.kind->Element_namespace == namespace",
+      "replace": "&&& true",
+      "expect": "killed",
+      "reason": "A copy may be in another namespace than its source: theorem_deep_copy_kind_fields is false.",
+      "certificate": {
+        "file": "src/deep_clone_mutation_lemmas.rs",
+        "lemma": "dm_namespace()",
+        "witness": "deep_copy_kind(dm_doc(), dm_out(dm_doc(), NodeKind::Element { namespace: Some(Namespace::Svg), prefix: None, local_name: seq![], attributes: seq![], template_contents: None, form_owner: None }), seq![1usize], 0)"
+      },
+      "module": "deep_clone_lemmas"
+    },
+    {
+      "id": "deep-copy-prefix-free",
+      "file": "src/spec.rs",
+      "find": "&&& n.kind->Element_prefix == prefix",
+      "replace": "&&& true",
+      "expect": "killed",
+      "reason": "A copy may have another prefix than its source: theorem_deep_copy_kind_fields is false.",
+      "certificate": {
+        "file": "src/deep_clone_mutation_lemmas.rs",
+        "lemma": "dm_prefix()",
+        "witness": "deep_copy_kind(dm_doc(), dm_out(dm_doc(), NodeKind::Element { namespace: Some(Namespace::Html), prefix: Some(seq![]), local_name: seq![], attributes: seq![], template_contents: None, form_owner: None }), seq![1usize], 0)"
+      },
+      "module": "deep_clone_lemmas"
+    },
+    {
+      "id": "deep-copy-other-kind-free",
+      "file": "src/spec.rs",
+      "find": "other => n.kind == other,",
+      "replace": "other => true,",
+      "expect": "killed",
+      "reason": "A copy of a text, comment, doctype or processing instruction may be anything: theorem_deep_copy_kind_fields is false.",
+      "certificate": {
+        "file": "src/deep_clone_mutation_lemmas.rs",
+        "lemma": "dm_other_kind()",
+        "witness": "deep_copy_kind(dm_doc(), dm_out(dm_doc(), NodeKind::Comment { data: seq![] }), seq![2usize], 0)"
+      },
+      "module": "deep_clone_lemmas"
+    },
+    {
+      "id": "deep-copy-contents-free",
+      "file": "src/spec.rs",
+      "find": "&&& (template_contents is None) == (n.kind->Element_template_contents is None)",
+      "replace": "&&& true",
+      "expect": "killed",
+      "reason": "A copy of a plain element may gain template contents: theorem_deep_copy_kind_fields is false.",
+      "certificate": {
+        "file": "src/deep_clone_mutation_lemmas.rs",
+        "lemma": "dm_gains_contents()",
+        "witness": "deep_copy_kind(dm_doc(), dm_out(dm_doc(), dm_el(seq![], seq![], None, Some(0))), seq![1usize], 0)"
+      },
+      "module": "deep_clone_lemmas"
+    },
+    {
+      "id": "deep-copy-contents-source-free",
+      "file": "src/spec.rs",
+      "find": "&&& src[c - b] == template_contents->Some_0",
+      "replace": "&&& true",
+      "expect": "killed",
+      "reason": "A template's copy may have contents that copy another node than its source's contents: theorem_deep_copy_kind_fields is false.",
+      "certificate": {
+        "file": "src/deep_clone_mutation_lemmas.rs",
+        "lemma": "dm_wrong_contents()",
+        "witness": "deep_copy_kind(ol_template(), dm_out(dm_out(ol_template(), dm_el(seq![], seq![], None, Some(4))), NodeKind::DocumentFragment { host: Some(3) }), seq![1usize, 1usize], 0)"
+      },
+      "module": "deep_clone_lemmas"
+    },
+    {
+      "id": "deep-copy-root-fragment-host",
+      "file": "src/spec.rs",
+      "find": "&&& t == 0 ==> n.kind->DocumentFragment_host is None",
+      "replace": "&&& true",
+      "expect": "killed",
+      "reason": "A cloned root fragment may keep a host: theorem_deep_copy_kind_fields is false.",
+      "certificate": {
+        "file": "src/deep_clone_mutation_lemmas.rs",
+        "lemma": "dm_root_fragment_host()",
+        "witness": "deep_copy_kind(ol_template(), dm_out(ol_template(), NodeKind::DocumentFragment { host: Some(1) }), seq![2usize], 0)"
+      },
+      "module": "deep_clone_lemmas"
+    },
+    {
+      "id": "deep-copy-root-parent",
+      "file": "src/spec.rs",
+      "find": "&&& t == 0 ==> n.parent is None",
+      "replace": "&&& true",
+      "expect": "killed",
+      "reason": "The root of a deep clone may have a parent: theorem_deep_copy_kind_fields is false.",
+      "certificate": {
+        "file": "src/deep_clone_mutation_lemmas.rs",
+        "lemma": "dm_root_parent()",
+        "witness": "deep_copy_kind(dm_doc(), Document { nodes: dm_out(dm_doc(), dm_el(seq![], seq![], None, None)).nodes.update(3, Node { parent: Some(0usize), ..dm_out(dm_doc(), dm_el(seq![], seq![], None, None)).nodes[3] }) }, seq![1usize], 0)"
+      },
+      "module": "deep_clone_lemmas"
+    },
+    {
+      "id": "deep-copy-wrapper",
+      "file": "src/spec.rs",
+      "find": "&&& n.wrapper is None",
+      "replace": "&&& true",
+      "expect": "killed",
+      "reason": "A copy may have a wrapper: theorem_deep_copy_kind_fields is false.",
+      "certificate": {
+        "file": "src/deep_clone_mutation_lemmas.rs",
+        "lemma": "dm_wrapper()",
+        "witness": "deep_copy_kind(dm_doc(), Document { nodes: dm_out(dm_doc(), dm_el(seq![], seq![], None, None)).nodes.update(3, Node { wrapper: Some(0nat), ..dm_out(dm_doc(), dm_el(seq![], seq![], None, None)).nodes[3] }) }, seq![1usize], 0)"
+      },
+      "module": "deep_clone_lemmas"
     }
   ]
 }

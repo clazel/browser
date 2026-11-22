@@ -1981,8 +1981,25 @@ impl Arena {
             lemma_inv_facts(d0, node, a, order0, i as int, j as int);
             assert(a.nodes[order0[i as int] as int] == d0.nodes[order0[i as int] as int]);
         }
-        let s = order[i];
-        let ch = self.children(s)[j];
+        // In bounds by the precondition; `get` keeps the code free of panics.
+        let s = match order.get(i) {
+            Some(s) => *s,
+            None => {
+                proof {
+                    assert(false);
+                }
+                return false;
+            },
+        };
+        let ch = match self.children(s).get(j) {
+            Some(c) => *c,
+            None => {
+                proof {
+                    assert(false);
+                }
+                return false;
+            },
+        };
         proof {
             lemma_child_requires(d0, node, a, order0, i as int, j as int, ch);
         }
@@ -2000,7 +2017,8 @@ impl Arena {
                     lemma_step_requires(d0, node, a, order0, i as int, j as int, ch);
                     lemma_step_inv(d0, node, a, order0, i as int, j as int, ch);
                 }
-                self.append(base + i, cc);
+                // base + i < self.len() <= MAX_NODES: never saturates.
+                self.append(base.saturating_add(i), cc);
                 proof {
                     assert(self@.nodes[ch as int] == a.nodes[ch as int]);
                 }
@@ -2073,21 +2091,26 @@ impl Arena {
                     }
                     return None;
                 }
-                j += 1;
+                // j < nch <= the node count: never saturates.
+                j = j.saturating_add(1);
             } else {
                 proof {
                     lemma_advance(d0, node, self@, order@, i as int, j as int);
                 }
-                i += 1;
+                // i < order.len(): never saturates.
+                i = i.saturating_add(1);
                 j = 0;
-                if i < order.len() {
-                    proof {
-                        lemma_inv_facts(d0, node, self@, order@, i as int, 0);
-                        assert(self@.nodes[order@[i as int] as int] == d0.nodes[order@[i as int] as int]);
-                    }
-                    nch = self.children(order[i]).len();
-                } else {
-                    nch = 0;
+                match order.get(i) {
+                    Some(s) => {
+                        proof {
+                            lemma_inv_facts(d0, node, self@, order@, i as int, 0);
+                            assert(self@.nodes[*s as int] == d0.nodes[*s as int]);
+                        }
+                        nch = self.children(*s).len();
+                    },
+                    None => {
+                        nch = 0;
+                    },
                 }
             }
             proof {

@@ -730,6 +730,7 @@ fn deep_clone_that_does_not_fit_changes_nothing() {
         assert_eq!(a.parent(*c), Some(root));
     }
     // One that does fit still works.
-    assert!(a.clone_deep(kids[0]).is_some());
+    let first = kids.first().copied().unwrap_or_default();
+    assert!(a.clone_deep(first).is_some());
     assert_eq!(a.len(), n + 1);
 }
