@@ -1813,7 +1813,7 @@ fn num_zero_digit(src: &[u32], k: usize) -> (r: Option<(usize, bool, bool)>)
 }
 
 /// A non-zero digit.
-#[verifier::rlimit(100)]
+#[verifier::rlimit(400)]
 fn num_nonzero(src: &[u32], k: usize) -> (r: Option<(usize, bool, bool)>)
     requires
         k < src.len(),
@@ -2859,13 +2859,35 @@ type TemplateScan = (bool, Option<Vec<u16>>, Vec<u16>, usize);
 /// §12.9.6 a template component at `k` (`` ` `` for `NoSubstitutionTemplate`
 /// and `TemplateHead`, `}` for `TemplateMiddle` and `TemplateTail`): whether
 /// it closes with `` ` `` (rather than `${`), its TV and TRV, and its end.
+///
+/// Proven: `Some((closes, tv, trv, e))` is a template component of the spec
+/// ([`template_part`]) of the kind its opening and `closes` give
+/// ([`tpart_kind`]), with that TV and TRV, and it is the only one the spec
+/// derives from `k` (every derivation has this end and kind: the characters
+/// stop at the first `` ` `` or `${`, since no `TemplateCharacter` starts
+/// at either, [`lemma_part_unique`]); `None` means the spec derives none
+/// ([`lemma_part_none`]).
 fn scan_template(src: &[u32], k: usize) -> (r: Option<TemplateScan>)
     requires
         k < src.len(),
+        src@[k as int] == 0x60 || src@[k as int] == 0x7D,
     ensures
         match r {
-            Some((_, _, _, e)) => k + 2 <= e <= src.len(),
-            None => true,
+            Some((closes, cooked, raw, e)) => k + 2 <= e <= src.len() && template_part(
+                src@,
+                k as int,
+                e as int,
+                tpart_kind(src@, k as int, closes),
+                match cooked {
+                    Some(c) => Some(c@),
+                    None => None,
+                },
+                raw@,
+            ) && (forall|j: int, kind2: TemplateKind, tv2: Tv, trv2: Seq<u16>|
+                #[trigger] template_part(src@, k as int, j, kind2, tv2, trv2) ==> (j == e as int
+                    && kind2 == tpart_kind(src@, k as int, closes))),
+            None => forall|j: int, kind2: TemplateKind, tv2: Tv, trv2: Seq<u16>|
+                !#[trigger] template_part(src@, k as int, j, kind2, tv2, trv2),
         },
 {
     let mut values = TemplateValues { cooked: Vec::new(), defined: true, raw: Vec::new() };
@@ -2873,6 +2895,15 @@ fn scan_template(src: &[u32], k: usize) -> (r: Option<TemplateScan>)
     loop
         invariant
             k < j <= src.len(),
+            src@[k as int] == 0x60 || src@[k as int] == 0x7D,
+            j == k + 1 ==> (tv_of(values) == Some(Seq::<u16>::empty()) && values.raw@.len() == 0),
+            j > k + 1 ==> template_characters(
+                src@,
+                k as int + 1,
+                j as int,
+                tv_of(values),
+                values.raw@,
+            ),
         decreases src.len() - j,
     {
         let c = peek(src, j);
@@ -2883,23 +2914,75 @@ fn scan_template(src: &[u32], k: usize) -> (r: Option<TemplateScan>)
             } else {
                 j.saturating_add(2)
             };
+            let ghost tvv = tv_of(values);
+            let ghost rawv = values.raw@;
+            let ghost cooked_view = values.cooked@;
             let cooked = if values.defined {
                 Some(values.cooked)
             } else {
                 None
             };
+            proof {
+                let s = src@;
+                let kind = tpart_kind(s, k as int, closes);
+                assert(delim_at(s, j as int));
+                if !closes {
+                    assert(s[j as int] == 0x24 && s[j as int + 1] == 0x7B);
+                    lemma_is_lit(s, j as int, j as int + 2, seq!['$', '{']);
+                    assert(is_lit(s, j as int, j as int + 2, seq!['$', '{']));
+                }
+                assert(match cooked {
+                    Some(c) => Some(c@),
+                    None => None,
+                } == tvv);
+                assert(template_part(s, k as int, end as int, kind, tvv, rawv));
+                assert forall|j2: int, kind2: TemplateKind, tv2: Tv, trv2: Seq<u16>|
+                    #[trigger] template_part(s, k as int, j2, kind2, tv2, trv2) implies (j2
+                    == end as int && kind2 == kind) by {
+                    lemma_part_unique(s, k as int, j as int, j2, kind2, tv2, trv2);
+                }
+            }
             return Some((closes, cooked, values.raw, end));
         } else if c == 0x5C {
+            let ghost ov = values;
+            let ghost s = src@;
             match scan_template_escape(src, j, &mut values) {
                 Some(e) => {
+                    proof {
+                        assert(tesc_ok(s, j as int, e as int, ov, values));
+                        let (tv, trv) = choose|tv: Tv, trv: Seq<u16>|
+                            #![trigger template_character(s, j as int, e as int, tv, trv)]
+                            template_character(s, j as int, e as int, tv, trv) && tv_of(values)
+                                =~= tv_concat(tv_of(ov), tv) && values.raw@ =~= ov.raw@ + trv;
+                        lemma_chars_step(s, k as int + 1, j as int, e as int, tv_of(ov), ov.raw@, tv, trv);
+                        assert(tv_of(values) == tv_concat(tv_of(ov), tv));
+                        assert(values.raw@ == ov.raw@ + trv);
+                    }
                     j = e;
                 },
                 None => {
+                    proof {
+                        let s = src@;
+                        assert(no_char(s, j as int));
+                        assert(!delim_at(s, j as int));
+                        assert forall|j2: int, kind2: TemplateKind, tv2: Tv, trv2: Seq<u16>|
+                            !#[trigger] template_part(s, k as int, j2, kind2, tv2, trv2) by {
+                            if template_part(s, k as int, j2, kind2, tv2, trv2) {
+                                assert(j as int == k as int + 1 || exists|
+                                    tv1: Tv,
+                                    trv1: Seq<u16>,
+                                | #[trigger] template_characters(s, k as int + 1, j as int, tv1, trv1));
+                                lemma_part_none(s, k as int, j as int, j2, kind2, tv2, trv2);
+                            }
+                        }
+                    }
                     return None;
                 },
             }
         } else if is_lt(c) {
             // LineTerminatorSequence: TV and TRV are its TRV.
+            let ghost ov = values;
+            let ghost s = src@;
             let e = line_terminator_sequence_end(src, j);
             let u: u16 = if c == 0x2028 || c == 0x2029 {
                 c as u16
@@ -2908,14 +2991,57 @@ fn scan_template(src: &[u32], k: usize) -> (r: Option<TemplateScan>)
             };
             values.cooked.push(u);
             values.raw.push(u);
+            proof {
+                let trv = line_terminator_sequence_trv(s, j as int, e as int);
+                assert(u == trv[0]);
+                assert(trv.len() == 1);
+                assert(template_character(s, j as int, e as int, Some(trv), trv));
+                lemma_chars_step(s, k as int + 1, j as int, e as int, tv_of(ov), ov.raw@, Some(trv), trv);
+                assert(tv_of(values) == tv_concat(tv_of(ov), Some(trv)));
+                assert(values.raw@ == ov.raw@ + trv);
+            }
             j = e;
         } else if is_src(c) {
             // `$` [lookahead ≠ {], or SourceCharacter but not one of ` \ $
             // LineTerminator: UTF16EncodeCodePoint of it.
+            let ghost ov = values;
+            let ghost s = src@;
             push_utf16(&mut values.cooked, c);
             push_utf16(&mut values.raw, c);
+            proof {
+                let trv = utf16_encode_code_point(c as int);
+                assert(c == s[j as int]);
+                assert(template_character(s, j as int, j as int + 1, Some(trv), trv));
+                lemma_chars_step(
+                    s,
+                    k as int + 1,
+                    j as int,
+                    j as int + 1,
+                    tv_of(ov),
+                    ov.raw@,
+                    Some(trv),
+                    trv,
+                );
+                assert(tv_of(values) == tv_concat(tv_of(ov), Some(trv)));
+                assert(values.raw@ == ov.raw@ + trv);
+            }
             j = j.saturating_add(1);
         } else {
+            proof {
+                let s = src@;
+                assert(no_char(s, j as int));
+                assert(!delim_at(s, j as int));
+                assert forall|j2: int, kind2: TemplateKind, tv2: Tv, trv2: Seq<u16>|
+                    !#[trigger] template_part(s, k as int, j2, kind2, tv2, trv2) by {
+                    if template_part(s, k as int, j2, kind2, tv2, trv2) {
+                        assert(j as int == k as int + 1 || exists|
+                            tv1: Tv,
+                            trv1: Seq<u16>,
+                        | #[trigger] template_characters(s, k as int + 1, j as int, tv1, trv1));
+                        lemma_part_none(s, k as int, j as int, j2, kind2, tv2, trv2);
+                    }
+                }
+            }
             return None;
         }
     }
@@ -4038,6 +4164,8 @@ fn lex_common(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Can
 fn lex_template(src: &[u32], pos: usize, substitution_tail: bool) -> (r: Option<Candidate>)
     requires
         pos < src.len(),
+        substitution_tail ==> src@[pos as int] == 0x7D,
+        !substitution_tail ==> src@[pos as int] == 0x60,
     ensures
         match r {
             Some(c) => candidate_ok(src@, pos, c) && c.0.kind is Template,

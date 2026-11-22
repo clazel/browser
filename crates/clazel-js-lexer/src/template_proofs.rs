@@ -601,4 +601,159 @@ pub proof fn lemma_utf16_of_push(s: Seq<u32>, i: int, k: int)
     }
 }
 
+// ---------------------------------------------------------------------
+// Template components: the scan's end is the only one.
+// ---------------------------------------------------------------------
+
+/// The length of the closing delimiter of a component of `kind`.
+pub open spec fn close_len(kind: TemplateKind) -> int {
+    match kind {
+        TemplateKind::NoSubstitution | TemplateKind::Tail => 1,
+        TemplateKind::Head | TemplateKind::Middle => 2,
+    }
+}
+
+/// The kind of a component that starts at `k` and ends at a `` ` `` (if
+/// `closes`) or a `${`.
+pub open spec fn tpart_kind(s: Seq<u32>, k: int, closes: bool) -> TemplateKind {
+    if s[k] == 0x60 {
+        if closes {
+            TemplateKind::NoSubstitution
+        } else {
+            TemplateKind::Head
+        }
+    } else {
+        if closes {
+            TemplateKind::Tail
+        } else {
+            TemplateKind::Middle
+        }
+    }
+}
+
+/// The shape of a derived template component: its opening, the run of
+/// characters, and the closing delimiter at `b`.
+pub proof fn lemma_part_shape(
+    s: Seq<u32>,
+    k: int,
+    j: int,
+    kind: TemplateKind,
+    tv: Tv,
+    trv: Seq<u16>,
+)
+    requires
+        template_part(s, k, j, kind, tv, trv),
+    ensures
+        0 <= k < s.len(),
+        k + 1 <= j - close_len(kind),
+        delim_at(s, j - close_len(kind)),
+        (kind == TemplateKind::NoSubstitution || kind == TemplateKind::Tail) ==> s[j - 1] == 0x60,
+        (kind == TemplateKind::Head || kind == TemplateKind::Middle) ==> (s[j - 2] == 0x24 && s[j
+            - 1] == 0x7B),
+        (kind == TemplateKind::NoSubstitution || kind == TemplateKind::Head) ==> s[k] == 0x60,
+        (kind == TemplateKind::Middle || kind == TemplateKind::Tail) ==> s[k] == 0x7D,
+        (j - close_len(kind) == k + 1) || exists|tv1: Tv, trv1: Seq<u16>|
+            #[trigger] template_characters(s, k + 1, j - close_len(kind), tv1, trv1),
+{
+    lemma_is_lit(s, j - 2, j, seq!['$', '{']);
+    if j - close_len(kind) != k + 1 {
+        assert(template_characters(s, k + 1, j - close_len(kind), tv, trv));
+    }
+}
+
+/// A scan of a component from `k` that consumed the characters up to a
+/// delimiter at `d` and closed there: every derivation of a component from
+/// `k` is that one.
+pub proof fn lemma_part_unique(
+    s: Seq<u32>,
+    k: int,
+    d: int,
+    j2: int,
+    kind2: TemplateKind,
+    tv2: Tv,
+    trv2: Seq<u16>,
+)
+    requires
+        0 <= k < s.len(),
+        s[k] == 0x60 || s[k] == 0x7D,
+        d == k + 1 || exists|tv1: Tv, trv1: Seq<u16>| #[trigger] template_characters(s, k + 1, d, tv1, trv1),
+        delim_at(s, d),
+        template_part(s, k, j2, kind2, tv2, trv2),
+    ensures
+        j2 == d + (if s[d] == 0x60 {
+            1int
+        } else {
+            2int
+        }),
+        kind2 == tpart_kind(s, k, s[d] == 0x60),
+{
+    lemma_part_shape(s, k, j2, kind2, tv2, trv2);
+    let b = j2 - close_len(kind2);
+    lemma_delim_no_char_spec(s, b);
+    lemma_delim_no_char_spec(s, d);
+    lemma_tc_end_unique(s, k + 1, b, d);
+}
+
+/// A scan from `k` that consumed the characters up to a place `d` where
+/// it is stuck (no delimiter, no character): no component derives from `k`.
+pub proof fn lemma_part_none(
+    s: Seq<u32>,
+    k: int,
+    d: int,
+    j2: int,
+    kind2: TemplateKind,
+    tv2: Tv,
+    trv2: Seq<u16>,
+)
+    requires
+        0 <= k < s.len(),
+        d == k + 1 || exists|tv1: Tv, trv1: Seq<u16>| #[trigger] template_characters(s, k + 1, d, tv1, trv1),
+        no_char(s, d),
+        !delim_at(s, d),
+        template_part(s, k, j2, kind2, tv2, trv2),
+    ensures
+        false,
+{
+    lemma_part_shape(s, k, j2, kind2, tv2, trv2);
+    let b = j2 - close_len(kind2);
+    lemma_delim_no_char_spec(s, b);
+    lemma_tc_end_unique(s, k + 1, b, d);
+}
+
+/// The characters of a component extend by one `TemplateCharacter` (or
+/// start with it): the scan's invariant.
+pub proof fn lemma_chars_step(
+    s: Seq<u32>,
+    a: int,
+    j: int,
+    e: int,
+    tv_old: Tv,
+    raw_old: Seq<u16>,
+    tv: Tv,
+    trv: Seq<u16>,
+)
+    requires
+        a <= j < e,
+        j == a ==> (tv_old == Some(Seq::<u16>::empty()) && raw_old.len() == 0),
+        j > a ==> template_characters(s, a, j, tv_old, raw_old),
+        template_character(s, j, e, tv, trv),
+    ensures
+        template_characters(s, a, e, tv_concat(tv_old, tv), raw_old + trv),
+{
+    if j == a {
+        assert(tv_concat(tv_old, tv) =~= tv) by {
+            match tv {
+                Some(x) => {
+                    assert(Seq::<u16>::empty() + x =~= x);
+                },
+                None => {},
+            }
+        }
+        assert(raw_old + trv =~= trv);
+        assert(template_character(s, a, e, tv_concat(tv_old, tv), raw_old + trv));
+    } else {
+        lemma_tc_extend(s, a, j, e, tv_old, raw_old, tv, trv);
+    }
+}
+
 } // verus!
