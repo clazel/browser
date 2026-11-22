@@ -19,15 +19,23 @@
 //!   on every 3 + 3 digit literal with any exponent, and `radix_value` on
 //!   every 3-byte string in each radix.
 //!
-//! Harnesses that were written and did not finish within 100 s (on a loaded
-//! laptop) were removed rather than left failing: `Big`'s `mul_small`,
-//! `shl`/`shr`, `cmp_big`/`sub_assign`/`add_assign`, `divrem` and `div_small`
-//! (vectors of limbs and 64-bit multiplication and division), Ryu's `d2d_with`
-//! as a whole, and `layout_decimal` (string building). So these are **not**
-//! proven panic-free by Kani: `decimal_exact`, `string_to_number`,
-//! `number_to_string`, the three `to_*` formatters, `Big` beyond `add_small`,
-//! and `d2d_with`. The differential tests (`tests/differential.rs`, with
-//! overflow checks on) exercise them; that is evidence, not proof.
+//! - on `Big` of up to two limbs (any `u128`): `mul_small` and `div_small`
+//!   (any word, zero included) are total; `cmp_big` is `u128` order;
+//!   `bit_len` and `bit` (any index) match `u128`.
+//!
+//! Harnesses that were written and did not finish within 100 s to 400 s (on
+//! a loaded laptop; Kani reports a CBMC timeout as FAILED, not as a
+//! counterexample) were removed rather than left failing: `Big`'s `shl` and
+//! `shr` (even for a shift under 64), `add_assign` (even on one-limb
+//! inputs), `sub_assign`, `divrem`, `mul_small` and `div_small` checked
+//! against `u128` arithmetic, Ryu's `d2d_with` as a whole, and
+//! `layout_decimal` (string building). `string_to_number` over a two-byte
+//! `&str` crashed the Kani compiler (an internal error in its intrinsics
+//! pass) before it ran. So these are **not** proven panic-free by Kani:
+//! `decimal_exact`, `string_to_number`, `number_to_string`, the three `to_*`
+//! formatters, `Big` beyond the operations above, and `d2d_with`. The
+//! differential tests (`tests/differential.rs`, with overflow checks on)
+//! exercise them; that is evidence, not proof.
 //!
 //! BigInt parsing and printing (`js_bigint`): proven are `digit_value` and
 //! `digit_char` (total, below 36, mutually inverse, exactly the ASCII
@@ -211,4 +219,47 @@ fn single_limb_mul_add_is_u128_arithmetic() {
     let want = u128::from(x) * u128::from(m);
     kani::assume(want <= u128::MAX - u128::from(a));
     assert!(b.low_u128() == want + u128::from(a));
+}
+
+// ---- `Big` on up to two limbs: the operations that finish ----
+
+#[kani::proof]
+#[kani::unwind(5)]
+fn big_mul_small_two_limbs_is_total() {
+    // Any two-limb value times any word: no panic, no overflow, no
+    // out-of-bounds access. (The value is not checked: a 128-bit
+    // multiplication against `u128` does not finish.)
+    let x: u128 = kani::any();
+    let m: u64 = kani::any();
+    let mut b = Big::from_u128(x);
+    b.mul_small(m);
+}
+
+#[kani::proof]
+#[kani::unwind(5)]
+fn big_div_small_two_limbs_is_total() {
+    // Likewise for division by any word, zero included.
+    let x: u128 = kani::any();
+    let m: u64 = kani::any();
+    let mut b = Big::from_u128(x);
+    let _ = b.div_small(m);
+}
+
+#[kani::proof]
+#[kani::unwind(5)]
+fn big_cmp_is_u128_order() {
+    let x: u128 = kani::any();
+    let y: u128 = kani::any();
+    assert!(Big::from_u128(x).cmp_big(&Big::from_u128(y)) == x.cmp(&y));
+}
+
+#[kani::proof]
+#[kani::unwind(5)]
+fn big_bit_len_and_bit_match_u128() {
+    let x: u128 = kani::any();
+    let i: u64 = kani::any();
+    let b = Big::from_u128(x);
+    assert!(b.bit_len() == u64::from(128 - x.leading_zeros()));
+    let want = i < 128 && (x >> i) & 1 == 1;
+    assert!(b.bit(i) == want);
 }
