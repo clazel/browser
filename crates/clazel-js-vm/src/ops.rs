@@ -193,6 +193,60 @@ pub enum HandlerId {
     /// A throw the compiler knows the kind of, for example assignment to a
     /// constant (a TypeError).
     ThrowError,
+    /// ToPropertyKey, §7.1.19†.
+    ToPropertyKey,
+    /// ToString, §7.1.17†.
+    ToString,
+    /// CopyDataProperties, §7.3.25†.
+    CopyDataProperties,
+    /// GetTemplateObject, §13.2.8.4†.
+    GetTemplateObject,
+    /// `new` with spread arguments, §13.3.5.1.1.
+    NewSpread,
+    /// SuperCall evaluation, §13.3.7.1†.
+    SuperCall,
+    /// SuperCall evaluation with spread arguments, §13.3.7.1†.
+    SuperCallSpread,
+    /// InitializeInstanceElements, §7.3.34†.
+    InitInstance,
+    /// ClassDefinitionEvaluation, §15.7.14†.
+    ClassSetup,
+    /// DefineMethodProperty, §15.4.5†.
+    DefineMethod,
+    /// MakeMethod, §10.2.7†.
+    SetHomeObject,
+    /// `[[Fields]]` and `[[PrivateMethods]]` of a class, §15.7.14†.
+    SetInstanceInit,
+    /// NewPrivateEnvironment, §9.2.1.1†.
+    NewPrivateName,
+    /// PrivateGet, §7.3.31†.
+    GetPrivate,
+    /// PrivateSet, §7.3.32†.
+    SetPrivate,
+    /// PrivateFieldAdd and PrivateMethodOrAccessorAdd, §7.3.30†.
+    DefinePrivate,
+    /// `#x in obj`, §13.10.1†.
+    HasPrivate,
+    /// GetSuperBase, §9.1.1.3.5†.
+    GetSuperBase,
+    /// Super property read, GetValue §6.2.5.5†.
+    GetSuper,
+    /// Super property write, PutValue §6.2.5.6†.
+    SetSuper,
+    /// GetNewTarget, §9.4.4†.
+    GetNewTarget,
+    /// The result of a derived constructor, §10.2.2† steps 10 to 12.
+    ConstructResult,
+    /// CreateUnmappedArgumentsObject, §10.4.4.6†.
+    CreateUnmappedArguments,
+    /// CreateMappedArgumentsObject, §10.4.4.7†.
+    CreateMappedArguments,
+    /// The array of a rest parameter, §10.2.11† step 24.
+    CreateRestArray,
+    /// EnumerateObjectProperties, §14.7.5.9†.
+    ForInIterator,
+    /// InitializeBinding on the global declarative record, §9.1.1.4.2†.
+    InitGlobalLexical,
 }
 
 /// The error constructors a compiler-known throw can name.
@@ -924,6 +978,362 @@ pub enum Op {
         /// The constant-pool index of the message.
         msg: nat,
     },
+    /// `dst := ToPropertyKey(src)`, §7.1.19†: ToPrimitive with hint string (step 1), then a Symbol
+    /// is itself (step 2) and anything else is ToString (step 3). It may call user code and throw,
+    /// so it is always a handler call. It is emitted for a computed property name of an object
+    /// literal or a class element (ComputedPropertyName evaluation, §13.2.5.4†: "Return ?
+    /// ToPropertyKey(propName)"), whose key must be converted when the name is evaluated, before
+    /// the value expression, which [`Op::DefineElem`] alone cannot do. The result is a string or a
+    /// Symbol, so converting it again (by `DefineElem`, `GetElem` or `HasProperty`) has no effect.
+    ToPropertyKey {
+        /// The register written.
+        dst: nat,
+        /// The register read.
+        src: nat,
+    },
+    /// `dst := ToString(src)`, §7.1.17†: a Symbol is a TypeError (step 1), an Object goes through
+    /// ToPrimitive with hint string (step 10). It is the conversion of each substitution of a
+    /// template literal (§13.2.8.6†, TemplateLiteral : TemplateHead Expression TemplateSpans, "Let
+    /// sub be ? ToString(subValue)"), which `+` (ToPrimitive with hint default) must not stand in
+    /// for.
+    ToString {
+        /// The register written.
+        dst: nat,
+        /// The register read.
+        src: nat,
+    },
+    /// `CopyDataProperties(obj, src, excluded)`, §7.3.25†, where `excluded` is the `nexcl` property
+    /// keys (already converted by ToPropertyKey, so strings and Symbols) in consecutive registers
+    /// from `excl`: if `src` is `undefined` or `null` nothing is copied (step 2); otherwise `from`
+    /// is ToObject(`src`) and each own key that is not excluded and whose descriptor is enumerable
+    /// is copied with Get and CreateDataPropertyOrThrow (step 4). It is the object spread of an
+    /// object literal (§13.2.5.5† PropertyDefinition : `...` AssignmentExpression, with no excluded
+    /// keys) and the rest property of an object pattern (§13.15.5.3†, §14.3.3.2†
+    /// RestBindingInitialization, with the keys of the pattern's other properties).
+    CopyDataProperties {
+        /// The register holding the target object.
+        obj: nat,
+        /// The register holding the source value.
+        src: nat,
+        /// The first of the registers holding the excluded property keys.
+        excl: nat,
+        /// The number of excluded property keys.
+        nexcl: nat,
+    },
+    /// `dst := GetTemplateObject(site)`, §13.2.8.4†, where `consts[k]` is a heap reference to the
+    /// record of the template literal at this site, built by the loader from what the compiler
+    /// lists: the cooked strings (a string, or `undefined` for a malformed escape in a tagged
+    /// template) and the raw strings of each TemplateString (TemplateStrings, §13.2.8.3†). The
+    /// handler looks the site up in the realm's `[[TemplateMap]]` (steps 1 and 2: the same site
+    /// gives the same object, whatever the call), and otherwise creates the frozen array of cooked
+    /// strings with its frozen `raw` array (steps 3 to 14) and records it.
+    GetTemplateObject {
+        /// The register written.
+        dst: nat,
+        /// The constant-pool index of the template record.
+        k: nat,
+    },
+    /// `dst := new callee(...array in args)`: as [`Op::New`] where the arguments are the elements
+    /// of the array in register `args`, which the compiler built from the argument list with its
+    /// spread elements already iterated (ArgumentListEvaluation, §13.3.8.1†). EvaluateNew
+    /// §13.3.5.1.1 steps 5 and 6 (IsConstructor, then Construct).
+    NewSpread {
+        /// The register written.
+        dst: nat,
+        /// The register holding the function.
+        callee: nat,
+        /// The register holding the array of arguments.
+        args: nat,
+    },
+    /// `dst := super(args[0..argc])`, §13.3.7.1† (Runtime Semantics: Evaluation, SuperCall :
+    /// `super` Arguments): `func` is the active function (GetSuperConstructor, §13.3.7.2†:
+    /// `func.[[GetPrototypeOf]]()`, step 5), which must be a constructor (step 6, else a
+    /// TypeError); the result is Construct(superConstructor, args, `newtarget`) (step 7). `this` is
+    /// the register of the `this` binding: if it is not the hole the binding is already initialized
+    /// and the handler throws a ReferenceError (BindThisValue, §9.1.1.3.1†, step 1), after the
+    /// construction, as the standard does. It does not store the result: the compiler stores `dst`
+    /// into the `this` binding and follows with [`Op::InitInstance`] (steps 9 and 10).
+    SuperCall {
+        /// The register written.
+        dst: nat,
+        /// The register holding the active function.
+        func: nat,
+        /// The register holding `new.target`.
+        newtarget: nat,
+        /// The register holding the current `this` binding (the hole until `super()` returns).
+        this: nat,
+        /// The first of the argument registers.
+        args: nat,
+        /// The number of arguments.
+        argc: nat,
+    },
+    /// As [`Op::SuperCall`], with the arguments the elements of the array in register `args`
+    /// (ArgumentListEvaluation, §13.3.8.1†, with the spread elements already iterated by the
+    /// compiler's code).
+    SuperCallSpread {
+        /// The register written.
+        dst: nat,
+        /// The register holding the active function.
+        func: nat,
+        /// The register holding `new.target`.
+        newtarget: nat,
+        /// The register holding the current `this` binding.
+        this: nat,
+        /// The register holding the array of arguments.
+        args: nat,
+    },
+    /// `InitializeInstanceElements(obj, func)`, §7.3.34†: runs the instance initializer that
+    /// [`Op::SetInstanceInit`] stored on the class constructor `func`, if any, with `this` = `obj`:
+    /// it adds the class's private methods and accessors to `obj` (steps 2 and 3,
+    /// PrivateMethodOrAccessorAdd) and defines its fields (steps 4 and 5, DefineField), in order.
+    /// It runs at the start of a base class constructor (§10.2.2† [[Construct]] step 6.b) and after
+    /// `super()` returns in a derived one (§13.3.7.1† step 10).
+    InitInstance {
+        /// The register holding the new object.
+        obj: nat,
+        /// The register holding the constructor.
+        func: nat,
+    },
+    /// ClassDefinitionEvaluation §15.7.14†, steps 5 to 14 and 16 to 17, and MakeClassConstructor
+    /// §10.2.5†, on the closure in `ctor` (a [`crate::bytecode::FunctionKind::Class`] or `Derived`
+    /// function template): if `derived` is false, protoParent is %Object.prototype% and
+    /// constructorParent %Function.prototype% (step 5); otherwise `heritage` is the value of the
+    /// ClassHeritage: `null` gives a null protoParent and %Function.prototype% (step 8.a), a
+    /// non-constructor is a TypeError (step 8.d), else protoParent is its `prototype` property,
+    /// which must be an Object or null (a TypeError otherwise, steps 8.f to 8.h), and
+    /// constructorParent is the value itself. Then `proto` := OrdinaryObjectCreate(protoParent)
+    /// (step 9) is written to `proto`, `ctor.[[Prototype]]` is set to constructorParent (step
+    /// 14.a), the closure becomes a class constructor of the kind base or derived
+    /// (MakeClassConstructor, step 14), `prototype` is defined on it, non-writable, non-enumerable
+    /// and non-configurable (MakeConstructor with writablePrototype false, step 16), its home
+    /// object is `proto` (MakeMethod, step 15) and `proto.constructor` is `ctor`, non-enumerable
+    /// (CreateMethodProperty, step 17).
+    ClassSetup {
+        /// The register holding the constructor closure.
+        ctor: nat,
+        /// The register written with the class's prototype object.
+        proto: nat,
+        /// The register holding the value of the `extends` clause.
+        heritage: nat,
+        /// Whether the class has an `extends` clause.
+        derived: bool,
+    },
+    /// DefineMethodProperty(`obj`, `key`, `func`, `enumerable`), §15.4.5†, for `form` 0, and the
+    /// getter and setter forms of MethodDefinition evaluation (§15.4.5†,
+    /// PropertyDefinitionEvaluation of `get` and `set`) for `form` 1 and 2: SetFunctionName(`func`,
+    /// `key`, prefix) with the prefix `"get"` or `"set"` for the accessors (§10.2.9†), then
+    /// DefinePropertyOrThrow of a data property for a method (writable, configurable, enumerable as
+    /// given) or of an accessor property whose `[[Get]]` or `[[Set]]` is `func` and whose other
+    /// half is kept if there is one (configurable, enumerable as given). `key` is already converted
+    /// (ToPropertyKey, a string or a Symbol). An object literal's methods are enumerable, a class's
+    /// are not (ClassElementEvaluation, §15.7.10†).
+    DefineMethod {
+        /// The register holding the object.
+        obj: nat,
+        /// The register holding the property key.
+        key: nat,
+        /// The register holding the method closure.
+        func: nat,
+        /// 0 method, 1 getter, 2 setter.
+        form: nat,
+        /// Whether the property is enumerable.
+        enumerable: bool,
+    },
+    /// MakeMethod(`func`, `obj`), §10.2.7†: sets `func.[[HomeObject]]` to `obj`, which `super.x`
+    /// reads ([`Op::GetSuperBase`]). Emitted for each method, accessor and initializer function of
+    /// a class or object literal that is a method (§15.4.5† step 2, §15.7.10†).
+    SetHomeObject {
+        /// The register holding the function.
+        func: nat,
+        /// The register holding the home object.
+        obj: nat,
+    },
+    /// Stores the closure `init` as the instance initializer of class constructor `ctor`
+    /// (ClassDefinitionEvaluation §15.7.14† steps 31 and 32, `F.[[PrivateMethods]]` and
+    /// `F.[[Fields]]`): `init` is a method (its home object the class's prototype) whose body adds
+    /// the class's private instance methods and defines its instance fields, in order, on `this`;
+    /// [`Op::InitInstance`] calls it.
+    SetInstanceInit {
+        /// The register holding the class constructor.
+        ctor: nat,
+        /// The register holding the initializer closure.
+        init: nat,
+    },
+    /// `dst := a new Private Name` with description `consts[k]` (a string, `"#x"`), §6.2.12†: one
+    /// per private identifier declared by a class, created each time the class is evaluated
+    /// (ClassDefinitionEvaluation §15.7.14† step 6, NewPrivateEnvironment §9.2.1.1†). The value is
+    /// an opaque heap reference, only ever an operand of the private-name ops.
+    NewPrivateName {
+        /// The register written.
+        dst: nat,
+        /// The constant-pool index of the description.
+        k: nat,
+    },
+    /// `dst := obj.#name`: PrivateGet(`obj`, `name`), §7.3.31† (a primitive `obj` is a TypeError,
+    /// as is an `obj` without the element, §13.3.2.1†; a field, method or accessor is read as the
+    /// element's kind says).
+    GetPrivate {
+        /// The register written.
+        dst: nat,
+        /// The register holding the object.
+        obj: nat,
+        /// The register holding the Private Name.
+        name: nat,
+    },
+    /// `obj.#name := val`: PrivateSet(`obj`, `name`, `val`), §7.3.32† (a TypeError for an `obj`
+    /// without the element, for a method, and for an accessor without a setter).
+    SetPrivate {
+        /// The register holding the object.
+        obj: nat,
+        /// The register holding the Private Name.
+        name: nat,
+        /// The register holding the value stored.
+        val: nat,
+    },
+    /// Adds a private element to `obj`: PrivateFieldAdd(`obj`, `name`, `val`) §7.3.30† for `form`
+    /// 0, and PrivateMethodOrAccessorAdd §7.3.31† for the others (`val` is the function; a getter
+    /// and a setter of the same name make one accessor element), which throw a TypeError if `obj`
+    /// already has an element of that name (the double initialization of a return-override trick).
+    /// SetFunctionName gives a method its name `"#x"` (and `"get #x"`, `"set #x"`), §10.2.9†.
+    DefinePrivate {
+        /// The register holding the object.
+        obj: nat,
+        /// The register holding the Private Name.
+        name: nat,
+        /// The register holding the value or function.
+        val: nat,
+        /// 0 field, 1 method, 2 getter, 3 setter.
+        form: nat,
+    },
+    /// `dst := #name in obj`, §13.10.1† (RelationalExpression : PrivateIdentifier `in`
+    /// ShiftExpression, step 5: a non-Object `obj` is a TypeError, then PrivateElementFind).
+    HasPrivate {
+        /// The register written.
+        dst: nat,
+        /// The register holding the Private Name.
+        name: nat,
+        /// The register holding the object.
+        obj: nat,
+    },
+    /// `dst := GetSuperBase()`, §9.1.1.3.5† (GetSuperBase of a function Environment Record):
+    /// `func.[[HomeObject]].[[GetPrototypeOf]]()`, the object `super.x` looks up properties on.
+    /// Emitted for `super.x` and `super[x]` (§13.3.7.1†, SuperProperty evaluation:
+    /// MakeSuperPropertyReference, §13.3.7.3†), after the `this` binding is read.
+    GetSuperBase {
+        /// The register written.
+        dst: nat,
+        /// The register holding the method whose home object is read.
+        func: nat,
+    },
+    /// `dst := base.[[Get]](key, this)`: GetValue of a super reference (§6.2.5.5† step 3.b: the
+    /// reference's base value is `base`, the receiver is `this`). `key` is converted by
+    /// ToPropertyKey by this op (§13.3.7.3†: for `super[x]` the conversion is delayed, as in
+    /// §13.3.3†); a null base is a TypeError (ToObject, step 3.a).
+    GetSuper {
+        /// The register written.
+        dst: nat,
+        /// The register holding the super base.
+        base: nat,
+        /// The register holding the property key.
+        key: nat,
+        /// The register holding the receiver.
+        this: nat,
+    },
+    /// `base.[[Set]](key, val, this)`: PutValue of a super reference (§6.2.5.6† steps 5.b to 5.d),
+    /// with the receiver `this`, which throws a TypeError if the set returns false in strict mode
+    /// code (the strictness of the function).
+    SetSuper {
+        /// The register holding the super base.
+        base: nat,
+        /// The register holding the property key.
+        key: nat,
+        /// The register holding the value stored.
+        val: nat,
+        /// The register holding the receiver.
+        this: nat,
+    },
+    /// `dst := new.target` of the running function: GetNewTarget §9.4.4† (the frame's
+    /// `[[NewTarget]]`: `undefined` unless the function was called by [[Construct]]), §13.3.12.1†
+    /// (MetaProperty : `new` `.` `target`).
+    GetNewTarget {
+        /// The register written.
+        dst: nat,
+    },
+    /// `dst :=` the result of returning `val` from a derived class constructor (§10.2.2†
+    /// [[Construct]] steps 10 to 12 with a derived kind): an Object `val` is the result; otherwise
+    /// a `val` that is not `undefined` is a TypeError (step 10.b); otherwise the `this` binding
+    /// (`this` is the hole if `super()` has not returned: a ReferenceError, step 12, GetThisBinding
+    /// §9.1.1.3.4†). The compiler emits it before every `Return` of a derived constructor; the
+    /// result of the call is then used as it is.
+    ConstructResult {
+        /// The register written.
+        dst: nat,
+        /// The register holding the returned value.
+        val: nat,
+        /// The register holding the `this` binding.
+        this: nat,
+    },
+    /// `dst := CreateUnmappedArgumentsObject(argumentsList)`, §10.4.4.6†
+    /// (FunctionDeclarationInstantiation §10.2.11† step 22.b.i): the `arguments` object of a strict
+    /// function or of one with a non-simple parameter list, from the frame's actual arguments.
+    CreateUnmappedArguments {
+        /// The register written.
+        dst: nat,
+    },
+    /// `dst := CreateMappedArgumentsObject(func, formals, argumentsList, env)`, §10.4.4.7†
+    /// (FunctionDeclarationInstantiation §10.2.11† step 22.b.ii): the exotic `arguments` object of
+    /// a sloppy function with a simple parameter list, whose indices alias the parameters'
+    /// bindings. `env` is the environment object that holds them (the compiler puts every parameter
+    /// in it), and `consts[k]` is a heap reference to the map record the loader builds from what
+    /// the compiler lists: for each formal parameter, the slot of `env` it is bound to, or none for
+    /// a parameter name that a later one repeats (§10.4.4.7† steps 16 to 20).
+    CreateMappedArguments {
+        /// The register written.
+        dst: nat,
+        /// The register holding the environment object that holds the parameters.
+        env: nat,
+        /// The constant-pool index of the parameter map record.
+        k: nat,
+    },
+    /// `dst := CreateArrayFromList(argumentsList[from..])`: the value of a rest parameter
+    /// (§10.2.11† FunctionDeclarationInstantiation step 24 and IteratorBindingInitialization of a
+    /// FunctionRestParameter, §15.1.4†), an array of the actual arguments from index `from` on,
+    /// empty if there are fewer.
+    CreateRestArray {
+        /// The register written.
+        dst: nat,
+        /// The index of the first argument in the array.
+        from: nat,
+    },
+    /// `dst := the for-in iterator of src`: ForIn/OfHeadEvaluation with `enumerate` (§14.7.5.6†)
+    /// calls EnumerateObjectProperties(ToObject(`src`)) (§14.7.5.9†), or gives an iterator that is
+    /// done at once if `src` is `undefined` or `null` (step 6.a of ForIn/OfHeadEvaluation: a
+    /// `break` completion). The result is an iterator record for [`Op::IterNext`], over the
+    /// enumerable string keys of the object and its prototype chain, each key once and only while
+    /// it is still a property when reached; it is never closed.
+    ForInIterator {
+        /// The register written.
+        dst: nat,
+        /// The register read.
+        src: nat,
+    },
+    /// InitializeBinding(`consts[key]`, `src`) on the global Environment Record (§9.1.1.4.2†
+    /// InitializeBinding step 2: "If DclRec.HasBinding(N) is true, return !
+    /// DclRec.InitializeBinding(N, V)"), whose [[DeclarativeRecord]] holds the binding that
+    /// [`Op::DeclareGlobals`] created, uninitialized (GlobalDeclarationInstantiation §16.1.7† step
+    /// 15: CreateMutableBinding or CreateImmutableBinding). It is the evaluation of a top-level
+    /// `let`, `const` or `class` declaration (§14.3.1.2† LexicalBinding evaluation, "Perform !
+    /// InitializeReferencedBinding(lhs, value)", §15.7.15†). Reads and writes of the binding are
+    /// [`Op::GetGlobal`] and [`Op::SetGlobal`], which resolve a name in the declarative record
+    /// before the global object (ResolveBinding §9.4.2†, GetIdentifierReference §9.1.2.1) and so
+    /// throw a ReferenceError for the uninitialized binding (GetBindingValue §9.1.1.1.6† step 2)
+    /// and a TypeError for a `const` (SetMutableBinding §9.1.1.1.5† step 5).
+    InitGlobalLexical {
+        /// The constant-pool index of the name.
+        key: nat,
+        /// The register read.
+        src: nat,
+    },
 }
 
 /// The class of an op (see the file header).
@@ -1010,6 +1420,33 @@ pub open spec fn op_class(op: Op) -> OpClass {
         | Op::Yield { .. }
         | Op::Await { .. }
         | Op::Throw { .. }
+        | Op::ToPropertyKey { .. }
+        | Op::ToString { .. }
+        | Op::CopyDataProperties { .. }
+        | Op::GetTemplateObject { .. }
+        | Op::NewSpread { .. }
+        | Op::SuperCall { .. }
+        | Op::SuperCallSpread { .. }
+        | Op::InitInstance { .. }
+        | Op::ClassSetup { .. }
+        | Op::DefineMethod { .. }
+        | Op::SetHomeObject { .. }
+        | Op::SetInstanceInit { .. }
+        | Op::NewPrivateName { .. }
+        | Op::GetPrivate { .. }
+        | Op::SetPrivate { .. }
+        | Op::DefinePrivate { .. }
+        | Op::HasPrivate { .. }
+        | Op::GetSuperBase { .. }
+        | Op::GetSuper { .. }
+        | Op::SetSuper { .. }
+        | Op::GetNewTarget { .. }
+        | Op::ConstructResult { .. }
+        | Op::CreateUnmappedArguments { .. }
+        | Op::CreateMappedArguments { .. }
+        | Op::CreateRestArray { .. }
+        | Op::ForInIterator { .. }
+        | Op::InitGlobalLexical { .. }
         | Op::ThrowError { .. } => OpClass::Handler,
     }
 }
@@ -1081,6 +1518,33 @@ pub open spec fn op_handler(op: Op) -> HandlerId {
         Op::Await { .. } => HandlerId::Await,
         Op::Throw { .. } | Op::Nop => HandlerId::Throw,
         Op::ThrowError { .. } => HandlerId::ThrowError,
+        Op::InitGlobalLexical { .. } => HandlerId::InitGlobalLexical,
+        Op::ToPropertyKey { .. } => HandlerId::ToPropertyKey,
+        Op::ToString { .. } => HandlerId::ToString,
+        Op::CopyDataProperties { .. } => HandlerId::CopyDataProperties,
+        Op::GetTemplateObject { .. } => HandlerId::GetTemplateObject,
+        Op::NewSpread { .. } => HandlerId::NewSpread,
+        Op::SuperCall { .. } => HandlerId::SuperCall,
+        Op::SuperCallSpread { .. } => HandlerId::SuperCallSpread,
+        Op::InitInstance { .. } => HandlerId::InitInstance,
+        Op::ClassSetup { .. } => HandlerId::ClassSetup,
+        Op::DefineMethod { .. } => HandlerId::DefineMethod,
+        Op::SetHomeObject { .. } => HandlerId::SetHomeObject,
+        Op::SetInstanceInit { .. } => HandlerId::SetInstanceInit,
+        Op::NewPrivateName { .. } => HandlerId::NewPrivateName,
+        Op::GetPrivate { .. } => HandlerId::GetPrivate,
+        Op::SetPrivate { .. } => HandlerId::SetPrivate,
+        Op::DefinePrivate { .. } => HandlerId::DefinePrivate,
+        Op::HasPrivate { .. } => HandlerId::HasPrivate,
+        Op::GetSuperBase { .. } => HandlerId::GetSuperBase,
+        Op::GetSuper { .. } => HandlerId::GetSuper,
+        Op::SetSuper { .. } => HandlerId::SetSuper,
+        Op::GetNewTarget { .. } => HandlerId::GetNewTarget,
+        Op::ConstructResult { .. } => HandlerId::ConstructResult,
+        Op::CreateUnmappedArguments { .. } => HandlerId::CreateUnmappedArguments,
+        Op::CreateMappedArguments { .. } => HandlerId::CreateMappedArguments,
+        Op::CreateRestArray { .. } => HandlerId::CreateRestArray,
+        Op::ForInIterator { .. } => HandlerId::ForInIterator,
         // Core ops never call a handler; the value is not used.
         _ => HandlerId::Throw,
     }

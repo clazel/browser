@@ -166,6 +166,33 @@ instrs! {
     Await { src: Reg, value: Reg, mode: Reg },
     Throw { src: Reg },
     ThrowError { kind: ErrorKind, msg: u32 },
+    ToPropertyKey { dst: Reg, src: Reg },
+    ToString { dst: Reg, src: Reg },
+    CopyDataProperties { obj: Reg, src: Reg, excl: Reg, nexcl: u32 },
+    GetTemplateObject { dst: Reg, k: u32 },
+    NewSpread { dst: Reg, callee: Reg, args: Reg },
+    SuperCall { dst: Reg, func: Reg, newtarget: Reg, this: Reg, args: Reg, argc: u32 },
+    SuperCallSpread { dst: Reg, func: Reg, newtarget: Reg, this: Reg, args: Reg },
+    InitInstance { obj: Reg, func: Reg },
+    ClassSetup { ctor: Reg, proto: Reg, heritage: Reg, derived: bool },
+    DefineMethod { obj: Reg, key: Reg, func: Reg, form: u32, enumerable: bool },
+    SetHomeObject { func: Reg, obj: Reg },
+    SetInstanceInit { ctor: Reg, init: Reg },
+    NewPrivateName { dst: Reg, k: u32 },
+    GetPrivate { dst: Reg, obj: Reg, name: Reg },
+    SetPrivate { obj: Reg, name: Reg, val: Reg },
+    DefinePrivate { obj: Reg, name: Reg, val: Reg, form: u32 },
+    HasPrivate { dst: Reg, name: Reg, obj: Reg },
+    GetSuperBase { dst: Reg, func: Reg },
+    GetSuper { dst: Reg, base: Reg, key: Reg, this: Reg },
+    SetSuper { base: Reg, key: Reg, val: Reg, this: Reg },
+    GetNewTarget { dst: Reg },
+    ConstructResult { dst: Reg, val: Reg, this: Reg },
+    CreateUnmappedArguments { dst: Reg },
+    CreateMappedArguments { dst: Reg, env: Reg, k: u32 },
+    CreateRestArray { dst: Reg, from: u32 },
+    ForInIterator { dst: Reg, src: Reg },
+    InitGlobalLexical { key: u32, src: Reg },
 }
 
 impl Instr {
@@ -230,6 +257,24 @@ pub enum Const {
     /// the heap builds it when it loads the function (see
     /// [`crate::ops::Op::DeclareGlobals`]).
     GlobalDeclarations(GlobalDecls),
+    /// A template literal's site record, which [`Instr::GetTemplateObject`]
+    /// reads (see [`crate::ops::Op::GetTemplateObject`]).
+    Template(TemplateSite),
+    /// A sloppy function's parameter map for its mapped `arguments` object,
+    /// which [`Instr::CreateMappedArguments`] reads: for each formal
+    /// parameter, the slot of the environment object it is bound to, or none
+    /// when a later parameter of the same name replaces it.
+    ArgumentsMap(Vec<Option<u32>>),
+}
+
+/// The strings of one template literal (§13.2.8.3† TemplateStrings).
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct TemplateSite {
+    /// The template values (TV, §12.9.6.1) of the TemplateStrings: `None` for
+    /// a malformed escape sequence, which only a tagged template allows.
+    pub cooked: Vec<Option<Vec<u16>>>,
+    /// The template raw values (TRV, §12.9.6.2).
+    pub raw: Vec<Vec<u16>>,
 }
 
 /// What GlobalDeclarationInstantiation (§16.1.7†) reads of a script.
@@ -280,8 +325,13 @@ pub enum FunctionKind {
     Normal,
     /// An arrow function.
     Arrow,
-    /// A method of an object literal.
+    /// A method of an object literal or a class, an accessor, or an initializer
+    /// of a class's fields (not a constructor).
     Method,
+    /// The constructor of a class without `extends`.
+    Class,
+    /// The constructor of a class with `extends`.
+    Derived,
 }
 
 /// One function's code (`spec::Code` and the facts about the template the
@@ -299,6 +349,10 @@ pub struct FunctionCode {
     pub span: Span,
     /// The number of parameters; registers `0..nparams` hold the arguments.
     pub nparams: u32,
+    /// The `length` of the function object: the parameters before the first
+    /// one with a default value or a rest parameter (§15.1.5†
+    /// ExpectedArgumentCount).
+    pub length: u32,
     /// The number of registers after the parameters.
     pub nregs: u32,
     /// The size of the inline-cache table.
@@ -478,6 +532,102 @@ pub fn check_function(f: &FunctionCode, nfuncs: usize) -> Result<(), &'static st
                 reg_ok(f, src) && reg_ok(f, value) && reg_ok(f, mode)
             }
             Instr::ThrowError { msg, .. } => konst(msg),
+            Instr::InitGlobalLexical { key, src } => konst(key) && reg_ok(f, src),
+            Instr::ToPropertyKey { dst, src }
+            | Instr::ToString { dst, src }
+            | Instr::ForInIterator { dst, src }
+            | Instr::GetSuperBase { dst, func: src } => reg_ok(f, dst) && reg_ok(f, src),
+            Instr::CopyDataProperties {
+                obj,
+                src,
+                excl,
+                nexcl,
+            } => reg_ok(f, obj) && reg_ok(f, src) && regs_ok(f, excl, nexcl),
+            Instr::GetTemplateObject { dst, k } => {
+                reg_ok(f, dst) && matches!(f.consts.get(k as usize), Some(Const::Template(_)))
+            }
+            Instr::NewSpread { dst, callee, args } => {
+                reg_ok(f, dst) && reg_ok(f, callee) && reg_ok(f, args)
+            }
+            Instr::SuperCall {
+                dst,
+                func,
+                newtarget,
+                this,
+                args,
+                argc,
+            } => {
+                reg_ok(f, dst)
+                    && reg_ok(f, func)
+                    && reg_ok(f, newtarget)
+                    && reg_ok(f, this)
+                    && regs_ok(f, args, argc)
+            }
+            Instr::SuperCallSpread {
+                dst,
+                func,
+                newtarget,
+                this,
+                args,
+            } => {
+                reg_ok(f, dst)
+                    && reg_ok(f, func)
+                    && reg_ok(f, newtarget)
+                    && reg_ok(f, this)
+                    && reg_ok(f, args)
+            }
+            Instr::InitInstance { obj: a, func: b }
+            | Instr::SetHomeObject { func: a, obj: b }
+            | Instr::SetInstanceInit { ctor: a, init: b } => reg_ok(f, a) && reg_ok(f, b),
+            Instr::ClassSetup {
+                ctor,
+                proto,
+                heritage,
+                ..
+            } => reg_ok(f, ctor) && reg_ok(f, proto) && reg_ok(f, heritage),
+            Instr::DefineMethod {
+                obj,
+                key,
+                func,
+                form,
+                ..
+            } => reg_ok(f, obj) && reg_ok(f, key) && reg_ok(f, func) && form < 3,
+            Instr::NewPrivateName { dst, k } => reg_ok(f, dst) && konst(k),
+            Instr::GetPrivate { dst, obj, name } | Instr::HasPrivate { dst, name, obj } => {
+                reg_ok(f, dst) && reg_ok(f, obj) && reg_ok(f, name)
+            }
+            Instr::SetPrivate { obj, name, val } => {
+                reg_ok(f, obj) && reg_ok(f, name) && reg_ok(f, val)
+            }
+            Instr::DefinePrivate {
+                obj,
+                name,
+                val,
+                form,
+            } => reg_ok(f, obj) && reg_ok(f, name) && reg_ok(f, val) && form < 4,
+            Instr::GetSuper {
+                dst,
+                base,
+                key,
+                this,
+            } => reg_ok(f, dst) && reg_ok(f, base) && reg_ok(f, key) && reg_ok(f, this),
+            Instr::SetSuper {
+                base,
+                key,
+                val,
+                this,
+            } => reg_ok(f, base) && reg_ok(f, key) && reg_ok(f, val) && reg_ok(f, this),
+            Instr::GetNewTarget { dst }
+            | Instr::CreateUnmappedArguments { dst }
+            | Instr::CreateRestArray { dst, .. } => reg_ok(f, dst),
+            Instr::ConstructResult { dst, val, this } => {
+                reg_ok(f, dst) && reg_ok(f, val) && reg_ok(f, this)
+            }
+            Instr::CreateMappedArguments { dst, env, k } => {
+                reg_ok(f, dst)
+                    && reg_ok(f, env)
+                    && matches!(f.consts.get(k as usize), Some(Const::ArgumentsMap(_)))
+            }
         };
         if !ok {
             return Err("an operand is out of range");
