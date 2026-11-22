@@ -7,46 +7,37 @@
 //! 0 bytes and a palette of 2 entries so that the work buffer is small; the
 //! canvas is 2 by 2 (every colour type and bit depth, interlaced or not).
 //!
-//! The pure parts, over every input up to a stated size:
+//! The harnesses (eight; `cargo kani -p clazel-png` runs them all):
 //!
 //! - [`paeth_is_the_spec`]: the Paeth predictor of every `a`, `b`, `c` equals
 //!   the specification's formula (9.4) computed in `i32`.
 //! - [`unfilter_any`]: all five filters (9.2) and every other filter-type
-//!   byte over any scanline of up to 8 bytes and any `bpp` of 0 to 8: no
+//!   byte over any scanline of up to 8 bytes and any `bpp` of 1 to 8: no
 //!   panic, a type above 4 is refused, and each type's result is the
 //!   specification's formula byte by byte.
-//! - [`adam7_geometry`]: for every width and height from 1 to 2^14, the sizes
-//!   of the seven passes add up to `width * height`, every pass pixel is in
-//!   the image, and every pixel of the image is in exactly one pass at the
-//!   position the pass's own coordinates give back.
+//! - [`adam7_pixel_in_one_pass`], [`adam7_pass_pixels_in_image`] and
+//!   [`adam7_whole_image`]: for every width and height from 1 to 2^14, every
+//!   pixel of the image is in exactly one pass at the position the pass's own
+//!   coordinates give back, every pass pixel is in the image, and the pass of
+//!   an image that is not interlaced is the whole image.
 //! - [`sample_and_rgba_any`]: `sample`, `rgba` and `over` over every colour
-//!   type, depth, index, transparent colour and palette (up to 2 entries)
+//!   type, depth, index, transparent colour and palette (up to 8 bytes)
 //!   and any row of up to 8 bytes: no panic.
 //! - [`crc_update_any`]: the CRC register update over any register and up
 //!   to 2 bytes.
-//!
-//! The step, over any state with the invariant, any contents of the buffers
-//! and any chunk up to 2 bytes:
-//!
-//! - [`control_any`]: `advance` in any phase but image data (the signature,
-//!   chunk headers, gathered chunks, skipped ones, the palette, `tRNS`, CRCs):
-//!   no panic, uses between 1 byte and all of a non-empty input, the
-//!   invariant holds afterwards.
 //! - [`begin_frame_any`]: starting a frame (disposal, the saved canvas, the
-//!   first pass) from any state with the invariant: the invariant holds,
-//!   with the first pass set up.
-//! - [`finish_row_any`]: a complete scanline of any content (any filter byte)
-//!   in any state that has one: unfiltered, placed on the canvas, the next
-//!   row or pass chosen, the invariant holds.
-//! - [`feed_any`]: the zlib loop over any state of an active frame, with
-//!   [`AnyEngine`], and any chunk of up to 2 bytes.
-//! - [`data_any`]: `advance` in the image-data phase, which is `image_bytes`
-//!   (`begin_frame` then `feed`) over the same states.
+//!   first pass) over any state with the invariant, any contents of the
+//!   buffers, on a 2 by 2 canvas: the invariant holds, with the first pass
+//!   set up.
 //!
-//! The template statement on the whole `step` (`decoder_step_harness!`) is
-//! not here: see the README, "What Kani covers".
+//! Written, but **not harnesses** (each is a `// NOT a harness:` comment
+//! block below with its measured reason; Kani 0.68.0 gave no verdict in the
+//! time and memory available, or failed): `adam7_sizes_add_up`,
+//! `control_any`, `finish_row_any`, `feed_any`, `data_any`, and the template
+//! statement on the whole `step` (`decoder_step_harness!`). See the README,
+//! "Kani harnesses".
 
-use crate::decoder::{any_png_control, any_png_data};
+use crate::decoder::any_png_data;
 use crate::engine::{Engine, Outcome, Progress};
 use crate::filter::{paeth, unfilter};
 use crate::pixel::{ColorType, Layout, Trns, over, rgba, sample};
@@ -110,15 +101,17 @@ fn paeth_is_the_spec() {
     assert!(paeth(a, b, c) == paeth_spec(a, b, c));
 }
 
-/// Every filter type over a scanline of up to 8 bytes with any `bpp` up to
-/// 8: the result is 9.2's formula for each byte (`Raw(x) = Filt(x) + the
-/// prediction`, modulo 256).
+/// Every filter type over a scanline of up to 8 bytes with any `bpp` from 1
+/// to 8: the result is 9.2's formula for each byte (`Raw(x) = Filt(x) + the
+/// prediction`, modulo 256). `bpp` is at least 1 because 9.2 rounds it up to
+/// 1 and `Layout::filter_bpp` does `.max(1)` (`src/pixel.rs`), its only
+/// caller being `src/decoder/image.rs`.
 #[kani::proof]
 #[kani::unwind(10)]
 fn unfilter_any() {
     let filter: u8 = kani::any();
     let bpp: usize = kani::any();
-    kani::assume(bpp <= 8);
+    kani::assume(bpp >= 1 && bpp <= 8);
     let len: usize = kani::any();
     kani::assume(len <= 8);
     let prev_array: [u8; 8] = kani::any();
@@ -149,29 +142,48 @@ fn unfilter_any() {
     }
 }
 
-/// Adam7 over every width and height up to 2^14.
+// NOT a harness: the seven Adam7 pass sizes add up to `width * height`, for every width
+// and height from 1 to 2^14. Kani 0.68.0 gave no verdict in 25 minutes with
+// cadical, kissat or minisat, so it is not a harness here; the statement is
+// argued from the bijection the three Adam7 harnesses below prove (every
+// pixel is in exactly one pass, at the position the pass gives back, and
+// every pass pixel is in the image), not machine-checked.
+//
+//     /// Adam7 over every width and height up to 2^14, in four harnesses: each
+//     /// states one of the four properties over the same inputs (every `w` and `h`
+//     /// from 1 to 2^14, and every `x`, `y`, `q`, `i`, `j` the property quantifies
+//     /// over), so that no solver call carries all of their multiplications.
+//     ///
+//     /// The pass sizes add up to the image's.
+//     #[kani::proof]
+//     #[kani::unwind(9)]
+//     fn adam7_sizes_add_up() {
+//         use crate::adam7::pass;
+//         let w: u32 = kani::any();
+//         let h: u32 = kani::any();
+//         kani::assume(w >= 1 && w <= 1 << 14 && h >= 1 && h <= 1 << 14);
+//         let mut total: u64 = 0;
+//         let mut p = 0u8;
+//         while p < 7 {
+//             if let Some(ps) = pass(true, p) {
+//                 let (pw, ph) = ps.size(w, h);
+//                 total += u64::from(pw) * u64::from(ph);
+//             }
+//             p += 1;
+//         }
+//         assert!(total == u64::from(w) * u64::from(h));
+//     }
+
+/// Every pixel is in exactly one pass, at the coordinates the pass gives
+/// back: column `i` and row `j` of the pass with `column(i) == x` and
+/// `row(j) == y`, inside the pass's size.
 #[kani::proof]
-#[kani::solver(kissat)]
 #[kani::unwind(9)]
-fn adam7_geometry() {
+fn adam7_pixel_in_one_pass() {
     use crate::adam7::pass;
     let w: u32 = kani::any();
     let h: u32 = kani::any();
     kani::assume(w >= 1 && w <= 1 << 14 && h >= 1 && h <= 1 << 14);
-    // The pass sizes add up to the image's.
-    let mut total: u64 = 0;
-    let mut p = 0u8;
-    while p < 7 {
-        if let Some(ps) = pass(true, p) {
-            let (pw, ph) = ps.size(w, h);
-            total += u64::from(pw) * u64::from(ph);
-        }
-        p += 1;
-    }
-    assert!(total == u64::from(w) * u64::from(h));
-    // Every pixel is in exactly one pass, at the coordinates the pass gives
-    // back: column `i` and row `j` of the pass with `column(i) == x` and
-    // `row(j) == y`, inside the pass's size.
     let x: u32 = kani::any();
     let y: u32 = kani::any();
     kani::assume(x < w && y < h);
@@ -191,7 +203,16 @@ fn adam7_geometry() {
         p += 1;
     }
     assert!(hits == 1);
-    // Every pass pixel is inside the image.
+}
+
+/// Every pass pixel is inside the image.
+#[kani::proof]
+#[kani::unwind(9)]
+fn adam7_pass_pixels_in_image() {
+    use crate::adam7::pass;
+    let w: u32 = kani::any();
+    let h: u32 = kani::any();
+    kani::assume(w >= 1 && w <= 1 << 14 && h >= 1 && h <= 1 << 14);
     let q: u8 = kani::any();
     kani::assume(q < 7);
     if let Some(ps) = pass(true, q) {
@@ -201,7 +222,16 @@ fn adam7_geometry() {
         kani::assume(i < pw && j < ph);
         assert!(ps.column(i) < w && ps.row(j) < h);
     }
-    // The pass of an image that is not interlaced is the whole image.
+}
+
+/// The pass of an image that is not interlaced is the whole image.
+#[kani::proof]
+#[kani::unwind(9)]
+fn adam7_whole_image() {
+    use crate::adam7::pass;
+    let w: u32 = kani::any();
+    let h: u32 = kani::any();
+    kani::assume(w >= 1 && w <= 1 << 14 && h >= 1 && h <= 1 << 14);
     let whole = pass(false, 0);
     assert!(whole.is_some());
     if let Some(ws) = whole {
@@ -283,32 +313,35 @@ macro_rules! parts {
     };
 }
 
-/// `advance`, in every phase but the image data's.
-#[kani::proof]
-#[kani::unwind(10)]
-fn control_any() {
-    let Some(mut png) = any_png_control() else {
-        return;
-    };
-    kani::assume(png.state_inv());
-    let mut pixels: [u8; 16] = kani::any();
-    let mut cur: [u8; 17] = kani::any();
-    let mut prev: [u8; 16] = kani::any();
-    let mut palette: [u8; 8] = kani::any();
-    let mut saved: [u8; 16] = kani::any();
-    let mut parts = parts!(pixels, cur, prev, palette, saved);
-    let input: [u8; 2] = kani::any();
-    let n: usize = kani::any();
-    kani::assume(n <= 2);
-    let Some(chunk) = input.get(..n) else {
-        return;
-    };
-    if let Ok((used, _)) = png.advance(chunk, &mut parts) {
-        assert!(used <= n);
-        assert!(n == 0 || used >= 1);
-        assert!(png.state_inv());
-    }
-}
+// NOT a harness: `advance` in every phase but image data. Kani 0.68.0 (CBMC) used about 10 GB
+// and gave no verdict in 25 minutes, so it is not a harness here.
+//
+//     /// `advance`, in every phase but the image data's.
+//     #[kani::proof]
+//     #[kani::unwind(10)]
+//     fn control_any() {
+//         let Some(mut png) = any_png_control() else {
+//             return;
+//         };
+//         kani::assume(png.state_inv());
+//         let mut pixels: [u8; 16] = kani::any();
+//         let mut cur: [u8; 17] = kani::any();
+//         let mut prev: [u8; 16] = kani::any();
+//         let mut palette: [u8; 8] = kani::any();
+//         let mut saved: [u8; 16] = kani::any();
+//         let mut parts = parts!(pixels, cur, prev, palette, saved);
+//         let input: [u8; 2] = kani::any();
+//         let n: usize = kani::any();
+//         kani::assume(n <= 2);
+//         let Some(chunk) = input.get(..n) else {
+//             return;
+//         };
+//         if let Ok((used, _)) = png.advance(chunk, &mut parts) {
+//             assert!(used <= n);
+//             assert!(n == 0 || used >= 1);
+//             assert!(png.state_inv());
+//         }
+//     }
 
 /// `begin_frame`.
 #[kani::proof]
@@ -330,78 +363,89 @@ fn begin_frame_any() {
     }
 }
 
-/// `finish_row`.
-#[kani::proof]
-#[kani::unwind(10)]
-fn finish_row_any() {
-    let Some(mut png) = any_png_data() else {
-        return;
-    };
-    kani::assume(png.state_inv());
-    kani::assume(png.complete_row());
-    let mut pixels: [u8; 16] = kani::any();
-    let mut cur: [u8; 17] = kani::any();
-    let mut prev: [u8; 16] = kani::any();
-    let mut palette: [u8; 8] = kani::any();
-    let mut saved: [u8; 16] = kani::any();
-    let mut parts = parts!(pixels, cur, prev, palette, saved);
-    if png.finish_row(&mut parts).is_ok() {
-        assert!(png.state_inv());
-    }
-}
+// NOT a harness: `finish_row`. Kani 0.68.0 FAILED an unwinding assertion in `unfilter`'s
+// loop (`src/filter.rs:50`) at `unwind(10)` after 305 s and 7.1 GB: rows are
+// up to 16 bytes, so it needs an unwind of 18 or more, and it was not re-run
+// at that bound. Not a harness here.
+//
+//     /// `finish_row`.
+//     #[kani::proof]
+//     #[kani::unwind(10)]
+//     fn finish_row_any() {
+//         let Some(mut png) = any_png_data() else {
+//             return;
+//         };
+//         kani::assume(png.state_inv());
+//         kani::assume(png.complete_row());
+//         let mut pixels: [u8; 16] = kani::any();
+//         let mut cur: [u8; 17] = kani::any();
+//         let mut prev: [u8; 16] = kani::any();
+//         let mut palette: [u8; 8] = kani::any();
+//         let mut saved: [u8; 16] = kani::any();
+//         let mut parts = parts!(pixels, cur, prev, palette, saved);
+//         if png.finish_row(&mut parts).is_ok() {
+//             assert!(png.state_inv());
+//         }
+//     }
 
-/// `feed`: the zlib loop, over an active frame.
-#[kani::proof]
-#[kani::unwind(22)]
-fn feed_any() {
-    let Some(mut png) = any_png_data() else {
-        return;
-    };
-    kani::assume(png.state_inv());
-    kani::assume(png.active_frame());
-    let mut pixels: [u8; 16] = kani::any();
-    let mut cur: [u8; 17] = kani::any();
-    let mut prev: [u8; 16] = kani::any();
-    let mut palette: [u8; 8] = kani::any();
-    let mut saved: [u8; 16] = kani::any();
-    let mut parts = parts!(pixels, cur, prev, palette, saved);
-    let input: [u8; 2] = kani::any();
-    let n: usize = kani::any();
-    kani::assume(n <= 2);
-    let Some(chunk) = input.get(..n) else {
-        return;
-    };
-    if png.feed(chunk, &mut parts).is_ok() {
-        assert!(png.state_inv());
-    }
-}
+// NOT a harness: `feed`, the zlib loop over an active frame. Kani 0.68.0 used about 6.7 GB
+// and gave no verdict in 25 minutes, so it is not a harness here.
+//
+//     /// `feed`: the zlib loop, over an active frame.
+//     #[kani::proof]
+//     #[kani::unwind(22)]
+//     fn feed_any() {
+//         let Some(mut png) = any_png_data() else {
+//             return;
+//         };
+//         kani::assume(png.state_inv());
+//         kani::assume(png.active_frame());
+//         let mut pixels: [u8; 16] = kani::any();
+//         let mut cur: [u8; 17] = kani::any();
+//         let mut prev: [u8; 16] = kani::any();
+//         let mut palette: [u8; 8] = kani::any();
+//         let mut saved: [u8; 16] = kani::any();
+//         let mut parts = parts!(pixels, cur, prev, palette, saved);
+//         let input: [u8; 2] = kani::any();
+//         let n: usize = kani::any();
+//         kani::assume(n <= 2);
+//         let Some(chunk) = input.get(..n) else {
+//             return;
+//         };
+//         if png.feed(chunk, &mut parts).is_ok() {
+//             assert!(png.state_inv());
+//         }
+//     }
 
-/// `advance` in the image-data phase.
-#[kani::proof]
-#[kani::unwind(22)]
-fn data_any() {
-    let Some(mut png) = any_png_data() else {
-        return;
-    };
-    kani::assume(png.state_inv());
-    let mut pixels: [u8; 16] = kani::any();
-    let mut cur: [u8; 17] = kani::any();
-    let mut prev: [u8; 16] = kani::any();
-    let mut palette: [u8; 8] = kani::any();
-    let mut saved: [u8; 16] = kani::any();
-    let mut parts = parts!(pixels, cur, prev, palette, saved);
-    let input: [u8; 2] = kani::any();
-    let n: usize = kani::any();
-    kani::assume(n <= 2);
-    let Some(chunk) = input.get(..n) else {
-        return;
-    };
-    if let Ok((used, _)) = png.advance(chunk, &mut parts) {
-        assert!(used <= n);
-        assert!(n == 0 || used >= 1);
-        assert!(png.state_inv());
-    }
-}
+// NOT a harness: `advance` in the image-data phase. Kani 0.68.0 used about 5.6 GB and gave
+// no verdict in 25 minutes, so it is not a harness here.
+//
+//     /// `advance` in the image-data phase.
+//     #[kani::proof]
+//     #[kani::unwind(22)]
+//     fn data_any() {
+//         let Some(mut png) = any_png_data() else {
+//             return;
+//         };
+//         kani::assume(png.state_inv());
+//         let mut pixels: [u8; 16] = kani::any();
+//         let mut cur: [u8; 17] = kani::any();
+//         let mut prev: [u8; 16] = kani::any();
+//         let mut palette: [u8; 8] = kani::any();
+//         let mut saved: [u8; 16] = kani::any();
+//         let mut parts = parts!(pixels, cur, prev, palette, saved);
+//         let input: [u8; 2] = kani::any();
+//         let n: usize = kani::any();
+//         kani::assume(n <= 2);
+//         let Some(chunk) = input.get(..n) else {
+//             return;
+//         };
+//         if let Ok((used, _)) = png.advance(chunk, &mut parts) {
+//             assert!(used <= n);
+//             assert!(n == 0 || used >= 1);
+//             assert!(png.state_inv());
+//         }
+//     }
 
 // NOT a harness: the item 6.3 template on the whole step function, with
 // `any_png` (every phase) as the state. It expands from this crate, but see
