@@ -2719,6 +2719,7 @@ fn scan_template_escape(src: &[u32], k: usize, values: &mut TemplateValues) -> (
                 }
                 if peek(src, m.saturating_add(1)) == 0x7B {
                     let (hv, h) = scan_hex_digits(src, m.saturating_add(2));
+                    let _ = hv;
                     e = h;
                     proof {
                         lemma_hex_run_end(s, m as int + 2);
