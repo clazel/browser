@@ -423,7 +423,9 @@ dependencies = [
 name = "clazel-js-vm"
 version = "0.0.0"
 dependencies = [
+ "clazel-js-heap",
  "clazel-js-lexer",
+ "clazel-js-number",
  "clazel-js-syntax",
  "vstd",
 ]
