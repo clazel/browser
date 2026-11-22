@@ -21,7 +21,8 @@
 //!   starts at or after `pos`, is not trivia, and its `newline_before` is
 //!   exactly [`contains_line_terminator`] of the code points between `pos`
 //!   and the token, which is [`skip_trivia`]'s flag for the range it skips
-//!   ([`super::lemmas::lemma_skip_trivia_flag`]).
+//!   ([`super::lemmas::lemma_skip_trivia_flag`]); that the range is the one
+//!   [`skip_trivia`] skips is in the last item below.
 //! - **The value's shape:** [`value_shape_agrees`]: an element has the
 //!   kind of `Value` its kind has (a `StringLiteral` a `Value::String`, and
 //!   so on), and a regular expression's `body_end` is inside it.
@@ -34,7 +35,12 @@
 //!   `StringLiteral`, `IdentifierName`, `PrivateIdentifier`, the four
 //!   template components, `RegularExpressionLiteral` (body and flags), and
 //!   `Comment` outside Annex B's `html` mode (a `//` or `/* */` comment).
-//!   So outside `html` mode every kind is proven.
+//!   So outside `html` mode every kind is proven. In `html` mode a
+//!   `Comment` is Annex B.1.1's, carried by [`cm_ok`] (and, for the
+//!   `HTMLCloseComment` the start of the source text has, [`lex_start`])
+//!   instead: a `Comment` candidate is a [`comment`] of the spec, and no
+//!   `comment` from `pos` is longer. [`next_input_element_proven`] states the
+//!   same for the element chosen.
 //! - **Values, for the kinds of [`value_proven`]:** [`value_agrees_proven`]:
 //!   a `NumericLiteral`'s `bigint` and `legacy` flags, a `StringLiteral`'s
 //!   SV, an identifier's IdentifierCodePoints and escape flag, a
@@ -62,26 +68,33 @@
 //!   [`super::spec::numeric_literal_follow_error`] for every following code
 //!   point, above U+007F included (`ID_Start` there is the generated table,
 //!   which the spec's predicate is).
-//! - **The contract, for a proven kind, given what is not proven**
-//!   ([`lemma_element_meets_contract`]): if no derivation of a kind that is
-//!   not proven ([`super::longest_proofs::unproven_bounded`]: in `html` mode,
-//!   comments) is as long as the element, then
-//!   [`super::contract::next_input_element_ensures`] holds for it in full
-//!   (the longest length, the errors of [`lex_error`], the value).
+//! - **The contract** ([`lemma_next_input_element_meets_contract`]): the
+//!   whole of [`super::contract::next_input_element_ensures`], for every
+//!   source text, position, goal and `html`, elements and the three errors
+//!   alike (the longest length, the errors of [`lex_error`], the value).
+//!   The longest length is [`proven_bounded`] (the proven kinds) and
+//!   [`super::longest_proofs::unproven_bounded`] (in `html` mode, Annex B.1.1's
+//!   `Comment`, [`cm_ok`]), which [`next_input_element_proven`] carries for
+//!   every result; [`lemma_element_meets_contract`],
 //!   [`lemma_no_input_element_meets_contract`],
 //!   [`lemma_numeric_error_meets_contract`] and
-//!   [`lemma_invalid_identifier_meets_contract`] do the same for
-//!   [`LexError::NoInputElement`],
-//!   [`LexError::IdentifierAfterNumericLiteral`] and
-//!   [`LexError::InvalidIdentifierEscape`]. **The hypothesis is discharged
-//!   for every position outside `html` mode**
-//!   ([`super::longest_proofs::lemma_unproven_absent`]: every kind is
-//!   proven there), so **outside `html` mode the full contract holds**, for
-//!   elements, `NoInputElement` and the two other errors, by
-//!   [`lemma_element_meets_contract_no_html`],
-//!   [`lemma_no_input_element_no_html`],
-//!   [`lemma_numeric_error_no_html`] and
-//!   [`lemma_invalid_identifier_no_html`].
+//!   [`lemma_invalid_identifier_meets_contract`] derive the contract from it.
+//!   [`next_input_element`] ensures it.
+//! - **Annex B.1.1 comments** (`html` mode: `<!--`, `-->`, a multi-line
+//!   comment with an `HTMLCloseComment`): `scan_html_close` ensures that the
+//!   end it returns is the longest `HTMLCloseComment` from where it starts and
+//!   `None` that there is none; its split into `WhiteSpaceSequence?`,
+//!   `SingleLineDelimitedCommentSequence?` and `-->` is deterministic
+//!   ([`super::html_proofs::lemma_hc_stuck`]: the code before the `-->` is
+//!   white space and delimited comments, each determined by the code point
+//!   that starts it, and a delimited comment ends at its first `*/`).
+//!   `lex_slash_comment` (`//`, `/* */` and Annex B's `MultiLineComment` with
+//!   its optional `HTMLCloseComment`, whose `*/` is the first one,
+//!   [`super::html_proofs::lemma_annex_b_ml`]), `lex_lt` (a
+//!   `SingleLineHTMLCloseComment`), `lex_html_open` (`<!--`) and `lex_start`
+//!   (an `HTMLCloseComment` at the start of the source text) each end at the
+//!   longest `Comment` of the spec, and the others cannot start one
+//!   ([`super::html_proofs::lemma_html_cm_free`]).
 //! - **The scanners that carry these:** `scan_punctuator`, `scan_numeric`
 //!   (with `scan_digits_sep`, `scan_exponent`, `scan_decimal_tail`),
 //!   `scan_string` (with `scan_string_escape`, `scan_legacy_octal_escape`,
@@ -107,32 +120,34 @@
 //!   classes, `hex_val`, `id_start_char`, `id_part_char`) equal the spec's,
 //!   and `push_utf16` is UTF16EncodeCodePoint (§11.1.1).
 //!
-//! It is **not** proven that the results agree with [`super::spec`]
-//! otherwise, so these functions do not implement [`super::api::JsLexer`]:
+//! - **`next_token`** ([`next_token`]) ensures the whole of
+//!   [`super::contract::next_token_ensures`]: the trivia it skips are
+//!   [`skip_trivia`]'s, and `newline_before` is [`skip_trivia`]'s flag. Each
+//!   element it skips is the longest, by the contract of
+//!   [`next_input_element`], so [`trivia_len`] is its length; and the element
+//!   it stops at, or the error it returns, is not trivia over the range the
+//!   longest element has, because no trivia kind and non-trivia kind derive
+//!   the same range ([`super::trivia_proofs::lemma_trivia_disjoint`], by the
+//!   first code points of the kinds, and the second of the few that share
+//!   one: `/`, `<!`, `-->`, `#!`).
+//! - **[`ExecLexer`] implements [`super::api::JsLexer`]**, with those two
+//!   functions: the executable lexer meets [`super::contract`].
 //!
-//! - **Annex B.1.1 comments** (`html` mode: `<!--`, `-->`, a multi-line
-//!   comment with an `HTMLCloseComment`): `Comment` is claimed only with
-//!   `html == false`, and with `html == true` the longest match against a
-//!   comment is the open hypothesis
-//!   ([`super::longest_proofs::unproven_bounded`]) of
-//!   [`lemma_element_meets_contract`]. Not done: it needs the determinism
-//!   of `HTMLCloseComment`'s split (its `WhiteSpaceSequence?` and
-//!   `SingleLineDelimitedCommentSequence?` before `-->`) and the longest
-//!   range of an Annex B `MultiLineComment` followed by one.
-//! - **`newline_before` being [`skip_trivia`]'s**: the flag is proven to be
-//!   the line terminators in the range, and [`skip_trivia`]'s to be the same
-//!   for its range; that the two ranges end at the same place is the
-//!   longest-match property for each trivia element, proven for every kind
-//!   outside `html` mode, but the link to [`skip_trivia`] is not stated.
+//! What is **not** proven, and is not part of the contract:
+//!
 //! - **`ReservedWord`**: there is nothing to prove of it in this module. The
 //!   executable lexer returns an identifier's code points and its escape
 //!   flag ([`Value::Name`]), and whether a name is a `ReservedWord`
 //!   ([`super::spec::is_reserved_word`], proven equal to a closed form in
 //!   [`super::equivalence`]) is the parser's (§12.7.2).
+//! - **The spec itself**: that [`super::spec`] is the standard (checked by
+//!   the independent transcription of part of it, [`super::independent`],
+//!   proven equal to it, the conformance suites and the certified mutation
+//!   kills, not by a proof), and that the generated Unicode table is the
+//!   Unicode property.
 //!
-//! Their agreement with the spec is tested (`tests/`), not proven.
-//! [`lemma_contract_implies_proven`] shows that what is proven is implied
-//! by the full contract.
+//! [`lemma_contract_implies_proven`] shows that what [`next_input_element`]
+//! used to be proven to return is implied by the full contract.
 //!
 //! `ID_Start` and `ID_Continue` above U+007F are [`super::unicode`]'s
 //! lookups, proven to be the spec's predicates, which are the generated
@@ -159,10 +174,12 @@ use super::spec::*;
 use super::string_proofs::*;
 #[cfg(verus_only)]
 use super::template_proofs::*;
+#[cfg(verus_only)]
+use super::trivia_proofs::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
-use super::api::{Element, Next, Step, Token, Value};
+use super::api::{Element, JsLexer, Next, Step, Token, Value};
 
 verus! {
 
@@ -343,8 +360,9 @@ pub open spec fn invalid_identifier_at(
 /// inside the source text and not trivia, and the flag is exactly whether a
 /// line terminator code point is between `pos` and the token (which is
 /// [`skip_trivia`]'s flag for the trivia that end there, by
-/// [`super::lemmas::lemma_skip_trivia_flag`]; that the trivia end where
-/// [`skip_trivia`] says is the longest-match property, not proven).
+/// [`super::lemmas::lemma_skip_trivia_flag`]). That the trivia end where
+/// [`skip_trivia`] says is part of [`next_token`]'s contract
+/// ([`super::contract::next_token_ensures`]), which it ensures as well.
 pub open spec fn next_token_proven(
     src: Seq<u32>,
     pos: usize,
@@ -5209,13 +5227,16 @@ fn trivia(kind: ElementKind) -> (r: bool)
 /// The next token of `goal` at `pos`: [`next_input_element`] repeated over
 /// trivia, with the line-terminator flag ASI needs (§12.10).
 ///
-/// Proven: [`next_token_proven`]. Not proven: the rest of
-/// [`super::contract::next_token_ensures`]; see the module header.
+/// Proven: the whole of [`super::contract::next_token_ensures`] (and
+/// [`next_token_proven`]): the trivia it skips are [`skip_trivia`]'s, by the
+/// longest-match contract of [`next_input_element`] for each of them and
+/// [`super::trivia_proofs::lemma_trivia_disjoint`], and the flag is theirs.
 pub fn next_token(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Result<Next, LexError>)
     requires
         pos <= src.len(),
     ensures
         next_token_proven(src@, pos, goal, html, r),
+        super::contract::next_token_ensures(src@, pos, goal, html, r),
 {
     let mut p = pos;
     let mut newline = false;
@@ -5223,13 +5244,35 @@ pub fn next_token(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Result
         invariant
             pos <= p <= src.len(),
             newline == contains_line_terminator(src@, pos as int, p as int),
+            skip_trivia(goal, html, src@, pos as int).0 == skip_trivia(
+                goal,
+                html,
+                src@,
+                p as int,
+            ).0,
+            skip_trivia(goal, html, src@, pos as int).1 == (newline || skip_trivia(
+                goal,
+                html,
+                src@,
+                p as int,
+            ).1),
         decreases src.len() - p,
     {
         match next_input_element(src, p, goal, html) {
             Err(e) => {
+                proof {
+                    // The error is the one of the first element that is not trivia.
+                    lemma_trivia_len_error(goal, html, src@, p as int);
+                    assert(skip_trivia(goal, html, src@, p as int) == (p as int, false));
+                }
                 return Err(e);
             },
             Ok(Step::Eof) => {
+                proof {
+                    super::lemmas::lemma_longest_len(goal, html, src@, p as int);
+                    assert(trivia_len(goal, html, src@, p as int) == 0);
+                    assert(skip_trivia(goal, html, src@, p as int) == (p as int, false));
+                }
                 return Ok(Next::Eof { newline_before: newline });
             },
             Ok(Step::Element(el)) => {
@@ -5241,16 +5284,60 @@ pub fn next_token(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Result
                             p as int,
                             el.end as int,
                         );
+                        // The element is the longest, and trivia: it is the next step of
+                        // `skip_trivia`.
+                        lemma_trivia_len_trivia(
+                            goal,
+                            html,
+                            src@,
+                            p as int,
+                            el.end as int,
+                            el.kind,
+                        );
+                        assert(skip_trivia(goal, html, src@, p as int) == (
+                            skip_trivia(goal, html, src@, el.end as int).0,
+                            skip_trivia(goal, html, src@, el.end as int).1
+                                || contains_line_terminator(src@, p as int, el.end as int),
+                        ));
                     }
                     if range_has_lt(src, el.start, el.end) {
                         newline = true;
                     }
                     p = el.end;
                 } else {
+                    proof {
+                        lemma_trivia_len_nontrivia(
+                            goal,
+                            html,
+                            src@,
+                            p as int,
+                            el.end as int,
+                            el.kind,
+                        );
+                        assert(skip_trivia(goal, html, src@, p as int) == (p as int, false));
+                    }
                     return Ok(Next::Token(Token { element: el, newline_before: newline }));
                 }
             },
         }
+    }
+}
+
+/// The executable lexer, as the [`JsLexer`] its contract is stated for:
+/// [`next_input_element`] and [`next_token`], proven to meet
+/// [`super::contract`] for every source text, position, goal and `html`.
+pub struct ExecLexer;
+
+impl JsLexer for ExecLexer {
+    fn next_input_element(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Result<
+        Step,
+        LexError,
+    >) {
+        crate::exec::next_input_element(src, pos, goal, html)
+    }
+
+    fn next_token(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Result<Next, LexError>) {
+        crate::exec::next_token(src, pos, goal, html)
     }
 }
 

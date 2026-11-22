@@ -952,6 +952,53 @@ pub proof fn lemma_html_close_start(s: Seq<u32>, i: int, j: int)
     }
 }
 
+/// An `HTMLCloseComment` starts with white space, with `/*`, or with its
+/// `-->`, and is as long as that needs.
+pub proof fn lemma_html_close_shape(s: Seq<u32>, i: int, j: int)
+    requires
+        html_close_comment(s, i, j),
+    ensures
+        0 <= i < s.len(),
+        white_space(s, i, i + 1) || (i + 1 < s.len() && s[i] == 0x2F && s[i + 1] == 0x2A && i + 2
+            <= j) || (arrow_at(s, i) && i + 3 <= j),
+{
+    lemma_html_close_equiv(s, i, j);
+    let b = choose|b: int|
+        #![trigger arrow_at(s, b)]
+        hc_pre(s, i, b) && arrow_at(s, b) && hc_tail(s, b, j);
+    if i < b {
+        lemma_hc_start(s, i, b);
+    }
+}
+
+/// Annex B's `Comment` starts with `//` or `/*`, or with `<!--`, or with a
+/// line terminator, and is as long as that needs.
+pub proof fn lemma_html_comment_start(s: Seq<u32>, i: int, j: int)
+    requires
+        comment(s, i, j, true),
+    ensures
+        0 <= i < s.len(),
+        (s[i] == 0x2F && i + 1 < s.len() && (s[i + 1] == 0x2F || s[i + 1] == 0x2A) && i + 2 <= j)
+            || (i + 3 < s.len() && s[i] == 0x3C && s[i + 1] == 0x21 && s[i + 2] == 0x2D && s[i + 3]
+            == 0x2D && i + 4 <= j) || (is_line_terminator(s[i]) && i + 2 <= j),
+{
+    lemma_sldc_equiv(s, i, j);
+    crate::equivalence::lemma_single_line_comment_equiv(s, i, j);
+    lemma_html_open_equiv(s, i, j);
+    if annex_b_multi_line_comment(s, i, j) {
+        lemma_annex_b_close(s, i, j);
+        let e = choose|e: int|
+            #![trigger block_close_ok(s, i + 2, e, true)]
+            block_close_ok(s, i + 2, e, true) && contains_line_terminator(s, i + 2, e - 2) && e <= j
+                && j <= s.len() && opt(e, j, html_close_comment(s, e, j));
+    }
+    if single_line_html_close_comment(s, i, j) {
+        lemma_slhcc_start(s, i, j);
+        let a = choose|a: int|
+            i < a && a < j && line_terminator_sequence(s, i, a) && html_close_comment(s, a, j);
+    }
+}
+
 /// Annex B's `Comment` that starts with `/` and then neither `/` nor `*` is
 /// none.
 pub proof fn lemma_html_cm_slash_other(s: Seq<u32>, i: int, j: int)

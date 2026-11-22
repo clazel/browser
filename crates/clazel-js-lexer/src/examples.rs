@@ -318,6 +318,47 @@ pub proof fn example_regexp_char_boundaries()
 {
 }
 
+/// Annex B.1.1: a `/` right after the `*` of a delimited comment is not a
+/// comment character (it ends the comment), nor is a line terminator; the
+/// `-->` of an `HTMLCloseComment` and the `<!--` of a
+/// `SingleLineHTMLOpenComment` are those four and three code points; and a
+/// `MultiLineComment` holds a line terminator before its `*/`.
+pub proof fn example_html_comment_boundaries()
+    ensures
+        !single_line_post_asterisk_comment_chars(seq![0x2Fu32], 0, 1),
+        !single_line_delimited_comment_chars(seq![0x0Au32], 0, 1),
+        single_line_delimited_comment_chars(seq![0x61u32], 0, 1),
+        html_close_comment_split(seq![0x2Du32, 0x2D, 0x3E], 0, 0, 0, 3),
+        !html_close_comment_split(seq![0x2Du32, 0x2D, 0x2D], 0, 0, 0, 3),
+        single_line_html_open_comment(seq![0x3Cu32, 0x21, 0x2D, 0x2D], 0, 4),
+        !single_line_html_open_comment(seq![0x3Cu32, 0x21, 0x2D, 0x3C], 0, 4),
+        annex_b_multi_line_comment_split(seq![0x2Fu32, 0x2A, 0x0A, 0x2A, 0x2F], 0, 2, 3, 5),
+        !annex_b_multi_line_comment_split(seq![0x2Fu32, 0x2A, 0x20, 0x2A, 0x2F], 0, 2, 3, 5),
+{
+    let a = seq![0x2Du32, 0x2D, 0x3E];
+    assert(is_lit(a, 0, 3, seq!['-', '-', '>']));
+    assert(html_close_comment_split(a, 0, 0, 0, 3));
+    let o = seq![0x3Cu32, 0x21, 0x2D, 0x2D];
+    assert(is_lit(o, 0, 4, seq!['<', '!', '-', '-']));
+    assert(single_line_html_open_comment(o, 0, 4));
+    let m = seq![0x2Fu32, 0x2A, 0x0A, 0x2A, 0x2F];
+    assert(is_lit(m, 0, 2, seq!['/', '*']));
+    assert(is_lit(m, 3, 5, seq!['*', '/']));
+    assert(annex_b_multi_line_comment_split(m, 0, 2, 3, 5));
+    let n = seq![0x2Fu32, 0x2A, 0x20, 0x2A, 0x2F];
+    assert(!line_terminator(n, 2, 3));
+    let b = seq![0x2Du32, 0x2D, 0x2D];
+    assert(!is_lit(b, 0, 3, seq!['-', '-', '>'])) by {
+        assert(b.subrange(0, 3)[2] == 0x2Du32);
+        assert(seq!['-', '-', '>'].map_values(|c: char| c as u32)[2] == 0x3Eu32);
+    }
+    let p = seq![0x3Cu32, 0x21, 0x2D, 0x3C];
+    assert(!is_lit(p, 0, 4, seq!['<', '!', '-', '-'])) by {
+        assert(p.subrange(0, 4)[3] == 0x3Cu32);
+        assert(seq!['<', '!', '-', '-'].map_values(|c: char| c as u32)[3] == 0x2Du32);
+    }
+}
+
 /// §12: comments, white space and line terminators are discarded by the
 /// syntactic grammar; an identifier is not.
 pub proof fn example_trivia()

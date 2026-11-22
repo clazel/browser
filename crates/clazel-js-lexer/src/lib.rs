@@ -9,16 +9,16 @@
 //!   parameter, and the longest-input-element rule.
 //! - [`contract`]: what the executable lexer must be proven to satisfy.
 //! - [`api`]: the token types and the contract-only trait [`api::JsLexer`].
-//! - [`exec`]: the executable lexer. Its totality and span coverage are
-//!   proven, and so is its agreement with [`spec`] for most token classes
-//!   (punctuators, numeric and string literals, plain comments, white space
-//!   and line terminators, identifiers and private identifiers, template
-//!   literals; see the module's header for exactly which, and which are
-//!   open), and that it returns the longest of those kinds. The rest of
-//!   [`contract`] (regular expression literals, Annex B HTML-like comments)
-//!   is tested, not proven, so it does not implement [`api::JsLexer`] yet.
+//! - [`exec`]: the executable lexer, [`exec::ExecLexer`], which implements
+//!   [`api::JsLexer`]: [`exec::next_input_element`] and [`exec::next_token`]
+//!   are proven to meet [`contract`] for every source text, position, goal
+//!   symbol and Annex B mode (Verus, no escape hatch; the module's header
+//!   says what the proofs rest on). What is not proven there is that
+//!   [`spec`] is the standard, and that the generated Unicode table is the
+//!   Unicode property.
 //! - [`scan_proofs`], [`string_proofs`], [`ident_proofs`],
-//!   [`template_proofs`], [`regexp_proofs`], [`longest_proofs`]: lemmas the proofs of [`exec`]
+//!   [`template_proofs`], [`regexp_proofs`], [`html_proofs`], [`trivia_proofs`],
+//!   [`longest_proofs`]: lemmas the proofs of [`exec`]
 //!   use, about [`independent`]'s closed forms, [`spec`]'s string, identifier
 //!   and template relations, and the longest match across kinds.
 //! - [`independent`]: a second transcription of part of the lexical grammar
@@ -45,5 +45,6 @@ pub mod scan_proofs;
 pub mod spec;
 pub mod string_proofs;
 pub mod template_proofs;
+pub mod trivia_proofs;
 pub mod unicode;
 pub mod unicode_data;

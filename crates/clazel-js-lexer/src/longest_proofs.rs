@@ -7,11 +7,14 @@
 //! executable lexer on the first code point then shows no other proven kind
 //! derives a longer range than the one it returns ([`pk_bounded`]).
 //!
-//! What is not proven is that no element of an *unproven* kind (Annex B's
-//! HTML-like comments in `html` mode) is longer; [`unproven_bounded`] states exactly that, and
+//! The one kind that is not a proven kind is Annex B's `Comment` in `html`
+//! mode; [`unproven_bounded`] states that no element of it is longer, and
 //! [`lemma_longest_from_bounds`] shows that with it the returned end is
 //! [`super::spec::longest_len`]. [`lemma_unproven_absent`] discharges it
-//! outside `html` mode.
+//! outside `html` mode, and [`lemma_unproven_html`] reduces it in `html` mode
+//! to the bound on `Comment` that [`super::exec`]'s dispatch proves
+//! (`cm_ok`, with `lex_start` for the `HTMLCloseComment` at the start of the
+//! source text).
 
 #[cfg(verus_only)]
 use super::equivalence::*;

@@ -325,6 +325,71 @@
         "lemma": "example_regexp_char_boundaries()",
         "witness": "regexp_first_char(seq![0x2Au32], 0, 1)"
       }
+    },
+    {
+      "id": "single-line-post-asterisk-allows-slash",
+      "file": "src/spec.rs",
+      "find": "(is_not_line_terminator(s[i]) && s[i] != 0x2F && s[i] != 0x2A\n            && (j == i + 1 || single_line_delimited_comment_chars(s, i + 1, j)))",
+      "replace": "(is_not_line_terminator(s[i]) && s[i] != 0x2A\n            && (j == i + 1 || single_line_delimited_comment_chars(s, i + 1, j)))",
+      "expect": "killed",
+      "reason": "SingleLinePostAsteriskCommentChars (Annex B.1.1) stops excluding `/` after a `*`, so `*/` would no longer end a delimited comment: example_html_comment_boundaries is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_html_comment_boundaries()",
+        "witness": "single_line_post_asterisk_comment_chars(seq![0x2Fu32], 0, 1)"
+      }
+    },
+    {
+      "id": "single-line-delimited-chars-allow-line-terminator",
+      "file": "src/spec.rs",
+      "find": "(is_not_line_terminator(s[i]) && s[i] != 0x2A\n            && (j == i + 1 || single_line_delimited_comment_chars(s, i + 1, j)))\n        // 2. `*` SingleLinePostAsteriskCommentChars?",
+      "replace": "(is_source_character(s[i]) && s[i] != 0x2A\n            && (j == i + 1 || single_line_delimited_comment_chars(s, i + 1, j)))\n        // 2. `*` SingleLinePostAsteriskCommentChars?",
+      "expect": "killed",
+      "reason": "SingleLineDelimitedCommentChars (Annex B.1.1) would take a line terminator, so a delimited comment could span lines and a `/* */` before `-->` would no longer be on one line: example_html_comment_boundaries is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_html_comment_boundaries()",
+        "witness": "single_line_delimited_comment_chars(seq![0x0Au32], 0, 1)"
+      }
+    },
+    {
+      "id": "html-close-comment-arrow-wrong-last-code-point",
+      "file": "src/spec.rs",
+      "find": "&& is_lit(s, b, b + 3, seq!['-', '-', '>'])",
+      "replace": "&& is_lit(s, b, b + 3, seq!['-', '-', '-'])",
+      "expect": "killed",
+      "reason": "HTMLCloseComment (Annex B.1.1) would end its code before `---` instead of `-->`: example_html_comment_boundaries is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_html_comment_boundaries()",
+        "witness": "html_close_comment_split(seq![0x2Du32, 0x2D, 0x2D], 0, 0, 0, 3)"
+      }
+    },
+    {
+      "id": "html-open-comment-wrong-last-code-point",
+      "file": "src/spec.rs",
+      "find": "is_lit(s, i, i + 4, seq!['<', '!', '-', '-']) && j >= i + 4",
+      "replace": "is_lit(s, i, i + 4, seq!['<', '!', '-', '<']) && j >= i + 4",
+      "expect": "killed",
+      "reason": "SingleLineHTMLOpenComment (Annex B.1.1) would start with `<!-<` instead of `<!--`: example_html_comment_boundaries is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_html_comment_boundaries()",
+        "witness": "single_line_html_open_comment(seq![0x3Cu32, 0x21, 0x2D, 0x3C], 0, 4)"
+      }
+    },
+    {
+      "id": "annex-b-multi-line-comment-needs-no-line-terminator",
+      "file": "src/spec.rs",
+      "find": "        && line_terminator(s, a, a + 1)\n        && opt(a + 1, c, multi_line_comment_chars(s, a + 1, c))",
+      "replace": "        && opt(a + 1, c, multi_line_comment_chars(s, a + 1, c))",
+      "expect": "killed",
+      "reason": "Annex B's MultiLineComment (B.1.1) would not need its LineTerminator, so `/* */` would be one and could be followed by an HTMLCloseComment: example_html_comment_boundaries is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_html_comment_boundaries()",
+        "witness": "annex_b_multi_line_comment_split(seq![0x2Fu32, 0x2A, 0x20, 0x2A, 0x2F], 0, 2, 3, 5)"
+      }
     }
   ]
 }
