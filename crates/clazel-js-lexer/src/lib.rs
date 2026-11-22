@@ -32,6 +32,7 @@ pub mod examples;
 pub mod exec;
 pub mod independent;
 pub mod lemmas;
+pub mod longest_proofs;
 pub mod scan_proofs;
 pub mod spec;
 pub mod string_proofs;
