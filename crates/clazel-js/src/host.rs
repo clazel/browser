@@ -466,6 +466,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg_attr(miri, ignore = "reads the system clock and the OS random source")]
     fn default_host_answers_for_the_world() {
         let mut host = DefaultHost::new();
         assert_eq!(host.local_tza(0.0, true), 0.0);
