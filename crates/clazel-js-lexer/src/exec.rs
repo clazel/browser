@@ -45,6 +45,10 @@
 //! Non-ASCII `ID_Start` and `ID_Continue` come from [`super::unicode`],
 //! which the spec leaves uninterpreted: nothing is claimed about them.
 
+#[cfg(verus_only)]
+use super::equivalence::*;
+#[cfg(verus_only)]
+use super::independent::*;
 #[allow(unused_imports)]
 use super::spec::*;
 #[allow(unused_imports)]
@@ -85,22 +89,32 @@ pub open spec fn value_shape_agrees(el: Element) -> bool {
     }
 }
 
-/// For the kinds whose derivation is proven, the kind derives the
-/// element's range in the goal ([`element_matches`], one conjunct of
-/// [`super::contract::next_input_element_ensures`]): `WhiteSpace`,
-/// `LineTerminator`, `HashbangComment`, `DivPunctuator` and
-/// `RightBracePunctuator`. For the other kinds nothing is claimed here.
+/// The kinds whose agreement with the spec is proven (see
+/// [`kind_agrees_proven`]).
+pub open spec fn kind_proven(kind: ElementKind, html: bool) -> bool {
+    kind == ElementKind::WhiteSpace || kind == ElementKind::LineTerminator || kind
+        == ElementKind::HashbangComment || kind == ElementKind::DivPunctuator || kind
+        == ElementKind::RightBracePunctuator || kind == ElementKind::Punctuator || (kind
+        == ElementKind::Comment && !html)
+}
+
+/// For the kinds of [`kind_proven`], the kind derives the element's range
+/// in the goal ([`element_matches`], one conjunct of
+/// [`super::contract::next_input_element_ensures`]), and no longer range
+/// inside the source text is derived by an element of that kind. (Not that
+/// no element of another kind is longer: that is [`longest_len`], which is
+/// not proven.) For the other kinds nothing is claimed here.
 pub open spec fn kind_agrees_proven(goal: Goal, html: bool, src: Seq<u32>, el: Element) -> bool {
-    (el.kind == ElementKind::WhiteSpace || el.kind == ElementKind::LineTerminator || el.kind
-        == ElementKind::HashbangComment || el.kind == ElementKind::DivPunctuator || el.kind
-        == ElementKind::RightBracePunctuator) ==> element_matches(
+    kind_proven(el.kind, html) ==> (element_matches(
         goal,
         html,
         el.kind,
         src,
         el.start as int,
         el.end as int,
-    )
+    ) && forall|j: int|
+        j <= src.len() && #[trigger] element_matches(goal, html, el.kind, src, el.start as int, j)
+            ==> j <= el.end)
 }
 
 /// What [`next_input_element`] is proven to return: totality, span
@@ -169,6 +183,23 @@ pub proof fn lemma_contract_implies_proven(
                 <= src.len() && kind_agrees_proven(goal, html, src, el),
         },
 {
+    if let Ok(Step::Element(el)) = r {
+        assert forall|j: int|
+            j <= src.len() && #[trigger] element_matches(
+                goal,
+                html,
+                el.kind,
+                src,
+                el.start as int,
+                j,
+            ) implies j <= el.end by {
+            super::lemmas::lemma_kind_implies_any(goal, html, el.kind, src, pos as int, j);
+            super::lemmas::lemma_longest_len(goal, html, src, pos as int);
+            let n = j - pos as int;
+            assert(pos as int + n == j);
+            assert(any_element_matches(goal, html, src, pos as int, pos as int + n));
+        }
+    }
 }
 
 // ---------------------------------------------------------------------
@@ -398,18 +429,35 @@ fn scan_line_chars(src: &[u32], k: usize) -> (r: usize)
     }
 }
 
+/// The `*/` that ends at `e` closes a block comment whose body starts at
+/// `k`: it is the first `*/` at or after `k`, and every code point before
+/// it is a `SourceCharacter` (and, if `!multi_line`, not a
+/// `LineTerminator`).
+pub open spec fn block_close_ok(s: Seq<u32>, k: int, e: int, multi_line: bool) -> bool {
+    k + 2 <= e && e <= s.len() && s[e - 2] == 0x2A && s[e - 1] == 0x2F && forall|m: int|
+        k <= m < e - 2 ==> (#[trigger] s[m] <= 0x10FFFF && !(s[m] == 0x2A && s[m + 1] == 0x2F) && (
+        multi_line || !is_line_terminator(s[m])))
+}
+
 /// §12.4 `MultiLineComment` (or, with `!multi_line`, Annex B's
 /// `SingleLineDelimitedComment`) after its `/*` at `k`: the end of the
 /// first `*/` and whether a `LineTerminator` came before it. `None` if the
 /// source text ends, or a code point that is not a `SourceCharacter` (or,
 /// with `!multi_line`, a `LineTerminator`) comes, first.
+///
+/// Proven: `Some((e, lt))` is the one end [`block_close_ok`] allows, and
+/// `lt` is [`contains_line_terminator`] of the body; `None` means no end
+/// is allowed.
 fn scan_block_comment(src: &[u32], k: usize, multi_line: bool) -> (r: Option<(usize, bool)>)
     requires
         k <= src.len(),
     ensures
         match r {
-            Some((e, _)) => k + 2 <= e <= src.len(),
-            None => true,
+            Some((e, lt)) => block_close_ok(src@, k as int, e as int, multi_line)
+                && lt == contains_line_terminator(src@, k as int, e as int - 2) && (forall|
+                e2: int,
+            | block_close_ok(src@, k as int, e2, multi_line) ==> e2 == e),
+            None => forall|e2: int| !block_close_ok(src@, k as int, e2, multi_line),
         },
 {
     let mut j = k;
@@ -417,17 +465,59 @@ fn scan_block_comment(src: &[u32], k: usize, multi_line: bool) -> (r: Option<(us
     loop
         invariant
             k <= j <= src.len(),
+            lt == contains_line_terminator(src@, k as int, j as int),
+            forall|m: int|
+                k <= m < j ==> (#[trigger] src@[m] <= 0x10FFFF && !(m + 1 < src.len()
+                    && src@[m] == 0x2A && src@[m + 1] == 0x2F) && (multi_line
+                    || !is_line_terminator(src@[m]))),
         decreases src.len() - j,
     {
         let c = peek(src, j);
         if c == 0x2A && peek(src, j.saturating_add(1)) == 0x2F {
+            proof {
+                let e = j + 2;
+                assert(block_close_ok(src@, k as int, e, multi_line));
+                assert forall|e2: int| block_close_ok(src@, k as int, e2, multi_line) implies e2
+                    == e by {
+                    if e2 < e {
+                        assert(src@[e2 - 2] == 0x2A && src@[e2 - 1] == 0x2F);
+                        assert(k <= e2 - 2 < j);
+                    } else if e2 > e {
+                        assert(k <= j < e2 - 2);
+                    }
+                }
+            }
             return Some((j.saturating_add(2), lt));
         }
         if !is_src(c) || (!multi_line && is_lt(c)) {
+            proof {
+                assert forall|e2: int| !block_close_ok(src@, k as int, e2, multi_line) by {
+                    if block_close_ok(src@, k as int, e2, multi_line) {
+                        if e2 - 2 < j {
+                            assert(k <= e2 - 2 < j);
+                        } else if e2 - 2 == j {
+                            assert(src@[j as int] == 0x2A);
+                        } else {
+                            assert(k <= j < e2 - 2);
+                        }
+                    }
+                }
+            }
             return None;
         }
         if is_lt(c) {
             lt = true;
+        }
+        proof {
+            assert(contains_line_terminator(src@, k as int, (j + 1) as int) == (lt || false) || true);
+            assert(lt == contains_line_terminator(src@, k as int, (j + 1) as int)) by {
+                if is_line_terminator(src@[j as int]) {
+                    assert(contains_line_terminator(src@, k as int, (j + 1) as int));
+                } else if contains_line_terminator(src@, k as int, (j + 1) as int) {
+                    let m = choose|m: int| k <= m < j + 1 && is_line_terminator(src@[m]);
+                    assert(m < j);
+                }
+            }
         }
         j = j.saturating_add(1);
     }
@@ -702,6 +792,8 @@ fn scan_punctuator(src: &[u32], k: usize) -> (r: usize)
         k < src.len(),
     ensures
         k <= r <= src.len(),
+        r > k ==> punctuator(src@, k as int, r as int),
+        forall|j: int| punctuator(src@, k as int, j) ==> j <= r,
 {
     let c0 = peek(src, k);
     let c1 = peek(src, k.saturating_add(1));
@@ -801,6 +893,17 @@ fn scan_punctuator(src: &[u32], k: usize) -> (r: usize)
     } else {
         0
     };
+    proof {
+        // The punctuators are the closed forms of `independent.rs`.
+        assert forall|j: int| punctuator(src@, k as int, j) implies j <= k + n by {
+            lemma_other_punctuator_equiv(src@, k as int, j);
+            lemma_optional_chaining_equiv(src@, k as int, j);
+        }
+        if n > 0 {
+            lemma_other_punctuator_equiv(src@, k as int, (k + n) as int);
+            lemma_optional_chaining_equiv(src@, k as int, (k + n) as int);
+        }
+    }
     k.saturating_add(n)
 }
 
@@ -1556,19 +1659,62 @@ fn longer(a: Option<Candidate>, b: Option<Candidate>) -> (r: Option<Candidate>)
 fn lex_slash_comment(src: &[u32], pos: usize, html: bool) -> (r: Option<Candidate>)
     requires
         pos < src.len(),
+        src@[pos as int] == 0x2F,
     ensures
         match r {
-            Some(c) => candidate_ok(src@, pos, c) && c.0.kind == ElementKind::Comment,
-            None => true,
+            Some(c) => candidate_ok(src@, pos, c) && c.0.kind == ElementKind::Comment && (!html
+                ==> (comment(src@, pos as int, c.0.end as int, false) && forall|j: int|
+                j <= src.len() && #[trigger] comment(src@, pos as int, j, false) ==> j
+                    <= c.0.end)),
+            None => !html ==> forall|j: int| !comment(src@, pos as int, j, false),
         },
 {
     let c1 = peek(src, pos.saturating_add(1));
     if c1 == 0x2F {
         let e = scan_line_chars(src, pos.saturating_add(2));
+        proof {
+            // `//` and no LineTerminator: `SingleLineComment`; and it cannot
+            // be longer, since `src[e]` is a LineTerminator or past the end.
+            lemma_single_line_comment_equiv(src@, pos as int, e as int);
+            lemma_comment_plain_equiv(src@, pos as int, e as int);
+            assert(ind_single_line_comment(src@, pos as int, e as int));
+            assert forall|j: int| j <= src.len() && #[trigger] comment(src@, pos as int, j, false)
+                implies j <= e by {
+                lemma_comment_plain_equiv(src@, pos as int, j);
+                lemma_single_line_comment_equiv(src@, pos as int, j);
+                if j > e {
+                    assert(ind_single_line_comment(src@, pos as int, j) || ind_multi_line_comment(
+                        src@,
+                        pos as int,
+                        j,
+                    ));
+                    if ind_single_line_comment(src@, pos as int, j) {
+                        assert(ind_src_cp(src@[e as int]) && !ind_lt_cp(src@[e as int]));
+                    } else {
+                        assert(src@[pos as int + 1] == 0x2A);
+                    }
+                }
+            }
+        }
         Some((plain(ElementKind::Comment, pos, e), None))
     } else if c1 == 0x2A {
         match scan_block_comment(src, pos.saturating_add(2), true) {
             Some((e, lt)) => {
+                proof {
+                    lemma_multi_line_comment_equiv(src@, pos as int, e as int);
+                    lemma_comment_plain_equiv(src@, pos as int, e as int);
+                    assert(ind_multi_line_comment(src@, pos as int, e as int));
+                    assert forall|j: int|
+                        j <= src.len() && #[trigger] comment(src@, pos as int, j, false)
+                            implies j <= e by {
+                        lemma_comment_plain_equiv(src@, pos as int, j);
+                        lemma_multi_line_comment_equiv(src@, pos as int, j);
+                        lemma_single_line_comment_equiv(src@, pos as int, j);
+                        if ind_multi_line_comment(src@, pos as int, j) {
+                            assert(block_close_ok(src@, pos as int + 2, j, true));
+                        }
+                    }
+                }
                 let end = if html && lt {
                     match scan_html_close(src, e) {
                         Some(f) => f,
@@ -1579,11 +1725,44 @@ fn lex_slash_comment(src: &[u32], pos: usize, html: bool) -> (r: Option<Candidat
                 };
                 Some((plain(ElementKind::Comment, pos, end), None))
             },
-            None => None,
+            None => {
+                proof {
+                    assert forall|j: int| !comment(src@, pos as int, j, false) by {
+                        lemma_comment_plain_equiv(src@, pos as int, j);
+                        lemma_multi_line_comment_equiv(src@, pos as int, j);
+                        lemma_single_line_comment_equiv(src@, pos as int, j);
+                        if ind_multi_line_comment(src@, pos as int, j) {
+                            assert(block_close_ok(src@, pos as int + 2, j, true));
+                        }
+                    }
+                }
+                None
+            },
         }
     } else {
+        proof {
+            assert forall|j: int| !comment(src@, pos as int, j, false) by {
+                lemma_comment_plain_equiv(src@, pos as int, j);
+                lemma_multi_line_comment_equiv(src@, pos as int, j);
+                lemma_single_line_comment_equiv(src@, pos as int, j);
+            }
+        }
         None
     }
+}
+
+/// `Comment` of §12.4 (not Annex B's) is a `MultiLineComment` or a
+/// `SingleLineComment`, in the closed forms of `independent.rs`.
+proof fn lemma_comment_plain_equiv(s: Seq<u32>, i: int, j: int)
+    ensures
+        comment(s, i, j, false) <==> (ind_multi_line_comment(s, i, j) || ind_single_line_comment(
+            s,
+            i,
+            j,
+        )),
+{
+    lemma_multi_line_comment_equiv(s, i, j);
+    lemma_single_line_comment_equiv(s, i, j);
 }
 
 /// Every alternative of `goal` that can start with the code point at
@@ -1602,12 +1781,42 @@ fn lex_common(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Can
     if is_ws(c) {
         // WhiteSpace
         assert(white_space(src@, pos as int, pos + 1));
-        Some((plain(ElementKind::WhiteSpace, pos, pos.saturating_add(1)), None))
+        let ws = Some((plain(ElementKind::WhiteSpace, pos, pos.saturating_add(1)), None));
+        proof {
+            let el = ws.unwrap().0;
+            assert forall|j: int|
+                j <= src.len() && #[trigger] element_matches(
+                    goal,
+                    html,
+                    el.kind,
+                    src@,
+                    pos as int,
+                    j,
+                ) implies j <= el.end by {
+                assert(white_space(src@, pos as int, j));
+            }
+        }
+        ws
     } else if is_lt(c) {
         // LineTerminator; with `html`, Annex B.1.1's
         // SingleLineHTMLCloseComment :: LineTerminatorSequence
         // HTMLCloseComment, which is longer when it matches.
         let lt = Some((plain(ElementKind::LineTerminator, pos, pos.saturating_add(1)), None));
+        proof {
+            let el = lt.unwrap().0;
+            assert(line_terminator(src@, pos as int, pos + 1));
+            assert forall|j: int|
+                j <= src.len() && #[trigger] element_matches(
+                    goal,
+                    html,
+                    el.kind,
+                    src@,
+                    pos as int,
+                    j,
+                ) implies j <= el.end by {
+                assert(line_terminator(src@, pos as int, j));
+            }
+        }
         if html {
             let s = line_terminator_sequence_end(src, pos);
             longer(lt, html_close_candidate(src, pos, s))
@@ -1616,7 +1825,26 @@ fn lex_common(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Can
         }
     } else if c == 0x2F {
         // Comment, RegularExpressionLiteral or DivPunctuator.
-        let comment = lex_slash_comment(src, pos, html);
+        let cmt = lex_slash_comment(src, pos, html);
+        proof {
+            if let Some(ref cm) = cmt {
+                let el = cm.0;
+                if !html {
+                    assert(element_matches(goal, html, ElementKind::Comment, src@, pos as int, el.end as int));
+                    assert forall|j: int|
+                        j <= src.len() && #[trigger] element_matches(
+                            goal,
+                            html,
+                            el.kind,
+                            src@,
+                            pos as int,
+                            j,
+                        ) implies j <= el.end by {
+                        assert(comment(src@, pos as int, j, false));
+                    }
+                }
+            }
+        }
         let regexp = if goal_regexp(goal) {
             regexp_candidate(src, pos)
         } else {
@@ -1637,11 +1865,27 @@ fn lex_common(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Can
                 pos.saturating_add(1)
             };
             assert(div_punctuator(src@, pos as int, e as int));
-            Some((plain(ElementKind::DivPunctuator, pos, e), None))
+            let d = Some((plain(ElementKind::DivPunctuator, pos, e), None));
+            proof {
+                let el = d.unwrap().0;
+                assert forall|j: int|
+                    j <= src.len() && #[trigger] element_matches(
+                        goal,
+                        html,
+                        el.kind,
+                        src@,
+                        pos as int,
+                        j,
+                    ) implies j <= el.end by {
+                    lemma_div_punctuator_equiv(src@, pos as int, j);
+                    lemma_div_punctuator_equiv(src@, pos as int, e as int);
+                }
+            }
+            d
         } else {
             None
         };
-        longer(longer(comment, regexp), div)
+        longer(longer(cmt, regexp), div)
     } else if c == 0x7D {
         // TemplateMiddle / TemplateTail or RightBracePunctuator.
         if goal_template_tail(goal) {
@@ -1652,7 +1896,22 @@ fn lex_common(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Can
                 |c: char| c as u32,
             ));
             assert(right_brace_punctuator(src@, pos as int, pos + 1));
-            Some((plain(ElementKind::RightBracePunctuator, pos, pos.saturating_add(1)), None))
+            let rb = Some((plain(ElementKind::RightBracePunctuator, pos, pos.saturating_add(1)), None));
+            proof {
+                let el = rb.unwrap().0;
+                assert forall|j: int|
+                    j <= src.len() && #[trigger] element_matches(
+                        goal,
+                        html,
+                        el.kind,
+                        src@,
+                        pos as int,
+                        j,
+                    ) implies j <= el.end by {
+                    lemma_right_brace_equiv(src@, pos as int, j);
+                }
+            }
+            rb
         } else {
             None
         }
@@ -1753,7 +2012,22 @@ fn lex_common(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Option<Can
         // Punctuator
         let e = scan_punctuator(src, pos);
         if e > pos {
-            Some((plain(ElementKind::Punctuator, pos, e), None))
+            let pu = Some((plain(ElementKind::Punctuator, pos, e), None));
+            proof {
+                let el = pu.unwrap().0;
+                assert forall|j: int|
+                    j <= src.len() && #[trigger] element_matches(
+                        goal,
+                        html,
+                        el.kind,
+                        src@,
+                        pos as int,
+                        j,
+                    ) implies j <= el.end by {
+                    assert(punctuator(src@, pos as int, j));
+                }
+            }
+            pu
         } else {
             None
         }
