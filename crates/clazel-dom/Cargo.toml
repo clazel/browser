@@ -63,6 +63,14 @@ theorems = [
     "theorem_deep_copy_kind_fields",
     "theorem_deep_copy_children_facts",
     "theorem_deep_clone_leaf",
+    # The size of a deep clone and when it may be refused
+    # (src/deep_clone_size_lemmas.rs).
+    "theorem_deep_clone_size",
+    "theorem_deep_clone_grew",
+    "theorem_clone_deep_refuses_exactly_when_full",
+    "theorem_clone_deep_refused_only_if_full",
+    "theorem_clone_deep_grew_means",
+    "theorem_ranked_at_facts",
 ]
 
 [package.metadata.verus]

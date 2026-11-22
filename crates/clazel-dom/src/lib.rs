@@ -16,6 +16,10 @@
 //!   children rules exactly.
 //! - [`deep_clone_lemmas`]: deep "clone a node" (a worklist) meets its
 //!   relational spec; what the relation says.
+//! - [`deep_clone_size_lemmas`]: a deep clone adds exactly the subtree's size,
+//!   and is refused only if the copy does not fit.
+//! - [`deep_clone_size_mutation_lemmas`]: the kill certificates of the
+//!   mutations of the size and refusal specs.
 //! - [`ops_mutation_lemmas`]: the kill certificates of the mutations of those.
 //! - [`mutation_lemmas`]: the theorems on small concrete arenas, the kill
 //!   certificates of `mutations.json`.
@@ -26,6 +30,8 @@
 pub mod contract;
 pub mod deep_clone_lemmas;
 pub mod deep_clone_mutation_lemmas;
+pub mod deep_clone_size_lemmas;
+pub mod deep_clone_size_mutation_lemmas;
 pub mod exec;
 pub mod independent;
 pub mod independent_equivalence;

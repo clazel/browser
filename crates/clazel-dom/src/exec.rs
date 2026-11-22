@@ -18,6 +18,8 @@ use super::contract::*;
 #[cfg(verus_only)]
 use super::deep_clone_lemmas::*;
 #[cfg(verus_only)]
+use super::deep_clone_size_lemmas::*;
+#[cfg(verus_only)]
 use super::lemmas::*;
 #[cfg(verus_only)]
 use super::ops_lemmas::*;
@@ -1969,11 +1971,13 @@ impl Arena {
             deep_inv(d0, node, old(self)@, old(order)@, i as int, j as int),
             i < old(order).len(),
             j < d0.nodes[old(order)@[i as int] as int].children.len(),
+            host_acyclic(d0),
         ensures
             ok ==> deep_inv(d0, node, final(self)@, final(order)@, i as int, j as int + 1),
             ok ==> final(self)@.nodes.len() == base + final(order).len(),
             ok ==> forall|k: int| 0 <= k < old(order).len() ==> #[trigger] final(order)@[k] == old(order)@[k],
             !ok ==> final(self)@ == d0,
+            !ok ==> !can_create(d0, subtree_size(d0, node)),
     {
         let ghost a = self@;
         let ghost order0 = order@;
@@ -2006,6 +2010,9 @@ impl Arena {
         match self.clone_node(ch) {
             None => {
                 proof {
+                    assert(!can_create(a, clone_count(a, ch)));
+                    lemma_step_fits(d0, node, a, order0, i as int, j as int, ch);
+                    assert(a.nodes[ch as int] == d0.nodes[ch as int]);
                     lemma_deep_rollback(d0, node, self@, order0, i as int, j as int);
                 }
                 self.truncate(base);
@@ -2050,7 +2057,15 @@ impl Arena {
     {
         let ghost d0 = self@;
         let base = self.nodes.len();
-        let root = self.clone_node(node)?;
+        let root = match self.clone_node(node) {
+            Some(root) => root,
+            None => {
+                proof {
+                    lemma_root_fits(d0, node);
+                }
+                return None;
+            },
+        };
         proof {
             assert(can_create(d0, clone_count(d0, node)));
             assert(root == d0.nodes.len());
@@ -2075,6 +2090,7 @@ impl Arena {
             invariant
                 d0 == old(self)@,
                 base == d0.nodes.len(),
+                host_acyclic(d0),
                 deep_inv(d0, node, self@, order@, i as int, j as int),
                 i < order.len() ==> nch == d0.nodes[order@[i as int] as int].children.len(),
                 i < order.len() ==> j <= nch,
@@ -2120,6 +2136,7 @@ impl Arena {
         }
         proof {
             lemma_deep_done(d0, node, self@, order@, i as int, j as int);
+            theorem_deep_clone_size(d0, node, self@, order@);
         }
         Some(root)
     }

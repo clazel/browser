@@ -35,8 +35,13 @@ carry machine-checked proofs.
   the pinned DOM commit. Deep "clone a node" (`clone_deep`, the clone
   children flag) is specified as a relation (the copy is an isomorphic
   fresh subtree of the host-including subtree, template contents included)
-  and implemented as a worklist, not a recursion; a clone that does not fit
-  the node limit leaves the arena as it was. Document-children
+  and implemented as a worklist, not a recursion. A clone that does not fit
+  the node limit leaves the arena as it was, and is refused only if it does
+  not fit: a successful clone adds exactly `subtree_size` nodes (a count of
+  the host-including subtree, proven), and a refusal needs the arena to be
+  unable to hold that many more. It requires a host-acyclic arena
+  (`host_acyclic`): `wf` forbids a cycle of parents but not one through a
+  template's host, whose unfolding is infinite. Document-children
   rules (step 6 of validity) and the Text/doctype rule (step 5) are covered
   by `tests/operations.rs` only: no theorem says them, so no mutation of
   them is certified.
