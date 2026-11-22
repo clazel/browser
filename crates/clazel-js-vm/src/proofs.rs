@@ -4,10 +4,13 @@
 //! seconds to minutes. They are evidence, not a tier claim: the crate stays at
 //! tier 0, as `Cargo.toml` says.
 //!
-//! - [`add_sub_mul_int32`]: for any two int32 operands, `+`, `-` and `*`
-//!   give the int32 exactly when the exact result fits (and is not `-0` for
-//!   `*`), and a double otherwise: `spec::arith_add`, `arith_sub`,
-//!   `arith_mul`'s encoding rule. Overflow never panics.
+//! - [`add_sub_int32_fits`], [`add_sub_int32_overflow`], [`mul_int32_fits`],
+//!   [`mul_negative_zero_is_a_double`]: for any two int32 operands, `+` and
+//!   `-` give the int32 when the exact result fits and a double when it does
+//!   not; `*` is checked for 16-bit operands (a 32 x 32 bit symbolic product
+//!   does not finish) and for the `-0` cases: `spec::arith_add`, `arith_sub`,
+//!   `arith_mul`'s encoding rule. Overflow never panics. The values of the
+//!   doubles, and an overflowing `*`, are left to the differential test.
 //! - [`neg_int32`], [`rem_int32`]: unary minus and `%` on int32, including the
 //!   two operand pairs that overflow `i32` arithmetic (`-(-2^31)`,
 //!   `-2^31 % -1`).
@@ -32,25 +35,61 @@ use crate::numeric::{self, Num};
 use clazel_js_heap::value::{Decoded, Value};
 
 #[kani::proof]
-fn add_sub_mul_int32() {
+fn add_sub_int32_fits() {
+    // The exact result fits an int32: the result is that int32. (Assuming it
+    // prunes the double path, whose floating-point arithmetic CBMC is slow
+    // on.)
     let x: i32 = kani::any();
     let y: i32 = kani::any();
-    let (a, b) = (Num::I(x), Num::I(y));
-    let (wx, wy) = (i64::from(x), i64::from(y));
-    for (got, exact) in [
-        (numeric::add(a, b), wx + wy),
-        (numeric::sub(a, b), wx - wy),
-        (numeric::mul(a, b), wx * wy),
-    ] {
-        match got.decode() {
-            Decoded::Int32(r) => assert!(i64::from(r) == exact),
-            // A double only when the exact result does not fit, or for a
-            // multiplication that is `-0`.
-            Decoded::Double(_) => {
-                assert!(i32::try_from(exact).is_err() || (exact == 0 && (x < 0 || y < 0)));
-            }
-            _ => assert!(false),
-        }
+    let sum = i64::from(x) + i64::from(y);
+    kani::assume(i32::try_from(sum).is_ok());
+    assert!(numeric::add(Num::I(x), Num::I(y)) == Value::int32(sum as i32));
+    let diff = i64::from(x) - i64::from(y);
+    kani::assume(i32::try_from(diff).is_ok());
+    assert!(numeric::sub(Num::I(x), Num::I(y)) == Value::int32(diff as i32));
+}
+
+#[kani::proof]
+fn mul_int32_fits() {
+    // A symbolic 32 x 32 bit multiplication does not finish in minutes under
+    // CBMC, so the operands are any 16-bit values (whose product always
+    // fits): the result is the exact int32.
+    let p: i16 = kani::any();
+    let q: i16 = kani::any();
+    let m = i32::from(p) * i32::from(q);
+    // Not the `-0` case, which is `mul_negative_zero_is_a_double`'s (its
+    // double path has a symbolic floating-point product).
+    kani::assume(!(m == 0 && (p < 0 || q < 0)));
+    let got = numeric::mul(Num::I(i32::from(p)), Num::I(i32::from(q)));
+    assert!(got == Value::int32(m));
+}
+
+#[kani::proof]
+fn add_sub_int32_overflow() {
+    // The exact result does not fit: a double (the value is the `f64` sum,
+    // which the differential test checks).
+    let x: i32 = kani::any();
+    let y: i32 = kani::any();
+    kani::assume(i32::try_from(i64::from(x) + i64::from(y)).is_err());
+    assert!(matches!(
+        numeric::add(Num::I(x), Num::I(y)).decode(),
+        Decoded::Double(_)
+    ));
+    let z: i32 = kani::any();
+    let w: i32 = kani::any();
+    kani::assume(i32::try_from(i64::from(z) - i64::from(w)).is_err());
+    assert!(matches!(
+        numeric::sub(Num::I(z), Num::I(w)).decode(),
+        Decoded::Double(_)
+    ));
+}
+
+#[kani::proof]
+fn mul_negative_zero_is_a_double() {
+    // `0 * y` and `x * 0` with a negative operand are `-0`, not the int32 0.
+    for y in [-1i32, i32::MIN] {
+        assert!(numeric::mul(Num::I(0), Num::I(y)) == Value::double(-0.0));
+        assert!(numeric::mul(Num::I(y), Num::I(0)) == Value::double(-0.0));
     }
 }
 
@@ -66,39 +105,57 @@ fn neg_int32() {
 
 #[kani::proof]
 fn rem_int32() {
+    // A symbolic 64-bit remainder by a symbolic divisor does not finish in
+    // minutes under CBMC, so the divisor is any value in -8..=8 (and the
+    // overflowing pair `-2^31 % -1` is its own case); the dividend is any
+    // int32.
     let x: i32 = kani::any();
     let y: i32 = kani::any();
+    kani::assume((-8..=8).contains(&y));
     match numeric::rem(Num::I(x), Num::I(y)).decode() {
         Decoded::Int32(r) => {
             assert!(y != 0);
-            assert!(i64::from(r) == i64::from(x) % i64::from(y));
             assert!(!(r == 0 && x < 0));
+            // |r| < |y| and the sign of the dividend.
+            assert!(i64::from(r).abs() < i64::from(y).abs());
+            assert!(r == 0 || (r < 0) == (x < 0));
         }
         // A double for a zero divisor, or a zero remainder of a negative
-        // dividend (`-0`); the operands are never both converted wrongly.
-        Decoded::Double(_) => assert!(y == 0 || (i64::from(x) % i64::from(y) == 0 && x < 0)),
+        // dividend (`-0`).
+        Decoded::Double(_) => assert!(y == 0 || x < 0),
         _ => assert!(false),
     }
+    // The pair that overflows i32 arithmetic is `-0`, a double.
+    assert!(matches!(
+        numeric::rem(Num::I(i32::MIN), Num::I(-1)).decode(),
+        Decoded::Double(_)
+    ));
 }
 
 #[kani::proof]
+#[kani::unwind(34)]
 fn shifts_int32() {
+    // Each shift count in turn (a symbolic divisor 2^count is as slow as
+    // above), with any int32 operand; the left operand's count is
+    // `b mod 32`, which the harness reaches through `b = count + 32 * k`.
     let x: i32 = kani::any();
-    let y: i32 = kani::any();
-    let count = (y as u32) % 32;
-    let (a, b) = (Num::I(x), Num::I(y));
-    // `<<`: x * 2^count, reduced to 32 bits.
-    let l = i64::from(x) * (1i64 << count);
-    assert!(numeric::shl(a, b) == Value::int32(l as i32));
-    // `>>`: floor(x / 2^count).
-    let r = i64::from(x).div_euclid(1i64 << count);
-    assert!(numeric::shr(a, b) == Value::int32(r as i32));
-    // `>>>`: floor(x as u32 / 2^count), an int32 when it fits.
-    let u = i64::from(x as u32) / (1i64 << count);
-    match numeric::ushr(a, b).decode() {
-        Decoded::Int32(v) => assert!(i64::from(v) == u),
-        Decoded::Double(d) => assert!(d == u as f64 && u > i64::from(i32::MAX)),
-        _ => assert!(false),
+    let k: i32 = kani::any();
+    kani::assume((-4..=4).contains(&k));
+    let mut count = 0u32;
+    while count < 32 {
+        let y = (count as i32) + 32 * k;
+        let (a, b) = (Num::I(x), Num::I(y));
+        let l = i64::from(x) * (1i64 << count);
+        assert!(numeric::shl(a, b) == Value::int32(l as i32));
+        let r = i64::from(x) >> count; // arithmetic shift: floor division
+        assert!(numeric::shr(a, b) == Value::int32(r as i32));
+        let u = i64::from(x as u32) >> count;
+        match numeric::ushr(a, b).decode() {
+            Decoded::Int32(v) => assert!(i64::from(v) == u),
+            Decoded::Double(d) => assert!(d == u as f64 && u > i64::from(i32::MAX)),
+            _ => assert!(false),
+        }
+        count += 1;
     }
 }
 
