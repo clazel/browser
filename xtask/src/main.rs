@@ -342,6 +342,19 @@ fn static_checks(r: &mut Runner, crates: &[Crate], pins: &Pins) {
         "every crate placed in the status images",
         outcome(status::placement_problems(&names), Vec::new()),
     );
+    let engine_deps: Vec<(String, Vec<String>)> = crates
+        .iter()
+        .map(|c| {
+            (
+                c.name.clone(),
+                c.deps_normal().into_iter().map(|(n, _)| n).collect(),
+            )
+        })
+        .collect();
+    r.step(
+        "engine crates depend on no browser crate",
+        outcome(status::engine_problems(&engine_deps), Vec::new()),
+    );
     // Unreviewed specs are not a failure (agents must be able to edit
     // them), but every run lists them.
     let review_notes: Vec<String> = review_status
