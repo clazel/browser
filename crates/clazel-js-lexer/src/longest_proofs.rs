@@ -7,11 +7,12 @@
 //! executable lexer on the first code point then shows no other proven kind
 //! derives a longer range than the one it returns ([`pk_bounded`]).
 //!
-//! What is not proven is that no element of an *unproven* kind (identifier,
-//! private identifier, regular expression literal, template, and Annex B's
-//! HTML-like comments) is longer; [`unproven_bounded`] states exactly that,
-//! and [`lemma_longest_from_bounds`] shows that with it the returned end is
-//! [`super::spec::longest_len`].
+//! What is not proven is that no element of an *unproven* kind (regular
+//! expression literal, and Annex B's HTML-like comments in `html` mode) is
+//! longer; [`unproven_bounded`] states exactly that, and
+//! [`lemma_longest_from_bounds`] shows that with it the returned end is
+//! [`super::spec::longest_len`]. [`lemma_unproven_absent`] discharges it
+//! where the first code point is not `/`, outside `html` mode.
 
 #[cfg(verus_only)]
 use super::equivalence::*;
@@ -197,9 +198,9 @@ pub open spec fn proven_bounded(goal: Goal, html: bool, s: Seq<u32>, pos: int, e
 }
 
 /// No derivation of a kind that is not [`kind_proven`] ends at or after
-/// `e`. This is what is not proven: it is the part of the longest-match
-/// property that concerns identifiers, private identifiers, regular
-/// expression literals, templates and (in `html` mode) comments.
+/// `e`. This is what is not proven in general: it is the part of the
+/// longest-match property that concerns regular expression literals and (in
+/// `html` mode) comments.
 pub open spec fn unproven_bounded(goal: Goal, html: bool, s: Seq<u32>, pos: int, e: int) -> bool {
     forall|k: ElementKind, j: int|
         e <= j <= s.len() && !kind_proven(k, html) && #[trigger] element_matches(
@@ -210,6 +211,32 @@ pub open spec fn unproven_bounded(goal: Goal, html: bool, s: Seq<u32>, pos: int,
             pos,
             j,
         ) ==> false
+}
+
+/// Outside Annex B's `html` mode the only kind that is not proven is the
+/// regular expression literal, which starts with `/`: where the code point
+/// is not `/`, nothing unproven is derived at all, so [`unproven_bounded`]
+/// holds for every `e`. This discharges the hypothesis of
+/// `exec::lemma_element_meets_contract` for those positions.
+pub proof fn lemma_unproven_absent(goal: Goal, s: Seq<u32>, pos: int, e: int)
+    requires
+        0 <= pos < s.len(),
+        s[pos] != 0x2F,
+    ensures
+        unproven_bounded(goal, false, s, pos, e),
+{
+    assert forall|k: ElementKind, j: int|
+        e <= j <= s.len() && !kind_proven(k, false) && #[trigger] element_matches(
+            goal,
+            false,
+            k,
+            s,
+            pos,
+            j,
+        ) implies false by {
+        assert(k == ElementKind::RegularExpressionLiteral);
+        let b = choose|b: int| regexp_literal(s, pos, j, b);
+    }
 }
 
 /// If the kinds `k1` and `k2` are bounded by `e` and every other proven kind

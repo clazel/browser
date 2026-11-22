@@ -31,11 +31,13 @@
 //!   is derived by an element of that kind. The kinds are `WhiteSpace`,
 //!   `LineTerminator`, `HashbangComment`, `DivPunctuator`,
 //!   `RightBracePunctuator`, `Punctuator`, `NumericLiteral`,
-//!   `StringLiteral`, and `Comment` outside Annex B's `html` mode (a `//`
-//!   or `/* */` comment).
+//!   `StringLiteral`, `IdentifierName`, `PrivateIdentifier`, the four
+//!   template components, and `Comment` outside Annex B's `html` mode (a
+//!   `//` or `/* */` comment).
 //! - **Values, for the kinds of [`value_proven`]:** [`value_agrees_proven`]:
-//!   a `NumericLiteral`'s `bigint` and `legacy` flags and a
-//!   `StringLiteral`'s SV are the spec's relations
+//!   a `NumericLiteral`'s `bigint` and `legacy` flags, a `StringLiteral`'s
+//!   SV, an identifier's IdentifierCodePoints and escape flag, and a
+//!   template's TV and TRV are the spec's relations
 //!   ([`super::contract::element_value_agrees`]).
 //! - **Longest match across the proven kinds** ([`proven_bounded`]): when
 //!   the element is of a [`kind_proven`] kind, no derivation, from `pos`, of
@@ -45,77 +47,90 @@
 //!   `lex_lt`, `lex_slash`, `lex_brace`, `lex_backtick`, `lex_string`,
 //!   `lex_hash`, `lex_numeric`, `lex_ident`, `lex_html_open`, `lex_punct`)
 //!   proves it from the code points each kind can start with
-//!   ([`super::longest_proofs::start_ok`], `lemma_first_cp`).
+//!   ([`super::longest_proofs::start_ok`], `lemma_first_cp`). White space
+//!   and line terminators are shown not to start an identifier from the
+//!   generated Unicode table
+//!   ([`super::ident_proofs::lemma_ws_lt_not_id_start`]).
+//! - **The errors** of [`lex_error`] for the proven kinds: an identifier
+//!   with an early error (§12.7.1.1) is [`LexError::InvalidIdentifierEscape`]
+//!   exactly when [`super::spec::identifier_name_valid`] fails (the one list
+//!   of IdentifierCodePoints the spec derives is the scan's,
+//!   [`super::ident_proofs::lemma_cps_unique`]), and the §12.9.3 check after
+//!   a numeric literal ([`numeric_follow_error`]) is
+//!   [`super::spec::numeric_literal_follow_error`] for every following code
+//!   point, above U+007F included (`ID_Start` there is the generated table,
+//!   which the spec's predicate is).
 //! - **The contract, for a proven kind, given what is not proven**
 //!   ([`lemma_element_meets_contract`]): if no derivation of a kind that is
-//!   not proven ([`super::longest_proofs::unproven_bounded`]: identifiers,
-//!   private identifiers, regular expression literals, templates, and in
-//!   `html` mode comments) is as long as the element, then
-//!   [`super::contract::next_input_element_ensures`] holds for it in full
-//!   (the longest length, the errors of [`lex_error`], the value), except
-//!   that for a `NumericLiteral` the code point after it must be below
-//!   U+0080 or absent ([`numeric_follow_error`] is proven to be the spec's
-//!   [`super::spec::numeric_literal_follow_error`] only then).
-//!   [`lemma_no_input_element_meets_contract`] and
-//!   [`lemma_numeric_error_meets_contract`] do the same for
-//!   [`LexError::NoInputElement`] and
-//!   [`LexError::IdentifierAfterNumericLiteral`].
+//!   not proven ([`super::longest_proofs::unproven_bounded`]: regular
+//!   expression literals, and in `html` mode comments) is as long as the
+//!   element, then [`super::contract::next_input_element_ensures`] holds for
+//!   it in full (the longest length, the errors of [`lex_error`], the
+//!   value). [`lemma_no_input_element_meets_contract`],
+//!   [`lemma_numeric_error_meets_contract`] and
+//!   [`lemma_invalid_identifier_meets_contract`] do the same for
+//!   [`LexError::NoInputElement`],
+//!   [`LexError::IdentifierAfterNumericLiteral`] and
+//!   [`LexError::InvalidIdentifierEscape`]. **The hypothesis is discharged
+//!   where the first code point is not `/`, outside `html` mode**
+//!   ([`super::longest_proofs::lemma_unproven_absent`]: a regular expression
+//!   literal starts with `/`), by [`lemma_element_meets_contract_not_slash`],
+//!   [`lemma_no_input_element_not_slash`],
+//!   [`lemma_numeric_error_not_slash`] and
+//!   [`lemma_invalid_identifier_not_slash`].
 //! - **The scanners that carry these:** `scan_punctuator`, `scan_numeric`
 //!   (with `scan_digits_sep`, `scan_exponent`, `scan_decimal_tail`),
 //!   `scan_string` (with `scan_string_escape`, `scan_legacy_octal_escape`,
-//!   `scan_unicode_escape`, `scan_hex_digits`, `scan_hex4`) and
-//!   `scan_block_comment` each state, in their `ensures`, that the end they
-//!   return is a range the spec derives, that no longer range is, and that
-//!   `None` means the spec derives none. The proofs reduce the spec's
-//!   productions to the closed forms of [`super::independent`] through
-//!   [`super::equivalence`], and reason about the closed forms in
-//!   [`super::scan_proofs`] and [`super::string_proofs`].
+//!   `scan_unicode_escape`, `scan_hex_digits`, `scan_hex4`),
+//!   `scan_block_comment`, `scan_identifier` and `scan_template` (with
+//!   `scan_template_escape` and `push_range_utf16`) each state, in their
+//!   `ensures`, that the end they return is a range the spec derives, that
+//!   no longer range is, and that `None` means the spec derives none. The
+//!   proofs reduce the spec's productions to the closed forms of
+//!   [`super::independent`] through [`super::equivalence`], and reason about
+//!   the closed forms in [`super::scan_proofs`], [`super::string_proofs`],
+//!   [`super::ident_proofs`] and [`super::template_proofs`].
 //! - **Single code points:** the classifiers (`is_ws`, `is_lt`, the digit
-//!   classes, `hex_val`) equal the spec's, and `push_utf16` is
-//!   UTF16EncodeCodePoint (§11.1.1).
+//!   classes, `hex_val`, `id_start_char`, `id_part_char`) equal the spec's,
+//!   and `push_utf16` is UTF16EncodeCodePoint (§11.1.1).
 //!
 //! It is **not** proven that the results agree with [`super::spec`]
 //! otherwise, so these functions do not implement [`super::api::JsLexer`]:
 //!
-//! - **Longest element against the unproven kinds** ([`longest_len`]): that
-//!   no element of a kind that is not proven is as long as the one returned
-//!   (the hypothesis of [`lemma_element_meets_contract`]). Nothing here
-//!   discharges it, not even where the first code point is ASCII and rules
-//!   an identifier out.
-//! - **The errors** of [`lex_error`]: [`LexError::InvalidIdentifierEscape`]
-//!   (identifiers); [`LexError::IdentifierAfterNumericLiteral`] when the
-//!   code point after the literal is above U+007F (see below).
+//! - **Regular expression literals** (`scan_regexp`, `scan_regexp_class`,
+//!   their flags, which are `IdentifierPartChar`s): nothing is proven about
+//!   their range or `body_end`, and so the longest match against them is the
+//!   open hypothesis of [`lemma_element_meets_contract`] wherever the first
+//!   code point is `/`. (The spec's `regexp_chars` is built left to right and
+//!   extends by one `RegularExpressionChar` with no change to its
+//!   triggers; what is not done is the scanners' proof and the uniqueness of
+//!   the closing `/` through classes and escapes.)
 //! - **`newline_before` being [`skip_trivia`]'s**: the flag is proven to be
 //!   the line terminators in the range, and [`skip_trivia`]'s to be the same
 //!   for its range; that the two ranges end at the same place is the
 //!   longest-match property for each trivia element, which holds only given
-//!   the hypothesis above.
+//!   the hypothesis above (for a `//` or `/* */` comment no regular
+//!   expression can start where it does, but this link is not stated).
 //! - **Annex B.1.1 comments** (`html` mode: `<!--`, `-->`, a multi-line
 //!   comment with an `HTMLCloseComment`): `Comment` is claimed only with
 //!   `html == false`. Not done: it needs the determinism of
 //!   `HTMLCloseComment`'s split (its `WhiteSpaceSequence?` and
 //!   `SingleLineDelimitedCommentSequence?` before `-->`) and the longest
 //!   range of an Annex B `MultiLineComment` followed by one.
-//! - **Identifiers and private identifiers, regular expression literals
-//!   (their flags are `IdentifierPartChar`s), the `ReservedWord` rule, and
-//!   the checks that read `IdentifierStart`**: nothing ties the table of
-//!   [`super::unicode`] to the spec's uninterpreted `ID_Start` and
-//!   `ID_Continue` of code points above U+007F
-//!   ([`super::spec::unicode_id_start_non_ascii`]), so the agreement of
-//!   anything that tests them cannot be stated until it is tied (an axiom
-//!   in an `axioms.rs`, CLAUDE.md rule 4, or an interpretation of the spec).
-//! - **Template literals** (their ranges, TV and TRV). Blocked by a proof
-//!   obstacle in [`super::spec`], not a lexing one: see
-//!   [`super::template_proofs`]. What it proves is that a
-//!   `TemplateCharacter` has one length and value and that none starts at a
-//!   closing delimiter.
+//! - **`ReservedWord`**: there is nothing to prove of it in this module. The
+//!   executable lexer returns an identifier's code points and its escape
+//!   flag ([`Value::Name`]), and whether a name is a `ReservedWord`
+//!   ([`super::spec::is_reserved_word`], proven equal to a closed form in
+//!   [`super::equivalence`]) is the parser's (§12.7.2).
 //!
 //! Their agreement with the spec is tested (`tests/`), not proven.
 //! [`lemma_contract_implies_proven`] shows that what is proven is implied
 //! by the full contract.
 //!
-//! Non-ASCII `ID_Start` and `ID_Continue` come from [`super::unicode`],
-//! which the spec leaves uninterpreted: nothing is claimed about them.
+//! `ID_Start` and `ID_Continue` above U+007F are [`super::unicode`]'s
+//! lookups, proven to be the spec's predicates, which are the generated
+//! Unicode 18.0.0 table (no axiom). That the table is the Unicode property
+//! is not proven: the spec's modelling choices list the evidence.
 
 #[cfg(verus_only)]
 use super::equivalence::*;
@@ -425,11 +440,8 @@ pub proof fn lemma_contract_implies_proven(
 
 /// The full contract for an element that [`next_input_element`] returns of
 /// a proven kind, **given** that no element of a kind that is not proven
-/// ([`unproven_bounded`]: an identifier, private identifier, regular
-/// expression literal, template or, in `html` mode, a comment, as long as
-/// this one or longer) is derived at `pos`, and, for a numeric literal,
-/// that the code point after it is below U+0080 (above it,
-/// `IdentifierStart` is the uninterpreted `ID_Start`).
+/// ([`unproven_bounded`]: a regular expression literal or, in `html` mode,
+/// a comment, as long as this one or longer) is derived at `pos`.
 ///
 /// This is the part of the longest-match property and of the errors
 /// ([`lex_error`]) that does not depend on the unproven kinds.
@@ -515,8 +527,7 @@ pub proof fn lemma_no_input_element_meets_contract(
 }
 
 /// The contract for [`LexError::IdentifierAfterNumericLiteral`], given that
-/// no element of a kind that is not proven is longer than the literal and
-/// that the code point after it is below U+0080.
+/// no element of a kind that is not proven is longer than the literal.
 pub proof fn lemma_numeric_error_meets_contract(
     src: Seq<u32>,
     pos: usize,
@@ -600,6 +611,105 @@ pub proof fn lemma_invalid_identifier_meets_contract(
     assert(n == end - i);
     reveal(numeric_absent);
     assert(!element_matches(goal, html, ElementKind::NumericLiteral, src, i, i + n));
+}
+
+/// The full contract for an element of a proven kind outside `html` mode
+/// whose first code point is not `/`: no regular expression literal can
+/// start there ([`lemma_unproven_absent`]), so the hypothesis of
+/// [`lemma_element_meets_contract`] holds.
+pub proof fn lemma_element_meets_contract_not_slash(
+    src: Seq<u32>,
+    pos: usize,
+    goal: Goal,
+    el: Element,
+)
+    requires
+        next_input_element_proven(src, pos, goal, false, Ok(Step::Element(el))),
+        kind_proven(el.kind, false),
+        src[pos as int] != 0x2F,
+    ensures
+        super::contract::next_input_element_ensures(src, pos, goal, false, Ok(Step::Element(el))),
+{
+    lemma_unproven_absent(goal, src, pos as int, el.end as int);
+    lemma_element_meets_contract(src, pos, goal, false, el);
+}
+
+/// The contract for [`LexError::NoInputElement`] outside `html` mode at a
+/// code point that is not `/`.
+pub proof fn lemma_no_input_element_not_slash(src: Seq<u32>, pos: usize, goal: Goal)
+    requires
+        next_input_element_proven(src, pos, goal, false, Err(LexError::NoInputElement)),
+        src[pos as int] != 0x2F,
+    ensures
+        super::contract::next_input_element_ensures(
+            src,
+            pos,
+            goal,
+            false,
+            Err(LexError::NoInputElement),
+        ),
+{
+    lemma_unproven_absent(goal, src, pos as int, pos as int + 1);
+    lemma_no_input_element_meets_contract(src, pos, goal, false);
+}
+
+/// The contract for [`LexError::IdentifierAfterNumericLiteral`] outside
+/// `html` mode at a code point that is not `/` (a numeric literal starts
+/// with a digit or `.`).
+pub proof fn lemma_numeric_error_not_slash(src: Seq<u32>, pos: usize, goal: Goal, end: int)
+    requires
+        next_input_element_proven(
+            src,
+            pos,
+            goal,
+            false,
+            Err(LexError::IdentifierAfterNumericLiteral),
+        ),
+        pos < end <= src.len(),
+        element_matches(goal, false, ElementKind::NumericLiteral, src, pos as int, end),
+        proven_bounded(goal, false, src, pos as int, end),
+        numeric_literal_follow_error(src, end),
+        src[pos as int] != 0x2F,
+    ensures
+        super::contract::next_input_element_ensures(
+            src,
+            pos,
+            goal,
+            false,
+            Err(LexError::IdentifierAfterNumericLiteral),
+        ),
+{
+    lemma_unproven_absent(goal, src, pos as int, end + 1);
+    lemma_numeric_error_meets_contract(src, pos, goal, false, end);
+}
+
+/// The contract for [`LexError::InvalidIdentifierEscape`] outside `html`
+/// mode at a code point that is not `/`.
+pub proof fn lemma_invalid_identifier_not_slash(src: Seq<u32>, pos: usize, goal: Goal, end: int)
+    requires
+        next_input_element_proven(
+            src,
+            pos,
+            goal,
+            false,
+            Err(LexError::InvalidIdentifierEscape),
+        ),
+        pos < end <= src.len(),
+        proven_bounded(goal, false, src, pos as int, end),
+        numeric_absent(src, pos as int),
+        invalid_identifier_at(goal, false, src, pos as int, end),
+        src[pos as int] != 0x2F,
+    ensures
+        super::contract::next_input_element_ensures(
+            src,
+            pos,
+            goal,
+            false,
+            Err(LexError::InvalidIdentifierEscape),
+        ),
+{
+    lemma_unproven_absent(goal, src, pos as int, end + 1);
+    lemma_invalid_identifier_meets_contract(src, pos, goal, false, end);
 }
 
 // ---------------------------------------------------------------------
@@ -4345,9 +4455,9 @@ fn regexp_candidate(src: &[u32], pos: usize) -> (r: Option<Candidate>)
 /// The next input element of `goal` at `pos`, trivia included (§12): the
 /// longest alternative, then the checks [`lex_error`] makes of it.
 ///
-/// Proven: [`next_input_element_proven`] (totality and span coverage).
-/// Not proven: the rest of [`super::contract::next_input_element_ensures`];
-/// see the module header.
+/// Proven: [`next_input_element_proven`] (totality, span coverage, and
+/// agreement with the spec for the proven kinds). Not proven: the rest of
+/// [`super::contract::next_input_element_ensures`]; see the module header.
 pub fn next_input_element(src: &[u32], pos: usize, goal: Goal, html: bool) -> (r: Result<
     Step,
     LexError,

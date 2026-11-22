@@ -10,22 +10,25 @@
 //! - [`contract`]: what the executable lexer must be proven to satisfy.
 //! - [`api`]: the token types and the contract-only trait [`api::JsLexer`].
 //! - [`exec`]: the executable lexer. Its totality and span coverage are
-//!   proven, and so is its agreement with [`spec`] for some token classes
+//!   proven, and so is its agreement with [`spec`] for most token classes
 //!   (punctuators, numeric and string literals, plain comments, white space
-//!   and line terminators; see the module's header for exactly which, and
-//!   which are open), and that it returns the longest of those kinds. The
-//!   rest of [`contract`] is tested, not proven, so it does not implement
-//!   [`api::JsLexer`] yet.
-//! - [`scan_proofs`], [`string_proofs`], [`template_proofs`],
-//!   [`longest_proofs`]: lemmas the proofs of [`exec`] use, about
-//!   [`independent`]'s closed forms, [`spec`]'s string and template
-//!   relations, and the longest match across kinds.
+//!   and line terminators, identifiers and private identifiers, template
+//!   literals; see the module's header for exactly which, and which are
+//!   open), and that it returns the longest of those kinds. The rest of
+//!   [`contract`] (regular expression literals, Annex B HTML-like comments)
+//!   is tested, not proven, so it does not implement [`api::JsLexer`] yet.
+//! - [`scan_proofs`], [`string_proofs`], [`ident_proofs`],
+//!   [`template_proofs`], [`longest_proofs`]: lemmas the proofs of [`exec`]
+//!   use, about [`independent`]'s closed forms, [`spec`]'s string, identifier
+//!   and template relations, and the longest match across kinds.
 //! - [`independent`]: a second transcription of part of the lexical grammar
 //!   from UAX #31 and ECMA-262 Annex A in closed form; [`equivalence`] proves
 //!   it equal to [`spec`] on every input it covers.
 //! - [`unicode`], [`unicode_data`]: `ID_Start` and `ID_Continue` above
-//!   U+007F, from a table generated from Unicode 18.0.0. The spec leaves
-//!   them uninterpreted, and nothing ties the two.
+//!   U+007F, from a table generated from Unicode 18.0.0. The spec's
+//!   predicates are that table (no axiom), and the lookups are proven to be
+//!   the spec's predicates; that the table is the Unicode property is not
+//!   proven.
 
 pub mod api;
 pub mod contract;
