@@ -60,7 +60,7 @@ fn slot_disp_exec(j: usize) -> (d: i32)
 }
 
 /// `mov dst, [r15 + 264 + 8 j]`.
-fn ex_load(dst: u8, j: usize) -> (i: x64::Instr)
+pub(crate) fn ex_load(dst: u8, j: usize) -> (i: x64::Instr)
     requires
         j < 31,
     ensures
@@ -78,7 +78,7 @@ fn ex_load(dst: u8, j: usize) -> (i: x64::Instr)
 }
 
 /// `mov [r15 + 264 + 8 j], src`.
-fn ex_store(j: usize, src: u8) -> (i: x64::Instr)
+pub(crate) fn ex_store(j: usize, src: u8) -> (i: x64::Instr)
     requires
         j < 31,
     ensures
@@ -682,7 +682,7 @@ fn emit_body_impl(ops: &[Op], nl: usize) -> (r: Option<Vec<x64::Instr>>)
 }
 
 /// The exit sequence appended to `code`.
-fn emit_exit(code: &mut Vec<x64::Instr>, exit_code: u32)
+pub(crate) fn emit_exit(code: &mut Vec<x64::Instr>, exit_code: u32)
     ensures
         final(code)@ == old(code)@ + exit_seq(exit_code),
 {
