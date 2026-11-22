@@ -951,6 +951,174 @@
         "witness": "deep_copy_kind(dm_doc(), Document { nodes: dm_out(dm_doc(), dm_el(seq![], seq![], None, None)).nodes.update(3, Node { wrapper: Some(0nat), ..dm_out(dm_doc(), dm_el(seq![], seq![], None, None)).nodes[3] }) }, seq![1usize], 0)"
       },
       "module": "deep_clone_lemmas"
+    },
+    {
+      "id": "subtree-count-counts-nothing",
+      "file": "src/spec.rs",
+      "find": "(k - 1) as NodeId) {\n            1nat\n        } else {\n            0nat",
+      "replace": "(k - 1) as NodeId) {\n            0nat\n        } else {\n            0nat",
+      "expect": "killed",
+      "reason": "The subtree count counts no node, so a deep clone of a leaf would add none: theorem_deep_clone_size is false.",
+      "certificate": {
+        "file": "src/deep_clone_size_mutation_lemmas.rs",
+        "lemma": "ds_leaf_exact()",
+        "witness": "subtree_size(ds_leaf(), 1) == 0"
+      },
+      "module": "deep_clone_size_lemmas"
+    },
+    {
+      "id": "subtree-count-counts-every-node",
+      "file": "src/spec.rs",
+      "find": "} else {\n            0nat\n        }\n    }\n}\n\n/// The size of",
+      "replace": "} else {\n            1nat\n        }\n    }\n}\n\n/// The size of",
+      "expect": "killed",
+      "reason": "The subtree count counts every node of the arena, not only the subtree: theorem_deep_clone_size is false.",
+      "certificate": {
+        "file": "src/deep_clone_size_mutation_lemmas.rs",
+        "lemma": "ds_leaf_exact()",
+        "witness": "subtree_size(ds_leaf(), 1) == 2"
+      },
+      "module": "deep_clone_size_lemmas"
+    },
+    {
+      "id": "subtree-count-ancestors-only",
+      "file": "src/spec.rs",
+      "find": "if is_host_including_inclusive_ancestor(doc, node, (k - 1) as NodeId) {\n            1nat",
+      "replace": "if is_inclusive_ancestor(doc, node, (k - 1) as NodeId) {\n            1nat",
+      "expect": "killed",
+      "reason": "The subtree leaves out a template's contents (ordinary descendants only): a deep clone of a template adds its contents too, so theorem_deep_clone_size is false.",
+      "certificate": {
+        "file": "src/deep_clone_size_mutation_lemmas.rs",
+        "lemma": "ds_tmpl_exact()",
+        "witness": "subtree_size(ds_tmpl(), 1) == 1"
+      },
+      "module": "deep_clone_size_lemmas"
+    },
+    {
+      "id": "subtree-count-extra-node",
+      "file": "src/spec.rs",
+      "find": "subtree_count(doc, node, (k - 1) as nat) + if",
+      "replace": "subtree_count(doc, node, (k - 1) as nat) + 1 + if",
+      "expect": "killed",
+      "reason": "The subtree count adds one node per arena node: theorem_deep_clone_size is false.",
+      "certificate": {
+        "file": "src/deep_clone_size_mutation_lemmas.rs",
+        "lemma": "ds_leaf_exact()",
+        "witness": "subtree_size(ds_leaf(), 1) == 3"
+      },
+      "module": "deep_clone_size_lemmas"
+    },
+    {
+      "id": "subtree-size-misses-last-node",
+      "file": "src/spec.rs",
+      "find": "    subtree_count(doc, node, doc.nodes.len())\n}",
+      "replace": "    subtree_count(doc, node, (doc.nodes.len() - 1) as nat)\n}",
+      "expect": "killed",
+      "reason": "The subtree size does not look at the last node of the arena (off by one): theorem_deep_clone_size is false when that node is in the subtree.",
+      "certificate": {
+        "file": "src/deep_clone_size_mutation_lemmas.rs",
+        "lemma": "ds_tmpl_exact()",
+        "witness": "subtree_size(ds_tmpl(), 1) == 1"
+      },
+      "module": "deep_clone_size_lemmas"
+    },
+    {
+      "id": "deep-clone-refusal-always",
+      "file": "src/contract.rs",
+      "find": "    &&& !can_create(doc, subtree_size(doc, node))",
+      "replace": "    &&& true",
+      "expect": "killed",
+      "reason": "A deep clone may be refused although the copy fits: theorem_clone_deep_refuses_exactly_when_full is false.",
+      "certificate": {
+        "file": "src/deep_clone_size_mutation_lemmas.rs",
+        "lemma": "ds_leaf_cannot_refuse()",
+        "witness": "clone_deep_refused(ds_leaf(), 1, ds_leaf())"
+      },
+      "module": "deep_clone_size_lemmas"
+    },
+    {
+      "id": "deep-clone-refusal-whole-limit",
+      "file": "src/contract.rs",
+      "find": "!can_create(doc, subtree_size(doc, node))",
+      "replace": "!can_create(doc, max_nodes())",
+      "expect": "killed",
+      "reason": "A deep clone is refused unless the arena is empty (it needs the whole node limit, not the subtree size): theorem_clone_deep_refuses_exactly_when_full is false.",
+      "certificate": {
+        "file": "src/deep_clone_size_mutation_lemmas.rs",
+        "lemma": "ds_leaf_cannot_refuse()",
+        "witness": "clone_deep_refused(ds_leaf(), 1, ds_leaf())"
+      },
+      "module": "deep_clone_size_lemmas"
+    },
+    {
+      "id": "deep-clone-grew-at-most",
+      "file": "src/contract.rs",
+      "find": "out.nodes.len() == doc.nodes.len() + subtree_size(doc, node)",
+      "replace": "out.nodes.len() <= doc.nodes.len() + subtree_size(doc, node)",
+      "expect": "killed",
+      "reason": "A deep clone may add fewer nodes than the subtree has: theorem_clone_deep_grew_means is false.",
+      "certificate": {
+        "file": "src/deep_clone_size_mutation_lemmas.rs",
+        "lemma": "ds_leaf_unchanged_is_not_grown()",
+        "witness": "clone_deep_grew(ds_leaf(), 1, ds_leaf())"
+      },
+      "module": "deep_clone_size_lemmas"
+    },
+    {
+      "id": "deep-clone-grew-one-more",
+      "file": "src/contract.rs",
+      "find": "out.nodes.len() == doc.nodes.len() + subtree_size(doc, node)",
+      "replace": "out.nodes.len() == doc.nodes.len() + 1 + subtree_size(doc, node)",
+      "expect": "killed",
+      "reason": "A deep clone must add one node more than the subtree has: a valid clone does not meet it, so theorem_deep_clone_grew is false.",
+      "certificate": {
+        "file": "src/deep_clone_size_mutation_lemmas.rs",
+        "lemma": "ds_leaf_grew()",
+        "witness": "!clone_deep_grew(ds_leaf(), 1, ds_leaf_copy())"
+      },
+      "module": "deep_clone_size_lemmas"
+    },
+    {
+      "id": "ranked-parent-not-strict",
+      "file": "src/spec.rs",
+      "find": "rank[node.parent->Some_0 as int] < rank[i]",
+      "replace": "rank[node.parent->Some_0 as int] <= rank[i]",
+      "expect": "killed",
+      "reason": "A node may rank like its parent (a cycle of parents would be ranked): theorem_ranked_at_facts is false.",
+      "certificate": {
+        "file": "src/deep_clone_size_mutation_lemmas.rs",
+        "lemma": "ds_rank_parent_strict()",
+        "witness": "ranked_at(ml_doc_child(), seq![0nat, 0nat, 0nat], 1)"
+      },
+      "module": "deep_clone_size_lemmas"
+    },
+    {
+      "id": "ranked-host-not-strict",
+      "file": "src/spec.rs",
+      "find": "h < n && rank[h as int] < rank[i]",
+      "replace": "h < n && rank[h as int] <= rank[i]",
+      "expect": "killed",
+      "reason": "A fragment may rank like its host (a template inside its own contents would be ranked): theorem_ranked_at_facts is false.",
+      "certificate": {
+        "file": "src/deep_clone_size_mutation_lemmas.rs",
+        "lemma": "ds_rank_host_strict()",
+        "witness": "ranked_at(ds_tmpl(), seq![0nat, 0nat, 0nat], 2)"
+      },
+      "module": "deep_clone_size_lemmas"
+    },
+    {
+      "id": "ranked-unbounded",
+      "file": "src/spec.rs",
+      "find": "    &&& rank[i] < n\n",
+      "replace": "    &&& true\n",
+      "expect": "killed",
+      "reason": "A rank may exceed the node count: theorem_ranked_at_facts is false.",
+      "certificate": {
+        "file": "src/deep_clone_size_mutation_lemmas.rs",
+        "lemma": "ds_rank_bounded()",
+        "witness": "ranked_at(ds_leaf(), seq![5nat, 0nat], 0)"
+      },
+      "module": "deep_clone_size_lemmas"
     }
   ]
 }
