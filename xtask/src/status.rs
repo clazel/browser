@@ -1219,8 +1219,9 @@ mod tests {
             &["clazel-dom"],
         );
         assert_eq!(found.len(), 2, "{found:?}");
-        // An engine crate left out of ENGINE.
-        assert_eq!(graph(&[], &["clazel-js-heap"]).len(), 1);
+        // An engine crate left out of ENGINE (a name no real crate has, so the
+        // test does not break when a real crate joins the list).
+        assert_eq!(graph(&[], &["clazel-js-not-listed"]).len(), 1);
     }
 
     #[test]
