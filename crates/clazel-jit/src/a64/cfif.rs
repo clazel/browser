@@ -3,8 +3,6 @@
 //! condition picks, run with the condition popped, so the arm's label 0 is the
 //! end of the whole `if`.
 
-#[allow(unused_imports)]
-use super::spec::*;
 #[cfg(verus_only)]
 use super::cfalg::*;
 #[cfg(verus_only)]
@@ -13,8 +11,6 @@ use super::cfblock::*;
 use super::cfcompose::*;
 #[cfg(verus_only)]
 use super::cfcontract::*;
-#[cfg(verus_only)]
-use crate::cfheight::*;
 #[cfg(verus_only)]
 use super::cfleaf::*;
 #[cfg(verus_only)]
@@ -25,8 +21,12 @@ use super::cfsteps::*;
 use super::cftemplates::*;
 #[cfg(verus_only)]
 use super::contract::*;
+#[allow(unused_imports)]
+use super::spec::*;
 #[cfg(verus_only)]
 use super::templates::*;
+#[cfg(verus_only)]
+use crate::cfheight::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 

@@ -3,10 +3,10 @@
 //! jump-free code by [`run_seq`] is a run by [`steps`]. The A64 counterpart of
 //! [`crate::cfsteps`]; every instruction is 4 bytes, so `fetch` is an index.
 
-#[allow(unused_imports)]
-use super::spec::*;
 #[cfg(verus_only)]
 use super::cfspec::*;
+#[allow(unused_imports)]
+use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 

@@ -7,8 +7,6 @@
 //! counterpart of [`crate::cfcheckrun`]. Only registers `x0` to `x2` and the
 //! flags change.
 
-#[allow(unused_imports)]
-use super::spec::*;
 #[cfg(verus_only)]
 use super::cfleaf::*;
 #[cfg(verus_only)]
@@ -17,8 +15,10 @@ use super::cfspec::*;
 use super::cfsteps::*;
 #[cfg(verus_only)]
 use super::cftemplates::*;
+#[allow(unused_imports)]
+use super::spec::*;
 #[cfg(verus_only)]
-use clazel_codecheck::a64::spec::{check_instr, Chk};
+use clazel_codecheck::a64::spec::{Chk, check_instr};
 #[allow(unused_imports)]
 use vstd::prelude::*;
 

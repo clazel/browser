@@ -289,6 +289,146 @@
         "lemma": "lemma_emitter_limits()",
         "witness": "MAX_TARGETS as nat != max_targets()"
       }
+    },
+    {
+      "id": "a64-load-access-index-register",
+      "module": "a64::cfmemvalid",
+      "file": "src/a64/cftemplates.rs",
+      "find": "load: true,\n                t: x0(),\n                n: x3(),\n                m: x1(),",
+      "replace": "load: true,\n                t: x0(),\n                n: x3(),\n                m: x2(),",
+      "expect": "killed",
+      "reason": "A load's access would index with `x2`, the check's scratch register for the bound, not the checked and masked index in `x1`. `a64::cfmemvalid::lemma_load_access_accepted` (the validator's `access_ok` admits the template's access after the check) is false for the mutant at region 0, 8 bytes.",
+      "certificate": {
+        "file": "src/a64/cfmemvalid.rs",
+        "lemma": "lemma_load_access_accepted()",
+        "witness": "!clazel_codecheck::a64::spec::access_ok(after_check(0, 8), clazel_codecheck::a64::spec::mem_access(mem_tail(MemOp::Load { region: 0, ty: MTy::I64 }, 0, 1)[0])->Some_0)"
+      }
+    },
+    {
+      "id": "a64-load-access-is-scaled",
+      "module": "a64::cfmemvalid",
+      "file": "src/a64/cftemplates.rs",
+      "find": "m: x1(),\n                s: false,\n            },\n            store_slot(",
+      "replace": "m: x1(),\n                s: true,\n            },\n            store_slot(",
+      "expect": "killed",
+      "reason": "A load's index would be shifted left by the access size (`S = 1`), so it would read at `base + 8 * index`, past the checked range. `a64::cfmemvalid::lemma_load_access_accepted` is false for the mutant (the validator's `access_ok` refuses a shifted index).",
+      "certificate": {
+        "file": "src/a64/cfmemvalid.rs",
+        "lemma": "lemma_load_access_accepted()",
+        "witness": "!clazel_codecheck::a64::spec::access_ok(after_check(0, 8), clazel_codecheck::a64::spec::mem_access(mem_tail(MemOp::Load { region: 0, ty: MTy::I64 }, 0, 1)[0])->Some_0)"
+      }
+    },
+    {
+      "id": "a64-store-access-index-register",
+      "module": "a64::cfmemvalid",
+      "file": "src/a64/cftemplates.rs",
+      "find": "t: x4(),\n                n: x3(),\n                m: x1(),",
+      "replace": "t: x4(),\n                n: x3(),\n                m: x2(),",
+      "expect": "killed",
+      "reason": "A store's access would index with `x2`, the check's scratch register for the bound, not the checked index. `a64::cfmemvalid::lemma_store_access_accepted` is false for the mutant at region 0, 8 bytes.",
+      "certificate": {
+        "file": "src/a64/cfmemvalid.rs",
+        "lemma": "lemma_store_access_accepted()",
+        "witness": "!clazel_codecheck::a64::spec::access_ok(after_check(0, 8), clazel_codecheck::a64::spec::mem_access(mem_tail(MemOp::Store { region: 0, ty: MTy::I64 }, 0, 2)[0])->Some_0)"
+      }
+    },
+    {
+      "id": "a64-i32-access-is-64-bit",
+      "module": "a64::cfmemvalid",
+      "file": "src/a64/cftemplates.rs",
+      "find": "MTy::I32 => isa::Width::W32,",
+      "replace": "MTy::I32 => isa::Width::W64,",
+      "expect": "killed",
+      "reason": "An `i32` access would be a 64-bit `ldr`/`str` (8 bytes) while its check admits 4: it would read or write past the checked range. `a64::cfmemvalid::lemma_mty_sf_bytes` (an access moves as many bytes as its type has) is false for the mutant at `i32`.",
+      "certificate": {
+        "file": "src/a64/cfmemvalid.rs",
+        "lemma": "lemma_mty_sf_bytes(MTy::I32)",
+        "witness": "sf_bytes(mty_sf(MTy::I32)) != MTy::I32.size()"
+      }
+    },
+    {
+      "id": "a64-bounds-check-exits-with-zero",
+      "module": "a64::cfmemvalid",
+      "file": "src/a64/cftemplates.rs",
+      "find": "MemOp::BoundsCheck { code, .. } => code as u16,",
+      "replace": "MemOp::BoundsCheck { code, .. } => 0u16,",
+      "expect": "killed",
+      "reason": "A failing `bounds_check` would exit with code 0, not its own code, which LIR's `Exit` carries. `a64::cfmemvalid::lemma_bc_exit_code` is false for the mutant at code 9.",
+      "certificate": {
+        "file": "src/a64/cfmemvalid.rs",
+        "lemma": "lemma_bc_exit_code(0, 1, 9)",
+        "witness": "mem_exit_code(MemOp::BoundsCheck { region: 0, size: 1, code: 9 }) as u32 != 9u32"
+      }
+    },
+    {
+      "id": "a64-br-table-chain-branches-on-not-equal",
+      "module": "a64::cfmemvalid",
+      "file": "src/a64/cftemplates.rs",
+      "find": "bcond_i(0, rel),",
+      "replace": "bcond_i(1, rel),",
+      "expect": "killed",
+      "reason": "A `br_table` entry would branch when the index differs from the entry's number (`b.ne` for `b.eq`), so it would take the first target for every index but 0. `a64::cfmemvalid::lemma_brt_cond` (the entry's condition is `eq`, 0) is false for the mutant.",
+      "certificate": {
+        "file": "src/a64/cfmemvalid.rs",
+        "lemma": "lemma_brt_cond(0, 0)",
+        "witness": "brt_entry(0, 0)[2]->BCond_cond != 0u8"
+      }
+    },
+    {
+      "id": "a64-branch-displacement-is-in-bytes",
+      "module": "a64::cfmemvalid",
+      "file": "src/a64/cftemplates.rs",
+      "find": "isa::Instr::B { imm26: (rel / 4) as i32 }",
+      "replace": "isa::Instr::B { imm26: (rel / 2) as i32 }",
+      "expect": "killed",
+      "reason": "A `b` would carry half the byte displacement where the machine scales its field by 4, so every branch would go twice as far. `a64::cfmemvalid::lemma_b_words` (a `b` 8 bytes on has `imm26` 2) is false for the mutant.",
+      "certificate": {
+        "file": "src/a64/cfmemvalid.rs",
+        "lemma": "lemma_b_words()",
+        "witness": "b_i(8)->B_imm26 != 2i32"
+      }
+    },
+    {
+      "id": "a64-br-if-branches-on-zero",
+      "module": "a64::cfmemvalid",
+      "file": "src/a64/cftemplates.rs",
+      "find": "Node::BrIf(l) => cond_pre(nl, h, false, if l < offs.len() {",
+      "replace": "Node::BrIf(l) => cond_pre(nl, h, true, if l < offs.len() {",
+      "expect": "killed",
+      "reason": "`br_if` would branch on a zero condition (`cbz` for `cbnz`). `a64::cfmemvalid::lemma_brif_branches_on_nonzero` is false for the mutant.",
+      "certificate": {
+        "file": "src/a64/cfmemvalid.rs",
+        "lemma": "lemma_brif_branches_on_nonzero()",
+        "witness": "ctmpl(Node::BrIf(0), 0, 1, seq![8int])[1]->CompareBranch_iszero != false"
+      }
+    },
+    {
+      "id": "a64-emitter-max-words-differs-from-spec",
+      "module": "a64::cfemit",
+      "file": "src/a64/cfemit.rs",
+      "find": "pub const MAX_WORDS: usize = 0x2_0000;",
+      "replace": "pub const MAX_WORDS: usize = 0x4_0000;",
+      "expect": "killed",
+      "reason": "The emitter would translate bodies up to 2^20 bytes where the spec's `cf_prog_ok` stops at `max_size` (2^19), so it would return a blob for a program the contract says has no translation, and a `cbz` could be asked to reach farther than its 19 bits. `a64::cfemit::lemma_emitter_limits` (the emitter's limit is the spec's) is false for the mutant.",
+      "certificate": {
+        "file": "src/a64/cfemit.rs",
+        "lemma": "lemma_emitter_limits()",
+        "witness": "4 * MAX_WORDS as nat != max_size()"
+      }
+    },
+    {
+      "id": "a64-emitter-max-targets-differs-from-spec",
+      "module": "a64::cfemit",
+      "file": "src/a64/cfemit.rs",
+      "find": "pub const MAX_TARGETS: usize = 0x10000;",
+      "replace": "pub const MAX_TARGETS: usize = 0x20000;",
+      "expect": "killed",
+      "reason": "The emitter would accept a `br_table` of up to 2^17 targets where the spec stops at `max_targets` (2^16, the most a 16-bit `movz` immediate can number), so a target's index would be truncated. `a64::cfemit::lemma_emitter_limits` is false for the mutant.",
+      "certificate": {
+        "file": "src/a64/cfemit.rs",
+        "lemma": "lemma_emitter_limits()",
+        "witness": "MAX_TARGETS as nat != max_targets()"
+      }
     }
   ]
 }

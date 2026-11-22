@@ -28,9 +28,6 @@
 //! - **Exit codes** are checked to be 16 bits first ([`codes_ok_exec`]), then
 //!   assumed by [`analyze`] and the emission.
 
-#[allow(unused_imports)]
-use super::spec::*;
-use super::emit::{emit_exit, emit_op, ex_load, ex_store, op_ok_exec, pops_exec, pushes_exec};
 #[cfg(verus_only)]
 use super::cfbrt::*;
 #[cfg(verus_only)]
@@ -49,6 +46,9 @@ use super::cfspec::*;
 use super::cftemplates::*;
 #[cfg(verus_only)]
 use super::contract::*;
+use super::emit::{emit_exit, emit_op, ex_load, ex_store, op_ok_exec, pops_exec, pushes_exec};
+#[allow(unused_imports)]
+use super::spec::*;
 #[cfg(verus_only)]
 use super::templates::*;
 use crate::cfspec::{MTy, MemOp, Node};
@@ -1024,7 +1024,7 @@ fn analyze(n: &Node, nl: usize, h: usize, labs: &[usize]) -> (r: Option<(Option<
             }
             Some((None, s))
         },
-        Node::Exit(c, k) => {
+        Node::Exit(_, k) => {
             proof {
                 assert(csize(*n, nl as nat, h as nat, depth as nat) == 12);
             }

@@ -4,8 +4,6 @@
 //! A64 counterpart of [`crate::cfop`]; the facts about LIR's evaluation of a
 //! straight-line instruction ([`crate::cfop::lemma_op_frame`]) are shared.
 
-#[allow(unused_imports)]
-use super::spec::*;
 #[cfg(verus_only)]
 use super::cfalg::*;
 #[cfg(verus_only)]
@@ -16,6 +14,8 @@ use super::cfspec::*;
 use super::cfsteps::*;
 #[cfg(verus_only)]
 use super::contract::*;
+#[allow(unused_imports)]
+use super::spec::*;
 #[cfg(verus_only)]
 use super::templates::*;
 #[cfg(verus_only)]

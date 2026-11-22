@@ -5,8 +5,6 @@
 //! counterpart of [`crate::cfleaf`]. A branch is relative to its own address
 //! and in words (choice 16 of [`super::cfspec`]).
 
-#[allow(unused_imports)]
-use super::spec::*;
 #[cfg(verus_only)]
 use super::cfalg::*;
 #[cfg(verus_only)]
@@ -17,6 +15,8 @@ use super::cfspec::*;
 use super::cfsteps::*;
 #[cfg(verus_only)]
 use super::cftemplates::*;
+#[allow(unused_imports)]
+use super::spec::*;
 #[cfg(verus_only)]
 use super::templates::*;
 #[allow(unused_imports)]

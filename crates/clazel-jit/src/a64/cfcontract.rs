@@ -45,14 +45,14 @@
 //!   [`crate::cfspec`]).
 //! - Anything about `pc`, flags or scratch registers beyond what is said.
 
-#[allow(unused_imports)]
-use super::spec::*;
 #[cfg(verus_only)]
 use super::cfspec::*;
 #[cfg(verus_only)]
 use super::cftemplates::*;
 #[cfg(verus_only)]
 use super::contract::*;
+#[allow(unused_imports)]
+use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 

@@ -7,8 +7,6 @@
 //! with it that the code is in the subset. The A64 counterpart of
 //! [`crate::cfproofs`].
 
-#[allow(unused_imports)]
-use super::spec::*;
 #[cfg(verus_only)]
 use super::cfblock::*;
 #[cfg(verus_only)]
@@ -39,6 +37,8 @@ use super::cftemplates::*;
 use super::cfvalid::*;
 #[cfg(verus_only)]
 use super::contract::*;
+#[allow(unused_imports)]
+use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 

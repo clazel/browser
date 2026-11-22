@@ -4,8 +4,6 @@
 //! a `b` over the stub, and the stub (an exit sequence) both of the check's
 //! exits go to. The A64 counterpart of [`crate::cfmemops`].
 
-#[allow(unused_imports)]
-use super::spec::*;
 #[cfg(verus_only)]
 use super::cfalg::*;
 #[cfg(verus_only)]
@@ -28,10 +26,12 @@ use super::cfspec::*;
 use super::cfsteps::*;
 #[cfg(verus_only)]
 use super::cftemplates::*;
+#[allow(unused_imports)]
+use super::spec::*;
 #[cfg(verus_only)]
 use super::templates::*;
 #[cfg(verus_only)]
-use crate::cfmemacc::{load_result, lemma_access_in_regions, store_result};
+use crate::cfmemacc::{lemma_access_in_regions, load_result, store_result};
 #[allow(unused_imports)]
 use vstd::prelude::*;
 

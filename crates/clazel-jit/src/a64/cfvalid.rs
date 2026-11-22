@@ -5,8 +5,6 @@
 //! has the leaf lemmas and [`crate::a64::cfproofs`] carries the size invariant
 //! that discharges them. The A64 counterpart of [`crate::cfvalid`].
 
-#[allow(unused_imports)]
-use super::spec::*;
 #[cfg(verus_only)]
 use super::cffit::*;
 #[cfg(verus_only)]
@@ -15,6 +13,8 @@ use super::cfspec::*;
 use super::cftemplates::*;
 #[cfg(verus_only)]
 use super::contract::*;
+#[allow(unused_imports)]
+use super::spec::*;
 #[cfg(verus_only)]
 use super::templates::*;
 #[allow(unused_imports)]

@@ -6,12 +6,12 @@
 //! invariant is closed under taking a piece of the code ([`lemma_fit_shift`]),
 //! adding a label in front ([`lemma_fit_cons`]) and shrinking the size.
 
-#[allow(unused_imports)]
-use super::spec::*;
 #[cfg(verus_only)]
 use super::cfspec::*;
 #[cfg(verus_only)]
 use super::cftemplates::*;
+#[allow(unused_imports)]
+use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 

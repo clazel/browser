@@ -5,8 +5,6 @@
 //! counterpart of [`crate::cfbrt`]; each entry is 3 words, so entry `i` is at
 //! word `1 + 3 i` and the final `b` at word `1 + 3 n`.
 
-#[allow(unused_imports)]
-use super::spec::*;
 #[cfg(verus_only)]
 use super::cfalg::*;
 #[cfg(verus_only)]
@@ -23,6 +21,8 @@ use super::cfspec::*;
 use super::cfsteps::*;
 #[cfg(verus_only)]
 use super::cftemplates::*;
+#[allow(unused_imports)]
+use super::spec::*;
 #[cfg(verus_only)]
 use super::templates::*;
 #[allow(unused_imports)]

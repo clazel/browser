@@ -26,10 +26,10 @@
 //! `offs[l]` has displacement `(offs[l] - pos) / 4` (choice 16 of
 //! [`crate::a64::cfspec`]).
 
-#[allow(unused_imports)]
-use super::spec::*;
 #[cfg(verus_only)]
 use super::cfspec::*;
+#[allow(unused_imports)]
+use super::spec::*;
 #[cfg(verus_only)]
 use super::templates::*;
 #[cfg(verus_only)]

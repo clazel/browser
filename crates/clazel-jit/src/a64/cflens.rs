@@ -2,8 +2,6 @@
 //! bytes, so [`csize`] is the length of [`ctmpl`] whatever the labels' offsets
 //! are. The A64 counterpart of [`crate::cflens`].
 
-#[allow(unused_imports)]
-use super::spec::*;
 #[cfg(verus_only)]
 use super::cfbrt::*;
 #[cfg(verus_only)]
@@ -12,6 +10,8 @@ use super::cfif::lemma_cond_pre_len;
 use super::cfspec::*;
 #[cfg(verus_only)]
 use super::cftemplates::*;
+#[allow(unused_imports)]
+use super::spec::*;
 #[cfg(verus_only)]
 use super::templates::*;
 #[allow(unused_imports)]

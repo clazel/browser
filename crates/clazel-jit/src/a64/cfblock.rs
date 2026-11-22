@@ -3,8 +3,6 @@
 //! body, a branch to the block's own label, a branch past it, an exit), then
 //! the two lemmas that use them.
 
-#[allow(unused_imports)]
-use super::spec::*;
 #[cfg(verus_only)]
 use super::cfalg::*;
 #[cfg(verus_only)]
@@ -12,11 +10,13 @@ use super::cfcompose::*;
 #[cfg(verus_only)]
 use super::cfcontract::*;
 #[cfg(verus_only)]
-use crate::cfheight::*;
-#[cfg(verus_only)]
 use super::cfspec::*;
 #[cfg(verus_only)]
 use super::contract::*;
+#[allow(unused_imports)]
+use super::spec::*;
+#[cfg(verus_only)]
+use crate::cfheight::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 

@@ -50,7 +50,7 @@
 use super::spec::*;
 #[cfg(verus_only)]
 pub use crate::cfspec::{
-    cf_flow, flow_fits, max_targets, templated, Flow, MTy, MemOp, Node, exit_instr, void_bt,
+    Flow, MTy, MemOp, Node, cf_flow, exit_instr, flow_fits, max_targets, templated, void_bt,
 };
 #[allow(unused_imports)]
 use vstd::prelude::*;

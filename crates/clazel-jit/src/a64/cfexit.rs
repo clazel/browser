@@ -5,8 +5,6 @@
 //! afterwards ([`exit_ops_refines`], [`cf_refines`]). The A64 counterpart of
 //! [`crate::cfexit`].
 
-#[allow(unused_imports)]
-use super::spec::*;
 #[cfg(verus_only)]
 use super::cfalg::*;
 #[cfg(verus_only)]
@@ -19,6 +17,8 @@ use super::cfspec::*;
 use super::cfsteps::*;
 #[cfg(verus_only)]
 use super::contract::*;
+#[allow(unused_imports)]
+use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 

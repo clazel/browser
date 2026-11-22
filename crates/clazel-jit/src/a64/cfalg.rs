@@ -4,12 +4,12 @@
 //! state. The A64 counterpart of [`crate::cfalg`] (without the native stack
 //! word, which the exit sequence does not read).
 
-#[allow(unused_imports)]
-use super::spec::*;
 #[cfg(verus_only)]
 use super::cfcontract::*;
 #[cfg(verus_only)]
 use super::cfspec::*;
+#[allow(unused_imports)]
+use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
