@@ -8,7 +8,8 @@
 use clazel_js_syntax::exec::parse;
 use clazel_js_syntax::spec::SourceGoal;
 use clazel_js_vm::bytecode::{
-    Const, ErrorKind, FunctionCode, FunctionKind, Handler, Instr, Program, Span, check_program,
+    Const, ErrorKind, FunctionCode, FunctionKind, GlobalDecls, Handler, Instr, Program, Span,
+    VarScoped, check_program,
 };
 use clazel_js_vm::compile::{CompileError, compile_script};
 
@@ -36,20 +37,32 @@ fn text(s: &str) -> Const {
 #[test]
 fn global_var_and_arithmetic() -> Result<(), String> {
     // `var` at the top of a script is a property of the global object: a
-    // reference is a global access, and the initializer a SetGlobal.
+    // reference is a global access, the initializer a SetGlobal, and the
+    // variable itself is created by DeclareGlobals (§16.1.7† step 17).
     let p = compile("var x = 1 + 2;")?;
     let f = func(&p, 0)?;
     assert_eq!(f.kind, FunctionKind::Script);
-    assert_eq!(f.consts, vec![text("x")]);
+    assert_eq!(
+        f.consts,
+        vec![
+            Const::GlobalDeclarations(GlobalDecls {
+                lexical: vec![],
+                var_scoped: vec![VarScoped::Var("x".encode_utf16().collect())],
+                annexb: vec![],
+            }),
+            text("x")
+        ]
+    );
     assert_eq!(
         f.instrs,
         vec![
             Instr::LoadUndefined { dst: 0 },
+            Instr::DeclareGlobals { k: 0 },
             Instr::LoadInt { dst: 2, imm: 1 },
             Instr::LoadInt { dst: 3, imm: 2 },
             Instr::Add { dst: 1, a: 2, b: 3 },
             Instr::SetGlobal {
-                key: 0,
+                key: 1,
                 src: 1,
                 ic: 0
             },
@@ -63,22 +76,24 @@ fn global_var_and_arithmetic() -> Result<(), String> {
 #[test]
 fn parameters_are_the_first_registers() -> Result<(), String> {
     let p = compile("function f(a, b) { return a + b; }")?;
-    // The script hoists `f` onto the global object (§16.1.7).
+    // The script declares `f` on the global object (§16.1.7† step 16).
     let main = func(&p, 0)?;
+    assert_eq!(
+        main.consts,
+        vec![Const::GlobalDeclarations(GlobalDecls {
+            lexical: vec![],
+            var_scoped: vec![VarScoped::Function {
+                name: "f".encode_utf16().collect(),
+                func: 1
+            }],
+            annexb: vec![],
+        })]
+    );
     assert_eq!(
         main.instrs,
         vec![
             Instr::LoadUndefined { dst: 0 },
-            Instr::NewClosure {
-                dst: 1,
-                func: 1,
-                env: 0
-            },
-            Instr::SetGlobal {
-                key: 0,
-                src: 1,
-                ic: 0
-            },
+            Instr::DeclareGlobals { k: 0 },
             Instr::LoadUndefined { dst: 1 },
             Instr::Return { src: 1 },
         ]
@@ -446,17 +461,128 @@ fn object_and_array_literals() -> Result<(), String> {
     assert_eq!(
         f.instrs
             .iter()
-            .filter(|i| matches!(i, Instr::SetProp { .. }))
+            .filter(|i| matches!(i, Instr::DefineProp { .. }))
             .count(),
         1
     );
     assert_eq!(
         f.instrs
             .iter()
-            .filter(|i| matches!(i, Instr::SetElem { .. }))
+            .filter(|i| matches!(i, Instr::DefineElem { .. }))
             .count(),
         2
     );
+    // CreateDataPropertyOrThrow, never Set: no store op at all.
+    assert!(!f.instrs.iter().any(|i| matches!(
+        i,
+        Instr::SetProp { .. } | Instr::SetElem { .. } | Instr::SetLiteralProto { .. }
+    )));
+    Ok(())
+}
+
+/// `__proto__: v` sets the prototype (§13.2.5.5† step 7); a shorthand, a
+/// computed or a method `__proto__` defines a property.
+#[test]
+fn proto_in_an_object_literal() -> Result<(), String> {
+    let count = |src: &str, pred: fn(&Instr) -> bool| -> Result<usize, String> {
+        let p = compile(src)?;
+        Ok(func(&p, 0)?.instrs.iter().filter(|i| pred(i)).count())
+    };
+    let setter = |i: &Instr| matches!(i, Instr::SetLiteralProto { .. });
+    let define = |i: &Instr| matches!(i, Instr::DefineProp { .. } | Instr::DefineElem { .. });
+    assert_eq!(count("({ __proto__: p });", setter)?, 1);
+    assert_eq!(count("({ \"__proto__\": p });", setter)?, 1);
+    assert_eq!(count("({ __proto__: p });", define)?, 0);
+    assert_eq!(count("({ __proto__ });", setter)?, 0);
+    assert_eq!(count("({ ['__proto__']: p });", setter)?, 0);
+    assert_eq!(count("({ ['__proto__']: p });", define)?, 1);
+    assert_eq!(count("({ __proto__() {} });", setter)?, 0);
+    assert_eq!(count("({ __proto__() {} });", define)?, 1);
+    Ok(())
+}
+
+/// `typeof` of a global does not throw for an undeclared name (§13.5.3.1
+/// step 2.a); any other operand reads normally.
+#[test]
+fn typeof_of_a_global() -> Result<(), String> {
+    let p = compile("typeof undeclared;")?;
+    let f = func(&p, 0)?;
+    assert!(
+        f.instrs
+            .iter()
+            .any(|i| matches!(i, Instr::GetGlobalOrUndefined { .. }))
+    );
+    assert!(
+        !f.instrs
+            .iter()
+            .any(|i| matches!(i, Instr::GetGlobal { .. }))
+    );
+    assert!(f.instrs.iter().any(|i| matches!(i, Instr::TypeOf { .. })));
+    let p = compile("typeof undeclared.x;")?;
+    assert!(
+        func(&p, 0)?
+            .instrs
+            .iter()
+            .any(|i| matches!(i, Instr::GetGlobal { .. }))
+    );
+    Ok(())
+}
+
+/// Unary `+` is ToNumber (§13.5.4.1†), not a multiplication.
+#[test]
+fn unary_plus_is_to_number() -> Result<(), String> {
+    let p = compile("+a;")?;
+    let f = func(&p, 0)?;
+    assert!(f.instrs.iter().any(|i| matches!(i, Instr::ToNumber { .. })));
+    assert!(!f.instrs.iter().any(|i| matches!(i, Instr::Mul { .. })));
+    Ok(())
+}
+
+/// The declaration record lists the script's `var`s (also those in blocks),
+/// functions and Annex B block functions in source order; a script that
+/// declares none has no `DeclareGlobals`.
+#[test]
+fn global_declaration_record() -> Result<(), String> {
+    let name = |s: &str| -> Vec<u16> { s.encode_utf16().collect() };
+    let p = compile(
+        "var a; function f() { var inner; } { function g() {} } if (a) { var b, c; } var a;",
+    )?;
+    let f = func(&p, 0)?;
+    let Some(Const::GlobalDeclarations(d)) = f
+        .consts
+        .iter()
+        .find(|c| matches!(c, Const::GlobalDeclarations(_)))
+    else {
+        return Err("no record".to_string());
+    };
+    assert!(d.lexical.is_empty());
+    assert_eq!(d.annexb, vec![name("g")]);
+    let names: Vec<(bool, Vec<u16>)> = d
+        .var_scoped
+        .iter()
+        .map(|v| match v {
+            VarScoped::Var(n) => (false, n.clone()),
+            VarScoped::Function { name, .. } => (true, name.clone()),
+        })
+        .collect();
+    assert_eq!(
+        names,
+        vec![
+            (false, name("a")),
+            (true, name("f")),
+            (false, name("b")),
+            (false, name("c")),
+            (false, name("a")),
+        ]
+    );
+    for src in ["1 + 2;", "let x = 1;", "function f() { var y; }"] {
+        let p = compile(src)?;
+        let has = func(&p, 0)?
+            .instrs
+            .iter()
+            .any(|i| matches!(i, Instr::DeclareGlobals { .. }));
+        assert_eq!(has, src.starts_with("function"), "{src}");
+    }
     Ok(())
 }
 
@@ -680,9 +806,7 @@ fn not_yet_compiled() -> Result<(), String> {
             "accessors and generator or async methods",
         ),
         ("function f() { arguments; }", "the arguments object"),
-        ("typeof undeclared;", "typeof of a global variable"),
         ("delete x;", "delete of a variable"),
-        ("({ __proto__: p });", "__proto__ in an object literal"),
         (
             "if (a) function f() {}",
             "a function declaration as the body of an if or a label",

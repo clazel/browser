@@ -116,6 +116,8 @@ pub enum HandlerId {
     Not,
     /// ToNumeric §7.1.3.
     ToNumeric,
+    /// ToNumber §7.1.4†, for the operand of unary `+` (§13.5.4.1†).
+    ToNumber,
     /// `JumpIfTrue` and `JumpIfFalse`: ToBoolean §7.1.2.
     ToBoolean,
     /// The termination check at a back-edge: ends the evaluation with an
@@ -149,6 +151,21 @@ pub enum HandlerId {
     GetGlobal,
     /// A global variable write, PutValue §6.2.5.6.
     SetGlobal,
+    /// A global variable read that does not throw for an unresolvable
+    /// reference: `typeof`'s step 2.a, §13.5.3.1 (IsUnresolvableReference
+    /// §6.2.5.2†), then GetValue §6.2.5.5.
+    GetGlobalOrUndefined,
+    /// GlobalDeclarationInstantiation, §16.1.7†.
+    DeclareGlobals,
+    /// CreateDataPropertyOrThrow §7.3.7† with a constant key, for object and
+    /// array literals.
+    DefineProp,
+    /// CreateDataPropertyOrThrow §7.3.7† with a key from a register (after
+    /// ToPropertyKey §7.1.19†).
+    DefineElem,
+    /// The `__proto__: value` of an object literal, §13.2.5.5† step 7:
+    /// `[[SetPrototypeOf]]` when the value is an Object or null.
+    SetLiteralProto,
     /// Object literal, §13.2.5.
     NewObject,
     /// Array literal, §13.2.4.
@@ -500,6 +517,17 @@ pub enum Op {
         /// The register read.
         src: nat,
     },
+    /// `dst := ToNumber(src)`, §7.1.4†, on a Number (the identity, step 1).
+    /// Unlike [`Op::ToNumeric`], a BigInt is a TypeError (step 3), so this is
+    /// the op of unary `+` (§13.5.4.1†: "Return ? ToNumber(? GetValue(expr))").
+    /// A Symbol is a TypeError (step 2); an Object goes through ToPrimitive
+    /// (steps 9 and 10). Everything but a Number is the handler's.
+    ToNumber {
+        /// The register written.
+        dst: nat,
+        /// The register read.
+        src: nat,
+    },
     /// `pc := target` if ToBoolean(`cond`), §14.6.2.
     JumpIfTrue {
         /// The register tested.
@@ -720,6 +748,89 @@ pub enum Op {
         /// The element capacity.
         len: nat,
     },
+    /// `dst := global.key`, or `undefined` when `key` is an unresolvable
+    /// reference: the operand evaluation of `typeof identifier`, §13.5.3.1
+    /// (Runtime Semantics: Evaluation, UnaryExpression : `typeof`
+    /// UnaryExpression) step 2.a, "If IsUnresolvableReference(val) is true,
+    /// return "undefined"" (IsUnresolvableReference §6.2.5.2†), else step 3,
+    /// "Set val to ? GetValue(val)" (§6.2.5.5, so a getter, a Proxy trap or a
+    /// binding in its temporal dead zone still throws). Feeding the result to
+    /// [`Op::TypeOf`] is then the standard's `typeof`, because `typeof
+    /// undefined` is the same string whether the reference is unresolvable or
+    /// resolves to `undefined`. Unlike [`Op::GetGlobal`] it does not throw a
+    /// ReferenceError (§6.2.5.5 step 3) for an unresolvable reference.
+    GetGlobalOrUndefined {
+        /// The register written.
+        dst: nat,
+        /// The constant-pool index of the name.
+        key: nat,
+    },
+    /// GlobalDeclarationInstantiation(script, env), §16.1.7†, run once on
+    /// entry to a script, as the first op of its function (ScriptEvaluation
+    /// §16.1.6†, step 11 "Let result be Completion(GlobalDeclarationInstantiation
+    /// (script, globalEnv))" comes before the evaluation of the script's
+    /// statements in step 12). `consts[k]` is a heap reference to the script's
+    /// declaration record, built by the loader from what the compiler lists:
+    /// the LexicallyScopedDeclarations (each bound name, constant or not,
+    /// §16.1.7† step 13), the VarScopedDeclarations in source order (each a
+    /// variable's name, or a function's name and function template, step 5),
+    /// and the names Annex B.3.2.2† adds at step 12 (functions in blocks).
+    /// The handler is steps 1 to 18: the SyntaxError and TypeError checks of
+    /// steps 3, 4, 8 and 10 (HasVarDeclaration §9.1.1.4.12†, HasLexicalDeclaration
+    /// §9.1.1.4.13†, HasRestrictedGlobalProperty §9.1.1.4.14†, CanDeclareGlobalVar
+    /// §9.1.1.4.15†, CanDeclareGlobalFunction §9.1.1.4.16†), all before any
+    /// binding is created, then the lexical bindings (step 15), the function
+    /// objects (step 16, InstantiateFunctionObject over the global
+    /// environment, CreateGlobalFunctionBinding §9.1.1.4.18†) and the
+    /// variables (step 17, CreateGlobalVarBinding §9.1.1.4.17†).
+    DeclareGlobals {
+        /// The constant-pool index of the declaration record.
+        k: nat,
+    },
+    /// `CreateDataPropertyOrThrow(obj, consts[key], val)`, §7.3.7† (step 1
+    /// CreateDataProperty §7.3.5†, which defines the own property with
+    /// `[[Writable]]`, `[[Enumerable]]` and `[[Configurable]]` all true by
+    /// `obj.[[DefineOwnProperty]]`; step 2 throws a TypeError if that fails).
+    /// It is not `Set` (§7.3.4): it never reads the prototype chain, so a
+    /// setter or a read-only property inherited from it is not seen. Emitted
+    /// for each property of an object literal, §13.2.5.5† step 9, "Perform !
+    /// CreateDataPropertyOrThrow(object, propKey, propValue)", and for each
+    /// element of an array literal, §13.2.4.1† ArrayAccumulation. The key is
+    /// a property name constant, a string or a canonical numeric string.
+    DefineProp {
+        /// The register holding the object.
+        obj: nat,
+        /// The constant-pool index of the property name.
+        key: nat,
+        /// The register holding the value stored.
+        val: nat,
+    },
+    /// As [`Op::DefineProp`], with the key in register `idx`, converted by
+    /// ToPropertyKey §7.1.19† when the op runs: a computed property name
+    /// (§13.2.5.4†) and an array literal's index. An element that is the hole
+    /// (an elision) is the handler's to leave absent. An object key whose
+    /// conversion has side effects is converted when this op runs, which is
+    /// after the value expression, where the standard converts it first; the
+    /// op list has no ToPropertyKey op yet, and `SetElem` had the same gap.
+    DefineElem {
+        /// The register holding the object.
+        obj: nat,
+        /// The register holding the key.
+        idx: nat,
+        /// The register holding the value stored.
+        val: nat,
+    },
+    /// The `__proto__: val` form of an object literal, §13.2.5.5† steps 3
+    /// and 7: "If propValue is an Object or propValue is null, then Perform !
+    /// object.[[SetPrototypeOf]](propValue)", and nothing otherwise, never a
+    /// property definition. `obj` is the literal's fresh ordinary object, so
+    /// the call cannot fail.
+    SetLiteralProto {
+        /// The register holding the object.
+        obj: nat,
+        /// The register holding the value.
+        val: nat,
+    },
     /// `dst := new environment` with `size` slots (all holes) and `parent`.
     NewEnv {
         /// The register written.
@@ -858,6 +969,7 @@ pub open spec fn op_class(op: Op) -> OpClass {
         | Op::StrictNe { .. }
         | Op::Not { .. }
         | Op::ToNumeric { .. }
+        | Op::ToNumber { .. }
         | Op::JumpIfTrue { .. }
         | Op::JumpIfFalse { .. }
         | Op::Loop { .. }
@@ -881,6 +993,11 @@ pub open spec fn op_class(op: Op) -> OpClass {
         | Op::DeleteProp { .. }
         | Op::GetGlobal { .. }
         | Op::SetGlobal { .. }
+        | Op::GetGlobalOrUndefined { .. }
+        | Op::DeclareGlobals { .. }
+        | Op::DefineProp { .. }
+        | Op::DefineElem { .. }
+        | Op::SetLiteralProto { .. }
         | Op::NewObject { .. }
         | Op::NewArray { .. }
         | Op::NewEnv { .. }
@@ -926,6 +1043,7 @@ pub open spec fn op_handler(op: Op) -> HandlerId {
         Op::LooseEq { .. } | Op::LooseNe { .. } => HandlerId::LooseEq,
         Op::Not { .. } => HandlerId::Not,
         Op::ToNumeric { .. } => HandlerId::ToNumeric,
+        Op::ToNumber { .. } => HandlerId::ToNumber,
         Op::JumpIfTrue { .. } | Op::JumpIfFalse { .. } => HandlerId::ToBoolean,
         Op::Loop { .. } => HandlerId::Terminate,
         Op::ThrowIfHole { .. } => HandlerId::ThrowHole,
@@ -945,6 +1063,11 @@ pub open spec fn op_handler(op: Op) -> HandlerId {
         Op::DeleteProp { .. } => HandlerId::DeleteProp,
         Op::GetGlobal { .. } => HandlerId::GetGlobal,
         Op::SetGlobal { .. } => HandlerId::SetGlobal,
+        Op::GetGlobalOrUndefined { .. } => HandlerId::GetGlobalOrUndefined,
+        Op::DeclareGlobals { .. } => HandlerId::DeclareGlobals,
+        Op::DefineProp { .. } => HandlerId::DefineProp,
+        Op::DefineElem { .. } => HandlerId::DefineElem,
+        Op::SetLiteralProto { .. } => HandlerId::SetLiteralProto,
         Op::NewObject { .. } => HandlerId::NewObject,
         Op::NewArray { .. } => HandlerId::NewArray,
         Op::NewEnv { .. } => HandlerId::NewEnv,

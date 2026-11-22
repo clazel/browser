@@ -1151,7 +1151,7 @@ pub open spec fn op_wf(c: Code, op: Op) -> bool {
             reg_ok(c, dst) && reg_ok(c, a) && reg_ok(c, b),
         Op::Neg { dst, src } | Op::Inc { dst, src } | Op::Dec { dst, src }
         | Op::BitNot { dst, src } | Op::Not { dst, src } | Op::ToNumeric { dst, src }
-        | Op::TypeOf { dst, src } | Op::GetIterator { dst, src } =>
+        | Op::ToNumber { dst, src } | Op::TypeOf { dst, src } | Op::GetIterator { dst, src } =>
             reg_ok(c, dst) && reg_ok(c, src),
         Op::JumpIfTrue { cond, target } | Op::JumpIfFalse { cond, target } =>
             reg_ok(c, cond) && target < nops,
@@ -1173,6 +1173,11 @@ pub open spec fn op_wf(c: Code, op: Op) -> bool {
         Op::DeleteProp { dst, obj, idx } => reg_ok(c, dst) && reg_ok(c, obj) && reg_ok(c, idx),
         Op::GetGlobal { dst, key, ic } => reg_ok(c, dst) && key < c.consts.len() && ic < c.nics,
         Op::SetGlobal { key, src, ic } => key < c.consts.len() && reg_ok(c, src) && ic < c.nics,
+        Op::GetGlobalOrUndefined { dst, key } => reg_ok(c, dst) && key < c.consts.len(),
+        Op::DeclareGlobals { k } => k < c.consts.len() && value_wf(c.consts[k as int]),
+        Op::DefineProp { obj, key, val } => reg_ok(c, obj) && key < c.consts.len() && reg_ok(c, val),
+        Op::DefineElem { obj, idx, val } => reg_ok(c, obj) && reg_ok(c, idx) && reg_ok(c, val),
+        Op::SetLiteralProto { obj, val } => reg_ok(c, obj) && reg_ok(c, val),
         Op::NewObject { dst } => reg_ok(c, dst),
         Op::NewArray { dst, .. } => reg_ok(c, dst),
         Op::NewEnv { dst, parent, .. } => reg_ok(c, dst) && reg_ok(c, parent),
@@ -1375,6 +1380,8 @@ pub open spec fn fast_path(s: State, op: Op) -> bool {
             is_number(reg(s, a)) && is_number(reg(s, b)),
         Op::Neg { src, .. } | Op::Inc { src, .. } | Op::Dec { src, .. }
         | Op::BitNot { src, .. } | Op::ToNumeric { src, .. } => is_number(reg(s, src)),
+        // ToNumber §7.1.4† step 1: a Number is returned as it is; everything else is the handler's.
+        Op::ToNumber { src, .. } => is_number(reg(s, src)),
         Op::StrictEq { a, b, .. } | Op::StrictNe { a, b, .. } =>
             strict_eq_fast(reg(s, a), reg(s, b)) is Some,
         Op::Not { src, .. } => to_boolean_fast(reg(s, src)) is Some,
@@ -1504,6 +1511,8 @@ pub open spec fn fast_step(s: State, op: Op) -> State {
         Op::Not { dst, src } => next(set_reg(s, dst,
             enc_bool(match to_boolean_fast(reg(s, src)) { Some(r) => !r, None => false }))),
         Op::ToNumeric { dst, src } => next(set_reg(s, dst, reg(s, src))),
+        // ToNumber §7.1.4† step 1: "If argument is a Number, return argument."
+        Op::ToNumber { dst, src } => next(set_reg(s, dst, reg(s, src))),
         Op::JumpIfTrue { cond, target } =>
             if to_boolean_fast(reg(s, cond)) == Some(true) { jump(s, target) } else { next(s) },
         Op::JumpIfFalse { cond, target } =>

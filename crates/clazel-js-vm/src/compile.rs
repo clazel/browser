@@ -6,9 +6,9 @@
 //! - **Expressions:** literals (numbers, BigInts, strings, `true`, `false`,
 //!   `null`), identifiers, `this`, the unary, binary, logical, conditional and
 //!   comma operators, assignment (simple, compound and logical), `++` and `--`,
-//!   calls, `new`, member access, object literals (data properties and methods;
-//!   `__proto__:` excepted) and array literals without spread, and function
-//!   and arrow function expressions.
+//!   calls, `new`, member access, object literals (data properties, methods and
+//!   `__proto__:`) and array literals without spread, and function and arrow
+//!   function expressions; `typeof` of a global, unary `+` as `ToNumber`.
 //! - **Statements:** `var`, `let` and `const` with temporal-dead-zone checks,
 //!   blocks, `if`, `while`, `do`-`while` and `for`, `switch`, labels, `break`,
 //!   `continue`, `return`, `throw`, `try`/`catch`/`finally`, and function
@@ -25,10 +25,11 @@
 //! template literals, regular expression literals, optional chaining, accessors,
 //! `for`-`in` and `for`-`of`, the `arguments` object, `new.target`, and the few
 //! forms listed on [`CompileError::NotYetCompiled`]'s users in this file
-//! (`typeof` or `delete` of a global variable, `__proto__:` in an object
-//! literal, a function declaration as the body of an `if` or a label). The
-//! full list, and the gaps of the op list that cause some of them, are in the
-//! pull request that adds this file.
+//! (`delete` of a global variable, a function declaration as the body of an
+//! `if` or a label). A script's top-level `let`, `const` and `class` are
+//! locals of the script function, not bindings of the global declarative
+//! record (`DeclareGlobals`'s record lists none), and a computed property name
+//! is converted to a key when its define op runs, not before the value.
 //!
 //! # Conventions of the output
 //!
@@ -63,7 +64,8 @@
 //! FunctionDeclarationInstantiation, and Annex B.3.3.1.
 
 use crate::bytecode::{
-    Const, ErrorKind, FunctionCode, FunctionKind, Handler, Instr, LIMIT, Program, Reg, Span,
+    Const, ErrorKind, FunctionCode, FunctionKind, GlobalDecls, Handler, Instr, LIMIT, Program, Reg,
+    Span, VarScoped,
 };
 use crate::literal::{self, Number};
 use crate::scope::{self, Analysis, BKind, NONE, SKind, Target, span_of};
@@ -887,13 +889,10 @@ impl<'a> Cg<'a> {
             let name_node = self.child(fnn, 0)?;
             let name = self.name_of(name_node);
             let m = self.mark();
-            if sc.kind == SKind::Script {
-                let t = self.alloc()?;
-                self.make_closure(fnode, t, FunctionKind::Normal)?;
-                let key = self.konst(Const::String(self.name_units(name)?))?;
-                let ic = self.ic();
-                self.emit(Instr::SetGlobal { key, src: t, ic }, self.sp(fnode))?;
-            } else if let Some(&b) = sc.names.get(&name)
+            // A script's functions were created by `DeclareGlobals` (§16.1.7†
+            // step 16), before this prologue.
+            if sc.kind != SKind::Script
+                && let Some(&b) = sc.names.get(&name)
                 && self.binding(b)?.decl_fn == fnode
             {
                 let t = self.alloc()?;
@@ -1029,6 +1028,50 @@ impl<'a> Cg<'a> {
         Ok(index)
     }
 
+    /// §16.1.7† GlobalDeclarationInstantiation, as the script's first op:
+    /// `DeclareGlobals` over a record of the script's `var`s (the
+    /// VarScopedDeclarations, step 5), its top-level functions (compiled here,
+    /// to templates) and the functions Annex B.3.2.2† hoists out of blocks
+    /// (step 12). No op when the script declares none of them. The record's
+    /// `lexical` list is empty: the script's top-level `let`, `const` and
+    /// `class` are still locals of the script function, not bindings of the
+    /// global declarative record (they would need an op that initializes one).
+    fn declare_globals(&mut self, sc_id: u32, sp: Span) -> R<()> {
+        let sc = self.scope(sc_id)?;
+        let mut entries: Vec<(usize, VarScoped)> = Vec::new();
+        for &v in &self.an.global_vars {
+            let vn = self.node(v)?;
+            let name_node = self.child(vn, 0)?;
+            let name = self.name_units(self.name_of(name_node))?;
+            entries.push((vn.start, VarScoped::Var(name)));
+        }
+        for &fnode in &sc.funcs {
+            let fnn = self.node(fnode)?;
+            let name_node = self.child(fnn, 0)?;
+            let name = self.name_units(self.name_of(name_node))?;
+            let func = self.compile_function(fnode, FunctionKind::Normal)?;
+            entries.push((fnn.start, VarScoped::Function { name, func }));
+        }
+        entries.sort_by_key(|e| e.0);
+        let mut annexb: Vec<(usize, Vec<u16>)> = Vec::new();
+        for (&fnode, target) in &self.an.annexb {
+            if let Target::Global(g) = *target {
+                annexb.push((self.node(fnode)?.start, self.name_units(g)?));
+            }
+        }
+        annexb.sort_by_key(|e| e.0);
+        let decls = GlobalDecls {
+            lexical: Vec::new(),
+            var_scoped: entries.into_iter().map(|e| e.1).collect(),
+            annexb: annexb.into_iter().map(|e| e.1).collect(),
+        };
+        if decls.var_scoped.is_empty() && decls.annexb.is_empty() {
+            return Ok(());
+        }
+        let k = self.konst(Const::GlobalDeclarations(decls))?;
+        self.emit(Instr::DeclareGlobals { k }, sp)
+    }
+
     /// The prologue, the body and the implicit return of function `nd`.
     fn function_body(&mut self, nd: &Node, sc_id: u32, body: Option<u32>) -> R<()> {
         let span = self.f.span;
@@ -1047,6 +1090,9 @@ impl<'a> Cg<'a> {
             self.emit(Instr::LoadUndefined { dst: base }, start)?;
         } else {
             self.emit(Instr::GetCalleeEnv { dst: base }, start)?;
+        }
+        if self.f.kind == FunctionKind::Script {
+            self.declare_globals(sc_id, start)?;
         }
         self.enter_scope(sc_id, start)?;
         match nd.kind {
@@ -1985,22 +2031,9 @@ impl<'a> Cg<'a> {
                 self.emit(Instr::Neg { dst: d, src: r }, sp)?;
             }
             AOp::Plus => {
-                // §13.5.4.1: ToNumber(x). `x * 1` is the same on every
-                // operand: Number, ToPrimitive then ToNumber, and a TypeError
-                // for a Symbol and for a BigInt (§6.1.6.2.4 BigInt::multiply
-                // of a BigInt and a Number is a TypeError, as ToNumber of a
-                // BigInt is).
+                // §13.5.4.1†: "Return ? ToNumber(? GetValue(expr))".
                 let r = self.expr_any(operand)?;
-                let one = self.alloc()?;
-                self.load_int(one, 1, sp)?;
-                self.emit(
-                    Instr::Mul {
-                        dst: d,
-                        a: r,
-                        b: one,
-                    },
-                    sp,
-                )?;
+                self.emit(Instr::ToNumber { dst: d, src: r }, sp)?;
             }
             AOp::BitNot => {
                 let r = self.expr_any(operand)?;
@@ -2020,11 +2053,19 @@ impl<'a> Cg<'a> {
                     && self.res(inner) == NONE
                 {
                     // §13.5.3.1 step 2.a: `typeof` of an unresolvable reference is
-                    // "undefined", and GetGlobal throws for one.
-                    return self.not_yet("typeof of a global variable", inner);
+                    // "undefined", and GetGlobal throws for one; step 3 is
+                    // GetValue otherwise.
+                    let name = self.name_of(inner);
+                    let key = self.konst(Const::String(self.name_units(name)?))?;
+                    let m = self.mark();
+                    let t = self.alloc()?;
+                    self.emit(Instr::GetGlobalOrUndefined { dst: t, key }, self.sp(inner))?;
+                    self.emit(Instr::TypeOf { dst: d, src: t }, sp)?;
+                    self.release(m);
+                } else {
+                    let r = self.expr_any(operand)?;
+                    self.emit(Instr::TypeOf { dst: d, src: r }, sp)?;
                 }
-                let r = self.expr_any(operand)?;
-                self.emit(Instr::TypeOf { dst: d, src: r }, sp)?;
             }
             AOp::Delete => {
                 let inner = self.unparen(operand)?;
@@ -2169,8 +2210,9 @@ impl<'a> Cg<'a> {
         Ok(())
     }
 
-    /// §13.2.4.1: `NewArray` and one `SetElem` per element; an elision stores
-    /// the hole.
+    /// §13.2.4.1†: `NewArray` and one `DefineElem` per element
+    /// (CreateDataPropertyOrThrow); an elision defines the hole, which the
+    /// handler leaves absent.
     fn array_literal(&mut self, nd: &Node, d: Reg, sp: Span) -> R<()> {
         let len = u32::try_from(nd.children.len())
             .map_err(|_| CompileError::TooLarge("array literal"))?;
@@ -2189,7 +2231,7 @@ impl<'a> Cg<'a> {
                 self.expr_any(e)?
             };
             self.emit(
-                Instr::SetElem {
+                Instr::DefineElem {
                     obj: d,
                     idx,
                     val: v,
@@ -2201,10 +2243,10 @@ impl<'a> Cg<'a> {
         Ok(())
     }
 
-    /// §13.2.5.4 object literals: `NewObject` and one `SetProp` or `SetElem`
-    /// per property. (The standard's CreateDataPropertyOrThrow is not `Set`:
-    /// the op list has no define op, so a setter or a read-only property on
-    /// the prototype chain is seen here. See the pull request.)
+    /// §13.2.5.4 object literals: `NewObject` and one `DefineProp` or
+    /// `DefineElem` per property (§13.2.5.5† step 9, CreateDataPropertyOrThrow,
+    /// which does not see a setter or a read-only property on the prototype
+    /// chain), and `SetLiteralProto` for `__proto__: value` (step 7).
     fn object_literal(&mut self, nd: &Node, d: Reg, sp: Span) -> R<()> {
         self.emit(Instr::NewObject { dst: d }, sp)?;
         for &p in &nd.children {
@@ -2229,9 +2271,9 @@ impl<'a> Cg<'a> {
                 _ => None,
             };
             let proto: Vec<u16> = "__proto__".encode_utf16().collect();
-            if pn.op == AOp::KeyValue && plain_key.as_deref() == Some(proto.as_slice()) {
-                return self.not_yet("__proto__ in an object literal", p);
-            }
+            // §13.2.5.5† step 3: `__proto__: value`, with a non-computed key.
+            let is_proto_setter =
+                pn.op == AOp::KeyValue && plain_key.as_deref() == Some(proto.as_slice());
             // The key first (§13.2.5.5 PropertyDefinitionEvaluation: the property
             // name is evaluated before the value).
             let key = match plain_key {
@@ -2256,27 +2298,27 @@ impl<'a> Cg<'a> {
             } else {
                 self.expr_any(value_node)?
             };
-            match key {
-                Prop::Named(k) => {
-                    let ic = self.ic();
-                    self.emit(
-                        Instr::SetProp {
+            if is_proto_setter {
+                self.emit(Instr::SetLiteralProto { obj: d, val: v }, psp)?;
+            } else {
+                match key {
+                    Prop::Named(k) => self.emit(
+                        Instr::DefineProp {
                             obj: d,
                             key: k,
                             val: v,
-                            ic,
                         },
                         psp,
-                    )?;
+                    )?,
+                    Prop::Computed(idx) => self.emit(
+                        Instr::DefineElem {
+                            obj: d,
+                            idx,
+                            val: v,
+                        },
+                        psp,
+                    )?,
                 }
-                Prop::Computed(idx) => self.emit(
-                    Instr::SetElem {
-                        obj: d,
-                        idx,
-                        val: v,
-                    },
-                    psp,
-                )?,
             }
             self.release(m);
         }
