@@ -301,6 +301,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "Miri deliberately perturbs libm results such as powf")]
     fn exponentiation_special_cases() {
         assert!(exponentiate(1.0, f64::INFINITY).is_nan());
         assert_eq!(exponentiate(f64::NAN, 0.0), 1.0);
