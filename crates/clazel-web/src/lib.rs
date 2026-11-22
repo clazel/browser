@@ -8,7 +8,11 @@
 //! 7.17; item 7.1 vendored the WPT `testharness.js` tests and the TodoMVC
 //! implementations that later items run.
 //!
+//! Item 7.14's engine-independent core is [`events`]: DOM event dispatch
+//! (§2.9†) with the listener lists, over the same arena.
+//!
 //! Tier 0 (`Cargo.toml`): safe Rust, tested, nothing proven.
 
+pub mod events;
 pub mod selectors;
 pub mod serialize;
