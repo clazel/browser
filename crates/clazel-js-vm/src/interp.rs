@@ -149,10 +149,12 @@ pub enum Intrinsic {
     NumberPrototype,
     /// `%String.prototype%`.
     StringPrototype,
+    /// `%Array.prototype%`.
+    ArrayPrototype,
 }
 
 /// How many [`Intrinsic`]s there are.
-const INTRINSICS: usize = 10;
+const INTRINSICS: usize = 11;
 
 /// The hint of ToPrimitive (§7.1.1†).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

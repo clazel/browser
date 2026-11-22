@@ -49,6 +49,7 @@ pub mod lemmas;
 pub mod literal;
 pub mod numeric;
 pub mod ops;
+pub mod props;
 pub mod scope;
 pub mod spec;
 
