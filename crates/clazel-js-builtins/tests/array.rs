@@ -56,7 +56,10 @@ fn array_exotic_objects() -> Result<(), String> {
         // §10.4.2.1 step 2.h: an index at or above `length` grows it.
         ("var a = []; a[4] = 1; var r = a.length;", "5"),
         ("var a = [1, 2, 3]; var r = a.length;", "3"),
-        ("var a = [1, , 3]; var r = a.length + ',' + (1 in a);", "3,false"),
+        (
+            "var a = [1, , 3]; var r = a.length + ',' + (1 in a);",
+            "3,false",
+        ),
         ("var a = [1, 2, ,]; var r = a.length;", "3"),
         // A key that is not a canonical index does not.
         ("var a = []; a['01'] = 1; a.x = 2; var r = a.length;", "0"),
@@ -115,7 +118,10 @@ fn array_exotic_objects() -> Result<(), String> {
             "var r = Array.isArray({ length: 0 }) + ',' + Array.isArray([]);",
             "false,true",
         ),
-        ("var r = Object.getPrototypeOf([]) === Array.prototype;", "true"),
+        (
+            "var r = Object.getPrototypeOf([]) === Array.prototype;",
+            "true",
+        ),
         // Object.keys returns an array now.
         ("var r = Array.isArray(Object.keys({ a: 1 }));", "true"),
         (
@@ -172,7 +178,10 @@ fn array_mutators() -> Result<(), String> {
             "var a = [1, 2, 3]; var x = a.pop(); var r = x + ',' + a;",
             "3,1,2",
         ),
-        ("var a = []; var r = a.pop() + ',' + a.length;", "undefined,0"),
+        (
+            "var a = []; var r = a.pop() + ',' + a.length;",
+            "undefined,0",
+        ),
         (
             "var a = [1, 2, 3]; var x = a.shift(); var r = x + ',' + a + ',' + a.length;",
             "1,2,3,2",
@@ -290,7 +299,10 @@ fn array_accessors() -> Result<(), String> {
             "var r = [, 1].includes(undefined) + ',' + [, 1].indexOf(undefined);",
             "true,-1",
         ),
-        ("var r = [0].includes(-0) + ',' + [-0].indexOf(0);", "true,0"),
+        (
+            "var r = [0].includes(-0) + ',' + [-0].indexOf(0);",
+            "true,0",
+        ),
     ])
 }
 

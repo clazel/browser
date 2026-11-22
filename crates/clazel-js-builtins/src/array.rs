@@ -882,7 +882,14 @@ fn includes(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
 
 /// The callback of one element: `Call(callbackfn, thisArg, « kValue, 𝔽(k), O
 /// »)`.
-fn call3(vm: &mut Vm, f: Value, this_arg: Value, v: Value, k: f64, o: Value) -> Result<Value, Abrupt> {
+fn call3(
+    vm: &mut Vm,
+    f: Value,
+    this_arg: Value,
+    v: Value,
+    k: f64,
+    o: Value,
+) -> Result<Value, Abrupt> {
     vm.call(f, this_arg, &[v, number(k), o])
 }
 

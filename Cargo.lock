@@ -397,6 +397,7 @@ dependencies = [
  "clazel-js-number",
  "clazel-js-syntax",
  "clazel-js-vm",
+ "clazel-json",
 ]
 
 [[package]]

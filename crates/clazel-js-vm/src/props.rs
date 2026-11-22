@@ -84,11 +84,7 @@ impl Vm {
     ///
     /// # Errors
     /// [`Abrupt::Internal`] if the heap is corrupt.
-    pub fn get_own_property(
-        &self,
-        obj: Value,
-        key: Key,
-    ) -> Result<Option<(Attrs, Value)>, Abrupt> {
+    pub fn get_own_property(&self, obj: Value, key: Key) -> Result<Option<(Attrs, Value)>, Abrupt> {
         let Some(f) = self.heap.find(obj, key)?.filter(|f| f.own) else {
             return Ok(None);
         };
@@ -214,7 +210,9 @@ impl Vm {
             return Ok(false);
         }
         if index >= length {
-            let new_len = index.checked_add(1).ok_or(Abrupt::Internal("array index"))?;
+            let new_len = index
+                .checked_add(1)
+                .ok_or(Abrupt::Internal("array index"))?;
             self.heap.set_array_length(obj, new_len)?;
         }
         Ok(true)

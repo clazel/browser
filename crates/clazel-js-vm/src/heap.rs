@@ -256,7 +256,8 @@ impl Heap {
     /// Whether a value is an Array exotic object.
     #[must_use]
     pub fn is_array_object(&self, v: Value) -> bool {
-        self.obj(v).is_some_and(|o| matches!(o.kind, ObjKind::Array))
+        self.obj(v)
+            .is_some_and(|o| matches!(o.kind, ObjKind::Array))
     }
 
     /// The array index a key names (§6.1.7†), if it names one.
