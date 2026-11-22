@@ -104,8 +104,10 @@
 //!   - that the validator's `check_unit_at` recognizes the template's check
 //!     as a unit and every blob is accepted: the code is `check_seq`
 //!     itself and the test accepts it, but there is no theorem;
-//!   - blocks with parameters or results (modelling choice 8 of [`cfspec`]);
-//!   - the A64 back end's control flow and memory.
+//!   - blocks with parameters or results (modelling choice 8 of [`cfspec`]).
+//!
+//! The A64 back end's control flow, memory and emitter are the same slice
+//! over `clazel-a64`, proven likewise: see [`a64`].
 //!
 //! # What is not (of the first slice)
 //!

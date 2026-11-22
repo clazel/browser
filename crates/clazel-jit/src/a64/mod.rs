@@ -45,19 +45,58 @@
 //!   ([`contract::emit_body_ensures`], [`contract::emit_blob_ensures`]), and
 //!   refuses (`None`) exactly the programs [`spec::prog_ok`] refuses.
 //!
-//! # What is not
+//! # Control flow and memory (the second slice)
+//!
+//! The A64 counterpart of the x86-64 second slice, written contract first
+//! ([`cfspec`], [`cfcontract`], [`cftemplates`] in their own commit); the
+//! source language [`crate::cfspec::Node`] and its analysis
+//! ([`crate::cfspec::cf_flow`], sound for LIR's `eval`: [`crate::cfheight`])
+//! are shared with x86-64. Differences: a branch is relative to its own
+//! address and in words, so a label offset is a multiple of 4 and a
+//! conditional branch reaches 1 MiB each way ([`cffit`]; the translation
+//! refuses code above [`cftemplates::max_size`] bytes, `2^19`); exit codes are
+//! 16 bits; there is no native stack word and no `create_undef`.
+//!
+//! - **Proven, no axiom, no assumption:**
+//!   - composition over `then`, `block`, `loop` and `if` ([`cfcompose`],
+//!     [`cfblock`], [`cfif`]) and the leaves `br` (`b`), `br_if` (`cbnz`),
+//!     `exit` **with operands** and a straight-line instruction ([`cfleaf`],
+//!     [`cfexit`], [`cfop`]);
+//!   - **the memory instructions** `bounds_check`, `load` and `store`
+//!     ([`cfmemops`]): the code is the validator's own bounds-check sequence
+//!     (`clazel_codecheck::a64::spec::check_seq`, run by [`cfchk`]) around the
+//!     access, with the two exits going to a stub after the access; the check
+//!     fails exactly when LIR's `bounds_check` exits (where a `load` or
+//!     `store` is `Stuck` nothing is claimed);
+//!   - **`br_table`** ([`cfbrt`]): a `movz`, `cmp`, `b.eq` chain and a `b` to
+//!     the default;
+//!   - by induction over the program, **every templated node's code refines
+//!     it, is in the subset, and every displacement fits its field**
+//!     ([`cfproofs::lemma_ctmpl_refines`], [`cffit::labels_fit`]);
+//!   - **the emitter** [`cfemit::emit_cf_blob`] is proven equal to the
+//!     templates ([`cfcontract::emit_cf_blob_ensures`]); positions are words,
+//!     displacements are formed without signed arithmetic;
+//!   - the validator's access rule admits the access a memory instruction
+//!     makes ([`cfmemvalid::lemma_load_access_accepted`]).
+//!   `tests/validator_a64_cf.rs` checks that the A64 validator accepts every
+//!   memory template, `br_table`, and 1500 generated programs with control
+//!   flow and memory.
+//! - **Not done:** that the validator's `check_unit_at` recognizes the check
+//!   as a unit and every blob is accepted (the code is `check_seq` itself and
+//!   the test accepts it, but there is no theorem); blocks with parameters or
+//!   results; `f64` arithmetic; rotates; a frame beyond 31 slots.
+//!
+//! # What is not (of the first slice)
 //!
 //! - **That the A64 validator accepts every blob** is checked by
 //!   `tests/validator_a64.rs` (every template, 3000 generated programs), not
 //!   proven.
-//! - **Not covered by any template:** the memory instructions (`bounds_check`,
-//!   `load`, `store`); structured control flow (`block`, `loop`, `if`, `br`,
-//!   `br_if`, `br_table`) and so composition over it; `exit` with operands;
-//!   `f64` arithmetic, comparison and conversion (LIR's `f64` operators are
-//!   uninterpreted functions, so a refinement to `FADD` and the rest would need
-//!   an axiom this crate does not add); rotates (`clazel-a64`'s subset has no
-//!   `RORV`); a frame beyond 31 slots (it needs the region frame and the
-//!   bounds-check sequence on every access).
+//! - **Not covered by any template:** `f64` arithmetic, comparison and
+//!   conversion (LIR's `f64` operators are uninterpreted functions, so a
+//!   refinement to `FADD` and the rest would need an axiom this crate does not
+//!   add); rotates (`clazel-a64`'s subset has no `RORV`); a frame beyond 31
+//!   slots (it needs the region frame and the bounds-check sequence on every
+//!   access).
 //! - **No tier is claimed** (`tier` stays 0): the crate has no independent
 //!   transcription or conformance suite. The proofs are about the spec of
 //!   `clazel-a64` and the semantics of `clazel-lir`, whose faithfulness is
@@ -81,8 +120,8 @@ pub mod cfleaf;
 pub mod cflens;
 pub mod cfmemops;
 pub mod cfmemrel;
-pub mod cfmemvalid;
 pub mod cfmemsteps;
+pub mod cfmemvalid;
 pub mod cfop;
 pub mod cfproofs;
 pub mod cfspec;

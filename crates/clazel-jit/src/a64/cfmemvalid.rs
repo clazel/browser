@@ -8,14 +8,14 @@
 //! words, and `br_if` branches on a nonzero condition. The A64 counterpart of
 //! [`crate::cfmemvalid`].
 
-#[allow(unused_imports)]
-use super::spec::*;
 #[cfg(verus_only)]
 use super::cfmemsteps::*;
 #[cfg(verus_only)]
 use super::cfspec::*;
 #[cfg(verus_only)]
 use super::cftemplates::*;
+#[allow(unused_imports)]
+use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
