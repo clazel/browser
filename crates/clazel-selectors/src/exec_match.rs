@@ -667,6 +667,7 @@ fn walk_siblings(
 
 /// [`dp_match`]'s answer for the complex selector at `ci` of the list `bound`, and its work.
 #[verifier::spinoff_prover]
+#[verifier::rlimit(100)]
 fn complex_matches_exec(arena: &Arena, scope: Option<NodeId>, s: &ExecSelectors, bound: usize, ci: usize, x: usize) -> (r: (bool, Ghost<nat>))
     requires
         match_args(arena@, *s, bound as int),

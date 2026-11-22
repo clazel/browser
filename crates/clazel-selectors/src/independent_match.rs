@@ -1463,6 +1463,7 @@ pub proof fn lemma_i_m_list_exists(doc: Document, scope: Option<NodeId>, m: Seq<
 }
 
 /// The first `k` selectors of a related list.
+#[verifier::rlimit(100)]
 pub proof fn lemma_match_list_prefix(doc: Document, scope: Option<NodeId>, l: Seq<Complex>, m: Seq<IComplex>, k: int, x: NodeId)
     requires
         wf(doc),
