@@ -4,57 +4,126 @@
 //! (symbolic, not sampled), that the functions named never panic, never
 //! overflow (the crate is built with overflow checks, so an overflowing
 //! operation is a failed assertion), and never index out of bounds; and,
-//! where an oracle is cheap, that the answer is right:
+//! where an oracle is cheap, that the answer is right.
 //!
-//! - `Big::add_small` against `u128` addition;
-//! - `round_to_f64` for every `q`, `exp2` and `sticky`: total, and never
-//!   NaN or negative;
-//! - `eisel_lemire` for every `w`, `q` and every table entry with its top
-//!   bit set (as every real entry has): total, never NaN or negative. That
-//!   no table value can make it overflow is this proof; that the real table
-//!   is right is the differential tests' job;
-//! - `mul_shift` (every 57-bit `m`, 125-bit `mul` and shift),
-//!   `log10_pow2`, `log10_pow5` and `pow5bits`;
-//! - `scan_decimal` on every byte string of up to 5 bytes, `leading_digits`
-//!   on every 3 + 3 digit literal with any exponent, and `radix_value` on
-//!   every 3-byte string in each radix.
+//! # `FixedBig<N>`, the array-backed big integer of the Number conversions
 //!
-//! - on `Big` of up to two limbs (any `u128`): `mul_small` and `div_small`
-//!   (any word, zero included) are total; `cmp_big` is `u128` order;
-//!   `bit_len` and `bit` (any index) match `u128`.
+//! `FixedBig<N>` (`fixed.rs`) holds `N` limbs in an array and the count in
+//! use; an operation whose result needs more limbs drops them and sets a
+//! `lost` flag, so every operation is total at every `N`. The harnesses run
+//! it at `N` = 1, 2 and 3, not at the real sizes (64 limbs for StringToNumber's
+//! exact path, 32 for the formatters and tables: they were sized by argument
+//! and by measurement, see `fixed.rs`). The code is the same generic code at
+//! every `N`: every limb access is a `get`, `take` or `zip`, and `N` appears
+//! only as the array length and in `min(N)`, so what is shown at `N` = 2 or 3
+//! for totality holds at `N` = 64. That is an argument, not a Kani result, and
+//! the differential tests (`tests/fixed.rs` against `u128` with `N` = 2,
+//! `tests/differential.rs` at the real sizes) are the evidence behind it.
 //!
-//! Harnesses that were written and did not finish within 100 s to 400 s (on
-//! a loaded laptop; Kani reports a CBMC timeout as FAILED, not as a
-//! counterexample) were removed rather than left failing: `Big`'s `shl` and
-//! `shr` (even for a shift under 64), `add_assign` (even on one-limb
-//! inputs), `sub_assign`, `divrem`, `mul_small` and `div_small` checked
-//! against `u128` arithmetic, Ryu's `d2d_with` as a whole, and
-//! `layout_decimal` (string building). `string_to_number` over a two-byte
-//! `&str` crashed the Kani compiler (an internal error in its intrinsics
-//! pass) before it ran. So these are **not** proven panic-free by Kani:
-//! `decimal_exact`, `string_to_number`, `number_to_string`, the three `to_*`
-//! formatters, `Big` beyond the operations above, and `d2d_with`. The
-//! differential tests (`tests/differential.rs`, with overflow checks on)
-//! exercise them; that is evidence, not proof.
+//! Proven on symbolic contents, each keeping the representation invariant
+//! (`FixedBig::invariant`: `len <= N`, limbs from `len` on zero, top limb
+//! nonzero):
 //!
-//! BigInt parsing and printing (`js_bigint`): proven are `digit_value` and
-//! `digit_char` (total, below 36, mutually inverse, exactly the ASCII
-//! alphanumerics), `chunk_power` (the largest power of each radix 2 to 36
-//! in a `u64`), and one-limb `mul_small` then `add_small` against `u128`
-//! arithmetic (31 s). Written and stopped after more than 3 minutes, so
-//! removed: one-limb `div_small` against `u64` division (a 128-by-64-bit
-//! division) and `push_chunk` (a 64-step loop of `u64` division). Not proven:
+//! - `from_u128`, `low_u128`, `bit_len`, `bit` against `u128` (`N` = 2);
+//!   `cmp_big` is `u128` order;
+//! - `add_small`, `add_assign` against `u128` addition, and `lost` exactly on
+//!   carry out; `sub_assign` against saturating `u128` subtraction;
+//! - `mul_small`: one-limb value times a word equals the `u128` product;
+//!   total on any three limbs times any word;
+//! - `div_small`: total on any three limbs and any word, zero included, with
+//!   the remainder below the divisor;
+//! - `shl` (any shift of a `u64`, equal to the `u128` shift when it is below
+//!   64) and `shr` (any shift of a `u128`, with the sticky bit); both total
+//!   on any three limbs and any shift.
+//!
+//! Kani found one real bug here: `add_small` with a carry out of the top limb
+//! left a zero top limb (invariant broken, only when the value did not fit).
+//! Fixed by trimming.
+//!
+//! **Not proven by Kani**: `divrem` (its loop runs once per bit of the
+//! dividend; one limb with a free dividend did not finish in 12 minutes, and
+//! one limb with a dividend under 2^12 did not in 8), `mul_pow10`,
+//! `mul_pow5`, `div_pow5` (each is a loop whose counter falls by saturating
+//! subtraction around `mul_small`/`div_small`, but at `N` = 2 with `k` up to
+//! 40 the multiplications did not finish in 7 minutes), `to_decimal`. They are
+//! checked by `tests/fixed.rs` (`divrem`, against `u128`) and the
+//! differential tests.
+//!
+//! # StringToNumber
+//!
+//! `string_to_number(&str)` is `string_to_number_bytes(s.as_bytes(), tables())`,
+//! on bytes: the old `&str` version crashed the Kani compiler in `char`
+//! decoding (`trim_matches` over `char`s and `char::to_digit`), so trimming is
+//! now `trim_str_whitespace` on UTF-8 bytes and radix digits are
+//! `digit_in_radix` (`tests/trim.rs` compares the trimmer with
+//! `trim_matches(is_str_whitespace)` on every Unicode scalar value).
+//!
+//! - `string_to_number_bytes::<2>` with a table that has no Eisel-Lemire
+//!   entry: total on every byte string of up to 3 bytes over a 12-byte
+//!   alphabet (digits 0, 1, 9; both signs; `.`; `e`; space; `x`; `I`; the
+//!   bytes `E2` and `80`). That covers whitespace trimming, signs, the radix
+//!   prefix, `Infinity`'s first letter, `scan_decimal` and Clinger's fast
+//!   path. A three-byte literal never reaches the exact path (`decimal_exact`
+//!   needs a decimal exponent beyond 22 or more than 15 significant digits),
+//!   so that path is not covered by this harness.
+//! - Also: `round_to_f64` (every `q`, `exp2`, `sticky`), `eisel_lemire` (every
+//!   `w`, `q` and every table entry with its top bit set), `scan_decimal` on
+//!   every byte string of up to 5 bytes, `leading_digits` on every 3 + 3 digit
+//!   literal with any exponent, and `radix_value` on every 3-byte string in
+//!   each radix.
+//!
+//! **Not proven by Kani**: `decimal_exact` (the exact fallback): a harness for
+//! one digit times `10^exp`, `exp` in 0..=400 on two limbs, did not finish in
+//! 12 minutes; neither did 0..=40 nor 0..=18. Negative exponents also need
+//! `divrem`. So `string_to_number` is **not** proven panic-free overall.
+//! `tables()` (the powers-of-five tables, built once from `FixedBig` by
+//! loops over about 700 entries) is not proven either. A CBMC timeout is
+//! reported by Kani as FAILED, not as a counterexample; none of the harnesses
+//! that were dropped produced a counterexample.
+//!
+//! # Number to string, `toFixed`, `toExponential`, `toPrecision`
+//!
+//! Proven: `mul_shift` (every 57-bit `m`, 125-bit `mul` and shift),
+//! `log10_pow2`, `log10_pow5` and `pow5bits`.
+//!
+//! **Not proven by Kani**: `number_to_string`, `to_fixed`, `to_exponential`,
+//! `to_precision`, `scaled_round`, `exponent_digits`, `layout_decimal`
+//! (`String` building), and Ryu's `d2d_with` as a whole (written and stopped
+//! after more than 400 s). A harness for `scaled_round` at two limbs with
+//! `divrem` replaced by a stub that returns any value (Kani's unstable
+//! stubbing, which `cargo kani -p` does not enable) did not finish in 6
+//! minutes. The differential tests (`tests/differential.rs`: every `f32`
+//! widened, 300,000 random doubles, `toFixed`/`toExponential`/`toPrecision`
+//! against Rust's `{:.*}` and `{:.*e}`, with overflow checks on) exercise them;
+//! that is evidence, not proof.
+//!
+//! # BigInt (`js_bigint`, the `Vec`-backed `bigint::Big`)
+//!
+//! Proven: `digit_value` and `digit_char` (total, below 36, mutually inverse,
+//! exactly the ASCII alphanumerics), `chunk_power` (the largest power of each
+//! radix 2 to 36 in a `u64`), `Big`'s `mul_small` and `div_small` total on any
+//! two limbs, `cmp_big` is `u128` order and `bit_len`/`bit` match `u128`, and
+//! one-limb `mul_small` then `add_small` against `u128` arithmetic.
+//! `Big::add_small` against `u128` addition. BigInt magnitudes are unbounded,
+//! so `Big` stays `Vec`-backed, and Kani cannot grow a `Vec` symbolically:
 //! `parse_magnitude`, `magnitude_digits`, `string_to_bigint`,
-//! `bigint_literal_value`, `BigInt::to_string_radix`; `tests/bigint.rs`
-//! exercises them against an independent reference.
+//! `bigint_literal_value` and `BigInt::to_string_radix` are **not** proven;
+//! `tests/bigint.rs` exercises them against an independent reference.
+//! One-limb `div_small` against `u64` division and `push_chunk` (a 64-step
+//! loop of `u64` division) were stopped after more than 3 minutes.
+//!
+//! So `clazel-js-number` stays at tier 0: no public conversion is proven free
+//! of panics and overflow.
 
 use crate::bigint::Big;
+use crate::fixed::FixedBig;
 use crate::js_bigint::{chunk_power, digit_char, digit_value};
 use crate::parse::{
     Decimal, eisel_lemire, leading_digits, radix_value, round_to_f64, scan_decimal,
+    string_to_number_bytes,
 };
 use crate::shortest::{log10_pow2, log10_pow5, mul_shift};
-use crate::tables::pow5bits;
+use crate::tables::{Tables, pow5bits};
 
 #[kani::proof]
 #[kani::unwind(4)]
@@ -262,4 +331,196 @@ fn big_bit_len_and_bit_match_u128() {
     assert!(b.bit_len() == u64::from(128 - x.leading_zeros()));
     let want = i < 128 && (x >> i) & 1 == 1;
     assert!(b.bit(i) == want);
+}
+
+// ---- `FixedBig<N>` (array-backed): the same generic code at small `N` ----
+
+type B1 = FixedBig<1>;
+type B2 = FixedBig<2>;
+type B3 = FixedBig<3>;
+
+#[kani::proof]
+#[kani::unwind(5)]
+fn fixed_from_u128_is_u128() {
+    let x: u128 = kani::any();
+    let i: u64 = kani::any();
+    let b = B2::from_u128(x);
+    assert!(b.invariant() && !b.lost());
+    assert!(b.low_u128() == x);
+    assert!(b.bit_len() == u64::from(128 - x.leading_zeros()));
+    assert!(b.bit(i) == (i < 128 && (x >> i) & 1 == 1));
+    assert!(b.is_zero() == (x == 0));
+}
+
+#[kani::proof]
+#[kani::unwind(5)]
+fn fixed_cmp_is_u128_order() {
+    let x: u128 = kani::any();
+    let y: u128 = kani::any();
+    assert!(B2::from_u128(x).cmp_big(&B2::from_u128(y)) == x.cmp(&y));
+}
+
+#[kani::proof]
+#[kani::unwind(5)]
+fn fixed_add_small_is_u128_sum() {
+    let x: u128 = kani::any();
+    let a: u64 = kani::any();
+    let mut b = B2::from_u128(x);
+    b.add_small(a);
+    assert!(b.invariant());
+    assert!(b.low_u128() == x.wrapping_add(u128::from(a)));
+    assert!(b.lost() == x.checked_add(u128::from(a)).is_none());
+}
+
+#[kani::proof]
+#[kani::unwind(5)]
+fn fixed_mul_small_is_total() {
+    // Three limbs of any value times any word: total, invariant kept.
+    let x: [u64; 3] = kani::any();
+    let m: u64 = kani::any();
+    let mut b = B3::from_limbs(x);
+    b.mul_small(m);
+    assert!(b.invariant());
+}
+
+#[kani::proof]
+#[kani::unwind(5)]
+fn fixed_mul_small_one_limb_is_u128_product() {
+    let x: u64 = kani::any();
+    let m: u64 = kani::any();
+    let mut b = B2::from_u64(x);
+    b.mul_small(m);
+    assert!(b.invariant() && !b.lost());
+    assert!(b.low_u128() == u128::from(x) * u128::from(m));
+}
+
+#[kani::proof]
+#[kani::unwind(5)]
+fn fixed_div_small_is_total() {
+    let x: [u64; 3] = kani::any();
+    let d: u64 = kani::any();
+    let mut b = B3::from_limbs(x);
+    let r = b.div_small(d);
+    assert!(b.invariant());
+    assert!(d == 0 || r < d);
+}
+
+#[kani::proof]
+#[kani::unwind(5)]
+fn fixed_shl_is_total_and_u128_shift() {
+    let x: u64 = kani::any();
+    let bits: u64 = kani::any();
+    let b = B2::from_u64(x);
+    let s = b.shl(bits);
+    assert!(s.invariant());
+    if bits < 64 {
+        assert!(s.low_u128() == u128::from(x) << bits);
+        assert!(!s.lost());
+    }
+}
+
+#[kani::proof]
+#[kani::unwind(5)]
+fn fixed_shl_three_limbs_is_total() {
+    let x: [u64; 3] = kani::any();
+    let bits: u64 = kani::any();
+    let s = B3::from_limbs(x).shl(bits);
+    assert!(s.invariant());
+}
+
+#[kani::proof]
+#[kani::unwind(5)]
+fn fixed_shr_is_u128_shift() {
+    let x: u128 = kani::any();
+    let bits: u64 = kani::any();
+    let (s, sticky) = B2::from_u128(x).shr(bits);
+    assert!(s.invariant() && !s.lost());
+    if bits < 128 {
+        assert!(s.low_u128() == x >> bits);
+        assert!(sticky == (x & ((1u128 << bits) - 1) != 0));
+    } else {
+        assert!(s.is_zero() && sticky == (x != 0));
+    }
+}
+
+#[kani::proof]
+#[kani::unwind(5)]
+fn fixed_shr_three_limbs_is_total() {
+    let x: [u64; 3] = kani::any();
+    let bits: u64 = kani::any();
+    let (s, _) = B3::from_limbs(x).shr(bits);
+    assert!(s.invariant());
+}
+
+#[kani::proof]
+#[kani::unwind(5)]
+fn fixed_add_assign_is_u128_sum() {
+    let x: u128 = kani::any();
+    let y: u128 = kani::any();
+    let mut b = B2::from_u128(x);
+    b.add_assign(&B2::from_u128(y));
+    assert!(b.invariant());
+    assert!(b.low_u128() == x.wrapping_add(y));
+    assert!(b.lost() == x.checked_add(y).is_none());
+}
+
+#[kani::proof]
+#[kani::unwind(5)]
+fn fixed_add_assign_three_limbs_is_total() {
+    let x: [u64; 3] = kani::any();
+    let y: [u64; 3] = kani::any();
+    let mut b = B3::from_limbs(x);
+    b.add_assign(&B3::from_limbs(y));
+    assert!(b.invariant());
+}
+
+#[kani::proof]
+#[kani::unwind(5)]
+fn fixed_sub_assign_is_u128_difference() {
+    let x: u128 = kani::any();
+    let y: u128 = kani::any();
+    let mut b = B2::from_u128(x);
+    b.sub_assign(&B2::from_u128(y));
+    assert!(b.invariant() && !b.lost());
+    assert!(b.low_u128() == x.saturating_sub(y));
+}
+
+#[kani::proof]
+#[kani::unwind(5)]
+fn fixed_sub_assign_three_limbs_is_total() {
+    let x: [u64; 3] = kani::any();
+    let y: [u64; 3] = kani::any();
+    let mut b = B3::from_limbs(x);
+    b.sub_assign(&B3::from_limbs(y));
+    assert!(b.invariant());
+}
+
+// ---- StringToNumber on bytes ----
+
+/// Tables with no Eisel-Lemire entry: every decimal that Clinger's fast path
+/// does not take goes to the exact path.
+fn no_tables() -> Tables {
+    Tables {
+        el: Vec::new(),
+        pow5_split: Vec::new(),
+        pow5_inv_split: Vec::new(),
+    }
+}
+
+#[kani::proof]
+#[kani::unwind(6)]
+fn string_to_number_bytes_three_bytes_is_total() {
+    // Every byte string of up to 3 bytes over an alphabet that has a digit,
+    // each sign, the point, both exponent letters, the radix letter, a space,
+    // two bytes of a multi-byte whitespace character, and `I`.
+    let bytes: [u8; 3] = kani::any();
+    let n: usize = kani::any();
+    kani::assume(n <= 3);
+    for b in &bytes {
+        kani::assume(matches!(
+            *b,
+            b'0' | b'1' | b'9' | b'.' | b'e' | b'-' | b'+' | b' ' | b'x' | b'I' | 0xE2 | 0x80
+        ));
+    }
+    let _ = string_to_number_bytes::<2>(&bytes[..n], &no_tables());
 }

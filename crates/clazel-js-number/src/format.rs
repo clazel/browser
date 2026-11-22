@@ -124,10 +124,13 @@ fn decompose(x: f64) -> (u64, i64) {
 }
 
 /// The integer nearest to `x * 10^scale`, the larger one on a tie.
-fn scaled_round(x: f64, scale: i64) -> Big {
+///
+/// Generic in the limb count `N` so that the Kani harnesses run the same code
+/// at a small `N` (too few limbs gives a wrong but defined answer).
+pub(crate) fn scaled_round<const N: usize>(x: f64, scale: i64) -> FixedBig<N> {
     let (m, e2) = decompose(x);
-    let mut num = Big::from_u64(m);
-    let mut den = Big::from_u64(1);
+    let mut num = FixedBig::<N>::from_u64(m);
+    let mut den = FixedBig::<N>::from_u64(1);
     if e2 >= 0 {
         num = num.shl(e2.unsigned_abs());
     } else {
@@ -142,7 +145,7 @@ fn scaled_round(x: f64, scale: i64) -> Big {
     // floor((2 num + den) / (2 den)) is round-half-up of num / den.
     let mut twice = num.shl(1);
     twice.add_assign(&den);
-    Big::divrem(&twice, &den.shl(1)).0
+    FixedBig::<N>::divrem(&twice, &den.shl(1)).0
 }
 
 /// The `p` digits `n` and the exponent `e` of the spec's "let e and n be
@@ -199,7 +202,7 @@ pub fn to_fixed(x: f64, fraction_digits: i64) -> Result<String, RangeError> {
     }
     // 9.a.: "let n be an integer for which n / 10^f - x is as close to zero
     //    as possible. If there are two such n, pick the larger n."
-    let n = scaled_round(x, f);
+    let n = scaled_round::<BIG_LIMBS_FORMAT>(x, f);
     let mut m = n.to_decimal();
     let f = usize::try_from(f).unwrap_or(0);
     // 10. "If f != 0, then let k be the length of m; if k <= f, then let z

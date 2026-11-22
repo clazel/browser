@@ -225,6 +225,8 @@ impl<const N: usize> FixedBig<N> {
         if carry != 0 {
             self.push(carry);
         }
+        // A carry that did not fit leaves the top limb zero (found by Kani).
+        self.trim();
     }
 
     /// `self /= d` for a nonzero word `d`; returns the remainder. Division
