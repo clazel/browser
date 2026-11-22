@@ -238,6 +238,8 @@ fn pseudo_class_of(name: &[u32]) -> (r: Option<PseudoClass>)
         &[0x66, 0x6F, 0x63, 0x75, 0x73, 0x2D, 0x77, 0x69, 0x74, 0x68, 0x69, 0x6E],
     ) {
         Some(PseudoClass::FocusWithin)
+    } else if matches_ignoring_case(name, &[0x73, 0x63, 0x6F, 0x70, 0x65]) {
+        Some(PseudoClass::Scope)
     } else {
         None
     }

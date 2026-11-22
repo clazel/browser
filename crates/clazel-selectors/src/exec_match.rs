@@ -1,6 +1,8 @@
 //! §21.3 "match a selector against an element", proven to meet
-//! [`super::contract::match_ensures`]: each complex selector runs the algorithm of
-//! [`super::algorithm`], which `lemmas::theorem_match_total` proves gives the spec's answer.
+//! [`super::contract::match_scoped_ensures`] (`matches_scoped`, with a scoping root for
+//! `:scope`) and [`super::contract::match_ensures`] (`matches`, with none): each complex
+//! selector runs the algorithm of [`super::algorithm`], which `lemmas::theorem_match_total`
+//! proves gives the spec's answer.
 
 #[cfg(verus_only)]
 use super::algorithm::*;
@@ -64,30 +66,30 @@ pub proof fn lemma_compound_wf_at(compound: Seq<Simple>, k: int, i: int)
 }
 
 /// A compound selector stops matching at the first simple selector that does not.
-proof fn lemma_compound_stops(doc: Document, compound: Seq<Simple>, k: int, m: int, x: NodeId)
+proof fn lemma_compound_stops(doc: Document, scope: Option<NodeId>, compound: Seq<Simple>, k: int, m: int, x: NodeId)
     requires
         0 <= k < m <= compound.len(),
-        !compound_matches(doc, compound, k + 1, x),
+        !compound_matches(doc, scope, compound, k + 1, x),
     ensures
-        !compound_matches(doc, compound, m, x),
+        !compound_matches(doc, scope, compound, m, x),
     decreases m - k,
 {
     if m > k + 1 {
-        lemma_compound_stops(doc, compound, k, m - 1, x);
+        lemma_compound_stops(doc, scope, compound, k, m - 1, x);
     }
 }
 
 /// A list matches once one of its selectors does.
-proof fn lemma_list_keeps(doc: Document, list: Seq<Complex>, k: int, m: int, x: NodeId)
+proof fn lemma_list_keeps(doc: Document, scope: Option<NodeId>, list: Seq<Complex>, k: int, m: int, x: NodeId)
     requires
         0 < k <= m <= list.len(),
-        match_list(doc, list, k, x),
+        match_list(doc, scope, list, k, x),
     ensures
-        match_list(doc, list, m, x),
+        match_list(doc, scope, list, m, x),
     decreases m - k,
 {
     if m > k {
-        lemma_list_keeps(doc, list, k, m - 1, x);
+        lemma_list_keeps(doc, scope, list, k, m - 1, x);
     }
 }
 
@@ -181,13 +183,13 @@ pub open spec fn match_args(arena: Document, s: ExecSelectors, bound: int) -> bo
 }
 
 /// True if the simple selector at `si` of the list `bound` matches `x`.
-fn simple_matches_exec(arena: &Arena, s: &ExecSelectors, bound: usize, si: usize, x: usize) -> (r: bool)
+fn simple_matches_exec(arena: &Arena, scope: Option<NodeId>, s: &ExecSelectors, bound: usize, si: usize, x: usize) -> (r: bool)
     requires
         match_args(arena@, *s, bound as int),
         si < s.simples.len(),
         simple_wf(view_simple(*s, bound as int, si as int)),
     ensures
-        r == simple_matches(arena@, view_simple(*s, bound as int, si as int), x),
+        r == simple_matches(arena@, scope, view_simple(*s, bound as int, si as int), x),
     decreases bound, 0int, 0int,
 {
     if !element(arena, x) {
@@ -265,6 +267,7 @@ fn simple_matches_exec(arena: &Arena, s: &ExecSelectors, bound: usize, si: usize
             PseudoClass::Focus => false,
             PseudoClass::FocusVisible => false,
             PseudoClass::FocusWithin => false,
+            PseudoClass::Scope => scope_matches(arena, scope, x),
         },
         ExecSimple::Nth { kind, a, b } => {
             let i = match kind {
@@ -276,17 +279,17 @@ fn simple_matches_exec(arena: &Arena, s: &ExecSelectors, bound: usize, si: usize
             nth(*a, *b, i)
         },
         ExecSimple::Is { list } => if *list < bound {
-            list_matches_exec(arena, s, *list, x)
+            list_matches_exec(arena, scope, s, *list, x)
         } else {
             false
         },
         ExecSimple::Where { list } => if *list < bound {
-            list_matches_exec(arena, s, *list, x)
+            list_matches_exec(arena, scope, s, *list, x)
         } else {
             false
         },
         ExecSimple::Not { list } => if *list < bound {
-            !list_matches_exec(arena, s, *list, x)
+            !list_matches_exec(arena, scope, s, *list, x)
         } else {
             true
         },
@@ -295,7 +298,7 @@ fn simple_matches_exec(arena: &Arena, s: &ExecSelectors, bound: usize, si: usize
 }
 
 /// True if the compound selector at `ci` of the list `bound` matches `x`.
-fn compound_matches_exec(arena: &Arena, s: &ExecSelectors, bound: usize, ci: usize, x: usize) -> (r: bool)
+fn compound_matches_exec(arena: &Arena, scope: Option<NodeId>, s: &ExecSelectors, bound: usize, ci: usize, x: usize) -> (r: bool)
     requires
         match_args(arena@, *s, bound as int),
         ci < s.compounds.len(),
@@ -306,6 +309,7 @@ fn compound_matches_exec(arena: &Arena, s: &ExecSelectors, bound: usize, ci: usi
     ensures
         r == compound_matches(
             arena@,
+            scope,
             view_compound(*s, bound as int, ci as int),
             view_compound(*s, bound as int, ci as int).len() as int,
             x,
@@ -327,16 +331,16 @@ fn compound_matches_exec(arena: &Arena, s: &ExecSelectors, bound: usize, ci: usi
             v.len() == hi - lo,
             compound_wf(v, v.len() as int),
             forall|j: int| 0 <= j < v.len() ==> #[trigger] v[j] == view_simple(*s, bound as int, lo + j),
-            compound_matches(arena@, v, k - lo, x),
+            compound_matches(arena@, scope, v, k - lo, x),
         decreases hi - k,
     {
         proof {
             lemma_compound_wf_at(v, v.len() as int, k - lo);
             assert(v[k - lo] == view_simple(*s, bound as int, k as int));
         }
-        if !simple_matches_exec(arena, s, bound, k, x) {
+        if !simple_matches_exec(arena, scope, s, bound, k, x) {
             proof {
-                lemma_compound_stops(arena@, v, k - lo, v.len() as int, x);
+                lemma_compound_stops(arena@, scope, v, k - lo, v.len() as int, x);
             }
             return false;
         }
@@ -348,6 +352,7 @@ fn compound_matches_exec(arena: &Arena, s: &ExecSelectors, bound: usize, ci: usi
 /// [`row`] for the complex selector at `ci` of the list `bound`, at `x`.
 fn row_exec(
     arena: &Arena,
+    scope: Option<NodeId>,
     s: &ExecSelectors,
     bound: usize,
     ci: usize,
@@ -365,6 +370,7 @@ fn row_exec(
     ensures
         r@ == row(
             arena@,
+            scope,
             view_complex(*s, bound as int, ci as int),
             x,
             inputs.0@,
@@ -408,6 +414,7 @@ fn row_exec(
             forall|k: int|
                 0 <= k < i ==> #[trigger] out@[k] == (is_element(arena@, x) && compound_matches(
                     arena@,
+                    scope,
                     c.compounds[k],
                     c.compounds[k].len() as int,
                     x,
@@ -420,7 +427,7 @@ fn row_exec(
             proof {
                 lemma_compounds_wf_at(c, n as int, i as int);
             }
-            let here = compound_matches_exec(arena, s, bound, cx.compounds.lo.saturating_add(i), x);
+            let here = compound_matches_exec(arena, scope, s, bound, cx.compounds.lo.saturating_add(i), x);
             here && (i == 0 || exec_related(
                 *item(s.combinators.as_slice(), cx.combinators.lo.saturating_add(i).saturating_sub(1)),
                 i.saturating_sub(1),
@@ -434,7 +441,7 @@ fn row_exec(
         i = i.saturating_add(1);
     }
     proof {
-        assert(out@ =~= row(arena@, c, x, parent@, descendant@, previous@, earlier@));
+        assert(out@ =~= row(arena@, scope, c, x, parent@, descendant@, previous@, earlier@));
     }
     out
 }
@@ -572,31 +579,32 @@ fn chain_up(arena: &Arena, x: usize) -> (r: Vec<usize>)
     up
 }
 
-/// [`siblings_loop`] over the first `end` of `kids`, with the parent and descendant rows
-/// `rows`.
+/// [`siblings_loop`] over the first `kids_end.1` of `kids_end.0`, with the parent and descendant
+/// rows `rows`.
 fn walk_siblings(
     arena: &Arena,
+    scope: Option<NodeId>,
     s: &ExecSelectors,
     bound: usize,
     ci: usize,
-    kids: &[usize],
-    end: usize,
+    kids_end: (&[usize], usize),
     rows: (&[bool], &[bool]),
 ) -> (r: (Vec<bool>, Vec<bool>, Ghost<nat>))
     requires
         match_args(arena@, *s, bound as int),
         ci < s.complexes.len(),
         complex_wf(view_complex(*s, bound as int, ci as int)),
-        end <= kids@.len(),
+        kids_end.1 <= kids_end.0@.len(),
         rows.0@.len() == view_complex(*s, bound as int, ci as int).compounds.len(),
         rows.1@.len() == rows.0@.len(),
     ensures
         ({
             let w = siblings_loop(
                 arena@,
+                scope,
                 view_complex(*s, bound as int, ci as int),
-                kids@,
-                end as int,
+                kids_end.0@,
+                kids_end.1 as int,
                 rows.0@,
                 rows.1@,
             );
@@ -609,6 +617,7 @@ fn walk_siblings(
     decreases bound, 2int, 1int,
 {
     let (m, descendant) = rows;
+    let (kids, end) = kids_end;
     let ghost doc = arena@;
     let ghost c = view_complex(*s, bound as int, ci as int);
     let n = m.len();
@@ -627,9 +636,9 @@ fn walk_siblings(
             j <= end <= kids@.len(),
             m@.len() == n,
             descendant@.len() == n,
-            previous@ == siblings_loop(doc, c, kids@, j as int, m@, descendant@).previous,
-            earlier@ == siblings_loop(doc, c, kids@, j as int, m@, descendant@).earlier,
-            inner == siblings_loop(doc, c, kids@, j as int, m@, descendant@).work,
+            previous@ == siblings_loop(doc, scope, c, kids@, j as int, m@, descendant@).previous,
+            earlier@ == siblings_loop(doc, scope, c, kids@, j as int, m@, descendant@).earlier,
+            inner == siblings_loop(doc, scope, c, kids@, j as int, m@, descendant@).work,
             previous@.len() == n,
             earlier@.len() == n,
         decreases end - j,
@@ -638,6 +647,7 @@ fn walk_siblings(
         if element(arena, sib) {
             let r = row_exec(
                 arena,
+                scope,
                 s,
                 bound,
                 ci,
@@ -657,14 +667,14 @@ fn walk_siblings(
 
 /// [`dp_match`]'s answer for the complex selector at `ci` of the list `bound`, and its work.
 #[verifier::spinoff_prover]
-fn complex_matches_exec(arena: &Arena, s: &ExecSelectors, bound: usize, ci: usize, x: usize) -> (r: (bool, Ghost<nat>))
+fn complex_matches_exec(arena: &Arena, scope: Option<NodeId>, s: &ExecSelectors, bound: usize, ci: usize, x: usize) -> (r: (bool, Ghost<nat>))
     requires
         match_args(arena@, *s, bound as int),
         ci < s.complexes.len(),
         complex_wf(view_complex(*s, bound as int, ci as int)),
     ensures
-        r.0 == dp_match(arena@, view_complex(*s, bound as int, ci as int), x).0,
-        r.1@ == dp_match(arena@, view_complex(*s, bound as int, ci as int), x).1,
+        r.0 == dp_match(arena@, scope, view_complex(*s, bound as int, ci as int), x).0,
+        r.1@ == dp_match(arena@, scope, view_complex(*s, bound as int, ci as int), x).1,
     decreases bound, 3int, 0int,
 {
     let ghost doc = arena@;
@@ -683,6 +693,7 @@ fn complex_matches_exec(arena: &Arena, s: &ExecSelectors, bound: usize, ci: usiz
     let root = *item(up.as_slice(), len.saturating_sub(1));
     let mut m = row_exec(
         arena,
+        scope,
         s,
         bound,
         ci,
@@ -710,9 +721,9 @@ fn complex_matches_exec(arena: &Arena, s: &ExecSelectors, bound: usize, ci: usiz
             len == ch.len(),
             forall|j: int| 0 <= j < len ==> #[trigger] ch[j] == up@[len - 1 - j],
             1 <= k <= len,
-            m@ == level(doc, c, ch, k - 1, siblings).row,
-            d@ == level(doc, c, ch, k - 1, siblings).descendant,
-            work == level(doc, c, ch, k - 1, siblings).work,
+            m@ == level(doc, scope, c, ch, k - 1, siblings).row,
+            d@ == level(doc, scope, c, ch, k - 1, siblings).descendant,
+            work == level(doc, scope, c, ch, k - 1, siblings).work,
             m@.len() == n,
             d@.len() == n,
         decreases len - k,
@@ -737,11 +748,11 @@ fn complex_matches_exec(arena: &Arena, s: &ExecSelectors, bound: usize, ci: usiz
             let ghost target = clazel_dom::spec::index_of(kids@, node);
             let (previous, earlier, Ghost(inner)) = walk_siblings(
                 arena,
+                scope,
                 s,
                 bound,
                 ci,
-                kids,
-                end,
+                (kids, end),
                 (m.as_slice(), descendant.as_slice()),
             );
             proof {
@@ -751,6 +762,7 @@ fn complex_matches_exec(arena: &Arena, s: &ExecSelectors, bound: usize, ci: usiz
             }
             let next = row_exec(
                 arena,
+                scope,
                 s,
                 bound,
                 ci,
@@ -764,6 +776,7 @@ fn complex_matches_exec(arena: &Arena, s: &ExecSelectors, bound: usize, ci: usiz
         } else {
             let next = row_exec(
                 arena,
+                scope,
                 s,
                 bound,
                 ci,
@@ -782,14 +795,14 @@ fn complex_matches_exec(arena: &Arena, s: &ExecSelectors, bound: usize, ci: usiz
 }
 
 /// True if one of the complex selectors of the list at `li` matches `x`.
-fn list_matches_exec(arena: &Arena, s: &ExecSelectors, li: usize, x: usize) -> (r: bool)
+fn list_matches_exec(arena: &Arena, scope: Option<NodeId>, s: &ExecSelectors, li: usize, x: usize) -> (r: bool)
     requires
         match_args(arena@, *s, li as int),
         li < s.lists.len(),
         x < arena@.nodes.len(),
         list_wf(view_list(*s, li as int), view_list(*s, li as int).len() as int),
     ensures
-        r == match_list(arena@, view_list(*s, li as int), view_list(*s, li as int).len() as int, x),
+        r == match_list(arena@, scope, view_list(*s, li as int), view_list(*s, li as int).len() as int, x),
     decreases li, 4int, 0int,
 {
     let ghost v = view_list(*s, li as int);
@@ -809,20 +822,20 @@ fn list_matches_exec(arena: &Arena, s: &ExecSelectors, li: usize, x: usize) -> (
             v.len() == hi - lo,
             list_wf(v, v.len() as int),
             forall|j: int| 0 <= j < v.len() ==> #[trigger] v[j] == view_complex(*s, li as int, lo + j),
-            !match_list(arena@, v, k - lo, x),
+            !match_list(arena@, scope, v, k - lo, x),
         decreases hi - k,
     {
         proof {
             lemma_list_wf_at(v, v.len() as int, k - lo);
             assert(v[k - lo] == view_complex(*s, li as int, k as int));
         }
-        let (found, Ghost(_work)) = complex_matches_exec(arena, s, li, k, x);
+        let (found, Ghost(_work)) = complex_matches_exec(arena, scope, s, li, k, x);
         proof {
-            super::lemmas::theorem_match_total(arena@, v[k - lo], x);
+            super::lemmas::theorem_match_total(arena@, scope, v[k - lo], x);
         }
         if found {
             proof {
-                lemma_list_keeps(arena@, v, k - lo + 1, v.len() as int, x);
+                lemma_list_keeps(arena@, scope, v, k - lo + 1, v.len() as int, x);
             }
             return true;
         }
@@ -831,7 +844,23 @@ fn list_matches_exec(arena: &Arena, s: &ExecSelectors, li: usize, x: usize) -> (
     false
 }
 
-/// §21.3 "match a selector against an element": the result list of `s` against `x`.
+/// §21.3 "match a selector against an element", with the scoping root `scope` (`None`: no
+/// scoping root, so that `:scope` is `:root`): the result list of `s` against `x`.
+pub fn matches_scoped(arena: &Arena, s: &ExecSelectors, scope: Option<usize>, x: usize) -> (r: bool)
+    requires
+        match_requires(arena@, x),
+        ranges_wf(*s),
+        s.lists.len() > 0,
+        list_wf(view_selectors(*s), view_selectors(*s).len() as int),
+    ensures
+        match_scoped_ensures(arena@, view_selectors(*s), scope, x, r),
+{
+    list_matches_exec(arena, scope, s, s.lists.len().saturating_sub(1), x)
+}
+
+/// §21.3 "match a selector against an element", with no scoping root: the result list of `s`
+/// against `x`. What every caller that is not scoped (a style sheet) means; [`matches_scoped`]
+/// with `None`.
 pub fn matches(arena: &Arena, s: &ExecSelectors, x: usize) -> (r: bool)
     requires
         match_requires(arena@, x),
@@ -841,7 +870,7 @@ pub fn matches(arena: &Arena, s: &ExecSelectors, x: usize) -> (r: bool)
     ensures
         match_ensures(arena@, view_selectors(*s), x, r),
 {
-    list_matches_exec(arena, s, s.lists.len().saturating_sub(1), x)
+    matches_scoped(arena, s, None, x)
 }
 
 } // verus!

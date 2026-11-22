@@ -34,7 +34,11 @@
 //!   saturating at 2^32 - 1 (§17 allows it). No definition was wrong against the standard.
 //! - **A switch, [`ICtx::ext`]**, for what the transcription supports and the spec does not:
 //!   `:has()`, `:scope`, `:defined` and `:nth-child(An+B of S)`. With it off the transcription
-//!   treats them as invalid (§3.6), as the spec does. It is on in no theorem.
+//!   treats them as invalid (§3.6), as the spec did. It is on in no theorem. The spec has since
+//!   gained `:scope` (with a scoping root), which this file already had, with the same meaning
+//!   of "scoping root" or, without one, the root; it stays behind the switch, so no parse theorem
+//!   relates it, and [`super::independent_match::lemma_scope_same`] says what it matches is what
+//!   the spec's does.
 //! - **Equivalent rewrites** that made proofs possible: `i_complex` passes its whole range to
 //!   `i_units` rather than the range without trailing white space (`i_units` already ends at
 //!   white space), and the quantifiers of the matching functions are triggered on the terms the

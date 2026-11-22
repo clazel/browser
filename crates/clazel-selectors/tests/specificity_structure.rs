@@ -67,6 +67,9 @@ fn pseudo_elements_nth_and_pseudo_classes() {
         ("li:nth-of-type(odd):first-child", (0, 2, 1)),
         (":first-child", (0, 1, 0)),
         (":root:empty", (0, 2, 0)),
+        // §9.4 `:scope` is a pseudo-class (B).
+        (":scope", (0, 1, 0)),
+        ("div:scope > p:scope", (0, 2, 2)),
         // Attribute selectors are B; namespace components and `*` count for nothing; a
         // repeated simple selector counts each time.
         ("[a]", (0, 1, 0)),
