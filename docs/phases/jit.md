@@ -529,7 +529,12 @@ runner.
   instruction emitted in the stub.
 - **Windows:** `CreateFileMapping`, `MapViewOfFile2`† into the renderer from
   the code process, with `PAGE_EXECUTE_READ` there and no writable view in
-  the renderer; `FlushInstructionCache`.
+  the renderer; `FlushInstructionCache`, called by `enter` in the executing
+  process on ARM64 (the writer is another process and cannot be trusted to
+  flush).
+- **x86-64 (all platforms):** the enter stub starts with `cpuid`, a
+  serializing instruction, because the writer's view and the executor's view
+  are different linear addresses (Intel SDM Vol. 3A, cross-modifying code).
 - **macOS:** `MAP_JIT`, `pthread_jit_write_protect_np`,
   `sys_icache_invalidate`.
 - `enter` per J.0(a), one block per ABI. Tests skip under Miri.

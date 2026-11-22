@@ -55,10 +55,20 @@ const MAP_JIT_ANON: c_int = 0x0002 | 0x1000 | 0x0800;
 
 /// An executable `MAP_JIT` mapping with the enter stub at its start. Unmapped
 /// on drop. [`crate::enter`] runs code in it.
-#[derive(Debug)]
 pub struct CodeRegion {
     base: usize,
     len: usize,
+}
+
+impl std::fmt::Debug for CodeRegion {
+    /// Prints the length only: the address is not shown, so safe code cannot
+    /// learn where the mapping is from a `{:?}` (the code-region API hands out
+    /// no addresses).
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CodeRegion")
+            .field("len", &self.len)
+            .finish_non_exhaustive()
+    }
 }
 
 impl CodeRegion {

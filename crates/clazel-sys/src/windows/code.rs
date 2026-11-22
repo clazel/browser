@@ -12,10 +12,20 @@
 //! executable memory, and has no writable view of this section. The renderer
 //! gets the view's address over IPC and calls [`CodeRegion::adopt`], which
 //! checks that the address really is a committed, mapped, read-execute view
-//! that starts with the enter stub. After writing, the writer calls
-//! [`RemoteView::flush`] (`FlushInstructionCache` on the renderer). An embedder
-//! with no sandbox uses [`SharedCode::map_executable`] to map the view in the
-//! current process.
+//! that starts with the enter stub. An embedder with no sandbox uses
+//! [`SharedCode::map_executable`] to map the view in the current process.
+//!
+//! **Instruction-cache coherence does not depend on the writer.** The writer
+//! (`CodeWriter::write`) has no handle to the process that will execute, so it
+//! cannot flush there; and a flush that safe code may leave out would let
+//! Windows ARM64 run stale code. So the *executing* process flushes: on
+//! ARM64 [`crate::enter`] calls [`CodeRegion::flush`]
+//! (`FlushInstructionCache(GetCurrentProcess())`, no right needed, allowed
+//! under Arbitrary Code Guard) on every entry, before it calls the stub, so no
+//! entry can run without a flush made after the last write. [`RemoteView::flush`]
+//! stays for a writer that wants to flush the other process early; it is not
+//! needed for correctness. On x86-64 stores and instruction fetch are coherent
+//! and the stub serializes (see `crate::code`), so `enter` flushes nothing.
 //!
 //! None of the functions are in `libc`, `windows-sys` is not a dependency, and
 //! so they are declared here, as `windows.rs` does; handles are `isize`.
@@ -31,7 +41,7 @@
 
 use std::ffi::c_void;
 use std::os::windows::io::AsRawHandle;
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use crate::CodeError;
 use crate::code::{STUB, check_size, write_range};
@@ -147,10 +157,20 @@ pub struct SharedCode {
 
 /// A read-write view of a [`SharedCode`] in this process, for the writer.
 /// Unmapped on drop.
-#[derive(Debug)]
 pub struct CodeWriter {
     base: usize,
     len: usize,
+}
+
+impl std::fmt::Debug for CodeWriter {
+    /// Prints the length only: the address is not shown, so safe code cannot
+    /// learn where the mapping is from a `{:?}` (the code-region API hands out
+    /// no addresses).
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CodeWriter")
+            .field("len", &self.len)
+            .finish_non_exhaustive()
+    }
 }
 
 /// A read-execute view in this process. [`crate::enter`] runs code in it.
@@ -160,41 +180,44 @@ pub struct CodeWriter {
 /// is never unmapped by this crate (it was mapped by another process, which
 /// lives as long as the renderer wants it), so adopting the same view twice
 /// is harmless and dropping one value cannot leave another dangling.
-#[derive(Debug)]
 pub struct CodeRegion {
     base: usize,
     len: usize,
     owned: bool,
 }
 
+impl std::fmt::Debug for CodeRegion {
+    /// Prints the length only: the address is not shown, so safe code cannot
+    /// learn where the mapping is from a `{:?}` (the code-region API hands out
+    /// no addresses).
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CodeRegion")
+            .field("owned", &self.owned)
+            .field("len", &self.len)
+            .finish_non_exhaustive()
+    }
+}
+
 /// The bases of the owned views that are mapped now, so that
 /// [`CodeRegion::adopt`] refuses them: an adopted value never unmaps, and an
 /// owned one does, so adopting an owned view could leave the adopted value
 /// dangling when the owner drops.
+///
+/// The lock is held **across** every span that must not be seen half done: from
+/// before `MapViewOfFile3` until the base is recorded
+/// ([`SharedCode::map_executable`]), from before the base is forgotten until
+/// `UnmapViewOfFile2` has returned (`Drop for CodeRegion`), and for the whole of
+/// [`CodeRegion::adopt`]. So `adopt` of an address sees either no owner yet (the
+/// map has not happened, so the address is not a view, and `VirtualQuery` says
+/// so) or an owner whose view is still mapped, never an owner that is about to
+/// unmap it. Nothing under the lock waits for another lock, and the lock is the
+/// only one in this module, so it cannot deadlock.
 static OWNED_VIEWS: Mutex<Vec<usize>> = Mutex::new(Vec::new());
 
-/// Record `base` as an owned view.
-fn register_owned(base: usize) {
-    OWNED_VIEWS
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .push(base);
-}
-
-/// Forget `base`; whether it was recorded.
-fn unregister_owned(base: usize) -> bool {
-    let mut views = OWNED_VIEWS.lock().unwrap_or_else(PoisonError::into_inner);
-    let before = views.len();
-    views.retain(|b| *b != base);
-    views.len() != before
-}
-
-/// Whether `base` is an owned view mapped now.
-fn is_owned(base: usize) -> bool {
-    OWNED_VIEWS
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .contains(&base)
+/// Take the owned-view list. A poisoned lock is still a consistent list (every
+/// edit is one `push` or `retain`), so it is used.
+fn lock_views() -> MutexGuard<'static, Vec<usize>> {
+    OWNED_VIEWS.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 /// A read-execute view that [`SharedCode::map_into`] made in another process:
@@ -283,9 +306,15 @@ impl SharedCode {
     ///
     /// The failing call's `GetLastError`, or [`CodeError::NotACodeRegion`].
     pub fn map_executable(&self) -> Result<CodeRegion, CodeError> {
-        let base = self.map(CURRENT_PROCESS, PAGE_EXECUTE_READ)?;
+        // The lock is held from before the view exists until it is recorded, so
+        // no `adopt` can pass this address in between (see `OWNED_VIEWS`).
+        let base = {
+            let mut views = lock_views();
+            let base = self.map(CURRENT_PROCESS, PAGE_EXECUTE_READ)?;
+            views.push(base);
+            base
+        };
         // From here `region` owns the view and unmaps it on any early return.
-        register_owned(base);
         let region = CodeRegion {
             base,
             len: self.len,
@@ -359,8 +388,9 @@ impl Drop for SharedCode {
 
 impl RemoteView {
     /// `FlushInstructionCache` for the view in `process` (the handle given to
-    /// [`SharedCode::map_into`]): call it after writing, so that the process
-    /// executes what was written.
+    /// [`SharedCode::map_into`]). Optional: [`crate::enter`] flushes in the
+    /// executing process on ARM64 itself, so correctness does not rest on this
+    /// call.
     ///
     /// # Errors
     ///
@@ -400,8 +430,9 @@ impl CodeWriter {
 
     /// Write `bytes` at `offset` from the region's start. The stub is not
     /// writable: `offset` must be at least [`crate::CODE_START`], and the write must
-    /// end inside the region. Flush the executing process's instruction cache
-    /// afterwards ([`RemoteView::flush`], [`CodeRegion::flush`]).
+    /// end inside the region. Nothing has to be flushed afterwards:
+    /// [`crate::enter`] makes the executing process's instruction cache
+    /// coherent itself (see the module documentation).
     ///
     /// # Errors
     ///
@@ -466,7 +497,10 @@ impl CodeRegion {
     /// call's `GetLastError`.
     pub fn adopt(address: usize, len: usize) -> Result<CodeRegion, CodeError> {
         check_size(len)?;
-        if is_owned(address) {
+        // Held to the end: the view cannot be made, recorded or unmapped by an
+        // owner while this decides (see `OWNED_VIEWS`).
+        let views = lock_views();
+        if views.contains(&address) {
             return Err(CodeError::NotACodeRegion);
         }
         let mut info = MemoryBasicInformation {
@@ -508,6 +542,7 @@ impl CodeRegion {
             owned: false,
         };
         region.check_stub()?;
+        drop(views);
         Ok(region)
     }
 
@@ -521,9 +556,9 @@ impl CodeRegion {
         self.len == 0
     }
 
-    /// `FlushInstructionCache` for this process's view: an embedder calls it
-    /// after writing through [`CodeWriter`]. (The sandboxed renderer's cache is
-    /// flushed by the writer with [`RemoteView::flush`].)
+    /// `FlushInstructionCache` for this process's view. [`crate::enter`] calls
+    /// it on every entry on ARM64, so the caller need not; it is public for an
+    /// embedder that wants it earlier.
     ///
     /// # Errors
     ///
@@ -560,8 +595,16 @@ impl CodeRegion {
 
 impl Drop for CodeRegion {
     fn drop(&mut self) {
-        if self.owned && unregister_owned(self.base) {
-            unmap(self.base);
+        if self.owned {
+            // The base is forgotten and the view unmapped under one hold of the
+            // lock, so an `adopt` of it either sees the owner (and refuses) or
+            // runs after the unmap (and `VirtualQuery` refuses).
+            let mut views = lock_views();
+            let before = views.len();
+            views.retain(|b| *b != self.base);
+            if views.len() != before {
+                unmap(self.base);
+            }
         }
     }
 }

@@ -40,9 +40,51 @@
 //!   that wants less makes the region smaller. They are not system calls
 //!   (legal at EL0), so the sandboxed renderer needs no system call. On
 //!   macOS and Windows A64 `CTR_EL0` cannot be read, so the maintenance is
-//!   the OS call the writer makes after every write (`sys_icache_invalidate`,
-//!   `FlushInstructionCache`) and the stub only does `dsb ish; isb`. On
-//!   x86-64 there is none: instruction fetch is coherent with stores.
+//!   an OS call, and the stub only does `dsb ish; isb`.
+//! - **Why no safe caller can run stale code** (audit finding 3 of PR 272),
+//!   per platform. The rule is that *every path from a write to an entry
+//!   passes through maintenance that this crate makes, not that the caller
+//!   makes*:
+//!   - **Linux A64:** the stub's maintenance runs on every entry and covers
+//!     the whole blob area, so it covers every write, whoever made it and
+//!     whenever. No call of the caller's is involved.
+//!   - **macOS (A64 and Intel):** the only writes are `CodeRegion::write` and
+//!     the stub install in `create`, and both end in `sys_icache_invalidate`
+//!     (`copy_in`) before they return, so no write is without its
+//!     invalidation. The writer and the executor are the same process.
+//!   - **Windows A64:** the writer is another process with no handle to the
+//!     executor, so a flush in `CodeWriter::write` cannot reach it, and a flush
+//!     the caller must remember is one safe code can omit. So `enter`
+//!     itself calls `FlushInstructionCache` in the executing process before
+//!     every entry (`crate::enter`): there is no entry without a flush made
+//!     after the last write. `RemoteView::flush` is optional.
+//!   - **x86-64 (all):** see the next item.
+//! - **x86-64 serialization** (audit finding 3 of the second audit of PR 272;
+//!   recalled from the Intel SDM, Vol. 3A, "Handling Self- and Cross-Modifying
+//!   Code", not re-read for this change). Stores and instruction fetch are
+//!   coherent, by *physical* address, in the caches, so no cache maintenance
+//!   is needed. But the SDM says the check of what the core has already
+//!   *prefetched* is by *linear* address, and that a core executing code that
+//!   another core modified (cross-modifying code) must execute a serializing
+//!   instruction before it runs the new bytes. Here the writer's read-write
+//!   view and the executor's read-execute view are different linear addresses
+//!   (other processes on Linux and Windows, one mapping on macOS but another
+//!   thread), so the architecture's own sequence is needed, and the plan (jit.md J.0
+//!   decisions, "a serializing jump after the mapping changes") asks for it.
+//!   The stub therefore starts with `xor eax, eax; cpuid` on every entry,
+//!   before it calls the blob. `cpuid` is the SDM's example of a serializing
+//!   instruction, available at every privilege level, and is the only one
+//!   that needs no feature test (`SERIALIZE` needs a CPUID flag; `iretq` to
+//!   the next instruction needs a stack frame and segment selectors; `lfence`
+//!   is not architecturally serializing for instruction fetch). It clobbers
+//!   `rax`, `rbx`, `rcx` and `rdx`: the stub has saved `rbx` and it passes no
+//!   argument in `rax`/`rcx`/`rdx` (System V: `rdi` and `rsi` are the
+//!   arguments, which `cpuid` does not touch; Windows: the stub moves its
+//!   `rcx` and `rdx` into `r15` and `r14`, which it has saved, first). The
+//!   cost is one `cpuid` per entry (a few tens of cycles; a trap to the
+//!   hypervisor, about a microsecond, in a virtual machine). The writer must
+//!   still not replace bytes a thread may be executing (the stub only makes the
+//!   *next* entry see the new bytes).
 //! - A region is [`CODE_START`] bytes of stub (zero padded), then blobs. A
 //!   [`Validated`] offset is from the region's start, so at least
 //!   [`CODE_START`].
@@ -235,6 +277,10 @@ pub(crate) const STUB: &[u8] = &[
     0x53, 0x55, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57,
     // sub rsp, 8   (the stack is 16-aligned at the call below)
     0x48, 0x83, 0xec, 0x08,
+    // xor eax, eax; cpuid   (a serializing instruction: the core refetches what the
+    // writer wrote through another linear address; clobbers rax, rbx (saved), rcx,
+    // rdx; rdi and rsi, the arguments, are not touched)
+    0x31, 0xc0, 0x0f, 0xa2,
     // mov r15, rdi   (the context register)
     0x49, 0x89, 0xff,
     // call rsi   (the blob; its `ret` returns here; rdx, the length, is not used)
@@ -264,10 +310,14 @@ pub(crate) const STUB: &[u8] = &[
     0x29, 0xa4, 0x24, 0x80, 0x00, 0x00, 0x00, 0x44, 0x0f, 0x29, 0xac, 0x24,
     0x90, 0x00, 0x00, 0x00, 0x44, 0x0f, 0x29, 0xb4, 0x24, 0xa0, 0x00, 0x00,
     0x00, 0x44, 0x0f, 0x29, 0xbc, 0x24, 0xb0, 0x00, 0x00, 0x00,
-    // mov r15, rcx   (the context register)
-    0x49, 0x89, 0xcf,
-    // call rdx   (the blob; r8, the length, is not used)
-    0xff, 0xd2,
+    // mov r15, rcx   (the context register); mov r14, rdx   (the blob's address; r14 is
+    // saved above, and cpuid below clobbers rcx and rdx)
+    0x49, 0x89, 0xcf, 0x49, 0x89, 0xd6,
+    // xor eax, eax; cpuid   (a serializing instruction: the core refetches what the
+    // writer wrote through another linear address; clobbers rax, rbx (saved), rcx, rdx)
+    0x31, 0xc0, 0x0f, 0xa2,
+    // call r14   (the blob; r8, the length, is not used)
+    0x41, 0xff, 0xd6,
     // movaps xmm(6+i), [rsp+32+16i], i = 0..10
     0x0f, 0x28, 0x74, 0x24, 0x20, 0x0f, 0x28, 0x7c, 0x24, 0x30, 0x44, 0x0f,
     0x28, 0x44, 0x24, 0x40, 0x44, 0x0f, 0x28, 0x4c, 0x24, 0x50, 0x44, 0x0f,
@@ -362,10 +412,12 @@ pub(crate) const STUB: &[u8] = &[
 ///
 /// It does **no cache maintenance of its own**: reading `CTR_EL0` at EL0 is
 /// not allowed on macOS (it raises SIGILL) and Windows does not document it.
-/// There the instruction cache is made coherent by the OS call the writer
-/// makes after writing (`sys_icache_invalidate` in `CodeWriter` on macOS;
-/// `FlushInstructionCache` on Windows, which also works across processes),
-/// and the stub only issues `dsb ish; isb`, so that this thread refetches.
+/// There the instruction cache is made coherent by an OS call that this crate
+/// makes, not the caller: on macOS `sys_icache_invalidate`, which
+/// `CodeRegion::write` calls on every write; on Windows
+/// `FlushInstructionCache`, which `crate::enter` calls in the executing
+/// process before every entry (the writer is another process). The stub only
+/// issues `dsb ish; isb`, so that this thread refetches.
 #[cfg(all(target_arch = "aarch64", not(target_os = "linux")))]
 #[rustfmt::skip]
 pub(crate) const STUB: &[u8] = &[

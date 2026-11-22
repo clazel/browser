@@ -8,8 +8,12 @@
 //! stub (`crate::code::STUB`, written at offset 0 of every region) is the only
 //! code that meets the platform ABI: it saves the callee-saved registers, sets
 //! the context register, calls the blob, and returns when the blob's exit
-//! sequence executes `ret`. On A64 it first does the instruction-cache
-//! maintenance over the region, which is why it also takes the region's length.
+//! sequence executes `ret`. On A64 on Linux it first does the instruction-cache
+//! maintenance over the region, which is why it also takes the region's length;
+//! on Windows ARM64 `enter` itself calls `FlushInstructionCache` first (the
+//! writer may be another process), and on macOS `CodeRegion::write` has already
+//! invalidated. On x86-64 the stub starts with a serializing `cpuid`. The full
+//! argument, per platform, is in `crate::code`.
 //!
 //! The ABIs: `sysv64` (x86-64 on Linux and macOS), `win64` (x86-64 on
 //! Windows) and `C` (AArch64, whose `C` is AAPCS64 on Linux, macOS and
@@ -56,6 +60,13 @@ pub fn enter(region: &CodeRegion, entry: Validated, ctx: &mut Context) -> Result
     if !offset.is_multiple_of(4) {
         return Err(CodeError::Misaligned);
     }
+    // Windows ARM64: the writer may be another process and cannot be trusted
+    // to flush, so the executing process makes its own instruction cache
+    // coherent with what was written, before every entry. (Linux ARM64 does it
+    // in the stub, macOS in `CodeRegion::write`, x86-64 needs none: see
+    // `crate::code`.)
+    #[cfg(all(windows, target_arch = "aarch64"))]
+    region.flush()?;
     let stub = region.base();
     let entry = stub.checked_add(offset).ok_or(CodeError::OutOfRange)?;
     let raw: *mut u8 = std::ptr::from_mut(&mut *ctx).cast();
