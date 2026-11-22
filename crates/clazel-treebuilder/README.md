@@ -185,6 +185,17 @@ evidence exists (see "Left" below).
   to 47); the 6 `scripted_*.dat` cases need a script engine and are not
   run. Cases with neither `#script-on` nor `#script-off` run with
   scripting off only.
+- **Fragments** (`tests/conformance_fragment.rs`, Phase 7 item 7.13): the
+  suite's 206 `#document-fragment` cases through `parse_fragment_real`,
+  each run with the scripting flag off and on (none names a flag, and the
+  suite's format says such a case holds for both): 412 of 412 pass. Step 19's
+  form element pointer takes the context's ancestors from the caller:
+  `ExecContext::in_form` says that the context is, or has an ancestor that
+  is, a form element, and the pointer then names the context element (a
+  stand-in: the parser only tests it for null, and the fragment case sets no
+  form owner). The suite has no case with a form ancestor, so the test's own
+  inputs check it, and `clazel-web`'s `tests/conformance_round_trip.rs` feeds it every
+  element of every tree the suite builds.
 - **Differential** (`tests/conformance_html5ever.rs`): Servo's `html5ever`
   0.39.0, with `markup5ever_rcdom` for its tree (test-only, 22 packages),
   against the same driver, both trees printed in the suite's format and

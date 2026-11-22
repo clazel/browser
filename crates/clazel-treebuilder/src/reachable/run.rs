@@ -251,7 +251,7 @@ pub proof fn lemma_fragment_parser_reach(ctx: Context, scripting: bool)
             assert(p1.template_modes.last() == Mode::InTemplate);
         }
     }
-    let p3 = if is_html(ctx_el, Tag::Form) {
+    let p3 = if is_html(ctx_el, Tag::Form) || ctx.in_form {
         Parser { form: Some(ctx_id), ..p2 }
     } else {
         p2
