@@ -16,7 +16,7 @@ const CA_RULE_AKI_SKI: &str = "an issuer-side certificate-profile rule (RFC 5280
 const CA_RULE_CRITICALITY: &str = "an issuer-side rule on an extension's criticality (RFC 5280 4.2.1.9, 4.2.1.10, 4.2.1.11: the CA MUST mark it critical); 6.1 processes the extension whatever its criticality, so the path is valid, and the profile adds no rule (nameConstraints and policyConstraints on an intermediate, basicConstraints on a trust anchor, which 6.1 takes as input)";
 const CA_RULE_SERIAL: &str = "an issuer-side rule (RFC 5280 4.1.2.2: the serial number MUST be a positive integer); no 6.1 step reads it, and the profile adds no rule (whether both browsers refuse a zero serial is unconfirmed)";
 const CABF_ROOT_PROFILE: &str = "a CA/Browser Forum rule on the content of a root certificate (BR 7.1.2.1.2 or 7.1.2.1.3); the trust anchor is an input to 6.1 and the profile does not audit it (Anchor construction checks only its role and key usage)";
-const CABF_SAN_CRITICALITY: &str = "a CA/Browser Forum or RFC 5280 4.1.2.6 issuer-side rule on the criticality of subjectAltName given the subject (empty subject: critical; BR 7.1.2.7.12: otherwise not critical); the RFC 9525 match does not depend on it, and the profile adds no rule";
+const CABF_SAN_CRITICALITY: &str = "a CA/Browser Forum issuer-side rule on the criticality of subjectAltName given a non-empty subject (BR 7.1.2.7.12: not critical); the RFC 9525 match does not depend on it, and the profile refuses only the RFC 5280 4.1.2.6 case of an empty subject with a non-critical subjectAltName";
 const CABF_LEAF_EKU: &str = "a CA/Browser Forum rule on a subscriber certificate's extKeyUsage that also contains serverAuth (BR 7.1.2.7.6 critical; 7.1.2.7.10 anyExtendedKeyUsage); the profile requires serverAuth and does not refuse the extra or critical forms (limbo: pedantic-webpki-eku)";
 const CABF_CN: &str = "a CA/Browser Forum rule on the subject commonName (BR 7.1.4.3: it must copy a SAN entry); the peer name matches a subjectAltName entry, and the commonName is never read (RFC 9525), so the path is valid";
 const CABF_AIA: &str = "a CA/Browser Forum rule on the content of authorityInfoAccess (a non-critical extension the decoders keep opaque; RFC 5280 6.1 does not read it)";
@@ -54,7 +54,6 @@ const EXPECTED_FAILURES: &[(&str, &str)] = &[
     ("rfc5280::nc::nc-permits-email-literal-double-asterisk-rejects-single", NEEDS_CLIENT_VALIDATION),
     ("rfc5280::nc::nc-permits-email-literal-mid-asterisk", NEEDS_CLIENT_VALIDATION),
     ("rfc5280::pc::ica-noncritical-pc", CA_RULE_CRITICALITY),
-    ("rfc5280::san::noncritical-with-empty-subject", CABF_SAN_CRITICALITY),
     ("rfc5280::serial::zero", CA_RULE_SERIAL),
     ("rfc5280::ski::root-missing-ski", CA_RULE_AKI_SKI),
     ("rfc5280::ski::intermediate-missing-ski", CA_RULE_AKI_SKI),
