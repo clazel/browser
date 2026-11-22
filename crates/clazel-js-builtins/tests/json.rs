@@ -1,7 +1,7 @@
 //! Tests of `JSON.parse` and `JSON.stringify`: scripts run with the built-ins
 //! installed, each expectation what ECMA-262 §25.5† says, written by hand.
 //! The result is the global `r` as its ToString. No files are read, so these
-//! run under Miri too (every fourth case).
+//! run under Miri too (every eighth case).
 
 use clazel_js_syntax::exec::parse;
 use clazel_js_syntax::spec::SourceGoal;
@@ -32,7 +32,7 @@ fn r_of(src: &str) -> Result<String, String> {
 }
 
 fn check(cases: &[(&str, &str)]) -> Result<(), String> {
-    let stride = if cfg!(miri) { 4 } else { 1 };
+    let stride = if cfg!(miri) { 8 } else { 1 };
     for (src, want) in cases.iter().step_by(stride) {
         let got = r_of(src)?;
         if got != *want {

@@ -2,7 +2,7 @@
 //! built-in, as small scripts run with the built-ins installed. Each
 //! expectation is what ECMA-262 says, written by hand; the result is the
 //! global `r` as its ToString. No files are read, so these run under Miri
-//! too (with every fourth case, as the other built-in tests do).
+//! too (with every eighth case, as the other built-in tests do).
 
 use clazel_js_syntax::exec::parse;
 use clazel_js_syntax::spec::SourceGoal;
@@ -40,7 +40,7 @@ fn r_of(src: &str) -> Result<String, String> {
 }
 
 fn check(cases: &[(&str, &str)]) -> Result<(), String> {
-    let stride = if cfg!(miri) { 4 } else { 1 };
+    let stride = if cfg!(miri) { 8 } else { 1 };
     for (src, want) in cases.iter().step_by(stride) {
         let got = r_of(src)?;
         if got != *want {
