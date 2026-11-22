@@ -838,7 +838,7 @@ fn script_host_data_comes_back() -> Test {
 }
 
 #[test]
-fn limits_are_the_embedders() -> Test {
+fn a_heap_too_small_for_the_builtins_is_out_of_memory() -> Test {
     // A heap too small for the built-ins is `OutOfMemory`, not a panic.
     let tiny = Limits {
         heap_bytes: 64 * 4,
@@ -848,12 +848,19 @@ fn limits_are_the_embedders() -> Test {
         Runtime::new(Config::new(tiny), DefaultHost::new()),
         Err(Error::OutOfMemory)
     ));
-    // A small one that fits them is hit by a script that allocates for ever.
+    Ok(())
+}
+
+#[test]
+fn the_heap_limit_stops_a_script_that_allocates_for_ever() -> Test {
+    // A small heap that fits the built-ins is hit by a script that allocates
+    // for ever. Under Miri each allocation is slow, so the room is smaller.
+    let cells: u64 = if cfg!(miri) { 300 } else { 20_000 };
     let (probe, _) = runtime()?;
     let base = probe.heap_used()?;
     assert!(base > 0);
     let room = Limits {
-        heap_bytes: base + 64 * 20_000,
+        heap_bytes: base + 64 * cells,
         ..Limits::unlimited()
     };
     let mut rt = Runtime::new(Config::new(room), DefaultHost::new())?;
@@ -868,7 +875,11 @@ fn limits_are_the_embedders() -> Test {
             .map(|_| ())
     });
     assert!(matches!(result, Err(Error::OutOfMemory)), "{result:?}");
+    Ok(())
+}
 
+#[test]
+fn the_value_stack_limit_makes_deep_recursion_catchable() -> Test {
     // A deep recursion is a catchable RangeError-like stop, not a crash.
     let shallow = Limits {
         value_stack_bytes: 8 * 512,
