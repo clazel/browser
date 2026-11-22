@@ -257,7 +257,7 @@ fn invalid_selectors_are_syntax_errors() {
 #[test]
 fn long_selectors_parse() {
     let d = doc();
-    let n = if cfg!(miri) { 1_000 } else { 100_000 };
+    let n = if cfg!(miri) { 200 } else { 100_000 };
     let long = vec![u32::from('a'); n];
     assert_eq!(
         query_selector_all(&d.t.arena, d.document, &long),
@@ -352,7 +352,7 @@ fn template_contents_are_not_entered() {
 // Iterative walk: a tree far deeper than the stack could recurse over.
 #[test]
 fn deep_trees_do_not_overflow() {
-    let depth: usize = if cfg!(miri) { 100 } else { 3_000 };
+    let depth: usize = if cfg!(miri) { 40 } else { 3_000 };
     let mut t = Tree::new();
     let mut cur = 0;
     for _ in 0..depth {

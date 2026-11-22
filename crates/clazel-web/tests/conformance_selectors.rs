@@ -27,9 +27,10 @@
 //! live tree and so on), which need the bindings.
 //!
 //! A unit is one selector in one context (or one `matches` entry); under
-//! Miri every 40th selector runs, in the document and the element only. A
-//! unit that fails must fall in a [`Class`] below, whose rule is a predicate
-//! over the selector; a class that applies to nothing fails too.
+//! Miri only the selectors naming `#universal` run (and every 70th invalid
+//! one), in the element context only, on a cut-short document. A unit that
+//! fails must fall in a [`Class`] below, whose rule is a predicate over the
+//! selector; a class that applies to nothing fails too (outside Miri).
 
 use clazel_dom::exec::{Arena, ExecAttr, ExecKind};
 use clazel_dom::spec::Namespace;
@@ -375,8 +376,27 @@ struct World {
     fragment: usize,
 }
 
+/// The test document. Under Miri, which is slow on a parse and a walk, only
+/// its head and the `#universal` block, so the selectors that run there are
+/// those that name `#universal` (see `wpt_selectors`).
+fn content() -> String {
+    if !cfg!(miri) {
+        return CONTENT.to_string();
+    }
+    let mut out = String::new();
+    for line in CONTENT.lines() {
+        if line.contains("<div id=\"attr-presence\">") {
+            break;
+        }
+        out.push_str(line);
+        out.push('\n');
+    }
+    out.push_str("</div>\n</body>\n</html>\n");
+    out
+}
+
 fn world(with_clone: bool) -> World {
-    let (p, _) = parse_real(&NoEnc, &u(CONTENT), Vec::new(), false, false);
+    let (p, _) = parse_real(&NoEnc, &u(&content()), Vec::new(), false, false);
     let mut arena = p.arena;
     let document = 0;
     let element = find_id(&arena, document, "root").must();
@@ -501,13 +521,21 @@ fn run_matches(w: &World, e: &Entry) -> Result<(), String> {
 fn wpt_selectors() {
     // The document, detached and fragment tests run before the clone is
     // appended to the body; the in-document element's after.
-    let w = world(false);
+    // Under Miri a parse and a walk are slow, so only the world with the clone
+    // is built, and only the element context runs.
     let wc = world(true);
+    let w_before_clone;
+    let w = if cfg!(miri) {
+        &wc
+    } else {
+        w_before_clone = world(false);
+        &w_before_clone
+    };
     let valid = entries("validSelectors");
     let invalid = entries("invalidSelectors");
     assert!(valid.len() > 150, "read {} valid entries", valid.len());
     assert!(invalid.len() > 25, "read {} invalid entries", invalid.len());
-    let step = if cfg!(miri) { 40 } else { 1 };
+    let step = if cfg!(miri) { 70 } else { 1 };
 
     let mut pass = 0usize;
     let mut xfail = 0usize;
@@ -560,17 +588,23 @@ fn wpt_selectors() {
 
     // Valid selectors, as querySelector[All] in the four contexts.
     let contexts: [(&str, &World, usize); 4] = [
-        ("document", &w, w.document),
+        ("document", w, w.document),
         ("element", &wc, wc.element),
-        ("detached", &w, w.detached),
-        ("fragment", &w, w.fragment),
+        ("detached", w, w.detached),
+        ("fragment", w, w.fragment),
     ];
-    for e in valid.iter().step_by(step) {
+    let contexts: Vec<_> = contexts
+        .into_iter()
+        .filter(|(kind, _, _)| !cfg!(miri) || *kind == "element")
+        .collect();
+    // Under Miri the document is cut short: only the selectors that name its
+    // `#universal` block, whose answers do not depend on the rest.
+    for e in valid
+        .iter()
+        .filter(|e| !cfg!(miri) || e.selector.starts_with("#universal"))
+    {
         if e.test_type & TEST_QSA != 0 {
-            for (kind, cw, root) in contexts {
-                if cfg!(miri) && (kind == "detached" || kind == "fragment") {
-                    continue;
-                }
+            for &(kind, cw, root) in &contexts {
                 if e.exclude.iter().any(|x| x == kind || x == "html") {
                     continue;
                 }
@@ -580,14 +614,19 @@ fn wpt_selectors() {
         if e.test_type & TEST_MATCH != 0
             && !e.exclude.iter().any(|x| x == "document" || x == "html")
         {
-            settle(e, format!("matches [{}]", e.name), run_matches(&w, e));
+            settle(e, format!("matches [{}]", e.name), run_matches(w, e));
         }
     }
 
     // The special selectors of runSpecialSelectorTests (the script harness
     // stringifies null and undefined to these) and the tree order of "*".
-    for (sel, tag) in [("null", "null"), ("undefined", "undefined")] {
-        for (_, cw, root) in contexts {
+    let specials: &[(&str, &str)] = if cfg!(miri) {
+        &[("null", "null")]
+    } else {
+        &[("null", "null"), ("undefined", "undefined")]
+    };
+    for &(sel, tag) in specials {
+        for &(_, cw, root) in &contexts {
             let all = query_selector_all(&cw.arena, root, &u(sel)).must();
             assert_eq!(all.len(), 1, "{sel}");
             let one = query_selector(&cw.arena, root, &u(sel)).must();
@@ -598,7 +637,7 @@ fn wpt_selectors() {
             }
         }
     }
-    for (_, cw, root) in contexts {
+    for &(_, cw, root) in contexts.iter().filter(|_| !cfg!(miri)) {
         let all = query_selector_all(&cw.arena, root, &u("*")).must();
         let mut want = elements_of(&cw.arena, root);
         want.retain(|&n| n != root);
