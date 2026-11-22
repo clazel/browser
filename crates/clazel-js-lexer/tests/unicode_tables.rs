@@ -4,7 +4,19 @@
 //! code points. Nothing about the tables is proven (`src/unicode.rs`).
 
 use clazel_js_lexer::unicode::{Range, id_continue_non_ascii, id_start_non_ascii};
-use clazel_js_lexer::unicode_data::{ID_CONTINUE, ID_START};
+use clazel_js_lexer::unicode_data::{
+    ID_CONTINUE_LEN, ID_START_LEN, id_continue_at_exec, id_start_at_exec,
+};
+
+/// The rows of `ID_Start`, through the accessor the lookups use.
+fn id_start_rows() -> Vec<Range> {
+    (0..ID_START_LEN).map(id_start_at_exec).collect()
+}
+
+/// The rows of `ID_Continue`.
+fn id_continue_rows() -> Vec<Range> {
+    (0..ID_CONTINUE_LEN).map(id_continue_at_exec).collect()
+}
 
 /// Sorted, disjoint, non-empty rows, all within U+0080..U+10FFFF.
 fn well_formed(table: &[Range]) {
@@ -21,8 +33,8 @@ fn well_formed(table: &[Range]) {
 
 #[test]
 fn tables_are_sorted_and_disjoint() {
-    well_formed(&ID_START);
-    well_formed(&ID_CONTINUE);
+    well_formed(&id_start_rows());
+    well_formed(&id_continue_rows());
 }
 
 /// Every lookup agrees with a linear scan of its table, and `ID_Start` is a
@@ -36,9 +48,10 @@ fn lookups_agree_with_the_tables() {
     // both.
     let (stride, row_stride) = if cfg!(miri) { (40_009, 97) } else { (7, 1) };
     let mut points: Vec<u32> = (0..=0x11_0000u32).step_by(stride).collect();
-    for row in ID_START
+    let (id_start, id_continue) = (id_start_rows(), id_continue_rows());
+    for row in id_start
         .iter()
-        .chain(ID_CONTINUE.iter())
+        .chain(id_continue.iter())
         .step_by(row_stride)
     {
         points.extend([
@@ -51,8 +64,8 @@ fn lookups_agree_with_the_tables() {
     for c in points {
         let start = id_start_non_ascii(c);
         let cont = id_continue_non_ascii(c);
-        assert_eq!(start, c >= 0x80 && in_table(&ID_START, c), "U+{c:04X}");
-        assert_eq!(cont, c >= 0x80 && in_table(&ID_CONTINUE, c), "U+{c:04X}");
+        assert_eq!(start, c >= 0x80 && in_table(&id_start, c), "U+{c:04X}");
+        assert_eq!(cont, c >= 0x80 && in_table(&id_continue, c), "U+{c:04X}");
         assert!(!start || cont, "U+{c:04X} is ID_Start but not ID_Continue");
     }
 }

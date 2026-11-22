@@ -30,23 +30,41 @@ pub struct Range {
     pub last: u32,
 }
 
-/// Whether a row of `table` (sorted, disjoint) holds `c`, by bisection.
-fn find(table: &[Range], c: u32) -> (r: bool) {
+/// Whether a row of the `ID_Start` table holds `c`, by bisection.
+fn find_start(c: u32) -> (r: bool) {
     let mut lo: usize = 0;
-    let mut hi: usize = table.len();
+    let mut hi: usize = ID_START_LEN;
     while lo < hi
         invariant
-            lo <= hi <= table.len(),
+            lo <= hi <= ID_START_LEN,
         decreases hi - lo,
     {
         // Never saturates: lo < hi.
         let mid = lo.saturating_add(hi.saturating_sub(lo) / 2);
-        let row = match table.get(mid) {
-            Some(row) => *row,
-            None => {
-                return false;
-            },
-        };
+        let row = id_start_at_exec(mid);
+        if c < row.first {
+            hi = mid;
+        } else if c > row.last {
+            lo = mid.saturating_add(1);
+        } else {
+            return true;
+        }
+    }
+    false
+}
+
+/// Whether a row of the `ID_Continue` table holds `c`, by bisection.
+fn find_continue(c: u32) -> (r: bool) {
+    let mut lo: usize = 0;
+    let mut hi: usize = ID_CONTINUE_LEN;
+    while lo < hi
+        invariant
+            lo <= hi <= ID_CONTINUE_LEN,
+        decreases hi - lo,
+    {
+        // Never saturates: lo < hi.
+        let mid = lo.saturating_add(hi.saturating_sub(lo) / 2);
+        let row = id_continue_at_exec(mid);
         if c < row.first {
             hi = mid;
         } else if c > row.last {
@@ -69,8 +87,7 @@ pub fn id_start_non_ascii(c: u32) -> (r: bool)
     if c > 0x10FFFF {
         return false;
     }
-    let table: &[Range] = &ID_START;
-    find(table, c)
+    find_start(c)
 }
 
 /// Whether `c` (above U+007F) has the Unicode property `ID_Continue`.
@@ -84,8 +101,7 @@ pub fn id_continue_non_ascii(c: u32) -> (r: bool)
     if c > 0x10FFFF {
         return false;
     }
-    let table: &[Range] = &ID_CONTINUE;
-    find(table, c)
+    find_continue(c)
 }
 
 } // verus!
