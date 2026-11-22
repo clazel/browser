@@ -35,9 +35,9 @@
 //! (each unit check equal to its spec function) and [`scan_exec`] (the scan
 //! equal to the spec's recursive `scan`). The tier stays 0 until CI's full
 //! verification runs (CLAUDE.md rule 7). The theorem of jit.md exit criterion 2
-//! (an accepted blob
-//! is confined) is not stated or proven here; see the end of [`spec`]'s
-//! header.
+//! (an accepted blob is confined) is stated and proven for x86-64 in
+//! [`confine`], not in [`spec`] or [`validate`]: it is about the semantics of
+//! `clazel-x64`, over the acceptance spec defined here.
 //!
 //! The A64 validator ([`a64`]) has the same shape and the same status: a spec
 //! and contract committed first, then [`a64::validate::validate`], proven sound
@@ -51,6 +51,7 @@
 pub mod a64;
 pub mod acc_lemmas;
 pub mod api;
+pub mod confine;
 pub mod contract;
 pub mod dataflow;
 pub mod decode_all;
