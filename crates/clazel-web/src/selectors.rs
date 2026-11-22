@@ -30,17 +30,19 @@
 //! - Template contents are not children in the arena, so a query does not
 //!   enter them, as the standard has it.
 //!
-//! Known gap: `clazel-selectors` does not parse `:scope`, nor the other
-//! pseudo-classes outside its subset, so such a selector is a
-//! [`SyntaxError`] here. DOM says `:scope` is the node the method is called
-//! on; that needs the matcher's support, and `clazel-selectors` is not this
-//! crate's to change. `tests/conformance_selectors.rs` lists what this
-//! costs among the WPT selectors.
+//! - `:scope` is the node the method is called on, as DOM says: the scoping
+//!   root of `query_selector`/`query_selector_all`, and the `:scope element`
+//!   of `matches`/`closest` (`clazel-selectors`' `matches_scoped`).
+//!
+//! Known gap: the pseudo-classes outside `clazel-selectors`' subset are not
+//! parsed, so such a selector is a [`SyntaxError`] here.
+//! `tests/conformance_selectors.rs` lists what this costs among the WPT
+//! selectors.
 
 use clazel_css::parser::contract::MAX_PARSER_INPUT;
 use clazel_dom::exec::{Arena, ExecKind};
 use clazel_selectors::exec_check::check;
-use clazel_selectors::exec_match::matches as match_against_element;
+use clazel_selectors::exec_match::matches_scoped;
 use clazel_selectors::exec_parse::parse_selector;
 use clazel_selectors::exec_types::ExecSelectors;
 
@@ -81,10 +83,17 @@ impl Selector {
 
     /// Whether `x` is an element of `arena` that this selector matches
     /// (Selectors 4 §21.3† "match a selector against an element").
+    /// With no scoping root, `:scope` is `:root` (Selectors 4 §9.4†).
     pub fn matches(&self, arena: &Arena, x: usize) -> bool {
+        self.matches_scoped(arena, None, x)
+    }
+
+    /// [`Selector::matches`] with the scoping root `scope`, which `:scope`
+    /// represents (Selectors 4 §9.4†).
+    pub fn matches_scoped(&self, arena: &Arena, scope: Option<usize>, x: usize) -> bool {
         x < arena.len()
             && matches!(arena.kind(x), ExecKind::Element { .. })
-            && match_against_element(arena, &self.parsed, x)
+            && matches_scoped(arena, &self.parsed, scope, x)
     }
 }
 
@@ -122,7 +131,7 @@ pub fn query_selector(
     let s = Selector::parse(selectors)?;
     let mut found = None;
     walk_descendants(arena, root, |n| {
-        let hit = s.matches(arena, n);
+        let hit = s.matches_scoped(arena, Some(root), n);
         if hit {
             found = Some(n);
         }
@@ -142,7 +151,7 @@ pub fn query_selector_all(
     let s = Selector::parse(selectors)?;
     let mut found = Vec::new();
     walk_descendants(arena, root, |n| {
-        if s.matches(arena, n) {
+        if s.matches_scoped(arena, Some(root), n) {
             found.push(n);
         }
         false
@@ -157,7 +166,7 @@ pub fn query_selector_all(
 /// success, then return true; otherwise, return false."
 pub fn matches(arena: &Arena, element: usize, selectors: &[u32]) -> Result<bool, SyntaxError> {
     let s = Selector::parse(selectors)?;
-    Ok(s.matches(arena, element))
+    Ok(s.matches_scoped(arena, Some(element), element))
 }
 
 /// DOM §4.9† `closest(selectors)`: 1.-2. as [`matches`]. 3. "Let elements be
@@ -173,7 +182,7 @@ pub fn closest(
     let s = Selector::parse(selectors)?;
     let mut cur = (element < arena.len()).then_some(element);
     while let Some(n) = cur {
-        if s.matches(arena, n) {
+        if s.matches_scoped(arena, Some(element), n) {
             return Ok(Some(n));
         }
         cur = arena.parent(n);

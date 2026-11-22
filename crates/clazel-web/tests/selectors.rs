@@ -380,11 +380,14 @@ fn unknown_context_node_is_empty() {
     assert_eq!(query_selector_all(&d.t.arena, 9999, &u("*")), Ok(vec![]));
 }
 
-// Known gap, recorded so that a change in `clazel-selectors` shows here:
-// `:scope` is not parsed, so it is a SyntaxError.
+// DOM §4.2.6†: `:scope` is the node queried, so `:scope > p` on div#a is
+// its two p children, and not div#b's p.
 #[test]
-fn scope_is_a_known_gap() {
+fn scope_is_the_node_queried() {
     let d = doc();
     let r = query_selector_all(&d.t.arena, d.a, &u(":scope > p"));
-    assert_eq!(r, Err(SyntaxError));
+    assert_eq!(r, Ok(vec![d.p1, d.p2]));
+    assert_eq!(matches(&d.t.arena, d.a, &u(":scope")), Ok(true));
+    assert_eq!(matches(&d.t.arena, d.p1, &u(":scope")), Ok(true));
+    assert_eq!(closest(&d.t.arena, d.s1, &u(":scope")), Ok(Some(d.s1)));
 }
