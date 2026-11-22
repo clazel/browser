@@ -2672,6 +2672,29 @@ pub open spec fn fetch_script(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, 
     fetch_sub(rules, urls, fetch, s, r, true, request, url)
 }
 
+/// The message asks for a sub-fetch: a `FetchStyle` or a `FetchScript`.
+pub open spec fn is_sub_request(m: clazel_ipc::message::spec::Message) -> bool {
+    m is FetchStyle || m is FetchScript
+}
+
+/// The `request` id of a sub-fetch request (0 for any other message).
+pub open spec fn sub_request_id(m: clazel_ipc::message::spec::Message) -> u64 {
+    match m {
+        clazel_ipc::message::spec::Message::FetchStyle { request, .. } => request,
+        clazel_ipc::message::spec::Message::FetchScript { request, .. } => request,
+        _ => 0,
+    }
+}
+
+/// The `url` of a sub-fetch request (empty for any other message).
+pub open spec fn sub_request_url(m: clazel_ipc::message::spec::Message) -> Seq<u8> {
+    match m {
+        clazel_ipc::message::spec::Message::FetchStyle { url, .. } => url,
+        clazel_ipc::message::spec::Message::FetchScript { url, .. } => url,
+        _ => seq![],
+    }
+}
+
 /// Sub-fetch `f`'s renderer is live, committed and locked to its lock, and
 /// `f` has not ended: `f` belongs to the renderer's current document.
 pub open spec fn subfetch_live(s: State, f: SubFetch) -> bool {

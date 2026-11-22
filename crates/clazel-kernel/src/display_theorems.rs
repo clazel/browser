@@ -95,8 +95,8 @@ proof fn lemma_handle_no_show(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, 
                 lemma_storage_call_no_show(s, r, m);
             }
         },
-        clazel_ipc::message::spec::Message::FetchStyle { request, url } => {
-            crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, request, url);
+        clazel_ipc::message::spec::Message::FetchStyle { .. } | clazel_ipc::message::spec::Message::FetchScript { .. } => {
+            crate::subfetch_rel::lemma_fetch_sub_shape(rules, urls, fetch, s, r, m is FetchScript, sub_request_id(m), sub_request_url(m));
         },
         _ => {},
     }

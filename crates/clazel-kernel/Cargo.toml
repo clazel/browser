@@ -135,6 +135,12 @@ theorems = [
     "theorem_subfetch_ownership",
     "theorem_subfetch_limits",
     "theorem_commit_ends_subfetches",
+    # Phase 7 item 7.16: script fetches (`FetchScript`, answered with
+    # `Script*` frames), as `FetchStyle` is, by the same function
+    # (`fetch_sub`). The statement is in `statements.rs`; the proof in
+    # `subfetch_theorems.rs`; the noninterference over `FetchScript` is
+    # `FetchStyle`'s (`subfetch_rel.rs`), whose lemmas take the `script` flag.
+    "theorem_script_fetch_shape",
     # Phase 5 item 5.17c: the GPU crash policy. The statements are in
     # `statements.rs`; the proofs in `gpu_theorems.rs`, the noninterference
     # over `GpuExited` and its declassified parts in `gpu_rel.rs`.
