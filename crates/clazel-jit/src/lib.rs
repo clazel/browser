@@ -100,10 +100,26 @@
 //!   on a `u32`. `tests/validator_cf.rs` additionally checks that the
 //!   validator accepts every memory template, `br_table`, and 1500 generated
 //!   programs with control flow and memory.
+//! - **The validator accepts every emitted blob (proven)**
+//!   ([`cfblobacc::theorem_blob_accepted`], carried by `emit_cf_blob` as a
+//!   postcondition, with the exactness of its bytes
+//!   [`cfblobacc::emitted_bytes`]): for every program with a translation,
+//!   `clazel_codecheck::spec::accepted(blob, [0])`. The proof ([`cfblobacc`]'s
+//!   header): the code is cut into the validator's units ([`cfunits`],
+//!   [`cfaccept::utmpl`]: an exit sequence, the bounds-check sequence as
+//!   `check_unit_at` recognizes it, single instructions that are neither a
+//!   `ret` nor a `jcc 2`), the scan walks exactly those units
+//!   ([`cfunits::lemma_scan_units`]) and accepts them whatever it knew
+//!   ([`cfuacc`], [`cfuacc2`], with [`cfsimple`] for the straight-line
+//!   templates): the access of a `load` or `store` is admitted because the
+//!   base was loaded and the index checked just before, and no jump lands
+//!   between ([`cfaccept::prot`]); every jump lands on a label or on a unit
+//!   start ([`cfjt`], [`cfbs`]).
 //! - **Not done:**
-//!   - that the validator's `check_unit_at` recognizes the template's check
-//!     as a unit and every blob is accepted: the code is `check_seq`
-//!     itself and the test accepts it, but there is no theorem;
+//!   - the corollary with `clazel-codecheck`'s confinement theorem (every
+//!     emitted blob, run from an accepted entry with the context invariant,
+//!     stays in its regions and leaves only through the exit): that theorem is
+//!     not in this stack's base, so it is not stated here;
 //!   - blocks with parameters or results (modelling choice 8 of [`cfspec`]).
 //!
 //! The A64 back end's control flow, memory and emitter are the same slice
@@ -111,9 +127,11 @@
 //!
 //! # What is not (of the first slice)
 //!
-//! - **That the validator accepts every blob** is checked by
-//!   `tests/validator.rs` (every template, 3000 generated programs), not
-//!   proven.
+//! - **That the validator accepts every blob of the first slice's own
+//!   emitter** (`emit::X64Backend`) is checked by `tests/validator.rs` (every
+//!   template, 3000 generated programs), not proven; the control-flow emitter
+//!   is proven above, and covers straight-line programs (a `then` chain of
+//!   instructions).
 //! - **Not covered by any template of the first slice:** the memory
 //!   instructions, structured control flow, `br_table` and `exit` with
 //!   operands (those are the second slice, above, for x86-64); `f64` arithmetic, comparison
@@ -139,8 +157,8 @@ pub mod cfaccept;
 pub mod cfalg;
 pub mod cfblobacc;
 pub mod cfblock;
-pub mod cfbs;
 pub mod cfbrt;
+pub mod cfbs;
 pub mod cfcheck;
 pub mod cfcheckrun;
 pub mod cfcompose;

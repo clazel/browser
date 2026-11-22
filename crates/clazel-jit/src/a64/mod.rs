@@ -78,19 +78,27 @@
 //!     displacements are formed without signed arithmetic;
 //!   - the validator's access rule admits the access a memory instruction
 //!     makes ([`cfmemvalid::lemma_load_access_accepted`]).
-//!   `tests/validator_a64_cf.rs` checks that the A64 validator accepts every
-//!   memory template, `br_table`, and 1500 generated programs with control
-//!   flow and memory.
-//! - **Not done:** that the validator's `check_unit_at` recognizes the check
-//!   as a unit and every blob is accepted (the code is `check_seq` itself and
-//!   the test accepts it, but there is no theorem); blocks with parameters or
-//!   results; `f64` arithmetic; rotates; a frame beyond 31 slots.
+//!     `tests/validator_a64_cf.rs` checks that the A64 validator accepts every
+//!     memory template, `br_table`, and 1500 generated programs with control
+//!     flow and memory.
+//! - **The validator accepts every emitted blob (proven)**
+//!   ([`cfblobacc::theorem_blob_accepted`], carried by `emit_cf_blob` as a
+//!   postcondition, with the exactness of its instructions
+//!   [`cfblobacc::emitted_ins`]): for every program with a translation,
+//!   `clazel_codecheck::a64::spec::accepted(blob, [0])`. The A64 counterpart
+//!   of the x86-64 proof (see `crate::cfblobacc`): units ([`cfunits`],
+//!   [`cfaccept`]: an exit sequence of 3, the bounds-check sequence of 7,
+//!   single instructions), the scan over them ([`cfuacc`], [`cfuacc2`],
+//!   [`cfsimple`]), and where branches land ([`cfjt`], [`cfbs`]).
+//! - **Not done:** blocks with parameters or results; `f64` arithmetic;
+//!   rotates; a frame beyond 31 slots.
 //!
 //! # What is not (of the first slice)
 //!
-//! - **That the A64 validator accepts every blob** is checked by
-//!   `tests/validator_a64.rs` (every template, 3000 generated programs), not
-//!   proven.
+//! - **That the A64 validator accepts every blob of the first slice's own
+//!   emitter** is checked by `tests/validator_a64.rs` (every template, 3000
+//!   generated programs), not proven; the control-flow emitter is proven
+//!   above.
 //! - **Not covered by any template:** `f64` arithmetic, comparison and
 //!   conversion (LIR's `f64` operators are uninterpreted functions, so a
 //!   refinement to `FADD` and the rest would need an axiom this crate does not
@@ -106,9 +114,12 @@ pub mod alu;
 pub mod api;
 pub mod bitfield;
 pub mod bitmid;
+pub mod cfaccept;
 pub mod cfalg;
+pub mod cfblobacc;
 pub mod cfblock;
 pub mod cfbrt;
+pub mod cfbs;
 pub mod cfchk;
 pub mod cfcompose;
 pub mod cfcontract;
@@ -116,6 +127,7 @@ pub mod cfemit;
 pub mod cfexit;
 pub mod cffit;
 pub mod cfif;
+pub mod cfjt;
 pub mod cfleaf;
 pub mod cflens;
 pub mod cfmemops;
@@ -124,9 +136,13 @@ pub mod cfmemsteps;
 pub mod cfmemvalid;
 pub mod cfop;
 pub mod cfproofs;
+pub mod cfsimple;
 pub mod cfspec;
 pub mod cfsteps;
 pub mod cftemplates;
+pub mod cfuacc;
+pub mod cfuacc2;
+pub mod cfunits;
 pub mod cfvalid;
 pub mod compose;
 pub mod contract;

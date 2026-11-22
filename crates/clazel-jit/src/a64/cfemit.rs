@@ -29,6 +29,8 @@
 //!   assumed by [`analyze`] and the emission.
 
 #[cfg(verus_only)]
+use super::cfblobacc::{emit_cf_blob_accepted_ensures, emitted_ins, lemma_emitter_accepted};
+#[cfg(verus_only)]
 use super::cfbrt::*;
 #[cfg(verus_only)]
 use super::cfcompose::lemma_shift_index;
@@ -1460,6 +1462,21 @@ pub fn emit_cf_blob(n: &Node, nl: usize, exit_code: u16) -> (r: Option<Vec<u8>>)
             Some(v) => Some(v@),
             None => None,
         }),
+        // **Exactly** the template instructions (`super::cfblobacc::emitted_ins`):
+        // an addition to the contract, which says only that some body
+        // refines; the validator-acceptance theorem is about these.
+        match r {
+            Some(v) => clazel_codecheck::a64::spec::decodes_to(
+                v@,
+                emitted_ins(*n, nl as nat, exit_code),
+            ),
+            None => true,
+        },
+        // **The validator accepts it** (J.9): `super::cfblobacc::theorem_blob_accepted`.
+        emit_cf_blob_accepted_ensures(*n, nl, exit_code, match r {
+            Some(v) => Some(v@),
+            None => None,
+        }),
 {
     proof {
         super::tlemmas::lemma_abi_consts_t();
@@ -1507,6 +1524,27 @@ pub fn emit_cf_blob(n: &Node, nl: usize, exit_code: u16) -> (r: Option<Vec<u8>>)
         }
     }
     let bytes = encode_code(body.as_slice());
+    proof {
+        let offs = offs_of(labs@, 0);
+        assert(offs =~= seq![4 * size as int]);
+        assert(csize(*n, nl as nat, 0, 1) == 4 * size);
+        assert(body_seq =~= ctmpl(*n, nl as nat, 0, offs)) by {
+            assert(Seq::<isa::Instr>::empty() + ctmpl(*n, nl as nat, 0, offs) =~= ctmpl(
+                *n,
+                nl as nat,
+                0,
+                offs,
+            ));
+        }
+        assert(body@ =~= body_seq + exit_seq(exit_code));
+        assert(emitted_ins(*n, nl as nat, exit_code) =~= body@);
+        assert(clazel_codecheck::a64::spec::decodes_to(
+            bytes@,
+            emitted_ins(*n, nl as nat, exit_code),
+        ));
+        assert(emit_cf_blob_ensures(*n, nl, exit_code, Some(bytes@)));
+        lemma_emitter_accepted(*n, nl, exit_code, bytes@);
+    }
     Some(bytes)
 }
 

@@ -39,9 +39,9 @@
 #[allow(unused_imports)]
 use super::spec::*;
 #[cfg(verus_only)]
-use crate::cfcompose::lemma_shift_index;
-#[cfg(verus_only)]
 use crate::cfblobacc::{emit_cf_blob_accepted_ensures, emitted_bytes, lemma_emitter_accepted};
+#[cfg(verus_only)]
+use crate::cfcompose::lemma_shift_index;
 #[cfg(verus_only)]
 use crate::cfcontract::*;
 #[cfg(verus_only)]
