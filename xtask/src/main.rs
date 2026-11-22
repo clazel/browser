@@ -29,12 +29,17 @@
 //!   user agent style sheet from HTML §15 (`crates/clazel-style/data/*.css`).
 //!   `check` and `verify` fail if they are stale or a data file's hash
 //!   differs from its `SOURCE.md`.
+//! - `cargo xtask bindings`: regenerate the resolved WebIDL interface model
+//!   of `clazel-webidl` (`crates/clazel-webidl/src/generated/`) from the
+//!   vendored IDL, with our own parser (`bindings/`). `check` and `verify`
+//!   fail if it is stale or a vendored file does not parse.
 //! - `cargo xtask report [--write] [--changed [base]]`: run the checks that produce the
 //!   status table (including each crate's conformance suites, see
 //!   `conformance.rs`), print it, and with `--write` update docs/STATUS.md
 //!   and the images drawn from it (`status.rs`). A table that differs from
 //!   what was measured is reported, not a failure: CI rewrites it on main.
 
+mod bindings;
 mod changed;
 mod conformance;
 mod deps;
@@ -410,6 +415,8 @@ fn static_checks(r: &mut Runner, crates: &[Crate], pins: &Pins) {
         "generated encoding labels and indexes",
         outcome(problems, notes),
     );
+    let (problems, notes) = bindings::run(false);
+    r.step("generated WebIDL interface model", outcome(problems, notes));
     let tooling = crates
         .iter()
         .filter(|c| c.tooling)
@@ -1033,6 +1040,29 @@ fn generate_testdata() -> ExitCode {
     }
 }
 
+/// `cargo xtask bindings`: rewrite the generated WebIDL interface model of
+/// `clazel-webidl` if stale.
+fn generate_bindings() -> ExitCode {
+    let mut r = Runner::default();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent();
+    if !root.is_some_and(|p| std::env::set_current_dir(p).is_ok()) {
+        r.step(
+            "find repository root",
+            Outcome::Fail(vec!["cannot enter the repository root".into()]),
+        );
+        return ExitCode::from(1);
+    }
+    let (problems, notes) = bindings::run(true);
+    r.step("generate WebIDL interface model", outcome(problems, notes));
+    if r.failed {
+        println!("RESULT: FAILED");
+        ExitCode::from(1)
+    } else {
+        println!("RESULT: WEBIDL BINDINGS UP TO DATE");
+        ExitCode::SUCCESS
+    }
+}
+
 /// `cargo xtask tables`: rewrite the generated Unicode tables if stale.
 fn generate_tables() -> ExitCode {
     let mut r = Runner::default();
@@ -1137,6 +1167,7 @@ fn main() -> ExitCode {
     let (full, only_mutate, report_mode, write) = match (args, base) {
         (["testdata"], None) => return generate_testdata(),
         (["tables"], None) => return generate_tables(),
+        (["bindings"], None) => return generate_bindings(),
         (["verify"], _) => (true, false, false, false),
         (["check"], None) => (false, false, false, false),
         (["mutate"], None) => (false, true, false, false),
@@ -1148,7 +1179,7 @@ fn main() -> ExitCode {
         (["report", "--write"], _) => (false, false, true, true),
         _ => {
             eprintln!(
-                "usage: cargo xtask <verify [--changed [base]]|verify --part (base|miri [<names>]|crate <names> --metrics <dir>|assemble --metrics <dir> [--write|--changed <base>])|crates [--changed <base>]|check|mutate [crate]|testdata|tables|report [--write] [--changed [base]]>"
+                "usage: cargo xtask <verify [--changed [base]]|verify --part (base|miri [<names>]|crate <names> --metrics <dir>|assemble --metrics <dir> [--write|--changed <base>])|crates [--changed <base>]|check|mutate [crate]|testdata|tables|bindings|report [--write] [--changed [base]]>"
             );
             return ExitCode::from(64);
         }
