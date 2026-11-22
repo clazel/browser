@@ -80,7 +80,8 @@
 //! # What is not here
 //!
 //! Typed blocks (choice 8), `f64` arithmetic, rotates, frames beyond 31
-//! slots, and the A64 back end.
+//! slots, a `br_table` of more than [`max_targets`] targets, and the A64 back
+//! end.
 
 use crate::spec::*;
 #[allow(unused_imports)]

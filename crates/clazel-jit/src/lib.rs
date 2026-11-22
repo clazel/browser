@@ -77,17 +77,29 @@
 //!     it** ([`cfproofs::lemma_ctmpl_refines`]), with every `jmp` and `jcc`
 //!     displacement a 32-bit number ([`cfproofs::labels_fit`]) and every
 //!     instruction in the subset ([`cfvalid`]);
+//!   - **the memory instructions** `bounds_check`, `load` and `store`
+//!     ([`cfmem`], [`cfmemops`]): the code is the validator's own
+//!     bounds-check sequence (`clazel_codecheck::spec::check_seq`, run by
+//!     [`cfcheckrun`]) around the access, with the two exits going to a stub
+//!     after the access ([`cftemplates::mem_code`]); the access reads and
+//!     writes through `mem_rel` ([`cfmemrel`], [`cfmemacc`]); the check
+//!     fails exactly when LIR's `bounds_check` exits (and where a load or
+//!     store is `Stuck` nothing is claimed);
+//!   - **`br_table`** ([`cfbrt`]): a compare-and-`je` chain and a `jmp` to
+//!     the default, by induction on the entry;
+//!   - that the validator's access rule admits the access the template
+//!     makes ([`cfmemvalid::lemma_access_accepted`]).
+//! - **The emitter** [`cfemit::emit_cf_blob`] is **not proven** equal to
+//!   [`cftemplates::ctmpl`] (Verus has no spec for the signed `checked_*`
+//!   operators or `i32::try_from(i64)`, so [`cfcontract::emit_cf_blob_ensures`]
+//!   is not discharged). `tests/validator_cf.rs` checks that the
+//!   validator accepts every memory template, `br_table`, and 1500 generated
+//!   programs with control flow and memory.
 //! - **Not done:**
-//!   - **the executable emitter** for control flow and its validator-acceptance
-//!     test: the code is the spec function [`cftemplates::ctmpl`], proven to
-//!     refine, and [`cfcontract::emit_cf_blob_ensures`] states what an emitter
-//!     must satisfy, but no emitter is written, so nothing about the validator
-//!     has been checked for control flow;
-//!   - the memory instructions `bounds_check`, `load`, `store`: the
-//!     statement is made for them ([`cfspec::MemOp`], [`cfspec::cf_flow`]),
-//!     but there is no template and no proof, and [`cfspec::templated`]
-//!     refuses them, so the emitter does too;
-//!   - `br_table` (likewise);
+//!   - [`cfcontract::emit_cf_blob_ensures`] (above);
+//!   - that the validator's `check_unit_at` recognizes the template's check
+//!     as a unit and every blob is accepted: the code is `check_seq`
+//!     itself and the test accepts it, but there is no theorem;
 //!   - blocks with parameters or results (modelling choice 8 of [`cfspec`]);
 //!   - the A64 back end's control flow and memory.
 //!
@@ -97,8 +109,8 @@
 //!   `tests/validator.rs` (every template, 3000 generated programs), not
 //!   proven.
 //! - **Not covered by any template of the first slice:** the memory
-//!   instructions, structured control flow and `exit` with operands (those
-//!   are the second slice, above, for x86-64); `f64` arithmetic, comparison
+//!   instructions, structured control flow, `br_table` and `exit` with
+//!   operands (those are the second slice, above, for x86-64); `f64` arithmetic, comparison
 //!   and conversion
 //!   (LIR's `f64` operators are uninterpreted functions, so a refinement to
 //!   SSE would need an axiom this crate does not add); rotates (the subset

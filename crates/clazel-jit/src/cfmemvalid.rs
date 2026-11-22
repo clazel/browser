@@ -1,6 +1,6 @@
 //! The code of the memory instructions and of `br_table` is in the x86-64
-//! subset ([`x64::valid_instr`]) and is, for a memory instruction, accepted
-//! by the validator's unit rules in its shape.
+//! subset ([`x64::valid_instr`]), and the validator's access rule admits the
+//! access a memory instruction makes after its check.
 
 #[allow(unused_imports)]
 use super::spec::*;
