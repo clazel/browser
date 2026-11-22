@@ -19,7 +19,9 @@
 //!   `pos`, ends after it and inside the source text; so elements from
 //!   repeated calls tile the source text. [`next_token_proven`]: the token
 //!   starts at or after `pos`, is not trivia, and its `newline_before` is
-//!   [`contains_line_terminator`] of some trivia element between them.
+//!   exactly [`contains_line_terminator`] of the code points between `pos`
+//!   and the token, which is [`skip_trivia`]'s flag for the range it skips
+//!   ([`super::lemmas::lemma_skip_trivia_flag`]).
 //! - **The value's shape:** [`value_shape_agrees`]: an element has the
 //!   kind of `Value` its kind has (a `StringLiteral` a `Value::String`, and
 //!   so on), and a regular expression's `body_end` is inside it.
@@ -35,6 +37,29 @@
 //!   a `NumericLiteral`'s `bigint` and `legacy` flags and a
 //!   `StringLiteral`'s SV are the spec's relations
 //!   ([`super::contract::element_value_agrees`]).
+//! - **Longest match across the proven kinds** ([`proven_bounded`]): when
+//!   the element is of a [`kind_proven`] kind, no derivation, from `pos`, of
+//!   any other proven kind is longer; and when the result is
+//!   [`LexError::NoInputElement`], no proven kind derives anything at `pos`.
+//!   Each branch of the dispatch on the first code point (`lex_ws`,
+//!   `lex_lt`, `lex_slash`, `lex_brace`, `lex_backtick`, `lex_string`,
+//!   `lex_hash`, `lex_numeric`, `lex_ident`, `lex_html_open`, `lex_punct`)
+//!   proves it from the code points each kind can start with
+//!   ([`super::longest_proofs::start_ok`], `lemma_first_cp`).
+//! - **The contract, for a proven kind, given what is not proven**
+//!   ([`lemma_element_meets_contract`]): if no derivation of a kind that is
+//!   not proven ([`super::longest_proofs::unproven_bounded`]: identifiers,
+//!   private identifiers, regular expression literals, templates, and in
+//!   `html` mode comments) is as long as the element, then
+//!   [`super::contract::next_input_element_ensures`] holds for it in full
+//!   (the longest length, the errors of [`lex_error`], the value), except
+//!   that for a `NumericLiteral` the code point after it must be below
+//!   U+0080 or absent ([`numeric_follow_error`] is proven to be the spec's
+//!   [`super::spec::numeric_literal_follow_error`] only then).
+//!   [`lemma_no_input_element_meets_contract`] and
+//!   [`lemma_numeric_error_meets_contract`] do the same for
+//!   [`LexError::NoInputElement`] and
+//!   [`LexError::IdentifierAfterNumericLiteral`].
 //! - **The scanners that carry these:** `scan_punctuator`, `scan_numeric`
 //!   (with `scan_digits_sep`, `scan_exponent`, `scan_decimal_tail`),
 //!   `scan_string` (with `scan_string_escape`, `scan_legacy_octal_escape`,
@@ -52,15 +77,25 @@
 //! It is **not** proven that the results agree with [`super::spec`]
 //! otherwise, so these functions do not implement [`super::api::JsLexer`]:
 //!
-//! - **Longest element across kinds** ([`longest_len`]): that no element of
-//!   *another* kind is longer than the one returned. Only "no longer element
-//!   of the same kind" is proven.
-//! - **The errors** of [`lex_error`] (`NoInputElement` follows from the
-//!   longest element; the two checks of §12.9.3 and §12.7.1.1 are not
-//!   proven to be the spec's), and `newline_before` being [`skip_trivia`]'s.
+//! - **Longest element against the unproven kinds** ([`longest_len`]): that
+//!   no element of a kind that is not proven is as long as the one returned
+//!   (the hypothesis of [`lemma_element_meets_contract`]). Nothing here
+//!   discharges it, not even where the first code point is ASCII and rules
+//!   an identifier out.
+//! - **The errors** of [`lex_error`]: [`LexError::InvalidIdentifierEscape`]
+//!   (identifiers); [`LexError::IdentifierAfterNumericLiteral`] when the
+//!   code point after the literal is above U+007F (see below).
+//! - **`newline_before` being [`skip_trivia`]'s**: the flag is proven to be
+//!   the line terminators in the range, and [`skip_trivia`]'s to be the same
+//!   for its range; that the two ranges end at the same place is the
+//!   longest-match property for each trivia element, which holds only given
+//!   the hypothesis above.
 //! - **Annex B.1.1 comments** (`html` mode: `<!--`, `-->`, a multi-line
 //!   comment with an `HTMLCloseComment`): `Comment` is claimed only with
-//!   `html == false`.
+//!   `html == false`. Not done: it needs the determinism of
+//!   `HTMLCloseComment`'s split (its `WhiteSpaceSequence?` and
+//!   `SingleLineDelimitedCommentSequence?` before `-->`) and the longest
+//!   range of an Annex B `MultiLineComment` followed by one.
 //! - **Identifiers and private identifiers, regular expression literals
 //!   (their flags are `IdentifierPartChar`s), the `ReservedWord` rule, and
 //!   the checks that read `IdentifierStart`**: nothing ties the table of
@@ -69,7 +104,11 @@
 //!   ([`super::spec::unicode_id_start_non_ascii`]), so the agreement of
 //!   anything that tests them cannot be stated until it is tied (an axiom
 //!   in an `axioms.rs`, CLAUDE.md rule 4, or an interpretation of the spec).
-//! - **Template literals** (their TV and TRV).
+//! - **Template literals** (their ranges, TV and TRV). Blocked by a proof
+//!   obstacle in [`super::spec`], not a lexing one: see
+//!   [`super::template_proofs`]. What it proves is that a
+//!   `TemplateCharacter` has one length and value and that none starts at a
+//!   closing delimiter.
 //!
 //! Their agreement with the spec is tested (`tests/`), not proven.
 //! [`lemma_contract_implies_proven`] shows that what is proven is implied
@@ -255,10 +294,14 @@ pub open spec fn next_token_proven(
 }
 
 /// The full contract implies what is proven of [`next_input_element`]
-/// (except the value's shape, which the full contract states value by
-/// value): the proven part is a weakening, not a different claim.
-/// ([`kind_agrees_proven`] is the contract's `element_matches` conjunct
-/// itself, restricted to some kinds.)
+/// about the spec (except the value's shape, which the full contract states
+/// value by value, and the facts about the dispatch that
+/// [`next_input_element_proven`] also carries to prove the above:
+/// `numeric_absent` and the numeric follow check): the proven part is a
+/// weakening, not a different claim. ([`kind_agrees_proven`] is the
+/// contract's `element_matches` conjunct itself, restricted to some kinds;
+/// [`proven_bounded`] is what the contract's longest length says of the
+/// proven kinds.)
 pub proof fn lemma_contract_implies_proven(
     src: Seq<u32>,
     pos: usize,
@@ -271,16 +314,48 @@ pub proof fn lemma_contract_implies_proven(
         super::contract::next_input_element_ensures(src, pos, goal, html, r),
     ensures
         match r {
-            Err(_) => pos < src.len(),
+            Err(e) => pos < src.len() && (e == LexError::NoInputElement ==> proven_bounded(
+                goal,
+                html,
+                src,
+                pos as int,
+                pos as int,
+            )),
             Ok(Step::Eof) => pos == src.len(),
             Ok(Step::Element(el)) => pos < src.len() && el.start == pos && pos < el.end && el.end
                 <= src.len() && kind_agrees_proven(goal, html, src, el) && value_agrees_proven(
                 src,
                 el,
-            ),
+            ) && (kind_proven(el.kind, html) ==> proven_bounded(
+                goal,
+                html,
+                src,
+                pos as int,
+                el.end as int,
+            )),
         },
 {
+    super::lemmas::lemma_longest_len(goal, html, src, pos as int);
+    if let Err(LexError::NoInputElement) = r {
+        // The longest length is 0: no range, so no kind, derives anything.
+        assert forall|k: ElementKind, j: int|
+            pos < j <= src.len() && #[trigger] element_matches(goal, html, k, src, pos as int, j)
+                implies j <= pos by {
+            super::lemmas::lemma_kind_implies_any(goal, html, k, src, pos as int, j);
+            let n = j - pos as int;
+            assert(pos as int + n == j);
+            assert(any_element_matches(goal, html, src, pos as int, pos as int + n));
+        }
+    }
     if let Ok(Step::Element(el)) = r {
+        assert forall|k: ElementKind, j: int|
+            pos < j <= src.len() && #[trigger] element_matches(goal, html, k, src, pos as int, j)
+                implies j <= el.end by {
+            super::lemmas::lemma_kind_implies_any(goal, html, k, src, pos as int, j);
+            let n = j - pos as int;
+            assert(pos as int + n == j);
+            assert(any_element_matches(goal, html, src, pos as int, pos as int + n));
+        }
         assert forall|j: int|
             j <= src.len() && #[trigger] element_matches(
                 goal,

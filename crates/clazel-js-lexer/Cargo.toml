@@ -16,8 +16,10 @@ vstd = "=0.0.0-2026-10-04-0306"
 # implementation (src/exec.rs) is proven total, panic-free and to tile its
 # input, and to agree with the spec for some token classes (punctuators,
 # numeric and string literals, plain comments, white space, line
-# terminators), but not for all: it does not meet src/contract.rs yet (the
-# module's header lists what is open). The tier-2 evidence around the spec exists in part: an independent
+# terminators), to return the longest of the proven kinds, and to meet
+# src/contract.rs for them given a stated bound on the kinds not proven; but
+# not for all kinds: it does not meet src/contract.rs unconditionally yet
+# (the module's header lists what is open). The tier-2 evidence around the spec exists in part: an independent
 # transcription of part of the grammar proven equal to the spec
 # (src/independent.rs, src/equivalence.rs), 19 certified mutation kills
 # (mutations.json) and Test262 conformance suites (tests/conformance_test262.rs).

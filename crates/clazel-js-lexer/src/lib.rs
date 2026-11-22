@@ -13,11 +13,13 @@
 //!   proven, and so is its agreement with [`spec`] for some token classes
 //!   (punctuators, numeric and string literals, plain comments, white space
 //!   and line terminators; see the module's header for exactly which, and
-//!   which are open). The rest of [`contract`] is tested, not proven, so it
-//!   does not implement [`api::JsLexer`] yet.
-//! - [`scan_proofs`], [`string_proofs`]: lemmas the proofs of [`exec`]'s
-//!   scanners use, about [`independent`]'s closed forms and [`spec`]'s
-//!   string literal relations.
+//!   which are open), and that it returns the longest of those kinds. The
+//!   rest of [`contract`] is tested, not proven, so it does not implement
+//!   [`api::JsLexer`] yet.
+//! - [`scan_proofs`], [`string_proofs`], [`template_proofs`],
+//!   [`longest_proofs`]: lemmas the proofs of [`exec`] use, about
+//!   [`independent`]'s closed forms, [`spec`]'s string and template
+//!   relations, and the longest match across kinds.
 //! - [`independent`]: a second transcription of part of the lexical grammar
 //!   from UAX #31 and ECMA-262 Annex A in closed form; [`equivalence`] proves
 //!   it equal to [`spec`] on every input it covers.
@@ -36,5 +38,6 @@ pub mod longest_proofs;
 pub mod scan_proofs;
 pub mod spec;
 pub mod string_proofs;
+pub mod template_proofs;
 pub mod unicode;
 pub mod unicode_data;
