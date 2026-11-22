@@ -84,6 +84,8 @@ pub open spec fn rank_below(rank: Seq<nat>, k: nat, b: nat) -> nat
 }
 
 /// At most `k`.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 proof fn lemma_rank_below_le(rank: Seq<nat>, k: nat, b: nat)
     ensures
         rank_below(rank, k, b) <= k,
@@ -95,6 +97,8 @@ proof fn lemma_rank_below_le(rank: Seq<nat>, k: nat, b: nat)
 }
 
 /// A higher bound counts at least as many.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 proof fn lemma_rank_below_mono(rank: Seq<nat>, k: nat, b1: nat, b2: nat)
     requires
         b1 <= b2,
@@ -108,6 +112,8 @@ proof fn lemma_rank_below_mono(rank: Seq<nat>, k: nat, b1: nat, b2: nat)
 }
 
 /// An entry between the bounds makes the higher bound count more.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 proof fn lemma_rank_below_strict(rank: Seq<nat>, k: nat, b1: nat, b2: nat, j: int)
     requires
         k <= rank.len(),
@@ -125,6 +131,8 @@ proof fn lemma_rank_below_strict(rank: Seq<nat>, k: nat, b1: nat, b2: nat, j: in
 }
 
 /// An entry at least `b` keeps the count below `k`.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 proof fn lemma_rank_below_lt(rank: Seq<nat>, k: nat, b: nat, j: int)
     requires
         k <= rank.len(),
@@ -143,6 +151,8 @@ proof fn lemma_rank_below_lt(rank: Seq<nat>, k: nat, b: nat, j: int)
 
 /// A ranking with ranks that need not be below the node count gives one
 /// that is: a node's new rank is how many nodes are ranked below it.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 pub proof fn lemma_ranked_u_acyclic(doc: Document, rank: Seq<nat>)
     requires
         ranked_u(doc, rank),
@@ -174,6 +184,8 @@ pub open spec fn frag_parentless(doc: Document) -> bool {
 }
 
 /// A well-formed arena is [`frag_parentless`].
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 pub proof fn lemma_wf_frag_parentless(doc: Document)
     requires
         wf(doc),
@@ -188,6 +200,8 @@ pub proof fn lemma_wf_frag_parentless(doc: Document)
 
 /// A host-including inclusive ancestor of a host-including inclusive
 /// ancestor of `x` is one of `x`.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 pub proof fn lemma_hi_trans(doc: Document, rank: Seq<nat>, a: NodeId, b: NodeId, x: NodeId)
     requires
         host_ranked(doc, rank),
@@ -211,6 +225,8 @@ pub proof fn lemma_hi_trans(doc: Document, rank: Seq<nat>, a: NodeId, b: NodeId,
 
 /// Chains read in an arena that has only lost links (a parent that was
 /// there is kept or gone, kinds are kept) are chains of the old arena.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 pub proof fn lemma_hw_sub(d: Document, d2: Document, a: NodeId, x: NodeId, f: nat)
     requires
         wf(d),
@@ -245,6 +261,8 @@ pub proof fn lemma_hw_sub(d: Document, d2: Document, a: NodeId, x: NodeId, f: na
 }
 
 /// Chains that do not pass through the node `n` do not see its new parent.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 pub proof fn lemma_hw_unchanged(d: Document, d2: Document, n: NodeId, a: NodeId, x: NodeId, f: nat)
     requires
         wf(d),
@@ -283,6 +301,8 @@ pub open spec fn in_graft(d: Document, nodes: Seq<NodeId>, x: NodeId) -> bool {
 
 /// A node below a grafted node, and not itself grafted, has its step up
 /// below one too.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 proof fn lemma_graft_up(d: Document, rank: Seq<nat>, nodes: Seq<NodeId>, x: NodeId, y: NodeId)
     requires
         host_ranked(d, rank),
@@ -300,6 +320,8 @@ proof fn lemma_graft_up(d: Document, rank: Seq<nat>, nodes: Seq<NodeId>, x: Node
 }
 
 /// A node whose parent is below a grafted node is below it.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 proof fn lemma_graft_child(d: Document, rank: Seq<nat>, nodes: Seq<NodeId>, c: NodeId, y: NodeId)
     requires
         host_ranked(d, rank),
@@ -315,6 +337,8 @@ proof fn lemma_graft_child(d: Document, rank: Seq<nat>, nodes: Seq<NodeId>, c: N
 }
 
 /// A fragment whose host is below a grafted node is below it.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 proof fn lemma_graft_contents(d: Document, rank: Seq<nat>, nodes: Seq<NodeId>, f: NodeId, h: NodeId)
     requires
         host_ranked(d, rank),
@@ -433,6 +457,8 @@ pub proof fn lemma_graft(d: Document, d2: Document, nodes: Seq<NodeId>, p: NodeI
 // What `wf` gives
 
 /// A well-formed arena is within the node limit.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 proof fn lemma_wf_limit(doc: Document)
     requires
         wf(doc),
@@ -444,6 +470,8 @@ proof fn lemma_wf_limit(doc: Document)
 }
 
 /// A node with a parent is not the document node.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 proof fn lemma_child_not_document(doc: Document, c: NodeId)
     requires
         wf(doc),
@@ -460,6 +488,8 @@ proof fn lemma_child_not_document(doc: Document, c: NodeId)
 // New document, creating nodes, kinds
 
 /// A new document is [`host_acyclic`].
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 pub proof fn theorem_new_document_host_acyclic(url: Seq<u32>)
     ensures
         host_acyclic(new_document(url)),
@@ -472,6 +502,8 @@ pub proof fn theorem_new_document_host_acyclic(url: Seq<u32>)
 
 /// Creating a node keeps [`host_acyclic`]: the new node has no parent and,
 /// being [`creatable`], no host.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 pub proof fn theorem_create_node_host_acyclic(doc: Document, k: NodeKind)
     requires
         host_acyclic(doc),
@@ -497,6 +529,8 @@ pub proof fn theorem_create_node_host_acyclic(doc: Document, k: NodeKind)
 
 /// Creating a template's contents keeps [`host_acyclic`]: the contents is
 /// ranked just above its host, and the host stays an element.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 pub proof fn theorem_create_template_contents_host_acyclic(doc: Document, t: NodeId)
     requires
         host_acyclic(doc),
@@ -531,6 +565,8 @@ pub proof fn theorem_create_template_contents_host_acyclic(doc: Document, t: Nod
 
 /// Replacing a node's kind by one of the same shape keeps [`host_acyclic`]:
 /// no parent or host changes.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 pub proof fn lemma_set_kind_acyclic(doc: Document, x: NodeId, k: NodeKind)
     requires
         host_acyclic(doc),
@@ -550,6 +586,8 @@ pub proof fn lemma_set_kind_acyclic(doc: Document, x: NodeId, k: NodeKind)
 }
 
 /// "Replace data" at the end of a text keeps [`host_acyclic`].
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 pub proof fn theorem_append_data_host_acyclic(doc: Document, n: NodeId, data: Seq<u32>)
     requires
         host_acyclic(doc),
@@ -563,6 +601,8 @@ pub proof fn theorem_append_data_host_acyclic(doc: Document, n: NodeId, data: Se
 }
 
 /// "Append an attribute" keeps [`host_acyclic`].
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 pub proof fn theorem_append_attribute_host_acyclic(doc: Document, e: NodeId, attr: Attr)
     requires
         host_acyclic(doc),
@@ -576,6 +616,8 @@ pub proof fn theorem_append_attribute_host_acyclic(doc: Document, e: NodeId, att
 }
 
 /// Setting the document's mode keeps [`host_acyclic`].
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 pub proof fn theorem_set_mode_host_acyclic(doc: Document, mode: DocumentMode)
     requires
         host_acyclic(doc),
@@ -589,6 +631,8 @@ pub proof fn theorem_set_mode_host_acyclic(doc: Document, mode: DocumentMode)
 }
 
 /// Setting an element's attribute list keeps [`host_acyclic`].
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 pub proof fn lemma_set_attributes_acyclic(doc: Document, e: NodeId, attrs: Seq<Attr>)
     requires
         host_acyclic(doc),
@@ -603,6 +647,8 @@ pub proof fn lemma_set_attributes_acyclic(doc: Document, e: NodeId, attrs: Seq<A
 }
 
 /// "Change an attribute" keeps [`host_acyclic`].
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 pub proof fn theorem_change_attribute_host_acyclic(doc: Document, e: NodeId, i: nat, value: Seq<u32>)
     requires
         host_acyclic(doc),
@@ -615,6 +661,8 @@ pub proof fn theorem_change_attribute_host_acyclic(doc: Document, e: NodeId, i: 
 }
 
 /// "Remove an attribute" keeps [`host_acyclic`].
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 pub proof fn theorem_remove_attribute_host_acyclic(doc: Document, e: NodeId, i: nat)
     requires
         host_acyclic(doc),
@@ -626,6 +674,8 @@ pub proof fn theorem_remove_attribute_host_acyclic(doc: Document, e: NodeId, i: 
 }
 
 /// "Replace an attribute" keeps [`host_acyclic`].
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 pub proof fn theorem_replace_attribute_host_acyclic(doc: Document, e: NodeId, i: nat, new_attr: Attr)
     requires
         host_acyclic(doc),
@@ -640,6 +690,8 @@ pub proof fn theorem_replace_attribute_host_acyclic(doc: Document, e: NodeId, i:
 // remove, adopt
 
 /// "Remove" keeps [`host_acyclic`]: it only takes a parent link away.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 pub proof fn theorem_remove_host_acyclic(doc: Document, node: NodeId)
     requires
         host_acyclic(doc),
@@ -662,6 +714,8 @@ pub proof fn theorem_remove_host_acyclic(doc: Document, node: NodeId)
 }
 
 /// "Adopt" keeps [`host_acyclic`].
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 pub proof fn theorem_adopt_host_acyclic(doc: Document, node: NodeId)
     requires
         host_acyclic(doc),
@@ -679,6 +733,8 @@ pub proof fn theorem_adopt_host_acyclic(doc: Document, node: NodeId)
 
 /// A child of a fragment that is not a host-including inclusive ancestor of
 /// `parent` is a node that is not a fragment and is not one either.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 proof fn lemma_frag_child_graftable(doc: Document, r: Seq<nat>, frag: NodeId, parent: NodeId, i: int)
     requires
         wf(doc),
@@ -704,6 +760,8 @@ proof fn lemma_frag_child_graftable(doc: Document, r: Seq<nat>, frag: NodeId, pa
 }
 
 /// A fragment of a well-formed arena has no parent.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 proof fn lemma_frag_parentless_at(doc: Document, x: int)
     requires
         wf(doc),
@@ -852,6 +910,8 @@ pub proof fn theorem_insert_any_host_acyclic(doc: Document, node: NodeId, parent
 /// a host-including inclusive ancestor of `parent`. [`insert_requires`]'s
 /// inclusive-ancestor check is not enough: a template inserted below a node
 /// of its own contents passes it, and makes a cycle through the host.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 pub proof fn theorem_insert_host_acyclic(doc: Document, node: NodeId, parent: NodeId, child: Option<NodeId>)
     requires
         insert_acyclic_requires(doc, node, parent, child),
@@ -864,6 +924,8 @@ pub proof fn theorem_insert_host_acyclic(doc: Document, node: NodeId, parent: No
 }
 
 /// "Append" keeps [`host_acyclic`], under [`insert_acyclic_requires`].
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 pub proof fn theorem_append_host_acyclic(doc: Document, parent: NodeId, node: NodeId)
     requires
         insert_acyclic_requires(doc, node, parent, None),
@@ -874,6 +936,8 @@ pub proof fn theorem_append_host_acyclic(doc: Document, parent: NodeId, node: No
 }
 
 /// "Insert before" keeps [`host_acyclic`], under [`insert_acyclic_requires`].
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 pub proof fn theorem_insert_before_host_acyclic(doc: Document, parent: NodeId, node: NodeId, child: NodeId)
     requires
         insert_acyclic_requires(doc, node, parent, Some(child)),
@@ -886,6 +950,8 @@ pub proof fn theorem_insert_before_host_acyclic(doc: Document, parent: NodeId, n
 /// DOM §4.2.3† "pre-insert" keeps [`host_acyclic`], with no precondition
 /// beyond [`host_acyclic`] of the input: its step 2 refuses a host-including
 /// inclusive ancestor of `parent`, and an error leaves the tree as it is.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 pub proof fn theorem_pre_insert_host_acyclic(doc: Document, node: NodeId, parent: NodeId, child: Option<NodeId>)
     requires
         pre_insert_requires(doc, node, parent, child),
@@ -903,6 +969,8 @@ pub proof fn theorem_pre_insert_host_acyclic(doc: Document, node: NodeId, parent
 /// A node that is not a host-including inclusive ancestor of `x` before
 /// links are taken away (`d2` has them only as `d` has them, or has none)
 /// is not one after it.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 proof fn lemma_not_hi_after_removal(d: Document, d2: Document, a: NodeId, x: NodeId)
     requires
         wf(d),
@@ -958,6 +1026,8 @@ pub proof fn theorem_replace_host_acyclic(doc: Document, child: NodeId, node: No
 
 /// A record after removing a prefix of a node's children keeps its kind, and
 /// its parent or loses it.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 proof fn lemma_removed_prefix_links(d: Document, p: NodeId, k: int, y: int)
     requires
         valid(d, p),
@@ -1073,6 +1143,8 @@ pub proof fn lemma_reparent_n_host_acyclic(d: Document, from: NodeId, to: NodeId
 /// The adoption agency's "take all of the child nodes of furthest block and
 /// append them to the element" keeps [`host_acyclic`], under
 /// [`reparent_children_acyclic_requires`].
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 pub proof fn theorem_reparent_children_host_acyclic(doc: Document, from: NodeId, to: NodeId)
     requires
         reparent_children_acyclic_requires(doc, from, to),
@@ -1087,6 +1159,8 @@ pub proof fn theorem_reparent_children_host_acyclic(doc: Document, from: NodeId,
 
 /// Shallow "clone a node" keeps [`host_acyclic`]: a new parentless node, and
 /// for a template its contents, ranked just above it.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 pub proof fn theorem_clone_node_host_acyclic(doc: Document, node: NodeId)
     requires
         clone_requires(doc, node),
@@ -1107,6 +1181,8 @@ pub proof fn theorem_clone_node_host_acyclic(doc: Document, node: NodeId)
 
 /// A new node of a deep clone with a parent has a new node as its parent,
 /// which copies the parent of what the node copies.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 proof fn lemma_deep_parent(doc: Document, out: Document, src: Seq<NodeId>, t: int) -> (u: int)
     requires
         wf(doc),
@@ -1145,6 +1221,8 @@ proof fn lemma_deep_parent(doc: Document, out: Document, src: Seq<NodeId>, t: in
 
 /// A new fragment of a deep clone with a host has a new node as its host,
 /// which copies the host of what the fragment copies.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 proof fn lemma_deep_host(doc: Document, out: Document, src: Seq<NodeId>, t: int) -> (u: int)
     requires
         wf(doc),
@@ -1192,6 +1270,8 @@ pub open spec fn deep_rank(doc: Document, src: Seq<NodeId>, r: Seq<nat>) -> Seq<
 }
 
 /// A new node of a deep clone with a parent ranks above it.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 proof fn lemma_deep_parent_ranked(doc: Document, out: Document, src: Seq<NodeId>, r: Seq<nat>, t: int)
     requires
         wf(doc),
@@ -1221,6 +1301,8 @@ proof fn lemma_deep_parent_ranked(doc: Document, out: Document, src: Seq<NodeId>
 }
 
 /// A new fragment of a deep clone with a host ranks above it.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 proof fn lemma_deep_host_ranked(doc: Document, out: Document, src: Seq<NodeId>, r: Seq<nat>, t: int)
     requires
         wf(doc),
@@ -1321,6 +1403,8 @@ pub proof fn theorem_deep_clone_src_host_acyclic(doc: Document, node: NodeId, ou
 
 /// A deep clone of a [`host_acyclic`] arena is [`host_acyclic`], as
 /// [`deep_clone`] (the relation) says it.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 pub proof fn theorem_deep_clone_host_acyclic(doc: Document, node: NodeId, out: Document, copy: NodeId)
     requires
         wf(doc),
@@ -1336,6 +1420,8 @@ pub proof fn theorem_deep_clone_host_acyclic(doc: Document, node: NodeId, out: D
 
 /// `Arena::clone_deep` keeps [`host_acyclic`]: on a copy the arena is the
 /// copy of a [`host_acyclic`] one, and on a refusal it is as it was.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
 pub proof fn theorem_clone_deep_host_acyclic(doc: Document, node: NodeId, out: Document, id: Option<NodeId>)
     requires
         clone_deep_requires(doc, node),
