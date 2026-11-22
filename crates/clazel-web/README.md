@@ -28,6 +28,19 @@ Tier 0, target tier 0: safe Rust, tested, nothing proven. So far:
   (adopting the fragment's nodes into the target document) waits for item
   7.13's `clazel-dom` operations and for 7.8 and 7.12.
 
+- **`event_loop`**: the engine-independent HTML event loop (HTML §8.1.7†
+  and §8.6†): task sources and queues (round-robin between sources, FIFO
+  within), "queue a task", the processing model's run-one-task-then-microtask
+  -checkpoint, the microtask checkpoint with its re-entrancy flag, a
+  rendering-opportunity stand-in, and the timers (`setTimeout`,
+  `setInterval`, `clearTimeout`, `clearInterval`: id allocation, the nesting
+  level 4 ms clamp, ordering by due time then start, interval rescheduling).
+  Callbacks are host-supplied ids; time is the caller's. `Limits` caps
+  active timers, queued tasks and queued microtasks (7.19): the call that
+  would pass a cap fails and changes nothing. `tests/event_loop.rs` has the
+  unit tests and hand transcriptions of WPT `timers/` and `microtask-queuing/`
+  orderings (which need a JS engine to run).
+
 Item 7.1 vendored the test
 data later items run: the WPT `testharness.js` tests (`tests/data/wpt-web/`) and
 the TodoMVC vanilla, React and Vue implementations (`tests/data/todomvc/`).

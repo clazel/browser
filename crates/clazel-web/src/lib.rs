@@ -11,8 +11,14 @@
 //! Item 7.14's engine-independent core is [`events`]: DOM event dispatch
 //! (§2.9†) with the listener lists, over the same arena.
 //!
+//! Items 7.14 and 7.15's event loop is [`event_loop`]: task queues, the
+//! microtask checkpoint and `setTimeout`/`setInterval` (HTML §8.1.7† and
+//! §8.6†), with caps for a hostile page (7.19) and time supplied by the
+//! caller.
+//!
 //! Tier 0 (`Cargo.toml`): safe Rust, tested, nothing proven.
 
+pub mod event_loop;
 pub mod events;
 pub mod selectors;
 pub mod serialize;
