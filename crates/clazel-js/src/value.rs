@@ -8,6 +8,9 @@
 //! alias of some other object.
 
 use core::marker::PhantomData;
+use std::sync::Arc;
+
+use clazel_js_heap::value::Value;
 
 /// A value, rooted for the lifetime `'s` of the [`Scope`](crate::Scope) that
 /// made it.
@@ -31,7 +34,7 @@ use core::marker::PhantomData;
 /// }
 /// ```
 ///
-/// ```no_run
+/// ```
 /// use clazel_js::{Key, Runtime};
 ///
 /// fn make_point(rt: &mut Runtime) -> clazel_js::Result<()> {
@@ -42,9 +45,16 @@ use core::marker::PhantomData;
 ///         Ok(())
 ///     })
 /// }
+/// # let mut rt = clazel_js::Runtime::new(clazel_js::Config::new(clazel_js::Limits::unlimited()), clazel_js::DefaultHost::new())?;
+/// # make_point(&mut rt)?;
+/// # Ok::<(), clazel_js::Error>(())
 /// ```
 #[derive(Clone, Copy, Debug)]
 pub struct Local<'s> {
+    value: Value,
+    /// Which runtime made it, so a `Local` handed to the scope of another
+    /// runtime is `Error::WrongRuntime`, not a read of the wrong heap.
+    runtime: usize,
     _scope: PhantomData<&'s ()>,
 }
 
@@ -64,27 +74,34 @@ pub struct Local<'s> {
 /// - **Cost.** A root table slot per live `Handle`. Use [`Local`] inside a
 ///   call and `Handle` only for what outlives it.
 ///
-/// ```no_run
-/// use clazel_js::{Handle, Runtime};
+/// ```
+/// use clazel_js::{Handle, Runtime, ValueKind};
 ///
 /// fn remember(rt: &mut Runtime) -> clazel_js::Result<Handle> {
 ///     rt.scope(|scope| {
-///         let list = scope.new_array(0)?;
+///         let list = scope.new_object()?;
 ///         Ok(scope.persist(list))
 ///     })
 /// }
 ///
-/// fn use_later(rt: &mut Runtime, list: &Handle) -> clazel_js::Result<()> {
+/// fn use_later(rt: &mut Runtime, list: &Handle) -> clazel_js::Result<ValueKind> {
 ///     rt.scope(|scope| {
 ///         let list = scope.local(list)?;
-///         let _kind = scope.kind(list);
-///         Ok(())
+///         Ok(scope.kind(list))
 ///     })
 /// }
+/// # let mut rt = clazel_js::Runtime::new(clazel_js::Config::new(clazel_js::Limits::unlimited()), clazel_js::DefaultHost::new())?;
+/// # let handle = remember(&mut rt)?;
+/// # assert_eq!(use_later(&mut rt, &handle)?, ValueKind::Object);
+/// # Ok::<(), clazel_js::Error>(())
 /// ```
 #[derive(Clone, Debug)]
 pub struct Handle {
-    _root: PhantomData<()>,
+    /// The runtime's identity token: the handle keeps it alive, so its address
+    /// names the runtime for as long as any handle does, and a handle can be
+    /// dropped on any thread without the runtime.
+    token: Arc<()>,
+    value: Value,
 }
 
 /// A value held without keeping it alive.
@@ -94,7 +111,7 @@ pub struct Handle {
 /// side table from platform objects to their JavaScript wrappers: the table
 /// must not stop an unreachable wrapper being collected.
 ///
-/// ```no_run
+/// ```
 /// use clazel_js::{Runtime, Weak};
 ///
 /// fn cache(rt: &mut Runtime) -> clazel_js::Result<Weak> {
@@ -107,10 +124,16 @@ pub struct Handle {
 /// fn lookup(rt: &mut Runtime, weak: &Weak) -> clazel_js::Result<bool> {
 ///     rt.scope(|scope| Ok(scope.upgrade(weak)?.is_some()))
 /// }
+/// # let mut rt = clazel_js::Runtime::new(clazel_js::Config::new(clazel_js::Limits::unlimited()), clazel_js::DefaultHost::new())?;
+/// # let weak = cache(&mut rt)?;
+/// # // There is no collector yet, so a value is never freed.
+/// # assert!(lookup(&mut rt, &weak)?);
+/// # Ok::<(), clazel_js::Error>(())
 /// ```
 #[derive(Clone, Debug)]
 pub struct Weak {
-    _value: PhantomData<()>,
+    token: Arc<()>,
+    value: Value,
 }
 
 /// A reference to a value that is kept alive only if the owner reports it to
@@ -124,7 +147,7 @@ pub struct Weak {
 /// [`Error::StaleHandle`](crate::Error::StaleHandle) (the generation check), never
 /// the wrong object. A member the owner reports is as strong as a [`Handle`].
 ///
-/// ```no_run
+/// ```
 /// use clazel_js::{HostObject, Member, Tracer};
 ///
 /// /// A DOM event target's data: its listeners' callbacks.
@@ -142,7 +165,8 @@ pub struct Weak {
 /// ```
 #[derive(Clone, Copy, Debug)]
 pub struct Member {
-    _value: PhantomData<()>,
+    value: Value,
+    runtime: usize,
 }
 
 /// What kind of value a [`Local`] is: the result of `typeof`, with `null` and
@@ -176,21 +200,28 @@ pub enum ValueKind {
 /// passed as [`Key::Value`]. `Key::Index` is an array index, the form
 /// element access takes.
 ///
-/// ```no_run
+/// There are no Arrays or Symbols in the VM yet, so this uses an ordinary
+/// object and a string held as a value:
+///
+/// ```
 /// use clazel_js::{Key, Runtime};
 ///
 /// fn keys(rt: &mut Runtime) -> clazel_js::Result<()> {
 ///     rt.scope(|scope| {
-///         let list = scope.new_array(2)?;
+///         let list = scope.new_object()?;
 ///         let hello = scope.string("hello");
 ///         scope.set(list, Key::Index(0), hello)?;
-///         let length = scope.get(list, Key::from("length"))?;
-///         let iterator = scope.well_known_symbol(clazel_js::WellKnownSymbol::Iterator);
-///         let _iterate = scope.get(list, Key::Value(iterator))?;
-///         let _ = length;
+///         let name = scope.string("0");
+///         let again = scope.get(list, Key::Value(name))?;
+///         assert!(scope.strict_equals(again, hello));
+///         let same = scope.get(list, Key::from("0"))?;
+///         assert!(scope.strict_equals(same, hello));
 ///         Ok(())
 ///     })
 /// }
+/// # let mut rt = clazel_js::Runtime::new(clazel_js::Config::new(clazel_js::Limits::unlimited()), clazel_js::DefaultHost::new())?;
+/// # keys(&mut rt)?;
+/// # Ok::<(), clazel_js::Error>(())
 /// ```
 #[derive(Clone, Copy, Debug)]
 pub enum Key<'a, 's> {
@@ -221,7 +252,7 @@ impl From<u32> for Key<'_, '_> {
 /// from [`Scope::define_property`](crate::Scope::define_property).
 /// For `get` and `set`, a `Local` that is `undefined` means "no function".
 ///
-/// ```no_run
+/// ```
 /// use clazel_js::{PropertyDescriptor, Runtime, Key};
 ///
 /// fn read_only(rt: &mut Runtime) -> clazel_js::Result<()> {
@@ -239,9 +270,14 @@ impl From<u32> for Key<'_, '_> {
 ///                 ..PropertyDescriptor::default()
 ///             },
 ///         )?;
+///         let eight = scope.number(8.0);
+///         assert!(scope.set(object, Key::from("answer"), eight).is_err());
 ///         Ok(())
 ///     })
 /// }
+/// # let mut rt = clazel_js::Runtime::new(clazel_js::Config::new(clazel_js::Limits::unlimited()), clazel_js::DefaultHost::new())?;
+/// # read_only(&mut rt)?;
+/// # Ok::<(), clazel_js::Error>(())
 /// ```
 #[derive(Clone, Copy, Debug, Default)]
 pub struct PropertyDescriptor<'s> {
@@ -291,37 +327,65 @@ pub enum PromiseState<'s> {
     Rejected(Local<'s>),
 }
 
-// The value representations arrive with the implementation (item 7.8). Until
-// then these build the opaque shells that the stubs hand back. No caller can
-// observe one, because every operation that would accept it returns
-// `Error::NotImplemented`.
-impl Local<'_> {
-    pub(crate) fn placeholder() -> Self {
+// The constructors and readers below are the crate's own: the representation
+// is private, and `Scope` is the only code that makes or opens one.
+impl<'s> Local<'s> {
+    pub(crate) fn new(value: Value, runtime: usize) -> Local<'s> {
         Local {
+            value,
+            runtime,
             _scope: PhantomData,
         }
+    }
+
+    pub(crate) fn value(self) -> Value {
+        self.value
+    }
+
+    pub(crate) fn runtime(self) -> usize {
+        self.runtime
     }
 }
 
 impl Handle {
-    pub(crate) fn placeholder() -> Self {
-        Handle { _root: PhantomData }
+    pub(crate) fn new(token: Arc<()>, value: Value) -> Handle {
+        Handle { token, value }
+    }
+
+    pub(crate) fn value(&self) -> Value {
+        self.value
+    }
+
+    pub(crate) fn token(&self) -> &Arc<()> {
+        &self.token
     }
 }
 
 impl Weak {
-    pub(crate) fn placeholder() -> Self {
-        Weak {
-            _value: PhantomData,
-        }
+    pub(crate) fn new(token: Arc<()>, value: Value) -> Weak {
+        Weak { token, value }
+    }
+
+    pub(crate) fn value(&self) -> Value {
+        self.value
+    }
+
+    pub(crate) fn token(&self) -> &Arc<()> {
+        &self.token
     }
 }
 
 impl Member {
-    pub(crate) fn placeholder() -> Self {
-        Member {
-            _value: PhantomData,
-        }
+    pub(crate) fn new(value: Value, runtime: usize) -> Member {
+        Member { value, runtime }
+    }
+
+    pub(crate) fn value(self) -> Value {
+        self.value
+    }
+
+    pub(crate) fn runtime(self) -> usize {
+        self.runtime
     }
 }
 

@@ -33,19 +33,24 @@ pub enum ErrorKind {
 /// is held, whichever scope it was thrown in, so an embedder can report it
 /// after the call that threw it has returned.
 ///
-/// ```no_run
+/// ```
 /// use clazel_js::{Error, Realm, Scope, Source};
 ///
-/// fn report(scope: &mut Scope<'_>, realm: &Realm) -> clazel_js::Result<()> {
+/// fn report(scope: &mut Scope<'_>, realm: &Realm) -> clazel_js::Result<String> {
 ///     match scope.eval_script(realm, Source::new("page.js", "null.x")) {
 ///         Err(Error::Thrown(exception)) => {
 ///             let report = scope.report(&exception)?;
 ///             println!("{}: {}", report.name, report.message);
-///             Ok(())
+///             Ok(report.name)
 ///         }
-///         other => other.map(|_| ()),
+///         other => other.map(|_| String::new()),
 ///     }
 /// }
+/// # let mut rt = clazel_js::Runtime::new(clazel_js::Config::new(clazel_js::Limits::unlimited()), clazel_js::DefaultHost::new())?;
+/// # let realm = rt.scope(|scope| scope.create_realm(clazel_js::RealmOptions::default()))?;
+/// # let name = rt.scope(|scope| report(scope, &realm))?;
+/// # assert_eq!(name, "TypeError");
+/// # Ok::<(), clazel_js::Error>(())
 /// ```
 #[derive(Clone, Debug)]
 pub struct Exception {
@@ -106,6 +111,8 @@ pub struct StackFrame {
 /// Every other variant is the engine's or the embedder's, and JavaScript
 /// cannot observe or catch it. A native function passes both kinds back with
 /// `?`.
+///
+/// This stays `no_run`: the script would loop for ever.
 ///
 /// ```no_run
 /// use clazel_js::{Error, Realm, Scope, Source};

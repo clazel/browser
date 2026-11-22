@@ -12,7 +12,7 @@ use std::hash::{BuildHasher, RandomState};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::code::{LoadPayload, Module, ModuleRequest, Realm, Referrer};
-use crate::error::{ErrorKind, Result, not_implemented};
+use crate::error::{ErrorKind, Result};
 use crate::native::Tracer;
 use crate::scope::Scope;
 use crate::value::{Handle, Local};
@@ -151,7 +151,11 @@ pub enum Resize {
 /// that says nothing. The browser's answers (HTML's, and 7.0(b)'s fixed
 /// time zone offset and `en-US`) are the browser's, in `clazel-web`.
 ///
-/// ```no_run
+/// None of these hooks is called yet: the VM has no promises, modules or
+/// `Date`, which are what call them. The example compiles and runs its type
+/// checks:
+///
+/// ```
 /// use clazel_js::{
 ///     Host, Job, Local, Module, ModuleRequest, LoadPayload, Referrer, RejectionOperation,
 ///     Result, Scope,
@@ -415,7 +419,7 @@ pub trait Host: Any + Send {
 /// Test262's runner, small tools and the examples use it. A real embedder
 /// supplies its own.
 ///
-/// ```no_run
+/// ```
 /// use clazel_js::{Config, DefaultHost, Limits, Runtime};
 ///
 /// fn main() -> Result<(), clazel_js::Error> {
@@ -452,12 +456,18 @@ impl Scope<'_> {
     /// [`Runtime::run_jobs`](crate::Runtime::run_jobs) drains. What the default
     /// `enqueue_*` hooks do, and what an overriding host may call to forward.
     pub fn enqueue_job_internal(&mut self, job: Job) -> Result<()> {
-        not_implemented!("Scope::enqueue_job_internal", job)
+        self.push_job(job)
     }
 
     /// Runs a job to completion. A job that throws returns the exception.
     pub fn run_job(&mut self, job: Job) -> Result<()> {
-        not_implemented!("Scope::run_job", job)
+        // A job's root is the function to run: no arguments, `undefined` for
+        // `this`. Nothing in the engine makes jobs yet (no promises), so this
+        // serves hosts that queue their own through `Scope::function`.
+        let function = self.local(job.as_handle())?;
+        let this = self.undefined();
+        self.call(function, this, &[])?;
+        Ok(())
     }
 }
 

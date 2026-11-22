@@ -51,6 +51,7 @@ use crate::numeric::{self, Num, num};
 use clazel_js_heap::shape::Attrs;
 use clazel_js_heap::string::{JsString, Key};
 use clazel_js_heap::value::Value;
+use std::any::Any;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -283,6 +284,8 @@ pub struct Vm {
     pub(crate) terminator: Terminator,
     pub(crate) budget: u64,
     pub(crate) atoms: Atoms,
+    /// The embedder's state (`clazel-js`'s runtime), see [`Vm::set_embedder`].
+    pub(crate) embedder: Option<Box<dyn Any + Send>>,
 }
 
 impl Vm {
@@ -349,6 +352,7 @@ impl Vm {
             terminator: Terminator::new(),
             budget: u64::MAX,
             atoms,
+            embedder: None,
         })
     }
 
@@ -357,6 +361,29 @@ impl Vm {
     #[must_use]
     pub fn terminator(&self) -> Terminator {
         self.terminator.clone()
+    }
+
+    /// Stores the embedder's own state in the VM, replacing what was there.
+    ///
+    /// A [`NativeFn`] is a plain function pointer that gets only `&mut Vm`, so
+    /// an embedder whose natives are closures (`clazel-js`) keeps the table of
+    /// closures here and finds it again from inside the native. The VM never
+    /// looks at it. Dropping the VM drops it.
+    pub fn set_embedder<T: Any + Send>(&mut self, data: T) {
+        self.embedder = Some(Box::new(data));
+    }
+
+    /// The embedder's state, if it is a `T`.
+    #[must_use]
+    pub fn embedder<T: Any>(&self) -> Option<&T> {
+        self.embedder.as_deref().and_then(|e| e.downcast_ref::<T>())
+    }
+
+    /// The embedder's state, mutably, if it is a `T`.
+    pub fn embedder_mut<T: Any>(&mut self) -> Option<&mut T> {
+        self.embedder
+            .as_deref_mut()
+            .and_then(|e| e.downcast_mut::<T>())
     }
 
     /// Bounds the back-edges and calls the VM may still make; when spent, a

@@ -6,10 +6,14 @@ license.workspace = true
 publish.workspace = true
 description = "The JavaScript engine's embedding API for Clazel (phase-7.md item 7.8): Runtime, realms, scripts and modules, native functions, host objects, rooted handles, the Host trait, limits and the Terminator. This is the contract only; nothing here is implemented yet."
 
-# No dependencies yet. When the engine's types are needed here they come from
-# other engine crates only (`cargo xtask check` enforces that no engine crate
-# reaches a browser crate; see ENGINE in xtask/src/status.rs).
+# Engine crates only (`cargo xtask check` enforces that no engine crate reaches
+# a browser crate; see ENGINE in xtask/src/status.rs): the parser and compiler
+# for scripts, the interpreter, the built-ins, and the heap's value type.
 [dependencies]
+clazel-js-builtins = { path = "../clazel-js-builtins" }
+clazel-js-heap = { path = "../clazel-js-heap" }
+clazel-js-syntax = { path = "../clazel-js-syntax" }
+clazel-js-vm = { path = "../clazel-js-vm" }
 
 # Verification tier (docs/VERIFICATION.md). Tier 0: this crate holds the
 # contract and its stubs, and nothing is proven about it.

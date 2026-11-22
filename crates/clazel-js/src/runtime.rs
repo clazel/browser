@@ -2,12 +2,13 @@
 
 use core::cell::Cell;
 use core::marker::PhantomData;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::error::{Result, not_implemented};
-use crate::host::Host;
-use crate::scope::Scope;
+use clazel_js_vm::interp::{Abrupt, Config as VmConfig, Terminator as VmTerminator, Vm};
+
+use crate::error::{Error, Result};
+use crate::host::{DefaultHost, Host};
+use crate::scope::{CELL_BYTES, Scope};
+use crate::state::State;
 
 /// Every limit is the embedder's to set, and the engine has no default for
 /// any of them (phase-7.md, "Limits and stopping").
@@ -16,7 +17,7 @@ use crate::scope::Scope;
 /// every embedder choose a value. The numbers the browser picks are not in
 /// this crate. Each limit has its own report, listed with the field.
 ///
-/// ```no_run
+/// ```
 /// use clazel_js::Limits;
 ///
 /// // A test harness with limits generous enough never to matter, and one
@@ -26,7 +27,8 @@ use crate::scope::Scope;
 ///     heap_bytes: 64 << 20,
 ///     ..relaxed
 /// };
-/// # let _ = strict;
+/// assert_eq!(strict.heap_bytes, 64 << 20);
+/// assert_eq!(strict.native_depth, relaxed.native_depth);
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Limits {
@@ -83,7 +85,7 @@ pub enum JitMode {
 
 /// What a [`Runtime`] is built from.
 ///
-/// ```no_run
+/// ```
 /// use clazel_js::{Config, JitMode, Limits};
 ///
 /// let config = Config::new(Limits::unlimited());
@@ -130,46 +132,53 @@ impl Config {
 ///
 /// A `Terminator` is `Clone`, `Send` and `Sync`.
 ///
-/// ```no_run
+/// ```
 /// use std::thread;
 /// use std::time::Duration;
-/// use clazel_js::{Config, DefaultHost, Limits, Realm, Runtime};
+/// use clazel_js::{Config, DefaultHost, Limits, Realm, RealmOptions, Runtime};
 ///
-/// fn run_for_a_second(rt: &mut Runtime, realm: &Realm) {
+/// fn run_until_stopped(rt: &mut Runtime, realm: &Realm) -> bool {
 ///     let terminator = rt.terminator();
 ///     let watchdog = thread::spawn(move || {
-///         thread::sleep(Duration::from_secs(1));
+///         thread::sleep(Duration::from_millis(20));
 ///         terminator.terminate();
 ///     });
-///     let _ = rt.scope(|scope| {
+///     let result = rt.scope(|scope| {
 ///         scope.eval_script(realm, clazel_js::Source::new("loop.js", "for (;;) {}"))?;
 ///         Ok::<(), clazel_js::Error>(())
 ///     });
 ///     let _ = watchdog.join();
 ///     rt.terminator().clear();
+///     matches!(result, Err(clazel_js::Error::Terminated))
 /// }
+/// # let mut rt = Runtime::new(Config::new(Limits::unlimited()), DefaultHost::new())?;
+/// # let realm = rt.scope(|scope| scope.create_realm(RealmOptions::default()))?;
+/// # assert!(run_until_stopped(&mut rt, &realm));
+/// # Ok::<(), clazel_js::Error>(())
 /// ```
 #[derive(Clone, Debug, Default)]
 pub struct Terminator {
-    flag: Arc<AtomicBool>,
+    /// The interpreter's own flag, which its loop reads at back-edges and
+    /// calls.
+    flag: VmTerminator,
 }
 
 impl Terminator {
     /// Asks the runtime to stop. Safe to call from any thread, any number of
     /// times.
     pub fn terminate(&self) {
-        self.flag.store(true, Ordering::Relaxed);
+        self.flag.terminate();
     }
 
     /// Whether `terminate` has been called and not cleared.
     pub fn is_terminated(&self) -> bool {
-        self.flag.load(Ordering::Relaxed)
+        self.flag.is_set()
     }
 
     /// Lets the runtime run again. Call it after an evaluation has returned
     /// `Terminated`, never while one is running.
     pub fn clear(&self) {
-        self.flag.store(false, Ordering::Relaxed);
+        self.flag.reset();
     }
 }
 
@@ -196,14 +205,20 @@ impl Terminator {
 /// fn check() { needs_sync::<Runtime>(); }
 /// ```
 ///
-/// ```no_run
-/// use clazel_js::{Config, DefaultHost, Limits, RealmOptions, Runtime, Source};
+/// The compiler gives a script no completion value yet, so `eval_script`
+/// returns `undefined` and this example reads its result from a global (see
+/// the README):
+///
+/// ```
+/// use clazel_js::{Config, DefaultHost, Key, Limits, RealmOptions, Runtime, Source};
 ///
 /// fn main() -> Result<(), clazel_js::Error> {
 ///     let mut rt = Runtime::new(Config::new(Limits::unlimited()), DefaultHost::new())?;
 ///     let realm = rt.scope(|scope| scope.create_realm(RealmOptions::default()))?;
 ///     let sum = rt.scope(|scope| {
-///         let value = scope.eval_script(&realm, Source::new("sum.js", "1 + 2"))?;
+///         scope.eval_script(&realm, Source::new("sum.js", "var sum = 1 + 2;"))?;
+///         let global = scope.global(&realm)?;
+///         let value = scope.get(global, Key::from("sum"))?;
 ///         Ok(scope.as_number(value))
 ///     })?;
 ///     assert_eq!(sum, Some(3.0));
@@ -214,26 +229,67 @@ impl Terminator {
 ///
 /// A `Runtime` moves to another thread as a whole:
 ///
-/// ```no_run
+/// ```
 /// use clazel_js::Runtime;
 ///
 /// fn assert_send<T: Send>() {}
 /// fn check() { assert_send::<Runtime>(); }
+/// check();
 /// ```
 pub struct Runtime {
     limits: Limits,
     terminator: Terminator,
-    host: Box<dyn Host>,
+    /// The VM, with the runtime's state (and so the host) in its embedder
+    /// slot, see [`crate::state`].
+    vm: Box<Vm>,
+    /// What [`Runtime::host_mut`] answers with if the state is ever missing,
+    /// which it cannot be: the method has no way to fail.
+    fallback_host: DefaultHost,
     // `Cell` is `Send` and not `Sync`, which is the rule.
     _not_sync: PhantomData<Cell<()>>,
 }
 
 impl Runtime {
-    /// Builds a runtime with no realms. The `host` is taken for the life of
-    /// the runtime; reach it again with [`Runtime::host_mut`] or, from inside
-    /// a native function, [`Scope::host_mut`].
+    /// Builds a runtime. The `host` is taken for the life of the runtime;
+    /// reach it again with [`Runtime::host_mut`] or, from inside a native
+    /// function, [`Scope::host_mut`].
+    ///
+    /// The VM and the built-ins are made here, so the one realm the VM has
+    /// exists at once, and [`Scope::create_realm`] hands it out (the
+    /// contract's "no realms" is not what a VM with one global can do). The
+    /// limits that have a counterpart are applied: `heap_bytes` becomes the
+    /// arena's cell count (an estimate of 64 bytes a cell), `value_stack_bytes`
+    /// the frame region's slot count (8 bytes a slot), and `native_depth` is
+    /// checked on every call of a closure made by [`Scope::function`].
+    /// `code_bytes` (no JIT), `regexp_backtrack_entries` (no RegExp) and
+    /// `nesting_depth` (the parser's own fixed bound applies) are accepted
+    /// and not used yet. The heap limit gives [`Error::OutOfMemory`] rather
+    /// than a `RangeError`, since the VM cannot allocate an error object
+    /// when it is full and there is no collector to run first.
     pub fn new(config: Config, host: impl Host) -> Result<Runtime> {
-        not_implemented!("Runtime::new", config, host)
+        let limits = config.limits;
+        // Limits the VM has a counterpart for: its arena counts cells (an
+        // estimate of `CELL_BYTES` each) and its frame region counts 8-byte
+        // slots. The VM clamps both to what it can address.
+        let heap_cells = usize::try_from(limits.heap_bytes / CELL_BYTES).unwrap_or(usize::MAX);
+        let region_slots = usize::try_from(limits.value_stack_bytes / 8).unwrap_or(usize::MAX);
+        let mut vm = Vm::new(VmConfig {
+            region_slots,
+            heap_cells,
+        })
+        .map_err(vm_failure)?;
+        clazel_js_builtins::install(&mut vm).map_err(vm_failure)?;
+        let terminator = Terminator {
+            flag: vm.terminator(),
+        };
+        vm.set_embedder(State::new(Box::new(host), limits));
+        Ok(Runtime {
+            limits,
+            terminator,
+            vm: Box::new(vm),
+            fallback_host: DefaultHost::new(),
+            _not_sync: PhantomData,
+        })
     }
 
     /// Runs `f` with a [`Scope`]. Every [`Local`](crate::Local) made inside is
@@ -243,7 +299,8 @@ impl Runtime {
     /// `f` cannot call `scope` again, because it has no access to the
     /// `Runtime`. Code that wants an inner scope uses [`Scope::nested`].
     pub fn scope<R>(&mut self, f: impl for<'s> FnOnce(&mut Scope<'s>) -> R) -> R {
-        let mut scope = Scope::new();
+        let runtime = self.runtime_id();
+        let mut scope = Scope::new(&mut self.vm, runtime);
         f(&mut scope)
     }
 
@@ -257,7 +314,7 @@ impl Runtime {
     /// `Err`, the jobs after it stay queued, and calling `run_jobs` again
     /// continues with them. A [`Terminator`] stops it as it stops anything.
     ///
-    /// ```no_run
+    /// ```
     /// use clazel_js::Runtime;
     ///
     /// fn checkpoint(rt: &mut Runtime) -> clazel_js::Result<()> {
@@ -266,9 +323,20 @@ impl Runtime {
     ///     println!("{ran} jobs");
     ///     Ok(())
     /// }
+    /// # let mut rt = clazel_js::Runtime::new(clazel_js::Config::new(clazel_js::Limits::unlimited()), clazel_js::DefaultHost::new())?;
+    /// # checkpoint(&mut rt)?;
+    /// # Ok::<(), clazel_js::Error>(())
     /// ```
     pub fn run_jobs(&mut self) -> Result<u64> {
-        not_implemented!("Runtime::run_jobs")
+        let runtime = self.runtime_id();
+        let mut scope = Scope::new(&mut self.vm, runtime);
+        scope.check_deferred()?;
+        let mut ran: u64 = 0;
+        while let Some(job) = scope.pop_job() {
+            scope.run_job(job)?;
+            ran = ran.saturating_add(1);
+        }
+        Ok(ran)
     }
 
     /// A handle that stops this runtime from another thread. Every call gives
@@ -285,13 +353,37 @@ impl Runtime {
     /// The host, between calls. Not available while a hook is running; there
     /// the hook's own `&mut self` is the host.
     pub fn host_mut(&mut self) -> &mut dyn Host {
-        &mut *self.host
+        match self.vm.embedder_mut::<State>() {
+            Some(state) => &mut *state.host,
+            None => &mut self.fallback_host,
+        }
     }
 
     /// Bytes the heap holds now, live and not yet swept, for the embedder's
     /// own accounting and for tests of [`Limits::heap_bytes`].
     pub fn heap_used(&self) -> Result<u64> {
-        not_implemented!("Runtime::heap_used")
+        // An estimate: live cells at `CELL_BYTES` each. Nothing is swept yet.
+        let cells = u64::try_from(self.vm.heap().live()).map_err(|_| Error::OutOfMemory)?;
+        cells.checked_mul(CELL_BYTES).ok_or(Error::OutOfMemory)
+    }
+}
+
+impl Runtime {
+    /// The runtime's identity, as `Local`s carry it.
+    fn runtime_id(&mut self) -> usize {
+        self.vm.embedder::<State>().map_or(0, |state| state.id)
+    }
+}
+
+/// A failure of the VM while a runtime is being built, before there is a
+/// runtime state to take errors from.
+fn vm_failure(abrupt: Abrupt) -> Error {
+    match abrupt {
+        Abrupt::OutOfMemory => Error::OutOfMemory,
+        Abrupt::Terminated => Error::Terminated,
+        Abrupt::Throw(_) | Abrupt::NotYet(_) | Abrupt::Internal(_) => {
+            Error::NotImplemented("the VM could not start with these limits")
+        }
     }
 }
 
