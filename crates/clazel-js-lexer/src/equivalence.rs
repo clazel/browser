@@ -20,8 +20,8 @@
 //!
 //! The identifier ranges are in the identifier part of this file when
 //! present; see [`super::independent`] for what is not covered. The only
-//! assumption shared by the two files is the uninterpreted `ID_Start` and
-//! `ID_Continue` of code points above U+007F.
+//! assumption shared by the two files is the generated table behind
+//! `ID_Start` and `ID_Continue` of code points above U+007F.
 
 #[cfg(verus_only)]
 use super::independent::*;

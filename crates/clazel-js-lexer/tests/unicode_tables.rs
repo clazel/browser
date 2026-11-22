@@ -1,7 +1,9 @@
 //! The `ID_Start` and `ID_Continue` tables (`src/unicode_data.rs`, generated
 //! from Unicode 18.0.0 by `xtask/src/js_idents.rs`) and their lookups: the
 //! shape the bisection relies on, a property Unicode guarantees, and known
-//! code points. Nothing about the tables is proven (`src/unicode.rs`).
+//! code points, and a second derivation from the file. `src/unicode.rs`
+//! proves the lookups are the spec's predicates; that the tables are the
+//! Unicode properties is checked here, not proven.
 
 use clazel_js_lexer::unicode::{Range, id_continue_non_ascii, id_start_non_ascii};
 use clazel_js_lexer::unicode_data::{
@@ -87,5 +89,59 @@ fn known_code_points() {
     // ASCII is not in the tables (the spec defines it).
     for c in 0..0x80 {
         assert!(!id_start_non_ascii(c) && !id_continue_non_ascii(c));
+    }
+}
+
+/// A second derivation of the two properties from `DerivedCoreProperties.txt`
+/// (the file the generator reads), with a parser of its own that shares no
+/// code with `xtask`: a bitmap per property over every code point. Every
+/// code point U+0080..U+10FFFF is compared with both lookups, each way: a
+/// code point the file lists must be found, and one it does not list must
+/// not be.
+#[test]
+#[cfg_attr(miri, ignore = "reads files")]
+fn lookups_equal_the_file_for_every_code_point() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../clazel-js-regexp/tests/data/ucd-regexp/DerivedCoreProperties.txt");
+    let text = std::fs::read_to_string(&path).unwrap_or_default();
+    assert!(!text.is_empty(), "cannot read {}", path.display());
+    let mut start = vec![false; 0x11_0000];
+    let mut cont = vec![false; 0x11_0000];
+    for line in text.lines() {
+        // `<hex>[..<hex>] ; <Property> # comment`
+        let body = line.split('#').next().unwrap_or("");
+        let Some((cps, prop)) = body.split_once(';') else {
+            continue;
+        };
+        let (cps, prop) = (cps.trim(), prop.trim());
+        let bitmap = match prop {
+            "ID_Start" => &mut start,
+            "ID_Continue" => &mut cont,
+            _ => continue,
+        };
+        let (lo, hi) = match cps.split_once("..") {
+            Some((a, b)) => (a, b),
+            None => (cps, cps),
+        };
+        let (Ok(lo), Ok(hi)) = (usize::from_str_radix(lo, 16), usize::from_str_radix(hi, 16))
+        else {
+            assert!(line.is_empty(), "not a hex range: {line}");
+            continue;
+        };
+        let Some(slots) = bitmap.get_mut(lo..=hi) else {
+            assert!(line.is_empty(), "range outside U+10FFFF: {line}");
+            continue;
+        };
+        slots.fill(true);
+    }
+    // The file lists both properties (ASCII letters are the first rows).
+    let at = |bitmap: &[bool], c: usize| bitmap.get(c).copied().unwrap_or(false);
+    assert!(at(&start, 0x41) && at(&cont, 0x30) && at(&cont, 0x5F) && !at(&start, 0x5F));
+    for (i, (&s, &c)) in (0u32..).zip(start.iter().zip(cont.iter())) {
+        if i < 0x80 {
+            continue;
+        }
+        assert_eq!(id_start_non_ascii(i), s, "ID_Start U+{i:04X}");
+        assert_eq!(id_continue_non_ascii(i), c, "ID_Continue U+{i:04X}");
     }
 }

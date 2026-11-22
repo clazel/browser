@@ -246,6 +246,32 @@
         "lemma": "example_trivia()",
         "witness": "!is_trivia(ElementKind::Comment)"
       }
+    },
+    {
+      "id": "id-start-above-ascii-is-id-continue",
+      "file": "src/spec.rs",
+      "find": "is_ascii_letter(c)\n    } else {\n        unicode_id_start_non_ascii(c)",
+      "replace": "is_ascii_letter(c)\n    } else {\n        unicode_id_continue_non_ascii(c)",
+      "expect": "killed",
+      "reason": "Swaps ID_Start and ID_Continue above U+007F (§12.7): U+0300 COMBINING GRAVE ACCENT would start an identifier, so example_unicode_id_anchors is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_unicode_id_anchors()",
+        "witness": "unicode_id_start(0x0300u32)"
+      }
+    },
+    {
+      "id": "id-start-table-row-without-upper-bound",
+      "file": "src/spec.rs",
+      "find": "(#[trigger] id_start_at(i)).first <= c <= id_start_at(i).last",
+      "replace": "(#[trigger] id_start_at(i)).first <= c",
+      "expect": "killed",
+      "reason": "A row of the ID_Start table holds every code point from its first on, not only up to its last: U+00D7 MULTIPLICATION SIGN would be ID_Start, so example_unicode_id_anchors is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_unicode_id_anchors()",
+        "witness": "unicode_id_start(0x00D7u32)"
+      }
     }
   ]
 }

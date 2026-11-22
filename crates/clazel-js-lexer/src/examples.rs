@@ -8,6 +8,10 @@
 
 #[allow(unused_imports)]
 use super::spec::*;
+#[cfg(verus_only)]
+use super::unicode::{lemma_id_continue_gap, lemma_id_start_gap};
+#[cfg(verus_only)]
+use super::unicode_data::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
@@ -307,6 +311,85 @@ pub proof fn example_trivia()
         is_trivia(ElementKind::HashbangComment),
         !is_trivia(ElementKind::IdentifierName),
 {
+}
+
+/// Rows of the generated `ID_Start` table that the anchors below use
+/// (Unicode 18.0.0): read from the table's contents.
+proof fn fact_id_start_rows()
+    ensures
+        id_start_at(3).last == 0xD6 && id_start_at(4).first == 0xD8 && id_start_at(4).last == 0xF6,
+        id_start_at(9).last == 0x2EE && id_start_at(10).first == 0x370,
+        id_start_at(249).last == 0x1FFC && id_start_at(250).first == 0x2071,
+        id_start_at(282).last == 0x2DDE && id_start_at(283).first == 0x3005,
+        id_start_at(296).first == 0x4E00 && id_start_at(296).last == 0xA48C,
+{
+    reveal(ID_START_0);
+}
+
+/// Rows of the generated `ID_Continue` table that the anchors below use.
+proof fn fact_id_continue_rows()
+    ensures
+        id_continue_at(4).last == 0xD6 && id_continue_at(5).first == 0xD8,
+        id_continue_at(11).first == 0x300 && id_continue_at(11).last == 0x374,
+        id_continue_at(297).first == 0x200C && id_continue_at(297).last == 0x200D,
+        id_continue_at(298).first == 0x203F,
+        id_continue_at(335).last == 0x2DFF && id_continue_at(336).first == 0x3005,
+{
+    reveal(ID_CONTINUE_0);
+}
+
+/// §12.7 and the Unicode 18.0.0 `ID_Start` / `ID_Continue` of code points
+/// above U+007F, as the generated table gives them (anchors; the table's
+/// equality with `DerivedCoreProperties.txt` is not proven): U+00E9 and
+/// U+65E5 are `ID_Start`; U+0300, U+200C and U+200D are `ID_Continue` and
+/// not `ID_Start`; U+00D7, U+2028 and U+2E2F are neither.
+pub proof fn example_unicode_id_anchors()
+    ensures
+        unicode_id_start(0xE9u32) && unicode_id_continue(0xE9u32),
+        unicode_id_start(0x65E5u32) && unicode_id_continue(0x65E5u32),
+        unicode_id_continue(0x0300u32) && !unicode_id_start(0x0300u32),
+        unicode_id_continue(0x200Cu32) && !unicode_id_start(0x200Cu32),
+        unicode_id_continue(0x200Du32) && !unicode_id_start(0x200Du32),
+        !unicode_id_start(0x00D7u32) && !unicode_id_continue(0x00D7u32),
+        !unicode_id_start(0x2028u32) && !unicode_id_continue(0x2028u32),
+        !unicode_id_start(0x2E2Fu32) && !unicode_id_continue(0x2E2Fu32),
+{
+    fact_id_start_rows();
+    fact_id_continue_rows();
+    // Positive: a row holds the code point.
+    assert(unicode_id_start_non_ascii(0xE9u32)) by {
+        let _ = id_start_at(4);
+    }
+    assert(unicode_id_start_non_ascii(0x65E5u32)) by {
+        let _ = id_start_at(296);
+    }
+    assert(unicode_id_continue_non_ascii(0xE9u32)) by {
+        reveal(ID_CONTINUE_0);
+        let _ = id_continue_at(5);
+    }
+    assert(unicode_id_continue_non_ascii(0x65E5u32)) by {
+        reveal(ID_CONTINUE_0);
+        let _ = id_continue_at(348);
+    }
+    assert(unicode_id_continue_non_ascii(0x0300u32)) by {
+        let _ = id_continue_at(11);
+    }
+    assert(unicode_id_continue_non_ascii(0x200Cu32)) by {
+        let _ = id_continue_at(297);
+    }
+    assert(unicode_id_continue_non_ascii(0x200Du32)) by {
+        let _ = id_continue_at(297);
+    }
+    // Negative: the code point lies strictly between two adjacent rows.
+    lemma_id_start_gap(9, 0x300u32);
+    lemma_id_start_gap(249, 0x200Cu32);
+    lemma_id_start_gap(249, 0x200Du32);
+    lemma_id_start_gap(3, 0xD7u32);
+    lemma_id_start_gap(249, 0x2028u32);
+    lemma_id_start_gap(282, 0x2E2Fu32);
+    lemma_id_continue_gap(4, 0xD7u32);
+    lemma_id_continue_gap(297, 0x2028u32);
+    lemma_id_continue_gap(335, 0x2E2Fu32);
 }
 
 } // verus!

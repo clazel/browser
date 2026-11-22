@@ -62,10 +62,13 @@
 //!
 //! - `ID_Start` and `ID_Continue` of code points above U+007F are
 //!   [`super::spec::unicode_id_start_non_ascii`] and
-//!   [`super::spec::unicode_id_continue_non_ascii`]: uninterpreted in
-//!   Verus, with the generated table (`unicode_data.rs`) as their only
-//!   connection to Unicode. This file does not try to say more, so the
-//!   equivalence says "the same given the same Unicode properties".
+//!   [`super::spec::unicode_id_continue_non_ascii`]: "some row of the
+//!   generated table (`unicode_data.rs`) holds the code point". The
+//!   properties are read from that shared table, so the equivalence is
+//!   relative to it, and this file is not a second source for the Unicode
+//!   data: whether the table is Unicode 18.0.0's `ID_Start` and
+//!   `ID_Continue` is not something this file or the spec proves (see the
+//!   spec's modelling choices for the evidence).
 //! - Source text is a `Seq<u32>` of code points, and a production is a
 //!   predicate on `(s, i, j)` meaning the code points `s[i..j)` are derived,
 //!   as in the spec: a different model of source text would change what
@@ -157,7 +160,7 @@ pub open spec fn ind_id_start(c: u32) -> bool {
 /// table's.) For ASCII, `ID_Continue` is the letters, the digits and `_`.
 /// `ID_Continue` contains `ID_Start` (UAX #31 §1.1), which is a fact about
 /// the Unicode data, so for code points above U+007F this file does not
-/// derive it: it uses `ID_Continue`'s own (shared, uninterpreted) predicate.
+/// derive it: it uses `ID_Continue`'s own (shared) predicate.
 pub open spec fn ind_id_continue(c: u32) -> bool {
     (0x41 <= c && c <= 0x5A) || (0x61 <= c && c <= 0x7A) || c == 0x24 || c == 0x5F || ind_dec(c)
         || (c > 0x7F && unicode_id_continue_non_ascii(c))

@@ -20,6 +20,7 @@
 //! the independent derivation in `tests/unicode_tables.rs`; the anchor code
 //! points in `examples.rs`; Test262.
 
+#[cfg(verus_only)]
 use super::spec;
 use super::unicode_data::*;
 #[allow(unused_imports)]
@@ -323,6 +324,50 @@ fn find_id_continue(c: u32) -> (r: bool)
         }
     }
     false
+}
+
+/// No row of the `ID_START` table holds a code point strictly between the
+/// end of row `k` and the start of row `k + 1`.
+pub proof fn lemma_id_start_gap(k: int, c: u32)
+    requires
+        0 <= k && k + 1 < ID_START_LEN,
+        (id_start_at(k)).last < c < id_start_at(k + 1).first,
+    ensures
+        !spec::unicode_id_start_non_ascii(c),
+{
+    lemma_id_start_sorted();
+    assert forall|i: int| 0 <= i < ID_START_LEN implies !((#[trigger] id_start_at(i)).first <= c <= (id_start_at(i)).last) by {
+        let _ = id_start_at(i);
+        if i < k {
+            lemma_id_start_ordered(i, k);
+        } else if i > k + 1 {
+            lemma_id_start_ordered(k + 1, i);
+        }
+        assert(range_ok(id_start_at(k)));
+        assert(range_ok(id_start_at(k + 1)));
+    }
+}
+
+/// No row of the `ID_CONTINUE` table holds a code point strictly between the
+/// end of row `k` and the start of row `k + 1`.
+pub proof fn lemma_id_continue_gap(k: int, c: u32)
+    requires
+        0 <= k && k + 1 < ID_CONTINUE_LEN,
+        (id_continue_at(k)).last < c < id_continue_at(k + 1).first,
+    ensures
+        !spec::unicode_id_continue_non_ascii(c),
+{
+    lemma_id_continue_sorted();
+    assert forall|i: int| 0 <= i < ID_CONTINUE_LEN implies !((#[trigger] id_continue_at(i)).first <= c <= (id_continue_at(i)).last) by {
+        let _ = id_continue_at(i);
+        if i < k {
+            lemma_id_continue_ordered(i, k);
+        } else if i > k + 1 {
+            lemma_id_continue_ordered(k + 1, i);
+        }
+        assert(range_ok(id_continue_at(k)));
+        assert(range_ok(id_continue_at(k + 1)));
+    }
 }
 
 /// Whether `c` (above U+007F) has the Unicode property `ID_Start`: the
