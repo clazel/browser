@@ -509,6 +509,7 @@ pub proof fn lemma_nullish_trace(
 
 /// A conditional jump on the register `src` being nullish (`undefined` or
 /// `null`), or not.
+#[verifier::rlimit(200)]
 pub proof fn lemma_jump_nullish(
     c: js::Code,
     op: js::Op,

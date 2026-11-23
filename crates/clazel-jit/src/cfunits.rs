@@ -442,6 +442,7 @@ proof fn lemma_lookahead(ins: Seq<x64::Instr>, j: int, us: Us)
 /// the units, every unit is well formed, `p` is membership in the scan's
 /// targets, and [`ucheck`] accepts the units, then `scan` accepts them and
 /// reports their starts.
+#[verifier::rlimit(200)]
 pub proof fn lemma_scan_units(
     ins: Seq<x64::Instr>,
     tg: Seq<int>,
