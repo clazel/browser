@@ -130,7 +130,10 @@ impl PageHooks for Hooks {
             self.navigate(url, false);
             return;
         }
-        let head = url.len() + method.len() + content_type.len();
+        let head = url
+            .len()
+            .saturating_add(method.len())
+            .saturating_add(content_type.len());
         if head > 8192 || body.len() > clazel_ipc::frame::spec::MAX_FRAME - 8192 - 64 {
             eprintln!("clazel-renderer: a form submission is too large to send");
             return;

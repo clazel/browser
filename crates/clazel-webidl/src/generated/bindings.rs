@@ -3672,7 +3672,7 @@ pub trait MouseEventImpl: Platform {
         Err(platform::not_implemented::<Self>(scope, "MouseEvent.getModifierState"))
     }
     /// `undefined initMouseEvent(DOMString typeArg, optional boolean bubblesArg, optional boolean cancelableArg, optional Window? viewArg, optional long detailArg, optional long screenXArg, optional long screenYArg, optional long clientXArg, optional long clientYArg, optional boolean ctrlKeyArg, optional boolean altKeyArg, optional boolean shiftKeyArg, optional boolean metaKeyArg, optional short buttonArg, optional EventTarget? relatedTargetArg)`.
-    fn init_mouse_event<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _type_arg: DomString, _bubbles_arg: bool, _cancelable_arg: bool, _view_arg: Option<ObjectKey>, _detail_arg: i32, _screen_x_arg: i32, _screen_y_arg: i32, _client_x_arg: i32, _client_y_arg: i32, _ctrl_key_arg: bool, _alt_key_arg: bool, _shift_key_arg: bool, _meta_key_arg: bool, _button_arg: i16, _related_target_arg: Option<ObjectKey>) -> Result<()> {
+    fn init_mouse_event<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _args: MouseEventInitMouseEventArgs) -> Result<()> {
         Err(platform::not_implemented::<Self>(scope, "MouseEvent.initMouseEvent"))
     }
     /// `constructor(DOMString type, optional MouseEventInit eventInitDict)`: the new platform object.
@@ -3762,7 +3762,7 @@ pub trait KeyboardEventImpl: Platform {
         Err(platform::not_implemented::<Self>(scope, "KeyboardEvent.getModifierState"))
     }
     /// `undefined initKeyboardEvent(DOMString typeArg, optional boolean bubblesArg, optional boolean cancelableArg, optional Window? viewArg, optional DOMString keyArg, optional unsigned long locationArg, optional boolean ctrlKey, optional boolean altKey, optional boolean shiftKey, optional boolean metaKey)`.
-    fn init_keyboard_event<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _type_arg: DomString, _bubbles_arg: bool, _cancelable_arg: bool, _view_arg: Option<ObjectKey>, _key_arg: DomString, _location_arg: u32, _ctrl_key: bool, _alt_key: bool, _shift_key: bool, _meta_key: bool) -> Result<()> {
+    fn init_keyboard_event<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _args: KeyboardEventInitKeyboardEventArgs) -> Result<()> {
         Err(platform::not_implemented::<Self>(scope, "KeyboardEvent.initKeyboardEvent"))
     }
     /// `constructor(DOMString type, optional KeyboardEventInit eventInitDict)`: the new platform object.
@@ -16343,6 +16343,41 @@ fn op_ui_event_init_ui_event<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: 
     Ok(scope.undefined())
 }
 
+/// The arguments of `MouseEvent.initMouseEvent`, more than a method may have.
+#[derive(Debug, Clone)]
+pub struct MouseEventInitMouseEventArgs {
+    /// `typeArg`
+    pub type_arg: DomString,
+    /// `bubblesArg`
+    pub bubbles_arg: bool,
+    /// `cancelableArg`
+    pub cancelable_arg: bool,
+    /// `viewArg`
+    pub view_arg: Option<ObjectKey>,
+    /// `detailArg`
+    pub detail_arg: i32,
+    /// `screenXArg`
+    pub screen_x_arg: i32,
+    /// `screenYArg`
+    pub screen_y_arg: i32,
+    /// `clientXArg`
+    pub client_x_arg: i32,
+    /// `clientYArg`
+    pub client_y_arg: i32,
+    /// `ctrlKeyArg`
+    pub ctrl_key_arg: bool,
+    /// `altKeyArg`
+    pub alt_key_arg: bool,
+    /// `shiftKeyArg`
+    pub shift_key_arg: bool,
+    /// `metaKeyArg`
+    pub meta_key_arg: bool,
+    /// `buttonArg`
+    pub button_arg: i16,
+    /// `relatedTargetArg`
+    pub related_target_arg: Option<ObjectKey>,
+}
+
 /// The interface object of `MouseEvent`: [[Call]] and [[Construct]] (WebIDL §3.7.1†).
 fn ctor_mouse_event<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
     // §3.7.1† step 1: "If NewTarget is undefined, then throw a TypeError."
@@ -16546,7 +16581,7 @@ fn op_mouse_event_init_mouse_event<'s, P: AllInterfaces>(scope: &mut Scope<'s>, 
     let a13 = if scope.kind(v) == ValueKind::Undefined { 0 } else { convert::short(scope, v, IntegerFlags { enforce_range: false, clamp: false })? };
     let v = args.get(14);
     let a14 = if scope.kind(v) == ValueKind::Undefined { None } else { if convert::is_nullish(scope, v) { None } else { Some(convert::interface::<P>(scope, v, InterfaceId::EventTarget)?) } };
-    <P as MouseEventImpl>::init_mouse_event(scope, this, a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14)?;
+    <P as MouseEventImpl>::init_mouse_event(scope, this, MouseEventInitMouseEventArgs { type_arg: a0, bubbles_arg: a1, cancelable_arg: a2, view_arg: a3, detail_arg: a4, screen_x_arg: a5, screen_y_arg: a6, client_x_arg: a7, client_y_arg: a8, ctrl_key_arg: a9, alt_key_arg: a10, shift_key_arg: a11, meta_key_arg: a12, button_arg: a13, related_target_arg: a14 })?;
     Ok(scope.undefined())
 }
 
@@ -16620,6 +16655,31 @@ fn get_wheel_event_momentum<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &
     let r = <P as WheelEventImpl>::momentum(scope, this)?;
     let v = scope.boolean(r);
     Ok(v)
+}
+
+/// The arguments of `KeyboardEvent.initKeyboardEvent`, more than a method may have.
+#[derive(Debug, Clone)]
+pub struct KeyboardEventInitKeyboardEventArgs {
+    /// `typeArg`
+    pub type_arg: DomString,
+    /// `bubblesArg`
+    pub bubbles_arg: bool,
+    /// `cancelableArg`
+    pub cancelable_arg: bool,
+    /// `viewArg`
+    pub view_arg: Option<ObjectKey>,
+    /// `keyArg`
+    pub key_arg: DomString,
+    /// `locationArg`
+    pub location_arg: u32,
+    /// `ctrlKey`
+    pub ctrl_key: bool,
+    /// `altKey`
+    pub alt_key: bool,
+    /// `shiftKey`
+    pub shift_key: bool,
+    /// `metaKey`
+    pub meta_key: bool,
 }
 
 /// The interface object of `KeyboardEvent`: [[Call]] and [[Construct]] (WebIDL §3.7.1†).
@@ -16795,7 +16855,7 @@ fn op_keyboard_event_init_keyboard_event<'s, P: AllInterfaces>(scope: &mut Scope
     let a8 = if scope.kind(v) == ValueKind::Undefined { false } else { convert::boolean(scope, v) };
     let v = args.get(9);
     let a9 = if scope.kind(v) == ValueKind::Undefined { false } else { convert::boolean(scope, v) };
-    <P as KeyboardEventImpl>::init_keyboard_event(scope, this, a0, a1, a2, a3, a4, a5, a6, a7, a8, a9)?;
+    <P as KeyboardEventImpl>::init_keyboard_event(scope, this, KeyboardEventInitKeyboardEventArgs { type_arg: a0, bubbles_arg: a1, cancelable_arg: a2, view_arg: a3, key_arg: a4, location_arg: a5, ctrl_key: a6, alt_key: a7, shift_key: a8, meta_key: a9 })?;
     Ok(scope.undefined())
 }
 

@@ -260,50 +260,37 @@ impl MouseEventImpl for Page {
         Ok(modifier_state(m, &String::from_utf16_lossy(&key_arg)))
     }
 
-    /// UI Events §5.2.3† `initMouseEvent`.
+    /// UI Events §5.2.3† `initMouseEvent` (the arguments are in a struct: the
+    /// operation has 15, more than a method may have).
     fn init_mouse_event<'s>(
         scope: &mut Scope<'s>,
         this: ObjectKey,
-        type_arg: DomString,
-        bubbles_arg: bool,
-        cancelable_arg: bool,
-        view_arg: Option<ObjectKey>,
-        detail_arg: i32,
-        screen_x_arg: i32,
-        screen_y_arg: i32,
-        client_x_arg: i32,
-        client_y_arg: i32,
-        ctrl_key_arg: bool,
-        alt_key_arg: bool,
-        shift_key_arg: bool,
-        meta_key_arg: bool,
-        button_arg: i16,
-        related_target_arg: Option<ObjectKey>,
+        a: MouseEventInitMouseEventArgs,
     ) -> Result<()> {
         if !init_ui(
             scope,
             this,
-            &type_arg,
-            bubbles_arg,
-            cancelable_arg,
-            view_arg,
-            detail_arg,
+            &a.type_arg,
+            a.bubbles_arg,
+            a.cancelable_arg,
+            a.view_arg,
+            a.detail_arg,
         )? {
             return Ok(());
         }
-        let related = related(scope, related_target_arg)?;
+        let related = related(scope, a.related_target_arg)?;
         let d = data(scope, this)?;
-        d.screen_x = screen_x_arg;
-        d.screen_y = screen_y_arg;
-        d.client_x = client_x_arg;
-        d.client_y = client_y_arg;
+        d.screen_x = a.screen_x_arg;
+        d.screen_y = a.screen_y_arg;
+        d.client_x = a.client_x_arg;
+        d.client_y = a.client_y_arg;
         d.mods = Modifiers {
-            ctrl: ctrl_key_arg,
-            alt: alt_key_arg,
-            shift: shift_key_arg,
-            meta: meta_key_arg,
+            ctrl: a.ctrl_key_arg,
+            alt: a.alt_key_arg,
+            shift: a.shift_key_arg,
+            meta: a.meta_key_arg,
         };
-        d.button = button_arg;
+        d.button = a.button_arg;
         d.related_target = related;
         Ok(())
     }
@@ -471,40 +458,31 @@ impl KeyboardEventImpl for Page {
         Ok(modifier_state(m, &String::from_utf16_lossy(&key_arg)))
     }
 
-    /// UI Events §6.? `initKeyboardEvent`.
+    /// UI Events §6.? `initKeyboardEvent` (the arguments are in a struct).
     fn init_keyboard_event<'s>(
         scope: &mut Scope<'s>,
         this: ObjectKey,
-        type_arg: DomString,
-        bubbles_arg: bool,
-        cancelable_arg: bool,
-        view_arg: Option<ObjectKey>,
-        key_arg: DomString,
-        location_arg: u32,
-        ctrl_key: bool,
-        alt_key: bool,
-        shift_key: bool,
-        meta_key: bool,
+        a: KeyboardEventInitKeyboardEventArgs,
     ) -> Result<()> {
         if !init_ui(
             scope,
             this,
-            &type_arg,
-            bubbles_arg,
-            cancelable_arg,
-            view_arg,
+            &a.type_arg,
+            a.bubbles_arg,
+            a.cancelable_arg,
+            a.view_arg,
             0,
         )? {
             return Ok(());
         }
         let d = data(scope, this)?;
-        d.key = key_arg;
-        d.location = location_arg;
+        d.key = a.key_arg;
+        d.location = a.location_arg;
         d.mods = Modifiers {
-            ctrl: ctrl_key,
-            alt: alt_key,
-            shift: shift_key,
-            meta: meta_key,
+            ctrl: a.ctrl_key,
+            alt: a.alt_key,
+            shift: a.shift_key,
+            meta: a.meta_key,
         };
         Ok(())
     }

@@ -1066,10 +1066,9 @@ fn the_ui_event_constructors_and_their_dictionaries() -> Test {
 }
 
 #[test]
-fn init_methods_set_the_members_unless_dispatching() -> Test {
+fn init_methods_set_the_members() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><script>\
-         var m = document.createEvent ? 1 : 0;\
          var e = new MouseEvent('click');\
          e.initMouseEvent('mouseover', true, true, window, 3, 1, 2, 3, 4, true, false, true, false, 1, document.body);\
          var u = new UIEvent('a'); u.initUIEvent('b', true, false, window, 5);\

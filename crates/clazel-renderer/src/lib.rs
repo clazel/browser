@@ -512,7 +512,15 @@ impl<L: Write> Graphics<'_, L> {
             return Ok(());
         };
         let scale = i64::from(v.scale.max(1));
-        let css = |d: u64| i32::try_from(i64::try_from(d).unwrap_or(i64::MAX) / scale).unwrap_or(0);
+        let css = |d: u64| {
+            i32::try_from(
+                i64::try_from(d)
+                    .unwrap_or(i64::MAX)
+                    .checked_div(scale)
+                    .unwrap_or(0),
+            )
+            .unwrap_or(0)
+        };
         match kind {
             // A click, in a page that runs scripts (item 7.14): the element
             // under the pointer gets the mouse events, and a click nobody

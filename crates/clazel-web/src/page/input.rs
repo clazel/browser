@@ -427,7 +427,7 @@ fn next_in_tab_order(arena: &Arena, from: Option<usize>, backwards: bool) -> Opt
     let pos = from.and_then(|f| ordered.iter().position(|&n| n == f));
     let len = ordered.len();
     let next = match (pos, backwards) {
-        (Some(i), false) => i.saturating_add(1) % len,
+        (Some(i), false) => i.saturating_add(1).checked_rem(len).unwrap_or(0),
         (Some(i), true) => i.checked_sub(1).unwrap_or(len.saturating_sub(1)),
         (None, false) => 0,
         (None, true) => len.saturating_sub(1),

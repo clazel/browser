@@ -1037,8 +1037,16 @@ fn members(g: &mut Gen<'_>, i: &Interface) -> Members {
                     .find_map(|t| g.unsupported(t));
                 let ret = g.resolve(&o.ret);
                 let dict_ret = matches!(&ret.kind, TyKind::Named(n) if g.named_kind(n) == Some(NamedKind::Dictionary));
-                if let Some(why) =
-                    bad.or_else(|| dict_ret.then(|| "returns a dictionary".to_owned()))
+                // A long operation's arguments go in a struct (see `is_long`),
+                // which cannot borrow the scope.
+                let borrows = is_long(o, o.kind == OpKind::Static)
+                    && o.args.iter().any(|a| g.needs_lt(&a.ty));
+                let too_long = borrows.then(|| {
+                    "more than 7 parameters, and an argument that borrows the scope".to_owned()
+                });
+                if let Some(why) = bad
+                    .or_else(|| dict_ret.then(|| "returns a dictionary".to_owned()))
+                    .or(too_long)
                 {
                     skip(g, format!("{}.{name}", i.name), why);
                     continue;
@@ -1133,6 +1141,46 @@ fn event_handler(a: &Attr) -> Option<String> {
         }
         _ => None,
     }
+}
+
+/// Whether the trait method of `o` would have more than 7 parameters
+/// (`scope`, `this` unless static, and the arguments): clippy's
+/// `too_many_arguments`, which the workspace keeps. The arguments of such an
+/// operation go in one struct, [`args_struct`], with a field for each.
+fn is_long(o: &Operation, is_static: bool) -> bool {
+    o.args.len().saturating_add(if is_static { 1 } else { 2 }) > 7
+}
+
+/// The name of the struct holding a long operation's arguments.
+fn args_struct(iface: &str, o: &Operation) -> String {
+    format!("{iface}{}Args", pascal(o.name.as_deref().unwrap_or("")))
+}
+
+/// The Rust type of an argument, for a trait method.
+fn arg_type(g: &mut Gen<'_>, a: &Argument) -> String {
+    let t = g.rty(&a.ty);
+    if a.variadic {
+        format!("Vec<{t}>")
+    } else if a.optional && a.default.is_none() {
+        format!("Option<{t}>")
+    } else {
+        t
+    }
+}
+
+/// The struct of a long operation's arguments, as Rust source.
+fn args_struct_def(g: &mut Gen<'_>, iface: &str, o: &Operation) -> String {
+    let name = args_struct(iface, o);
+    let mut s = format!(
+        "/// The arguments of `{iface}.{}`, more than a method may have.\n#[derive(Debug, Clone)]\npub struct {name} {{\n",
+        o.name.as_deref().unwrap_or("")
+    );
+    for a in &o.args {
+        let t = arg_type(g, a);
+        let _ = writeln!(s, "    /// `{}`\n    pub {}: {t},", a.name, snake(&a.name));
+    }
+    s.push_str("}\n\n");
+    s
 }
 
 /// The Rust parameters of an argument list, for a trait method.
@@ -1388,7 +1436,13 @@ fn emit_interface(g: &mut Gen<'_>, i: &Interface, ms: &Members, o: &mut Out) {
     for op in &ms.ops {
         for (o, _, method) in &op.overloads {
             let rt = g.rty(&o.ret);
-            let ps = params(g, &o.args);
+            let ps = if is_long(o, op.is_static) {
+                let def = args_struct_def(g, name, o);
+                glue.push_str(&def);
+                format!(", _args: {}", args_struct(name, o))
+            } else {
+                params(g, &o.args)
+            };
             let this = if op.is_static {
                 String::new()
             } else {
@@ -1730,7 +1784,17 @@ fn emit_interface(g: &mut Gen<'_>, i: &Interface, ms: &Members, o: &mut Out) {
             op.name
         );
         let call_one = |g: &mut Gen<'_>, o: &Operation, method: &str, indent: &str| -> String {
-            let (code, call) = convert_args(g, &o.args);
+            let (code, mut call) = convert_args(g, &o.args);
+            if is_long(o, op.is_static) {
+                let fields = o
+                    .args
+                    .iter()
+                    .enumerate()
+                    .map(|(k, a)| format!("{}: a{k}", snake(&a.name)))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                call = format!(", {} {{ {fields} }}", args_struct(name, o));
+            }
             let this_arg = if op.is_static {
                 String::new()
             } else {

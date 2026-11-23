@@ -295,9 +295,9 @@ fn run_page(name: &str, source: &str) -> Result<Verdict> {
         *t = t.saturating_add(5_000);
     }
     let mut progress = page.run()?;
-    let mut guard = 0;
+    let mut guard = 0u32;
     while progress == Progress::Waiting && guard < 50 {
-        guard += 1;
+        guard = guard.saturating_add(1);
         let requests = page.take_requests()?;
         if requests.is_empty() {
             break;
@@ -339,9 +339,9 @@ fn run_page(name: &str, source: &str) -> Result<Verdict> {
     let reports = page.take_reports()?;
     let engine: Vec<String> = reports
         .iter()
-        .filter_map(|r| match r {
-            Report::Engine { error, .. } => Some(error.clone()),
-            Report::Exception { name, message, .. } => Some(format!("{name}: {message}")),
+        .map(|r| match r {
+            Report::Engine { error, .. } => error.clone(),
+            Report::Exception { name, message, .. } => format!("{name}: {message}"),
         })
         .collect();
     let counts: Vec<usize> = summary

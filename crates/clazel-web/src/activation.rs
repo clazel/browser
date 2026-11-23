@@ -139,9 +139,11 @@ fn parse_integer(v: &[u32]) -> Option<i64> {
             break;
         }
         any = true;
-        n = n.saturating_mul(10).saturating_add(i64::from(c - 0x30));
+        n = n
+            .saturating_mul(10)
+            .saturating_add(i64::from(c.saturating_sub(0x30)));
     }
-    any.then_some(if neg { -n } else { n })
+    any.then_some(if neg { n.saturating_neg() } else { n })
 }
 
 /// The element's `tabindex` content attribute, parsed (HTML §6.6.3†
