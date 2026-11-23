@@ -242,7 +242,7 @@ pub open spec fn indep_store_cookies(urls: UrlFns, jar: Seq<Cookie>, now: int, r
 /// The state `s` is the request `r` after the same history: the same
 /// current URL, the redirect count of the list, the taint computed from it.
 pub open spec fn corresponds(urls: UrlFns, s: State, r: FetchRequest) -> bool {
-    r.url_list.len() > 0 && s.url == current_url(r) && s.redirects == redirect_count(r) && s.tainted == list_taint(urls, r.url_list)
+    crate::request::spec::is_plain_get(s.req) && r.url_list.len() > 0 && s.url == current_url(r) && s.redirects == redirect_count(r) && s.tainted == list_taint(urls, r.url_list)
 }
 
 /// Applying `stored_ops` is the fold of storage.
@@ -305,8 +305,8 @@ pub proof fn theorem_independent_request(urls: UrlFns, s: State, r: FetchRequest
         corresponds(urls, s, r),
     ensures
         cookie_string(urls, s, jar, now) == indep_cookie_value(urls, jar, now, r),
-        crate::request::spec::request_bytes_cookie(s.url, cookie_string(urls, s, jar, now)) == indep_request_bytes(urls, jar, now, r),
-        forall|plain: Seq<u8>| #[trigger] indep_request_bytes(urls, jar, now, r) == Some(wire_bytes(s.url, cookie_string(urls, s, jar, now), plain))
+        crate::request::spec::request_bytes_req_cookie(s.url, s.req, cookie_string(urls, s, jar, now)) == indep_request_bytes(urls, jar, now, r),
+        forall|plain: Seq<u8>| #[trigger] indep_request_bytes(urls, jar, now, r) == Some(wire_bytes(s.url, s.req, cookie_string(urls, s, jar, now), plain))
             || indep_request_bytes(urls, jar, now, r) is None,
 {
     assert(request_context(urls, s) == indep_context(urls, r));
@@ -339,7 +339,7 @@ pub proof fn theorem_independent_redirect(urls: UrlFns, s: State, r: FetchReques
             FetchResult::NetworkError => exists|reason: Reason| on_final(urls, s, response, open, now).1 == close_if(open) + seq![Action::Fail(reason)],
             FetchResult::Follow(r2) => {
                 let after = on_final(urls, s, response, open, now);
-                corresponds(urls, after.0, r2) && after.1 == close_if(open) + begin(after.0.url, after.0.redirects, after.0.tainted).1
+                corresponds(urls, after.0, r2) && after.1 == close_if(open) + begin(after.0.url, after.0.redirects, after.0.tainted, after.0.req).1
             },
         },
 {
@@ -597,13 +597,15 @@ pub proof fn lemma_corresponds_context(urls: UrlFns, s: State, r: FetchRequest)
 
 /// `begin` gives a connection exactly for a fetchable URL, and otherwise
 /// ends the fetch with `NotFetched`.
-pub proof fn lemma_begin_fetchable(url: Url, redirects: nat, tainted: bool)
+pub proof fn lemma_begin_fetchable(url: Url, redirects: nat, tainted: bool, req: crate::request::spec::Req)
+    requires
+        crate::request::spec::is_plain_get(req),
     ensures
-        begin(url, redirects, tainted).0.url == url,
-        begin(url, redirects, tainted).0.redirects == redirects,
-        begin(url, redirects, tainted).0.tainted == tainted,
-        begin(url, redirects, tainted).0.phase is Connecting <==> indep_fetchable(url),
-        !indep_fetchable(url) ==> begin(url, redirects, tainted).0.phase is Finished && begin(url, redirects, tainted).1 == seq![Action::Fail(Reason::NotFetched)],
+        begin(url, redirects, tainted, req).0.url == url,
+        begin(url, redirects, tainted, req).0.redirects == redirects,
+        begin(url, redirects, tainted, req).0.tainted == tainted,
+        begin(url, redirects, tainted, req).0.phase is Connecting <==> indep_fetchable(url),
+        !indep_fetchable(url) ==> begin(url, redirects, tainted, req).0.phase is Finished && begin(url, redirects, tainted, req).1 == seq![Action::Fail(Reason::NotFetched)],
 {
 }
 
@@ -644,12 +646,13 @@ pub proof fn lemma_run_connected(http: HttpFns, urls: UrlFns, s: State, r: Fetch
 {
     reveal_with_fuel(apply_ops, 2);
     lemma_corresponds_context(urls, s, r);
-    let plain = crate::request::spec::request_bytes(s.url).unwrap();
+    crate::request::lemmas::lemma_plain_get_bytes(s.url, s.req, seq![]);
+    let plain = crate::request::spec::request_bytes_req(s.url, s.req).unwrap();
     theorem_independent_request(urls, s, r, jar, now);
     let s1 = step(http, urls, s, Input::Connected, jar, now);
     assert(s1.2 == seq![retrieval_op(urls, s, now)]);
     assert(s1.2.drop_first() =~= Seq::<JarOp>::empty());
-    assert(wire_bytes(s.url, cookie_string(urls, s, jar, now), plain) == indep_wire(urls, jar, now, r));
+    assert(wire_bytes(s.url, s.req, cookie_string(urls, s, jar, now), plain) == indep_wire(urls, jar, now, r));
 }
 
 /// The second step of a hop: the hop's bytes arrive and are the final
@@ -673,8 +676,8 @@ pub proof fn lemma_run_bytes(http: HttpFns, urls: UrlFns, s: State, r: FetchRequ
                 && on_final(urls, s, d.response, true, now).1.last() is Fail,
             FetchResult::Follow(r2) => {
                 let after = on_final(urls, s, d.response, true, now);
-                corresponds(urls, after.0, r2) && after.0.redirects <= 20 && after.1 == close_if(true) + begin(after.0.url, after.0.redirects, after.0.tainted).1
-                    && after.0 == begin(after.0.url, after.0.redirects, after.0.tainted).0
+                corresponds(urls, after.0, r2) && after.0.redirects <= 20 && after.1 == close_if(true) + begin(after.0.url, after.0.redirects, after.0.tainted, after.0.req).1
+                    && after.0 == begin(after.0.url, after.0.redirects, after.0.tainted, after.0.req).0
             },
         },
 {
@@ -697,7 +700,7 @@ pub proof fn lemma_run_bytes(http: HttpFns, urls: UrlFns, s: State, r: FetchRequ
         FetchResult::Follow(r2) => {
             assert(r.url_list.len() - 1 != 20);
             let after = on_final(urls, s, d.response, true, now);
-            lemma_begin_fetchable(after.0.url, after.0.redirects, after.0.tainted);
+            lemma_begin_fetchable(after.0.url, after.0.redirects, after.0.tainted, after.0.req);
         },
     }
 }
@@ -707,6 +710,7 @@ pub proof fn lemma_run_bytes(http: HttpFns, urls: UrlFns, s: State, r: FetchRequ
 /// driven through any hops the parser delivers sends the requests Fetch's
 /// loop sends, leaves the cookie jar Fetch's loop leaves, and ends as Fetch
 /// does.
+#[verifier::rlimit(60)]
 pub proof fn lemma_independent_run(http: HttpFns, urls: UrlFns, s: State, r: FetchRequest, jar: Seq<Cookie>, now: int, hops: Seq<Hop>)
     requires
         corresponds(urls, s, r),
@@ -760,8 +764,8 @@ pub proof fn lemma_independent_run(http: HttpFns, urls: UrlFns, s: State, r: Fet
                 assert((s1.1 + s2.1)[(s1.1 + s2.1).len() - 1] == s2.1[s2.1.len() - 1]);
             },
             FetchResult::Follow(r2) => {
-                lemma_begin_fetchable(s2.0.url, s2.0.redirects, s2.0.tainted);
-                let nb = begin(s2.0.url, s2.0.redirects, s2.0.tainted);
+                lemma_begin_fetchable(s2.0.url, s2.0.redirects, s2.0.tainted, s2.0.req);
+                let nb = begin(s2.0.url, s2.0.redirects, s2.0.tainted, s2.0.req);
                 if indep_fetchable(s2.0.url) {
                     lemma_independent_run(http, urls, s2.0, r2, j2, now, rest_hops);
                     let all = s1.1 + s2.1 + rest.1;
@@ -799,7 +803,7 @@ pub proof fn theorem_independent_run(http: HttpFns, urls: UrlFns, url: Url, jar:
 {
     let r = FetchRequest { url_list: seq![url] };
     let b = start(url);
-    lemma_begin_fetchable(url, 0, false);
+    lemma_begin_fetchable(url, 0, false, crate::request::spec::get_req());
     assert(current_url(r) == url);
     if indep_fetchable(url) {
         assert(r.url_list.drop_last() =~= Seq::<Url>::empty());

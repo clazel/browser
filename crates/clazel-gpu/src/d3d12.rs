@@ -175,6 +175,9 @@ impl D3d12Backend {
             );
             self.target = Some(target);
         }
+        if !frame.image_draws.is_empty() {
+            return Err(fail("images are not built for Direct3D 12"));
+        }
         let quad_count = u32::try_from(frame.quads.len()).map_err(|_| fail("quad count"))?;
         let mut cleared = false;
         let mut quads_written = false;
@@ -190,6 +193,13 @@ impl D3d12Backend {
                     self.atlas_bytes = vec![0; n];
                     self.atlas_stale = false;
                     k = k.saturating_add(1);
+                }
+                // Images are not built for Direct3D 12: the HLSL (and its committed
+                // bytecode, which only `vkd3d-compiler` makes, and which no machine
+                // here has) has no image path (item 6.12; see the README). A list
+                // with an image ends the process, as any backend failure does.
+                Op::Images { .. } | Op::ImageUpload { .. } => {
+                    return Err(fail("images are not built for Direct3D 12"));
                 }
                 Op::Upload { offset, start, len } => {
                     let end = start.checked_add(*len).ok_or(fail("upload range"))?;

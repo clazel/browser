@@ -49,6 +49,7 @@ pub open spec fn user_tabs_open(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns
         true
     } else {
         &&& (t[0] is NavigateTab ==> find_by_tab(s.renderers, t[0]->NavigateTab_tab, 0) is Some)
+        &&& (t[0] is SubmitTab ==> find_by_tab(s.renderers, t[0]->SubmitTab_tab, 0) is Some)
         &&& (t[0] is Net ==> net_target(s, t[0]->Net_conn) is Some)
         &&& user_tabs_open(rules, urls, fetch, step(rules, urls, fetch, s, t[0]).0, t.drop_first())
     }
@@ -165,6 +166,7 @@ pub open spec fn rel(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate:
 pub open spec fn kept_event(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, s1: State, e: Event) -> bool {
     &&& crate::domain::ipurge_event(rules, urls, s1, d, e) == Some(e)
     &&& (e is NavigateTab ==> find_by_tab(s1.renderers, e->NavigateTab_tab, 0) is Some)
+    &&& (e is SubmitTab ==> find_by_tab(s1.renderers, e->SubmitTab_tab, 0) is Some)
     &&& (e is Net ==> net_target(s1, e->Net_conn) is Some)
 }
 

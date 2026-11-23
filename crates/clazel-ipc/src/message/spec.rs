@@ -21,6 +21,7 @@
 //! | 9 | renderer to kernel | `Navigate` | url (text) |
 //! | 10 | renderer to kernel | `Display` | title (text), text (text), links (array of text) |
 //! | 11 | renderer to kernel | `Title` | title (text) |
+//! | 12 | renderer to kernel | `Submit` | url (text), method (text), content type (bytes), body (bytes) |
 //! | 14 | renderer to kernel | `FetchStyle` | request (unsigned), url (text) |
 //! | 16 | renderer to kernel | `FetchScript` | request (unsigned), url (text) |
 //! | 17 | renderer to kernel | `UpdateUrl` | replace (bool), url (text) |
@@ -83,6 +84,24 @@
 //! field value, or empty), zero or more `StyleBody` and `StyleEnd`, or with
 //! `StyleFailed`, each naming that `request`. The request id is the
 //! renderer's own number for its fetch, not an identity: it names nobody.
+//!
+//! Phase 6 item 6.16 added `Submit`, a navigation with a method and a body
+//! (a form submission, HTML §4.10.22.3 step 22 "navigate"), beside `Navigate`,
+//! whose tag, 9, stays the `GET`-only form. `method` is `GET` or `POST`; for
+//! `GET` the content type and the body are empty (a `GET` has no body), for
+//! `POST` they are the body's `Content-Type` and octets (an empty body is
+//! allowed). The schema does not narrow them (the kernel refuses the rest, as
+//! it refuses a `Commit` kind it does not know). **The body's bound is the
+//! frame's**, not the plan's proposed 16 MiB: a `Submit` is one frame, a frame
+//! is at most [`crate::frame::spec::MAX_FRAME`] (1 MiB) octets, and
+//! [`max_submit_body`] is the largest body that fits one with a URL, method and
+//! content type of at most [`max_submit_head`] octets together
+//! (`lemmas::lemma_submit_fits_frame`); a larger one is not sent
+//! (`encode_framed` gives `None`). Raising the bound means chunking the body
+//! over several frames or raising `MAX_FRAME`, which every receiver's memory
+//! bound depends on; neither is done (listed in phase-6.md). A decoded
+//! `Submit` is at most a frame, so `clazel-fetch`'s 16 MiB bound is never
+//! the tighter one.
 //!
 //! Phase 7 item 7.16 adds the script fetch and the URL update.
 //! `FetchScript` has 5.19's request shape: a committed renderer asks the
@@ -199,6 +218,17 @@ pub enum Message {
     Navigate {
         /// The URL to go to (not the sender's).
         url: Seq<u8>,
+    },
+    /// Renderer to kernel (item 6.16): navigate with a method and a body.
+    Submit {
+        /// The URL to go to (not the sender's).
+        url: Seq<u8>,
+        /// The method: `GET` or `POST`.
+        method: Seq<u8>,
+        /// The body's `Content-Type` field value (empty for `GET`).
+        content_type: Seq<u8>,
+        /// The body's octets (empty for `GET`).
+        body: Seq<u8>,
     },
     /// Renderer to kernel: show this text rendering of the committed
     /// document (phase-4.md item 4.12).
@@ -383,6 +413,21 @@ pub open spec fn max_body_chunk() -> nat {
     (crate::frame::spec::MAX_FRAME - 8) as nat
 }
 
+/// The most octets a `Submit`'s URL, method and content type may have
+/// together, for [`max_submit_body`] to hold (item 6.16).
+pub open spec fn max_submit_head() -> nat {
+    8192
+}
+
+/// The most octets a `Submit`'s body may have so that, with a URL, method and
+/// content type of at most [`max_submit_head`] octets together, the message
+/// fits one frame: `MAX_FRAME` minus that head, the array's head (1 octet),
+/// the tag (2 octets) and the four fields' heads (at most 5 octets each below
+/// 2^32), with room to spare (`lemmas::lemma_submit_fits_frame`).
+pub open spec fn max_submit_body() -> nat {
+    (crate::frame::spec::MAX_FRAME - 8192 - 64) as nat
+}
+
 /// The most octets one `StyleBody` carries: `MAX_FRAME` minus the rest of
 /// its payload, which is the array's head (1 octet), the tag 111 (2
 /// octets), the request id (at most 9 octets) and the byte string's head
@@ -416,6 +461,7 @@ pub open spec fn is_from_renderer(m: Message) -> bool {
         | Message::Navigate { .. }
         | Message::FetchScript { .. }
         | Message::UpdateUrl { .. }
+        | Message::Submit { .. }
         | Message::Display { .. }
         | Message::Title { .. }
         | Message::FetchStyle { .. } => true,
@@ -441,6 +487,8 @@ pub enum Field {
     Value,
     /// A URL to navigate to or commit.
     Url,
+    /// A request method.
+    Method,
     /// A storage index.
     Index,
     /// Whether a storage value is present.
@@ -511,6 +559,7 @@ pub open spec fn message_fields(m: Message) -> Seq<Field> {
         Message::StorageKey { .. } => seq![Field::Index],
         Message::StorageLength => seq![],
         Message::Navigate { .. } => seq![Field::Url],
+        Message::Submit { .. } => seq![Field::Url, Field::Method, Field::ContentType, Field::BodyBytes],
         Message::Display { .. } => seq![Field::Title, Field::Text, Field::Links],
         Message::Commit { .. } => seq![Field::Url, Field::ContentType, Field::Kind],
         Message::CookieValue { .. } => seq![Field::CookieString],
@@ -583,6 +632,7 @@ pub open spec fn message_tokens(m: Message) -> Seq<Token> {
         Message::StorageKey { index } => seq![Token::Array(2), Token::Uint(7), Token::Uint(index)],
         Message::StorageLength => seq![Token::Array(1), Token::Uint(8)],
         Message::Navigate { url } => seq![Token::Array(2), Token::Uint(9), Token::Text(url)],
+        Message::Submit { url, method, content_type, body } => seq![Token::Array(5), Token::Uint(12), Token::Text(url), Token::Text(method), Token::Bytes(content_type), Token::Bytes(body)],
         Message::Display { title, text, links } => display_tokens(title, text, links),
         Message::Commit { url, content_type, kind } => seq![Token::Array(4), Token::Uint(101), Token::Text(url), Token::Bytes(content_type), Token::Uint(kind)],
         Message::CookieValue { cookie_string } => seq![Token::Array(2), Token::Uint(102), Token::Text(cookie_string)],
@@ -654,6 +704,13 @@ pub open spec fn parse_fields(tag: u64, f: Seq<Token>) -> Option<Message> {
         if f.len() == 0 { Some(Message::StorageLength) } else { None }
     } else if tag == 9 {
         if f.len() == 1 { match f[0] { Token::Text(s) => Some(Message::Navigate { url: s }), _ => None } } else { None }
+    } else if tag == 12 {
+        if f.len() == 4 {
+            match (f[0], f[1], f[2], f[3]) {
+                (Token::Text(u), Token::Text(m), Token::Bytes(c), Token::Bytes(b)) => Some(Message::Submit { url: u, method: m, content_type: c, body: b }),
+                _ => None,
+            }
+        } else { None }
     } else if tag == 11 {
         if f.len() == 1 { match f[0] { Token::Text(s) => Some(Message::Title { title: s }), _ => None } } else { None }
     } else if tag == 14 {

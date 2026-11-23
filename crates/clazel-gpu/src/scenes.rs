@@ -61,6 +61,86 @@ fn draw(id: u32, x: i32, y: i32, colour: u32) -> ExecItem {
     ExecItem::DrawMask { id, x, y, colour }
 }
 
+/// An image of `width` × `height` whose red grows to the right, green downwards and
+/// blue alternates by pixel, all scaled by `alpha` (premultiplied), so that a filter
+/// has something to do on every row and column.
+fn gradient(id: u32, width: u16, height: u16, alpha: u8) -> ExecItem {
+    let axis = |v: u32, n: u32| {
+        let top = n.saturating_sub(1).max(1);
+        v.saturating_mul(255).checked_div(top).unwrap_or(0)
+    };
+    let premultiplied = |c: u32| {
+        u8::try_from(
+            c.saturating_mul(u32::from(alpha))
+                .checked_div(255)
+                .unwrap_or(0),
+        )
+        .unwrap_or(255)
+    };
+    let mut pixels = Vec::new();
+    for y in 0..u32::from(height) {
+        for x in 0..u32::from(width) {
+            let blue = if x.saturating_add(y) & 1 == 0 { 255 } else { 0 };
+            pixels.extend_from_slice(&[
+                premultiplied(axis(x, width.into())),
+                premultiplied(axis(y, height.into())),
+                premultiplied(blue),
+                alpha,
+            ]);
+        }
+    }
+    ExecItem::UploadImage {
+        id,
+        image_width: width,
+        image_height: height,
+        pixels,
+    }
+}
+
+/// An image of `width` × `height` pixels from a byte ramp of period 251 (prime, so
+/// every row differs) shifted by the id, like [`ramp`]: one period is computed and
+/// repeated.
+fn noise(id: u32, width: u16, height: u16) -> ExecItem {
+    let n = usize::from(width)
+        .saturating_mul(usize::from(height))
+        .saturating_mul(4);
+    let period: Vec<u8> = (0..251usize)
+        .map(|i| {
+            let seed = usize::try_from(id).unwrap_or(0).saturating_mul(61);
+            u8::try_from(i.saturating_mul(37).saturating_add(13).saturating_add(seed) % 256)
+                .unwrap_or(0)
+        })
+        .collect();
+    // Sixteen periods first, so that the repeat that fills the image is 16 times
+    // fewer copies (it runs under Miri, which counts copies).
+    let block = period.repeat(16);
+    let mut pixels = block.repeat(n.div_ceil(block.len()));
+    pixels.truncate(n);
+    ExecItem::UploadImage {
+        id,
+        image_width: width,
+        image_height: height,
+        pixels,
+    }
+}
+
+/// A draw of the whole of an image of `iw` × `ih`, or of a source rectangle `src`
+/// (x, y, width, height), into the destination `(x, y, width, height)`.
+fn put(id: u32, dest: (i32, i32, u32, u32), src: (u16, u16, u16, u16), linear: bool) -> ExecItem {
+    ExecItem::DrawImage {
+        id,
+        x: dest.0,
+        y: dest.1,
+        width: dest.2,
+        height: dest.3,
+        src_x: src.0,
+        src_y: src.1,
+        src_width: src.2,
+        src_height: src.3,
+        linear,
+    }
+}
+
 /// Every scene.
 pub fn all() -> Vec<Scene> {
     vec![
@@ -157,6 +237,93 @@ pub fn all() -> Vec<Scene> {
                     ramp(3, 512, 600),
                     draw(2, -300, -20, 0xff80_0000),
                     draw(3, -50, -250, 0x8000_0080),
+                ],
+            ],
+        },
+        Scene {
+            name: "images",
+            width: 48,
+            height: 40,
+            lists: vec![vec![
+                fill(0, 0, 48, 40, 0xffe0_e0e0),
+                gradient(0, 8, 8, 255),
+                gradient(1, 4, 4, 128),
+                gradient(3, 15, 15, 255),
+                // One to one, nearest.
+                put(0, (2, 2, 8, 8), (0, 0, 8, 8), false),
+                // Three times larger, nearest: each source pixel is a 3 × 3 block.
+                put(0, (12, 2, 24, 24), (0, 0, 8, 8), false),
+                // Twice larger, linear, over the one before.
+                put(0, (2, 12, 16, 16), (0, 0, 8, 8), true),
+                // Smaller (15 to 6; odd sides, so no pixel centre lies on a source
+                // edge), with each filter.
+                put(3, (38, 2, 6, 6), (0, 0, 15, 15), false),
+                put(3, (38, 10, 6, 6), (0, 0, 15, 15), true),
+                // A source rectangle, linear: the filter clamps to it.
+                put(0, (2, 30, 8, 8), (2, 2, 4, 4), true),
+                // A translucent image over a fill, linear and nearest.
+                fill(26, 30, 12, 8, 0xff20_60c0),
+                put(1, (26, 30, 12, 8), (0, 0, 4, 4), true),
+                put(1, (40, 30, 4, 4), (0, 0, 4, 4), false),
+                // At the edges: off the top left, off the bottom right, scaled off
+                // the top right.
+                put(0, (-3, -3, 8, 8), (0, 0, 8, 8), false),
+                put(0, (44, 36, 8, 8), (0, 0, 8, 8), true),
+                put(0, (40, -6, 16, 16), (0, 0, 8, 8), false),
+                // Under a clip, which cuts it.
+                clip(14, 28, 6, 10),
+                put(0, (10, 26, 16, 16), (0, 0, 8, 8), true),
+                ExecItem::PopClip,
+                // Empty destination, empty source and wholly off the target draw
+                // nothing.
+                put(0, (5, 5, 0, 4), (0, 0, 8, 8), false),
+                put(0, (5, 5, 4, 4), (0, 0, 0, 4), true),
+                put(0, (100, 100, 8, 8), (0, 0, 8, 8), false),
+            ]],
+        },
+        Scene {
+            name: "image-frames",
+            width: 24,
+            height: 16,
+            lists: vec![
+                vec![
+                    gradient(1, 8, 8, 255),
+                    put(1, (0, 0, 8, 8), (0, 0, 8, 8), false),
+                ],
+                // An image from the list before, then it is freed, its id uploaded
+                // again with other pixels and drawn, beside another.
+                vec![
+                    put(1, (8, 0, 16, 8), (0, 0, 8, 8), true),
+                    ExecItem::FreeImage { id: 1 },
+                    gradient(1, 4, 4, 255),
+                    put(1, (0, 8, 8, 8), (0, 0, 4, 4), false),
+                    gradient(2, 2, 2, 200),
+                    put(2, (16, 8, 8, 8), (0, 0, 2, 2), true),
+                ],
+                // Nothing at all: a cleared target; the images stay.
+                vec![],
+                vec![put(2, (0, 0, 6, 6), (0, 0, 2, 2), false)],
+            ],
+        },
+        Scene {
+            name: "image-store",
+            width: 32,
+            height: 32,
+            lists: vec![
+                // Four 256 × 256 images (256 KiB each) fill the first 1 MiB store
+                // exactly; the fifth, after a free, forces a compaction in the middle
+                // of the list, between two draws.
+                vec![
+                    noise(0, 256, 256),
+                    noise(1, 256, 256),
+                    noise(2, 256, 256),
+                    noise(3, 256, 256),
+                    put(0, (0, 0, 16, 16), (0, 0, 255, 255), false),
+                    ExecItem::FreeImage { id: 1 },
+                    noise(4, 256, 256),
+                    put(2, (16, 0, 16, 16), (0, 0, 255, 255), false),
+                    put(3, (0, 16, 16, 16), (1, 1, 255, 255), true),
+                    put(4, (16, 16, 16, 16), (0, 0, 255, 255), true),
                 ],
             ],
         },

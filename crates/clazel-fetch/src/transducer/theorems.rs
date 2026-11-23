@@ -102,17 +102,17 @@ pub open spec fn connect_budget(s: State) -> int {
 }
 
 /// `begin` for the request after `redirects` redirects.
-pub proof fn lemma_begin_budget(url: Url, redirects: nat, tainted: bool)
+pub proof fn lemma_begin_budget(url: Url, redirects: nat, tainted: bool, req: crate::request::spec::Req)
     requires
         redirects <= 20,
     ensures
-        begin(url, redirects, tainted).0.redirects == redirects,
-        super::contract::count_sends(begin(url, redirects, tainted).1) + send_budget(begin(url, redirects, tainted).0) <= 21 - redirects,
-        super::contract::count_connects(begin(url, redirects, tainted).1) + connect_budget(begin(url, redirects, tainted).0) <= 21 - redirects,
-        begin(url, redirects, tainted).1.len() == 1,
-        !(begin(url, redirects, tainted).1[0] is Send),
+        begin(url, redirects, tainted, req).0.redirects == redirects,
+        super::contract::count_sends(begin(url, redirects, tainted, req).1) + send_budget(begin(url, redirects, tainted, req).0) <= 21 - redirects,
+        super::contract::count_connects(begin(url, redirects, tainted, req).1) + connect_budget(begin(url, redirects, tainted, req).0) <= 21 - redirects,
+        begin(url, redirects, tainted, req).1.len() == 1,
+        !(begin(url, redirects, tainted, req).1[0] is Send),
 {
-    let b = begin(url, redirects, tainted);
+    let b = begin(url, redirects, tainted, req);
     lemma_count_one(b.1[0]);
     assert(b.1 =~= seq![b.1[0]]);
 }
@@ -166,8 +166,8 @@ pub proof fn lemma_on_final_budget(urls: UrlFns, s: State, response: Response, o
                 lemma_fail_budget(s, Reason::RedirectLimit, open);
             } else {
                 let t = s.tainted || !clazel_origin::spec::same_site(urls.rules, (urls.origin)(s.url), (urls.origin)(location));
-                let next = begin(location, s.redirects + 1, t);
-                lemma_begin_budget(location, s.redirects + 1, t);
+                let next = begin(location, s.redirects + 1, t, next_req(urls, s, response.status_line.status, location));
+                lemma_begin_budget(location, s.redirects + 1, t, next_req(urls, s, response.status_line.status, location));
                 lemma_count_concat(close_if(open), next.1);
                 lemma_count_close_if(open);
             }
@@ -191,9 +191,9 @@ pub proof fn lemma_step_budget(http: HttpFns, urls: UrlFns, s: State, input: Inp
             assert(super::contract::count_connects(Seq::<Action>::empty()) == 0);
         },
         Phase::Connecting => match input {
-            Input::Connected => match crate::request::spec::request_bytes(s.url) {
+            Input::Connected => match crate::request::spec::request_bytes_req(s.url, s.req) {
                 Some(plain) => {
-                    lemma_count_one(Action::Send(wire_bytes(s.url, cookie_string(urls, s, jar, now), plain)));
+                    lemma_count_one(Action::Send(wire_bytes(s.url, s.req, cookie_string(urls, s, jar, now), plain)));
                 },
                 None => lemma_fail_budget(s, Reason::NotFetched, true),
             },
@@ -260,7 +260,7 @@ pub proof fn theorem_requests_bounded(http: HttpFns, urls: UrlFns, url: Url, giv
         super::contract::requests_bounded(http, urls, url, given),
 {
     let s0 = start(url);
-    lemma_begin_budget(url, 0, false);
+    lemma_begin_budget(url, 0, false, crate::request::spec::get_req());
     lemma_run_budget(http, urls, s0.0, given);
     lemma_budget_nonnegative(run(http, urls, s0.0, given).0);
     lemma_count_concat(s0.1, run(http, urls, s0.0, given).1);
@@ -354,7 +354,7 @@ pub proof fn lemma_on_final_no_sends(urls: UrlFns, s: State, response: Response,
                 lemma_no_sends_closing(open, seq![Action::Fail(Reason::RedirectLimit)]);
             } else {
                 let t = s.tainted || !clazel_origin::spec::same_site(urls.rules, (urls.origin)(s.url), (urls.origin)(location));
-                let next = begin(location, s.redirects + 1, t);
+                let next = begin(location, s.redirects + 1, t, next_req(urls, s, response.status_line.status, location));
                 assert(no_sends(next.1));
                 lemma_no_sends_closing(open, next.1);
             }
@@ -375,12 +375,12 @@ pub proof fn lemma_fail_no_sends(s: State, reason: Reason, open: bool)
 /// whose request is built. Every other step sends nothing.
 pub proof fn lemma_sends_only_on_connected(http: HttpFns, urls: UrlFns, s: State, input: Input, jar: Seq<Cookie>, now: int)
     ensures
-        !(s.phase is Connecting && input is Connected && crate::request::spec::request_bytes(s.url) is Some) ==> no_sends(step(http, urls, s, input, jar, now).1),
+        !(s.phase is Connecting && input is Connected && crate::request::spec::request_bytes_req(s.url, s.req) is Some) ==> no_sends(step(http, urls, s, input, jar, now).1),
 {
     match s.phase {
         Phase::Finished => {},
         Phase::Connecting => match input {
-            Input::Connected => match crate::request::spec::request_bytes(s.url) {
+            Input::Connected => match crate::request::spec::request_bytes_req(s.url, s.req) {
                 Some(_) => {},
                 None => lemma_fail_no_sends(s, Reason::NotFetched, true),
             },
@@ -513,41 +513,35 @@ pub proof fn theorem_split_invariant(http: HttpFns, urls: UrlFns, s: State, a: S
 // ===========================================================================
 
 /// The request with no cookie-string is the plain request.
-pub proof fn lemma_no_cookie_is_plain(url: Url)
+pub proof fn lemma_no_cookie_is_plain(url: Url, req: crate::request::spec::Req)
     ensures
-        crate::request::spec::request_bytes_cookie(url, seq![]) == crate::request::spec::request_bytes(url),
+        crate::request::spec::request_bytes_req_cookie(url, req, seq![]) == crate::request::spec::request_bytes_req(url, req),
 {
-    match crate::request::spec::request_for(url) {
-        Some(r) => {
-            assert(crate::request::spec::cookie_field_lines(seq![]) =~= Seq::<clazel_http::field::spec::FieldLine>::empty());
-            assert(r.fields + crate::request::spec::cookie_field_lines(seq![]) =~= r.fields);
-        },
-        None => {},
-    }
 }
 
-/// A request that was built is a wire request: valid, serialized, and
-/// differing from the cookie-less request only by the `Cookie` field.
-pub proof fn lemma_wire_request(url: Url, cookie: Seq<u8>, bytes: Seq<u8>)
+/// A request that was built is a wire request: valid, serialized (with its
+/// body), and differing from the cookie-less request only by the `Cookie`
+/// field.
+pub proof fn lemma_wire_request(url: Url, req: crate::request::spec::Req, cookie: Seq<u8>, bytes: Seq<u8>)
     requires
-        crate::request::spec::request_bytes_cookie(url, cookie) == Some(bytes),
+        crate::request::spec::request_bytes_req_cookie(url, req, cookie) == Some(bytes),
     ensures
-        super::contract::is_wire_request(url, cookie, bytes),
+        super::contract::is_wire_request(url, req, cookie, bytes),
 {
 }
 
 /// The bytes a request is sent as carry the cookie-string, or none.
-pub proof fn lemma_wire_bytes(url: Url, cookie: Seq<u8>, plain: Seq<u8>)
+pub proof fn lemma_wire_bytes(url: Url, req: crate::request::spec::Req, cookie: Seq<u8>, plain: Seq<u8>)
     requires
-        crate::request::spec::request_bytes(url) == Some(plain),
+        crate::request::spec::request_bytes_req(url, req) == Some(plain),
     ensures
-        super::contract::is_wire_request(url, super::contract::carried(url, cookie), wire_bytes(url, cookie, plain)),
+        super::contract::is_wire_request(url, req, super::contract::carried(url, req, cookie), wire_bytes(url, req, cookie, plain)),
 {
-    match crate::request::spec::request_bytes_cookie(url, cookie) {
-        Some(bytes) => lemma_wire_request(url, cookie, bytes),
+    match crate::request::spec::request_bytes_req_cookie(url, req, cookie) {
+        Some(bytes) => lemma_wire_request(url, req, cookie, bytes),
         None => {
-            lemma_no_cookie_is_plain(url);
-            lemma_wire_request(url, seq![], plain);
+            lemma_no_cookie_is_plain(url, req);
+            lemma_wire_request(url, req, seq![], plain);
         },
     }
 }
@@ -563,14 +557,14 @@ pub proof fn theorem_wire_cookies(http: HttpFns, urls: UrlFns, s: State, input: 
     theorem_sends_are_requests(http, urls, s, input, jar, now);
     let cs = cookie_string(urls, s, jar, now);
     assert forall|k: int| 0 <= k < step(http, urls, s, input, jar, now).1.len() implies match #[trigger] step(http, urls, s, input, jar, now).1[k] {
-        Action::Send(bytes) => super::contract::is_wire_request(s.url, super::contract::carried(s.url, cs), bytes),
+        Action::Send(bytes) => super::contract::is_wire_request(s.url, s.req, super::contract::carried(s.url, s.req, cs), bytes),
         _ => true,
     } by {
         match step(http, urls, s, input, jar, now).1[k] {
             Action::Send(bytes) => {
-                let plain = crate::request::spec::request_bytes(s.url)->Some_0;
-                assert(bytes == wire_bytes(s.url, cs, plain));
-                lemma_wire_bytes(s.url, cs, plain);
+                let plain = crate::request::spec::request_bytes_req(s.url, s.req)->Some_0;
+                assert(bytes == wire_bytes(s.url, s.req, cs, plain));
+                lemma_wire_bytes(s.url, s.req, cs, plain);
             },
             _ => {},
         }
@@ -586,7 +580,7 @@ pub proof fn theorem_jar_frame(http: HttpFns, urls: UrlFns, s: State, input: Inp
     match s.phase {
         Phase::Finished => {},
         Phase::Connecting => match input {
-            Input::Connected => match crate::request::spec::request_bytes(s.url) {
+            Input::Connected => match crate::request::spec::request_bytes_req(s.url, s.req) {
                 Some(_) => {},
                 None => {
                     assert(seq![retrieval_op(urls, s, now)] + Seq::<JarOp>::empty() =~= seq![retrieval_op(urls, s, now)]);
@@ -672,7 +666,7 @@ pub proof fn theorem_jar_only_in_sends(http: HttpFns, urls: UrlFns, s: State, in
 {
     let a = step(http, urls, s, input, ja, now);
     let b = step(http, urls, s, input, jb, now);
-    if s.phase is Connecting && input is Connected && crate::request::spec::request_bytes(s.url) is Some {
+    if s.phase is Connecting && input is Connected && crate::request::spec::request_bytes_req(s.url, s.req) is Some {
         assert(a.1.len() == 1 && b.1.len() == 1);
         assert(a.1[0] is Send && b.1[0] is Send);
     } else {
@@ -731,9 +725,9 @@ pub proof fn lemma_fail_secure(next: State, s: State, reason: Reason, open: bool
 
 /// For a URL this client sends a request for (`http:` or `https:`), TLS
 /// is used exactly when the cookie functions see the request as secure.
-pub proof fn lemma_tls_is_secure(url: Url)
+pub proof fn lemma_tls_is_secure(url: Url, req: crate::request::spec::Req)
     requires
-        crate::request::spec::request_bytes(url) is Some,
+        crate::request::spec::request_bytes_req(url, req) is Some,
     ensures
         crate::request::spec::uses_tls(url) == clazel_cookie::storage::spec::url_is_secure(request_url(url)),
 {
@@ -756,14 +750,14 @@ pub proof fn lemma_tls_is_secure(url: Url)
 
 /// `begin` asks for the connection of the request it starts, with TLS
 /// exactly when that request is secure.
-pub proof fn lemma_begin_secure(url: Url, redirects: nat, tainted: bool)
+pub proof fn lemma_begin_secure(url: Url, redirects: nat, tainted: bool, req: crate::request::spec::Req)
     ensures
-        super::contract::connects_secure(begin(url, redirects, tainted).0, begin(url, redirects, tainted).1),
+        super::contract::connects_secure(begin(url, redirects, tainted, req).0, begin(url, redirects, tainted, req).1),
 {
-    let b = begin(url, redirects, tainted);
-    match (crate::request::spec::connect_to(url), crate::request::spec::request_bytes(url)) {
+    let b = begin(url, redirects, tainted, req);
+    match (crate::request::spec::connect_to(url), crate::request::spec::request_bytes_req(url, req)) {
         (Some((host, port)), Some(_)) => {
-            lemma_tls_is_secure(url);
+            lemma_tls_is_secure(url, req);
             assert(b.1 == seq![Action::Connect { host: host, port: port, tls: crate::request::spec::uses_tls(url) }]);
             assert(b.0.url == url && b.0.phase is Connecting);
             assert forall|k: int| 0 <= k < b.1.len() implies match #[trigger] b.1[k] {
@@ -829,8 +823,8 @@ pub proof fn lemma_on_final_secure(urls: UrlFns, s: State, response: Response, o
                 lemma_fail_secure(r.0, s, Reason::RedirectLimit, open);
             } else {
                 let tainted = s.tainted || !clazel_origin::spec::same_site(urls.rules, (urls.origin)(s.url), (urls.origin)(location));
-                lemma_begin_secure(location, s.redirects + 1, tainted);
-                lemma_closing_secure(begin(location, s.redirects + 1, tainted).0, open, begin(location, s.redirects + 1, tainted).1);
+                lemma_begin_secure(location, s.redirects + 1, tainted, next_req(urls, s, response.status_line.status, location));
+                lemma_closing_secure(begin(location, s.redirects + 1, tainted, next_req(urls, s, response.status_line.status, location)).0, open, begin(location, s.redirects + 1, tainted, next_req(urls, s, response.status_line.status, location)).1);
             }
         },
     }
@@ -841,14 +835,14 @@ pub proof fn theorem_tls_when_secure(http: HttpFns, urls: UrlFns, url: Url, s: S
     ensures
         super::contract::tls_when_secure(http, urls, url, s, input, jar, now),
 {
-    lemma_begin_secure(url, 0, false);
+    lemma_begin_secure(url, 0, false, crate::request::spec::get_req());
     let r = step(http, urls, s, input, jar, now);
     match s.phase {
         Phase::Finished => lemma_no_connects_secure(r.0, r.1),
         Phase::Connecting => match input {
-            Input::Connected => match crate::request::spec::request_bytes(s.url) {
+            Input::Connected => match crate::request::spec::request_bytes_req(s.url, s.req) {
                 Some(plain) => {
-                    assert(r.1 == seq![Action::Send(wire_bytes(s.url, cookie_string(urls, s, jar, now), plain))]);
+                    assert(r.1 == seq![Action::Send(wire_bytes(s.url, s.req, cookie_string(urls, s, jar, now), plain))]);
                     assert(no_connects(r.1));
                     lemma_no_connects_secure(r.0, r.1);
                 },
@@ -872,6 +866,87 @@ pub proof fn theorem_tls_when_secure(http: HttpFns, urls: UrlFns, url: Url, s: S
             },
             Input::Error => lemma_fail_secure(r.0, s, Reason::Network, true),
         },
+    }
+}
+
+// ===========================================================================
+// Item 6.16: requests with a body.
+// ===========================================================================
+
+/// `on_final` keeps the request unless it follows a redirect, and then
+/// gives [`super::contract::redirected_req`].
+pub proof fn lemma_on_final_req(urls: UrlFns, s: State, response: Response, open: bool, now: int)
+    ensures
+        on_final(urls, s, response, open, now).0.redirects == s.redirects ==> on_final(urls, s, response, open, now).0.req == s.req,
+        on_final(urls, s, response, open, now).0.redirects == s.redirects + 1 ==> super::contract::redirected_req(
+            response.status_line.status,
+            s.req,
+            on_final(urls, s, response, open, now).0.req,
+        ),
+{
+}
+
+/// **The method and body after a redirect** (`theorem_redirect_method`):
+/// HTTP-redirect fetch step 12 and RFC 9110 §15.4. A step that follows a
+/// redirect gives the request [`super::contract::redirected_req`] of the
+/// final response's status (so, by `lemma_redirect_method_rule`: a 301 or
+/// 302 turns a `POST` into a `GET` with no body, a 303 does so to any
+/// method but `GET` and `HEAD`, a 307 or 308 keeps method and body, which
+/// the next `Send` writes again), the initiator never changes, and any
+/// other step leaves the request as it was.
+pub proof fn theorem_redirect_method(http: HttpFns, urls: UrlFns, s: State, input: Input, jar: Seq<Cookie>, now: int)
+    ensures
+        super::contract::redirect_method(http, urls, s, input, jar, now),
+{
+    match s.phase {
+        Phase::Finished => {},
+        Phase::Connecting => {},
+        Phase::Reading { received } => match input {
+            Input::Bytes(bytes) => match settle(http, received + bytes) {
+                Settled::Final(response) => lemma_on_final_req(urls, s, response, true, now),
+                _ => {},
+            },
+            Input::Closed => match settle_at_close(http, received) {
+                Settled::Final(response) => lemma_on_final_req(urls, s, response, false, now),
+                _ => {},
+            },
+            _ => {},
+        },
+    }
+}
+
+/// **`SameSite=Lax` and `Strict` cookies are not sent on a cross-site
+/// `POST`** (`theorem_post_cookies`), at the level of the request context a
+/// step reads ([`super::contract::post_cookies`]); with `theorem_wire_cookies`
+/// (the `Cookie` field is the retrieval's serialization for that context).
+pub proof fn theorem_post_cookies(urls: UrlFns, s: State)
+    ensures
+        super::contract::post_cookies(urls, s),
+{
+    crate::request::lemmas::lemma_post_is_unsafe(s.req);
+    let ctx = request_context(urls, s);
+    if s.req.method == crate::request::spec::lit_post() {
+        assert(!crate::request::spec::method_is_safe(s.req));
+        assert forall|c: Cookie, h: clazel_cookie::matching::spec::CanonicalHost|
+            #[trigger] clazel_cookie::storage::spec::cookie_is_retrieved(urls.rules, (urls.request_url)(s.url), ctx, h, c)
+                && !clazel_cookie::storage::spec::is_same_site_request(urls.rules, ctx) implies c.same_site_flag == clazel_cookie::set_cookie::spec::SameSite::None by {
+            assert(match ctx {
+                RequestContext::Http(request) => !request.method_is_safe,
+                _ => false,
+            });
+        }
+    }
+}
+
+/// **A request that is sent is a request this client builds**
+/// ([`super::contract::req_valid_on_send`]).
+pub proof fn theorem_sends_have_valid_req(http: HttpFns, urls: UrlFns, s: State, input: Input, jar: Seq<Cookie>, now: int)
+    ensures
+        super::contract::req_valid_on_send(http, urls, s, input, jar, now),
+{
+    if exists|k: int| 0 <= k < step(http, urls, s, input, jar, now).1.len() && step(http, urls, s, input, jar, now).1[k] is Send {
+        assert(s.phase is Connecting && input is Connected);
+        assert(crate::request::spec::request_bytes_req(s.url, s.req) is Some);
     }
 }
 

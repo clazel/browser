@@ -300,8 +300,10 @@ pub open spec fn wire_cookies_statement(rules: Seq<clazel_psl::spec::Rule>, urls
                     Output::Send { conn: x, bytes } => x == conn && (exists|a: int| 0 <= a < actions.len() && actions[a] == clazel_fetch::transducer::spec::Action::Send(bytes))
                         && clazel_fetch::transducer::contract::is_wire_request(
                         nav.fetch.url,
+                        nav.fetch.req,
                         clazel_fetch::transducer::contract::carried(
                             nav.fetch.url,
+                            nav.fetch.req,
                             clazel_cookie::storage::spec::retrieve_cookie_string(
                                 rules,
                                 s.jar,
@@ -354,6 +356,7 @@ pub open spec fn event_tab(s: State, e: Event) -> Option<nat> {
             None => None,
         },
         Event::NavigateTab { tab, .. } => Some(tab),
+        Event::SubmitTab { tab, .. } => Some(tab),
         Event::OpenTab { script, .. } => if script is None {
             Some(s.next_id)
         } else {
@@ -420,8 +423,10 @@ pub open spec fn navigation_event(e: Event) -> bool {
     match e {
         Event::OpenTab { .. } => true,
         Event::NavigateTab { .. } => true,
+        Event::SubmitTab { .. } => true,
         Event::Net { .. } => true,
-        Event::FromRenderer { bytes, .. } => decode_renderer_frame(bytes) matches Some(clazel_ipc::message::spec::Message::Navigate { .. }),
+        Event::FromRenderer { bytes, .. } => decode_renderer_frame(bytes) matches Some(clazel_ipc::message::spec::Message::Navigate { .. })
+            || decode_renderer_frame(bytes) matches Some(clazel_ipc::message::spec::Message::Submit { .. }),
         _ => false,
     }
 }
@@ -812,8 +817,10 @@ pub open spec fn subfetch_credentials_statement(rules: Seq<clazel_psl::spec::Rul
                     &&& out[k]->SubSend_renderer == renderer && out[k]->SubSend_serial == serial && out[k]->SubSend_hop == hop
                     &&& clazel_fetch::transducer::contract::is_wire_request(
                         f.fetch.url,
+                        f.fetch.req,
                         clazel_fetch::transducer::contract::carried(
                             f.fetch.url,
+                            f.fetch.req,
                             clazel_cookie::storage::spec::retrieve_cookie_string(
                                 rules,
                                 jar,
@@ -1065,6 +1072,167 @@ pub open spec fn paint_after_restart_statement(rules: Seq<clazel_psl::spec::Rule
             0 <= k < step(rules, urls, fetch, s, Event::FromGpu { id, bytes }).1.len() ==> !(#[trigger] step(rules, urls, fetch, s, Event::FromGpu { id, bytes }).1[k] is Paint),
         None => true,
     }
+}
+
+
+// ---------------------------------------------------------------------
+// Item 6.16: navigations with a body.
+//
+// Committed before the proofs (CLAUDE.md rule 3). The proofs are in
+// `body_theorems.rs`.
+// ---------------------------------------------------------------------
+
+/// The body of the request of renderer `r`'s navigation in flight: none if it
+/// is not navigating or the request has none.
+pub open spec fn nav_body(r: Renderer) -> Option<clazel_fetch::request::spec::Payload> {
+    match r.pending {
+        Some(n) => n.fetch.req.body,
+        None => None,
+    }
+}
+
+/// The body that event `e`, in state `s`, hands a tab: the body of a `Submit`
+/// the sender may send whose request the kernel builds
+/// ([`submit_request`]), with the sender's tab; nothing for any other event.
+/// (It does not ask whether the URL resolves or is locked: it lists every
+/// body a renderer gave, and a theorem that a body came from here is the
+/// stronger for it.)
+pub open spec fn event_submitted(s: State, e: Event) -> Option<(nat, clazel_fetch::request::spec::Payload)> {
+    match e {
+        Event::FromRenderer { id, bytes } => match find_by_id(s.renderers, id, 0) {
+            None => None,
+            Some(i) => match accepted_message(s.renderers[i], bytes) {
+                Some(clazel_ipc::message::spec::Message::Submit { method, content_type, body, .. }) => match submit_request(s.renderers[i], method, content_type, body) {
+                    Some(req) => match req.body {
+                        Some(p) => Some((s.renderers[i].tab, p)),
+                        None => None,
+                    },
+                    None => None,
+                },
+                _ => None,
+            },
+        },
+        _ => None,
+    }
+}
+
+/// Some event of the trace `t`, run from `s`, hands tab `tab` the body `p`
+/// ([`event_submitted`]).
+pub open spec fn submitted_in(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, t: Seq<Event>, tab: nat, p: clazel_fetch::request::spec::Payload) -> bool
+    decreases t.len(),
+{
+    if t.len() == 0 {
+        false
+    } else {
+        event_submitted(s, t[0]) == Some((tab, p)) || submitted_in(rules, urls, fetch, step(rules, urls, fetch, s, t[0]).0, t.drop_first(), tab, p)
+    }
+}
+
+/// The trace has no `SubmitTab`: the host shell cannot produce one (it has
+/// no record for it), it exists to say what a `Submit` of another domain
+/// leaves in a purge.
+pub open spec fn no_submit_tab(t: Seq<Event>) -> bool {
+    forall|k: int| 0 <= k < t.len() ==> !((#[trigger] t[k]) is SubmitTab)
+}
+
+/// `bytes` ends with `tail`: it is some octets, then `tail`.
+pub open spec fn ends_with(bytes: Seq<u8>, tail: Seq<u8>) -> bool {
+    tail.len() <= bytes.len() && bytes.subrange(bytes.len() - tail.len(), bytes.len() as int) == tail
+}
+
+/// `theorem_body_from_requester` (item 6.16): in any state a run of the
+/// kernel from the initial state reaches, by a trace with no `SubmitTab`,
+///
+/// - every body of a navigation in flight is the body of a `Submit` that
+///   the renderer of that tab sent (a frame the kernel accepted from a
+///   renderer whose tab it is, at some step of the trace): nothing else
+///   makes a request body, not a `NavigateTab`, an `OpenTab`, another tab's
+///   `Submit`, a redirect (which keeps or drops the body);
+/// - and, for a `Net` event, every octet of a `Send` after the head is the
+///   body of the request of the navigation the connection belongs to, so
+///   (by the first clause, with that navigation's tab) a body octet on the
+///   wire is from the `Submit` of the tab whose connection carries it.
+///
+/// (The second clause is item 3.6's `is_wire_request`
+/// ([`clazel_fetch::transducer::contract::is_wire_request`]): the
+/// serialization of a valid request, then `body_bytes` of the request.)
+pub open spec fn body_from_requester_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, t: Seq<Event>, conn: nat, input: NetInput) -> bool {
+    let s = run_state(rules, urls, fetch, init_state(), t);
+    &&& forall|j: int|
+        0 <= j < s.renderers.len() && nav_body(#[trigger] s.renderers[j]) is Some ==> submitted_in(rules, urls, fetch, init_state(), t, s.renderers[j].tab, nav_body(s.renderers[j])->Some_0)
+    &&& match net_target(s, conn) {
+        None => true,
+        Some((c, _, nav)) => {
+            let out = step(rules, urls, fetch, s, Event::Net { conn, input }).1;
+            &&& nav.fetch.req.body is Some ==> submitted_in(rules, urls, fetch, init_state(), t, c.tab, nav.fetch.req.body->Some_0)
+            &&& forall|k: int|
+                0 <= k < out.len() ==> match #[trigger] out[k] {
+                    Output::Send { bytes, .. } => ends_with(bytes, clazel_fetch::request::spec::body_bytes(nav.fetch.req)),
+                    _ => true,
+                }
+        },
+    }
+}
+
+/// `theorem_body_sent_once` (item 6.16), in the steps the kernel takes:
+///
+/// - an event that starts a navigation (a `NavigateTab`, a `SubmitTab`, a
+///   renderer's frame, which is a `Navigate`, a `Submit` or another message)
+///   gives no `Send`: a body is not sent when the navigation starts;
+/// - a `Net` event on a connection that is not open, or whose tab's renderer
+///   is gone or not navigating (the navigation was replaced, ended or
+///   cancelled, or the renderer exited), changes nothing and gives nothing;
+/// - a `Net` event gives a `Send` only on `Connected` for a fetch that is
+///   connecting, and then that `Send` is its only output: so the request
+///   (the body with it) is written once for each connection the transducer
+///   asks for, and item 3.6's `theorem_requests_bounded` (at most one
+///   `Connect` per hop, at most 21 hops) bounds the sends of a navigation:
+///   one, and one more for each 307 or 308 it follows
+///   (`theorem_redirect_method`).
+///
+/// (That the connections of a replaced, ended or cancelled navigation are
+/// gone from the table is `theorem_connection_ownership` and `conns_wf`'s
+/// backing of every connection by a navigating renderer; it is not restated.)
+pub open spec fn body_sent_once_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> bool {
+    let (s1, out) = step(rules, urls, fetch, s, e);
+    &&& (e is NavigateTab || e is SubmitTab || e is FromRenderer) ==> forall|k: int| 0 <= k < out.len() ==> !((#[trigger] out[k]) is Send)
+    &&& (e is Net ==> match net_target(s, e->Net_conn) {
+        None => s1 == s && out == Seq::<Output>::empty(),
+        Some((_, _, nav)) => forall|k: int|
+            0 <= k < out.len() && (#[trigger] out[k]) is Send ==> nav.fetch.phase is Connecting && e->Net_input is Connected && out.len() == 1,
+    })
+}
+
+/// `theorem_redirect_method` (item 6.16), at the kernel: the transducer step
+/// the kernel takes for a `Net` event ([`net_transducer_step`]) gives the
+/// request RFC 9110 §15.4 and HTTP-redirect fetch step 12 say
+/// ([`clazel_fetch::transducer::contract::redirect_method`]): a `Net` event
+/// that follows a redirect gives a request whose method and body are
+/// `rewrite_for_redirect`'s of the response's status (301 and 302: a `POST`
+/// becomes a `GET` with no body; 303: every method but `GET` and `HEAD`
+/// does; 307 and 308 keep both), and any other `Net` event leaves the request
+/// as it was.
+pub open spec fn redirect_method_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, conn: nat, input: NetInput) -> bool {
+    match net_target(s, conn) {
+        None => true,
+        Some((_, _, nav)) => clazel_fetch::transducer::contract::redirect_method(fetch.http, fetch.urls, nav.fetch, input, s.jar, s.now),
+    }
+}
+
+/// `theorem_post_cookies` (item 6.16), at the kernel: for the fetch a `Net`
+/// event steps, a cookie that §5.8.3 step 3 would return for a request that
+/// is not same-site (§5.2), of a `POST`, has `SameSite=None`, and a request
+/// whose initiator's site is not the target's is not same-site
+/// ([`clazel_fetch::transducer::contract::post_cookies`]); and every `Send` is
+/// [`wire_cookies_statement`]'s: its `Cookie` field is the serialization of
+/// that retrieval. So a `SameSite=Lax` or `Strict` cookie is not sent on a
+/// cross-site `POST`.
+pub open spec fn post_cookies_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, conn: nat, input: NetInput) -> bool {
+    &&& match net_target(s, conn) {
+        None => true,
+        Some((_, _, nav)) => clazel_fetch::transducer::contract::post_cookies(fetch.urls, nav.fetch),
+    }
+    &&& wire_cookies_statement(rules, urls, fetch, s, conn, input)
 }
 
 } // verus!

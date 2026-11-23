@@ -27,6 +27,10 @@ use std::path::Path;
 
 use crate::{Errno, RandomError};
 
+/// Executable code regions: a section with a writable view in the writer
+/// and a read-execute view in the renderer (jit.md item J.7).
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+pub mod code;
 pub mod d3d12;
 pub mod window;
 

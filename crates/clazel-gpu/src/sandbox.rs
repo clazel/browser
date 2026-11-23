@@ -218,6 +218,7 @@ pub fn warm_up_frame() -> (crate::backend::Frame, Vec<u8>) {
             },
         ],
         bytes: vec![255, 0, 0, 255],
+        image_draws: Vec::new(),
     };
     const RED: [u8; 4] = [255, 0, 0, 255];
     const BLUE: [u8; 4] = [0, 0, 255, 255];

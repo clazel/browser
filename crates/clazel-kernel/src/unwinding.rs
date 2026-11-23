@@ -316,19 +316,19 @@ pub proof fn lemma_open_tab_fetch_consistency(
         s1b.renderers[j].tab == id,
     ensures
         crate::noninterference::renderer_outs(
-            seq![Output::Spawn { id, policy: Policy::Gpu }, Output::Spawn { id, policy: Policy::Renderer }] + begin_navigation(rules, urls, fetch, s1b, id, url).1,
+            seq![Output::Spawn { id, policy: Policy::Gpu }, Output::Spawn { id, policy: Policy::Renderer }] + begin_navigation(rules, urls, fetch, s1b, id, url, clazel_fetch::request::spec::get_req()).1,
         ) == crate::noninterference::renderer_outs(
-            seq![Output::Spawn { id, policy: Policy::Gpu }, Output::Spawn { id, policy: Policy::Renderer }] + begin_navigation(rules, urls, fetch, s2b, id, url).1,
+            seq![Output::Spawn { id, policy: Policy::Gpu }, Output::Spawn { id, policy: Policy::Renderer }] + begin_navigation(rules, urls, fetch, s2b, id, url, clazel_fetch::request::spec::get_req()).1,
         ),
-        crate::noninterference::rel(rules, urls, d, begin_navigation(rules, urls, fetch, s1b, id, url).0, begin_navigation(rules, urls, fetch, s2b, id, url).0),
+        crate::noninterference::rel(rules, urls, d, begin_navigation(rules, urls, fetch, s1b, id, url, clazel_fetch::request::spec::get_req()).0, begin_navigation(rules, urls, fetch, s2b, id, url, clazel_fetch::request::spec::get_req()).0),
 {
     assert(find_by_tab(s1b.renderers, id, 0) is Some) by {
         crate::invariant::lemma_find_by_tab(s1b.renderers, id, 0);
     }
-    crate::net_rel::lemma_begin_consistency(rules, urls, fetch, d, s1b, s2b, id, url);
+    crate::net_rel::lemma_begin_consistency(rules, urls, fetch, d, s1b, s2b, id, url, clazel_fetch::request::spec::get_req());
     let spawn = seq![Output::Spawn { id, policy: Policy::Gpu }, Output::Spawn { id, policy: Policy::Renderer }];
-    crate::net_rel::lemma_renderer_outs_concat(spawn, begin_navigation(rules, urls, fetch, s1b, id, url).1);
-    crate::net_rel::lemma_renderer_outs_concat(spawn, begin_navigation(rules, urls, fetch, s2b, id, url).1);
+    crate::net_rel::lemma_renderer_outs_concat(spawn, begin_navigation(rules, urls, fetch, s1b, id, url, clazel_fetch::request::spec::get_req()).1);
+    crate::net_rel::lemma_renderer_outs_concat(spawn, begin_navigation(rules, urls, fetch, s2b, id, url, clazel_fetch::request::spec::get_req()).1);
 }
 
 /// `RendererExited` from related states.

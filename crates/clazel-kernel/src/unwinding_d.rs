@@ -225,14 +225,74 @@ pub proof fn lemma_d_navigate(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, 
                     assert(s1.renderers.contains(r));
                     crate::unwind_base::lemma_found_contained(s1, r.tab);
                     crate::unwind_base::lemma_find_contained(urls, s1, r);
-                    crate::net_rel::lemma_begin_consistency(rules, urls, fetch, d, s1, s2, r.tab, resolved);
+                    crate::net_rel::lemma_begin_consistency(rules, urls, fetch, d, s1, s2, r.tab, resolved, clazel_fetch::request::spec::get_req());
                 }
             },
         },
     }
 }
 
+/// A `Submit` (item 6.16) of a renderer of `d`: the same outputs, and related
+/// states. (As [`lemma_d_navigate`]: the same request starts the same
+/// navigation in both runs.)
+pub proof fn lemma_d_submit(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns,
+    fetch: FetchFns,
+    d: crate::domain::Domain,
+    s1: State,
+    s2: State,
+    id: nat,
+    bytes: Seq<u8>,
+    url: Seq<u8>,
+    method: Seq<u8>,
+    content_type: Seq<u8>,
+    body: Seq<u8>,
+)
+    requires
+        crate::noninterference::rel(rules, urls, d, s1, s2),
+        crate::domain::event_domain(rules, s1, Event::FromRenderer { id, bytes }) == Some(d),
+        accepted_message(s1.renderers[find_by_id(s1.renderers, id, 0)->Some_0], bytes) == Some(clazel_ipc::message::spec::Message::Submit { url, method, content_type, body }),
+    ensures
+        crate::noninterference::renderer_outs(step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).1) == crate::noninterference::renderer_outs(step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).1),
+        crate::noninterference::rel(rules, urls, d, step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).0, step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).0),
+{
+    let e = Event::FromRenderer { id, bytes };
+    lemma_d_sender(rules, urls, d, s1, s2, id, bytes);
+    let i1 = find_by_id(s1.renderers, id, 0)->Some_0;
+    let r = s1.renderers[i1];
+    let (s1b, o1) = step(rules, urls, fetch, s1, e);
+    let (s2b, o2) = step(rules, urls, fetch, s2, e);
+    match submit_request(r, method, content_type, body) {
+        None => {
+            assert(s1b == s1 && s2b == s2);
+        },
+        Some(req) => match clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+            None => {
+                assert(s1b == s1 && s2b == s2);
+            },
+            Some(relative) => match (urls.resolve)(r.url, relative) {
+                None => {
+                    assert(s1b == s1 && s2b == s2);
+                },
+                Some(resolved) => {
+                    if lock_of_url(urls, resolved, s1.next_id) is None {
+                        assert(s1b == s1 && s2b == s2);
+                    } else {
+                        assert(s1.renderers.contains(r));
+                        crate::unwind_base::lemma_found_contained(s1, r.tab);
+                        crate::unwind_base::lemma_find_contained(urls, s1, r);
+                        crate::net_rel::lemma_begin_consistency(rules, urls, fetch, d, s1, s2, r.tab, resolved, req);
+                    }
+                },
+            },
+        },
+    }
+}
+
 /// A frame that does not decode kills the sender: for a renderer of `d`.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(60)]
 pub proof fn lemma_d_kill(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s1: State, s2: State, id: nat, bytes: Seq<u8>)
     requires
         crate::noninterference::rel(rules, urls, d, s1, s2),
@@ -340,6 +400,7 @@ pub proof fn lemma_d_event(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fet
             clazel_ipc::message::spec::Message::CookieGet => lemma_d_cookie_get(rules, urls, fetch, d, s1, s2, id, bytes),
             clazel_ipc::message::spec::Message::CookieSet { cookie_string } => lemma_d_cookie_set(rules, urls, fetch, d, s1, s2, id, bytes, cookie_string),
             clazel_ipc::message::spec::Message::Navigate { url } => lemma_d_navigate(rules, urls, fetch, d, s1, s2, id, bytes, url),
+            clazel_ipc::message::spec::Message::Submit { url, method, content_type, body } => lemma_d_submit(rules, urls, fetch, d, s1, s2, id, bytes, url, method, content_type, body),
             _ => {
                 if crate::statements::is_storage_message(m) {
                     lemma_d_storage(rules, urls, fetch, d, s1, s2, id, bytes, m);

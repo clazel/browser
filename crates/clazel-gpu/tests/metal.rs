@@ -169,6 +169,13 @@ fn every_scene_on_metal() -> Result<(), String> {
                 ));
             }
             let path = stored(scene.name, n);
+            // Item 6.12's image scenes have no pixels drawn by Metal stored yet (the
+            // session that wrote them had no Mac): they are compared with the reference
+            // only, until `CLAZEL_GPU_BLESS=1` writes them.
+            if !bless && scene.name.starts_with("image") && !path.exists() {
+                log("clazel-gpu: skipped: no stored pixels for the image scenes");
+                continue;
+            }
             if bless {
                 std::fs::write(&path, &got).map_err(|e| format!("{}: {e}", path.display()))?;
             } else {

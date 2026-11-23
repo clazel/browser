@@ -8,7 +8,8 @@ use vstd::prelude::*;
 use super::contract::{HttpFnsExec, UrlFnsExec};
 use super::types::{ActionBuf, InputBuf, JarOpBuf, LocationBuf, PhaseBuf, SettledBuf, StateBuf};
 use crate::request::build::{
-    connect_to, is_interim, request_bytes, request_bytes_cookie, uses_tls,
+    ReqBuf, clone_opt_origin, connect_to, get_req_buf, is_interim, method_is_safe,
+    request_bytes_req, request_bytes_req_cookie, rewrite_for_redirect, uses_tls,
 };
 use clazel_cookie::storage::exec::{
     CookieRecord, HttpRequestRecord, RequestContextRecord, clone_cookie,
@@ -18,28 +19,28 @@ use clazel_http::field::section::field_values_named;
 use clazel_http::field::string::copy;
 use clazel_http::message::body::ResponseParser;
 use clazel_http::message::types::{ParseBuf, ResponseBuf};
-use clazel_origin::exec::{ParsedOrigin, same_site_exec};
+use clazel_origin::exec::{ParsedOrigin, same_origin_exec, same_site_exec};
 use clazel_url::url::record::{ParsedUrl, clone_opt_str, clone_url, eq_str};
 
 verus! {
 
 /// `begin`: ask for the connection for `url`, or fail.
-fn begin_exec(url: ParsedUrl, redirects: u8, tainted: bool) -> (out: (StateBuf, Vec<ActionBuf>))
+fn begin_exec(url: ParsedUrl, redirects: u8, tainted: bool, req: ReqBuf) -> (out: (StateBuf, Vec<ActionBuf>))
     ensures
-        (out.0@, super::types::actions_view(out.1@)) == begin(url@, redirects as nat, tainted),
+        (out.0@, super::types::actions_view(out.1@)) == begin(url@, redirects as nat, tainted, req@),
         !(out.0.phase is Reading),
 {
-    match (connect_to(&url), request_bytes(&url)) {
+    match (connect_to(&url), request_bytes_req(&url, &req)) {
         (Some((host, port)), Some(_)) => {
             let tls = uses_tls(&url);
             let a = vec![ActionBuf::Connect { host, port, tls }];
-            assert(super::types::actions_view(a@) =~= begin(url@, redirects as nat, tainted).1);
-            (StateBuf { url, redirects, phase: PhaseBuf::Connecting, tainted }, a)
+            assert(super::types::actions_view(a@) =~= begin(url@, redirects as nat, tainted, req@).1);
+            (StateBuf { url, redirects, phase: PhaseBuf::Connecting, req, tainted }, a)
         },
         _ => {
             let a = vec![ActionBuf::Fail(Reason::NotFetched)];
-            assert(super::types::actions_view(a@) =~= begin(url@, redirects as nat, tainted).1);
-            (StateBuf { url, redirects, phase: PhaseBuf::Finished, tainted }, a)
+            assert(super::types::actions_view(a@) =~= begin(url@, redirects as nat, tainted, req@).1);
+            (StateBuf { url, redirects, phase: PhaseBuf::Finished, req, tainted }, a)
         },
     }
 }
@@ -51,7 +52,18 @@ pub fn start(url: &ParsedUrl) -> (out: (StateBuf, Vec<ActionBuf>))
         super::contract::step_requires(out.0@),
         !(out.0.phase is Reading),
 {
-    begin_exec(clone_url(url), 0, false)
+    begin_exec(clone_url(url), 0, false, get_req_buf())
+}
+
+/// `start_req`: the first state and actions of a fetch of `url` as the
+/// request `req` (item 6.16).
+pub fn start_req(url: &ParsedUrl, req: ReqBuf) -> (out: (StateBuf, Vec<ActionBuf>))
+    ensures
+        (out.0@, super::types::actions_view(out.1@)) == super::spec::start_req(url@, req@),
+        super::contract::step_requires(out.0@),
+        !(out.0.phase is Reading),
+{
+    begin_exec(clone_url(url), 0, false, req)
 }
 
 /// `close_if(open)` followed by `rest`.
@@ -139,10 +151,11 @@ fn location_url_exec<U: UrlFnsExec>(u: &U, response: &ResponseBuf, request_url: 
 }
 
 /// `request_context` (RFC 6265bis §5.2) for a state whose URL is `url`.
-fn request_context_exec<U: UrlFnsExec>(u: &U, url: &ParsedUrl, tainted: bool, Ghost(s): Ghost<State>) -> (r: RequestContextRecord)
+fn request_context_exec<U: UrlFnsExec>(u: &U, url: &ParsedUrl, tainted: bool, req: &ReqBuf, Ghost(s): Ghost<State>) -> (r: RequestContextRecord)
     requires
         s.url == url@,
         s.tainted == tainted,
+        s.req == req@,
     ensures
         r@ == request_context(u.urls(), s),
 {
@@ -150,7 +163,7 @@ fn request_context_exec<U: UrlFnsExec>(u: &U, url: &ParsedUrl, tainted: bool, Gh
     let site_for_cookies = if tainted {
         Some(ParsedOrigin::Opaque(0))
     } else {
-        None
+        clone_opt_origin(&req.initiator)
     };
     RequestContextRecord::Http(HttpRequestRecord {
         url_origin,
@@ -158,28 +171,30 @@ fn request_context_exec<U: UrlFnsExec>(u: &U, url: &ParsedUrl, tainted: bool, Gh
         is_reload_navigation: false,
         reloaded_document_was_same_site: false,
         navigates_top_level_traversable: true,
-        method_is_safe: true,
+        method_is_safe: method_is_safe(req),
         target_is_active_or_top_level: true,
     })
 }
 
 /// `retrieval_op` for a state whose URL is `url`.
-fn retrieval_op_exec<U: UrlFnsExec>(u: &U, url: &ParsedUrl, tainted: bool, now: u64, Ghost(s): Ghost<State>) -> (r: JarOpBuf)
+fn retrieval_op_exec<U: UrlFnsExec>(u: &U, url: &ParsedUrl, tainted: bool, req: &ReqBuf, now: u64, Ghost(s): Ghost<State>) -> (r: JarOpBuf)
     requires
         s.url == url@,
         s.tainted == tainted,
+        s.req == req@,
     ensures
         r@ == retrieval_op(u.urls(), s, now as int),
 {
-    JarOpBuf::Retrieved { url: u.request_url(url), ctx: request_context_exec(u, url, tainted, Ghost(s)), now }
+    JarOpBuf::Retrieved { url: u.request_url(url), ctx: request_context_exec(u, url, tainted, req, Ghost(s)), now }
 }
 
 /// `response_ops` (Fetch §3.1.2 step 6) of `lines`, the response's
 /// `Set-Cookie` values, for a state whose URL is `url`.
-fn response_ops_exec<U: UrlFnsExec>(u: &U, url: &ParsedUrl, tainted: bool, lines: &[Vec<u8>], now: u64, Ghost(s): Ghost<State>) -> (out: Vec<JarOpBuf>)
+fn response_ops_exec<U: UrlFnsExec>(u: &U, url: &ParsedUrl, tainted: bool, req: &ReqBuf, lines: &[Vec<u8>], now: u64, Ghost(s): Ghost<State>) -> (out: Vec<JarOpBuf>)
     requires
         s.url == url@,
         s.tainted == tainted,
+        s.req == req@,
     ensures
         super::types::ops_view(out@) == stored_ops(clazel_http::field::types::strings_view(lines@), (u.urls().request_url)(s.url), request_context(u.urls(), s), now as int),
 {
@@ -198,6 +213,7 @@ fn response_ops_exec<U: UrlFnsExec>(u: &U, url: &ParsedUrl, tainted: bool, lines
             rc == request_context(u.urls(), s),
             s.url == url@,
             s.tainted == tainted,
+            s.req == req@,
             super::types::ops_view(out@) + stored_ops(ls.skip(i as int), ru, rc, now as int) == stored_ops(ls, ru, rc, now as int),
         decreases lines.len() - i,
     {
@@ -208,7 +224,7 @@ fn response_ops_exec<U: UrlFnsExec>(u: &U, url: &ParsedUrl, tainted: bool, lines
                 assert(ls.skip(i as int)[0] == ls[i as int]);
                 assert(ls[i as int] == lines@[i as int]@);
             }
-            let op = JarOpBuf::Stored { line, url: u.request_url(url), ctx: request_context_exec(u, url, tainted, Ghost(s)), now };
+            let op = JarOpBuf::Stored { line, url: u.request_url(url), ctx: request_context_exec(u, url, tainted, req, Ghost(s)), now };
             let ghost before = out@;
             out.push(op);
             proof {
@@ -240,12 +256,13 @@ fn on_final_exec<U: UrlFnsExec>(u: &U, base: StateBuf, response: ResponseBuf, op
     let url = base.url;
     let redirects = base.redirects;
     let tainted = base.tainted;
+    let req = base.req;
     // Fetch §4.7 step 17: the operations storing the response's `Set-Cookie` lines.
     let lines = field_values_named(response.fields.as_slice(), &[0x53, 0x65, 0x74, 0x2D, 0x43, 0x6F, 0x6F, 0x6B, 0x69, 0x65]);
     proof {
         assert(seq![0x53u8, 0x65, 0x74, 0x2D, 0x43, 0x6F, 0x6F, 0x6B, 0x69, 0x65] =~= lit_set_cookie());
     }
-    let ops = response_ops_exec(u, &url, tainted, lines.as_slice(), now, Ghost(s0));
+    let ops = response_ops_exec(u, &url, tainted, &req, lines.as_slice(), now, Ghost(s0));
     let ghost s = s0;
     // 3.
     match location_url_exec(u, &response, &url) {
@@ -254,14 +271,14 @@ fn on_final_exec<U: UrlFnsExec>(u: &U, base: StateBuf, response: ResponseBuf, op
             let ghost r = response@;
             let last = vec![ActionBuf::Done { url: Box::new(clone_url(&url)), response: Box::new(response) }];
             assert(super::types::actions_view(last@) =~= seq![Action::Done { url: s.url, response: r }]);
-            let st = StateBuf { url, redirects, phase: PhaseBuf::Finished, tainted };
+            let st = StateBuf { url, redirects, phase: PhaseBuf::Finished, req, tainted };
             assert(st@ == finished(s));
             let acts = after_close(open, last);
             assert(super::types::actions_view(acts@) == close_if(open) + seq![Action::Done { url: s.url, response: r }]);
             (st, acts, ops)
         },
         // 5.
-        LocationBuf::Failure => fail_exec(StateBuf { url, redirects, phase: PhaseBuf::Finished, tainted }, Reason::RedirectLocation, open, ops, Ghost(s)),
+        LocationBuf::Failure => fail_exec(StateBuf { url, redirects, phase: PhaseBuf::Finished, req, tainted }, Reason::RedirectLocation, open, ops, Ghost(s)),
         LocationBuf::Url(location) => {
             proof {
                 assert(seq![0x68u32, 0x74, 0x74, 0x70] =~= clazel_url::url::spec::http_str());
@@ -271,20 +288,26 @@ fn on_final_exec<U: UrlFnsExec>(u: &U, base: StateBuf, response: ResponseBuf, op
                 || eq_str(location.scheme.as_slice(), &[0x68, 0x74, 0x74, 0x70, 0x73]);
             if !http_s {
                 // 6.
-                fail_exec(StateBuf { url, redirects, phase: PhaseBuf::Finished, tainted }, Reason::RedirectScheme, open, ops, Ghost(s))
+                fail_exec(StateBuf { url, redirects, phase: PhaseBuf::Finished, req, tainted }, Reason::RedirectScheme, open, ops, Ghost(s))
             } else if redirects >= 20 {
                 // 7.
-                fail_exec(StateBuf { url, redirects, phase: PhaseBuf::Finished, tainted }, Reason::RedirectLimit, open, ops, Ghost(s))
+                fail_exec(StateBuf { url, redirects, phase: PhaseBuf::Finished, req, tainted }, Reason::RedirectLimit, open, ops, Ghost(s))
             } else {
-                // 8., 18., 22. and the redirect-taint.
+                // 8., 12., 18., 22. and the redirect-taints.
                 let from = u.origin(&url);
                 let to = u.origin(&location);
                 let crossed = !same_site_exec(&from, &to);
+                let origin_crossed = !same_origin_exec(&from, &to);
                 proof {
                     u.rules_are_psl();
                 }
+                let mut rewritten = rewrite_for_redirect(response.status_line.status, req);
+                if origin_crossed {
+                    rewritten.origin_tainted = true;
+                }
+                assert(rewritten@ == next_req(u.urls(), s, response@.status_line.status, location@));
                 // Never saturates: redirects < 20.
-                let next = begin_exec(location, redirects.saturating_add(1), tainted || crossed);
+                let next = begin_exec(location, redirects.saturating_add(1), tainted || crossed, rewritten);
                 (next.0, after_close(open, next.1), ops)
             }
         },
@@ -391,7 +414,8 @@ fn step_reading<H: HttpFnsExec, U: UrlFnsExec>(h: &H, u: &U, base: StateBuf, par
                     let url = base.url;
                     let redirects = base.redirects;
                     let tainted = base.tainted;
-                    (StateBuf { url, redirects, phase: PhaseBuf::Reading { parser: rest }, tainted }, a, none)
+                    let req = base.req;
+                    (StateBuf { url, redirects, phase: PhaseBuf::Reading { parser: rest }, req, tainted }, a, none)
                 },
                 SettledBuf::Final(response) => on_final_exec(u, base, response, true, now, Ghost(s)),
                 SettledBuf::Bad(reason) => fail_exec(base, reason, true, none, Ghost(s)),
@@ -465,50 +489,51 @@ pub fn step<H: HttpFnsExec, U: UrlFnsExec>(h: &H, u: &U, s: StateBuf, input: &In
     let redirects = s.redirects;
     let phase = s.phase;
     let tainted = s.tainted;
+    let req = s.req;
     let none: Vec<JarOpBuf> = Vec::new();
     assert(super::types::ops_view(none@) =~= Seq::<JarOp>::empty());
     let out = match phase {
         PhaseBuf::Finished => {
             let a: Vec<ActionBuf> = Vec::new();
             assert(super::types::actions_view(a@) =~= Seq::<Action>::empty());
-            (StateBuf { url, redirects, phase: PhaseBuf::Finished, tainted }, a, none)
+            (StateBuf { url, redirects, phase: PhaseBuf::Finished, req, tainted }, a, none)
         },
         PhaseBuf::Connecting => match input {
             InputBuf::Connected => {
                 proof {
                     u.rules_are_psl();
                 }
-                let op = retrieval_op_exec(u, &url, tainted, now, Ghost(sv));
+                let op = retrieval_op_exec(u, &url, tainted, &req, now, Ghost(sv));
                 let ops = vec![op];
                 assert(super::types::ops_view(ops@) =~= seq![retrieval_op(u.urls(), sv, now as int)]);
-                match request_bytes(&url) {
+                match request_bytes_req(&url, &req) {
                     Some(plain) => {
                         // The cookie-string, from a copy of the jar (the
                         // retrieval's step 5 is the operation, applied by the
                         // caller).
                         let url_rec = u.request_url(&url);
-                        let ctx = request_context_exec(u, &url, tainted, Ghost(sv));
+                        let ctx = request_context_exec(u, &url, tainted, &req, Ghost(sv));
                         let mut copy = copy_jar(jar);
                         let cookie = retrieve_a_cookie_string_exec(&mut copy, &url_rec, &ctx, now);
-                        let bytes = match request_bytes_cookie(&url, cookie.as_slice()) {
+                        let bytes = match request_bytes_req_cookie(&url, &req, cookie.as_slice()) {
                             Some(b) => b,
                             None => plain,
                         };
                         let a = vec![ActionBuf::Send(bytes)];
                         assert(super::types::actions_view(a@) =~= super::spec::step(h.http(), u.urls(), sv, input@, jv, now as int).1);
-                        (StateBuf { url, redirects, phase: PhaseBuf::Reading { parser: h.new_parser() }, tainted }, a, ops)
+                        (StateBuf { url, redirects, phase: PhaseBuf::Reading { parser: h.new_parser() }, req, tainted }, a, ops)
                     },
-                    None => fail_exec(StateBuf { url, redirects, phase: PhaseBuf::Finished, tainted }, Reason::NotFetched, true, ops, Ghost(sv)),
+                    None => fail_exec(StateBuf { url, redirects, phase: PhaseBuf::Finished, req, tainted }, Reason::NotFetched, true, ops, Ghost(sv)),
                 }
             },
-            InputBuf::Bytes(_) => fail_exec(StateBuf { url, redirects, phase: PhaseBuf::Finished, tainted }, Reason::Shell, true, none, Ghost(sv)),
-            InputBuf::Closed => fail_exec(StateBuf { url, redirects, phase: PhaseBuf::Finished, tainted }, Reason::Network, false, none, Ghost(sv)),
-            InputBuf::Error => fail_exec(StateBuf { url, redirects, phase: PhaseBuf::Finished, tainted }, Reason::Network, false, none, Ghost(sv)),
+            InputBuf::Bytes(_) => fail_exec(StateBuf { url, redirects, phase: PhaseBuf::Finished, req, tainted }, Reason::Shell, true, none, Ghost(sv)),
+            InputBuf::Closed => fail_exec(StateBuf { url, redirects, phase: PhaseBuf::Finished, req, tainted }, Reason::Network, false, none, Ghost(sv)),
+            InputBuf::Error => fail_exec(StateBuf { url, redirects, phase: PhaseBuf::Finished, req, tainted }, Reason::Network, false, none, Ghost(sv)),
         },
         PhaseBuf::Reading { parser } => step_reading(
             h,
             u,
-            StateBuf { url, redirects, phase: PhaseBuf::Finished, tainted },
+            StateBuf { url, redirects, phase: PhaseBuf::Finished, req, tainted },
             parser,
             input,
             now,

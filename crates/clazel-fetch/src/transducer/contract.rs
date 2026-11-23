@@ -227,8 +227,8 @@ pub open spec fn url_changes_only_by_redirect(http: HttpFns, urls: UrlFns, s: St
 /// carry it ([`wire_bytes`]).
 pub open spec fn sends_are_requests(http: HttpFns, urls: UrlFns, s: State, input: Input, jar: Seq<Cookie>, now: int) -> bool {
     forall|k: int| 0 <= k < step(http, urls, s, input, jar, now).1.len() ==> match #[trigger] step(http, urls, s, input, jar, now).1[k] {
-        Action::Send(bytes) => match crate::request::spec::request_bytes(s.url) {
-            Some(plain) => bytes == wire_bytes(s.url, cookie_string(urls, s, jar, now), plain),
+        Action::Send(bytes) => match crate::request::spec::request_bytes_req(s.url, s.req) {
+            Some(plain) => bytes == wire_bytes(s.url, s.req, cookie_string(urls, s, jar, now), plain),
             None => false,
         },
         _ => true,
@@ -270,9 +270,9 @@ pub open spec fn tls_when_secure(http: HttpFns, urls: UrlFns, url: Url, s: State
 /// [`crate::request::spec::cookie_field_lines`] of `cookie` appended to
 /// the fields (so none when the cookie-string is empty, and otherwise one
 /// `Cookie` field line whose value is `cookie`).
-pub open spec fn is_wire_request(url: Url, cookie: Seq<u8>, bytes: Seq<u8>) -> bool {
-    match (crate::request::spec::request_for(url), crate::request::spec::request_for_cookie(url, cookie)) {
-        (Some(base), Some(r)) => clazel_http::message::spec::is_valid_request(r) && clazel_http::message::spec::serialize_request(r) == bytes
+pub open spec fn is_wire_request(url: Url, req: crate::request::spec::Req, cookie: Seq<u8>, bytes: Seq<u8>) -> bool {
+    match (crate::request::spec::request_for_req(url, req), crate::request::spec::request_for_req_cookie(url, req, cookie)) {
+        (Some(base), Some(r)) => clazel_http::message::spec::is_valid_request(r) && clazel_http::message::spec::serialize_request(r) + crate::request::spec::body_bytes(req) == bytes
             && r.method == base.method && r.target == base.target && r.fields == base.fields + crate::request::spec::cookie_field_lines(cookie),
         _ => false,
     }
@@ -281,8 +281,8 @@ pub open spec fn is_wire_request(url: Url, cookie: Seq<u8>, bytes: Seq<u8>) -> b
 /// The cookie-string `cookie` as the request for `url` carries it: itself,
 /// or nothing when no valid request can carry it (see the modelling
 /// choices of `spec.rs`).
-pub open spec fn carried(url: Url, cookie: Seq<u8>) -> Seq<u8> {
-    if crate::request::spec::request_bytes_cookie(url, cookie) is Some {
+pub open spec fn carried(url: Url, req: crate::request::spec::Req, cookie: Seq<u8>) -> Seq<u8> {
+    if crate::request::spec::request_bytes_req_cookie(url, req, cookie) is Some {
         cookie
     } else {
         seq![]
@@ -297,8 +297,8 @@ pub open spec fn carried(url: Url, cookie: Seq<u8>) -> Seq<u8> {
 pub open spec fn wire_cookies(http: HttpFns, urls: UrlFns, s: State, input: Input, jar: Seq<Cookie>, now: int) -> bool {
     forall|k: int| 0 <= k < step(http, urls, s, input, jar, now).1.len() ==> match #[trigger] step(http, urls, s, input, jar, now).1[k] {
         Action::Send(bytes) => is_wire_request(
-            s.url,
-            carried(s.url, clazel_cookie::storage::spec::retrieve_cookie_string(urls.rules, jar, (urls.request_url)(s.url), request_context(urls, s), now)),
+            s.url, s.req,
+            carried(s.url, s.req, clazel_cookie::storage::spec::retrieve_cookie_string(urls.rules, jar, (urls.request_url)(s.url), request_context(urls, s), now)),
             bytes,
         ),
         _ => true,
@@ -423,6 +423,70 @@ pub open spec fn split_invariant(http: HttpFns, urls: UrlFns, s: State, a: Seq<u
         },
         _ => true,
     }
+}
+
+// ===========================================================================
+// Item 6.16: requests with a body.
+// ===========================================================================
+
+/// `next` is the request after a redirect whose response had status
+/// `status`, from the request `req`: the method and body are
+/// [`crate::request::spec::rewrite_for_redirect`]'s (HTTP-redirect fetch
+/// step 12) and the initiator is unchanged. (The origin redirect-taint
+/// may also have been set.)
+pub open spec fn redirected_req(status: nat, req: crate::request::spec::Req, next: crate::request::spec::Req) -> bool {
+    let rewritten = crate::request::spec::rewrite_for_redirect(status, req);
+    next.method == rewritten.method && next.body == rewritten.body && next.initiator == rewritten.initiator
+        && (next.origin_tainted == rewritten.origin_tainted || next.origin_tainted)
+}
+
+/// **The request after a redirect** (`theorem_redirect_method`, HTTP-
+/// redirect fetch step 12 and RFC 9110 §15.4): a step that follows a
+/// redirect gives the request [`redirected_req`] of the final response's
+/// status, and any other step leaves the request as it was.
+pub open spec fn redirect_method(http: HttpFns, urls: UrlFns, s: State, input: Input, jar: Seq<Cookie>, now: int) -> bool {
+    let next = step(http, urls, s, input, jar, now).0;
+    &&& next.redirects == s.redirects ==> next.req == s.req
+    &&& next.redirects == s.redirects + 1 ==> (match s.phase {
+        Phase::Reading { received } => match input {
+            Input::Bytes(bytes) => match settle(http, received + bytes) {
+                Settled::Final(response) => redirected_req(response.status_line.status, s.req, next.req),
+                _ => false,
+            },
+            Input::Closed => match settle_at_close(http, received) {
+                Settled::Final(response) => redirected_req(response.status_line.status, s.req, next.req),
+                _ => false,
+            },
+            _ => false,
+        },
+        _ => false,
+    })
+}
+
+/// **`SameSite=Lax` and `Strict` cookies are not sent on a cross-site
+/// `POST`** (`theorem_post_cookies`, `theorem_wire_cookies` restated over
+/// methods with a body): for a request `s` that is a `POST`, any cookie
+/// that RFC 6265bis §5.8.3 step 3 would return for it, and any request that
+/// is not same-site (§5.2), has `SameSite=None`. And a request whose
+/// initiator's site is not the target's (and that no redirect has tainted)
+/// is not same-site. The `Cookie` field of every `Send` is the
+/// serialization of such cookies ([`wire_cookies`]).
+pub open spec fn post_cookies(urls: UrlFns, s: State) -> bool {
+    &&& s.req.method == crate::request::spec::lit_post() ==> (forall|c: Cookie, h: clazel_cookie::matching::spec::CanonicalHost|
+        #[trigger] clazel_cookie::storage::spec::cookie_is_retrieved(urls.rules, (urls.request_url)(s.url), request_context(urls, s), h, c)
+            && !clazel_cookie::storage::spec::is_same_site_request(urls.rules, request_context(urls, s))
+            ==> c.same_site_flag == clazel_cookie::set_cookie::spec::SameSite::None)
+    &&& (match s.req.initiator {
+        Some(i) => !s.tainted && !clazel_origin::spec::same_site(urls.rules, (urls.origin)(s.url), i),
+        None => false,
+    }) ==> !clazel_cookie::storage::spec::is_same_site_request(urls.rules, request_context(urls, s))
+}
+
+/// Every `Send` is a request that is [`crate::request::spec::req_ok`]: its
+/// method is `GET` or `POST`, with no body on a `GET`, and a body of at
+/// most [`crate::request::spec::max_request_body`] octets.
+pub open spec fn req_valid_on_send(http: HttpFns, urls: UrlFns, s: State, input: Input, jar: Seq<Cookie>, now: int) -> bool {
+    (exists|k: int| 0 <= k < step(http, urls, s, input, jar, now).1.len() && step(http, urls, s, input, jar, now).1[k] is Send) ==> crate::request::spec::req_ok(s.req)
 }
 
 } // verus!

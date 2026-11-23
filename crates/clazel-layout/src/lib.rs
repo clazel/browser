@@ -16,6 +16,7 @@
 //! heights and cell alignment of tables (CSS 2.1 §17, CSS Tables 3); and
 //! paint (item 5.16, [`paint`]): the fragment tree to a display list in
 //! CSS 2.1 Appendix E.2's order, with the hit regions of links; and the
+//! images' states and natural sizes ([`images`], item 6.11); and the
 //! client rectangles of every element and text node as JSON ([`rects`],
 //! item 5.25's geometry comparison).
 //!
@@ -25,6 +26,10 @@
 pub mod boxes;
 pub mod flow;
 pub mod fonts;
+pub mod images;
+
+#[cfg(test)]
+mod image_tests;
 pub mod paint;
 pub mod rects;
 pub mod shape;

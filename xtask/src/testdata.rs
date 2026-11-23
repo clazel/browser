@@ -23,9 +23,11 @@ mod http_state_dates;
 mod http_state_parser;
 mod inventory;
 mod isa;
+mod jpeg;
 mod js;
 mod llhttp;
 mod nist_cavp_sigver;
+mod pngsuite;
 mod test262;
 mod wpt_base64;
 mod wpt_cookies;
@@ -35,6 +37,7 @@ mod wpt_css_syntax;
 mod wpt_css_values;
 mod wpt_encoding;
 mod wpt_encoding_legacy;
+mod wpt_form_encodings;
 mod wpt_idna;
 mod wpt_mediaqueries;
 mod wpt_mime_types;
@@ -45,6 +48,9 @@ mod wpt_url_percent;
 mod wpt_url_setters;
 mod wpt_urltestdata;
 mod wpt_webstorage;
+mod wuffs_deflate;
+mod wuffs_gif;
+mod wuffs_webp;
 mod wycheproof_ecdsa;
 mod wycheproof_rsa;
 mod x509_limbo;
@@ -147,6 +153,11 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         wpt_encoding_legacy::convert,
         wpt_encoding_legacy::FILES,
     ),
+    (
+        "wpt-form-encodings",
+        wpt_form_encodings::convert,
+        wpt_form_encodings::FILES,
+    ),
     ("wpt-url-idna", wpt_idna::convert, wpt_idna::FILES),
     (
         "wpt-mime-types",
@@ -194,6 +205,30 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         wycheproof_rsa::FILES,
     ),
     ("x509-limbo", x509_limbo::convert, x509_limbo::FILES),
+    ("wuffs-gif", wuffs_gif::convert, wuffs_gif::FILES_MAIN),
+    (
+        "wuffs-gif-artificial",
+        wuffs_gif::convert,
+        wuffs_gif::FILES_ARTIFICIAL,
+    ),
+    (
+        "wuffs-deflate",
+        wuffs_deflate::convert,
+        wuffs_deflate::FILES_MAIN,
+    ),
+    (
+        "wuffs-deflate-artificial",
+        wuffs_deflate::convert,
+        wuffs_deflate::FILES_ARTIFICIAL,
+    ),
+    ("pngsuite", pngsuite::convert, pngsuite::FILES),
+    (
+        "libjpeg-turbo-testimages",
+        jpeg::convert,
+        jpeg::FILES_TESTIMAGES,
+    ),
+    ("jpeg-corpus", jpeg::convert, jpeg::FILES_CORPUS),
+    ("wuffs-webp", wuffs_webp::convert, wuffs_webp::FILES),
     // Phase 7 item 7.1: files later items read as files; each converts to an
     // inventory of paths, sizes and hashes (see inventory.rs).
     ("wpt-web", inventory::convert_wpt_web, &[]),

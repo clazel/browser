@@ -83,9 +83,18 @@ const PLACES: &[(&str, Place)] = &[
     ("clazel-font", Place::Renderer),
     ("clazel-layout", Place::Renderer),
     ("clazel-glyph-mask", Place::Renderer),
+    ("clazel-image-shape", Place::Renderer),
+    ("clazel-gif", Place::Renderer),
+    ("clazel-forms", Place::Renderer),
+    ("clazel-png", Place::Renderer),
+    ("clazel-svg", Place::Renderer),
+    ("clazel-jpeg", Place::Renderer),
+    ("clazel-webp", Place::Renderer),
     // The GPU process (item 5.17b): sandboxed and one per tab like the renderer.
     // The detail image has no panel for it yet; item 5.27 adds one.
     ("clazel-gpu", Place::Renderer),
+    // Item 6.2: DEFLATE and zlib, run by the renderer's image decoders (PNG, later).
+    ("clazel-deflate", Place::Renderer),
     ("clazel-displaylist", Place::Primitive),
     ("clazel-encoding", Place::Primitive),
     ("clazel-url", Place::Primitive),

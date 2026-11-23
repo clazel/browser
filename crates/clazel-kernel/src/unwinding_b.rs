@@ -51,7 +51,15 @@ pub proof fn lemma_local_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
     if let Some(m) = accepted_message(r, bytes) {
         crate::lock::lemma_storage_call_frame(s, r, m);
         crate::net_theorems::lemma_handle_message_conns(rules, urls, fetch, s, r, m);
-        if let clazel_ipc::message::spec::Message::Navigate { url } = m {
+        if let clazel_ipc::message::spec::Message::Submit { url, method, content_type, body } = m {
+        if let Some(req) = submit_request(r, method, content_type, body) {
+            if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+                if let Some(resolved) = (urls.resolve)(r.url, relative) {
+                    assert(false);
+                }
+            }
+        }
+    } else if let clazel_ipc::message::spec::Message::Navigate { url } = m {
             if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
                 if let Some(resolved) = (urls.resolve)(r.url, relative) {
                     assert(false);
@@ -89,7 +97,15 @@ pub proof fn lemma_local_table(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns,
     let r = s.renderers[i];
     if let Some(m) = accepted_message(r, bytes) {
         crate::lock::lemma_storage_call_frame(s, r, m);
-        if let clazel_ipc::message::spec::Message::Navigate { url } = m {
+        if let clazel_ipc::message::spec::Message::Submit { url, method, content_type, body } = m {
+        if let Some(req) = submit_request(r, method, content_type, body) {
+            if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+                if let Some(resolved) = (urls.resolve)(r.url, relative) {
+                    assert(false);
+                }
+            }
+        }
+    } else if let clazel_ipc::message::spec::Message::Navigate { url } = m {
             if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
                 if let Some(resolved) = (urls.resolve)(r.url, relative) {
                     assert(false);

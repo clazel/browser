@@ -149,6 +149,24 @@ fn all() -> Vec<Msg> {
         },
         Msg::ScriptEnd { request: 9 },
         Msg::ScriptFailed { request: 0 },
+        Msg::Submit {
+            url: t("http://example.test/login?x=1"),
+            method: t("POST"),
+            content_type: t("application/x-www-form-urlencoded"),
+            body: t("a=1&b=%26%23"),
+        },
+        Msg::Submit {
+            url: t("/s"),
+            method: t("GET"),
+            content_type: vec![],
+            body: vec![],
+        },
+        Msg::Submit {
+            url: t("/s"),
+            method: t("POST"),
+            content_type: t("application/octet-stream"),
+            body: vec![0x00, 0xFF, 0x0D, 0x0A],
+        },
     ]
 }
 
@@ -165,6 +183,31 @@ fn a_largest_style_body_fits_one_frame() {
     let over = Msg::StyleBody {
         request: u64::MAX,
         bytes: vec![0x5A; MAX_STYLE_CHUNK + 1],
+    };
+    assert!(encode_framed(&over).is_none());
+}
+
+/// The largest `Submit` body (with a head of the stated size) fits one frame
+/// exactly or with room to spare; one octet more than the bound still fits when
+/// the head is small, and a body over the frame is not sent.
+#[test]
+fn a_largest_submit_fits_one_frame() {
+    use clazel_ipc::message::codec::{MAX_SUBMIT_BODY, MAX_SUBMIT_HEAD};
+    let m = Msg::Submit {
+        url: vec![b'a'; MAX_SUBMIT_HEAD - 100],
+        method: "POST".as_bytes().to_vec(),
+        content_type: vec![b'c'; 96],
+        body: vec![0x5A; MAX_SUBMIT_BODY],
+    };
+    let frame = encode_framed(&m).unwrap_or_default();
+    assert!(!frame.is_empty());
+    assert!(frame.len() <= MAX_FRAME + 4);
+    assert_eq!(decode_framed(&frame), Some(m_clone(&m)));
+    let over = Msg::Submit {
+        url: "/s".as_bytes().to_vec(),
+        method: "POST".as_bytes().to_vec(),
+        content_type: "text/plain".as_bytes().to_vec(),
+        body: vec![0x5A; MAX_FRAME],
     };
     assert!(encode_framed(&over).is_none());
 }
@@ -217,6 +260,7 @@ fn the_kernel_decoder_takes_only_renderer_messages() {
                 | Msg::StorageKey { .. }
                 | Msg::StorageLength
                 | Msg::Navigate { .. }
+                | Msg::Submit { .. }
                 | Msg::Display { .. }
                 | Msg::Title { .. }
                 | Msg::FetchStyle { .. }

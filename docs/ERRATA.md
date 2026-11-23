@@ -951,3 +951,25 @@ it evidently means. Each entry records what we specified instead.
   operand signs, as an added step 5a (`number_multiply` in
   `crates/clazel-js-vm/src/spec.rs`).
 - **Reported upstream:** not yet.
+
+## RFC 1951 §3.2.5 says the extra bits are most-significant bit first
+
+- **Spec:** RFC 1951, "DEFLATE Compressed Data Format Specification version
+  1.3", May 1996, <https://www.rfc-editor.org/rfc/rfc1951#section-3.2.5>
+  (plain text SHA-256 `5ebf4b5b7fe1c3a0c0ab9aa3ac8c0f3853a7dc484905e76e03b0b0f301350009`)
+- **Text:** "The extra bits should be interpreted as a machine integer
+  stored with the most-significant bit first, e.g., bits 1110 represent the
+  value 14."
+- **Problem:** §3.1.1 says "Data elements other than Huffman codes are
+  packed starting with the least-significant bit of the data element", and
+  the extra bits are not a Huffman code. Read literally the two sentences
+  disagree about the order of the bits of a length's or distance's extra
+  field. Every decoder (zlib, `miniz_oxide`, Wuffs) reads them least
+  significant bit first, as §3.1.1 says, and the test streams only decode
+  that way.
+- **We specify:** the extra bits are read least significant bit first, like
+  every other non-Huffman data element (`bits_value` in
+  `crates/clazel-deflate/src/spec.rs`). The sentence is read as saying the
+  value is an ordinary integer (bits "1110" written most significant first
+  are 14), not as an order of transmission.
+- **Reported upstream:** not yet.
