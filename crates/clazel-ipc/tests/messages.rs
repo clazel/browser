@@ -156,7 +156,12 @@ fn all() -> Vec<Msg> {
             content_type: t("text/plain;charset=UTF-8"),
             body: vec![0x00, 0x7B, 0xFF],
             mode: 1,
-            headers: vec![t("X-Requested-With"), t("XMLHttpRequest"), t("Accept-Language"), t("en")],
+            headers: vec![
+                t("X-Requested-With"),
+                t("XMLHttpRequest"),
+                t("Accept-Language"),
+                t("en"),
+            ],
         },
         Msg::Fetch {
             request: 0,

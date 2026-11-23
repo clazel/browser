@@ -460,16 +460,12 @@ pub fn req_ok_exec(req: &ReqBuf) -> (r: bool)
     if !(g || p) {
         return false;
     }
-    match &req.body {
-        Some(b) => {
-            if g {
-                return false;
-            }
-            if b.bytes.len() > 0x100_0000 {
-                return false;
-            }
-        },
-        None => {},
+    let body_bad = match &req.body {
+        Some(b) => g || b.bytes.len() > 0x100_0000,
+        None => false,
+    };
+    if body_bad {
+        return false;
     }
     author_headers_ok_exec(req.headers.as_slice())
 }
@@ -713,7 +709,7 @@ pub fn byte_lowercase_exec(s: &[u8]) -> (out: Vec<u8>)
         decreases s.len() - i,
     {
         if let Some(b) = s.get(i) {
-            let c = if 0x41 <= *b && *b <= 0x5A { *b + 0x20 } else { *b };
+            let c = if 0x41 <= *b && *b <= 0x5A { b.checked_add(0x20).unwrap_or(*b) } else { *b };
             let ghost before = out@;
             out.push(c);
             proof {
@@ -775,7 +771,7 @@ proof fn lemma_in_names(ns: Seq<Seq<u8>>, x: Seq<u8>)
 }
 
 /// `names` holds `l`.
-fn contains_name(names: &Vec<Vec<u8>>, l: &[u8]) -> (r: bool)
+fn contains_name(names: &[Vec<u8>], l: &[u8]) -> (r: bool)
     ensures
         r == in_names(names_view(names@), l@),
 {
@@ -790,14 +786,16 @@ fn contains_name(names: &Vec<Vec<u8>>, l: &[u8]) -> (r: bool)
             in_names(names_view(names@), l@) == names_view(names@).contains(l@),
         decreases names.len() - k,
     {
-        if let Some(n) = names.get(k) {
-            if eq8(n.as_slice(), l) {
-                proof {
-                    assert(names_view(names@)[k as int] == l@);
-                    assert(names_view(names@).contains(l@));
-                }
-                return true;
+        let hit = match names.get(k) {
+            Some(n) => eq8(n.as_slice(), l),
+            None => false,
+        };
+        if hit {
+            proof {
+                assert(names_view(names@)[k as int] == l@);
+                assert(names_view(names@).contains(l@));
             }
+            return true;
         }
         // Never saturates: k < names.len().
         k = k.saturating_add(1);
@@ -881,10 +879,10 @@ pub fn author_header_dropped_exec(name: &[u8]) -> (r: bool)
         assert(lit_proxy_prefix() =~= seq![0x70u8, 0x72, 0x6F, 0x78, 0x79, 0x2D]);
         assert(lit_sec_prefix() =~= seq![0x73u8, 0x65, 0x63, 0x2D]);
     }
-    contains_name(&forbidden_names_exec(), l.as_slice()) || starts_with_exec(l.as_slice(), &[0x70, 0x72, 0x6F, 0x78, 0x79, 0x2D]) || starts_with_exec(
+    contains_name(forbidden_names_exec().as_slice(), l.as_slice()) || starts_with_exec(l.as_slice(), &[0x70, 0x72, 0x6F, 0x78, 0x79, 0x2D]) || starts_with_exec(
         l.as_slice(),
         &[0x73, 0x65, 0x63, 0x2D],
-    ) || contains_name(&method_override_names_exec(), l.as_slice()) || contains_name(&managed_names_exec(), l.as_slice())
+    ) || contains_name(method_override_names_exec().as_slice(), l.as_slice()) || contains_name(managed_names_exec().as_slice(), l.as_slice())
 }
 
 /// [`author_headers_ok`].
