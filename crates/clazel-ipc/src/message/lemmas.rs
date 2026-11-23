@@ -484,6 +484,7 @@ pub proof fn lemma_parse_message_tokens(m: Message)
         Message::StyleFailed { request } => { assert(t.subrange(2, 3) =~= seq![Token::Uint(request)]); },
         Message::FetchScript { request, url } => { assert(t.subrange(2, 4) =~= seq![Token::Uint(request), Token::Text(url)]); },
         Message::UpdateUrl { replace, url } => { assert(t.subrange(2, 4) =~= seq![Token::Bool(replace), Token::Text(url)]); },
+        Message::OpenTab { url } => { assert(t.subrange(2, 3) =~= seq![Token::Text(url)]); },
         Message::ScriptResponse { request, content_type } => { assert(t.subrange(2, 4) =~= seq![Token::Uint(request), Token::Bytes(content_type)]); },
         Message::ScriptBody { request, bytes } => { assert(t.subrange(2, 4) =~= seq![Token::Uint(request), Token::Bytes(bytes)]); },
         Message::ScriptEnd { request } => { assert(t.subrange(2, 3) =~= seq![Token::Uint(request)]); },

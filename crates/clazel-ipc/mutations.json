@@ -731,8 +731,8 @@
     {
       "id": "dir-navigate-not-renderer",
       "file": "src/message/spec.rs",
-      "find": "| Message::StorageLength\n        | Message::Navigate { .. }\n        | Message::FetchScript { .. }\n        | Message::UpdateUrl { .. }\n        | Message::Fetch { .. }\n        | Message::Submit { .. }\n        | Message::Display { .. }\n        | Message::Title { .. }\n        | Message::FetchStyle { .. } => true,",
-      "replace": "| Message::StorageLength\n        | Message::FetchScript { .. }\n        | Message::UpdateUrl { .. }\n        | Message::Fetch { .. }\n        | Message::Submit { .. }\n        | Message::Display { .. }\n        | Message::Title { .. }\n        | Message::FetchStyle { .. } => true,",
+      "find": "| Message::StorageLength\n        | Message::Navigate { .. }\n        | Message::FetchScript { .. }\n        | Message::UpdateUrl { .. }\n        | Message::OpenTab { .. }\n        | Message::Fetch { .. }\n        | Message::Submit { .. }\n        | Message::Display { .. }\n        | Message::Title { .. }\n        | Message::FetchStyle { .. } => true,",
+      "replace": "| Message::StorageLength\n        | Message::FetchScript { .. }\n        | Message::UpdateUrl { .. }\n        | Message::OpenTab { .. }\n        | Message::Fetch { .. }\n        | Message::Submit { .. }\n        | Message::Display { .. }\n        | Message::Title { .. }\n        | Message::FetchStyle { .. } => true,",
       "expect": "killed",
       "reason": "Navigate is not counted as a renderer message: the kernel rejects it, so lemma_example_renderer_navigate is false.",
       "certificate": {
@@ -978,8 +978,8 @@
     {
       "id": "msg-display-direction",
       "file": "src/message/spec.rs",
-      "find": "        | Message::Navigate { .. }\n        | Message::FetchScript { .. }\n        | Message::UpdateUrl { .. }\n        | Message::Fetch { .. }\n        | Message::Submit { .. }\n        | Message::Display { .. }\n        | Message::Title { .. }\n        | Message::FetchStyle { .. } => true,",
-      "replace": "        | Message::Navigate { .. }\n        | Message::FetchScript { .. }\n        | Message::UpdateUrl { .. }\n        | Message::Fetch { .. }\n        | Message::Submit { .. }\n        | Message::Title { .. }\n        | Message::FetchStyle { .. } => true,",
+      "find": "        | Message::Navigate { .. }\n        | Message::FetchScript { .. }\n        | Message::UpdateUrl { .. }\n        | Message::OpenTab { .. }\n        | Message::Fetch { .. }\n        | Message::Submit { .. }\n        | Message::Display { .. }\n        | Message::Title { .. }\n        | Message::FetchStyle { .. } => true,",
+      "replace": "        | Message::Navigate { .. }\n        | Message::FetchScript { .. }\n        | Message::UpdateUrl { .. }\n        | Message::OpenTab { .. }\n        | Message::Fetch { .. }\n        | Message::Submit { .. }\n        | Message::Title { .. }\n        | Message::FetchStyle { .. } => true,",
       "expect": "killed",
       "reason": "Display is not counted as a renderer message: the kernel rejects it, so lemma_example_display is false.",
       "certificate": {
@@ -1329,8 +1329,8 @@
     {
       "id": "dir-update-url-not-renderer",
       "file": "src/message/spec.rs",
-      "find": "        | Message::UpdateUrl { .. }\n        | Message::Fetch { .. }",
-      "replace": "        | Message::Fetch { .. }",
+      "find": "        | Message::UpdateUrl { .. }\n        | Message::OpenTab { .. }",
+      "replace": "        | Message::OpenTab { .. }",
       "expect": "killed",
       "reason": "UpdateUrl is not counted as a renderer message: the kernel would refuse it, so lemma_example_script is false.",
       "certificate": {
@@ -1532,6 +1532,58 @@
         "file": "src/message/lemmas.rs",
         "lemma": "super::examples::lemma_example_fetch()",
         "witness": "decode_renderer_message(seq![0x82u8, 0x18, 0x79, 0x01]) is Some"
+      }
+    },
+    {
+      "id": "msg-open-tab-tag",
+      "file": "src/message/spec.rs",
+      "find": "Message::OpenTab { url } => seq![Token::Array(2), Token::Uint(21),",
+      "replace": "Message::OpenTab { url } => seq![Token::Array(2), Token::Uint(22),",
+      "expect": "killed",
+      "reason": "OpenTab is written with tag 22, which nothing reads: lemma_decode_encode_message is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "lemma_decode_encode_message(Message::OpenTab { url: seq![0x61u8] })",
+        "witness": "message_ok(Message::OpenTab { url: seq![0x61u8] }) && decode_message(encode_message(Message::OpenTab { url: seq![0x61u8] })) != Some(Message::OpenTab { url: seq![0x61u8] })"
+      }
+    },
+    {
+      "id": "msg-open-tab-parse-tag",
+      "file": "src/message/spec.rs",
+      "find": "} else if tag == 21 {",
+      "replace": "} else if tag == 23 {",
+      "expect": "killed",
+      "reason": "The parser reads OpenTab under tag 23: lemma_decode_encode_message is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "lemma_decode_encode_message(Message::OpenTab { url: seq![0x62u8] })",
+        "witness": "message_ok(Message::OpenTab { url: seq![0x62u8] }) && decode_message(encode_message(Message::OpenTab { url: seq![0x62u8] })) != Some(Message::OpenTab { url: seq![0x62u8] })"
+      }
+    },
+    {
+      "id": "dir-open-tab-not-renderer",
+      "file": "src/message/spec.rs",
+      "find": "        | Message::OpenTab { .. }\n        | Message::Fetch { .. }",
+      "replace": "        | Message::Fetch { .. }",
+      "expect": "killed",
+      "reason": "OpenTab is not counted as a renderer message: the kernel would refuse it, so lemma_example_open_tab is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "super::examples::lemma_example_open_tab()",
+        "witness": "decode_renderer_message(seq![0x82u8, 0x15, 0x62, 0x2F, 0x61]) is None"
+      }
+    },
+    {
+      "id": "msg-open-tab-never-parsed",
+      "file": "src/message/spec.rs",
+      "find": "Token::Text(s) => Some(Message::OpenTab { url: s }), _ => None } } else { None }",
+      "replace": "Token::Text(s) => None, _ => None } } else { None }",
+      "expect": "killed",
+      "reason": "The parser never yields an OpenTab: a message written could not be read back; lemma_decode_encode_message is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "lemma_decode_encode_message(Message::OpenTab { url: seq![0x63u8] })",
+        "witness": "message_ok(Message::OpenTab { url: seq![0x63u8] }) && decode_message(encode_message(Message::OpenTab { url: seq![0x63u8] })) != Some(Message::OpenTab { url: seq![0x63u8] })"
       }
     }
   ]

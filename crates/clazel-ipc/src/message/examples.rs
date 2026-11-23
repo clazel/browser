@@ -437,4 +437,16 @@ pub proof fn lemma_example_fetch()
     assert(decode_renderer_message(seq![0x88u8, 0x14, 0x01, 0x63, 0x47, 0x45, 0x54, 0x62, 0x2F, 0x61, 0x40, 0x40, 0x01, 0x81, 0x63, 0x78, 0x2D, 0x61]) == Some(Message::Fetch { request: 1, method: seq![0x47u8, 0x45, 0x54], url: seq![0x2Fu8, 0x61], content_type: Seq::<u8>::empty(), body: Seq::<u8>::empty(), mode: 1, headers: seq![seq![0x78u8, 0x2D, 0x61]] })) by (compute_only);
 }
 
+/// `OpenTab("/a")` is `[21, "/a"]`, from a renderer only (item 7.16).
+pub proof fn lemma_example_open_tab()
+    ensures
+        decode_renderer_message(seq![0x82u8, 0x15, 0x62, 0x2F, 0x61]) == Some(Message::OpenTab { url: seq![0x2Fu8, 0x61] }),
+        encode_message(Message::OpenTab { url: seq![0x2Fu8, 0x61] }) == seq![0x82u8, 0x15, 0x62, 0x2F, 0x61],
+        decode_renderer_message(seq![0x82u8, 0x15, 0x42, 0x2F, 0x61]) is None,
+{
+    assert(decode_renderer_message(seq![0x82u8, 0x15, 0x62, 0x2F, 0x61]) == Some(Message::OpenTab { url: seq![0x2Fu8, 0x61] })) by (compute_only);
+    assert(encode_message(Message::OpenTab { url: seq![0x2Fu8, 0x61] }) == seq![0x82u8, 0x15, 0x62, 0x2F, 0x61]) by (compute_only);
+    assert(decode_renderer_message(seq![0x82u8, 0x15, 0x42, 0x2F, 0x61]) is None) by (compute_only);
+}
+
 } // verus!

@@ -136,6 +136,11 @@ pub enum Msg {
         /// The URL, as the script wrote it.
         url: Vec<u8>,
     },
+    /// Renderer to kernel: `window.open` and `target=_blank` (item 7.16).
+    OpenTab {
+        /// The URL of the new tab, as the script or link wrote it.
+        url: Vec<u8>,
+    },
     /// Kernel to renderer: the script's response arrived.
     ScriptResponse {
         /// The renderer's id for the fetch.
@@ -391,6 +396,7 @@ impl View for Msg {
             Msg::StyleFailed { request } => Message::StyleFailed { request: *request },
             Msg::FetchScript { request, url } => Message::FetchScript { request: *request, url: url@ },
             Msg::UpdateUrl { replace, url } => Message::UpdateUrl { replace: *replace, url: url@ },
+            Msg::OpenTab { url } => Message::OpenTab { url: url@ },
             Msg::ScriptResponse { request, content_type } => Message::ScriptResponse { request: *request, content_type: content_type@ },
             Msg::ScriptBody { request, bytes } => Message::ScriptBody { request: *request, bytes: bytes@ },
             Msg::ScriptEnd { request } => Message::ScriptEnd { request: *request },
@@ -574,6 +580,11 @@ fn parse_fields(tag: u64, toks: &[Tok]) -> (r: Option<Msg>)
                 (Some(a), Some(b)) => Some(Msg::UpdateUrl { replace: a, url: b }),
                 _ => None,
             }
+        } else { None }
+    } else if tag == 21 {
+        if k == 1 {
+            let s = text_at(toks, 2)?;
+            Some(Msg::OpenTab { url: s })
         } else { None }
     } else if tag == 15 {
         if k == 3 {
@@ -977,6 +988,7 @@ pub fn is_from_renderer(m: &Msg) -> (r: bool)
             | Msg::FetchStyle { .. }
             | Msg::FetchScript { .. }
             | Msg::UpdateUrl { .. }
+            | Msg::OpenTab { .. }
             | Msg::Fetch { .. }
     )
 }
@@ -1246,6 +1258,7 @@ fn message_tokens(m: &Msg) -> (t: Vec<Tok>)
         Msg::StyleFailed { request } => toks3(Tok::Array(2), Tok::Uint(113), Tok::Uint(*request)),
         Msg::FetchScript { request, url } => toks4(Tok::Array(3), Tok::Uint(16), Tok::Uint(*request), Tok::Text(copy(url.as_slice()))),
         Msg::UpdateUrl { replace, url } => toks4(Tok::Array(3), Tok::Uint(17), Tok::Bool(*replace), Tok::Text(copy(url.as_slice()))),
+        Msg::OpenTab { url } => toks3(Tok::Array(2), Tok::Uint(21), Tok::Text(copy(url.as_slice()))),
         Msg::ScriptResponse { request, content_type } => toks4(Tok::Array(3), Tok::Uint(115), Tok::Uint(*request), Tok::Bytes(copy(content_type.as_slice()))),
         Msg::ScriptBody { request, bytes } => toks4(Tok::Array(3), Tok::Uint(116), Tok::Uint(*request), Tok::Bytes(copy(bytes.as_slice()))),
         Msg::ScriptEnd { request } => toks3(Tok::Array(2), Tok::Uint(117), Tok::Uint(*request)),

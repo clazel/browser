@@ -139,6 +139,8 @@ fn all() -> Vec<Msg> {
             replace: true,
             url: t(""),
         },
+        Msg::OpenTab { url: t("/popup?a=1") },
+        Msg::OpenTab { url: t("") },
         Msg::ScriptResponse {
             request: u64::MAX,
             content_type: t("text/javascript"),
@@ -305,6 +307,7 @@ fn the_kernel_decoder_takes_only_renderer_messages() {
                 | Msg::FetchStyle { .. }
                 | Msg::FetchScript { .. }
                 | Msg::UpdateUrl { .. }
+                | Msg::OpenTab { .. }
                 | Msg::Fetch { .. }
         );
         assert_eq!(
