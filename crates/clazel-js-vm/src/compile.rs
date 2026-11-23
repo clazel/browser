@@ -218,9 +218,10 @@ fn with_stack<T: Send>(
     // them, each a few frames): a program that deep needs a bigger stack than
     // a test thread has, as the parser does.
     const SMALL: usize = 256;
-    if ast.nodes.len() <= SMALL {
+    if ast.nodes.len() <= SMALL || clazel_js_syntax::exec::inline() {
         return f(ast, src);
     }
+    clazel_js_syntax::exec::note_big_stack_thread();
     std::thread::scope(|s| {
         match std::thread::Builder::new()
             .stack_size(256 * 1024 * 1024)

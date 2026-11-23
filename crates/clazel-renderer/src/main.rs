@@ -102,6 +102,11 @@ fn polled_input() -> Option<io::Stdin> {
     None
 }
 
+/// The renderer's stack: the engine parses and compiles on its caller's
+/// stack (`clazel_js::set_inline_parsing`), and a source nested as deeply as
+/// the parser accepts needs this much, as the helper threads it replaces had.
+const STACK: usize = 256 * 1024 * 1024;
+
 fn main() -> ExitCode {
     let width = width();
     // Fonts and the list socket are opened before the sandbox, which forbids
@@ -120,8 +125,49 @@ fn main() -> ExitCode {
         },
     };
     let polled_input = polled_input();
-    // First act, before a byte is read: fail closed.
-    if let Err(failure) = clazel_renderer::sandbox::enter() {
+    // The sandbox, first act, before a byte is read: fail closed. The seccomp
+    // allowlist has no `clone`, so the one thread the renderer runs on is made
+    // now, and the engine is told to make none of its own. What is
+    // process-wide is done first, on this, the only thread (`unshare(USER)`
+    // fails in a multithreaded one); then the renderer thread is made, and
+    // enters the rest from inside, before it reads anything. Its seccomp
+    // filter goes on every thread of the process
+    // (`SECCOMP_FILTER_FLAG_TSYNC`, `clazel_sys::linux::
+    // seccomp_set_mode_filter_all_threads`, as the GPU process's does,
+    // `clazel-sandbox/src/syscalls.rs`'s `GPU_EXTRA` documents), so this
+    // thread, which does nothing from now but wait in `join`, is filtered too.
+    // macOS's Seatbelt and Windows's AppContainer are the process's, already
+    // entered by `enter_process`.
+    if let Err(failure) = clazel_renderer::sandbox::enter_process() {
+        eprintln!("clazel-renderer: {failure}");
+        return ExitCode::from(71);
+    }
+    clazel_js::set_inline_parsing(true);
+    let worker = std::thread::Builder::new()
+        .name("renderer".to_owned())
+        .stack_size(STACK)
+        .spawn(move || renderer(width, &fonts, list, polled_input));
+    match worker.map(std::thread::JoinHandle::join) {
+        Ok(Ok(code)) => code,
+        Ok(Err(_)) => {
+            eprintln!("clazel-renderer: the renderer thread panicked");
+            ExitCode::from(70)
+        }
+        Err(e) => {
+            eprintln!("clazel-renderer: cannot make the renderer thread: {e}");
+            ExitCode::from(71)
+        }
+    }
+}
+
+/// The renderer thread: the rest of the sandbox, then the loop.
+fn renderer(
+    width: usize,
+    fonts: &clazel_renderer::page::fonts::Fonts,
+    list: Option<ListFile>,
+    polled_input: Option<PolledInput>,
+) -> ExitCode {
+    if let Err(failure) = clazel_renderer::sandbox::enter_thread() {
         eprintln!("clazel-renderer: {failure}");
         return ExitCode::from(71);
     }
@@ -136,8 +182,8 @@ fn main() -> ExitCode {
         Some(list) => {
             let list = Box::leak(Box::new(list));
             match polled_input {
-                Some(input) => clazel_renderer::run_graphics(input, io::stdout(), list, &fonts),
-                None => clazel_renderer::run_graphics(io::stdin(), io::stdout(), list, &fonts),
+                Some(input) => clazel_renderer::run_graphics(input, io::stdout(), list, fonts),
+                None => clazel_renderer::run_graphics(io::stdin(), io::stdout(), list, fonts),
             }
         }
         None => clazel_renderer::run_with_width(io::stdin(), io::stdout(), width),
@@ -150,3 +196,15 @@ fn main() -> ExitCode {
         }
     }
 }
+
+/// What `open_list` returns.
+#[cfg(not(windows))]
+type ListFile = std::fs::File;
+#[cfg(windows)]
+type ListFile = clazel_sys::windows::Inherited;
+
+/// What `polled_input` returns.
+#[cfg(unix)]
+type PolledInput = Polled;
+#[cfg(windows)]
+type PolledInput = io::Stdin;
