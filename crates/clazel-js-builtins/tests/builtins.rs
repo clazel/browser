@@ -49,9 +49,11 @@ fn r_of(src: &str) -> Result<String, String> {
 /// Runs each `(script, expected ToString of r)`.
 fn check(cases: &[(&str, &str)]) -> Result<(), String> {
     // Each case builds a VM and installs every built-in, which Miri runs
-    // slowly (object_constructor_and_prototype took 298 s there, at xtask's
-    // 300 s limit), so under Miri every third case runs. Natively, all do.
-    let stride = if cfg!(miri) { 3 } else { 1 };
+    // slowly (object_constructor_and_prototype took 298 s there at a stride
+    // of 3, at xtask's 300 s limit, and install grew with Symbol, the
+    // iterators and String: about 25 s a case), so under Miri every eighth
+    // case runs, as in the other built-in tests. Natively, all do.
+    let stride = if cfg!(miri) { 8 } else { 1 };
     for (src, want) in cases.iter().step_by(stride) {
         let got = r_of(src)?;
         if got != *want {
