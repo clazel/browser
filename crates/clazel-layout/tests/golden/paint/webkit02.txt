@@ -120,117 +120,56 @@ fill 0,0 800x600 #ffffffff
 #data "<select><hr>"
 scale 1
 fill 0,0 800x600 #ffffffff
-fill 8,8 784x1 #ff808080
-fill 8,9 784x1 #ff808080
-push-clip 9,9 782x0
-pop-clip
-push-clip 9,9 782x0
-pop-clip
 
 #case 26
 #data "<select><option><hr>"
 scale 1
 fill 0,0 800x600 #ffffffff
-fill 8,8 784x1 #ff808080
-fill 8,9 784x1 #ff808080
-push-clip 9,9 782x0
-pop-clip
-push-clip 9,9 782x0
-pop-clip
 
 #case 27
 #data "<select><optgroup><option><hr>"
 scale 1
 fill 0,0 800x600 #ffffffff
-fill 8,8 784x1 #ff808080
-fill 8,9 784x1 #ff808080
-push-clip 9,9 782x0
-pop-clip
-push-clip 9,9 782x0
-pop-clip
 
 #case 28
 #data "<select><optgroup><hr>"
 scale 1
 fill 0,0 800x600 #ffffffff
-fill 8,8 784x1 #ff808080
-fill 8,9 784x1 #ff808080
-push-clip 9,9 782x0
-pop-clip
-push-clip 9,9 782x0
-pop-clip
 
 #case 29
 #data "<select><option><optgroup><hr>"
 scale 1
 fill 0,0 800x600 #ffffffff
-fill 8,8 784x1 #ff808080
-fill 8,9 784x1 #ff808080
-push-clip 9,9 782x0
-pop-clip
-push-clip 9,9 782x0
-pop-clip
 
 #case 30
 #data "<table><tr><td><select><hr>"
 scale 1
 fill 0,0 800x600 #ffffffff
-fill 11,19 2x1 #ff808080
-fill 11,20 2x1 #ff808080
-push-clip 12,20 0x0
-pop-clip
-push-clip 12,20 0x0
-pop-clip
 
 #case 31
 #data "<table><tr><td><select><option><hr>"
 scale 1
 fill 0,0 800x600 #ffffffff
-fill 11,19 2x1 #ff808080
-fill 11,20 2x1 #ff808080
-push-clip 12,20 0x0
-pop-clip
-push-clip 12,20 0x0
-pop-clip
 
 #case 32
 #data "<table><tr><td><select><optgroup><option><hr>"
 scale 1
 fill 0,0 800x600 #ffffffff
-fill 11,19 2x1 #ff808080
-fill 11,20 2x1 #ff808080
-push-clip 12,20 0x0
-pop-clip
-push-clip 12,20 0x0
-pop-clip
 
 #case 33
 #data "<table><tr><td><select><optgroup><hr>"
 scale 1
 fill 0,0 800x600 #ffffffff
-fill 11,19 2x1 #ff808080
-fill 11,20 2x1 #ff808080
-push-clip 12,20 0x0
-pop-clip
-push-clip 12,20 0x0
-pop-clip
 
 #case 34
 #data "<table><tr><td><select><option><optgroup><hr>"
 scale 1
 fill 0,0 800x600 #ffffffff
-fill 11,19 2x1 #ff808080
-fill 11,20 2x1 #ff808080
-push-clip 12,20 0x0
-pop-clip
-push-clip 12,20 0x0
-pop-clip
 
 #case 35
 #data "<select><div><i></div><option>option"
 scale 1
 fill 0,0 800x600 #ffffffff
-text -8,-9 83x48 #ff000000 face=0 size=1024 glyphs=6 first=512,1463
 
 #case 36
 #data "<div><i></div><option>option"
@@ -242,16 +181,11 @@ text -8,-9 83x48 #ff000000 face=0 size=1024 glyphs=6 first=512,1463
 #data "<select><div>div 1</div><button>button</button><div>div 2</div><datalist><option>option</option></datalist><div>div 3</div></select>"
 scale 1
 fill 0,0 800x600 #ffffffff
-text -8,-9 72x48 #ff000000 face=0 size=1024 glyphs=5 first=512,1463
-text -8,10 85x48 #ff000000 face=0 size=1024 glyphs=6 first=512,2656
-text -8,28 72x48 #ff000000 face=0 size=1024 glyphs=5 first=512,3849
-text -8,47 72x48 #ff000000 face=0 size=1024 glyphs=5 first=512,5042
 
 #case 38
 #data "<select><button>button</select>"
 scale 1
 fill 0,0 800x600 #ffffffff
-text -8,-9 85x48 #ff000000 face=0 size=1024 glyphs=6 first=512,1463
 
 #case 39
 #data "<select><datalist>datalist</select>"
@@ -261,18 +195,17 @@ fill 0,0 800x600 #ffffffff
 #case 40
 #data "<select><button><select></select></button></select>"
 scale 1
-fill 0,-7 800x607 #ffffffff
+fill 0,0 800x600 #ffffffff
 
 #case 41
 #data "<select><button><div><select></select>"
 scale 1
-fill 0,-7 800x607 #ffffffff
+fill 0,0 800x600 #ffffffff
 
 #case 42
 #data "<select><div><option><img>option</option></div></select>"
 scale 1
 fill 0,0 800x600 #ffffffff
-text -8,-9 83x48 #ff000000 face=0 size=1024 glyphs=6 first=512,1463
 
 #case 43
 #data "<select><input>"
@@ -283,34 +216,24 @@ fill 0,0 800x600 #ffffffff
 #data "<select><button><selectedcontent></button><option>X"
 scale 1
 fill 0,0 800x600 #ffffffff
-text -8,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
 
 #case 45
 #data "<select><button><selectedcontent></button><option>x<i>i<b>ib</i>b"
 scale 1
 fill 0,0 800x600 #ffffffff
-text -8,-9 41x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
-text 1,-9 37x48 #ff000000 face=0 size=1024 glyphs=1 first=1090,1463
-text 6,-9 48x48 #ff000000 face=0 size=1024 glyphs=2 first=1418,1463
-text 22,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=2401,1463
 
 #case 46
 #data "<select><button><selectedcontent></button><option>X<option>Y"
 scale 1
 fill 0,0 800x600 #ffffffff
-text -8,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
-text 3,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=1241,1463
 
 #case 47
 #data "<select><button><selectedcontent></button><option>X<option selected>Y"
 scale 1
 fill 0,0 800x600 #ffffffff
-text -8,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
-text 3,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=1241,1463
 
 #case 48
 #data "<font><select><option>a</option></font></select>"
 scale 1
 fill 0,0 800x600 #ffffffff
-text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
 

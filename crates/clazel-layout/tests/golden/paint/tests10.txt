@@ -109,19 +109,13 @@ text -8,76 72x48 #ff000000 face=0 size=1024 glyphs=4 first=512,6921
 #data "<!DOCTYPE html><body><table><tr><td><select><svg><g>foo</g><g>bar</g><p>baz</table><p>quux"
 scale 1
 fill 0,0 800x600 #ffffffff
-text -5,-6 57x48 #ff000000 face=0 size=1024 glyphs=3 first=704,1655
-text 20,-6 60x48 #ff000000 face=0 size=1024 glyphs=3 first=2316,1655
-text -5,29 60x48 #ff000000 face=0 size=1024 glyphs=3 first=704,3872
-text -8,82 72x48 #ff000000 face=0 size=1024 glyphs=4 first=512,7305
+text -8,39 72x48 #ff000000 face=0 size=1024 glyphs=4 first=512,4562
 
 #case 17
 #data "<!DOCTYPE html><body><table><select><svg><g>foo</g><g>bar</g><p>baz</table><p>quux"
 scale 1
 fill 0,0 800x600 #ffffffff
-text -8,-9 57x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
-text 17,-9 60x48 #ff000000 face=0 size=1024 glyphs=3 first=2124,1463
-text -8,26 60x48 #ff000000 face=0 size=1024 glyphs=3 first=512,3680
-text -8,76 72x48 #ff000000 face=0 size=1024 glyphs=4 first=512,6921
+text -8,33 72x48 #ff000000 face=0 size=1024 glyphs=4 first=512,4178
 
 #case 18
 #data "<!DOCTYPE html><body></body></html><svg><g>foo</g><g>bar</g><p>baz"

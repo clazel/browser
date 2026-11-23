@@ -34,7 +34,6 @@ fill 0,0 800x600 #ffffffff
 #data "<table><select><option>3</select></table>"
 scale 1
 fill 0,0 800x600 #ffffffff
-text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
 
 #case 7
 #data "<table><select><table></table></select></table>"
@@ -50,8 +49,7 @@ fill 0,0 800x600 #ffffffff
 #data "<table><select><option>A<tr><td>B</td></tr></table>"
 scale 1
 fill 0,0 800x600 #ffffffff
-text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
-text -5,13 44x48 #ff000000 face=0 size=1024 glyphs=1 first=704,2848
+text -5,17 44x48 #ff000000 face=0 size=1024 glyphs=1 first=704,3104
 
 #case 10
 #data "<table><td></body></caption></col></colgroup></html>foo"

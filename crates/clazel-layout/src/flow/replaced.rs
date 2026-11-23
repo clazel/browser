@@ -62,6 +62,10 @@ pub struct Natural {
     pub ratio: Option<(i32, i32)>,
 }
 
+/// 4px: the border and padding a `select` list's fixed look adds (item
+/// 6.15).
+const SELECT_INSET: i32 = 4 * 64;
+
 /// 13px, a checkbox's side.
 const CHECK: i32 = 13 * 64;
 
@@ -97,6 +101,17 @@ pub fn natural(
         Replaced::Iframe { .. } => Natural {
             width: None,
             height: None,
+            ratio: None,
+        },
+        // Item 6.15: a select list, `chars` wide and `rows` lines high, and
+        // 4px more in each direction for the list's border and padding.
+        Replaced::Select { rows, chars } => Natural {
+            width: Some(chars_to_px(*chars, m.average, m.maximum).saturating_add(SELECT_INSET)),
+            height: Some(
+                i32::try_from(i64::from(*rows).saturating_mul(i64::from(line)))
+                    .unwrap_or(i32::MAX)
+                    .saturating_add(SELECT_INSET),
+            ),
             ratio: None,
         },
         Replaced::Input(Input::Text { chars }) => text(*chars),

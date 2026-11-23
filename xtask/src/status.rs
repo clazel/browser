@@ -83,6 +83,7 @@ const PLACES: &[(&str, Place)] = &[
     ("clazel-image-shape", Place::Renderer),
     ("clazel-gif", Place::Renderer),
     ("clazel-forms", Place::Renderer),
+    ("clazel-forms-edit", Place::Renderer),
     ("clazel-png", Place::Renderer),
     ("clazel-svg", Place::Renderer),
     ("clazel-jpeg", Place::Renderer),

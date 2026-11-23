@@ -1,0 +1,14 @@
+dd....................oo|
+-d....................o.|
+-dBBBBBBBBBBBBBBBBBBBBo.|
+-dBBBBBBBBBBBBBBBBBBBBo.|
+-dBB######....######BBo.|
+-dBB######....######BBo.|
+-dBB######....######BBo.|
+-dBB######....######BBo.|
+-dBB######....######BBo.|
+ddBB######....######BBoo|
+..BBBBBBBBBBBBBBBBBBBB..|
+..BBBBBBBBBBBBBBBBBBBB..|
+........................|
+........................|

@@ -69,51 +69,55 @@ root (anonymous) 0,0 800x600
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      block (anonymous) 8,8 784x18.640625
-        line 8,8 784x18.640625 base=22.859375
-          inline <select> 8,8 10.1875x18.640625 start end
-          inline <option> 8,8 10.1875x18.640625 start end
-          text "3" x=8 base=22.859375 w=10.1875
-      table-wrapper <table> 8,26.640625 0x0 m=0,784,0,0
-        table <table> 8,26.640625 0x0
+      block (anonymous) 8,8 784x22.640625
+        line 8,8 784x22.640625 base=30.640625
+          atomic <select>
+        replaced <select> 8,8 38.234375x22.640625
+      table-wrapper <table> 8,30.640625 0x0 m=0,784,0,0
+        table <table> 8,30.640625 0x0
 
 #case 7
 #data "<table><select><table></table></select></table>"
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      block (anonymous) 8,8 784x0
-      table-wrapper <table> 8,8 0x0 m=0,784,0,0
-        table <table> 8,8 0x0
-      table-wrapper <table> 8,8 0x0 m=0,784,0,0
-        table <table> 8,8 0x0
+      block (anonymous) 8,8 784x22.640625
+        line 8,8 784x22.640625 base=30.640625
+          atomic <select>
+        replaced <select> 8,8 38.234375x22.640625
+      table-wrapper <table> 8,30.640625 0x0 m=0,784,0,0
+        table <table> 8,30.640625 0x0
+      table-wrapper <table> 8,30.640625 0x0 m=0,784,0,0
+        table <table> 8,30.640625 0x0
 
 #case 8
 #data "<table><select></table>"
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      block (anonymous) 8,8 784x0
-      table-wrapper <table> 8,8 0x0 m=0,784,0,0
-        table <table> 8,8 0x0
+      block (anonymous) 8,8 784x22.640625
+        line 8,8 784x22.640625 base=30.640625
+          atomic <select>
+        replaced <select> 8,8 38.234375x22.640625
+      table-wrapper <table> 8,30.640625 0x0 m=0,784,0,0
+        table <table> 8,30.640625 0x0
 
 #case 9
 #data "<table><select><option>A<tr><td>B</td></tr></table>"
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      block (anonymous) 8,8 784x18.640625
-        line 8,8 784x18.640625 base=22.859375
-          inline <select> 8,8 11.5625x18.640625 start end
-          inline <option> 8,8 11.5625x18.640625 start end
-          text "A" x=8 base=22.859375 w=11.5625
-      table-wrapper <table> 8,26.640625 17.765625x24.640625 m=0,766.234375,0,0
-        table <table> 8,26.640625 17.765625x24.640625
-          row-group <tbody> 10,28.640625 13.765625x20.640625
-            row <tr> 10,28.640625 13.765625x20.640625
-              cell <td> 10,28.640625 13.765625x20.640625 p=1,1,1,1
-                line 11,29.640625 11.765625x18.640625 base=44.5
-                  text "B" x=11 base=44.5 w=11.765625
+      block (anonymous) 8,8 784x22.640625
+        line 8,8 784x22.640625 base=30.640625
+          atomic <select>
+        replaced <select> 8,8 38.234375x22.640625
+      table-wrapper <table> 8,30.640625 17.765625x24.640625 m=0,766.234375,0,0
+        table <table> 8,30.640625 17.765625x24.640625
+          row-group <tbody> 10,32.640625 13.765625x20.640625
+            row <tr> 10,32.640625 13.765625x20.640625
+              cell <td> 10,32.640625 13.765625x20.640625 p=1,1,1,1
+                line 11,33.640625 11.765625x18.640625 base=48.5
+                  text "B" x=11 base=48.5 w=11.765625
 
 #case 10
 #data "<table><td></body></caption></col></colgroup></html>foo"
@@ -212,13 +216,18 @@ root (anonymous) 0,0 800x600
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      block <div> 8,8 784x0
-        block (anonymous) 8,8 784x0
-        table-wrapper <table> 8,8 0x0 m=0,784,0,0
-          table <table> 8,8 0x0
-        block (anonymous) 8,8 784x0
-        table-wrapper <table> 8,8 0x0 m=0,784,0,0
-          table <table> 8,8 0x0
+      block <div> 8,8 784x22.640625
+        block (anonymous) 8,8 784x22.640625
+          line 8,8 784x22.640625 base=30.640625
+            inline <svg> 8,15.78125 38.234375x18.640625 start end
+            inline <foreignObject> 8,15.78125 38.234375x18.640625 start end
+            atomic <select>
+              replaced <select> 8,8 38.234375x22.640625
+        table-wrapper <table> 8,30.640625 0x0 m=0,784,0,0
+          table <table> 8,30.640625 0x0
+        block (anonymous) 8,30.640625 784x0
+        table-wrapper <table> 8,30.640625 0x0 m=0,784,0,0
+          table <table> 8,30.640625 0x0
 
 #case 18
 #data "<table>a<!doctype html>"

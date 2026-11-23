@@ -1,0 +1,6 @@
+root
+  block <html>
+    block <body>
+      block <form>
+        block <div>
+          replaced <textarea> inline TextArea { cols: 10, rows: 3 }
