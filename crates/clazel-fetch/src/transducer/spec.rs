@@ -119,6 +119,21 @@
 //!   depend on the jar (`theorem_jar_only_in_sends`), so a caller that
 //!   applies them to a jar other fetches also change still runs this
 //!   transducer.
+//! - **Requests with a body (item 6.16).** The state holds a
+//!   [`crate::request::spec::Req`]: method, body, initiator and the origin
+//!   redirect-taint. The bytes sent are `crate::request::spec::request_bytes_req_cookie`
+//!   (the head, then the body). On a redirect the request is rewritten by
+//!   HTTP-redirect fetch step 12 (`crate::request::spec::rewrite_for_redirect`:
+//!   301 and 302 turn a `POST` into a `GET` without a body, 303 does so for
+//!   every method but `GET` and `HEAD`, 307 and 308 keep method and body, so
+//!   the body is sent again to the new URL, which the standard allows) and
+//!   the origin redirect-taint is set when the location's origin is not the
+//!   current URL's. The cookie context reads the method
+//!   (`method_is_safe`) and the initiator as the site for cookies (RFC
+//!   6265bis §5.2: a request with a client is same-site only if the client's
+//!   site is the target's), so `SameSite=Lax` and `Strict` cookies are not
+//!   sent on a cross-site `POST`. [`start`] is a `GET` with no body and no
+//!   client, as before; [`start_req`] is any request.
 //! - **The cookie parameters** are in [`UrlFns`]: the Public Suffix List
 //!   `rules` the cookie functions take, the URL as they read it
 //!   ([`request_url`]) and the URL Standard's "origin" of a URL, from which
@@ -286,6 +301,9 @@ pub struct State {
     pub redirects: nat,
     /// Where it is.
     pub phase: Phase,
+    /// Item 6.16: the rest of the request: method, body, initiator and the
+    /// origin redirect-taint (`crate::request::spec::Req`).
+    pub req: crate::request::spec::Req,
     /// Fetch's "redirect-taint" is "cross-site": some redirect crossed
     /// sites (see the modelling choices).
     pub tainted: bool,
@@ -414,11 +432,11 @@ pub open spec fn request_url(url: Url) -> RequestUrl {
 pub open spec fn request_context(urls: UrlFns, s: State) -> RequestContext {
     RequestContext::Http(clazel_cookie::storage::spec::HttpRequest {
         url_origin: (urls.origin)(s.url),
-        site_for_cookies: if s.tainted { Some(clazel_origin::spec::Origin::Opaque(0)) } else { None },
+        site_for_cookies: if s.tainted { Some(clazel_origin::spec::Origin::Opaque(0)) } else { s.req.initiator },
         is_reload_navigation: false,
         reloaded_document_was_same_site: false,
         navigates_top_level_traversable: true,
-        method_is_safe: true,
+        method_is_safe: crate::request::spec::method_is_safe(s.req),
         target_is_active_or_top_level: true,
     })
 }
@@ -469,8 +487,8 @@ pub open spec fn cookie_string(urls: UrlFns, s: State, jar: Seq<Cookie>, now: in
 /// The bytes sent for `url` with the cookie-string `cookie`, given `plain`,
 /// the request without a `Cookie` field: the request with it, or `plain`
 /// if no field value can carry it (see the modelling choices).
-pub open spec fn wire_bytes(url: Url, cookie: Seq<u8>, plain: Seq<u8>) -> Seq<u8> {
-    match crate::request::spec::request_bytes_cookie(url, cookie) {
+pub open spec fn wire_bytes(url: Url, req: crate::request::spec::Req, cookie: Seq<u8>, plain: Seq<u8>) -> Seq<u8> {
+    match crate::request::spec::request_bytes_req_cookie(url, req, cookie) {
         Some(bytes) => bytes,
         None => plain,
     }
@@ -479,14 +497,14 @@ pub open spec fn wire_bytes(url: Url, cookie: Seq<u8>, plain: Seq<u8>) -> Seq<u8
 /// Begin the request for `url`, after `redirects` redirects, with
 /// redirect-taint `tainted`: ask for its connection, or fail if it is a URL
 /// this client does not fetch.
-pub open spec fn begin(url: Url, redirects: nat, tainted: bool) -> (State, Seq<Action>) {
-    match (crate::request::spec::connect_to(url), crate::request::spec::request_bytes(url)) {
+pub open spec fn begin(url: Url, redirects: nat, tainted: bool, req: crate::request::spec::Req) -> (State, Seq<Action>) {
+    match (crate::request::spec::connect_to(url), crate::request::spec::request_bytes_req(url, req)) {
         (Some((host, port)), Some(_)) => (
-            State { url: url, redirects: redirects, phase: Phase::Connecting, tainted: tainted },
+            State { url: url, redirects: redirects, phase: Phase::Connecting, req: req, tainted: tainted },
             seq![Action::Connect { host: host, port: port, tls: crate::request::spec::uses_tls(url) }],
         ),
         _ => (
-            State { url: url, redirects: redirects, phase: Phase::Finished, tainted: tainted },
+            State { url: url, redirects: redirects, phase: Phase::Finished, req: req, tainted: tainted },
             seq![Action::Fail(Reason::NotFetched)],
         ),
     }
@@ -495,7 +513,14 @@ pub open spec fn begin(url: Url, redirects: nat, tainted: bool) -> (State, Seq<A
 /// The first state and actions of a fetch of `url`. (No jar: nothing is
 /// sent before the connection is open.)
 pub open spec fn start(url: Url) -> (State, Seq<Action>) {
-    begin(url, 0, false)
+    begin(url, 0, false, crate::request::spec::get_req())
+}
+
+/// Item 6.16: the first state and actions of a fetch of `url` as the request
+/// `req` (a method, a body, the initiator). `start(url)` is `start_req` of
+/// [`crate::request::spec::get_req`].
+pub open spec fn start_req(url: Url, req: crate::request::spec::Req) -> (State, Seq<Action>) {
+    begin(url, 0, false, req)
 }
 
 // ===========================================================================
@@ -647,6 +672,18 @@ pub open spec fn location_url(urls: UrlFns, response: Response, request_url: Url
     }
 }
 
+/// The request after a redirect to `location` with status `status`:
+/// [`crate::request::spec::rewrite_for_redirect`] (HTTP-redirect fetch step
+/// 12), and the origin redirect-taint set if the location's origin is not
+/// the current URL's (Fetch "serializing a request origin" step 2).
+pub open spec fn next_req(urls: UrlFns, s: State, status: nat, location: Url) -> crate::request::spec::Req {
+    let rewritten = crate::request::spec::rewrite_for_redirect(status, s.req);
+    crate::request::spec::Req {
+        origin_tainted: rewritten.origin_tainted || !clazel_origin::spec::same_origin((urls.origin)(s.url), (urls.origin)(location)),
+        ..rewritten
+    }
+}
+
 /// What a final response for the current request leads to (Fetch §4.5
 /// HTTP-redirect fetch); `open` says whether the connection is still
 /// open. The cookies are stored at `now`.
@@ -679,7 +716,15 @@ pub open spec fn on_final(urls: UrlFns, s: State, response: Response, open: bool
             // connection.
             // The redirect-taint (see the modelling choices).
             let tainted = s.tainted || !clazel_origin::spec::same_site(urls.rules, (urls.origin)(s.url), (urls.origin)(location));
-            let next = begin(location, s.redirects + 1, tainted);
+            // 12. "If one of the following is true: ... 301 or 302 and
+            // request's method is `POST`; ... 303 and request's method is
+            // not `GET` or `HEAD`; then: 12.1 Set request's method to `GET`
+            // and request's body to null. 12.2 ..." (the body headers are
+            // derived from the body); a 307 or 308 keeps method and body, so
+            // the next request sends the body again. The origin
+            // redirect-taint (Fetch "serializing a request origin" step 2)
+            // is set when the location's origin is not the current URL's.
+            let next = begin(location, s.redirects + 1, tainted, next_req(urls, s, response.status_line.status, location));
             (next.0, close_if(open) + next.1, ops)
         },
     }
@@ -710,9 +755,9 @@ pub open spec fn step(http: HttpFns, urls: UrlFns, s: State, input: Input, jar: 
             // The connection is open: send the request, with the `Cookie`
             // field of Fetch §3.1.1 from the jar (RFC 6265bis §5.8.3), and
             // the retrieval's step 5 as an operation.
-            Input::Connected => match crate::request::spec::request_bytes(s.url) {
+            Input::Connected => match crate::request::spec::request_bytes_req(s.url, s.req) {
                 Some(plain) => {
-                    let bytes = wire_bytes(s.url, cookie_string(urls, s, jar, now), plain);
+                    let bytes = wire_bytes(s.url, s.req, cookie_string(urls, s, jar, now), plain);
                     (
                         State { phase: Phase::Reading { received: seq![] }, ..s },
                         seq![Action::Send(bytes)],

@@ -52,6 +52,7 @@ use super::inline::{Ifc, intrinsic as line_sizes};
 use super::replaced::{natural, used_width};
 use super::state::Role;
 use crate::boxes::{BoxId, BoxKind, BoxTree};
+use crate::images::Images;
 
 /// A length that is not a percentage, else zero.
 fn fixed(v: Lp) -> i32 {
@@ -114,6 +115,8 @@ pub struct Tables<'a> {
     pub grids: &'a HashMap<BoxId, Grid>,
     /// The document is in quirks mode.
     pub quirks: bool,
+    /// The images, for the natural sizes of replaced `img` elements (item 6.11).
+    pub images: &'a Images,
 }
 
 /// The intrinsic sizes of every box of `tree` (see the module's modelling
@@ -128,7 +131,7 @@ pub fn sizes(
     arena: &Arena,
     tables: &Tables<'_>,
 ) -> Intrinsic {
-    let (grids, quirks) = (tables.grids, tables.quirks);
+    let (grids, quirks, images) = (tables.grids, tables.quirks, tables.images);
     let n = tree.boxes.len();
     let mut outer = vec![(0i32, 0i32); n];
     let mut content = vec![(0i32, 0i32); n];
@@ -138,7 +141,7 @@ pub fn sizes(
         let s = styles.get(b).unwrap_or(&initial);
         let own = match &lb.kind {
             BoxKind::Replaced { what, .. } => {
-                let w = used_width(natural(what, s, fonts, arena, lb.node), s, 0);
+                let w = used_width(natural(what, s, fonts, arena, lb.node, images), s, 0, None);
                 (w, w)
             }
             BoxKind::Table { .. } => {

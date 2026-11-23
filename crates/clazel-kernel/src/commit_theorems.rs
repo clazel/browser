@@ -300,17 +300,17 @@ proof fn lemma_carry_out_sent(urls: UrlFns, s: State, o: Seq<Output>, tab: nat, 
 }
 
 /// `begin_navigation` keeps [`all_sent`].
-proof fn lemma_begin_sent(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, o: Seq<Output>, tab: nat, url: Seq<u32>)
+proof fn lemma_begin_sent(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, o: Seq<Output>, tab: nat, url: Seq<u32>, req: clazel_fetch::request::spec::Req)
     requires
         all_sent(s.renderers, o),
     ensures
         ({
-            let (s1, out) = begin_navigation(rules, urls, fetch, s, tab, url);
+            let (s1, out) = begin_navigation(rules, urls, fetch, s, tab, url, req);
             all_sent(s1.renderers, o + out)
         }),
 {
     crate::invariant::lemma_find_by_tab(s.renderers, tab, 0);
-    let out = begin_navigation(rules, urls, fetch, s, tab, url).1;
+    let out = begin_navigation(rules, urls, fetch, s, tab, url, req).1;
     match find_by_tab(s.renderers, tab, 0) {
         None => {
             assert(o + out =~= o);
@@ -330,7 +330,7 @@ proof fn lemma_begin_sent(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetc
                         assert(o + (closes + out1) =~= (o + closes) + out1);
                     },
                     Some(parsed) => {
-                        let (fs, actions) = clazel_fetch::transducer::spec::start(parsed);
+                        let (fs, actions) = clazel_fetch::transducer::spec::start_req(parsed, req);
                         let nav = Navigation { url, fetch: fs, partition: crate::domain::domain_of_renderer(rules, old) };
                         let s1 = State { renderers: s0.renderers.update(i, Renderer { pending: Some(nav), ..old }), ..s0 };
                         lemma_all_pending(s0.renderers, o + closes, i, Some(nav));
@@ -384,8 +384,8 @@ proof fn lemma_open_tab_sent(
                 let s1 = State { renderers: s.renderers.push(Renderer { committed: false, id, tab: id, url, lock, pending: None }), next_id: id + 1, ..s };
                 lemma_all_prefix(s.renderers, o, spawn);
                 lemma_all_push(s.renderers, o + spawn, Renderer { committed: false, id, tab: id, url, lock, pending: None });
-                lemma_begin_sent(rules, urls, fetch, s1, o + spawn, id, url);
-                let out1 = begin_navigation(rules, urls, fetch, s1, id, url).1;
+                lemma_begin_sent(rules, urls, fetch, s1, o + spawn, id, url, clazel_fetch::request::spec::get_req());
+                let out1 = begin_navigation(rules, urls, fetch, s1, id, url, clazel_fetch::request::spec::get_req()).1;
                 assert(o + (spawn + out1) =~= (o + spawn) + out1);
             },
         },
@@ -426,7 +426,7 @@ proof fn lemma_net_sent(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch:
     }
 }
 
-/// `handle_message` keeps [`all_sent`]: only `Navigate` changes the
+/// `handle_message` keeps [`all_sent`]: only `Navigate` and `Submit` change the
 /// renderers, through `begin_navigation`.
 proof fn lemma_handle_message_sent(
     rules: Seq<clazel_psl::spec::Rule>,
@@ -452,7 +452,17 @@ proof fn lemma_handle_message_sent(
         if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
             if let Some(resolved) = (urls.resolve)(r.url, relative) {
                 if lock_of_url(urls, resolved, s.next_id) is Some {
-                    lemma_begin_sent(rules, urls, fetch, s, o, r.tab, resolved);
+                    lemma_begin_sent(rules, urls, fetch, s, o, r.tab, resolved, clazel_fetch::request::spec::get_req());
+                }
+            }
+        }
+    } else if let clazel_ipc::message::spec::Message::Submit { url, method, content_type, body } = m {
+        if let Some(req) = submit_request(r, method, content_type, body) {
+            if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+                if let Some(resolved) = (urls.resolve)(r.url, relative) {
+                    if lock_of_url(urls, resolved, s.next_id) is Some {
+                        lemma_begin_sent(rules, urls, fetch, s, o, r.tab, resolved, req);
+                    }
                 }
             }
         }
@@ -494,7 +504,10 @@ proof fn lemma_step_sent(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch
             lemma_open_tab_sent(rules, urls, fetch, s, o, url, script);
         },
         Event::NavigateTab { tab, url } => {
-            lemma_begin_sent(rules, urls, fetch, s, o, tab, url);
+            lemma_begin_sent(rules, urls, fetch, s, o, tab, url, clazel_fetch::request::spec::get_req());
+        },
+        Event::SubmitTab { tab, url, req } => {
+            lemma_begin_sent(rules, urls, fetch, s, o, tab, url, req);
         },
         Event::Net { conn, input } => {
             lemma_net_sent(rules, urls, fetch, s, o, conn, input);
@@ -540,6 +553,9 @@ proof fn lemma_run_sent(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch:
         all_sent(run_state(rules, urls, fetch, s, t).renderers, o + run_outputs(rules, urls, fetch, s, t)),
     decreases t.len(),
 {
+    // Only `lemma_step_sent` is needed of `step`; its unfolded definition
+    // (larger with item 6.16's `Submit`) ran the solver out of resources.
+    hide(step);
     if t.len() == 0 {
         assert(o + run_outputs(rules, urls, fetch, s, t) =~= o);
     } else {

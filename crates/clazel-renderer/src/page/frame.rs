@@ -172,6 +172,9 @@ pub fn frame(
                     open = false;
                 }
             }
+            // Image items are item 6.18's: it uploads the pixels and draws them (6.10, 6.12);
+            // until then a frame has none to draw.
+            Item::Image { .. } => {}
             Item::Fill { rect, colour } => {
                 if full {
                     continue;

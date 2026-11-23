@@ -1,0 +1,417 @@
+{
+  "mutations": [
+    {
+      "id": "lower-boundary",
+      "file": "src/spec.rs",
+      "find": "if 0x41 <= c <= 0x5A {",
+      "replace": "if 0x41 <= c < 0x5A {",
+      "expect": "killed",
+      "reason": "Leaves Z uppercase: ASCII case-insensitive matching of \"Z\" fails, so lemma_examples' ascii_lower row is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_examples()",
+        "witness": "ascii_lower(seq![0x5Au32, 0x41, 0x40, 0x5B])[0] == 0x5Au32"
+      }
+    },
+    {
+      "id": "whitespace-no-form-feed",
+      "file": "src/spec.rs",
+      "find": "c == 0x09 || c == 0x0A || c == 0x0C || c == 0x0D || c == 0x20",
+      "replace": "c == 0x09 || c == 0x0A || c == 0x0D || c == 0x20",
+      "expect": "killed",
+      "reason": "Form feed is not ASCII whitespace: strip_whitespace keeps it, so lemma_examples' strip_whitespace row is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_examples()",
+        "witness": "strip_whitespace(seq![0x0Cu32, 0x61, 0x0C])[0] == 0x0Cu32"
+      }
+    },
+    {
+      "id": "strip-newlines-keeps-cr",
+      "file": "src/spec.rs",
+      "find": "} else if s[0] == 0x0A || s[0] == 0x0D {",
+      "replace": "} else if s[0] == 0x0A {",
+      "expect": "killed",
+      "reason": "Keeps CR: strip_newlines of \"a CR LF b\" is \"a CR b\", so lemma_examples' strip_newlines row is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_examples()",
+        "witness": "strip_newlines(seq![0x61u32, 0x0D, 0x0A, 0x62])[1] == 0x0Du32"
+      }
+    },
+    {
+      "id": "crlf-becomes-two-lf",
+      "file": "src/spec.rs",
+      "find": "seq![0x0Au32] + normalize_newlines(s.skip(2))",
+      "replace": "seq![0x0Au32] + normalize_newlines(s.skip(1))",
+      "expect": "killed",
+      "reason": "CR LF becomes two LF (the LF is kept after the CR's LF), so lemma_examples' normalize_newlines row is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_examples()",
+        "witness": "normalize_newlines(seq![0x61u32, 0x0D, 0x0A, 0x62, 0x0D, 0x63])[2] == 0x0Au32"
+      }
+    },
+    {
+      "id": "negative-zero-is-an-error",
+      "file": "src/spec.rs",
+      "find": "if negative && v != 0 {",
+      "replace": "if negative {",
+      "expect": "killed",
+      "reason": "\"-0\" is an error: lemma_examples says it parses to 0 (the rules for parsing integers give 0 for \"-0\").",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_examples()",
+        "witness": "parse_non_negative(seq![0x2Du32, 0x30]) is None"
+      }
+    },
+    {
+      "id": "decimal-digit-offset",
+      "file": "src/spec.rs",
+      "find": "seq![(0x30 + n % 10) as u32]",
+      "replace": "seq![(0x31 + n % 10) as u32]",
+      "expect": "killed",
+      "reason": "Every digit after the first is one too high, so lemma_examples' decimal(345) row is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_examples()",
+        "witness": "decimal(345)[2] == 0x36u32"
+      }
+    },
+    {
+      "id": "decimal-single-digit-offset",
+      "file": "src/spec.rs",
+      "find": "seq![(0x30 + n) as u32]",
+      "replace": "seq![(0x31 + n) as u32]",
+      "expect": "killed",
+      "reason": "A single digit is one too high, so lemma_examples' decimal(9) row is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_examples()",
+        "witness": "decimal(9)[0] == 0x3Au32"
+      }
+    },
+    {
+      "id": "width-zero-is-zero",
+      "file": "src/spec.rs",
+      "find": "Some(w) => if w > 0 {",
+      "replace": "Some(w) => if w >= 0 {",
+      "expect": "killed",
+      "reason": "cols=\"0\" gives character width 0 instead of the default 20, so lemma_examples' width_of row is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_examples()",
+        "witness": "width_of(Some(seq![0x30u32])) == 0nat"
+      }
+    },
+    {
+      "id": "wrap-one-late",
+      "file": "src/spec.rs",
+      "find": "} else if col >= cols {",
+      "replace": "} else if col > cols {",
+      "expect": "killed",
+      "reason": "Lines are broken after cols + 1 characters, so lemma_examples' wrap_from row is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_examples()",
+        "witness": "wrap_from(seq![0x61u32, 0x62, 0x63, 0x64, 0x65], 2, 0)[2] == 0x63u32"
+      }
+    },
+    {
+      "id": "email-keeps-whitespace",
+      "file": "src/spec.rs",
+      "find": "InputType::Url | InputType::Email => strip_whitespace(strip_newlines(v)),",
+      "replace": "InputType::Url | InputType::Email => strip_newlines(v),",
+      "expect": "killed",
+      "reason": "Email values keep their surrounding whitespace, so lemma_examples' sanitize(Email) row is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_examples()",
+        "witness": "sanitize(InputType::Email, seq![0x20u32, 0x61, 0x0A, 0x20])[0] == 0x20u32"
+      }
+    },
+    {
+      "id": "entry-skips-disabled-check",
+      "file": "src/spec.rs",
+      "find": "has_datalist_ancestor(doc, field) || is_disabled(doc, field) || (is_button(doc, field) && submitter != Some(field))",
+      "replace": "has_datalist_ancestor(doc, field) || (is_button(doc, field) && submitter != Some(field))",
+      "expect": "killed-incidentally",
+      "reason": "Step 5.1 forgets disabled controls. No lemma about the spec is false (an entry's name stays non-empty), so only the proof script breaks: exec/fields.rs's lemma_field_cases and field_entries_exec no longer equal the spec. A certificate needs a concrete document, which is left."
+    },
+    {
+      "id": "entry-skips-datalist-check",
+      "file": "src/spec.rs",
+      "find": "has_datalist_ancestor(doc, field) || is_disabled(doc, field) ||",
+      "replace": "is_disabled(doc, field) ||",
+      "expect": "killed-incidentally",
+      "reason": "Step 5.1 forgets the datalist ancestor. Same as entry-skips-disabled-check: the exec proofs break, no spec lemma does."
+    },
+    {
+      "id": "button-without-submitter",
+      "file": "src/spec.rs",
+      "find": "(is_button(doc, field) && submitter != Some(field))",
+      "replace": "(is_button(doc, field) && false)",
+      "expect": "killed-incidentally",
+      "reason": "Every button is included, not only the submitter. Same as entry-skips-disabled-check."
+    },
+    {
+      "id": "image-x-as-dot-y",
+      "file": "src/spec.rs",
+      "find": "create_entry(name + seq![0x78u32], decimal(control(st, field).x))",
+      "replace": "create_entry(name + seq![0x78u32], decimal(control(st, field).y))",
+      "expect": "killed-incidentally",
+      "reason": "The x entry carries y. Same as entry-skips-disabled-check."
+    },
+    {
+      "id": "image-name-without-dot",
+      "file": "src/spec.rs",
+      "find": "v + seq![0x2Eu32]",
+      "replace": "v",
+      "expect": "killed-incidentally",
+      "reason": "An image button's name has no \".\" before x and y. Same as entry-skips-disabled-check."
+    },
+    {
+      "id": "dirname-for-any-control",
+      "file": "src/spec.rs",
+      "find": "Some(d) => if d.len() > 0 && is_auto_directionality(doc, field) {",
+      "replace": "Some(d) => if d.len() > 0 {",
+      "expect": "killed-incidentally",
+      "reason": "The dirname entry is added for every control, not only the auto-directionality ones. Same as entry-skips-disabled-check."
+    },
+    {
+      "id": "fieldset-ignores-legend",
+      "file": "src/spec.rs",
+      "find": "&& first_legend_child(doc, p)\n            != Some(child) {",
+      "replace": "{",
+      "expect": "killed-incidentally",
+      "reason": "A control under a disabled fieldset's first legend is disabled too. Same as entry-skips-disabled-check."
+    },
+    {
+      "id": "option-disabled-ignores-attribute",
+      "file": "src/spec.rs",
+      "find": "    if has_attr(doc, o, b\"disabled\"@) {\n        true",
+      "replace": "    if false {\n        true",
+      "expect": "killed-incidentally",
+      "reason": "An option's own disabled attribute is ignored. Same as entry-skips-disabled-check."
+    },
+    {
+      "id": "owner-ignores-form-attribute",
+      "file": "src/spec.rs",
+      "find": "if is_listed(doc, e) && has_attr(doc, e, b\"form\"@) && dom::connected(doc, e) {",
+      "replace": "if false {",
+      "expect": "killed-incidentally",
+      "reason": "The form attribute is ignored: the nearest ancestor form is always the owner. Same as entry-skips-disabled-check."
+    },
+    {
+      "id": "selected-ignores-option-disabled",
+      "file": "src/spec.rs",
+      "find": "if control(st, o).selected && !option_disabled(doc, o) {",
+      "replace": "if control(st, o).selected {",
+      "expect": "killed-incidentally",
+      "reason": "A disabled option that is selected is submitted. Same as entry-skips-disabled-check."
+    },
+    {
+      "id": "crlf-pair-reread",
+      "file": "src/submit/spec.rs",
+      "find": "seq![0x0Du32, 0x0Au32] + crlf_newlines(s.skip(2))",
+      "replace": "seq![0x0Du32, 0x0Au32] + crlf_newlines(s.skip(1))",
+      "expect": "killed",
+      "reason": "CR LF is not consumed together: the LF is replaced again, so CR LF becomes CR LF CR LF and examples::lemma_examples' crlf row is false.",
+      "certificate": {
+        "file": "src/submit/lemmas.rs",
+        "lemma": "crate::submit::examples::lemma_examples()",
+        "witness": "crlf_newlines(seq![0x0Du32, 0x0Au32]).len() == 4"
+      }
+    },
+    {
+      "id": "crlf-lf-untouched",
+      "file": "src/submit/spec.rs",
+      "find": "} else if s[0] == 0x0A {\n        seq![0x0Du32, 0x0Au32] + crlf_newlines(s.drop_first())",
+      "replace": "} else if s[0] == 0x0B {\n        seq![0x0Du32, 0x0Au32] + crlf_newlines(s.drop_first())",
+      "expect": "killed",
+      "reason": "A lone LF is left alone, so examples::lemma_examples' row for [LF] is false.",
+      "certificate": {
+        "file": "src/submit/lemmas.rs",
+        "lemma": "crate::submit::examples::lemma_examples()",
+        "witness": "crlf_newlines(seq![0x0Au32])[0] == 0x0Au32"
+      }
+    },
+    {
+      "id": "split-ws-only-space",
+      "file": "src/submit/spec.rs",
+      "find": "} else if is_ascii_whitespace(s[0]) {\n        (if cur.len() > 0 {",
+      "replace": "} else if s[0] == 0x20 {\n        (if cur.len() > 0 {",
+      "expect": "killed",
+      "reason": "Only SPACE separates tokens: TAB and FF join the token, so the split row of examples::lemma_examples is false.",
+      "certificate": {
+        "file": "src/submit/lemmas.rs",
+        "lemma": "crate::submit::examples::lemma_examples()",
+        "witness": "split_ws(seq![0x20u32, 0x61u32, 0x09u32, 0x0Cu32, 0x62u32, 0x63u32, 0x20u32]).len() == 1"
+      }
+    },
+    {
+      "id": "text-plain-lf-only",
+      "file": "src/submit/spec.rs",
+      "find": "pairs[0].value + seq![0x0Du32, 0x0Au32],",
+      "replace": "pairs[0].value + seq![0x0Au32],",
+      "expect": "killed",
+      "reason": "A pair ends with LF instead of CR LF, so examples::lemma_examples' text/plain row is false.",
+      "certificate": {
+        "file": "src/submit/lemmas.rs",
+        "lemma": "crate::submit::examples::lemma_examples()",
+        "witness": "text_plain_encode(seq![Entry { name: seq![0x61u32], value: seq![0x62u32] }]).len() == 4"
+      }
+    },
+    {
+      "id": "serialize-separator",
+      "file": "src/submit/spec.rs",
+      "find": "output.push(0x26u32)",
+      "replace": "output.push(0x3Bu32)",
+      "expect": "killed",
+      "reason": "Pairs are joined with U+003B instead of U+0026, so the urlencoded serializer row of examples::lemma_examples is false.",
+      "certificate": {
+        "file": "src/submit/lemmas.rs",
+        "lemma": "crate::submit::examples::lemma_examples()",
+        "witness": "urlencoded_serialize(seq![Entry { name: seq![0x61u32], value: seq![0x62u32] }, Entry { name: seq![0x63u32], value: seq![0x64u32] }], Encoding::Utf8)[3] == 0x3Bu32"
+      }
+    },
+    {
+      "id": "serialize-equals",
+      "file": "src/submit/spec.rs",
+      "find": "output + name + seq![0x3Du32] + value",
+      "replace": "output + name + seq![0x3Au32] + value",
+      "expect": "killed",
+      "reason": "Name and value are joined with U+003A instead of U+003D, so the same row is false.",
+      "certificate": {
+        "file": "src/submit/lemmas.rs",
+        "lemma": "crate::submit::examples::lemma_examples()",
+        "witness": "urlencoded_serialize(seq![Entry { name: seq![0x61u32], value: seq![0x62u32] }, Entry { name: seq![0x63u32], value: seq![0x64u32] }], Encoding::Utf8)[1] == 0x3Au32"
+      }
+    },
+    {
+      "id": "serialize-always-separator",
+      "file": "src/submit/spec.rs",
+      "find": "let output = if output.len() != 0 {",
+      "replace": "let output = if true {",
+      "expect": "killed",
+      "reason": "A separator is also written before the first pair, so the empty-list and the first-pair rows of examples::lemma_examples are false.",
+      "certificate": {
+        "file": "src/submit/lemmas.rs",
+        "lemma": "crate::submit::examples::lemma_examples()",
+        "witness": "urlencoded_serialize(seq![Entry { name: seq![0x61u32], value: seq![0x62u32] }, Entry { name: seq![0x63u32], value: seq![0x64u32] }], Encoding::Utf8)[0] == 0x26u32"
+      }
+    },
+    {
+      "id": "unencodable-code-point",
+      "file": "src/submit/spec.rs",
+      "find": "EncoderResult::Error(c) => seq![0x25u32, 0x32, 0x36, 0x25, 0x32, 0x33] + decimal(c as nat)",
+      "replace": "EncoderResult::Error(c) => seq![0x25u32, 0x32, 0x36, 0x25, 0x32, 0x34] + decimal(c as nat)",
+      "expect": "killed-incidentally",
+      "reason": "Step 7.4's %23 becomes %24. A certificate needs the single-byte index table evaluated, which compute_only does not reach; the proof script breaks (percent_encode_after_encoding_sb_exec and the ASCII lemma no longer equal the spec)."
+    },
+    {
+      "id": "pick-encoding-last-candidate",
+      "file": "src/submit/spec.rs",
+      "find": "candidates[0]\n            }",
+      "replace": "candidates[candidates.len() - 1]\n            }",
+      "expect": "killed-incidentally",
+      "reason": "Step 2.6 returns the last candidate. A certificate needs get_an_encoding's label table; pick_encoding_exec no longer equals the spec."
+    },
+    {
+      "id": "method-invalid-default",
+      "file": "src/submit/spec.rs",
+      "find": "} else if ci_eq(v, b\"dialog\"@) {\n        MethodState::Dialog\n    } else {\n        MethodState::Get",
+      "replace": "} else if ci_eq(v, b\"dialog\"@) {\n        MethodState::Dialog\n    } else {\n        MethodState::Post",
+      "expect": "killed-incidentally",
+      "reason": "An invalid method is POST, not the invalid value default GET. The evaluator cannot read byte-string literals, so no certificate; method_of_value_exec no longer equals the spec."
+    },
+    {
+      "id": "enctype-invalid-default",
+      "file": "src/submit/spec.rs",
+      "find": "} else if ci_eq(v, b\"text/plain\"@) {\n        EnctypeState::Text\n    } else {\n        EnctypeState::UrlEncoded",
+      "replace": "} else if ci_eq(v, b\"text/plain\"@) {\n        EnctypeState::Text\n    } else {\n        EnctypeState::Text",
+      "expect": "killed-incidentally",
+      "reason": "An invalid enctype is text/plain, not the invalid value default. Same as method-invalid-default."
+    },
+    {
+      "id": "submit-button-type-reset",
+      "file": "src/submit/spec.rs",
+      "find": "Some(v) => !(ci_eq(v, b\"reset\"@) || ci_eq(v, b\"button\"@)),",
+      "replace": "Some(v) => !ci_eq(v, b\"reset\"@),",
+      "expect": "killed-incidentally",
+      "reason": "A button of type button is a submit button, so its formaction applies. Same as method-invalid-default."
+    },
+    {
+      "id": "action-form-first",
+      "file": "src/submit/spec.rs",
+      "find": "(true, Some(v), _) => v,\n        (_, _, Some(v)) => v,",
+      "replace": "(_, _, Some(v)) => v,\n        (true, Some(v), _) => v,",
+      "expect": "killed-incidentally",
+      "reason": "The form's action wins over the submitter's formaction. Same as method-invalid-default."
+    },
+    {
+      "id": "get-uses-body-branch",
+      "file": "src/submit/spec.rs",
+      "find": "let is_get = method is Get;",
+      "replace": "let is_get = method is Post;",
+      "expect": "killed-incidentally",
+      "reason": "GET and POST swap their cells of the table. Same as method-invalid-default."
+    },
+    {
+      "id": "mailto-navigates",
+      "file": "src/submit/spec.rs",
+      "find": "} else if scheme == ascii(b\"mailto\"@) {\n                    Outcome::Refused(Refusal::MailtoScheme)",
+      "replace": "} else if scheme == ascii(b\"mailto\"@) {\n                    Outcome::Refused(Refusal::JavascriptScheme)",
+      "expect": "killed-incidentally",
+      "reason": "The wrong refusal reason. Same as method-invalid-default."
+    },
+    {
+      "id": "multipart-name-quote-unescaped",
+      "file": "src/submit/spec.rs",
+      "find": "} else if b[0] == 0x22 {\n            b\"%22\"@",
+      "replace": "} else if b[0] == 0x22 {\n            seq![0x22u8]",
+      "expect": "killed-incidentally",
+      "reason": "A double quote in a field name is not escaped. The evaluator cannot read byte-string literals; escape_name_exec no longer equals the spec."
+    },
+    {
+      "id": "multipart-value-not-normalized",
+      "file": "src/submit/spec.rs",
+      "find": "let value = crlf_newlines(entry.value);",
+      "replace": "let value = entry.value;",
+      "expect": "killed-incidentally",
+      "reason": "A multipart value keeps its bare CR and LF (step 1.2 skipped). multipart_encode_exec no longer equals the spec."
+    },
+    {
+      "id": "pairs-name-not-normalized",
+      "file": "src/submit/spec.rs",
+      "find": "name: crlf_newlines(entry_list[0].name),",
+      "replace": "name: entry_list[0].name,",
+      "expect": "killed-incidentally",
+      "reason": "Conversion step 2.1 skipped: a name keeps its bare CR and LF. convert_to_pairs_exec no longer equals the spec."
+    },
+    {
+      "id": "noreferrer-any-rel",
+      "file": "src/submit/spec.rs",
+      "find": "Some(rel) => any_ci(split_ws(rel), b\"noreferrer\"@),",
+      "replace": "Some(rel) => split_ws(rel).len() > 0,",
+      "expect": "killed-incidentally",
+      "reason": "Any rel token means no-referrer. Same as method-invalid-default."
+    },
+    {
+      "id": "base-target-ignored",
+      "file": "src/submit/spec.rs",
+      "find": "base_target\n        }\n    } else {",
+      "replace": "None\n        }\n    } else {",
+      "expect": "killed-incidentally",
+      "reason": "The base element's target is never used. get_an_elements_target_exec no longer equals the spec."
+    },
+    {
+      "id": "to-scalar-keeps-surrogates",
+      "file": "src/submit/spec.rs",
+      "find": "if is_scalar_value(c) { c } else { 0xFFFDu32 }",
+      "replace": "c",
+      "expect": "killed-incidentally",
+      "reason": "Surrogates are kept: the strings are no longer scalar value strings (lemma_to_scalar_scalar fails) and to_scalar_exec differs."
+    }
+  ]
+}

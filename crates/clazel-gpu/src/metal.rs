@@ -17,13 +17,18 @@
 //!   encoded keep the old one alive through the command buffer, which retains what
 //!   it uses. Before the first upload a 4-byte placeholder is bound, with
 //!   `atlas_bytes` 0, so the fragment shader reads nothing from it.
+//! - **The image store and the image draws are buffers too** (item 6.12): the store
+//!   is replaced on each `Op::Images` and filled by blit copies from a staging buffer
+//!   per `Op::ImageUpload`, in order with the passes; the frame's image draws are one
+//!   buffer bound at 4 (a 4-byte spare when there are none). **Never run on Metal by the
+//!   session that wrote it**: the shader and these calls are checked only by CI.
 
 use clazel_sys::macos::metal::{
     BlendFactor, Buffer, CommandBuffer, CommandQueue, Device, MetalError, Pipeline, PipelineDesc,
     PixelFormat, Stage, Surface, Texture, with_autorelease_pool,
 };
 
-use crate::backend::{Backend, BackendError, Frame, Op, quad_bytes};
+use crate::backend::{Backend, BackendError, Frame, Op, image_draw_bytes, quad_bytes};
 use crate::blocklist::{APPLE, Adapter, Api};
 use crate::geom::{Rect, Viewport};
 
@@ -76,6 +81,12 @@ pub struct MetalBackend {
     target: Option<Target>,
     atlas: Buffer,
     atlas_bytes: u32,
+    /// The image store (item 6.12), a shared buffer replaced on each `Op::Images`, as
+    /// the atlas is; a 4-byte placeholder with `image_bytes` 0 before the first.
+    images: Buffer,
+    image_bytes: u32,
+    /// A 4-byte buffer bound where a frame has no image draws.
+    spare: Buffer,
 }
 
 impl MetalBackend {
@@ -95,6 +106,8 @@ impl MetalBackend {
                 })
                 .map_err(backend_error)?;
             let atlas = device.new_buffer(4).map_err(backend_error)?;
+            let images = device.new_buffer(4).map_err(backend_error)?;
+            let spare = device.new_buffer(4).map_err(backend_error)?;
             Ok(MetalBackend {
                 device,
                 queue,
@@ -102,6 +115,9 @@ impl MetalBackend {
                 target: None,
                 atlas,
                 atlas_bytes: 0,
+                images,
+                image_bytes: 0,
+                spare,
             })
         })
         .map_err(backend_error)?
@@ -136,6 +152,18 @@ impl MetalBackend {
                     .map_err(backend_error)?,
             )
         };
+        let draw_table = if frame.image_draws.is_empty() {
+            None
+        } else {
+            Some(
+                self.device
+                    .new_buffer_with_bytes(&image_draw_bytes(&frame.image_draws))
+                    .map_err(backend_error)?,
+            )
+        };
+        let draw_count = u32::try_from(frame.image_draws.len()).map_err(|_| fail("draw count"))?;
+        // The staging buffers of the image uploads, kept until the commands finish.
+        let mut image_staging: Vec<Buffer> = Vec::new();
         let quad_count = u32::try_from(frame.quads.len()).map_err(|_| fail("quad count"))?;
         let staging = if frame.bytes.is_empty() {
             None
@@ -157,6 +185,23 @@ impl MetalBackend {
                     self.atlas_bytes = *capacity;
                     k = k.saturating_add(1);
                 }
+                Op::Images { capacity } => {
+                    let n = usize::try_from(*capacity).map_err(|_| fail("capacity"))?;
+                    self.images = self.device.new_buffer(n.max(4)).map_err(backend_error)?;
+                    self.image_bytes = *capacity;
+                    k = k.saturating_add(1);
+                }
+                Op::ImageUpload { offset, pixels } => {
+                    let src = self
+                        .device
+                        .new_buffer_with_bytes(pixels)
+                        .map_err(backend_error)?;
+                    let at = usize::try_from(*offset).map_err(|_| fail("offset"))?;
+                    cb.copy_buffer(&src, 0, &self.images, at, pixels.len())
+                        .map_err(backend_error)?;
+                    image_staging.push(src);
+                    k = k.saturating_add(1);
+                }
                 Op::Upload { offset, start, len } => {
                     let src = staging.as_ref().ok_or(fail("no staging buffer"))?;
                     let at = usize::try_from(*offset).map_err(|_| fail("offset"))?;
@@ -174,7 +219,14 @@ impl MetalBackend {
                         .map_or(frame.ops.len(), |p| k.saturating_add(p));
                     let draws = frame.ops.get(k..run_end).unwrap_or(&[]);
                     let quads = quads.as_ref().ok_or(fail("no quads"))?;
-                    self.pass(&mut cb, viewport, !cleared, quads, quad_count, draws)?;
+                    let table = draw_table.as_ref().unwrap_or(&self.spare);
+                    self.pass(
+                        &mut cb,
+                        viewport,
+                        !cleared,
+                        (quads, quad_count, table, draw_count),
+                        draws,
+                    )?;
                     cleared = true;
                     k = run_end;
                 }
@@ -185,7 +237,9 @@ impl MetalBackend {
             cb.render(&target.texture, Some([0.0; 4]), |_| Ok(()))
                 .map_err(backend_error)?;
         }
-        cb.commit_and_wait().map_err(backend_error)
+        let done = cb.commit_and_wait().map_err(backend_error);
+        drop(image_staging);
+        done
     }
 
     /// One render pass drawing a run of [`Op::Draw`].
@@ -194,17 +248,18 @@ impl MetalBackend {
         cb: &mut CommandBuffer,
         viewport: Viewport,
         clear: bool,
-        quads: &Buffer,
-        quad_count: u32,
+        (quads, quad_count, table, draw_count): (&Buffer, u32, &Buffer, u32),
         draws: &[Op],
     ) -> Result<(), BackendError> {
         let target = self.target.as_ref().ok_or(fail("no target"))?;
-        let mut uniforms = Vec::with_capacity(16);
+        let mut uniforms = Vec::with_capacity(24);
         for w in [
             viewport.width,
             viewport.height,
             quad_count,
             self.atlas_bytes,
+            self.image_bytes,
+            draw_count,
         ] {
             uniforms.extend_from_slice(&w.to_le_bytes());
         }
@@ -214,6 +269,8 @@ impl MetalBackend {
             enc.set_buffer(Stage::Vertex, quads, 0)?;
             enc.set_buffer(Stage::Fragment, quads, 0)?;
             enc.set_buffer(Stage::Fragment, &self.atlas, 1)?;
+            enc.set_buffer(Stage::Fragment, &self.images, 3)?;
+            enc.set_buffer(Stage::Fragment, table, 4)?;
             enc.set_bytes(Stage::Vertex, &uniforms, 2)?;
             enc.set_bytes(Stage::Fragment, &uniforms, 2)?;
             for op in draws {

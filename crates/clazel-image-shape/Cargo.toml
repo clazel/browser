@@ -1,0 +1,22 @@
+[package]
+name = "clazel-image-shape"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "The decoder interface of Phase 6 (item 6.3): RGBA8 buffers, the size limits, premultiplication, and the WUFFS-style Decoder trait with its Kani harness template. No decoder, no policy, no dependencies."
+
+# No dependencies at all: every Phase 6 decoder crate depends on this one, so
+# anything it pulled in would be in the trusted base of all of them.
+
+# Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
+# shipped code today; `target-tier` is the plan's reading of item 6.3: the
+# decoders (tier 1) depend on this crate, so its size arithmetic and
+# premultiplication are proven panic-free too (Kani harnesses in
+# src/proofs.rs). The tier stays 0 until CI's full verification has run them.
+[package.metadata.clazel]
+tier = 0
+target-tier = 1
+
+[lints]
+workspace = true

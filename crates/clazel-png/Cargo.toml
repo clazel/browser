@@ -1,0 +1,35 @@
+[package]
+name = "clazel-png"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "A PNG and APNG decoder (Phase 6 item 6.4): chunks and CRC-32, every colour type and bit depth, the five filters, Adam7, palettes and tRNS, animation frames composited with dispose and blend. A resumable step function over caller-owned buffers, implementing clazel-image-shape's Decoder."
+
+[dependencies]
+# The decoder interface (item 6.3), our own crate with no dependencies.
+clazel-image-shape = { path = "../clazel-image-shape" }
+# DEFLATE and zlib (item 6.2): PNG uses only its interface (`Inflater::step`),
+# through the `Engine` trait of this crate. The only third-party code it
+# brings is `vstd`, the proof library (class `proof`), which carries no
+# runtime code.
+clazel-deflate = { path = "../clazel-deflate" }
+
+# The reference decoder of the differential test (tests/conformance_png.rs),
+# never compiled into the browser: the `png` crate (image-rs), written by
+# others (docs/DEPENDENCIES.md, class `test`). Without its default features it
+# has no `std` feature to name, so the defaults are the crate's own.
+[dev-dependencies]
+png = "=0.18.1"
+
+# Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
+# shipped code today; `target-tier` is the plan's reading of item 6.4: bytes of
+# a page-chosen file drive every index and counter, so Tier 1 (Kani harnesses
+# in src/proofs.rs, listed with their bounds in the README). The tier stays 0
+# until CI's full verification has run those harnesses green.
+[package.metadata.clazel]
+tier = 0
+target-tier = 1
+
+[lints]
+workspace = true

@@ -17,6 +17,7 @@
 //!
 //! - [`geom`]: whole-pixel rectangles, the viewport's limit.
 //! - [`atlas`]: the glyph atlas, one linear store with a bump allocator.
+//! - [`images`]: the image store, the same for images (item 6.12).
 //! - [`batch`]: the shared batching, clips as scissor rectangles.
 //! - [`backend`]: the frame a backend draws, the quad format, the trait.
 //! - [`blocklist`]: the driver blocklist and its parser (item 5.17c).
@@ -48,6 +49,7 @@ pub mod channel;
 #[cfg(windows)]
 pub mod d3d12;
 pub mod geom;
+pub mod images;
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 pub mod metal;
 pub mod policy;
@@ -83,6 +85,9 @@ pub enum Error {
     /// The atlas cannot hold the live masks (only if the validator's limit on live
     /// coverage were broken).
     AtlasFull,
+    /// The image store cannot hold the live images (only if the validator's limit on
+    /// live image bytes were broken).
+    ImagesFull,
     /// The backend failed: a lost device, no memory, or a failed call.
     Backend(BackendError),
 }
@@ -94,6 +99,7 @@ impl fmt::Display for Error {
             Error::Refused => f.write_str("the display list broke a rule"),
             Error::Range => f.write_str("a number was out of range"),
             Error::AtlasFull => f.write_str("the glyph atlas is full"),
+            Error::ImagesFull => f.write_str("the image store is full"),
             Error::Backend(e) => write!(f, "the GPU failed: {} ({})", e.what, e.code),
         }
     }
@@ -106,6 +112,7 @@ impl std::error::Error for Error {}
 pub struct Gpu<B: Backend> {
     validator: Validator,
     atlas: atlas::Atlas,
+    images: images::Images,
     backend: B,
 }
 
@@ -132,6 +139,7 @@ impl<B: Backend> Gpu<B> {
         let gpu = Gpu {
             validator: Validator::empty(),
             atlas: atlas::Atlas::new(),
+            images: images::Images::new(),
             backend,
         };
         Ok((gpu, ready))
@@ -145,7 +153,7 @@ impl<B: Backend> Gpu<B> {
         if !self.validator.validate(&items) {
             return Err(Error::Refused);
         }
-        let frame = batch::build(&items, viewport, &mut self.atlas)?;
+        let frame = batch::build_with(&items, viewport, &mut self.atlas, &mut self.images)?;
         self.backend.draw_frame(&frame).map_err(Error::Backend)
     }
 
@@ -154,7 +162,7 @@ impl<B: Backend> Gpu<B> {
         &mut self.backend
     }
 
-    /// Give the backend back, forgetting the masks. Starting again checks the
+    /// Give the backend back, forgetting the masks and images. Starting again checks the
     /// blocklist again.
     pub fn into_backend(self) -> B {
         self.backend

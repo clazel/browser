@@ -35,7 +35,7 @@ use clazel_sys::linux::vulkan::{
     PipelineDesc, Target, VulkanError,
 };
 
-use crate::backend::{Backend, BackendError, Frame, Op, QUAD_BYTES, quad_bytes};
+use crate::backend::{Backend, BackendError, Frame, Op, QUAD_BYTES, image_draw_bytes, quad_bytes};
 use crate::blocklist::{Adapter, Api, vulkan_driver_version};
 use crate::geom::{Rect, Viewport};
 
@@ -45,8 +45,9 @@ const VERTEX: &[u8] = include_bytes!("../shaders/quad.vert.spv");
 /// See [`VERTEX`].
 const FRAGMENT: &[u8] = include_bytes!("../shaders/quad.frag.spv");
 
-/// The push constants: `width, height, quad_count, atlas_bytes`.
-const PUSH_BYTES: u32 = 16;
+/// The push constants: `width, height, quad_count, atlas_bytes, image_bytes,
+/// draw_count`.
+const PUSH_BYTES: u32 = 24;
 
 /// The quad buffer's first size: 256 quads.
 const FIRST_QUADS: usize = 256 * QUAD_BYTES;
@@ -74,6 +75,10 @@ pub struct VulkanBackend {
     /// Where the target is copied for reading; as large as the target.
     staging: Option<Buffer>,
     atlas_bytes: u32,
+    /// The image store's size, 0 until the first image upload (item 6.12).
+    image_bytes: u32,
+    /// How many image draws the frame being drawn has.
+    draw_count: u32,
 }
 
 /// The device [`VulkanBackend::new`] draws with, of those the loader listed.
@@ -99,11 +104,11 @@ impl VulkanBackend {
                 fragment: FRAGMENT,
                 format: Format::Rgba8Unorm,
                 blend: Some((BlendFactor::One, BlendFactor::OneMinusSourceAlpha)),
-                storage_buffers: 2,
+                storage_buffers: 4,
                 push_bytes: PUSH_BYTES,
             })
             .map_err(backend_error)?;
-        for (binding, len) in [(0, FIRST_QUADS), (1, 4)] {
+        for (binding, len) in [(0, FIRST_QUADS), (1, 4), (2, 4), (3, 4)] {
             let buffer = device
                 .new_buffer(len, BufferUse::Storage)
                 .map_err(backend_error)?;
@@ -126,6 +131,8 @@ impl VulkanBackend {
             target: None,
             staging: None,
             atlas_bytes: 0,
+            image_bytes: 0,
+            draw_count: 0,
         })
     }
 
@@ -135,8 +142,8 @@ impl VulkanBackend {
     }
 
     /// Bind a new buffer of `len` bytes at storage binding `binding` (0 the
-    /// quads, 1 the atlas); the one bound before is dropped, nothing being in
-    /// flight.
+    /// quads, 1 the atlas, 2 the image store, 3 the image draws); the one bound
+    /// before is dropped, nothing being in flight.
     fn rebind(&mut self, binding: u32, len: usize) -> Result<(), BackendError> {
         let new = self
             .device
@@ -170,6 +177,7 @@ impl VulkanBackend {
             );
         }
         let quad_count = u32::try_from(frame.quads.len()).map_err(|_| fail("quad count"))?;
+        self.draw_count = u32::try_from(frame.image_draws.len()).map_err(|_| fail("draw count"))?;
         let mut cleared = false;
         let mut quads_written = false;
         let mut k = 0usize;
@@ -179,6 +187,23 @@ impl VulkanBackend {
                     let n = usize::try_from(*capacity).map_err(|_| fail("capacity"))?;
                     self.rebind(1, n.max(4))?;
                     self.atlas_bytes = *capacity;
+                    k = k.saturating_add(1);
+                }
+                Op::Images { capacity } => {
+                    let n = usize::try_from(*capacity).map_err(|_| fail("capacity"))?;
+                    self.rebind(2, n.max(4))?;
+                    self.image_bytes = *capacity;
+                    k = k.saturating_add(1);
+                }
+                Op::ImageUpload { offset, pixels } => {
+                    let at = usize::try_from(*offset).map_err(|_| fail("offset"))?;
+                    if !pixels.is_empty() {
+                        self.pipeline
+                            .buffer(2)
+                            .ok_or(fail("no image store"))?
+                            .write(at, pixels)
+                            .map_err(backend_error)?;
+                    }
                     k = k.saturating_add(1);
                 }
                 Op::Upload { offset, start, len } => {
@@ -205,6 +230,7 @@ impl VulkanBackend {
                     let draws = frame.ops.get(k..run_end).unwrap_or(&[]);
                     if !quads_written {
                         self.write_quads(frame)?;
+                        self.write_image_draws(frame)?;
                         quads_written = true;
                     }
                     self.pass(viewport, !cleared, quad_count, draws)?;
@@ -241,6 +267,28 @@ impl VulkanBackend {
             .map_err(backend_error)
     }
 
+    /// Copy the frame's image draws into their buffer, growing it first if they do
+    /// not fit.
+    fn write_image_draws(&mut self, frame: &Frame) -> Result<(), BackendError> {
+        let bytes = image_draw_bytes(&frame.image_draws);
+        if bytes.is_empty() {
+            return Ok(());
+        }
+        let have = self.pipeline.buffer(3).ok_or(fail("no image draws"))?.len();
+        if bytes.len() > have {
+            let grown = bytes
+                .len()
+                .checked_next_power_of_two()
+                .ok_or(fail("image draw bytes"))?;
+            self.rebind(3, grown)?;
+        }
+        self.pipeline
+            .buffer(3)
+            .ok_or(fail("no image draws"))?
+            .write(0, &bytes)
+            .map_err(backend_error)
+    }
+
     /// One render pass drawing a run of [`Op::Draw`].
     fn pass(
         &mut self,
@@ -249,12 +297,14 @@ impl VulkanBackend {
         quad_count: u32,
         draws: &[Op],
     ) -> Result<(), BackendError> {
-        let mut push = Vec::with_capacity(16);
+        let mut push = Vec::with_capacity(24);
         for w in [
             viewport.width,
             viewport.height,
             quad_count,
             self.atlas_bytes,
+            self.image_bytes,
+            self.draw_count,
         ] {
             push.extend_from_slice(&w.to_le_bytes());
         }

@@ -48,16 +48,34 @@
 //!   otherwise (the table-internal values included: a replaced element has
 //!   no table-internal box, CSS Display 3 §2.4†). Its children are not
 //!   walked.
+//! - **A broken `img`** (item 6.11, [`Images`]): HTML §15.4.2: "When an img element
+//!   represents some text and the user agent does not expect this to change, the user
+//!   agent is expected to treat the element as a non-replaced phrasing element whose
+//!   content is the text", and an `img` that "represents nothing" is "an empty inline
+//!   element". So an `img` whose image is [`ImageStatus::Broken`] and that has an `alt`
+//!   attribute generates a non-replaced box (an inline box, or a block box if its
+//!   `display` says) holding one text run of its `alt` (empty `alt`: no run), with no
+//!   icon (listed). The exception HTML gives is kept: an `img` that "already has
+//!   intrinsic dimensions (e.g. from the dimension attributes or CSS rules)" (here: a
+//!   computed `width` or `height` that is not `auto`) and either has no `alt` or is in
+//!   quirks mode is "a replaced element whose content is the text that the element
+//!   represents", sized as one; the text is a hint and is not drawn (listed). A broken
+//!   `img` with no `alt` is a replaced element too. An image still pending is the
+//!   replaced element of natural size 0 by 0 (§15.4.2: "the user agent has reason to
+//!   believe that the image will become available").
 
 use clazel_dom::exec::{Arena, ExecKind};
+use clazel_style::cascade::computed::Size;
 use clazel_style::cascade::computed::{ComputedStyle, Display, ListStyleType, WhiteSpace};
-use clazel_style::cascade::hints::is_html;
+use clazel_style::cascade::hints::{attribute, html_element, is_html};
 
 use super::StyleFns;
 use super::marker;
 use super::replaced::{replaced, string};
 use super::state::{Decision, Frame, Principal, Walk};
 use super::tree::{BoxId, BoxKind, BoxTree, Fragment, Marker, RowGroup, TextRun};
+use crate::flow::block::{Mode, mode};
+use crate::images::{ImageStatus, Images};
 use crate::text::TextStyle;
 
 /// What kind of node a DOM node is, as box generation reads it.
@@ -198,8 +216,30 @@ pub fn text_style(style: Option<&ComputedStyle>) -> TextStyle {
     })
 }
 
+/// The `alt` text of a broken `img` that is shown as text in place of a replaced box (the
+/// module's "A broken `img`"), if `x` is one.
+fn alt_text(arena: &Arena, styles: &impl StyleFns, images: &Images, x: usize) -> Option<String> {
+    let (name, attributes) = html_element(arena, x)?;
+    if !name.iter().copied().eq("img".chars().map(u32::from))
+        || images.element(x) != ImageStatus::Broken
+    {
+        return None;
+    }
+    let alt = attribute(attributes, "alt")?;
+    let dimensions = styles
+        .style(x)
+        .is_some_and(|s| s.width != Size::Auto || s.height != Size::Auto);
+    // "... and either: the user agent has reason to believe that the image will become
+    // available ..., or the element has no alt attribute, or the Document is in quirks
+    // mode": here the image is broken for good, and `alt` is present.
+    if dimensions && mode(arena) == Mode::Quirks {
+        return None;
+    }
+    Some(string(alt))
+}
+
 /// What `decide` reads of node `x`.
-fn node_info(arena: &Arena, styles: &impl StyleFns, x: usize) -> NodeInfo {
+fn node_info(arena: &Arena, styles: &impl StyleFns, images: &Images, x: usize) -> NodeInfo {
     let class = match arena.kind(x) {
         ExecKind::Document { .. } => NodeClass::Document,
         ExecKind::Element { .. } => NodeClass::Element,
@@ -211,7 +251,7 @@ fn node_info(arena: &Arena, styles: &impl StyleFns, x: usize) -> NodeInfo {
         class,
         display: style.map(|s| s.display),
         contents: styles.display_contents(x),
-        replaced: replaced(arena, x).is_some(),
+        replaced: replaced(arena, x).is_some() && alt_text(arena, styles, images, x).is_none(),
         line_break: is_html(arena, x, "br") || is_html(arena, x, "wbr"),
         marker: style.is_some_and(|s| s.list_style_type != ListStyleType::None),
     }
@@ -282,6 +322,11 @@ fn principal(
 /// root box, the root element's principal box under it, and every other
 /// node's boxes under its nearest ancestor's (§9.2).
 pub fn generate(arena: &Arena, styles: &impl StyleFns) -> BoxTree {
+    generate_with(arena, styles, &Images::new())
+}
+
+/// [`generate`], knowing the state of each image (item 6.11).
+pub fn generate_with(arena: &Arena, styles: &impl StyleFns, images: &Images) -> BoxTree {
     let mut tree = BoxTree::new();
     let n = arena.len();
     if n == 0 {
@@ -304,7 +349,7 @@ pub fn generate(arena: &Arena, styles: &impl StyleFns) -> BoxTree {
             _ => continue,
         }
         let x = frame.node;
-        let decision = decide(node_info(arena, styles, x));
+        let decision = decide(node_info(arena, styles, images, x));
         let walk = walk_step(frame, decision, tree.boxes.len());
         match decision {
             Decision::Nothing | Decision::Contents => {}
@@ -320,7 +365,18 @@ pub fn generate(arena: &Arena, styles: &impl StyleFns) -> BoxTree {
                 }
             }
             Decision::Element(p) => {
-                principal(&mut tree, arena, styles, &ordinals, x, frame.parent, p);
+                let id = principal(&mut tree, arena, styles, &ordinals, x, frame.parent, p);
+                if let Some(alt) = alt_text(arena, styles, images, x)
+                    && !alt.is_empty()
+                {
+                    // No node of its own: its style is its box's inherited one.
+                    let run = TextRun {
+                        text: alt,
+                        style: text_style(styles.style(x)),
+                        units: Vec::new(),
+                    };
+                    tree.add_child(id, BoxKind::Text(run), None);
+                }
             }
         }
         if let Some(under) = walk.children_under {

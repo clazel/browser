@@ -194,6 +194,74 @@ pub proof fn lemma_body_fits_frame(bytes: Seq<u8>)
     assert(crate::cbor::spec::encode_head(2, bytes.len()).len() <= 5);
 }
 
+/// The head of a token below 2^32 in length is at most 5 octets.
+proof fn lemma_head_len(major: u8, v: nat)
+    requires
+        v < 0x1_0000_0000,
+    ensures
+        crate::cbor::spec::encode_head(major, v).len() <= 5,
+{
+    crate::cbor::lemmas::lemma_be_bytes_len(v, 1);
+    crate::cbor::lemmas::lemma_be_bytes_len(v, 2);
+    crate::cbor::lemmas::lemma_be_bytes_len(v, 4);
+}
+
+/// A `Submit` whose body is at most [`max_submit_body`] octets, with a
+/// URL, method and content type of at most [`max_submit_head`] octets
+/// together (URL and method valid UTF-8, as every text string is), can be
+/// sent, and its bytes fit one frame (item 6.16).
+pub proof fn lemma_submit_fits_frame(url: Seq<u8>, method: Seq<u8>, content_type: Seq<u8>, body: Seq<u8>)
+    requires
+        url.len() + method.len() + content_type.len() <= max_submit_head(),
+        body.len() <= max_submit_body(),
+        crate::cbor::spec::utf8_valid(url),
+        crate::cbor::spec::utf8_valid(method),
+    ensures
+        message_ok(Message::Submit { url, method, content_type, body }),
+        crate::frame::spec::payload_ok(encode_message(Message::Submit { url, method, content_type, body })),
+{
+    let t = seq![Token::Array(5), Token::Uint(12), Token::Text(url), Token::Text(method), Token::Bytes(content_type), Token::Bytes(body)];
+    let rest = seq![Token::Text(url), Token::Text(method), Token::Bytes(content_type), Token::Bytes(body)];
+    assert(t =~= seq![Token::Array(5), Token::Uint(12)] + rest);
+    lemma_items_head(5, 12, rest);
+    lemma_items_step(rest, 4);
+    let r1 = rest.drop_first();
+    assert(r1 =~= seq![Token::Text(method), Token::Bytes(content_type), Token::Bytes(body)]);
+    lemma_items_step(r1, 3);
+    let r2 = r1.drop_first();
+    assert(r2 =~= seq![Token::Bytes(content_type), Token::Bytes(body)]);
+    lemma_items_step(r2, 2);
+    let r3 = r2.drop_first();
+    assert(r3 =~= seq![Token::Bytes(body)]);
+    lemma_items_step(r3, 1);
+    assert(r3.drop_first() =~= Seq::<Token>::empty());
+    assert(crate::cbor::spec::token_ok(Token::Text(url)));
+    assert(crate::cbor::spec::token_ok(Token::Text(method)));
+    assert(crate::cbor::spec::token_ok(Token::Bytes(content_type)));
+    assert(crate::cbor::spec::token_ok(Token::Bytes(body)));
+    assert(crate::cbor::spec::is_items(Seq::<Token>::empty(), 0));
+    reveal_with_fuel(crate::cbor::spec::encode, 7);
+    let t1 = t.drop_first();
+    let t2 = t1.drop_first();
+    let t3 = t2.drop_first();
+    let t4 = t3.drop_first();
+    let t5 = t4.drop_first();
+    assert(t2 =~= rest);
+    assert(t3 =~= r1);
+    assert(t4 =~= r2);
+    assert(t5 =~= r3);
+    assert(t5.drop_first() =~= Seq::<Token>::empty());
+    crate::cbor::lemmas::lemma_be_bytes_len(5, 1);
+    crate::cbor::lemmas::lemma_be_bytes_len(12, 1);
+    lemma_head_len(3, url.len());
+    lemma_head_len(3, method.len());
+    lemma_head_len(2, content_type.len());
+    lemma_head_len(2, body.len());
+    assert(crate::cbor::spec::encode(Seq::<Token>::empty()) == Seq::<u8>::empty());
+    assert(crate::cbor::spec::encode_head(4, 5).len() <= 5);
+    assert(crate::cbor::spec::encode_head(0, 12).len() <= 5);
+}
+
 /// A `StyleBody` of at most [`max_style_chunk`] octets can be sent, and its
 /// bytes fit one frame (item 5.19), whatever its request id.
 pub proof fn lemma_style_body_fits_frame(request: u64, bytes: Seq<u8>)
@@ -252,6 +320,9 @@ pub proof fn lemma_parse_message_tokens(m: Message)
         Message::StorageRemoveItem { key } => { assert(t.subrange(2, 3) =~= seq![Token::Text(key)]); },
         Message::StorageKey { index } => { assert(t.subrange(2, 3) =~= seq![Token::Uint(index)]); },
         Message::Navigate { url } => { assert(t.subrange(2, 3) =~= seq![Token::Text(url)]); },
+        Message::Submit { url, method, content_type, body } => {
+            assert(t.subrange(2, 6) =~= seq![Token::Text(url), Token::Text(method), Token::Bytes(content_type), Token::Bytes(body)]);
+        },
         Message::Display { title, text, links } => {
             let f = t.subrange(2, t.len() as int);
             assert(f =~= seq![Token::Text(title), Token::Text(text), Token::Array(links.len() as u64)] + text_tokens(links));

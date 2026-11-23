@@ -809,6 +809,21 @@ pub enum Event {
         /// The URL.
         url: Seq<u32>,
     },
+    /// Item 6.16: the declassified part of a renderer's `Submit` (see
+    /// [`crate::domain::declassified`]): the tab's renderer starts navigating
+    /// to the URL with the request `req`. It is what a `Submit` of another
+    /// domain's renderer is replaced by in a purge, so that two related runs
+    /// start the same navigation with the same request. The host shell never
+    /// produces it (it has no `EventRecord`); a theorem about what a real run
+    /// does leaves it out of the trace (`crate::statements::no_submit_tab`).
+    SubmitTab {
+        /// The tab.
+        tab: nat,
+        /// The URL.
+        url: Seq<u32>,
+        /// The request.
+        req: clazel_fetch::request::spec::Req,
+    },
     /// The network shell reports on a connection the kernel asked for
     /// (item 3.7): it is open, bytes arrived, the peer closed it, or it
     /// failed.
@@ -1495,6 +1510,7 @@ pub open spec fn begin_navigation(
     s: State,
     tab: nat,
     url: Seq<u32>,
+    req: clazel_fetch::request::spec::Req,
 ) -> (State, Seq<Output>) {
     match find_by_tab(s.renderers, tab, 0) {
         // No such tab (or its renderer has exited): nothing to navigate.
@@ -1512,13 +1528,81 @@ pub open spec fn begin_navigation(
                         (s1, closes + out)
                     },
                     Some(parsed) => {
-                        let (fs, actions) = clazel_fetch::transducer::spec::start(parsed);
+                        let (fs, actions) = clazel_fetch::transducer::spec::start_req(parsed, req);
                         let nav = Navigation { url, fetch: fs, partition: crate::domain::domain_of_renderer(rules, old) };
                         let s1 = State { renderers: s0.renderers.update(i, Renderer { pending: Some(nav), ..old }), ..s0 };
                         let (s2, out) = carry_out(urls, s1, tab, nav.partition, None, actions);
                         (s2, closes + out)
                     },
                 }
+            },
+        },
+    }
+}
+
+/// The request a `Submit` of renderer `r` makes (item 6.16): `GET` with no
+/// content type and no body, or `POST` with a body (an empty body is a body)
+/// of at most [`clazel_fetch::request::spec::max_request_body`] octets and the
+/// message's content type; `None` for any other method or shape. The
+/// initiator is the renderer's lock, the origin of its committed document
+/// (HTML §4.10.22.3 step 22: the form's node document is the source
+/// browsing context's active document), so a cross-site `POST` carries no
+/// `SameSite=Lax` or `Strict` cookie and its `Origin` is the lock's
+/// serialization. The redirect-taint starts false.
+pub open spec fn submit_request(r: Renderer, method: Seq<u8>, content_type: Seq<u8>, body: Seq<u8>) -> Option<clazel_fetch::request::spec::Req> {
+    if method == clazel_fetch::request::spec::lit_get() {
+        if content_type.len() == 0 && body.len() == 0 {
+            Some(clazel_fetch::request::spec::Req { method: method, body: None, initiator: Some(r.lock), origin_tainted: false })
+        } else {
+            None
+        }
+    } else if method == clazel_fetch::request::spec::lit_post() {
+        if clazel_fetch::request::spec::body_len_ok(body.len()) {
+            Some(
+                clazel_fetch::request::spec::Req {
+                    method: method,
+                    body: Some(clazel_fetch::request::spec::Payload { content_type: content_type, bytes: body }),
+                    initiator: Some(r.lock),
+                    origin_tainted: false,
+                },
+            )
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
+/// `Submit { url, method, content_type, body }` (item 6.16) of renderer
+/// `r`: [`submit_request`], and the URL resolved and locked as a `Navigate`'s
+/// is, then [`begin_navigation`] of the sender's own tab with that request.
+/// A request or URL the kernel cannot use is answered to the sender with
+/// `Error` code 3 ([`error_bad_url`]) and nothing starts. The body octets
+/// are the message's; nothing else in the state can reach the wire as a
+/// body (`theorem_body_from_requester`).
+pub open spec fn submit(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns,
+    fetch: FetchFns,
+    s: State,
+    r: Renderer,
+    url: Seq<u8>,
+    method: Seq<u8>,
+    content_type: Seq<u8>,
+    body: Seq<u8>,
+) -> (State, Seq<Output>) {
+    match submit_request(r, method, content_type, body) {
+        None => (s, reply(r, clazel_ipc::message::spec::Message::Error { code: error_bad_url() })),
+        Some(req) => match clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+            None => (s, reply(r, clazel_ipc::message::spec::Message::Error { code: error_bad_url() })),
+            Some(relative) => match (urls.resolve)(r.url, relative) {
+                None => (s, reply(r, clazel_ipc::message::spec::Message::Error { code: error_bad_url() })),
+                Some(resolved) => if lock_of_url(urls, resolved, s.next_id) is None {
+                    (s, reply(r, clazel_ipc::message::spec::Message::Error { code: error_bad_url() }))
+                } else {
+                    begin_navigation(rules, urls, fetch, s, r.tab, resolved, req)
+                },
             },
         },
     }
@@ -1551,7 +1635,7 @@ pub open spec fn open_tab(
             ),
             None => {
                 let s1 = State { renderers: s.renderers.push(Renderer { committed: false, id, tab: id, url, lock, pending: None }), next_id: id + 1, ..s };
-                let (s2, out) = begin_navigation(rules, urls, fetch, s1, id, url);
+                let (s2, out) = begin_navigation(rules, urls, fetch, s1, id, url, clazel_fetch::request::spec::get_req());
                 (s2, seq![Output::Spawn { id, policy: Policy::Gpu }, Output::Spawn { id, policy: Policy::Renderer }] + out)
             },
         },
@@ -2673,7 +2757,7 @@ pub open spec fn decode_renderer_frame(bytes: Seq<u8>) -> Option<clazel_ipc::mes
 /// is committed.
 pub open spec fn accepted_message(r: Renderer, bytes: Seq<u8>) -> Option<clazel_ipc::message::spec::Message> {
     match decode_renderer_frame(bytes) {
-        Some(m) => if (m is Display || m is Title || m is FetchStyle) && !r.committed { None } else { Some(m) },
+        Some(m) => if (m is Display || m is Title || m is FetchStyle || m is Submit) && !r.committed { None } else { Some(m) },
         None => None,
     }
 }
@@ -2734,10 +2818,12 @@ pub open spec fn handle_message(
                 Some(resolved) => if lock_of_url(urls, resolved, s.next_id) is None {
                     (s, reply(r, clazel_ipc::message::spec::Message::Error { code: error_bad_url() }))
                 } else {
-                    begin_navigation(rules, urls, fetch, s, r.tab, resolved)
+                    begin_navigation(rules, urls, fetch, s, r.tab, resolved, clazel_fetch::request::spec::get_req())
                 },
             },
         },
+        // Item 6.16.
+        clazel_ipc::message::spec::Message::Submit { url, method, content_type, body } => submit(rules, urls, fetch, s, r, url, method, content_type, body),
         // `Display` (phase-4.md item 4.12): shown for the sender's tab, under
         // its committed URL; neither comes from the message.
         clazel_ipc::message::spec::Message::Display { title, text, links } => (s, seq![Output::Show { tab: r.tab, url: r.url, title, text, links }]),
@@ -2777,7 +2863,8 @@ pub open spec fn step(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: F
     match e {
         Event::FromRenderer { id, bytes } => from_renderer(rules, urls, fetch, s, id, bytes),
         Event::OpenTab { url, script } => open_tab(rules, urls, fetch, s, url, script),
-        Event::NavigateTab { tab, url } => begin_navigation(rules, urls, fetch, s, tab, url),
+        Event::NavigateTab { tab, url } => begin_navigation(rules, urls, fetch, s, tab, url, clazel_fetch::request::spec::get_req()),
+        Event::SubmitTab { tab, url, req } => begin_navigation(rules, urls, fetch, s, tab, url, req),
         Event::Net { conn, input } => net(rules, urls, fetch, s, conn, input),
         Event::RendererExited { id } => renderer_exited(s, id),
         Event::Tick { time } => tick_all(s, time),
