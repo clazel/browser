@@ -12,7 +12,7 @@ pub(crate) enum Kind {
     Soi,
     /// EOI, 0xD9.
     Eoi,
-    /// SOF0 (baseline) and SOF1 (extended sequential, Huffman): decoded
+    /// SOF0 (baseline), SOF1 (extended sequential) and SOF2 (progressive, Huffman): decoded
     /// when the precision is 8 bits.
     Frame,
     /// SOS, 0xDA.
@@ -35,8 +35,7 @@ pub(crate) fn kind(m: u8) -> Kind {
         0x01 | 0xD0..=0xD7 => Kind::Standalone,
         0xD8 => Kind::Soi,
         0xD9 => Kind::Eoi,
-        0xC0 | 0xC1 => Kind::Frame,
-        0xC2 => Kind::Unsupported("progressive JPEG (SOF2) is item 6.6, not built yet"),
+        0xC0..=0xC2 => Kind::Frame,
         0xC3 | 0xC7 | 0xCB | 0xCF => Kind::Unsupported("lossless JPEG"),
         0xC5 | 0xC6 | 0xCD | 0xCE => Kind::Unsupported("hierarchical JPEG"),
         0xC9 | 0xCA | 0xCC => Kind::Unsupported("arithmetic-coded JPEG"),
@@ -59,7 +58,7 @@ mod tests {
             let k = kind(m);
             // The markers the introduction of the standard lists.
             match m {
-                0xC0 | 0xC1 => assert_eq!(k, Kind::Frame),
+                0xC0..=0xC2 => assert_eq!(k, Kind::Frame),
                 0xC4 | 0xDB | 0xDD => assert_eq!(k, Kind::Read),
                 0xD0..=0xD7 => assert_eq!(k, Kind::Standalone),
                 0xD8 => assert_eq!(k, Kind::Soi),
@@ -67,7 +66,6 @@ mod tests {
                 0xDA => assert_eq!(k, Kind::Scan),
                 0xE0 | 0xE1 | 0xEE => assert_eq!(k, Kind::Read),
                 0xE2..=0xED | 0xEF | 0xFE => assert_eq!(k, Kind::Skip),
-                0xC2 => assert!(matches!(k, Kind::Unsupported(w) if w.contains("progressive"))),
                 0x00 | 0xFF | 0x02..=0xBF => assert_eq!(k, Kind::Invalid),
                 _ => {}
             }

@@ -3,8 +3,8 @@
 A WebP decoder for [Clazel](../../README.md), a web browser whose parsers of
 untrusted input carry machine-checked proofs. Phase 6 item 6.8
 (`docs/phases/phase-6.md`): the RIFF container, animation, and **lossless**
-(VP8L) decoding. Lossy VP8 is item 6.9; here a `VP8 ` chunk is recognised and
-refused with `Error::Unsupported`. It runs in the renderer's sandbox, on bytes
+(VP8L) decoding; and item 6.9, **lossy** VP8 key frames (RFC 6386) with the
+`ALPH` alpha plane (see "Lossy" below). It runs in the renderer's sandbox, on bytes
 a page chose, and implements the one interface of every Phase 6 decoder,
 `clazel_image_shape::Decoder` (item 6.3): a resumable step function over
 caller-owned buffers, nothing allocated while decoding.
@@ -15,7 +15,7 @@ used only by the differential test.
 ## What it does
 
 RFC 9649 (the WebP container, and the lossless bitstream): `RIFF`/`WEBP`, the
-simple lossless format, the extended format (`VP8X`; `ICCP`, `ALPH`, `EXIF`,
+simple lossless format, the extended format (`VP8X`; `ICCP`, `EXIF`,
 `XMP ` and unknown chunks skipped), `ANIM` and `ANMF`. **Every frame** of an
 animation is decoded and composited onto the canvas with the previous
 frame's disposal and the frame's blending method; after each
@@ -51,7 +51,7 @@ Animation canvas transparent black and the `ANIM` background ignored,
 disposal to transparent; alpha blending on stored values with libwebp's
 integer arithmetic (a destination of alpha 0 takes the source exactly);
 `alpha_is_used` ignored; `ANMF`/`ANIM` skipped in a still image, image data
-outside a frame in an animation an error; `ALPH` skipped; the RIFF size ends
+outside a frame in an animation an error; `ALPH` decoded for `VP8 ` images (item 6.9; ignored for `VP8L`); the RIFF size ends
 the stream; prefix codes empty, over-subscribed or incomplete are errors and a
 single symbol takes zero bits; predictor modes 14 and 15 predict like mode 0;
 at most 1,024 prefix code groups (more is `Unsupported`); a backward
@@ -59,7 +59,7 @@ reference before the first pixel or past the last is an error.
 
 ## Kani harnesses (`src/proofs.rs`)
 
-Sixty-nine. The step harnesses are one per phase, role or transform: with
+Sixty-nine from item 6.8 (the count of 6.9 is below: 75 in all). The step harnesses are one per phase, role or transform: with
 the phase symbolic, CBMC ran out of memory (over 4 GB locally; on CI the
 runner was lost after two hours). What keeps each in memory is listed at the
 top of `src/proofs.rs` (MiniSat for the pixel, finish and container ones,
@@ -128,7 +128,7 @@ are the result that counts.
   (the largest 1,165 by 859); the animation agrees on its first frame and
   within 1 per channel on the alpha-blended ones (`image-webp` rounds blending
   more precisely than libwebp's formula, which is followed: listed); the 2
-  lossy files are refused as unsupported, each with its reason. Every file at
+  lossy files are 6.9's, see "Lossy". Every file at
   chunk sizes 1 to 4096 (with and without empty chunks) equals the
   whole-file decode, with the invariant checked at every step and canary
   bytes past the buffers untouched. 1,440 deterministic byte mutants
@@ -150,10 +150,52 @@ are the result that counts.
   25,000 to 30,000 times slower than native; measured with `--cfg miri`
   natively, the 156-byte file decodes in 0.85 ms.
 
+## Lossy (item 6.9)
+
+`src/vp8/` follows RFC 6386 (pinned in `vp8/mod.rs`, which also lists its
+choices): `bool_decoder.rs` (§7), `header.rs` (§9, 19), `quant.rs` (§9.6,
+14.1), `tables.rs` (extracted from the RFC's text by script), `tokens.rs`
+(§13), `transform.rs` (§14.3, 14.4, 14.5), `predict.rs` and `plane.rs` (§12),
+`loop_filter.rs` (§15), `yuv.rs` (libwebp's conversion, a listed choice);
+`src/alpha.rs` is `ALPH` (RFC 9649 §2.7.1.2). The whole `VP8 ` chunk is kept
+(in the frame's RGBA buffer, or 1 kB of work space if small) and the frame is
+decoded, filtered and converted in the `step` that gives its last byte. **The
+work buffer grew** by about 2.6 bytes per pixel (alpha plane and lossy planes)
+for a file whose config says `Coding::Lossy`: a simple `VP8 ` file, and every
+extended (`VP8X`) one, since its first bytes do not show which codec its
+images use. A simple lossless (`VP8L`) file is `Coding::Base` and keeps the
+6.8 size; a `VP8 ` chunk under a lossless config is refused.
+
+State, honestly: **built; tier unchanged at 0.** Eight harnesses were written
+in `src/proofs.rs` for item 6.9; six are harnesses and two are not. Measured
+locally, each run on its own under Kani 0.68.0 (CBMC 6.11.0) on a machine shared
+with other jobs (so the times are upper bounds):
+
+| Harness | Result |
+|---------|--------|
+| `bool_decoder_any` | **FAILS**, 13 s, 214 MB: `assert!(d.inv())` straight after `BoolDecoder::new` fails when the first input byte is 0xFF, since then `value` is at least `255 << 8`, which is not under `range << 8` (`inv`'s claim, and the comment on `value`, are false for that input; the bytes are 'any'). Neither the harness nor the code was changed: the fix (a weaker `inv` at the start, or clamping in `new`, which would differ from the RFC's arithmetic on streams no encoder writes) is the maintainer's. |
+| `subblock_predict_any` | proves, 63 s, 710 MB, after raising `unwind` from 12 to 18 (the `all` over the 16 pixels of a subblock needs 17; at 12 it failed its unwinding assertion). A widening, not a narrowing |
+| `predict_block_edges_any` | proves, 27 s, 357 MB |
+| `loop_filter_any` | proves, 5 s, 313 MB |
+| `inverse_transforms_any` | proves, 16 s, 499 MB |
+| `yuv_to_rgb_any` | proves, 2 s, 180 MB |
+| `container_alpha`, `container_vp8` | **not harnesses**: no verdict in 40 minutes each (6 to 7 GB resident, MiniSat, `unwind(6)`); see the `// NOT a harness:` block in `src/proofs.rs`. The `ALPH` and `VP8 ` container phases are covered by unit tests, differential tests and Miri, not machine-checked |
+
+So the crate has 75 harnesses (the 69 of item 6.8 and 6), of which one,
+`bool_decoder_any`, fails as it stands. The 69 of 6.8 and the other five here
+were all run: the slowest are `act_dist_sym_predictor` (about 10.5 minutes,
+3.4 GB), `container_anim` (about 10 minutes, 2.6 GB) and `act_dist_sym_palette`
+(about 8 minutes, 3.5 GB). The whole-frame
+decode is not harnessed. Tests: all 14 Wuffs lossy files equal `image-webp`
+exactly (`tests/data/wuffs-webp`, 12 added); `tests/lossy/` has a VP8 writer
+(399 of 400 random frames equal, one refused as over 4 bytes to the pixel) and
+48 `ALPH` files (every filter, raw and compressed) equal. libwebp's vectors
+and `dwebp` output are not used (no licence): the reference is `image-webp`.
+
 ## Not done
 
-Lossy VP8 and `ALPH` (item 6.9). The loop count and frame timing policy
+The loop count and frame timing policy
 (6.19). Prefix code group counts above 1,024 (or above the image's blocks).
 libwebp's own test vectors (no licence) and `dwebp`'s output: `image-webp`
 is the reference, and libwebp's blending is reproduced from its source's
-formula, not compared with it. Kani has not been run on this crate.
+formula, not compared with it. Kani has been run on this crate's harnesses one at a time (see "Kani harnesses" above and the pull request).

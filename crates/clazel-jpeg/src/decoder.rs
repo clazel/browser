@@ -6,7 +6,7 @@
 //! `lib.rs`'s header; the listed choices are there too.
 
 use clazel_image_shape::{
-    Buffers, Config, ConfigStatus, Decoder, Error, Format, FrameCount, Status, Step,
+    Buffers, Coding, Config, ConfigStatus, Decoder, Error, Format, FrameCount, Status, Step,
 };
 
 use crate::bits::BitReader;
@@ -16,6 +16,7 @@ use crate::huffman::Table;
 use crate::idct::idct;
 use crate::markers::{Kind, kind};
 use crate::output::{Plane, cmyk_to_rgb, orient, swaps, ycc_to_rgb, ycck_to_cmyk};
+use crate::progressive::{self, MAX_SCANS, Params, Prog, ScanKind};
 
 /// Components of a frame: T.81 B.2.2 allows 1 to 255; this decoder reads
 /// 1 (gray), 3 (YCbCr or RGB) and 4 (CMYK or YCCK).
@@ -221,6 +222,15 @@ pub struct Jpeg {
     bits: BitReader,
     /// An `0xFF` was just read in an entropy-coded segment.
     ff: bool,
+    /// The frame is progressive (SOF2, item 6.6): the planes hold
+    /// coefficients until EOI (`progressive.rs`), and `prog` decodes blocks.
+    progressive: bool,
+    /// The coefficient planes still hold what the caller left in the work
+    /// buffer and must be zeroed before the first scan.
+    zero_pending: bool,
+    /// Scans started in the frame (counted for progressive frames only).
+    scans: u16,
+    prog: Prog,
 }
 
 /// Error shorthand.
@@ -233,15 +243,29 @@ fn ceil_div(a: usize, b: usize) -> Option<usize> {
     a.checked_add(b.checked_sub(1)?)?.checked_div(b)
 }
 
-/// The most the work buffer can need for a `w` by `h` image: four planes of
-/// `(w + 31) * (h + 31)` samples (the planes are padded to whole MCUs, at
-/// most 32 samples at sampling factors of 4).
-fn plane_bound(w: u32, h: u32) -> Result<usize, Error> {
-    let pad = |s: u32| s.checked_add(31).and_then(|v| usize::try_from(v).ok());
-    pad(w)
-        .zip(pad(h))
+/// The most the work buffer can need for a `w` by `h` image of the coding
+/// the config states.
+///
+/// - Sequential ([`Coding::Base`]): four planes of `(w + 31) * (h + 31)`
+///   samples (the planes are padded to whole MCUs, at most 32 samples at
+///   sampling factors of 4).
+/// - Progressive ([`Coding::Progressive`]): `6 * (w + 31) * (h + 35)` bytes.
+///   A progressive frame keeps every coefficient as 2 bytes plus one block
+///   row of samples per component (`progressive::region_len`, at most
+///   `2 * (w + 31) * (h + 35)` bytes), so it fits when its planes do not add
+///   up to more than three full ones (every frame of 1 or 3 components does;
+///   one of 4 does when it is subsampled).
+fn plane_bound(w: u32, h: u32, coding: Coding) -> Result<usize, Error> {
+    let (pad_h, per) = if coding == Coding::Progressive {
+        (35, 6)
+    } else {
+        (31, MAX_COMPONENTS)
+    };
+    let pad = |s: u32, by: u32| s.checked_add(by).and_then(|v| usize::try_from(v).ok());
+    pad(w, 31)
+        .zip(pad(h, pad_h))
         .and_then(|(a, b)| a.checked_mul(b))
-        .and_then(|p| p.checked_mul(MAX_COMPONENTS))
+        .and_then(|p| p.checked_mul(per))
         .ok_or(Error::Malformed("work buffer size overflow"))
 }
 
@@ -290,6 +314,9 @@ impl Jpeg {
 
     /// One byte of the stream. `Ok(true)` when EOI completed the frame.
     pub(crate) fn byte(&mut self, b: u8, work: &mut [u8]) -> Result<bool, Error> {
+        if self.zero_pending {
+            self.zero_coefficients(work)?;
+        }
         if self.phase == Phase::Entropy {
             match self.entropy_byte(b, work)? {
                 Some(m) => self.marker_code(m),
@@ -404,7 +431,7 @@ impl Jpeg {
     fn segment_byte(&mut self, b: u8) -> Result<(), Error> {
         let pos = usize::from(self.seg_pos);
         match self.marker {
-            0xC0 | 0xC1 | 0xDA | 0xDD | 0xE0 | 0xEE => {
+            0xC0..=0xC2 | 0xDA | 0xDD | 0xE0 | 0xEE => {
                 if let Some(s) = self.hold.get_mut(pos) {
                     *s = b;
                 }
@@ -538,7 +565,7 @@ impl Jpeg {
     fn end_segment(&mut self) -> Result<(), Error> {
         let total = self.seg_total;
         match self.marker {
-            0xC0 | 0xC1 => self.finish_frame()?,
+            0xC0..=0xC2 => self.finish_frame()?,
             0xDA => return self.finish_scan_header(),
             0xDD => {
                 // B.2.4.4: `Lr` = 4, then `Ri`.
@@ -578,6 +605,14 @@ impl Jpeg {
             self.u16_hold(3),
             usize::from(self.hold_at(5)),
         );
+        // SOF2 (B.2.2, Table B.1): progressive DCT, Huffman coding.
+        let progressive = self.marker == 0xC2;
+        // The work buffer was sized for the coding `decode_config` read from
+        // the same frame header; a stream fed after another's config could
+        // differ.
+        if progressive != (self.config.coding() == Coding::Progressive) {
+            return bad("frame coding differs from the config");
+        }
         if p != 8 {
             return Err(Error::Unsupported("a sample precision other than 8 bits"));
         }
@@ -653,14 +688,28 @@ impl Jpeg {
                 .and_then(|v| u16::try_from(v).ok())
                 .ok_or(Error::Malformed("size"))?;
             c.off = off;
-            off = c
-                .plane_len()
+            // Progressive: the region of the coefficients and one block row
+            // of samples (`progressive.rs`), not the sample plane alone.
+            let need = if progressive {
+                progressive::region_len(usize::from(c.blocks_w), usize::from(c.blocks_h))
+            } else {
+                c.plane_len()
+            };
+            off = need
                 .and_then(|l| off.checked_add(l))
                 .ok_or(Error::Malformed("size"))?;
         }
         if off > self.work_len {
+            if progressive {
+                return Err(Error::Unsupported(
+                    "progressive coefficients do not fit the work buffer (a 4-component frame without enough subsampling)",
+                ));
+            }
             return bad("planes do not fit the work buffer");
         }
+        self.progressive = progressive;
+        self.zero_pending = progressive;
+        self.scans = 0;
         self.width = x;
         self.height = y;
         self.ncomp = u8::try_from(nf).map_err(|_| Error::Malformed("components"))?;
@@ -686,7 +735,30 @@ impl Jpeg {
         }
         // `Ss`, `Se`, `Ah`, `Al` follow; for sequential processes they are
         // 0, 63, 0, 0 (B.2.3, Table B.3) and libjpeg-turbo only warns
-        // otherwise, so they are ignored.
+        // otherwise, so they are ignored. For progressive ones they select
+        // the scan (Annex G) and are checked.
+        let prog = if self.progressive {
+            let at = ns.saturating_mul(2).saturating_add(1);
+            let ahal = self.hold_at(at.saturating_add(2));
+            self.scans = self.scans.saturating_add(1);
+            if self.scans > MAX_SCANS {
+                return Err(Error::Unsupported("a progressive frame of over 100 scans"));
+            }
+            Some(
+                Params::new(
+                    self.hold_at(at),
+                    self.hold_at(at.saturating_add(1)),
+                    ahal >> 4,
+                    ahal & 15,
+                    ns,
+                )
+                .map_err(Error::Malformed)?,
+            )
+        } else {
+            None
+        };
+        let need_dc = prog.is_none_or(|p| p.kind == ScanKind::DcFirst);
+        let need_ac = prog.is_none_or(|p| matches!(p.kind, ScanKind::AcFirst | ScanKind::AcRefine));
         let mut scan = Scan {
             n: u8::try_from(ns).map_err(|_| Error::Malformed("components"))?,
             comp: [0; MAX_COMPONENTS],
@@ -718,8 +790,9 @@ impl Jpeg {
             if td > 3 || ta > 3 {
                 return bad("a Huffman table selector out of range");
             }
-            if self.dc.get(usize::from(td)).is_none_or(|t| t.is_none())
-                || self.ac.get(usize::from(ta)).is_none_or(|t| t.is_none())
+            // A progressive scan needs only the tables its kind uses.
+            if (need_dc && self.dc.get(usize::from(td)).is_none_or(|t| t.is_none()))
+                || (need_ac && self.ac.get(usize::from(ta)).is_none_or(|t| t.is_none()))
             {
                 return bad("a scan uses a Huffman table that was not defined");
             }
@@ -727,23 +800,29 @@ impl Jpeg {
                 .comps
                 .get_mut(ci)
                 .ok_or(Error::Malformed("component"))?;
-            if !self
-                .qt_def
-                .get(usize::from(comp.tq))
-                .copied()
-                .unwrap_or(false)
-            {
-                return bad("a scan uses a quantization table that was not defined");
+            // Latched at every scan when sequential; for a progressive
+            // component at its first scan, as libjpeg does.
+            if prog.is_none() || !comp.done {
+                if !self
+                    .qt_def
+                    .get(usize::from(comp.tq))
+                    .copied()
+                    .unwrap_or(false)
+                {
+                    return bad("a scan uses a quantization table that was not defined");
+                }
+                comp.q = self
+                    .qt
+                    .get(usize::from(comp.tq))
+                    .copied()
+                    .unwrap_or([1; 64]);
             }
-            comp.q = self
-                .qt
-                .get(usize::from(comp.tq))
-                .copied()
-                .unwrap_or([1; 64]);
             comp.dc_sel = td;
             comp.ac_sel = ta;
             comp.pred = 0;
-            comp.done = false;
+            if prog.is_none() {
+                comp.done = false;
+            }
             blocks = blocks
                 .checked_add(usize::from(comp.h).saturating_mul(usize::from(comp.v)))
                 .ok_or(Error::Malformed("blocks"))?;
@@ -773,6 +852,9 @@ impl Jpeg {
                 .map_err(|_| Error::Malformed("size"))?;
         }
         self.scan = scan;
+        if let Some(p) = prog {
+            self.prog.start_scan(p);
+        }
         self.block = Block::new();
         self.bits = BitReader::empty();
         self.ff = false;
@@ -828,6 +910,7 @@ impl Jpeg {
             c.pred = 0;
         }
         self.block = Block::new();
+        self.prog.reset();
         self.scan.state = ScanState::Decoding;
         Ok(())
     }
@@ -881,6 +964,9 @@ impl Jpeg {
     /// One bit of the entropy-coded data: to the block decoder, and when it
     /// finishes a block, dequantize, transform, store, and move on.
     pub(crate) fn block_bit(&mut self, bit: u8, work: &mut [u8]) -> Result<(), Error> {
+        if self.progressive {
+            return self.prog_bit(bit, work);
+        }
         let (ci, bx, by) = self
             .current_block()
             .ok_or(Error::Malformed("block position"))?;
@@ -905,6 +991,114 @@ impl Jpeg {
             return Ok(());
         }
         self.store_block(ci, bx, by, work)
+    }
+
+    /// One bit of a progressive scan (Annex G): to the block machine; when
+    /// it finishes a block, the coefficients go back to the plane and the
+    /// next blocks that need no bits are passed.
+    fn prog_bit(&mut self, bit: u8, work: &mut [u8]) -> Result<(), Error> {
+        if self.prog.idle() {
+            self.prog_begin(work)?;
+            if self.scan.state != ScanState::Decoding {
+                return Ok(());
+            }
+        }
+        let (ci, bx, by) = self
+            .current_block()
+            .ok_or(Error::Malformed("block position"))?;
+        let comp = self.comps.get(ci).ok_or(Error::Malformed("component"))?;
+        let kind = self.prog.params().kind;
+        let dc = match kind {
+            ScanKind::DcFirst => self
+                .dc
+                .get(usize::from(comp.dc_sel))
+                .and_then(|t| t.as_ref()),
+            _ => None,
+        };
+        let ac = match kind {
+            ScanKind::AcFirst | ScanKind::AcRefine => self
+                .ac
+                .get(usize::from(comp.ac_sel))
+                .and_then(|t| t.as_ref()),
+            _ => None,
+        };
+        let mut pred = comp.pred;
+        let base = Self::coef_base(comp, bx, by)?;
+        let done = self
+            .prog
+            .bit(bit, dc, ac, &mut pred)
+            .map_err(Error::Malformed)?;
+        self.comps
+            .get_mut(ci)
+            .ok_or(Error::Malformed("component"))?
+            .pred = pred;
+        if !done {
+            return Ok(());
+        }
+        progressive::store(work, base, &self.prog.blk).ok_or(Error::Malformed("plane position"))?;
+        self.advance();
+        self.prog_begin(work)
+    }
+
+    /// Where in the work buffer the coefficients of block `(bx, by)` of
+    /// `comp` are.
+    fn coef_base(comp: &Comp, bx: usize, by: usize) -> Result<usize, Error> {
+        let (bw, bh) = (usize::from(comp.blocks_w), usize::from(comp.blocks_h));
+        if bx >= bw || by >= bh {
+            return bad("block outside the plane");
+        }
+        progressive::block_base(comp.off, bw, bx, by).ok_or(Error::Malformed("plane position"))
+    }
+
+    /// Starts the current block of a progressive scan: loads its
+    /// coefficients, and passes every block that needs no bits (inside an
+    /// EOB run) until one does or the scan or interval ends.
+    fn prog_begin(&mut self, work: &mut [u8]) -> Result<(), Error> {
+        while self.scan.state == ScanState::Decoding && self.prog.idle() {
+            let (ci, bx, by) = self
+                .current_block()
+                .ok_or(Error::Malformed("block position"))?;
+            let comp = self.comps.get(ci).ok_or(Error::Malformed("component"))?;
+            let base = Self::coef_base(comp, bx, by)?;
+            progressive::load(work, base, &mut self.prog.blk)
+                .ok_or(Error::Malformed("plane position"))?;
+            if !self.prog.begin().map_err(Error::Malformed)? {
+                break;
+            }
+            self.advance();
+        }
+        Ok(())
+    }
+
+    /// Before the first scan of a progressive frame: the coefficients start
+    /// at zero, whatever the caller's buffer held.
+    fn zero_coefficients(&mut self, work: &mut [u8]) -> Result<(), Error> {
+        for c in self.comps.iter().take(usize::from(self.ncomp)) {
+            let len = usize::from(c.blocks_w)
+                .checked_mul(usize::from(c.blocks_h))
+                .and_then(|n| n.checked_mul(progressive::BLOCK_BYTES))
+                .ok_or(Error::Malformed("size"))?;
+            let end = c.off.checked_add(len).ok_or(Error::Malformed("size"))?;
+            work.get_mut(c.off..end)
+                .ok_or(Error::Malformed("plane"))?
+                .fill(0);
+        }
+        self.zero_pending = false;
+        Ok(())
+    }
+
+    /// At EOI of a progressive frame: the inverse DCT of every block of
+    /// every component into its sample plane (`progressive::finish_plane`).
+    fn finish_progressive(&mut self, work: &mut [u8]) -> Result<(), Error> {
+        if !self.progressive {
+            return Ok(());
+        }
+        for c in self.comps.iter_mut().take(usize::from(self.ncomp)) {
+            let (bw, bh) = (usize::from(c.blocks_w), usize::from(c.blocks_h));
+            c.off = progressive::finish_plane(work, c.off, bw, bh, &c.q)
+                .ok_or(Error::Malformed("progressive inverse DCT"))?;
+        }
+        Ok(())
     }
 
     /// The block is complete: A.3.3's inverse DCT into the plane at block
@@ -1083,6 +1277,8 @@ impl Jpeg {
                     || (self.scan.mx < self.scan.mcus_x && self.scan.my < self.scan.mcus_y)));
         self.bits.inv()
             && self.block.inv()
+            && self.scans <= MAX_SCANS.saturating_add(1)
+            && (self.phase != Phase::Entropy || self.prog.inv())
             && usize::from(self.seg_pos) <= usize::from(self.seg_total)
             && (1..=8).contains(&self.orientation)
             && comps_ok
@@ -1096,7 +1292,7 @@ impl Decoder for Jpeg {
     }
 
     fn work_len(config: &Config) -> Result<usize, Error> {
-        plane_bound(config.width(), config.height())
+        plane_bound(config.width(), config.height(), config.coding())
     }
 
     fn start(config: &Config) -> Result<Jpeg, Error> {
@@ -1162,6 +1358,10 @@ impl Decoder for Jpeg {
             block: Block::new(),
             bits: BitReader::empty(),
             ff: false,
+            progressive: false,
+            zero_pending: false,
+            scans: 0,
+            prog: Prog::new(),
         })
     }
 
@@ -1182,6 +1382,9 @@ impl Decoder for Jpeg {
             match self.byte(b, buffers.work) {
                 Ok(false) => {}
                 Ok(true) => {
+                    if let Err(e) = self.finish_progressive(buffers.work) {
+                        return Err(self.fail(e));
+                    }
                     return match self.render(buffers.pixels, buffers.work) {
                         Ok(()) => Ok(Step {
                             consumed: i.saturating_add(1),

@@ -23,6 +23,11 @@ pub const FILES: &[Case] = &[
         bytes: include_bytes!("../data/wuffs-webp/bricks-color.lossless.webp"),
     },
     Case {
+        file: "bricks-color.lossy.webp",
+        sha256: "0bfe8085b5bcf80272c70dba25a825559cbf0f2a0aa511937ccfba721ede7a0d",
+        bytes: include_bytes!("../data/wuffs-webp/bricks-color.lossy.webp"),
+    },
+    Case {
         file: "bricks-dither.lossless.webp",
         sha256: "1bc1775f477cd9fdc971ae82ca89a03c9ff1239b8e5ebda449a1bef0eb01acfd",
         bytes: include_bytes!("../data/wuffs-webp/bricks-dither.lossless.webp"),
@@ -31,6 +36,11 @@ pub const FILES: &[Case] = &[
         file: "bricks-gray.lossless.webp",
         sha256: "44f07a8e6634ff1aa6abcc3acc59e34ece2b1417bae1a91e77c8157879500917",
         bytes: include_bytes!("../data/wuffs-webp/bricks-gray.lossless.webp"),
+    },
+    Case {
+        file: "bricks-gray.lossy.webp",
+        sha256: "81673e9477378cfa5d3b62d65c9ade314a322869c9981ce98ea2bf5d3eebb786",
+        bytes: include_bytes!("../data/wuffs-webp/bricks-gray.lossy.webp"),
     },
     Case {
         file: "bricks-nodither.lossless.webp",
@@ -43,9 +53,19 @@ pub const FILES: &[Case] = &[
         bytes: include_bytes!("../data/wuffs-webp/harvesters.lossless.webp"),
     },
     Case {
+        file: "harvesters.lossy.webp",
+        sha256: "08cf3c48b76182f797f56b97ce69898d0c28abc132a9a51a9ebc67cb6f0547a7",
+        bytes: include_bytes!("../data/wuffs-webp/harvesters.lossy.webp"),
+    },
+    Case {
         file: "hat.lossless.webp",
         sha256: "d91429191b532107311b3c16a251a65ecc1142375132c3c27ac2f1dc78f9ac80",
         bytes: include_bytes!("../data/wuffs-webp/hat.lossless.webp"),
+    },
+    Case {
+        file: "hat.lossy.webp",
+        sha256: "c3e4e8e405b501cb204081787511f1a36ab8300ceaba70955cc50e1942d6f258",
+        bytes: include_bytes!("../data/wuffs-webp/hat.lossy.webp"),
     },
     Case {
         file: "hibiscus.primitive.lossless.webp",
@@ -53,14 +73,34 @@ pub const FILES: &[Case] = &[
         bytes: include_bytes!("../data/wuffs-webp/hibiscus.primitive.lossless.webp"),
     },
     Case {
+        file: "hibiscus.primitive.lossy.webp",
+        sha256: "a199c81ee96160fdd7ae9b1243e4e496954ef21d29cba07c13d1ec9c0f0dbe9a",
+        bytes: include_bytes!("../data/wuffs-webp/hibiscus.primitive.lossy.webp"),
+    },
+    Case {
         file: "hibiscus.regular.lossless.webp",
         sha256: "5ca1345294d22b9db016078f872316ec47811697f918c4427a537d9cd0814726",
         bytes: include_bytes!("../data/wuffs-webp/hibiscus.regular.lossless.webp"),
     },
     Case {
+        file: "hibiscus.regular.lossy.webp",
+        sha256: "6a4bdd4efbdbddf7ff1b9aa9a819fb9c133e7f76f115fdaf504446dabcce21b3",
+        bytes: include_bytes!("../data/wuffs-webp/hibiscus.regular.lossy.webp"),
+    },
+    Case {
         file: "hippopotamus.lossless.webp",
         sha256: "3fdf2cae4fa5b661edb77e8526f8223e230a0ad2404098b2db4192886d328964",
         bytes: include_bytes!("../data/wuffs-webp/hippopotamus.lossless.webp"),
+    },
+    Case {
+        file: "hippopotamus.lossy.webp",
+        sha256: "33983efaa7a3700f4319443b9f8d5dac44a587b93bda969449cb2bea3c294288",
+        bytes: include_bytes!("../data/wuffs-webp/hippopotamus.lossy.webp"),
+    },
+    Case {
+        file: "hippopotamus.masked-with-muybridge.lossy.webp",
+        sha256: "7277cf5d60c49624d361edc8543eb86b778458f4a7a4f27911914d3f88cac356",
+        bytes: include_bytes!("../data/wuffs-webp/hippopotamus.masked-with-muybridge.lossy.webp"),
     },
     Case {
         file: "mona-lisa.21x32.lossless.webp",
@@ -71,6 +111,26 @@ pub const FILES: &[Case] = &[
         file: "mona-lisa.21x32.q0.lossy.webp",
         sha256: "8f03717a413fabb1ea615774dbe87dce2f09a13b8bbaf53dd484d0db272621e1",
         bytes: include_bytes!("../data/wuffs-webp/mona-lisa.21x32.q0.lossy.webp"),
+    },
+    Case {
+        file: "mona-lisa.21x32.q25.lossy.webp",
+        sha256: "80a7a9460a863bc8bace8f4f073590e91e1cd3a3f9bf65c2c7de1141d9e36d0d",
+        bytes: include_bytes!("../data/wuffs-webp/mona-lisa.21x32.q25.lossy.webp"),
+    },
+    Case {
+        file: "mona-lisa.21x32.q50.lossy.webp",
+        sha256: "e5a5ddc1645bf822234d36b71caab3ed2764dedce38a380e014e43df68384a18",
+        bytes: include_bytes!("../data/wuffs-webp/mona-lisa.21x32.q50.lossy.webp"),
+    },
+    Case {
+        file: "mona-lisa.21x32.q90.lossy.webp",
+        sha256: "0213e92e3cea5ada4b027385fe78a8199d2543903f088ef90bca280dd771ce05",
+        bytes: include_bytes!("../data/wuffs-webp/mona-lisa.21x32.q90.lossy.webp"),
+    },
+    Case {
+        file: "peacock.24x19.lossy.webp",
+        sha256: "c40cbcbdc506c471bbceb17b7125b758a206af871dd67d2dca8eb126bfc070c4",
+        bytes: include_bytes!("../data/wuffs-webp/peacock.24x19.lossy.webp"),
     },
     Case {
         file: "pjw-thumbnail.lossless.webp",
