@@ -24,6 +24,7 @@
 
 use crate::model::{External, ForeignIncludes};
 
+pub mod bindings;
 mod callbacks;
 pub use callbacks::CALLBACKS;
 mod dictionaries;

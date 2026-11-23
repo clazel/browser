@@ -784,6 +784,9 @@ dependencies = [
 [[package]]
 name = "clazel-webidl"
 version = "0.0.0"
+dependencies = [
+ "clazel-js",
+]
 
 [[package]]
 name = "clazel-webp"
