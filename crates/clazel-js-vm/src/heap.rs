@@ -84,6 +84,9 @@ pub enum ObjKind {
     /// `[[RegExpMatcher]]`, ...): its row in the VM's table of host objects
     /// (`crate::host`).
     Host(u32),
+    /// An arguments exotic object (§10.4.4†, here always without a parameter
+    /// map: see `crate::host`).
+    Arguments,
 }
 
 /// `[[ArrayLikeIterationKind]]` of an Array Iterator (§23.1.5.1†).

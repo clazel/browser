@@ -86,6 +86,7 @@ fn to_string(vm: &mut Vm, this: Value, _args: &[Value]) -> Result<Value, Abrupt>
         match vm.heap().obj(o).map(|o| o.kind) {
             Some(ObjKind::Array) => "Array",
             Some(ObjKind::Error) => "Error",
+            Some(ObjKind::Arguments) => "Arguments",
             Some(ObjKind::Primitive(p)) => match p.decode() {
                 Decoded::Bool(_) => "Boolean",
                 Decoded::Int32(_) | Decoded::Double(_) => "Number",

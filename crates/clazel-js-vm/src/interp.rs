@@ -246,6 +246,10 @@ pub(crate) struct LoadedFn {
     pub(crate) entries: u64,
     pub(crate) back_edges: u64,
     pub(crate) name_value: Option<Value>,
+    /// Whether the function reads the arguments past its parameters
+    /// (`arguments` or a rest parameter): a call then keeps its argument list
+    /// for the op that makes the object (`crate::host`, "Arguments").
+    pub(crate) needs_args: bool,
 }
 
 /// A script loaded into a VM.
@@ -552,6 +556,14 @@ impl Vm {
             entries: 0,
             back_edges: 0,
             name_value: None,
+            needs_args: f.instrs.iter().any(|i| {
+                matches!(
+                    i,
+                    Instr::CreateUnmappedArguments { .. }
+                        | Instr::CreateMappedArguments { .. }
+                        | Instr::CreateRestArray { .. }
+                )
+            }),
         })
     }
 
@@ -746,6 +758,9 @@ impl Vm {
         let argc_slot = enc_argc(argc.min(0x0FFF_FFFF), frame_kind)
             .ok_or(Abrupt::Internal("argument count"))?;
         let base = self.top;
+        if self.codes.get(code).is_some_and(|f| f.needs_args) {
+            self.host.entry_args.insert(base, args.to_vec());
+        }
         let header = [callee, this, argc_slot, ret_value];
         if self.region.push_frame(base, size, header) == Err(FrameError::Overflow) {
             return Err(self.range_error("Maximum call stack size exceeded"));
@@ -1495,6 +1510,21 @@ impl Vm {
             // (§13.2.7.3† step 3): `%RegExp%` makes the object.
             Instr::NewRegExp { dst, k } => {
                 let v = self.new_regexp(k)?;
+                self.w(dst, v)?;
+            }
+            // CreateUnmappedArgumentsObject §10.4.4.6† and
+            // CreateMappedArgumentsObject §10.4.4.7† (see `crate::host`),
+            // and the rest parameter's array (§15.1.3† step 4.b).
+            Instr::CreateUnmappedArguments { dst } => {
+                let v = self.create_arguments_object(true)?;
+                self.w(dst, v)?;
+            }
+            Instr::CreateMappedArguments { dst, .. } => {
+                let v = self.create_arguments_object(false)?;
+                self.w(dst, v)?;
+            }
+            Instr::CreateRestArray { dst, from } => {
+                let v = self.create_rest_array(from)?;
                 self.w(dst, v)?;
             }
             other => return Err(Abrupt::NotYet(op_name(&other))),

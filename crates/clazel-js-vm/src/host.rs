@@ -54,6 +54,10 @@ pub(crate) struct HostState {
     pub(crate) function_slots: HashMap<Value, Vec<Value>>,
     pub(crate) jobs: VecDeque<Job>,
     pub(crate) job_errors: Vec<Value>,
+    /// The argument list of each running call of a function that reads its
+    /// arguments past its parameters, by the frame's base (the frame has
+    /// slots for the parameters only).
+    pub(crate) entry_args: HashMap<usize, Vec<Value>>,
 }
 
 /// The most jobs one [`Vm::run_jobs`] runs: a promise chain that enqueues
@@ -256,5 +260,86 @@ impl Vm {
     /// The exceptions that escaped jobs since the last call, oldest first.
     pub fn take_job_errors(&mut self) -> Vec<Value> {
         std::mem::take(&mut self.host.job_errors)
+    }
+}
+
+// -----------------------------------------------------------------------
+// `arguments` and rest parameters
+// -----------------------------------------------------------------------
+
+impl Vm {
+    /// The arguments of the running call (see [`HostState::entry_args`]).
+    fn call_arguments(&self) -> Vec<Value> {
+        self.host
+            .entry_args
+            .get(&self.fp)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// CreateUnmappedArgumentsObject ( argumentsList ), §10.4.4.6†, for a
+    /// strict function (`strict`), and for a sloppy function the object of
+    /// CreateMappedArgumentsObject (§10.4.4.7†) without its parameter map:
+    /// 1. Let len be the number of elements in argumentsList.
+    /// 2. Let obj be OrdinaryObjectCreate(%Object.prototype%, « [[ParameterMap]]
+    ///    »).
+    /// 3. Set obj.[[ParameterMap]] to undefined.
+    /// 4. Perform ! DefinePropertyOrThrow(obj, "length", PropertyDescriptor {
+    ///    [[Value]]: 𝔽(len), [[Writable]]: true, [[Enumerable]]: false,
+    ///    [[Configurable]]: true }).
+    /// 5. Let index be 0.
+    /// 6. Repeat, while index < len, (a) let val be argumentsList[index];
+    ///    (b) perform ! CreateDataPropertyOrThrow(obj, ! ToString(𝔽(index)),
+    ///    val); (c) set index to index + 1.
+    /// 7. Perform ! DefinePropertyOrThrow(obj, @@iterator, PropertyDescriptor {
+    ///    [[Value]]: %Array.prototype.values%, [[Writable]]: true,
+    ///    [[Enumerable]]: false, [[Configurable]]: true }).
+    /// 8. Perform ! DefinePropertyOrThrow(obj, "callee", PropertyDescriptor {
+    ///    [[Get]]: %ThrowTypeError%, [[Set]]: %ThrowTypeError%,
+    ///    [[Enumerable]]: false, [[Configurable]]: false }). (Strict only; a
+    ///    sloppy function's `callee` is the function, §10.4.4.7† step 21.)
+    /// 9. Return obj.
+    ///
+    /// The deviation: a sloppy function's object is not mapped (a write to
+    /// `arguments[0]` does not change the parameter, and the reverse), and a
+    /// strict function's `callee` is absent (it is an accessor, and the VM has
+    /// none).
+    pub(crate) fn create_arguments_object(&mut self, strict: bool) -> Result<Value, Abrupt> {
+        use clazel_js_heap::shape::Attrs;
+        let args = self.call_arguments();
+        let proto = self.atoms.object_proto;
+        let obj = self.heap.new_object(proto, ObjKind::Arguments)?;
+        let k_len = self.atoms.k_length;
+        let len = i32::try_from(args.len()).map_err(|_| Abrupt::OutOfMemory)?;
+        let method = Attrs(Attrs::WRITABLE | Attrs::CONFIGURABLE);
+        self.heap.define(obj, k_len, Value::int32(len), method)?;
+        for (i, v) in args.iter().enumerate() {
+            let k = self.index_key(i as u64)?;
+            self.heap.define(obj, k, *v, Attrs::ALL)?;
+        }
+        let array_proto = self.intrinsic(crate::interp::Intrinsic::ArrayPrototype);
+        if self.heap.is_object(array_proto) {
+            let values = self.get_named(array_proto, "values")?;
+            if values != Value::UNDEFINED {
+                let ki = self.well_known_key(clazel_js_heap::symbol::ITERATOR)?;
+                self.heap.define(obj, ki, values, method)?;
+            }
+        }
+        if !strict {
+            let callee = self.region.header(self.fp, crate::frame::HDR_CALLEE)?;
+            let kc = self.heap.intern_str("callee")?;
+            self.heap.define(obj, kc, callee, method)?;
+        }
+        Ok(obj)
+    }
+
+    /// The array of a rest parameter: the arguments from index `from` on
+    /// (§15.1.3† "IteratorBindingInitialization of FunctionRestParameter"
+    /// step 2: CreateArrayFromList of the remaining arguments).
+    pub(crate) fn create_rest_array(&mut self, from: u32) -> Result<Value, Abrupt> {
+        let args = self.call_arguments();
+        let from = usize::try_from(from).map_err(|_| Abrupt::Internal("rest index"))?;
+        let rest = args.get(from..).unwrap_or(&[]);
+        self.create_array_from_list(rest)
     }
 }
