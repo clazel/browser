@@ -600,6 +600,43 @@ pub proof fn theorem_append_data_host_acyclic(doc: Document, n: NodeId, data: Se
     lemma_set_kind_acyclic(doc, n, k);
 }
 
+/// "Replace data" of all of a node's data keeps [`host_acyclic`].
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
+pub proof fn theorem_set_data_host_acyclic(doc: Document, n: NodeId, data: Seq<u32>)
+    requires
+        host_acyclic(doc),
+        set_data_requires(doc, n),
+    ensures
+        host_acyclic(set_data(doc, n, data)),
+{
+    let k = set_data(doc, n, data).nodes[n as int].kind;
+    assert(set_data(doc, n, data) == set_kind(doc, n, k));
+    lemma_set_kind_acyclic(doc, n, k);
+}
+
+/// Setting a wrapper slot keeps [`host_acyclic`]: no parent, host or kind
+/// changes.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(50)]
+pub proof fn theorem_set_wrapper_host_acyclic(doc: Document, n: NodeId, w: Option<nat>)
+    requires
+        host_acyclic(doc),
+        set_wrapper_requires(doc, n),
+    ensures
+        host_acyclic(set_wrapper(doc, n, w)),
+{
+    let r = lemma_rank_witness(doc);
+    let d2 = set_wrapper(doc, n, w);
+    assert forall|i: int| 0 <= i < doc.nodes.len() implies #[trigger] ranked_at(d2, r, i) by {
+        assert(ranked_at(doc, r, i));
+        theorem_ranked_at_facts(doc, r, i);
+        assert(d2.nodes[i].parent == doc.nodes[i].parent);
+        assert(d2.nodes[i].kind == doc.nodes[i].kind);
+    }
+    assert(host_ranked(d2, r));
+}
+
 /// "Append an attribute" keeps [`host_acyclic`].
 #[verifier::spinoff_prover]
 #[verifier::rlimit(50)]
