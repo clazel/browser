@@ -900,7 +900,7 @@ pub open spec fn orb_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns,
                         url: clazel_url::url::spec::Url,
                         response: clazel_http::message::spec::Response,
                     |
-                        out[k]->ToRenderer_bytes == #[trigger] answer_frames(f.sub, f.request, response_document(response)) && sub_orb_allows(sub_ctx(fetch, f), url, response)
+                        out[k]->ToRenderer_bytes == #[trigger] answer_frames(f.sub, f.request, response_document(response)) && #[trigger] sub_orb_allows(sub_ctx(fetch, f), url, response)
                 },
                 None => false,
             },

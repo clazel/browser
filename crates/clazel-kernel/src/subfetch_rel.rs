@@ -380,7 +380,7 @@ pub proof fn lemma_sub_actions_same_but_sends(ctx: SubCtx, id: nat, serial: nat,
 }
 
 /// Every renderer-bound output of a `SubNet` is the `ToRenderer` of its end.
-pub proof fn lemma_renderer_outs_sub(out: Seq<Output>, id: nat, serial: nat, request: u64, hop: nat, actions: Seq<NetAction>)
+pub proof fn lemma_renderer_outs_sub(ctx: SubCtx, out: Seq<Output>, id: nat, serial: nat, request: u64, hop: nat, actions: Seq<NetAction>)
     requires
         out == sub_actions(ctx, id, serial, request, hop, actions).1,
     ensures
@@ -809,8 +809,8 @@ pub proof fn lemma_d_subnet(
                 lemma_sub_actions_same_but_sends(sub_ctx(fetch, f), renderer, serial, f.request, hop, aa, ab);
                 let (ha, outa, enda) = sub_actions(sub_ctx(fetch, f), renderer, serial, f.request, hop, aa);
                 let (hb, outb, endb) = sub_actions(sub_ctx(fetch, f), renderer, serial, f.request, hop, ab);
-                lemma_renderer_outs_sub(outa, renderer, serial, f.request, hop, aa);
-                lemma_renderer_outs_sub(outb, renderer, serial, f.request, hop, ab);
+                lemma_renderer_outs_sub(sub_ctx(fetch, f), outa, renderer, serial, f.request, hop, aa);
+                lemma_renderer_outs_sub(sub_ctx(fetch, f), outb, renderer, serial, f.request, hop, ab);
                 let g = SubFetch { fetch: fsa, hop: ha, ..f };
                 if let Some(frames) = enda {
                     crate::net_rel::lemma_renderer_outs_concat(outa, seq![Output::ToRenderer { id: renderer, bytes: frames }]);

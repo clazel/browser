@@ -1042,7 +1042,7 @@ pub proof fn lemma_sub_actions_end(ctx: SubCtx, id: nat, serial: nat, request: u
             url: clazel_url::url::spec::Url,
             response: clazel_http::message::spec::Response,
         |
-            x == #[trigger] answer_frames(ctx.sub, request, response_document(response)) && sub_orb_allows(ctx, url, response)),
+            x == #[trigger] answer_frames(ctx.sub, request, response_document(response)) && #[trigger] sub_orb_allows(ctx, url, response)),
     decreases actions.len(),
 {
     if actions.len() > 0 {
@@ -1187,7 +1187,7 @@ pub proof fn theorem_orb(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch
                     url: clazel_url::url::spec::Url,
                     response: clazel_http::message::spec::Response,
                 |
-                    out[k]->ToRenderer_bytes == #[trigger] answer_frames(f.sub, f.request, response_document(response)) && sub_orb_allows(sub_ctx(fetch, f), url, response)) by {
+                    out[k]->ToRenderer_bytes == #[trigger] answer_frames(f.sub, f.request, response_document(response)) && #[trigger] sub_orb_allows(sub_ctx(fetch, f), url, response)) by {
                     if k < o.len() {
                         assert(out[k] == o[k]);
                     }
