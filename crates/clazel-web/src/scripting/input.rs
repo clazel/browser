@@ -58,7 +58,8 @@ impl Page {
     /// # Errors
     /// An error that stops the page (termination, out of memory).
     pub fn click(&mut self, input: MouseInput) -> Result<()> {
-        self.rt.scope(|scope| task(scope, |s| input::click(s, &input)))
+        self.rt
+            .scope(|scope| task(scope, |s| input::click(s, &input)))
     }
 
     /// A key pressed and released with focus where it is: `keydown`,
@@ -68,7 +69,8 @@ impl Page {
     /// # Errors
     /// An error that stops the page.
     pub fn key(&mut self, input: KeyInput) -> Result<()> {
-        self.rt.scope(|scope| task(scope, |s| input::key(s, &input)))
+        self.rt
+            .scope(|scope| task(scope, |s| input::key(s, &input)))
     }
 
     /// A wheel turn over `input.target`: the `wheel` event. Returns `true`
@@ -78,7 +80,8 @@ impl Page {
     /// # Errors
     /// An error that stops the page.
     pub fn wheel(&mut self, input: WheelInput) -> Result<bool> {
-        self.rt.scope(|scope| task(scope, |s| input::wheel(s, &input)))
+        self.rt
+            .scope(|scope| task(scope, |s| input::wheel(s, &input)))
     }
 
     /// The viewport scrolled: the `scroll` event at the document, which
@@ -97,7 +100,8 @@ impl Page {
     /// # Errors
     /// An error that stops the page.
     pub fn set_focus(&mut self, node: Option<usize>) -> Result<()> {
-        self.rt.scope(|scope| task(scope, |s| input::set_focus(s, node)))
+        self.rt
+            .scope(|scope| task(scope, |s| input::set_focus(s, node)))
     }
 
     /// The focused element, if any.
@@ -162,7 +166,11 @@ impl Page {
     /// # Errors
     /// What `clazel-js` returns.
     pub fn control_checked(&mut self, node: usize) -> Result<bool> {
-        self.rt
-            .scope(|scope| Ok(crate::page::forms::is_checked(crate::page::page(scope)?, node)))
+        self.rt.scope(|scope| {
+            Ok(crate::page::forms::is_checked(
+                crate::page::page(scope)?,
+                node,
+            ))
+        })
     }
 }

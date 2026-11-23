@@ -657,12 +657,15 @@ fn install(scope: &mut Scope<'_>, realm: &Realm) -> Result<()> {
 /// `undefined`; assigning replaces it with a data property (WebIDL
 /// §3.7.5.2† "[Replaceable]").
 fn install_window_event(scope: &mut Scope<'_>, global: Local<'_>) -> Result<()> {
-    let get = scope.function("get event", 0, Callable::Function, |scope, _args| {
-        match page::page(scope)?.ui.current_event {
+    let get = scope.function(
+        "get event",
+        0,
+        Callable::Function,
+        |scope, _args| match page::page(scope)?.ui.current_event {
             Some(k) => clazel_webidl::platform::wrap::<page::Page>(scope, k),
             None => Ok(scope.undefined()),
-        }
-    })?;
+        },
+    )?;
     let set = scope.function("set event", 1, Callable::Function, |scope, args| {
         let realm = scope.current_realm()?;
         let global = scope.global(&realm)?;

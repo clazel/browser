@@ -625,7 +625,12 @@ pub trait Host {
     /// value's event listener list"), so that the host can bring a target's
     /// event handlers (HTML §8.1.8†: `on*` content attributes) up to date in
     /// `listeners`.
-    fn prepare_listeners(&mut self, target: TargetId, event_type: &[u32], listeners: &mut Listeners) {
+    fn prepare_listeners(
+        &mut self,
+        target: TargetId,
+        event_type: &[u32],
+        listeners: &mut Listeners,
+    ) {
         let _ = (target, event_type, listeners);
     }
 }

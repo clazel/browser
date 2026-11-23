@@ -345,7 +345,9 @@ pub(crate) fn set_focus(scope: &mut Scope<'_>, new: Option<usize>) -> Result<()>
         let changed = {
             let p = page(scope)?;
             let before = p.ui.value_at_focus.take();
-            before.is_some_and(|b| activation::is_text_control(&p.arena, o) && super::forms::control_value(p, o) != b)
+            before.is_some_and(|b| {
+                activation::is_text_control(&p.arena, o) && super::forms::control_value(p, o) != b
+            })
         };
         if changed {
             fire_with(
@@ -366,8 +368,8 @@ pub(crate) fn set_focus(scope: &mut Scope<'_>, new: Option<usize>) -> Result<()>
     if let Some(n) = new {
         let p = page(scope)?;
         p.ui.focused = Some(n);
-        p.ui.value_at_focus = activation::is_text_control(&p.arena, n)
-            .then(|| super::forms::control_value(p, n));
+        p.ui.value_at_focus =
+            activation::is_text_control(&p.arena, n).then(|| super::forms::control_value(p, n));
         focus_event(scope, n, "focus", false, old)?;
         focus_event(scope, n, "focusin", true, old)?;
     }
@@ -536,8 +538,10 @@ pub(crate) fn key(scope: &mut Scope<'_>, k: &KeyInput) -> Result<()> {
         if matches!(
             kind,
             Some(Kind::Submit | Kind::Reset | Kind::Checkbox | Kind::Radio | Kind::Inert)
-        ) && !matches!(k.mods, Modifiers { ctrl: true, .. } | Modifiers { meta: true, .. })
-        {
+        ) && !matches!(
+            k.mods,
+            Modifiers { ctrl: true, .. } | Modifiers { meta: true, .. }
+        ) {
             key_click(scope, up_target)?;
         }
     }
@@ -593,8 +597,10 @@ fn enter(scope: &mut Scope<'_>, target: usize, k: &KeyInput) -> Result<()> {
         let p = page(scope)?;
         (
             activation::kind_of(&p.arena, target),
-            is_html_exec(&p.arena, target, b"textarea") && activation::is_text_control(&p.arena, target),
-            is_html_exec(&p.arena, target, b"input") && activation::is_text_control(&p.arena, target),
+            is_html_exec(&p.arena, target, b"textarea")
+                && activation::is_text_control(&p.arena, target),
+            is_html_exec(&p.arena, target, b"input")
+                && activation::is_text_control(&p.arena, target),
             super::forms::form_owner(&p.arena, target),
         )
     };
@@ -634,9 +640,10 @@ fn implicit_submission(scope: &mut Scope<'_>, form: usize) -> Result<()> {
     let (default_button, blockers) = {
         let p = page(scope)?;
         let controls = clazel_forms::exec::controls::controls_exec(&p.arena, form);
-        let button = controls.iter().copied().find(|&c| {
-            clazel_forms::submit::exec::submit::is_submit_button_exec(&p.arena, c)
-        });
+        let button = controls
+            .iter()
+            .copied()
+            .find(|&c| clazel_forms::submit::exec::submit::is_submit_button_exec(&p.arena, c));
         let blockers = controls
             .iter()
             .filter(|&&c| {

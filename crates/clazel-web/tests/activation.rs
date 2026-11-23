@@ -29,7 +29,9 @@ fn tree() -> Arena {
             template_contents: None,
             form_owner: None,
         });
-        let Some(e) = e else { unreachable!("node limit") };
+        let Some(e) = e else {
+            unreachable!("node limit")
+        };
         arena.append(parent, e);
         parent = e;
     }
@@ -89,12 +91,7 @@ fn click(bubbles: bool, mouse: bool, type_: &str) -> Event {
 
 /// Dispatches at `target` with listeners 1 (capture on the body), 2 (at the
 /// target), and `cancel`, which makes listener 2 cancel; returns the log.
-fn run(
-    activators: &[usize],
-    target: usize,
-    mut event: Event,
-    cancel: bool,
-) -> (Vec<String>, bool) {
+fn run(activators: &[usize], target: usize, mut event: Event, cancel: bool) -> (Vec<String>, bool) {
     let arena = tree();
     let mut listeners = Listeners::new();
     listeners.add_event_listener(

@@ -61,7 +61,7 @@ use clazel_js::{Error, Key, Local, Result, Scope, Source};
 use clazel_webidl::platform::ObjectKey;
 
 use super::{HookCall, LogLevel, Object, Page, WINDOW, page, points_to_string, str_points};
-use crate::events::{AddOptions, Listeners, ListenerId, TargetId};
+use crate::events::{AddOptions, ListenerId, Listeners, TargetId};
 use crate::ui::{HANDLER_ID_BASE, Handler, HandlerValue};
 
 /// HTML §8.1.8.? "Window-reflecting body element event handler set": the
@@ -116,9 +116,10 @@ fn is_body_or_frameset(arena: &Arena, n: usize) -> bool {
 /// The document's `body` element: the first child of the document element
 /// that is a `body` or `frameset` (HTML §3.1.4†).
 fn body_element(arena: &Arena) -> Option<usize> {
-    let html = *arena.children(0).iter().find(|&&c| {
-        c < arena.len() && matches!(arena.kind(c), ExecKind::Element { .. })
-    })?;
+    let html = *arena
+        .children(0)
+        .iter()
+        .find(|&&c| c < arena.len() && matches!(arena.kind(c), ExecKind::Element { .. }))?;
     arena
         .children(html)
         .iter()
@@ -172,7 +173,13 @@ fn content_attribute(arena: &Arena, target: TargetId, event: &str) -> Option<Vec
 /// HTML §8.1.8.1† "activate an event handler": "If eventTarget's event
 /// listener list does not contain an event listener whose type is name and
 /// callback is the event handler's listener, then add an event listener".
-fn activate(arena: &Arena, listeners: &mut Listeners, target: TargetId, event: &str, h: &mut Handler) {
+fn activate(
+    arena: &Arena,
+    listeners: &mut Listeners,
+    target: TargetId,
+    event: &str,
+    h: &mut Handler,
+) {
     if h.active {
         return;
     }

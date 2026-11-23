@@ -222,10 +222,7 @@ fn a_click_is_move_down_up_click_and_bubbles() -> Test {
     // capture, target, bubble.
     let mut h = Harness::new(&format!(
         "<!DOCTYPE html><body><div id=a><span id=b>x</span></div><script>var r = '';{}</script>",
-        log_events(
-            "document",
-            &["mousemove", "mousedown", "mouseup", "click"]
-        )
+        log_events("document", &["mousemove", "mousedown", "mouseup", "click"])
     ))?;
     h.click_on("b")?;
     assert_eq!(
@@ -526,7 +523,12 @@ fn a_post_form_sends_its_body() -> Test {
                 method,
                 content_type,
                 body,
-            } => Some((url, method, content_type, String::from_utf8_lossy(&body).into_owned())),
+            } => Some((
+                url,
+                method,
+                content_type,
+                String::from_utf8_lossy(&body).into_owned(),
+            )),
             _ => None,
         })
         .collect();
@@ -592,8 +594,14 @@ fn a_label_clicks_its_control() -> Test {
 fn a_click_moves_focus_with_blur_and_focus_events_in_order() -> Test {
     let mut h = Harness::new(&format!(
         "<!DOCTYPE html><body><input id=a><input id=b><p id=p>x</p><script>var r = '';{}{}</script>",
-        log_events("document.getElementById('a')", &["focus", "blur", "focusin", "focusout"]),
-        log_events("document.getElementById('b')", &["focus", "blur", "focusin", "focusout"]),
+        log_events(
+            "document.getElementById('a')",
+            &["focus", "blur", "focusin", "focusout"]
+        ),
+        log_events(
+            "document.getElementById('b')",
+            &["focus", "blur", "focusin", "focusout"]
+        ),
     ))?;
     h.click_on("a")?;
     assert_eq!(h.r()?, " focus@a focusin@a");
@@ -664,7 +672,10 @@ fn typing_in_a_text_input_fires_the_key_and_input_events_and_changes_the_value()
            r += ' [' + (e instanceof InputEvent) + e.inputType + ':' + e.data + ']'; }});\
          document.getElementById('a').addEventListener('keydown', function (e) {{\
            r += ' key=' + e.key + ',' + e.keyCode + ',' + e.isTrusted; }});</script>",
-        log_events("document.getElementById('a')", &["keypress", "keyup", "beforeinput", "change"]),
+        log_events(
+            "document.getElementById('a')",
+            &["keypress", "keyup", "beforeinput", "change"]
+        ),
     ))?;
     let a = h.node("a")?;
     h.click_on("a")?;
@@ -907,7 +918,13 @@ fn a_syntax_error_in_a_handler_attribute_is_reported_and_the_handler_is_null() -
     assert_eq!(h.r()?, "");
     assert_eq!(h.eval("document.getElementById('a').onclick")?, "null");
     assert_eq!(h.eval("document.getElementById('b').onclick")?, "null");
-    assert_eq!(h.logs().iter().filter(|l| l.contains("SyntaxError")).count(), 2);
+    assert_eq!(
+        h.logs()
+            .iter()
+            .filter(|l| l.contains("SyntaxError"))
+            .count(),
+        2
+    );
     Ok(())
 }
 
@@ -971,7 +988,10 @@ fn user_activation_follows_html_6_4() -> Test {
          document.getElementById('a').addEventListener('mousedown', function () { r += 'down:' + ua.isActive; });\
          document.getElementById('a').addEventListener('click', function () { r += ' click:' + ua.isActive + ua.hasBeenActive; });</script>",
     )?;
-    assert_eq!(h.eval("ua.isActive + ',' + ua.hasBeenActive")?, "false,false");
+    assert_eq!(
+        h.eval("ua.isActive + ',' + ua.hasBeenActive")?,
+        "false,false"
+    );
     assert!(!h.page.has_transient_activation()?);
     h.advance(1000);
     h.click_on("a")?;
@@ -982,19 +1002,26 @@ fn user_activation_follows_html_6_4() -> Test {
     h.advance(4999);
     assert_eq!(h.eval("ua.isActive")?, "true");
     h.advance(1);
-    assert_eq!(h.eval("ua.isActive + ',' + ua.hasBeenActive")?, "false,true");
+    assert_eq!(
+        h.eval("ua.isActive + ',' + ua.hasBeenActive")?,
+        "false,true"
+    );
     assert!(h.page.has_sticky_activation()?);
     // Consuming.
     h.click_on("a")?;
     assert!(h.page.consume_user_activation()?);
     assert!(!h.page.consume_user_activation()?);
-    assert_eq!(h.eval("ua.isActive + ',' + ua.hasBeenActive")?, "false,true");
+    assert_eq!(
+        h.eval("ua.isActive + ',' + ua.hasBeenActive")?,
+        "false,true"
+    );
     Ok(())
 }
 
 #[test]
 fn a_key_is_an_activation_triggering_input_event_except_escape() -> Test {
-    let mut h = Harness::new("<!DOCTYPE html><body><script>var ua = navigator.userActivation;</script>")?;
+    let mut h =
+        Harness::new("<!DOCTYPE html><body><script>var ua = navigator.userActivation;</script>")?;
     h.typed("Escape")?;
     assert_eq!(h.eval("ua.hasBeenActive")?, "false");
     h.typed("a")?;

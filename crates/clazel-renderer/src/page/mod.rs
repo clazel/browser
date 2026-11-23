@@ -756,9 +756,11 @@ impl Page {
                 return Some(node);
             }
             // The canvas: the document element.
-            arena.children(0).iter().copied().find(|&c| {
-                matches!(arena.kind(c), clazel_dom::exec::ExecKind::Element { .. })
-            })
+            arena
+                .children(0)
+                .iter()
+                .copied()
+                .find(|&c| matches!(arena.kind(c), clazel_dom::exec::ExecKind::Element { .. }))
         })
         .flatten()
     }

@@ -169,7 +169,12 @@ impl events::Host for JsInvoke<'_, '_> {
         }
     }
 
-    fn prepare_listeners(&mut self, target: TargetId, event_type: &[u32], listeners: &mut Listeners) {
+    fn prepare_listeners(
+        &mut self,
+        target: TargetId,
+        event_type: &[u32],
+        listeners: &mut Listeners,
+    ) {
         if let Ok(p) = page(self.scope) {
             handlers::prepare(&p.arena, &mut p.ui, listeners, target, event_type);
         }
