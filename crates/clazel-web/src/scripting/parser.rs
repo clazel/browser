@@ -59,7 +59,10 @@ pub(crate) fn run_tokenizer(scope: &mut Scope<'_>) -> Result<Run> {
             return Ok(Run::Blocked);
         }
         let Some(parser) = st.doc.parser() else {
-            return Ok(Run::Stopped);
+            match walk(scope)? {
+                Some(run) => return Ok(run),
+                None => continue,
+            }
         };
         match parser.pump(&Encodings) {
             Pause::InsertionPoint => return Ok(Run::InsertionPoint),
@@ -82,6 +85,36 @@ pub(crate) fn run_tokenizer(scope: &mut Scope<'_>) -> Result<Run> {
     }
 }
 
+/// A document that was parsed before its scripts ran (`Page::for_document`):
+/// the parser's part of [`run_tokenizer`], for a tree that is already
+/// built. The next script element in tree order is reached as the parser
+/// would reach it (the end tag "script" steps), and when there is none the
+/// parser has stopped.
+///
+/// What this is not: the scripts see the whole tree, not the part the
+/// parser had built when it reached them, and `document.write` has no input
+/// stream to edit (it is reported, not run). The incremental driver cannot
+/// hand its tree to a script to change until `clazel-treebuilder` lets the
+/// tree builder's open elements follow such changes.
+fn walk(scope: &mut Scope<'_>) -> Result<Option<Run>> {
+    let st = state(scope)?;
+    let Some(w) = st.walk.as_mut() else {
+        return Ok(Some(Run::Stopped));
+    };
+    match w.order.get(w.next).copied() {
+        Some(node) => {
+            w.next = w.next.saturating_add(1);
+            script_end_tag(scope, node)?;
+            Ok(None)
+        }
+        None => {
+            st.walk = None;
+            begin_the_end(st);
+            Ok(Some(Run::Stopped))
+        }
+    }
+}
+
 /// HTML §13.2.6.4.8† the "text" insertion mode, "An end tag whose tag name
 /// is "script"", steps 1 and 5 to 10, for the script element `script`.
 fn script_end_tag(scope: &mut Scope<'_>, script: usize) -> Result<()> {
@@ -92,13 +125,18 @@ fn script_end_tag(scope: &mut Scope<'_>, script: usize) -> Result<()> {
     // 2. to 4. The step has done these (module docs).
     // 5. "Let the old insertion point have the same value as the current
     //    insertion point. Let the insertion point be just before the next
-    //    input character."
+    //    input character." (A document parsed up front has no insertion
+    //    point.)
     let st = state(scope)?;
-    let Some(parser) = st.doc.parser() else {
-        return Ok(());
+    let old = match st.doc.parser() {
+        Some(parser) => {
+            let old = parser.insertion_point();
+            parser.set_insertion_point_to_next();
+            old
+        }
+        None if st.walk.is_some() => None,
+        None => return Ok(()),
     };
-    let old = parser.insertion_point();
-    parser.set_insertion_point_to_next();
     // 6. "Increment the parser's script nesting level by one."
     st.script_nesting_level = st.script_nesting_level.saturating_add(1);
     // 7. "If the active speculative HTML parser is null, then prepare the
@@ -168,12 +206,13 @@ pub(crate) fn resume_blocked(scope: &mut Scope<'_>) -> Result<()> {
         // 6. "If this parser has been aborted in the meantime, return."
         // 7. Stop the speculative parser; 8. unblock the tokenizer.
         st.blocked_on = None;
-        let Some(parser) = st.doc.parser() else {
-            return Ok(());
-        };
         // 9. "Let the insertion point be just before the next input
-        //    character."
-        parser.set_insertion_point_to_next();
+        //    character." (A document parsed up front has none.)
+        match st.doc.parser() {
+            Some(parser) => parser.set_insertion_point_to_next(),
+            None if st.walk.is_some() => {}
+            None => return Ok(()),
+        }
         // 10. "Increment the parser's script nesting level by one (it should
         //     be zero before this step, so this sets it to one)."
         st.script_nesting_level = st.script_nesting_level.saturating_add(1);
@@ -246,6 +285,9 @@ fn begin_the_end(st: &mut PageState) {
 /// waiting (`true`) for a script or for the load event's delays.
 pub(crate) fn continue_the_end(scope: &mut Scope<'_>) -> Result<bool> {
     loop {
+        // What the steps so far fired reaches its listeners before the next
+        // step runs (`readystatechange`, `DOMContentLoaded`).
+        super::bound::flush_events(scope)?;
         let st = state(scope)?;
         match st.end {
             EndPhase::Parsing | EndPhase::Loaded => return Ok(false),

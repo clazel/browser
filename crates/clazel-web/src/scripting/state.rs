@@ -276,6 +276,99 @@ pub(crate) struct PageState {
     pub(crate) clock: Box<dyn Clock>,
     /// The time origin on that clock.
     pub(crate) time_origin_us: u64,
+    /// The page's bindings are installed (item 7.12): `document` and the
+    /// nodes are the generated interfaces' objects, and timers and the rest
+    /// of `bound.rs` exist.
+    pub(crate) bound: bool,
+    /// A document that was parsed before its scripts ran: the script
+    /// elements still to be reached, in tree order (`parser::walk`).
+    pub(crate) walk: Option<Walk>,
+    /// HTML's event loop (§8.1.7†) for this page: the timers, tasks and
+    /// microtasks that scripts queue. Taken out of here while the loop runs
+    /// a callback of the host (`bound::LoopHost`), which swaps it back in.
+    pub(crate) event_loop: crate::event_loop::EventLoop,
+    /// The callbacks the loop's ids stand for.
+    pub(crate) callbacks: HashMap<u64, super::bound::Callback>,
+    /// The next callback id.
+    pub(crate) next_callback: u64,
+    /// The callback of each timer id.
+    pub(crate) timer_callbacks: HashMap<u32, u64>,
+    /// `requestAnimationFrame` callbacks, by handle.
+    pub(crate) animation_callbacks: BTreeMap<u32, u64>,
+    /// The next animation frame handle.
+    pub(crate) next_animation: u32,
+    /// How many of `events` have been dispatched to listeners.
+    pub(crate) dispatched: usize,
+    /// Events are being dispatched (`bound::flush_events` does not nest).
+    pub(crate) flushing: bool,
+}
+
+/// A parsed document's script elements, reached in order as a parser would
+/// reach them.
+pub(crate) struct Walk {
+    /// The script elements' node ids, in tree order.
+    pub(crate) order: Vec<usize>,
+    /// How many have been reached.
+    pub(crate) next: usize,
+}
+
+impl PageState {
+    /// The state of a new page over `doc`.
+    pub(crate) fn new(
+        doc: Doc,
+        encoding: Encoding,
+        tentative: bool,
+        clock: Box<dyn Clock>,
+        time_origin_us: u64,
+    ) -> PageState {
+        PageState {
+            realm: None,
+            doc,
+            finished: None,
+            encoding,
+            tentative,
+            reparse: None,
+            generation: 0,
+            scripts: Default::default(),
+            pending_parsing_blocking: None,
+            blocked_on: None,
+            asap: Vec::new(),
+            in_order: Default::default(),
+            deferred: Default::default(),
+            script_nesting_level: 0,
+            parser_pause: false,
+            script_created: false,
+            active_parser_aborted: false,
+            ignore_destructive_writes: 0,
+            readiness: Readiness::Loading,
+            end: EndPhase::Parsing,
+            running: 0,
+            current_script: None,
+            document_object: None,
+            wrappers: Default::default(),
+            outgoing: Vec::new(),
+            fetches: Default::default(),
+            next_fetch: 1,
+            module_map: Default::default(),
+            module_waiters: Default::default(),
+            ready_modules: Vec::new(),
+            import_waiters: Default::default(),
+            reports: Vec::new(),
+            events: Vec::new(),
+            clock,
+            time_origin_us,
+            bound: false,
+            walk: None,
+            event_loop: crate::event_loop::EventLoop::default(),
+            callbacks: HashMap::new(),
+            next_callback: 1,
+            timer_callbacks: HashMap::new(),
+            animation_callbacks: BTreeMap::new(),
+            next_animation: 1,
+            dispatched: 0,
+            flushing: false,
+        }
+    }
 }
 
 /// The engine's host hooks for a page that has script state, which

@@ -703,13 +703,8 @@ pub(crate) fn clean_up_after_running_script(scope: &mut Scope<'_>) -> Result<()>
     if state(scope)?.running != 0 {
         return Ok(());
     }
-    loop {
-        match scope.run_jobs() {
-            Ok(_) => return Ok(()),
-            Err(e @ (Error::Terminated | Error::OutOfMemory)) => return Err(e),
-            Err(e) => report(scope, "", e)?,
-        }
-    }
+    super::bound::microtask_checkpoint(scope)?;
+    super::bound::flush_events(scope)
 }
 
 /// HTML §8.1.4.?† "report an exception": the exception's name and message,

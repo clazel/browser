@@ -37,6 +37,7 @@
 //! the compiler or interpreter cannot run yet gives a [`Report::Engine`],
 //! and the page goes on with the next one, as it would after an exception.
 
+mod bound;
 pub mod dom;
 mod element;
 mod encodings;
@@ -53,6 +54,7 @@ use clazel_encoding::labels::spec::Encoding;
 use clazel_js::{Config, Error, Limits, Realm, RealmOptions, Result, Runtime, Scope};
 use clazel_treebuilder::exec::incremental::Incremental;
 
+pub use bound::DocumentOptions;
 use element::ScriptResult;
 use state::{Doc, EndPhase, FetchFor, PageState, arena, state};
 pub use state::{
@@ -109,43 +111,13 @@ impl Page {
         } = options;
         let parser = Incremental::new(dom::cps(&url), true, tentative, input, true);
         let time_origin_us = clock.now_us();
-        let st = PageState {
-            realm: None,
-            doc: Doc::Parsing(Box::new(parser)),
-            finished: None,
+        let st = PageState::new(
+            Doc::Parsing(Box::new(parser)),
             encoding,
             tentative,
-            reparse: None,
-            generation: 0,
-            scripts: Default::default(),
-            pending_parsing_blocking: None,
-            blocked_on: None,
-            asap: Vec::new(),
-            in_order: Default::default(),
-            deferred: Default::default(),
-            script_nesting_level: 0,
-            parser_pause: false,
-            script_created: false,
-            active_parser_aborted: false,
-            ignore_destructive_writes: 0,
-            readiness: Readiness::Loading,
-            end: EndPhase::Parsing,
-            running: 0,
-            current_script: None,
-            document_object: None,
-            wrappers: Default::default(),
-            outgoing: Vec::new(),
-            fetches: Default::default(),
-            next_fetch: 1,
-            module_map: Default::default(),
-            module_waiters: Default::default(),
-            ready_modules: Vec::new(),
-            import_waiters: Default::default(),
-            reports: Vec::new(),
-            events: Vec::new(),
             clock,
             time_origin_us,
-        };
+        );
         // The host is the bindings' page (item 7.12) with this state in it;
         // its own tree stays empty until the parser is done (`state`).
         let mut host =
@@ -239,8 +211,11 @@ impl Page {
 
     /// The events fired since the last call.
     pub fn take_events(&mut self) -> Result<Vec<FiredEvent>> {
-        self.rt
-            .scope(|scope| Ok(core::mem::take(&mut state(scope)?.events)))
+        self.rt.scope(|scope| {
+            let st = state(scope)?;
+            st.dispatched = 0;
+            Ok(core::mem::take(&mut st.events))
+        })
     }
 
     /// The document's current readiness.
@@ -252,6 +227,13 @@ impl Page {
 /// The page's loop within one task: the parser while it can run (resuming
 /// a blocked tokenizer when its script is ready), then "the end".
 fn advance(scope: &mut Scope<'_>) -> Result<Progress> {
+    let progress = advance_parser(scope)?;
+    bound::flush_events(scope)?;
+    Ok(progress)
+}
+
+/// [`advance`] without the events it fired being dispatched.
+fn advance_parser(scope: &mut Scope<'_>) -> Result<Progress> {
     // Each pass runs the tokenizer (which returns only when it can go no
     // further), resumes a blocked tokenizer, or moves "the end" on; a pass
     // that does none of these returns. The bound guards against a bug.
@@ -278,7 +260,7 @@ fn advance(scope: &mut Scope<'_>) -> Result<Progress> {
                     parser::Run::Blocked | parser::Run::Stopped => {}
                 }
                 let st = state(scope)?;
-                if st.end == EndPhase::Parsing && st.doc.parser().is_none() {
+                if st.end == EndPhase::Parsing && st.doc.parser().is_none() && st.walk.is_none() {
                     return Ok(Progress::Loaded);
                 }
             }

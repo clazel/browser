@@ -607,3 +607,34 @@ impl AbortControllerImpl for Page {
         Ok(page(scope)?.add_object(Object::AbortController { signal }))
     }
 }
+
+/// DOM §2.10† "fire an event" named `name` at `target`, as the platform does
+/// (HTML's `DOMContentLoaded`, `load` and `readystatechange`): a trusted,
+/// uncancelable `Event`, dispatched to the listeners `addEventListener` made.
+/// Returns false if a listener canceled it.
+///
+/// # Errors
+/// What a listener's exception does not (it is reported); engine errors.
+pub(crate) fn fire_event(
+    scope: &mut Scope<'_>,
+    target: TargetId,
+    name: &str,
+    bubbles: bool,
+) -> Result<bool> {
+    let t = now(scope)?;
+    let init = Init {
+        bubbles,
+        cancelable: false,
+        composed: false,
+    };
+    let event = Event::new_trusted(&super::str_points(name), init, t);
+    let key = page(scope)?.add_object(Object::Event(Box::new(EventData {
+        event,
+        interface: InterfaceId::Event,
+        detail: None,
+    })));
+    let result = dispatch(scope, target, key);
+    // The event object is not needed again (script may hold its wrapper, and
+    // the wrapper's key then names nothing: fine for an event that is over).
+    result
+}

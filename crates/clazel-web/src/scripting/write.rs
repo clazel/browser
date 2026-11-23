@@ -65,6 +65,16 @@ pub(crate) fn document_write_steps(scope: &mut Scope<'_>, input: &[u32]) -> Resu
     if st.active_parser_aborted {
         return Ok(());
     }
+    // A document parsed before its scripts ran has no input stream to edit
+    // (`parser::walk`): reported, not run.
+    if st.walk.is_some() && st.doc.parser().is_none() {
+        st.reports.push(super::state::Report::Engine {
+            script: "document.write".to_owned(),
+            error: "the document was parsed before its scripts ran: there is no input stream to write to"
+                .to_owned(),
+        });
+        return Ok(());
+    }
     // 6. "If the insertion point is undefined, then:"
     let undefined = st
         .doc
@@ -108,7 +118,7 @@ pub(crate) fn document_open(scope: &mut Scope<'_>) -> Result<()> {
     //    entry document's origin: never apply (module docs).
     // 5. "If document has an active parser whose script nesting level is
     //    greater than 0, then return document."
-    if st.doc.parser().is_some() && st.script_nesting_level > 0 {
+    if (st.doc.parser().is_some() || st.walk.is_some()) && st.script_nesting_level > 0 {
         return Ok(());
     }
     // 6. The unload counter: always zero.
@@ -122,6 +132,7 @@ pub(crate) fn document_open(scope: &mut Scope<'_>) -> Result<()> {
         abort_parser(st);
     }
     st.active_parser_aborted = false;
+    st.walk = None;
     // 9. and 10. Erase event listeners and handlers: there are none.
     // 11. "Replace all with null within document, without firing any
     //     mutation events": a new tree, and a new generation.

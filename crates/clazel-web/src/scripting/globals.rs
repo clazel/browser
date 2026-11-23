@@ -81,6 +81,13 @@ pub(crate) fn document_object<'s>(scope: &mut Scope<'s>) -> Result<Local<'s>> {
 /// object.
 pub(crate) fn wrapper<'s>(scope: &mut Scope<'s>, node: usize) -> Result<Local<'s>> {
     let st = state(scope)?;
+    if st.bound {
+        // The bindings' wrapper of the node.
+        return clazel_webidl::platform::wrap::<crate::page::Page>(
+            scope,
+            crate::page::Page::node_key(node),
+        );
+    }
     if let Some(h) = st.wrappers.get(&node).cloned() {
         return scope.local(&h);
     }
