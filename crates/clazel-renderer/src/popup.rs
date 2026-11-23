@@ -39,31 +39,33 @@ mod tests {
     use clazel_ipc::message::codec::decode_renderer_message;
 
     #[test]
-    fn the_frame_is_an_open_tab_the_kernel_accepts_from_a_renderer() {
-        let frame = open_tab_frame("/popup?a=1").expect("fits a frame");
+    fn the_frame_is_an_open_tab_the_kernel_accepts_from_a_renderer() -> Result<(), String> {
+        let frame = open_tab_frame("/popup?a=1").ok_or("does not fit a frame")?;
         // The frame's payload is the message, after the 4-octet length.
-        let payload = frame.get(4..).expect("has a payload");
+        let payload = frame.get(4..).ok_or("no payload")?;
         assert_eq!(
             decode_renderer_message(payload),
             Some(Msg::OpenTab {
                 url: b"/popup?a=1".to_vec()
             })
         );
+        Ok(())
     }
 
     #[test]
-    fn send_writes_the_frame() {
+    fn send_writes_the_frame() -> Result<(), String> {
         let mut out = Vec::new();
-        send_open_tab(&mut out, "http://example.test/").expect("writes");
+        send_open_tab(&mut out, "http://example.test/").map_err(|e| e.to_string())?;
         assert_eq!(Some(out), open_tab_frame("http://example.test/"));
+        Ok(())
     }
 
     #[test]
     fn a_url_over_a_frame_is_not_sent() {
         let long = "a".repeat(clazel_ipc::frame::spec::MAX_FRAME + 1);
         let mut out = Vec::new();
-        let err = send_open_tab(&mut out, &long).expect_err("too long");
-        assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+        let kind = send_open_tab(&mut out, &long).err().map(|e| e.kind());
+        assert_eq!(kind, Some(io::ErrorKind::InvalidInput));
         assert!(out.is_empty());
     }
 }

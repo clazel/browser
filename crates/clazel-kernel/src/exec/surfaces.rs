@@ -521,7 +521,7 @@ pub fn age_activations_exec(acts: &[ActivationRecord]) -> (out: Vec<ActivationRe
         decreases acts.len() - k,
     {
         if let Some(t) = acts.get(k) {
-            let left = if t.left > 0 { t.left - 1 } else { 0 };
+            let left = t.left.saturating_sub(1);
             let ghost before = out@;
             out.push(ActivationRecord { id: t.id, lock: clone_origin(&t.lock), left });
             proof {
