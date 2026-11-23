@@ -629,7 +629,7 @@
     {
       "id": "display-before-commit",
       "file": "src/spec.rs",
-      "find": "Some(m) => if (m is Display || m is Title || m is FetchStyle || m is FetchScript || m is Submit || m is UpdateUrl || m is Fetch) && !r.committed {\n            None\n        } else {\n            Some(m)\n        },",
+      "find": "Some(m) => if (m is Display || m is Title || m is FetchStyle || m is FetchScript || m is Submit || m is UpdateUrl || m is OpenTab || m is Fetch) && !r.committed {\n            None\n        } else {\n            Some(m)\n        },",
       "replace": "Some(m) => Some(m),",
       "expect": "killed",
       "module": "mutation_lemmas",
@@ -755,8 +755,8 @@
     {
       "id": "input-to-next-renderer",
       "file": "src/spec.rs",
-      "find": "Some(i) => (s, seq![Output::ToRenderer { id: s.renderers[i].id, bytes: input_frame(input) }]),",
-      "replace": "Some(i) => (s, seq![Output::ToRenderer { id: s.renderers[i].id + 1, bytes: input_frame(input) }]),",
+      "find": "(State { acts, ..s }, seq![Output::ToRenderer { id: r.id, bytes: input_frame(input) }])",
+      "replace": "(State { acts, ..s }, seq![Output::ToRenderer { id: r.id + 1, bytes: input_frame(input) }])",
       "expect": "killed",
       "module": "mutation_lemmas",
       "reason": "The user's input on a tab goes to the renderer of the next id: ml_user_input (theorem_input_only_to_own_tab) is false.",
@@ -1178,8 +1178,8 @@
     {
       "id": "update-url-before-commit",
       "file": "src/spec.rs",
-      "find": "|| m is Submit || m is UpdateUrl || m is Fetch) && !r.committed",
-      "replace": "|| m is Submit || m is Fetch) && !r.committed",
+      "find": "|| m is Submit || m is UpdateUrl || m is OpenTab || m is Fetch) && !r.committed",
+      "replace": "|| m is Submit || m is OpenTab || m is Fetch) && !r.committed",
       "expect": "killed",
       "module": "mutation_lemmas",
       "reason": "A renderer that has committed nothing may send UpdateUrl. ml_uncommitted_update_url, the case theorem_url_update_same_origin's committed sender rests on, is false.",
@@ -1264,8 +1264,8 @@
       "id": "fetch-before-commit",
       "file": "src/spec.rs",
       "module": "mutation_lemmas",
-      "find": "|| m is UpdateUrl || m is Fetch) && !r.committed",
-      "replace": "|| m is UpdateUrl) && !r.committed",
+      "find": "|| m is UpdateUrl || m is OpenTab || m is Fetch) && !r.committed",
+      "replace": "|| m is UpdateUrl || m is OpenTab) && !r.committed",
       "expect": "killed",
       "reason": "A renderer that has committed nothing may send Fetch. ml_uncommitted_fetch is false.",
       "certificate": {
@@ -1306,6 +1306,212 @@
         "reveal": [
           "Seq::filter"
         ]
+      }
+    },
+    {
+      "id": "popup-ignores-activation",
+      "file": "src/spec.rs",
+      "find": "    if activation_left(s.acts, r) == 0 {\n        (s, seq![])\n    } else {\n        match clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {\n            None => (s, seq![]),\n            Some(relative) => match (urls.resolve)(r.url, relative) {\n                None => (s, seq![]),\n                Some(resolved) => popup_result(",
+      "replace": "    if false {\n        (s, seq![])\n    } else {\n        match clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {\n            None => (s, seq![]),\n            Some(relative) => match (urls.resolve)(r.url, relative) {\n                None => (s, seq![]),\n                Some(resolved) => popup_result(",
+      "expect": "killed",
+      "module": "popup_mutation_lemmas",
+      "reason": "A renderer opens a tab without any activation the kernel recorded: a page could open as many tabs as it likes. mp_popup_refused (the core of theorem_popup_needs_input) is false.",
+      "certificate": {
+        "file": "src/popup_mutation_lemmas.rs",
+        "lemma": "mp_popup_refused(Seq::<clazel_psl::spec::Rule>::empty(), crate::mutation_lemmas::ml_urls_opaque(), crate::mutation_lemmas::ml_fetch_unparsed(), mp_state(0), mp_renderer(), seq![0x61u8])",
+        "witness": "open_tab_from(Seq::<clazel_psl::spec::Rule>::empty(), crate::mutation_lemmas::ml_urls_opaque(), crate::mutation_lemmas::ml_fetch_unparsed(), mp_state(0), mp_renderer(), seq![0x61u8]).0.next_id == 2",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "popup-keeps-activation",
+      "file": "src/spec.rs",
+      "find": "(State { acts: forget_activation(s1.acts, r.id, r.lock), ..s1 }, out)",
+      "replace": "(s1, out)",
+      "expect": "killed",
+      "module": "popup_mutation_lemmas",
+      "reason": "A popup leaves the activation it used, so one click opens any number of tabs: mp_popup_spends is false.",
+      "certificate": {
+        "file": "src/popup_mutation_lemmas.rs",
+        "lemma": "mp_popup_spends(Seq::<clazel_psl::spec::Rule>::empty(), crate::mutation_lemmas::ml_urls_opaque(), crate::mutation_lemmas::ml_fetch_unparsed(), mp_state(5), mp_renderer(), seq![0x61u32])",
+        "witness": "activation_left(popup_result(Seq::<clazel_psl::spec::Rule>::empty(), crate::mutation_lemmas::ml_urls_opaque(), crate::mutation_lemmas::ml_fetch_unparsed(), mp_state(5), mp_renderer(), seq![0x61u32]).0.acts, mp_renderer()) == 5",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "popup-spends-wrong-activation",
+      "file": "src/spec.rs",
+      "find": "(State { acts: forget_activation(s1.acts, r.id, r.lock), ..s1 }, out)",
+      "replace": "(State { acts: forget_activation(s1.acts, r.id + 1, r.lock), ..s1 }, out)",
+      "expect": "killed",
+      "module": "popup_mutation_lemmas",
+      "reason": "A popup spends the activation of the next renderer, not its own: the sender keeps its activation. mp_popup_spends is false.",
+      "certificate": {
+        "file": "src/popup_mutation_lemmas.rs",
+        "lemma": "mp_popup_spends(Seq::<clazel_psl::spec::Rule>::empty(), crate::mutation_lemmas::ml_urls_opaque(), crate::mutation_lemmas::ml_fetch_unparsed(), mp_state(5), mp_renderer(), seq![0x61u32])",
+        "witness": "activation_left(popup_result(Seq::<clazel_psl::spec::Rule>::empty(), crate::mutation_lemmas::ml_urls_opaque(), crate::mutation_lemmas::ml_fetch_unparsed(), mp_state(5), mp_renderer(), seq![0x61u32]).0.acts, mp_renderer()) == 5",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "scroll-activates",
+      "file": "src/spec.rs",
+      "find": "    input.kind == 0 || input.kind == 2\n",
+      "replace": "    input.kind == 0 || input.kind == 1 || input.kind == 2\n",
+      "expect": "killed",
+      "module": "popup_mutation_lemmas",
+      "reason": "A scroll is a user activation (HTML does not count it): a page that scrolls under the pointer could open tabs. mp_scroll_no_activation is false.",
+      "certificate": {
+        "file": "src/popup_mutation_lemmas.rs",
+        "lemma": "mp_scroll_no_activation(mp_state_none(), 0, mp_scroll())",
+        "witness": "user_input(mp_state_none(), 0, mp_scroll()).0.acts.len() == 1",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "activation-before-commit",
+      "file": "src/spec.rs",
+      "find": "let acts = if r.committed && is_activating_input(input) {",
+      "replace": "let acts = if is_activating_input(input) {",
+      "expect": "killed",
+      "module": "popup_mutation_lemmas",
+      "reason": "An input to a renderer with no document yet is recorded as an activation. mp_uncommitted_input is false.",
+      "certificate": {
+        "file": "src/popup_mutation_lemmas.rs",
+        "lemma": "mp_uncommitted_input(mp_state_uncommitted(), 0, mp_click(), 0)",
+        "witness": "user_input(mp_state_uncommitted(), 0, mp_click()).0.acts.len() == 1",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "activation-for-wrong-renderer",
+      "file": "src/spec.rs",
+      "find": "set_activation(s.acts, r.id, r.lock, activation_window())",
+      "replace": "set_activation(s.acts, r.id + 1, r.lock, activation_window())",
+      "expect": "killed",
+      "module": "popup_mutation_lemmas",
+      "reason": "An input gives the activation to the renderer of the next id, not the one it was delivered to. mp_input_activates_own is false.",
+      "certificate": {
+        "file": "src/popup_mutation_lemmas.rs",
+        "lemma": "mp_input_activates_own(mp_state_none(), 0, mp_click(), 0)",
+        "witness": "activation_left(user_input(mp_state_none(), 0, mp_click()).0.acts, mp_renderer()) == 0",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "activation-window-empty",
+      "file": "src/spec.rs",
+      "find": "pub open spec fn activation_window() -> nat {\n    1000\n}",
+      "replace": "pub open spec fn activation_window() -> nat {\n    0\n}",
+      "expect": "killed",
+      "module": "popup_mutation_lemmas",
+      "reason": "The window is empty, so no input ever lets a popup open (or, with the other rules, every popup is dead on arrival): mp_window_positive is false.",
+      "certificate": {
+        "file": "src/popup_mutation_lemmas.rs",
+        "lemma": "mp_window_positive()",
+        "witness": "activation_window() == 0"
+      }
+    },
+    {
+      "id": "tick-keeps-activation",
+      "file": "src/spec.rs",
+      "find": "now, acts: age_activations(s.acts), ..s }, seq![])",
+      "replace": "now, acts: s.acts, ..s }, seq![])",
+      "expect": "killed",
+      "module": "popup_mutation_lemmas",
+      "reason": "A Tick does not age the activations: an input would allow a popup for ever. mp_tick_ages is false.",
+      "certificate": {
+        "file": "src/popup_mutation_lemmas.rs",
+        "lemma": "mp_tick_ages(mp_state(5), 1, 0)",
+        "witness": "tick(mp_state(5), 1).0.acts[0].left == 5",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "commit-keeps-activation",
+      "file": "src/spec.rs",
+      "find": "acts: forget_activation(s.acts, old.id, old.lock),\n                        ..s\n                    }, seq![",
+      "replace": "acts: s.acts,\n                        ..s\n                    }, seq![",
+      "expect": "killed",
+      "module": "popup_mutation_lemmas",
+      "reason": "A same-origin commit keeps the old document's activation, which the new document then uses. mp_commit_forgets_activation is false.",
+      "certificate": {
+        "file": "src/popup_mutation_lemmas.rs",
+        "lemma": "mp_commit_forgets_activation(crate::mutation_lemmas::ml_urls_tuple(), mp_commit_state(), 0, seq![0x63u32], script_document(Seq::<u8>::empty()), 0, crate::mutation_lemmas::ml_tuple(seq![0x68u32, 0x74, 0x74, 0x70]))",
+        "witness": "mp_commit_state().acts.len() == 1 && forget_activation(mp_commit_state().acts, 0, crate::mutation_lemmas::ml_tuple(seq![0x68u32, 0x74, 0x74, 0x70])).len() == 0",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "popup-before-commit",
+      "file": "src/spec.rs",
+      "find": "m is UpdateUrl || m is OpenTab || m is Fetch) && !r.committed",
+      "replace": "m is UpdateUrl || m is Fetch) && !r.committed",
+      "expect": "killed",
+      "module": "popup_mutation_lemmas",
+      "reason": "A renderer that has committed nothing may send OpenTab. mp_uncommitted_popup, the case theorem_popup_needs_input's committed sender rests on, is false.",
+      "certificate": {
+        "file": "src/popup_mutation_lemmas.rs",
+        "lemma": "mp_uncommitted_popup(mp_uncommitted(), seq![0x00u8, 0x00, 0x00, 0x03, 0x82, 0x15, 0x60])",
+        "witness": "decode_renderer_frame(seq![0x00u8, 0x00, 0x00, 0x03, 0x82, 0x15, 0x60]) == Some(clazel_ipc::message::spec::Message::OpenTab { url: Seq::<u8>::empty() }) && accepted_message(mp_uncommitted(), seq![0x00u8, 0x00, 0x00, 0x03, 0x82, 0x15, 0x60]) is Some"
+      }
+    },
+    {
+      "id": "declassified-popup-without-activation",
+      "file": "src/domain.rs",
+      "find": "Some(clazel_ipc::message::spec::Message::OpenTab { url }) => if !r.committed || activation_left(s.acts, r) == 0 {",
+      "replace": "Some(clazel_ipc::message::spec::Message::OpenTab { url }) => if !r.committed {",
+      "expect": "killed",
+      "module": "popup_mutation_lemmas",
+      "reason": "A refused popup of another domain still has a declassified part, so a purge opens a tab the real run did not (the activation is in the sender's domain): mp_declassified_needs_activation is false.",
+      "certificate": {
+        "file": "src/popup_mutation_lemmas.rs",
+        "lemma": "mp_declassified_needs_activation(crate::mutation_lemmas::ml_urls_opaque(), mp_state_none(), 0, seq![0x00u8, 0x00, 0x00, 0x03, 0x82, 0x15, 0x60], 0)",
+        "witness": "decode_renderer_frame(seq![0x00u8, 0x00, 0x00, 0x03, 0x82, 0x15, 0x60]) == Some(clazel_ipc::message::spec::Message::OpenTab { url: Seq::<u8>::empty() }) && find_by_id(mp_state_none().renderers, 0, 0) == Some(0int) && crate::domain::declassified(crate::mutation_lemmas::ml_urls_opaque(), mp_state_none(), Event::FromRenderer { id: 0, bytes: seq![0x00u8, 0x00, 0x00, 0x03, 0x82, 0x15, 0x60] }) is Some"
+      }
+    },
+    {
+      "id": "lock-allows-javascript",
+      "file": "src/spec.rs",
+      "find": "if (urls.is_javascript)(url) {\n        None\n    } else {",
+      "replace": "if false {\n        None\n    } else {",
+      "expect": "killed",
+      "module": "popup_mutation_lemmas",
+      "reason": "A javascript: URL gets a lock, so a tab can be opened or a document committed at one. mp_javascript_refused is false.",
+      "certificate": {
+        "file": "src/popup_mutation_lemmas.rs",
+        "lemma": "mp_javascript_refused(mp_urls_js(), seq![0x61u32], 0)",
+        "witness": "lock_of_url(mp_urls_js(), seq![0x61u32], 0) is Some"
+      }
+    },
+    {
+      "id": "javascript-scheme-constant",
+      "file": "src/urls.rs",
+      "find": "seq![0x6Au32, 0x61, 0x76, 0x61, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74]\n}",
+      "replace": "seq![0x6Au32, 0x61, 0x76, 0x61, 0x73, 0x63, 0x72, 0x69, 0x70, 0x75]\n}",
+      "expect": "killed",
+      "module": "popup_mutation_lemmas",
+      "reason": "The scheme the shipped kernel refuses is not javascript: mp_javascript_scheme is false.",
+      "certificate": {
+        "file": "src/popup_mutation_lemmas.rs",
+        "lemma": "mp_javascript_scheme()",
+        "witness": "crate::urls::javascript_scheme() != seq![0x6Au32, 0x61, 0x76, 0x61, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74]"
       }
     }
   ]
