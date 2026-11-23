@@ -1007,6 +1007,9 @@ fn run_jobs_with_an_empty_queue_runs_none() -> Test {
     assert_eq!(rt.run_jobs()?, 0);
     eval_number(&mut rt, &realm, "1")?;
     assert_eq!(rt.run_jobs()?, 0);
+    // The same checkpoint from inside a scope (no job maker exists yet).
+    let ran = rt.scope(|scope| scope.run_jobs())?;
+    assert_eq!(ran, 0);
     Ok(())
 }
 

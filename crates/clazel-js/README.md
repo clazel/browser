@@ -32,7 +32,8 @@ conversions, `strict_equals`, `same_value`, `instance_of`; `new_object`, `get`,
 `function`, `define_method`, `Args`, `new_host_object` with `host_data`,
 `get_prototype_from_constructor`, `host_mut`, `check_terminated`; errors,
 `new_exception`, `throw_error`, `throw`, `report`, `Error::Thrown`;
-`create_realm` (once), `global`, realm and script host data; `compile_script`,
+`create_realm` (once), `global`, realm and script host data; `Scope::run_jobs`
+(a microtask checkpoint from inside a scope, item 7.15); `compile_script`,
 `run_script`, `eval_script`; `Handle`, `Weak`, `Member`; `gc` and
 `clear_kept_objects` as no-ops.
 
