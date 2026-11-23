@@ -19,7 +19,7 @@
 //! the Test262 run in `tests/test262_run.rs`.
 
 use crate::bytecode::{Const, ErrorKind, FunctionKind, VarScoped};
-use crate::heap::{Cell, ObjKind};
+use crate::heap::{ACCESSOR, Cell, Found, ObjKind};
 use crate::interp::{Abrupt, ArithOp, Hint, Intrinsic, Rel, Vm};
 use crate::numeric::{self, Num, num};
 use clazel_js_heap::shape::Attrs;
@@ -529,6 +529,66 @@ impl Vm {
         }
     }
 
+    /// The value of a property `find` found, read for `receiver`: OrdinaryGet
+    /// (§10.1.8.1†) from step 4 on.
+    /// 4. If IsDataDescriptor(desc) is true, return desc.[[Value]].
+    /// 5. (Assert: IsAccessorDescriptor(desc) is true.)
+    /// 6. Let getter be desc.[[Get]].
+    /// 7. If getter is undefined, return undefined.
+    /// 8. Return ? Call(getter, Receiver).
+    ///
+    /// # Errors
+    /// What the getter throws, or [`Abrupt::Internal`] if the heap is
+    /// corrupt.
+    pub(crate) fn found_value(&mut self, f: Found, receiver: Value) -> Result<Value, Abrupt> {
+        let v = self
+            .heap
+            .slot(f.holder, f.slot)
+            .ok_or(Abrupt::Internal("property slot"))?;
+        if f.attrs.0 & ACCESSOR == 0 {
+            return Ok(v);
+        }
+        let (getter, _) = self
+            .heap
+            .accessor(v)
+            .ok_or(Abrupt::Internal("accessor pair"))?;
+        if getter == Value::UNDEFINED {
+            return Ok(Value::UNDEFINED);
+        }
+        self.call(getter, receiver, &[])
+    }
+
+    /// The accessor half of OrdinarySetWithOwnDescriptor (§10.1.9.2†) for a
+    /// property `find` found: `None` for a data property (the caller goes on
+    /// with steps 2 and 3), else steps 4 to 7.
+    /// 4. (Assert: IsAccessorDescriptor(ownDesc) is true.)
+    /// 5. Let setter be ownDesc.[[Set]].
+    /// 6. If setter is undefined, return false.
+    /// 7. Perform ? Call(setter, Receiver, « V »). 8. Return true.
+    fn set_through_accessor(
+        &mut self,
+        f: Found,
+        receiver: Value,
+        v: Value,
+    ) -> Result<Option<bool>, Abrupt> {
+        if f.attrs.0 & ACCESSOR == 0 {
+            return Ok(None);
+        }
+        let pair = self
+            .heap
+            .slot(f.holder, f.slot)
+            .ok_or(Abrupt::Internal("property slot"))?;
+        let (_, setter) = self
+            .heap
+            .accessor(pair)
+            .ok_or(Abrupt::Internal("accessor pair"))?;
+        if setter == Value::UNDEFINED {
+            return Ok(Some(false));
+        }
+        self.call(setter, receiver, &[v])?;
+        Ok(Some(true))
+    }
+
     /// `[[Get]]` of `key` on a value, §6.2.5.5 GetValue step 3 and §10.1.8:
     /// an own or inherited data property of an object, `length` and the
     /// indices of a string, and a TypeError for `undefined` and `null`.
@@ -553,12 +613,10 @@ impl Vm {
             Decoded::Ref(_) => match self.heap.cell(base) {
                 Some(Cell::Object(_)) => match self.heap.find(base, key)? {
                     Some(f) => {
-                        if f.own && !self.heap.is_dictionary(f.shape) {
+                        if f.own && f.attrs.0 & ACCESSOR == 0 && !self.heap.is_dictionary(f.shape) {
                             self.ic_install(ic, f.shape.0, f.slot);
                         }
-                        self.heap
-                            .slot(f.holder, f.slot)
-                            .ok_or(Abrupt::Internal("property slot"))
+                        self.found_value(f, base)
                     }
                     None => Ok(Value::UNDEFINED),
                 },
@@ -577,17 +635,21 @@ impl Vm {
                             let c = JsString::from_units(&[u]).map_err(|_| Abrupt::OutOfMemory)?;
                             Ok(self.heap.new_string(c)?)
                         }
-                        None => self.get_from_primitive_proto(Intrinsic::StringPrototype, key),
+                        None => {
+                            self.get_from_primitive_proto(Intrinsic::StringPrototype, key, base)
+                        }
                     }
                 }
                 Some(Cell::Symbol(_)) => {
-                    self.get_from_primitive_proto(Intrinsic::SymbolPrototype, key)
+                    self.get_from_primitive_proto(Intrinsic::SymbolPrototype, key, base)
                 }
                 _ => Err(Abrupt::Internal("property get on an internal cell")),
             },
-            Decoded::Bool(_) => self.get_from_primitive_proto(Intrinsic::BooleanPrototype, key),
+            Decoded::Bool(_) => {
+                self.get_from_primitive_proto(Intrinsic::BooleanPrototype, key, base)
+            }
             Decoded::Int32(_) | Decoded::Double(_) => {
-                self.get_from_primitive_proto(Intrinsic::NumberPrototype, key)
+                self.get_from_primitive_proto(Intrinsic::NumberPrototype, key, base)
             }
             _ => Err(Abrupt::NotYet("property of a primitive".into())),
         }
@@ -596,19 +658,22 @@ impl Vm {
     /// `[[Get]]` on a primitive base: GetValue step 3.a makes ToObject(base)
     /// the object the property is looked up on, so the lookup is on the
     /// wrapper's prototype (the wrapper has no own properties but a String's
-    /// `length` and indices, which the caller has handled). The properties
-    /// are data properties, so the receiver does not matter. `NotYet` while
-    /// the realm has no such prototype.
-    fn get_from_primitive_proto(&mut self, which: Intrinsic, key: Key) -> Result<Value, Abrupt> {
+    /// `length` and indices, which the caller has handled). A getter found
+    /// there is called with the primitive itself as its receiver (§10.1.8.1†
+    /// step 8, with Receiver the base value). `NotYet` while the realm has no
+    /// such prototype.
+    fn get_from_primitive_proto(
+        &mut self,
+        which: Intrinsic,
+        key: Key,
+        receiver: Value,
+    ) -> Result<Value, Abrupt> {
         let proto = self.intrinsic(which);
         if !self.heap.is_object(proto) {
             return Err(Abrupt::NotYet("property of a primitive".into()));
         }
         match self.heap.find(proto, key)? {
-            Some(f) => self
-                .heap
-                .slot(f.holder, f.slot)
-                .ok_or(Abrupt::Internal("property slot")),
+            Some(f) => self.found_value(f, receiver),
             None => Ok(Value::UNDEFINED),
         }
     }
@@ -635,6 +700,21 @@ impl Vm {
         v: Value,
         throw: bool,
     ) -> Result<(), Abrupt> {
+        if self.heap.is_object(base)
+            && let Some(f) = self.heap.find(base, key)?
+            && f.attrs.0 & ACCESSOR != 0
+        {
+            if self.set_through_accessor(f, base, v)? == Some(true) {
+                return Ok(());
+            }
+            if throw {
+                let name = self.key_text(key);
+                return Err(self.type_error(&format!(
+                    "Cannot set property {name} which has only a getter"
+                )));
+            }
+            return Ok(());
+        }
         if self.heap.is_object(base)
             && let Some(f) = self.heap.find(base, key)?
             && f.attrs.0 & Attrs::WRITABLE == 0
@@ -717,7 +797,19 @@ impl Vm {
         }
         let array_key = self.heap.is_array_object(base)
             && (key == self.atoms.k_length || self.heap.key_index(key).is_some());
-        let ok = match self.heap.find(base, key)? {
+        let found = self.heap.find(base, key)?;
+        if let Some(f) = found
+            && let Some(ok) = self.set_through_accessor(f, base, v)?
+        {
+            if !ok && self.strict() {
+                let name = self.key_text(key);
+                return Err(self.type_error(&format!(
+                    "Cannot set property {name} which has only a getter"
+                )));
+            }
+            return Ok(());
+        }
+        let ok = match found {
             Some(f) if f.attrs.0 & Attrs::WRITABLE == 0 => false,
             // OrdinarySetWithOwnDescriptor (§10.1.9.2†) step 2.c.ii: an
             // existing own data property of an array is changed with
@@ -883,7 +975,7 @@ impl Vm {
         }
         let kp = self.atoms.k_prototype;
         let proto = match self.heap.find(f, kp)? {
-            Some(found) => self.heap.slot(found.holder, found.slot),
+            Some(found) => Some(self.found_value(found, f)?),
             None => None,
         };
         let proto = match proto {
@@ -1014,10 +1106,7 @@ impl Vm {
         }
         let global = self.global;
         match self.heap.find(global, key)? {
-            Some(f) => self
-                .heap
-                .slot(f.holder, f.slot)
-                .ok_or(Abrupt::Internal("global property slot")),
+            Some(f) => self.found_value(f, global),
             None if throw_unresolvable => {
                 let name = self.key_text(key);
                 Err(self.reference_error(&format!("{name} is not defined")))
@@ -1294,10 +1383,7 @@ impl Vm {
     pub fn get_named(&mut self, obj: Value, name: &str) -> Result<Value, Abrupt> {
         let key = self.heap.intern_str(name)?;
         match self.heap.find(obj, key)? {
-            Some(f) => self
-                .heap
-                .slot(f.holder, f.slot)
-                .ok_or(Abrupt::Internal("slot")),
+            Some(f) => self.found_value(f, obj),
             None => Ok(Value::UNDEFINED),
         }
     }

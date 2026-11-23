@@ -29,18 +29,20 @@ primitives and strings (UTF-16 exact), `kind` and the `as_*`, `to_*` and `is_*`
 conversions, `strict_equals`, `same_value`, `instance_of`; `new_object`, `get`,
 `set`, `has_property`, `define_property` (data properties),
 `get_prototype_of`, `set_prototype_of`, `get_method`, `call`, `construct`;
-`function`, `define_method`, `Args`, `new_host_object` with `host_data`,
+accessor properties (`define_property` with `get`/`set`, `get_own_property`),
+`delete_property`, `new_array`, `new_array_from` and `is_array` (item 7.12
+needed them: WebIDL attributes are accessors);
+`function`, `shared_function` (re-entrant), `define_method`, `Args`,
+`new_host_object` with `host_data`,
 `get_prototype_from_constructor`, `host_mut`, `check_terminated`; errors,
 `new_exception`, `throw_error`, `throw`, `report`, `Error::Thrown`;
 `create_realm` (once), `global`, realm and script host data; `compile_script`,
 `run_script`, `eval_script`; `Handle`, `Weak`, `Member`; `gc` and
 `clear_kept_objects` as no-ops.
 
-Still `NotImplemented`, each because the VM lacks the feature: arrays
-(`new_array*`), promises (`new_promise` and the rest), `iterate` and symbols
-(`new_symbol`, `well_known_symbol`), BigInt, ArrayBuffer, `delete_property`
-(the heap cannot remove a property), accessor descriptors in `define_property`,
-modules and synthetic modules (the compiler's module goal and the runtime's
+Still `NotImplemented`, each because the VM lacks the feature: promises
+(`new_promise` and the rest), `iterate` and symbols (`new_symbol`,
+`well_known_symbol`), BigInt, ArrayBuffer, modules and synthetic modules (the compiler's module goal and the runtime's
 module records), a second realm and `RealmOptions::global`, `construct` with a
 `new_target` other than the constructor, `instance_of` of a bound function,
 `ErrorKind::EvalError` and `UriError`. The infallible constructors for the
@@ -52,9 +54,12 @@ return an error, so they record it and the next fallible call returns it.
 - **No completion value.** `run_script` and `eval_script` return `undefined`
   because the compiler's script has no completion value. Results go out
   through globals or native functions.
-- **Re-entrance.** A native closure that JavaScript re-enters while it runs
-  gets `Error::Busy`, because the closures are stored in the VM they borrow
-  (the table is where a plain function pointer can find it). Open question 14.
+- **Re-entrance.** A closure made by `function` that JavaScript re-enters
+  while it runs gets `Error::Busy`, because the closures are stored in the VM
+  they borrow (the table is where a plain function pointer can find it).
+  `shared_function` takes a `Sync` closure, which the runtime shares with each
+  call, so it can be re-entered: open question 14's proposal, added beside
+  `function` rather than in its place.
 - **Rooting.** There is no collector in this tree (open pull requests), so
   nothing is ever freed: `Local`, `Handle`, `Weak` and `Member` are checked
   (the runtime they belong to, the arena's generation) but root nothing;

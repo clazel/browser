@@ -40,7 +40,7 @@ use clazel_js_vm::interp::{Abrupt, Vm};
 
 use crate::error::{Error, Exception};
 use crate::host::{Host, Job};
-use crate::native::{Args, HostObject, NativeFn};
+use crate::native::{Args, HostObject, NativeFn, SharedNativeFn};
 use crate::runtime::Limits;
 use crate::scope::Scope;
 use crate::value::Handle;
@@ -55,7 +55,7 @@ pub(crate) struct State {
     pub(crate) limits: Limits,
     /// The closures behind native functions, by the function object's bits.
     /// `None` while the closure runs (see the module docs).
-    pub(crate) natives: HashMap<u64, Option<Box<NativeFn>>>,
+    pub(crate) natives: HashMap<u64, Native>,
     /// The Rust data of host objects, by the object's bits.
     pub(crate) host_objects: HashMap<u64, Box<dyn HostObject>>,
     pub(crate) realm_host_defined: Option<Box<dyn Any + Send>>,
@@ -97,6 +97,22 @@ impl State {
 }
 
 /// The message of the error an operation the interpreter lacks gives.
+/// A closure in the table: one made by [`Scope::function`], taken out while it
+/// runs, or one made by [`Scope::shared_function`], shared with the calls
+/// that run it and so re-entrant.
+pub(crate) enum Native {
+    /// `Scope::function`'s: `None` while it runs.
+    Owned(Option<Box<NativeFn>>),
+    /// `Scope::shared_function`'s.
+    Shared(Arc<SharedNativeFn>),
+}
+
+/// What [`trampoline`] runs: the closure, owned for the call or shared.
+enum Running {
+    Owned(Box<NativeFn>),
+    Shared(Arc<SharedNativeFn>),
+}
+
 pub(crate) const NOT_YET: &str = "an operation the interpreter does not implement yet";
 
 /// The VM's reason a run ended, as the API's error. A thrown value becomes an
@@ -158,10 +174,15 @@ pub(crate) fn trampoline(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Val
             None
         } else {
             match state.natives.get_mut(&key) {
-                Some(slot) => match slot.take() {
+                Some(Native::Shared(f)) => {
+                    let f = Arc::clone(f);
+                    state.native_depth = state.native_depth.saturating_add(1);
+                    Some(Ok((state.id, Running::Shared(f))))
+                }
+                Some(Native::Owned(slot)) => match slot.take() {
                     Some(f) => {
                         state.native_depth = state.native_depth.saturating_add(1);
-                        Some(Ok((state.id, f)))
+                        Some(Ok((state.id, Running::Owned(f))))
                     }
                     None => {
                         state.pending = Some(Error::Busy);
@@ -181,11 +202,17 @@ pub(crate) fn trampoline(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Val
     let result = {
         let mut scope = Scope::new(vm, runtime);
         let arguments = Args::new(runtime, this, args, new_target);
-        f(&mut scope, &arguments).map(|local| (local.value(), local.runtime()))
+        let r = match &f {
+            Running::Owned(f) => f(&mut scope, &arguments),
+            Running::Shared(f) => f(&mut scope, &arguments),
+        };
+        r.map(|local| (local.value(), local.runtime()))
     };
 
     if let Some(state) = vm.embedder_mut::<State>() {
-        if let Some(slot) = state.natives.get_mut(&key) {
+        if let Running::Owned(f) = f
+            && let Some(Native::Owned(slot)) = state.natives.get_mut(&key)
+        {
             *slot = Some(f);
         }
         state.native_depth = state.native_depth.saturating_sub(1);

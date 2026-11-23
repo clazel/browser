@@ -1,4 +1,4 @@
-//! The interpreter loop (phase-7.md item 7.8, first slice).
+//! The units.extend(key_text.units());nterpreter loop (phase-7.md item 7.8, first slice).
 //!
 //! [`Vm`] owns the frame region ([`crate::frame`]), the heap
 //! ([`crate::heap`]) and the loaded code. [`Vm::run`] and [`Vm::call`] push a
@@ -1592,8 +1592,7 @@ impl Vm {
             // property access reads (`GetSuperBase`, not yet implemented), so
             // it is accepted and not stored.
             Instr::SetHomeObject { .. } => {}
-            // DefineMethodProperty (§15.4.5†) for a method (form 0); the
-            // accessor forms need accessor properties, not yet.
+            // DefineMethodProperty (§15.4.5†) for a method (form 0).
             Instr::DefineMethod {
                 obj,
                 key,
@@ -1613,6 +1612,38 @@ impl Vm {
                         | if enumerable { Attrs::ENUMERABLE } else { 0 },
                 );
                 self.heap.define(o, pk, f, attrs)?;
+            }
+            // The getter (form 1) and setter (form 2) of MethodDefinition
+            // evaluation (§15.4.5†): SetFunctionName(closure, propKey, "get" or
+            // "set") (§10.2.9† step 5), then DefinePropertyOrThrow(object,
+            // propKey, PropertyDescriptor { [[Get]] or [[Set]]: closure,
+            // [[Enumerable]]: enumerable, [[Configurable]]: true }).
+            Instr::DefineMethod {
+                obj,
+                key,
+                func,
+                form: form @ (1 | 2),
+                enumerable,
+            } => {
+                let (o, k, f) = (self.r(obj)?, self.r(key)?, self.r(func)?);
+                let key_text = self.coerce_js_string(k)?;
+                let pk = self.heap.intern(&key_text)?;
+                let mut units: Vec<u16> = if form == 1 { "get " } else { "set " }
+                    .encode_utf16()
+                    .collect();
+                units.extend((0..key_text.len()).filter_map(|i| key_text.unit(i)));
+                let name = JsString::from_units(&units).map_err(|_| Abrupt::OutOfMemory)?;
+                let name = self.heap.new_string(name)?;
+                let kn = self.atoms.k_name;
+                self.heap.define(f, kn, name, Attrs(Attrs::CONFIGURABLE))?;
+                let desc = crate::props::PropDesc {
+                    get: (form == 1).then_some(f),
+                    set: (form == 2).then_some(f),
+                    enumerable: Some(enumerable),
+                    configurable: Some(true),
+                    ..crate::props::PropDesc::default()
+                };
+                self.define_property_or_throw(o, pk, &desc)?;
             }
             Instr::InitGlobalLexical { key, src } => {
                 let key = self.key_const(key)?;

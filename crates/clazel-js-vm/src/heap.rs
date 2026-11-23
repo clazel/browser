@@ -6,9 +6,11 @@
 //! open pull requests. This module is the VM's own cell type over the arena
 //! (`spec::Cell`): a string, a Symbol, an ordinary object (properties by
 //! shape, a prototype, and what kind of object it is), a declarative
-//! environment, and the iterator records of the iteration ops. It holds only
-//! data properties; accessors, elements and exotic objects come with the
-//! later slices. Nothing here is collected: the collector is item 7.6.
+//! environment, and the iterator records of the iteration ops. It holds data
+//! properties and accessor properties (an accessor's slot holds a
+//! [`Cell::Accessor`] with its getter and setter, and its attributes carry
+//! [`ACCESSOR`]); elements and exotic objects come with the later slices.
+//! Nothing here is collected: the collector is item 7.6.
 //!
 //! A property key is a [`Key`]: an interned string, or a Symbol encoded by
 //! `clazel-js-heap`'s symbol contract (Y4, [`encode`]), whose top bit is set.
@@ -26,6 +28,12 @@ use clazel_js_heap::value::Value;
 /// cannot be built by this slice's handlers; the bound keeps a corrupt heap
 /// from looping).
 pub const MAX_PROTO_DEPTH: usize = 100_000;
+
+/// The attribute bit of an accessor property (§6.1.7.1† Table 4): the
+/// property's slot holds a [`Cell::Accessor`] and not a value, and its
+/// `WRITABLE` bit is clear (an accessor property has no `[[Writable]]`).
+/// `clazel-js-heap`'s shapes store the bits without reading them.
+pub const ACCESSOR: u8 = 8;
 
 /// What an object is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -175,6 +183,16 @@ pub enum Cell {
     Symbol(Sym),
     /// An iterator record (never reachable from JS: only registers hold it).
     Iter(IterRecord),
+    /// The `[[Get]]` and `[[Set]]` of an accessor property (§6.1.7.1† Table
+    /// 4): each a function object or `undefined`. Only an object's slot whose
+    /// attributes carry [`ACCESSOR`] refers to one; it is never a language
+    /// value.
+    Accessor {
+        /// `[[Get]]`.
+        get: Value,
+        /// `[[Set]]`.
+        set: Value,
+    },
 }
 
 /// Why a heap operation failed.
@@ -291,7 +309,7 @@ fn cell_bytes(cell: &Cell) -> u64 {
             .saturating_mul(8),
         // A Symbol's description is a string cell of its own, counted there;
         // an iterator record holds a few values and no growing buffer.
-        Cell::Symbol(_) | Cell::Iter(_) => 0,
+        Cell::Symbol(_) | Cell::Iter(_) | Cell::Accessor { .. } => 0,
     };
     CELL_BYTES.saturating_add(payload)
 }
@@ -394,6 +412,23 @@ impl Heap {
     /// [`HeapError::Full`] or [`HeapError::TooLong`].
     pub fn new_str(&mut self, s: &str) -> Result<Value, HeapError> {
         self.new_string(JsString::from_rust_str(s)?)
+    }
+
+    /// Allocates the getter and setter pair of an accessor property.
+    ///
+    /// # Errors
+    /// [`HeapError::Full`] if the arena is full.
+    pub fn new_accessor(&mut self, get: Value, set: Value) -> Result<Value, HeapError> {
+        self.alloc(Cell::Accessor { get, set })
+    }
+
+    /// The getter and setter an accessor pair holds.
+    #[must_use]
+    pub fn accessor(&self, v: Value) -> Option<(Value, Value)> {
+        match self.cell(v)? {
+            Cell::Accessor { get, set } => Some((*get, *set)),
+            _ => None,
+        }
     }
 
     /// Allocates an ordinary object with `proto` as its prototype.

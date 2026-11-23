@@ -338,6 +338,17 @@ fn run_one(case: &Case, src: &[u32], goal: SourceGoal) -> Outcome {
             {
                 return Outcome::Xfail(format!("global {var} is missing (a built-in, 7.9)"));
             }
+            // A test that catches the ReferenceError itself and reports it
+            // in its own message, "... is incorrect. Actual: ReferenceError:
+            // eval is not defined" (reached since `instanceof` runs, item
+            // 7.12).
+            if name.as_deref() == Some("Test262Error")
+                && let Some(m) = &msg
+                && let Some((_, got)) = m.split_once("Actual: ReferenceError: ")
+                && let Some(var) = got.strip_suffix(" is not defined")
+            {
+                return Outcome::Xfail(format!("global {var} is missing (a built-in, 7.9)"));
+            }
             if name.as_deref() == Some("TypeError")
                 && let Some(m) = &msg
                 && m == "undefined is not a function"
