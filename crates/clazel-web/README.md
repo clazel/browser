@@ -41,6 +41,27 @@ Tier 0, target tier 0: safe Rust, tested, nothing proven. So far:
   unit tests and hand transcriptions of WPT `timers/` and `microtask-queuing/`
   orderings (which need a JS engine to run).
 
+- **`page`**: the platform objects of a page exposed to script through
+  `clazel-webidl`'s generated bindings (item 7.12). `Page` is the
+  `clazel-js` host and the bindings' platform: it owns the document (a
+  `clazel-dom` arena), the listeners, the other platform objects and the
+  wrappers (a node's in `clazel-dom`'s wrapper slot, the others in a side
+  table). It implements `EventTarget`, `Event`, `CustomEvent`,
+  `AbortController`, `AbortSignal`, `Node`, `Document`, `DocumentType`,
+  `DocumentFragment`, `CharacterData`, `Text`, `Comment`, `Element`, the
+  HTML element interfaces the bindings expose (their `[Reflect]` attributes
+  and `HTMLTitleElement.text`), `NodeList`, `HTMLCollection`,
+  `DOMTokenList`, `Window`, `Location`, `History`, `Navigator` (a fixed,
+  honest user-agent string) and `console`, which writes to the host's log.
+  `location.href = …` and the other navigations call `PageHooks::navigate`;
+  `pushState` and `replaceState` call `PageHooks::update_url` (no renderer
+  runs `clazel-web` yet, item 7.17, and 7.16's `UpdateUrl` message is not
+  built, so these are the hooks the renderer will implement). Each module's
+  header lists what is not implemented; those members throw a
+  `NotSupportedError` naming themselves. `tests/bindings.rs` runs script
+  against parsed documents, with checks transcribed from WPT's `dom/` and
+  `html/` tests (testharness.js needs more of the engine than it has).
+
 Item 7.1 vendored the test
 data later items run: the WPT `testharness.js` tests (`tests/data/wpt-web/`) and
 the TodoMVC vanilla, React and Vue implementations (`tests/data/todomvc/`).

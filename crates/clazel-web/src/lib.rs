@@ -16,9 +16,15 @@
 //! §8.6†), with caps for a hostile page (7.19) and time supplied by the
 //! caller.
 //!
+//! Item 7.12's platform is [`page`]: the page's platform objects (the DOM,
+//! events, `Window`, `Location`, `History`, `Navigator`, `console`) exposed
+//! to script through `clazel-webidl`'s generated bindings and `clazel-js`'s
+//! embedding API.
+//!
 //! Tier 0 (`Cargo.toml`): safe Rust, tested, nothing proven.
 
 pub mod event_loop;
 pub mod events;
+pub mod page;
 pub mod selectors;
 pub mod serialize;

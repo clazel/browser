@@ -17,6 +17,15 @@ clazel-dom = { path = "../clazel-dom", version = "=0.0.0" }
 clazel-selectors = { path = "../clazel-selectors", version = "=0.0.0" }
 clazel-css = { path = "../clazel-css", version = "=0.0.0" }
 
+# The page's platform objects exposed to script (`src/page/`, item 7.12):
+# the engine through its embedding API, the generated bindings, the URL
+# parser for `Location` and `History`, and forgiving-base64 for `btoa` and
+# `atob`.
+clazel-js = { path = "../clazel-js", version = "=0.0.0" }
+clazel-webidl = { path = "../clazel-webidl", version = "=0.0.0" }
+clazel-url = { path = "../clazel-url", version = "=0.0.0" }
+clazel-base64 = { path = "../clazel-base64", version = "=0.0.0" }
+
 # The parser that the serializer's round-trip tests feed
 # (`tests/conformance_round_trip.rs`).
 [dev-dependencies]

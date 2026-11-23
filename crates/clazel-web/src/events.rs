@@ -58,6 +58,9 @@ pub enum TargetId {
     Node(usize),
     /// The `Window` of a document's browsing context.
     Window,
+    /// Another event target that is not a node (`new EventTarget()`, an
+    /// `AbortSignal`), by the caller's id. "Get the parent" of it is null.
+    Object(u64),
 }
 
 /// What a listener's callback is: supplied by the caller, compared for
@@ -234,7 +237,24 @@ impl Event {
     pub fn stop_immediate_propagation_flag(&self) -> bool {
         self.stop_immediate_propagation
     }
-    /// Whether the "dispatch flag" is set.
+    /// Whether the "initialized flag" is set.
+    pub fn is_initialized(&self) -> bool {
+        self.initialized
+    }
+
+    /// `dispatchEvent` step 2: "Initialize event's isTrusted attribute to
+    /// false."
+    pub fn set_untrusted(&mut self) {
+        self.is_trusted = false;
+    }
+
+    /// An event the user agent fires (DOM §2.10† "fire an event": "Set
+    /// event's isTrusted attribute to true").
+    pub fn set_trusted(&mut self) {
+        self.is_trusted = true;
+    }
+
+    /// Whether the event is being dispatched (its dispatch flag).
     pub fn is_dispatching(&self) -> bool {
         self.dispatching
     }
@@ -468,6 +488,7 @@ fn default_passive_value(arena: &Arena, type_: &[u32], target: TargetId) -> bool
     let node = match target {
         TargetId::Window => return true,
         TargetId::Node(n) => n,
+        TargetId::Object(_) => return false,
     };
     if node >= arena.len() {
         return false;
