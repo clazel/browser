@@ -96,8 +96,10 @@
 //! - **What the user sees (phase-4.md item 4.12).** A committed renderer's
 //!   `Display { title, text, links }` becomes the output `Show { tab, url,
 //!   title, text, links }`, where `tab` is the sender's tab and `url` the
-//!   sender's committed URL, both from the kernel's state, never from the
-//!   message: the address line is the kernel's. It has no other effect. A
+//!   sender's committed URL (item 7.16: its document's URL, which an
+//!   accepted `UpdateUrl` may have set to a URL of the same origin), both
+//!   from the kernel's state, never from the `Display` message: the address
+//!   line is the kernel's. It has no other effect. A
 //!   `Display` from a renderer that is not committed is a message the
 //!   renderer may not send, and is treated as every such frame is (below):
 //!   the sender is killed. A `Display` over `MAX_FRAME` never reaches `step`
@@ -348,7 +350,7 @@
 //! - **`Paint`.** A `FrameReady { buffer, width, height }` from the GPU
 //!   process of renderer `id` ([`from_gpu`]) gives `Paint { tab, url, title,
 //!   buffer, width, height }`, with `tab`, `url` and `title` the renderer's
-//!   from the kernel's state, never from the message, when the renderer is
+//!   (the URL its document's, item 7.16) from the kernel's state, never from the message, when the renderer is
 //!   committed, `buffer` is an id of the ring ([`ring_size`]) and the frame
 //!   fits the tab's viewport. A frame before the renderer's first commit, a
 //!   buffer outside the ring, a frame that does not decode, or a renderer's
@@ -460,6 +462,51 @@
 //!   the kernel a `Tick` before every event, so that is at once.
 //! - **A `Tick` fails a sub-fetch** that started [`subfetch_timeout`] (60)
 //!   seconds ago or more: `StyleFailed`, its connection closed.
+//!
+//! # URL updates (phase-7.md item 7.16)
+//!
+//! - **`UpdateUrl { replace, url }`** is `history.pushState` and
+//!   `history.replaceState` ([`update_url`]). The renderer runs HTML's
+//!   steps itself (it holds the document and throws the "SecurityError");
+//!   the kernel decides only what the address bar shows. It accepts the URL
+//!   when it decodes, resolves against the committed URL (as `Navigate`'s
+//!   does) and has the renderer's lock as its origin, and the lock is a tuple
+//!   origin; then the document's URL is the resolved one. Anything else
+//!   changes nothing. An `UpdateUrl` before the renderer's first commit is a
+//!   disallowed frame (killed), as `Display` is. It has no reply.
+//! - **The document's URL is a lock-tagged table** ([`DocUrl`],
+//!   [`State::doc_urls`]), as 5.18's titles are, not the renderer's `url`,
+//!   which stays the URL last committed. An entry carries the renderer's id
+//!   and lock and is read only by that pair ([`doc_url_of`]), so another
+//!   domain's `UpdateUrl` changes only an entry under its own lock and the
+//!   noninterference relation compares only the observer's entries. A commit
+//!   to the same renderer forgets its entry (the new document's URL is the
+//!   committed one); a renderer replaced, killed or exited leaves its entry,
+//!   never read again because ids are not reused (the table grows by at
+//!   most one entry per renderer that ever had an update, as the GPU
+//!   records do).
+//! - **What reads it**: the URL of a `Show` and of a `Paint`, the address
+//!   bar. Not the base the kernel resolves a renderer's URLs against
+//!   (`Navigate`, `Submit`, `FetchStyle`, `FetchScript`, `UpdateUrl`), and not
+//!   the path of `document.cookie`'s request URL ([`request_url_of`]): both
+//!   stay the committed URL (a deviation; the renderer resolves the URLs a
+//!   page writes against its document's URL and sends them absolute, so the
+//!   base matters only for a renderer that sends relative ones, and a
+//!   `document.cookie` after a `pushState` to another path matches cookies
+//!   by the committed path, listed).
+//! - **HTML's rewrite rule is wider than the kernel's check** ("can have its
+//!   URL rewritten", HTML §7.2.5: the same scheme, username, password, host
+//!   and port; for `file:` the same path; for any other non-HTTP(S) scheme
+//!   only the fragment may differ). The kernel cannot compare URL components
+//!   (the URL functions are parameters) and checks the origin, which is
+//!   what the address bar's integrity needs. Two deviations follow: a
+//!   renderer may change a URL's username or password, which HTML forbids
+//!   (the renderer refuses it; a compromised renderer gains nothing an origin
+//!   could not already show); and a document with an opaque origin (`file:`,
+//!   `data:`, `about:blank`) cannot update the address bar at all, though HTML
+//!   lets it change the fragment (listed).
+//! - **`replace` is not read.** The kernel keeps no session history, so
+//!   `pushState` and `replaceState` do the same thing to it.
 //!
 //! # The GPU crash policy (phase-5.md item 5.17c)
 //!
@@ -681,6 +728,18 @@ pub struct Titled {
     pub title: Seq<u8>,
 }
 
+/// A document's URL after a `pushState` or `replaceState` (item 7.16): the
+/// URL renderer `id`, locked to `lock`, last set with an accepted
+/// `UpdateUrl`, since its last commit. See the modelling choices.
+pub struct DocUrl {
+    /// The renderer's id.
+    pub id: nat,
+    /// The renderer's lock.
+    pub lock: clazel_origin::spec::Origin,
+    /// The document's URL, absolute.
+    pub url: Seq<u32>,
+}
+
 /// One event of the user's on a tab's content area (item 5.18): the fields
 /// of the `Input` message (`clazel_ipc::message::spec`).
 pub struct UserInput {
@@ -807,6 +866,9 @@ pub struct State {
     pub subcounts: Seq<SubCount>,
     /// The GPU crash policy's state (item 5.17c).
     pub gpu: GpuState,
+    /// The documents' URLs set by `pushState` and `replaceState` (item
+    /// 7.16), at most one per renderer.
+    pub doc_urls: Seq<DocUrl>,
 }
 
 /// What can happen to the kernel.
@@ -1102,7 +1164,7 @@ pub struct Document {
 
 /// The kernel before anything happens.
 pub open spec fn init_state() -> State {
-    State { renderers: seq![], jar: seq![], storage: Map::empty(), next_id: 0, conns: seq![], next_conn: 0, now: 0, viewports: seq![], titles: seq![], subfetches: seq![], subcounts: seq![], gpu: init_gpu() }
+    State { renderers: seq![], jar: seq![], storage: Map::empty(), next_id: 0, conns: seq![], next_conn: 0, now: 0, viewports: seq![], titles: seq![], subfetches: seq![], subcounts: seq![], gpu: init_gpu(), doc_urls: seq![] }
 }
 
 // ---------------------------------------------------------------------
@@ -1500,6 +1562,9 @@ pub open spec fn navigate_tab(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, d
                         renderers: s.renderers.update(i, r),
                         subfetches: end_subfetches(s.subfetches, old.id, old.lock),
                         subcounts: new_document_counts(s.subcounts, old.id, old.lock),
+                        // Item 7.16: the new document's URL is the one
+                        // committed, not the old one's `pushState` URL.
+                        doc_urls: forget_doc_url(s.doc_urls, old.id, old.lock),
                         ..s
                     }, seq![
                         Output::ToRenderer { id: old.id, bytes: commit_frames(url, doc) },
@@ -2036,6 +2101,31 @@ pub open spec fn set_title(ts: Seq<Titled>, id: nat, lock: clazel_origin::spec::
     forget_title(ts, id, lock).push(Titled { id, lock, title })
 }
 
+/// The URL of renderer `r`'s document (item 7.16): the URL of the first
+/// entry with its id and its lock, or, if none, its committed URL.
+pub open spec fn doc_url_of(ds: Seq<DocUrl>, r: Renderer) -> Seq<u32>
+    decreases ds.len(),
+{
+    if ds.len() == 0 {
+        r.url
+    } else if ds[0].id == r.id && ds[0].lock == r.lock {
+        ds[0].url
+    } else {
+        doc_url_of(ds.drop_first(), r)
+    }
+}
+
+/// `ds` without the document URL of renderer `id` locked to `lock`.
+pub open spec fn forget_doc_url(ds: Seq<DocUrl>, id: nat, lock: clazel_origin::spec::Origin) -> Seq<DocUrl> {
+    ds.filter(|x: DocUrl| !(x.id == id && x.lock == lock))
+}
+
+/// `ds` with the document URL of renderer `id` locked to `lock` set to
+/// `url`: any earlier one is removed and the new one goes last.
+pub open spec fn set_doc_url(ds: Seq<DocUrl>, id: nat, lock: clazel_origin::spec::Origin, url: Seq<u32>) -> Seq<DocUrl> {
+    forget_doc_url(ds, id, lock).push(DocUrl { id, lock, url })
+}
+
 /// The frame of `Viewport` for `v`.
 pub open spec fn viewport_frame(v: Viewport) -> Seq<u8> {
     reply_frame(clazel_ipc::message::spec::Message::Viewport { width: v.width, height: v.height, scale: v.scale })
@@ -2154,7 +2244,7 @@ pub open spec fn from_gpu(s: State, id: nat, bytes: Seq<u8>) -> (State, Seq<Outp
                     // (or out of order): dropped.
                     (s, seq![])
                 } else if fits(viewport_of(s, r.tab), width, height) {
-                    (s, seq![Output::Paint { tab: r.tab, url: r.url, title: title_of(s.titles, r), buffer, width, height }])
+                    (s, seq![Output::Paint { tab: r.tab, url: doc_url_of(s.doc_urls, r), title: title_of(s.titles, r), buffer, width, height }])
                 } else {
                     // Drawn for a larger viewport than the tab now has.
                     (s, seq![])
@@ -2756,6 +2846,46 @@ pub open spec fn fetch_script(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, 
     fetch_sub(rules, urls, fetch, s, r, true, request, url)
 }
 
+/// `UpdateUrl { replace, url }` (item 7.16) of the committed renderer `r`:
+/// the kernel's part of HTML §7.2.5's "shared history push/replace state
+/// steps"
+/// (<https://html.spec.whatwg.org/multipage/nav-history-apis.html#shared-history-push/replace-state-steps>),
+/// which the renderer runs first:
+///
+/// - step 4, "Let newURL be document's URL", and step 5, "If url is not
+///   null or the empty string": an empty `url` changes nothing;
+/// - step 5.1, "Set newURL to the result of encoding-parsing a URL given
+///   url, relative to the relevant settings object": the text decoded as
+///   UTF-8 and resolved against the committed URL, as `Navigate`'s is;
+/// - steps 5.2 and 5.3, "If newURL is failure" or "If document cannot have
+///   its URL rewritten to newURL, then throw a "SecurityError"": a URL that
+///   does not decode or resolve, or whose origin is not the renderer's lock,
+///   or a renderer whose lock is opaque, changes nothing (the renderer has
+///   already thrown; see the modelling choices);
+/// - step 10, "Run the URL and history update steps given document and
+///   newURL": the document's URL becomes newURL ([`set_doc_url`]), which is
+///   what the address bar shows from then on.
+///
+/// `replace` is not read: the kernel keeps no session history. There is no
+/// reply.
+pub open spec fn update_url(urls: UrlFns, s: State, r: Renderer, url: Seq<u8>) -> (State, Seq<Output>) {
+    if url.len() == 0 {
+        (s, seq![])
+    } else {
+        match clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+            None => (s, seq![]),
+            Some(relative) => match (urls.resolve)(r.url, relative) {
+                None => (s, seq![]),
+                Some(resolved) => if r.lock is Tuple && lock_of_url(urls, resolved, r.id) == Some(r.lock) {
+                    (State { doc_urls: set_doc_url(s.doc_urls, r.id, r.lock, resolved), ..s }, seq![])
+                } else {
+                    (s, seq![])
+                },
+            },
+        }
+    }
+}
+
 /// The message asks for a sub-fetch: a `FetchStyle` or a `FetchScript`.
 pub open spec fn is_sub_request(m: clazel_ipc::message::spec::Message) -> bool {
     m is FetchStyle || m is FetchScript
@@ -2863,7 +2993,7 @@ pub open spec fn decode_renderer_frame(bytes: Seq<u8>) -> Option<clazel_ipc::mes
 /// is committed.
 pub open spec fn accepted_message(r: Renderer, bytes: Seq<u8>) -> Option<clazel_ipc::message::spec::Message> {
     match decode_renderer_frame(bytes) {
-        Some(m) => if (m is Display || m is Title || m is FetchStyle || m is FetchScript || m is Submit) && !r.committed { None } else { Some(m) },
+        Some(m) => if (m is Display || m is Title || m is FetchStyle || m is FetchScript || m is Submit || m is UpdateUrl) && !r.committed { None } else { Some(m) },
         None => None,
     }
 }
@@ -2932,13 +3062,17 @@ pub open spec fn handle_message(
         clazel_ipc::message::spec::Message::Submit { url, method, content_type, body } => submit(rules, urls, fetch, s, r, url, method, content_type, body),
         // `Display` (phase-4.md item 4.12): shown for the sender's tab, under
         // its committed URL; neither comes from the message.
-        clazel_ipc::message::spec::Message::Display { title, text, links } => (s, seq![Output::Show { tab: r.tab, url: r.url, title, text, links }]),
+        // Item 7.16: the URL is the document's, which an accepted
+        // `UpdateUrl` may have set ([`doc_url_of`]).
+        clazel_ipc::message::spec::Message::Display { title, text, links } => (s, seq![Output::Show { tab: r.tab, url: doc_url_of(s.doc_urls, r), title, text, links }]),
         // Item 5.18: the renderer's title, kept for its `Paint`s.
         clazel_ipc::message::spec::Message::Title { title } => (State { titles: set_title(s.titles, r.id, r.lock, title), ..s }, seq![]),
         // Item 5.19.
         clazel_ipc::message::spec::Message::FetchStyle { request, url } => fetch_style(rules, urls, fetch, s, r, request, url),
         // Item 7.16.
         clazel_ipc::message::spec::Message::FetchScript { request, url } => fetch_script(rules, urls, fetch, s, r, request, url),
+        // Item 7.16: `pushState` and `replaceState`.
+        clazel_ipc::message::spec::Message::UpdateUrl { replace, url } => update_url(urls, s, r, url),
         // A message a renderer may not send: unreachable, see
         // `decode_renderer_frame`.
         _ => (s, seq![]),

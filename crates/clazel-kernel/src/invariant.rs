@@ -80,6 +80,12 @@ pub open spec fn conns_wf(rs: Seq<Renderer>, cs: Seq<Connection>, next_conn: nat
     &&& forall|i: int| 0 <= i < cs.len() ==> conn_backed(rs, #[trigger] cs[i])
 }
 
+/// Item 7.16: every document URL an `UpdateUrl` set is under a tuple lock
+/// that is the URL's own lock.
+pub open spec fn doc_urls_wf(urls: UrlFns, ds: Seq<DocUrl>) -> bool {
+    forall|k: int| 0 <= k < ds.len() ==> (#[trigger] ds[k]).lock is Tuple && lock_of_url(urls, ds[k].url, ds[k].id) == Some(ds[k].lock)
+}
+
 /// The invariant of every reachable state.
 ///
 /// - the jar: `jar_domains_nonempty` (the hypothesis of `clazel-cookie`'s
@@ -88,7 +94,8 @@ pub open spec fn conns_wf(rs: Seq<Renderer>, cs: Seq<Connection>, next_conn: nat
 ///   per root, and unique keys (§5.7 step 23's invariant);
 /// - the renderers: [`renderers_wf`];
 /// - Web Storage: [`storage_wf`];
-/// - navigations and connections (item 3.7): [`navigations_wf`], [`conns_wf`].
+/// - navigations and connections (item 3.7): [`navigations_wf`], [`conns_wf`];
+/// - document URLs (item 7.16): [`doc_urls_wf`].
 pub open spec fn kernel_wf(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s: State) -> bool {
     &&& clazel_cookie::storage::isolation::jar_domains_nonempty(s.jar)
     &&& clazel_cookie::storage::spec::jar_within_root_limit(rules, s.jar)
@@ -98,6 +105,7 @@ pub open spec fn kernel_wf(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s: 
     &&& storage_wf(s.storage)
     &&& navigations_wf(rules, s.renderers)
     &&& conns_wf(s.renderers, s.conns, s.next_conn)
+    &&& doc_urls_wf(urls, s.doc_urls)
 }
 
 /// The initial state satisfies the invariant.

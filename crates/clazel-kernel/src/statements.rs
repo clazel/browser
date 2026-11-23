@@ -82,13 +82,16 @@ pub open spec fn show_only_own_tab_statement(rules: Seq<clazel_psl::spec::Rule>,
 
 /// `theorem_address_bar_integrity`: whatever frame `bytes` renderer `id`
 /// sends, every `Show` it gives is labelled with the tab and the URL the
-/// kernel holds for `id`, and `id` is committed, so the URL is the one the
-/// kernel committed there: nothing in the message reaches the address line.
+/// kernel holds for `id`'s document, and `id` is committed, so the URL is
+/// the one the kernel committed there or (item 7.16, restated) one an
+/// accepted `UpdateUrl` set ([`doc_url_of`]), whose origin is the
+/// renderer's lock (`theorem_url_update_same_origin`): nothing in the
+/// `Display` message reaches the address line.
 pub open spec fn address_bar_integrity_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat, bytes: Seq<u8>) -> bool {
     let out = step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1;
     forall|k: int|
         0 <= k < out.len() && (#[trigger] out[k]) is Show ==> exists|i: int|
-            0 <= i < s.renderers.len() && s.renderers[i].id == id && s.renderers[i].committed && out[k]->Show_url == s.renderers[i].url
+            0 <= i < s.renderers.len() && s.renderers[i].id == id && s.renderers[i].committed && out[k]->Show_url == doc_url_of(s.doc_urls, s.renderers[i])
                 && out[k]->Show_tab == s.renderers[i].tab
 }
 
@@ -655,8 +658,10 @@ pub open spec fn paint_only_own_tab_statement(rules: Seq<clazel_psl::spec::Rule>
 /// half; the first is [`address_bar_integrity_statement`], for `Show`):
 /// whatever frame `bytes` the GPU process of renderer `id` sends, every
 /// `Paint` it gives is labelled with the tab, the URL and the title the
-/// kernel holds for `id`, and `id` is committed, so the URL is the one the
-/// kernel committed there: nothing in the message reaches the address bar.
+/// kernel holds for `id` (the URL its document's, item 7.16, as for `Show`),
+/// and `id` is committed, so the URL is the one the kernel committed there
+/// or one an accepted `UpdateUrl` set: nothing in the message reaches the
+/// address bar.
 /// The frame's sender is the GPU process paired with `id`, whose lock is the
 /// document's origin. With [`paint_only_own_tab_statement`] (no other event
 /// paints), this covers every message content from either process.
@@ -664,7 +669,7 @@ pub open spec fn paint_address_bar_statement(rules: Seq<clazel_psl::spec::Rule>,
     let out = step(rules, urls, fetch, s, Event::FromGpu { id, bytes }).1;
     forall|k: int|
         0 <= k < out.len() && (#[trigger] out[k]) is Paint ==> exists|i: int|
-            0 <= i < s.renderers.len() && s.renderers[i].id == id && s.renderers[i].committed && out[k]->Paint_url == s.renderers[i].url
+            0 <= i < s.renderers.len() && s.renderers[i].id == id && s.renderers[i].committed && out[k]->Paint_url == doc_url_of(s.doc_urls, s.renderers[i])
                 && out[k]->Paint_tab == s.renderers[i].tab && out[k]->Paint_title == title_of(s.titles, s.renderers[i])
 }
 
@@ -952,6 +957,46 @@ pub open spec fn script_fetch_shape_statement(rules: Seq<clazel_psl::spec::Rule>
             _ => true,
         },
     }
+}
+
+// ---------------------------------------------------------------------
+// URL updates (phase-7.md item 7.16).
+// ---------------------------------------------------------------------
+
+/// `theorem_url_update_same_origin` (item 7.16), the step: whatever frame
+/// `bytes` renderer `id` sends, if it is an `UpdateUrl` the kernel accepts
+/// (the sender is committed), then it has no output, and it either changes
+/// nothing or changes only the sender's document URL ([`set_doc_url`] under
+/// the sender's id and lock), to a URL `u` whose origin is the sender's lock,
+/// a tuple origin: `pushState` and `replaceState` change a tab's URL only
+/// to one with the same origin. The renderers (their committed URLs and
+/// locks), the jar, storage, connections, counters and every other table
+/// are unchanged.
+pub open spec fn url_update_same_origin_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat, bytes: Seq<u8>) -> bool {
+    let (s1, out) = step(rules, urls, fetch, s, Event::FromRenderer { id, bytes });
+    match find_by_id(s.renderers, id, 0) {
+        None => true,
+        Some(i) => match accepted_message(s.renderers[i], bytes) {
+            Some(clazel_ipc::message::spec::Message::UpdateUrl { replace, url }) => {
+                let r = s.renderers[i];
+                &&& r.committed
+                &&& out.len() == 0
+                &&& (s1 == s || exists|u: Seq<u32>|
+                    s1 == (State { doc_urls: set_doc_url(s.doc_urls, id, r.lock, u), ..s }) && r.lock is Tuple && (urls.origin_of)(u) == Some(r.lock))
+            },
+            _ => true,
+        },
+    }
+}
+
+/// `theorem_url_update_same_origin` (item 7.16), the state: in every
+/// reachable state, the URL of every renderer's document ([`doc_url_of`],
+/// what `Show` and `Paint` label its tab with) has the renderer's lock as
+/// its lock, as its committed URL has (`theorem_lock_is_committed_origin`):
+/// the address bar still names the document's origin.
+pub open spec fn address_bar_origin_statement(urls: UrlFns, s: State) -> bool {
+    forall|i: int|
+        0 <= i < s.renderers.len() ==> lock_of_url(urls, doc_url_of(s.doc_urls, #[trigger] s.renderers[i]), s.renderers[i].id) == Some(s.renderers[i].lock)
 }
 
 // ---------------------------------------------------------------------

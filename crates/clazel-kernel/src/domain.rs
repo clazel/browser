@@ -36,7 +36,10 @@
 //!   its origins, and the time. Not the other domains' renderers and
 //!   cookies, and not the id counter or the other domains' storage. Item
 //!   5.18 adds the tabs' viewports (the host's, so every domain's) and the
-//!   titles of the domain's renderers ([`titles_of_domain`]).
+//!   titles of the domain's renderers ([`titles_of_domain`]). Item 7.16
+//!   adds their document URLs ([`doc_urls_of_domain`]): another domain's
+//!   `UpdateUrl` has no declassified part, and changes only an entry under
+//!   its own lock.
 //! - **Item 5.19.** A `SubNet` event belongs to the domain of the renderer
 //!   whose sub-fetch it reports on, and has no declassified part: the
 //!   sub-fetch exists only because that renderer asked. Sub-fetch connection
@@ -124,6 +127,8 @@ pub struct Observation {
     pub viewports: Seq<TabViewport>,
     /// The titles of its renderers (item 5.18).
     pub titles: Seq<Titled>,
+    /// The document URLs of its renderers (item 7.16).
+    pub doc_urls: Seq<DocUrl>,
 }
 
 /// The sub-fetches of `fs` whose lock is in domain `d` (item 5.19).
@@ -141,6 +146,12 @@ pub open spec fn titles_of_domain(rules: Seq<clazel_psl::spec::Rule>, ts: Seq<Ti
     ts.filter(|x: Titled| domain_of_lock(rules, x.lock) == d)
 }
 
+/// The document URLs of `ds` whose lock is in domain `d` (item 7.16), in
+/// order.
+pub open spec fn doc_urls_of_domain(rules: Seq<clazel_psl::spec::Rule>, ds: Seq<DocUrl>, d: Domain) -> Seq<DocUrl> {
+    ds.filter(|x: DocUrl| domain_of_lock(rules, x.lock) == d)
+}
+
 /// The GPU records of `gs` whose lock is in domain `d` (item 5.17c), in
 /// order.
 pub open spec fn gpu_recs_of_domain(rules: Seq<clazel_psl::spec::Rule>, gs: Seq<GpuRec>, d: Domain) -> Seq<GpuRec> {
@@ -156,6 +167,7 @@ pub open spec fn obs(rules: Seq<clazel_psl::spec::Rule>, s: State, d: Domain) ->
         now: s.now,
         viewports: s.viewports,
         titles: titles_of_domain(rules, s.titles, d),
+        doc_urls: doc_urls_of_domain(rules, s.doc_urls, d),
     }
 }
 
