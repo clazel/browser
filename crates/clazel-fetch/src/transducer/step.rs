@@ -305,6 +305,11 @@ fn on_final_exec<U: UrlFnsExec>(u: &U, base: StateBuf, response: ResponseBuf, op
                 if origin_crossed {
                     rewritten.origin_tainted = true;
                 }
+                // Item 7.16: no author's header after a cross-origin hop.
+                if rewritten.origin_tainted {
+                    rewritten.headers = Vec::new();
+                    assert(clazel_http::field::types::lines_view(rewritten.headers@) =~= Seq::<clazel_http::field::spec::FieldLine>::empty());
+                }
                 assert(rewritten@ == next_req(u.urls(), s, response@.status_line.status, location@));
                 // Never saturates: redirects < 20.
                 let next = begin_exec(location, redirects.saturating_add(1), tainted || crossed, rewritten);
