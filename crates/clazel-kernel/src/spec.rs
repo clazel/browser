@@ -622,7 +622,10 @@
 //!   Whether a string is one is a parameter ([`UrlFns::is_javascript`]), as
 //!   its origin is; the shipped instantiation reads the scheme the basic
 //!   URL parser gives ([`crate::urls`]). `theorem_no_javascript_url`: no
-//!   renderer, committed or not, ever holds a `javascript:` URL.
+//!   renderer, committed or not, ever holds a `javascript:` URL. A
+//!   renderer's `Navigate` or `Submit` to one is answered with
+//!   [`error_fetch`] (the kernel does not fetch it, as before the lock
+//!   refused it: [`error_unlocked`]), not [`error_bad_url`].
 //!
 //! # The GPU crash policy (phase-5.md item 5.17c)
 //!
@@ -1335,6 +1338,19 @@ pub open spec fn error_fetch() -> u64 {
     5
 }
 
+/// The code a `Navigate` or `Submit` to the resolved URL `url` is answered
+/// with when the kernel can give it no lock (item 7.16): a `javascript:` URL
+/// is one the kernel never fetches, as before it was refused by the lock
+/// ([`error_fetch`], which a navigation the transducer does not take also
+/// gets), and every other URL without a lock is a bad URL ([`error_bad_url`]).
+pub open spec fn error_unlocked(urls: UrlFns, url: Seq<u32>) -> u64 {
+    if (urls.is_javascript)(url) {
+        error_fetch()
+    } else {
+        error_bad_url()
+    }
+}
+
 /// The frame holding `m`, if it can be sent: its tokens are one data item of
 /// the CBOR profile and the payload is within `MAX_FRAME`.
 pub open spec fn frame_of(m: clazel_ipc::message::spec::Message) -> Option<Seq<u8>> {
@@ -1838,7 +1854,7 @@ pub open spec fn submit(
             Some(relative) => match (urls.resolve)(r.url, relative) {
                 None => (s, reply(r, clazel_ipc::message::spec::Message::Error { code: error_bad_url() })),
                 Some(resolved) => if lock_of_url(urls, resolved, s.next_id) is None {
-                    (s, reply(r, clazel_ipc::message::spec::Message::Error { code: error_bad_url() }))
+                    (s, reply(r, clazel_ipc::message::spec::Message::Error { code: error_unlocked(urls, resolved) }))
                 } else {
                     begin_navigation(rules, urls, fetch, s, r.tab, resolved, req)
                 },
@@ -3655,7 +3671,7 @@ pub open spec fn handle_message(
             Some(relative) => match (urls.resolve)(r.url, relative) {
                 None => (s, reply(r, clazel_ipc::message::spec::Message::Error { code: error_bad_url() })),
                 Some(resolved) => if lock_of_url(urls, resolved, s.next_id) is None {
-                    (s, reply(r, clazel_ipc::message::spec::Message::Error { code: error_bad_url() }))
+                    (s, reply(r, clazel_ipc::message::spec::Message::Error { code: error_unlocked(urls, resolved) }))
                 } else {
                     begin_navigation(rules, urls, fetch, s, r.tab, resolved, clazel_fetch::request::spec::get_req())
                 },
