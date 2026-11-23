@@ -11,12 +11,11 @@
 //!
 //! # Differences from the standard, all listed
 //!
-//! - **No RegExp yet** (7.10). `match`, `matchAll`, `search`, `replace`,
-//!   `replaceAll` and `split` call a pattern's `@@match`, `@@matchAll`,
-//!   `@@search`, `@@replace` or `@@split` method as the standard says, so an
-//!   object that has one works; `match`, `matchAll` and `search` with any
-//!   other pattern must make a RegExp (RegExpCreate) and are `NotYet`, and
-//!   IsRegExp sees only `@@match` (no object has `[[RegExpMatcher]]`).
+//! - **`match`, `matchAll`, `search`, `replace`, `replaceAll` and `split`**
+//!   call a pattern's `@@match`, `@@matchAll`, `@@search`, `@@replace` or
+//!   `@@split` method as the standard says (a `RegExp`'s are in
+//!   [`crate::regexp`]); `match`, `matchAll` and `search` with any other
+//!   pattern make a RegExp with RegExpCreate and invoke its method.
 //! - **Case conversion** (`toLowerCase`, `toUpperCase`, §22.1.3.28†) is
 //!   Rust's `str::to_lowercase` and `to_uppercase`: the full Unicode Default
 //!   Case Conversion with SpecialCasing's unconditional mappings and Final
@@ -35,6 +34,7 @@
 //!   primitive string's indices are read by the VM directly.
 
 use crate::iterator::{code_point_at, create_string_iterator};
+use crate::regexp::{invoke_symbol, is_regexp, regexp_create};
 use crate::util::{
     CONSTANT, arg, constructor, define, js_string, method, number, require_object_coercible,
     string, to_integer_or_infinity,
@@ -307,6 +307,15 @@ fn this_string(vm: &mut Vm, this: Value, method: &str) -> Result<JsString, Abrup
     vm.to_js_string(this)
 }
 
+/// ToString as a string value.
+fn to_string_value(vm: &mut Vm, v: Value) -> Result<Value, Abrupt> {
+    if vm.heap().is_string(v) {
+        return Ok(v);
+    }
+    let s = vm.to_js_string(v)?;
+    js_string(vm, s)
+}
+
 /// The length of a string as `f64`.
 fn len_of(s: &JsString) -> f64 {
     s.len() as f64
@@ -436,25 +445,6 @@ fn concat(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
         }
     }
     units_value(vm, &r)
-}
-
-/// IsRegExp ( argument ), §7.2.8†:
-/// 1. If argument is not an Object, return false.
-/// 2. Let matcher be ? Get(argument, @@match).
-/// 3. If matcher is not undefined, return ToBoolean(matcher).
-/// 4. If argument has a [[RegExpMatcher]] internal slot, return true. (No
-///    object has one yet.)
-/// 5. Return false.
-fn is_regexp(vm: &mut Vm, v: Value) -> Result<bool, Abrupt> {
-    if !vm.heap().is_object(v) {
-        return Ok(false);
-    }
-    let k = vm.well_known_key(wk::MATCH)?;
-    let matcher = vm.get_value(v, k)?;
-    if matcher != Value::UNDEFINED {
-        return Ok(vm.to_boolean(matcher));
-    }
-    Ok(false)
 }
 
 /// The search string of `startsWith`, `endsWith` and `includes` (their
@@ -694,15 +684,16 @@ fn delegate(
 ///    b. If matcher is not undefined, then
 ///    i. Return ? Call(matcher, regexp, « O »).
 /// 3. Let S be ? ToString(O).
-/// 4. Let rx be ? RegExpCreate(regexp, undefined). (No RegExp yet: `NotYet`.)
+/// 4. Let rx be ? RegExpCreate(regexp, undefined).
 /// 5. Return ? Invoke(rx, @@match, « S »).
 fn match_fn(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
     require_object_coercible(vm, this, "String.prototype.match")?;
     if let Some(v) = delegate(vm, arg(args, 0), wk::MATCH, this, &[])? {
         return Ok(v);
     }
-    vm.to_js_string(this)?;
-    Err(Abrupt::NotYet("RegExp (String.prototype.match)".into()))
+    let sv = to_string_value(vm, this)?;
+    let rx = regexp_create(vm, arg(args, 0), Value::UNDEFINED)?;
+    invoke_symbol(vm, rx, wk::MATCH, &[sv])
 }
 
 /// `String.prototype.matchAll ( regexp )`, §22.1.3.14†:
@@ -718,7 +709,7 @@ fn match_fn(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
 ///    d. If matcher is not undefined, then
 ///    i. Return ? Call(matcher, regexp, « O »).
 /// 3. Let S be ? ToString(O).
-/// 4. Let rx be ? RegExpCreate(regexp, "g"). (No RegExp yet: `NotYet`.)
+/// 4. Let rx be ? RegExpCreate(regexp, "g").
 /// 5. Return ? Invoke(rx, @@matchAll, « S »).
 fn match_all(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
     require_object_coercible(vm, this, "String.prototype.matchAll")?;
@@ -729,8 +720,10 @@ fn match_all(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> 
     if let Some(v) = delegate(vm, re, wk::MATCH_ALL, this, &[])? {
         return Ok(v);
     }
-    vm.to_js_string(this)?;
-    Err(Abrupt::NotYet("RegExp (String.prototype.matchAll)".into()))
+    let sv = to_string_value(vm, this)?;
+    let g = string(vm, "g")?;
+    let rx = regexp_create(vm, re, g)?;
+    invoke_symbol(vm, rx, wk::MATCH_ALL, &[sv])
 }
 
 /// Step 2.a and 2.b of `matchAll` and `replaceAll`: a RegExp pattern must
@@ -757,15 +750,16 @@ fn require_global_flag(vm: &mut Vm, re: Value, method: &str) -> Result<(), Abrup
 ///    b. If searcher is not undefined, then
 ///    i. Return ? Call(searcher, regexp, « O »).
 /// 3. Let string be ? ToString(O).
-/// 4. Let rx be ? RegExpCreate(regexp, undefined). (No RegExp yet: `NotYet`.)
+/// 4. Let rx be ? RegExpCreate(regexp, undefined).
 /// 5. Return ? Invoke(rx, @@search, « string »).
 fn search(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
     require_object_coercible(vm, this, "String.prototype.search")?;
     if let Some(v) = delegate(vm, arg(args, 0), wk::SEARCH, this, &[])? {
         return Ok(v);
     }
-    vm.to_js_string(this)?;
-    Err(Abrupt::NotYet("RegExp (String.prototype.search)".into()))
+    let sv = to_string_value(vm, this)?;
+    let rx = regexp_create(vm, arg(args, 0), Value::UNDEFINED)?;
+    invoke_symbol(vm, rx, wk::SEARCH, &[sv])
 }
 
 /// The placement of StringPad.
@@ -874,6 +868,9 @@ fn repeat(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
     units_value(vm, &out)
 }
 
+/// The lookup of a group name in GetSubstitution's namedCaptures.
+pub type NamedLookup<'a> = &'a mut dyn FnMut(&[u16]) -> Result<Vec<u16>, Abrupt>;
+
 /// GetSubstitution ( matched, str, position, captures, namedCaptures,
 /// replacementTemplate ), §22.1.3.19.1†:
 /// 1. Let stringLength be the length of str.
@@ -923,8 +920,12 @@ fn repeat(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
 ///    i. Let gtPos be StringIndexOf(templateRemainder, ">", 0).
 ///    ii. If gtPos is not-found or namedCaptures is undefined, then 1. Let
 ///    ref be "$<". 2. Let refReplacement be ref.
-///    iii. Else, (named groups: only a RegExp has them; not reached here,
-///    as `named` is `None` for every caller of this slice).
+///    iii. Else, 1. Let ref be the substring of templateRemainder from 0 to
+///    gtPos + 1. 2. Let groupName be the substring of templateRemainder from
+///    2 to gtPos. 3. Assert: namedCaptures is an Object. 4. Let capture be ?
+///    Get(namedCaptures, groupName). 5. If capture is undefined, then a. Let
+///    refReplacement be the empty String. 6. Else, a. Let refReplacement be ?
+///    ToString(capture).
 ///    h. Else,
 ///    i. Let ref be the substring of templateRemainder from 0 to 1.
 ///    ii. Let refReplacement be ref.
@@ -934,15 +935,20 @@ fn repeat(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
 ///    k. Set result to the string-concatenation of result and refReplacement.
 /// 6. Return result.
 ///
-/// `captures` holds each capture, `None` for undefined.
-#[must_use]
+/// `captures` holds each capture, `None` for undefined. `named` is `None` for
+/// an undefined namedCaptures, else the lookup `? Get(namedCaptures,
+/// groupName)` then ToString (the empty string for `undefined`).
+///
+/// # Errors
+/// What `named` returns.
 pub fn get_substitution(
     matched: &[u16],
     str_units: &[u16],
     position: usize,
     captures: &[Option<Vec<u16>>],
+    mut named: Option<NamedLookup<'_>>,
     template: &[u16],
-) -> Vec<u16> {
+) -> Result<Vec<u16>, Abrupt> {
     const DOLLAR: u16 = 0x24;
     let digit = |u: Option<&u16>| -> Option<usize> {
         u.and_then(|d| d.checked_sub(0x30))
@@ -976,6 +982,24 @@ pub fn get_substitution(
                 result.extend_from_slice(str_units.get(tail..).unwrap_or(&[]));
                 i = i.saturating_add(2);
             }
+            Some(0x3C) if named.is_some() => {
+                let gt = template
+                    .iter()
+                    .skip(i)
+                    .position(|u| *u == 0x3E)
+                    .map(|p| p.saturating_add(i));
+                match (gt, named.as_mut()) {
+                    (Some(gt), Some(lookup)) => {
+                        let name = template.get(i.saturating_add(2)..gt).unwrap_or(&[]);
+                        result.extend(lookup(name)?);
+                        i = gt.saturating_add(1);
+                    }
+                    _ => {
+                        result.push(DOLLAR);
+                        i = i.saturating_add(1);
+                    }
+                }
+            }
             _ => {
                 if let Some(d1) = digit(next) {
                     let d2 = digit(template.get(i.saturating_add(2)));
@@ -1005,7 +1029,7 @@ pub fn get_substitution(
             }
         }
     }
-    result
+    Ok(result)
 }
 
 /// `String.prototype.replace ( searchValue, replaceValue )`, §22.1.3.19†:
@@ -1087,7 +1111,7 @@ fn replacement_at(
         )?;
         Ok(units(&vm.to_js_string(r)?))
     } else {
-        Ok(get_substitution(needle, su, position, &[], template))
+        get_substitution(needle, su, position, &[], None, template)
     }
 }
 

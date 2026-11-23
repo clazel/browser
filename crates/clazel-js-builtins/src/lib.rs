@@ -30,6 +30,10 @@
 //!   `@@iterator` and `@@unscopables`;
 //! - [`json`]: `JSON.parse` and `JSON.stringify` (§25.5†) over `clazel-json`;
 //! - [`math`]: the pure functions of `Math` (§21.3†);
+//! - [`promise`]: `Promise` (§27.2†) over the VM's job queue;
+//! - [`regexp`]: `RegExp` (§22.2†) over `clazel-js-regexp`, with the
+//!   `@@match`, `@@matchAll`, `@@replace`, `@@search` and `@@split` methods
+//!   the `String` methods use;
 //! - [`global`]: `globalThis`, `isNaN`, `isFinite`, `parseInt`, `parseFloat`
 //!   (§19†).
 //!
@@ -75,6 +79,7 @@ pub mod math;
 pub mod number;
 pub mod object;
 pub mod promise;
+pub mod regexp;
 pub mod string;
 pub mod symbol;
 pub mod util;
@@ -99,5 +104,6 @@ pub fn install(vm: &mut Vm) -> Result<(), Abrupt> {
     math::install(vm)?;
     json::install(vm)?;
     promise::install(vm)?;
+    regexp::install(vm)?;
     global::install(vm)
 }
