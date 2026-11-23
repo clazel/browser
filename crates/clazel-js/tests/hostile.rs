@@ -121,31 +121,55 @@ fn unbounded_recursion_is_a_range_error() -> Test {
     })
 }
 
-/// `(a+)+b` on a long input, against the real `RegExp`: the matcher's
-/// backtrack stack is bounded by `Limits::regexp_backtrack_entries` (through
-/// `Vm::regexp_backtrack_limit`), so the page gets a `RangeError` that a
-/// `catch` sees, and neither panics nor hangs. The matcher's own bound is
-/// also tested in `clazel-js-regexp`'s `tests/limits.rs`.
+/// A long input against a pattern whose backtrack stack grows with it
+/// (`(?:a|b)*c` pushes an entry per iteration): the stack is bounded by
+/// `Limits::regexp_backtrack_entries` (through `Vm::regexp_backtrack_limit`),
+/// so the page gets a `RangeError` that a `catch` sees.
 #[test]
-fn a_catastrophic_regexp_is_a_range_error() -> Test {
-    // A small stack bound, so that the page reaches it quickly.
+fn a_regexp_past_the_backtrack_limit_is_a_range_error() -> Test {
     let limits = Limits {
-        regexp_backtrack_entries: if cfg!(miri) { 1 << 10 } else { 1 << 16 },
+        regexp_backtrack_entries: if cfg!(miri) { 1 << 8 } else { 1 << 14 },
         ..Limits::recommended()
     };
     let (mut rt, realm) = runtime(limits)?;
     let input = "a".repeat(if cfg!(miri) { 300 } else { 100_000 });
-    let page = format!("var r = /(a+)+b/.test('{input}');");
+    let page = format!("var r = /(?:a|b)*c/.test('{input}');");
     let result = rt.scope(|scope| outcome(scope, &realm, &page))?;
     assert_eq!(result.as_deref(), Some("RangeError"), "{page}");
-    let caught = format!(
-        "var r = 'none'; try {{ /(a+)+b/.test('{input}'); }} catch (e) {{ r = e.name; }}"
-    );
+    let caught =
+        format!("var r = 'none'; try {{ /(?:a|b)*c/.test('{input}'); }} catch (e) {{ r = e.name; }}");
     rt.scope(|scope| {
         assert_eq!(outcome(scope, &realm, &caught)?, None);
         assert_eq!(global_string(scope, &realm, "r")?, "RangeError");
         Ok(())
     })
+}
+
+/// `(a+)+b` on a long input: exponential time with a shallow stack, so the
+/// stack bound does not stop it; the termination flag does, which the matcher
+/// checks as its interrupt hook. The page ends as `Terminated`, soon after the
+/// flag is set, and the runtime is usable afterwards.
+#[test]
+fn a_catastrophic_regexp_is_terminated() -> Test {
+    let (mut rt, realm) = runtime(Limits::recommended())?;
+    let terminator = rt.terminator();
+    let started = Instant::now();
+    let watchdog = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(if cfg!(miri) { 1 } else { 100 }));
+        terminator.terminate();
+    });
+    let input = "a".repeat(if cfg!(miri) { 30 } else { 5_000 });
+    let page = format!("var r = /(a+)+b/.test('{input}');");
+    let result = rt.scope(|scope| outcome(scope, &realm, &page));
+    let _ = watchdog.join();
+    assert!(matches!(result, Err(Error::Terminated)), "{result:?}");
+    if !cfg!(miri) {
+        assert!(started.elapsed() < Duration::from_secs(10));
+    }
+    rt.terminator().clear();
+    let after = rt.scope(|scope| outcome(scope, &realm, "var ok = 1;"))?;
+    assert_eq!(after, None);
+    Ok(())
 }
 
 /// A string doubled until it would be a gigabyte (`s = s + s` thirty times):
