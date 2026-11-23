@@ -1588,11 +1588,135 @@ impl Vm {
                 self.set_global(key, v)?;
             }
             Instr::DeclareGlobals { k } => self.declare_globals(k)?,
-            // MakeMethod (§10.2.7†) records [[HomeObject]], which only `super`
-            // property access reads (`GetSuperBase`, not yet implemented), so
-            // it is accepted and not stored.
-            Instr::SetHomeObject { .. } => {}
-            // DefineMethodProperty (§15.4.5†) for a method (form 0).
+            // MakeMethod (§10.2.7†) records [[HomeObject]], which `super`
+            // property access reads (`GetSuperBase`).
+            Instr::SetHomeObject { func, obj } => {
+                let (f, o) = (self.r(func)?, self.r(obj)?);
+                self.host.class.home_objects.insert(f, o);
+            }
+            Instr::ClassSetup {
+                ctor,
+                proto,
+                heritage,
+                derived,
+            } => {
+                let (c, h) = (self.r(ctor)?, self.r(heritage)?);
+                let p = self.class_setup(c, h, derived)?;
+                self.w(proto, p)?;
+            }
+            Instr::SetInstanceInit { ctor, init } => {
+                let (c, i) = (self.r(ctor)?, self.r(init)?);
+                self.host.class.instance_inits.insert(c, i);
+            }
+            Instr::InitInstance { obj, func } => {
+                let (o, f) = (self.r(obj)?, self.r(func)?);
+                self.initialize_instance(o, f)?;
+            }
+            Instr::SuperCall {
+                dst,
+                func,
+                newtarget,
+                this,
+                args,
+                argc,
+            } => {
+                let mut vals = Vec::with_capacity(usize::try_from(argc).unwrap_or(0));
+                for i in 0..argc {
+                    let reg = args
+                        .checked_add(i)
+                        .ok_or(Abrupt::Internal("argument register"))?;
+                    vals.push(self.r(reg)?);
+                }
+                let (f, nt, t) = (self.r(func)?, self.r(newtarget)?, self.r(this)?);
+                let v = self.super_call(f, nt, t, &vals)?;
+                self.w(dst, v)?;
+            }
+            Instr::SuperCallSpread {
+                dst,
+                func,
+                newtarget,
+                this,
+                args,
+            } => {
+                let arr = self.r(args)?;
+                let vals = self.spread_arguments(arr)?;
+                let (f, nt, t) = (self.r(func)?, self.r(newtarget)?, self.r(this)?);
+                let v = self.super_call(f, nt, t, &vals)?;
+                self.w(dst, v)?;
+            }
+            Instr::GetSuperBase { dst, func } => {
+                let f = self.r(func)?;
+                let v = self.super_base(f)?;
+                self.w(dst, v)?;
+            }
+            Instr::GetSuper {
+                dst,
+                base,
+                key,
+                this,
+            } => {
+                let (b, k, t) = (self.r(base)?, self.r(key)?, self.r(this)?);
+                let v = self.get_super(b, k, t)?;
+                self.w(dst, v)?;
+            }
+            Instr::SetSuper {
+                base,
+                key,
+                val,
+                this,
+            } => {
+                let (b, k, v, t) = (self.r(base)?, self.r(key)?, self.r(val)?, self.r(this)?);
+                self.set_super(b, k, v, t)?;
+            }
+            Instr::GetNewTarget { dst } => {
+                let v = self.current_new_target()?;
+                self.w(dst, v)?;
+            }
+            Instr::ConstructResult { dst, val, this } => {
+                let (v, t) = (self.r(val)?, self.r(this)?);
+                let r = self.construct_result(v, t)?;
+                self.w(dst, r)?;
+            }
+            Instr::NewPrivateName { dst, k } => {
+                let desc = match self.konst(k)? {
+                    ConstVal::Value(v) => v,
+                    _ => {
+                        return Err(Abrupt::Internal(
+                            "NewPrivateName of a constant that is no string",
+                        ));
+                    }
+                };
+                let n = self.new_private_name(desc)?;
+                self.w(dst, n)?;
+            }
+            Instr::GetPrivate { dst, obj, name } => {
+                let (o, n) = (self.r(obj)?, self.r(name)?);
+                let v = self.private_get(o, n)?;
+                self.w(dst, v)?;
+            }
+            Instr::SetPrivate { obj, name, val } => {
+                let (o, n, v) = (self.r(obj)?, self.r(name)?, self.r(val)?);
+                self.private_set(o, n, v)?;
+            }
+            Instr::DefinePrivate {
+                obj,
+                name,
+                val,
+                form,
+            } => {
+                let (o, n, v) = (self.r(obj)?, self.r(name)?, self.r(val)?);
+                self.define_private(o, n, v, form)?;
+            }
+            Instr::HasPrivate { dst, name, obj } => {
+                let (n, o) = (self.r(name)?, self.r(obj)?);
+                let r = self.has_private(n, o)?;
+                self.w(dst, Value::boolean(r))?;
+            }
+            // DefineMethodProperty (§15.4.5†) for a method (form 0):
+            // SetFunctionName(closure, key), §10.2.9†, then
+            // DefinePropertyOrThrow(homeObject, key, PropertyDescriptor {
+            // [[Value]]: closure, [[Writable]]: true, [[Enumerable]]:
+            // enumerable, [[Configurable]]: true }).
             Instr::DefineMethod {
                 obj,
                 key,
@@ -1604,14 +1728,15 @@ impl Vm {
                 let name = self.function_name_for_key(k)?;
                 let pk = self.coerce_property_key(k)?;
                 let kn = self.atoms.k_name;
-                // SetFunctionName(func, key), §10.2.9†.
                 self.heap.define(f, kn, name, Attrs(Attrs::CONFIGURABLE))?;
-                let attrs = Attrs(
-                    Attrs::WRITABLE
-                        | Attrs::CONFIGURABLE
-                        | if enumerable { Attrs::ENUMERABLE } else { 0 },
-                );
-                self.heap.define(o, pk, f, attrs)?;
+                let desc = crate::props::PropDesc {
+                    value: Some(f),
+                    writable: Some(true),
+                    enumerable: Some(enumerable),
+                    configurable: Some(true),
+                    ..crate::props::PropDesc::default()
+                };
+                self.define_property_or_throw(o, pk, &desc)?;
             }
             // The getter (form 1) and setter (form 2) of MethodDefinition
             // evaluation (§15.4.5†): SetFunctionName(closure, propKey, "get" or
@@ -1626,12 +1751,16 @@ impl Vm {
                 enumerable,
             } => {
                 let (o, k, f) = (self.r(obj)?, self.r(key)?, self.r(func)?);
-                let key_text = self.coerce_js_string(k)?;
-                let pk = self.heap.intern(&key_text)?;
+                let base_name = self.function_name_for_key(k)?;
+                let pk = self.coerce_property_key(k)?;
+                let base_units: Vec<u16> = match self.heap.string(base_name) {
+                    Some(s) => s.units().collect(),
+                    None => Vec::new(),
+                };
                 let mut units: Vec<u16> = if form == 1 { "get " } else { "set " }
                     .encode_utf16()
                     .collect();
-                units.extend((0..key_text.len()).filter_map(|i| key_text.unit(i)));
+                units.extend(base_units);
                 let name = JsString::from_units(&units).map_err(|_| Abrupt::OutOfMemory)?;
                 let name = self.heap.new_string(name)?;
                 let kn = self.atoms.k_name;

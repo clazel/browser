@@ -45,6 +45,7 @@
 //! `docs/VERIFICATION.md`.
 
 pub mod bytecode;
+pub(crate) mod class;
 pub mod compile;
 pub mod examples;
 pub mod frame;

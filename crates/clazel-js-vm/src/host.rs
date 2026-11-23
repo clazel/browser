@@ -58,6 +58,8 @@ pub(crate) struct HostState {
     /// arguments past its parameters, by the frame's base (the frame has
     /// slots for the parameters only).
     pub(crate) entry_args: HashMap<usize, Vec<Value>>,
+    /// The class ops' tables (`crate::class`).
+    pub(crate) class: crate::class::ClassState,
 }
 
 /// The most jobs one [`Vm::run_jobs`] runs: a promise chain that enqueues

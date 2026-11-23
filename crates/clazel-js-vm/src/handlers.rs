@@ -939,7 +939,21 @@ impl Vm {
         args: &[Value],
         ret: Option<usize>,
     ) -> Result<Option<Value>, Abrupt> {
+        self.construct_nt(f, args, ret, f)
+    }
+
+    /// [[Construct]] ( argumentsList, newTarget ) of `f` with `new_target`
+    /// (`f` itself for `new f`; `super(...)` and `Reflect.construct` pass
+    /// another): [`Vm::construct`] for any NewTarget.
+    pub(crate) fn construct_nt(
+        &mut self,
+        f: Value,
+        args: &[Value],
+        ret: Option<usize>,
+        new_target: Value,
+    ) -> Result<Option<Value>, Abrupt> {
         let mut f = f;
+        let mut new_target = new_target;
         let mut all_args: Option<Vec<Value>> = None;
         // §10.4.1.2 [[Construct]] of a bound function: the target, with the
         // bound arguments first; step 5, NewTarget is the target when it was
@@ -949,6 +963,9 @@ impl Vm {
             let mut all = b.args;
             all.extend_from_slice(all_args.as_deref().unwrap_or(args));
             all_args = Some(all);
+            if new_target == f {
+                new_target = b.target;
+            }
             f = b.target;
         }
         let args = all_args.as_deref().unwrap_or(args);
@@ -959,7 +976,7 @@ impl Vm {
                     return Err(self.type_error("value is not a constructor"));
                 }
                 self.charge()?;
-                let v = self.invoke_native(i, f, Value::UNDEFINED, args, f)?;
+                let v = self.invoke_native(i, f, Value::UNDEFINED, args, new_target)?;
                 return Ok(Some(v));
             }
             _ => return Err(self.type_error("value is not a constructor")),
@@ -970,24 +987,38 @@ impl Vm {
             .map(|c| c.code.kind)
             .ok_or(Abrupt::Internal("code index"))?;
         match kind {
-            FunctionKind::Normal => {}
-            FunctionKind::Class | FunctionKind::Derived => {
-                return Err(Abrupt::NotYet("class constructors".into()));
+            FunctionKind::Normal | FunctionKind::Class => {
+                self.construct_closure(f, code, args, ret, new_target, false)?;
+            }
+            FunctionKind::Derived => {
+                self.construct_closure(f, code, args, ret, new_target, true)?;
             }
             _ => return Err(self.type_error("value is not a constructor")),
         }
-        let kp = self.atoms.k_prototype;
-        let proto = match self.heap.find(f, kp)? {
-            Some(found) => Some(self.found_value(found, f)?),
-            None => None,
-        };
-        let proto = match proto {
-            Some(p) if self.heap.is_object(p) => p,
-            _ => self.atoms.object_proto,
-        };
-        let this = self.heap.new_object(proto, ObjKind::Plain)?;
-        self.enter_closure(f, code, this, args, ret, crate::frame::KIND_CONSTRUCT)?;
         Ok(None)
+    }
+
+    /// `Construct ( F, argumentsList, newTarget )`, §7.3.14†, to completion:
+    /// [[Construct]] with the given NewTarget, running the constructor's body
+    /// (a native's, or a closure's frame, re-entering the interpreter as
+    /// [`Vm::construct_value`] does).
+    ///
+    /// # Errors
+    /// A `TypeError` if `f` is not a constructor, or what it throws.
+    pub fn construct_with_target(
+        &mut self,
+        f: Value,
+        args: &[Value],
+        new_target: Value,
+    ) -> Result<Value, Abrupt> {
+        let saved = (self.fp, self.pc, self.cur, self.top);
+        let result = match self.construct_nt(f, args, None, new_target) {
+            Ok(Some(v)) => Ok(v),
+            Ok(None) => self.execute(),
+            Err(e) => Err(e),
+        };
+        (self.fp, self.pc, self.cur, self.top) = saved;
+        result
     }
 
     /// `new f(...args)` for a native: [[Construct]] to completion.
