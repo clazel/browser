@@ -70,7 +70,7 @@ impl<'a> BoolDecoder<'a> {
     /// `range << 8`. The decoder is still total then (every operation wraps
     /// or shifts) and decodes some bits; the caller's checks on what they
     /// mean are unchanged.
-    #[cfg(any(test, kani))]
+    #[cfg(kani)]
     pub(crate) fn inv_any(&self) -> bool {
         (128..=255).contains(&self.range) && self.bit_count < 8 && self.next >= 2
     }
