@@ -104,7 +104,7 @@ Tier 0, target tier 0: safe Rust, tested, nothing proven. So far:
     runs the vendored WPT `dom/nodes` and `dom/collections` tests with a
     stand-in for `testharness.js` (`tests/support/standin-dom-harness.js`;
     the real file does not load in the engine yet) and compares the result
-    per file with `tests/data/wpt_dom_expected.txt`; a subtest is a pass only
+    per file with `tests/wpt_dom_expected.txt`; a subtest is a pass only
     if it ran and held, async and promise tests are counted as skipped, and
     a test that needs a WPT helper that is not vendored is listed as
     blocked.

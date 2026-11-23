@@ -10,7 +10,7 @@
 //! is a pass only if its function ran and every assertion held; an
 //! `async_test` or `promise_test` is *skipped*, never a pass.
 //!
-//! `tests/data/wpt_dom_expected.txt` is the committed result, one line per
+//! `tests/wpt_dom_expected.txt` is the committed result, one line per
 //! file: `pass fail skip blocked path`. The test fails if any line differs
 //! (a regression, or an improvement that has not been written down). To
 //! write it after a change: `CLAZEL_WPT_DOM_BLESS=1 cargo test -p
@@ -314,7 +314,7 @@ fn wpt_dom_tests_through_the_bindings() {
         "wpt-dom: {total_files} files, {blocked} blocked; subtests: {pass} passed, {fail} failed, {skip} skipped"
     );
     let expected_path =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/wpt_dom_expected.txt");
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/wpt_dom_expected.txt");
     if std::env::var_os("CLAZEL_WPT_DOM_BLESS").is_some() {
         assert!(
             std::fs::write(&expected_path, &table).is_ok(),
