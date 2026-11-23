@@ -334,6 +334,32 @@ fn clicks_follow_links() -> Result<(), RunError> {
     Ok(())
 }
 
+/// A click on a `javascript:` link sends no `Navigate`: the URL is the
+/// page's to evaluate (item 7.15), and the kernel never sees it.
+#[test]
+fn javascript_links_are_not_navigations() -> Result<(), RunError> {
+    let mut input = commit(
+        "<!DOCTYPE html><body style='margin:0'><a href='JavaScript:alert(1)' style='display:block;height:20px'>js</a>",
+        "text/html",
+    );
+    input.push(viewport(100, 50));
+    input.push(Msg::Input {
+        kind: 0,
+        x: 5,
+        y: 5,
+        negative: false,
+        delta: 0,
+        key: 0,
+    });
+    let s = run(&input)?;
+    assert!(
+        !s.kernel.iter().any(|m| matches!(m, Msg::Navigate { .. })),
+        "{:?}",
+        s.kernel
+    );
+    Ok(())
+}
+
 /// `text/plain` is one `pre` block of glyphs; another type is a drawn
 /// notice; neither has a title.
 #[test]
