@@ -70,6 +70,7 @@
 
 pub mod array;
 pub mod boolean;
+pub mod collections;
 pub mod error;
 pub mod function;
 pub mod global;
@@ -105,5 +106,6 @@ pub fn install(vm: &mut Vm) -> Result<(), Abrupt> {
     json::install(vm)?;
     promise::install(vm)?;
     regexp::install(vm)?;
+    collections::install(vm)?;
     global::install(vm)
 }

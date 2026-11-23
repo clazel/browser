@@ -38,6 +38,8 @@ pub(crate) struct HostObject {
     pub(crate) tag: u32,
     pub(crate) slots: Vec<Value>,
     pub(crate) data: Option<Arc<dyn Any + Send + Sync>>,
+    /// A `Map`'s or `Set`'s entries (`crate::collections`).
+    pub(crate) table: Option<crate::collections::Table>,
 }
 
 /// A pending job: a call of `callee` with `args` and `this` `undefined`.
@@ -84,7 +86,12 @@ impl Vm {
     ) -> Result<Value, Abrupt> {
         let index = u32::try_from(self.host.objects.len()).map_err(|_| Abrupt::OutOfMemory)?;
         let o = self.heap.new_object(proto, ObjKind::Host(index))?;
-        self.host.objects.push(HostObject { tag, slots, data });
+        self.host.objects.push(HostObject {
+            tag,
+            slots,
+            data,
+            table: None,
+        });
         Ok(o)
     }
 
@@ -112,7 +119,12 @@ impl Vm {
                 ));
             }
         }
-        self.host.objects.push(HostObject { tag, slots, data });
+        self.host.objects.push(HostObject {
+            tag,
+            slots,
+            data,
+            table: None,
+        });
         Ok(())
     }
 
@@ -135,6 +147,20 @@ impl Vm {
             ObjKind::Host(i) => self.host.objects.get(usize::try_from(i).ok()?),
             _ => None,
         }
+    }
+
+    pub(crate) fn host_object_table(
+        &self,
+        obj: Value,
+    ) -> Option<&Option<crate::collections::Table>> {
+        self.host_object(obj).map(|h| &h.table)
+    }
+
+    pub(crate) fn host_table_mut(
+        &mut self,
+        obj: Value,
+    ) -> Option<&mut Option<crate::collections::Table>> {
+        self.host_object_mut(obj).map(|h| &mut h.table)
     }
 
     fn host_object_mut(&mut self, obj: Value) -> Option<&mut HostObject> {

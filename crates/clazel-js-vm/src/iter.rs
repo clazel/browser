@@ -276,6 +276,21 @@ impl Vm {
         }))?)
     }
 
+    /// An Iterator Record (§7.4.1†) { [[Iterator]]: `iterator`, [[NextMethod]]:
+    /// `next`, [[Done]]: false } on the heap, for [`Vm::iterator_step_value`]
+    /// and [`Vm::iterator_close`] (what GetIterator makes, for a built-in that
+    /// calls the iterator's method itself, as the Set methods do with `keys`).
+    ///
+    /// # Errors
+    /// [`Abrupt::OutOfMemory`].
+    pub fn new_iterator_record(&mut self, iterator: Value, next: Value) -> Result<Value, Abrupt> {
+        Ok(self.heap.alloc(Cell::Iter(IterRecord::Protocol {
+            iterator,
+            next,
+            done: false,
+        }))?)
+    }
+
     /// IteratorStepValue ( iteratorRecord ), §7.4.8†, on a record of
     /// [`Vm::get_iterator`] (or of `ForInIterator`): `None` when the
     /// iterator is done.

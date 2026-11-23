@@ -46,6 +46,7 @@
 
 pub mod bytecode;
 pub(crate) mod class;
+pub mod collections;
 pub mod compile;
 pub mod examples;
 pub mod frame;

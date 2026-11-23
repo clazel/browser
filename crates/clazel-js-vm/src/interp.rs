@@ -193,6 +193,18 @@ pub enum Intrinsic {
     RegExpStringIteratorPrototype,
     /// `%AggregateError.prototype%` (§20.5.7†).
     AggregateErrorPrototype,
+    /// `%Map.prototype%` (§24.1.3†).
+    MapPrototype,
+    /// `%MapIteratorPrototype%` (§24.1.5.2†).
+    MapIteratorPrototype,
+    /// `%Set.prototype%` (§24.2.4†).
+    SetPrototype,
+    /// `%SetIteratorPrototype%` (§24.2.6.2†).
+    SetIteratorPrototype,
+    /// `%WeakMap.prototype%` (§24.3.3†).
+    WeakMapPrototype,
+    /// `%WeakSet.prototype%` (§24.4.3†).
+    WeakSetPrototype,
 }
 
 /// The most natives that may run one inside another, until
@@ -218,7 +230,7 @@ pub const DEFAULT_NESTING_DEPTH: u32 = 512;
 pub const DEFAULT_REGEXP_BACKTRACK: u64 = 1 << 20;
 
 /// How many [`Intrinsic`]s there are.
-const INTRINSICS: usize = 25;
+const INTRINSICS: usize = 31;
 
 /// The hint of ToPrimitive (§7.1.1†).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
