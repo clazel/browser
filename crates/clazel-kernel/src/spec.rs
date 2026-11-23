@@ -3117,10 +3117,18 @@ pub open spec fn open_tab_from(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns,
             None => (s, seq![]),
             Some(relative) => match (urls.resolve)(r.url, relative) {
                 None => (s, seq![]),
-                Some(resolved) => open_tab(rules, urls, fetch, State { acts: forget_activation(s.acts, r.id, r.lock), ..s }, resolved, None),
+                Some(resolved) => popup_result(rules, urls, fetch, s, r, resolved),
             },
         }
     }
+}
+
+/// The popup of the committed renderer `r` to the resolved URL `resolved`:
+/// the host's `OpenTab` of it without a script ([`open_tab`]), then the
+/// activation spent ([`forget_activation`]; `open_tab` leaves it alone).
+pub open spec fn popup_result(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, r: Renderer, resolved: Seq<u32>) -> (State, Seq<Output>) {
+    let (s1, out) = open_tab(rules, urls, fetch, s, resolved, None);
+    (State { acts: forget_activation(s1.acts, r.id, r.lock), ..s1 }, out)
 }
 
 // ---------------------------------------------------------------------
