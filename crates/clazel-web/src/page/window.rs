@@ -643,6 +643,12 @@ impl HistoryImpl for Page {
 }
 
 impl NavigatorImpl for Page {
+    /// HTML §6.4.? `userActivation`: "the `UserActivation` object of this's
+    /// relevant global object's navigator's ... window" (`[SameObject]`).
+    fn user_activation<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<ObjectKey> {
+        Ok(page(scope)?.add_object(Object::UserActivation))
+    }
+
     /// HTML §8.9.1.1† `appCodeName`: "Mozilla".
     fn app_code_name<'s>(_scope: &mut Scope<'s>, _this: ObjectKey) -> Result<DomString> {
         Ok(str_units("Mozilla"))

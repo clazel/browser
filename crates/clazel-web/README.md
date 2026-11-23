@@ -76,7 +76,10 @@ Tier 0, target tier 0: safe Rust, tested, nothing proven. So far:
     `close`, `currentScript`), `performance.now`, and one wrapper object
     per node. Item 7.12 replaces it.
 
-  Events are recorded, not dispatched (no listeners exist before 7.12).
+  The events the page fires (`load`, `DOMContentLoaded`, `readystatechange`,
+  `error`) are dispatched to the listeners and `on*` handlers of the page's
+  bindings, in order, after the step that fired them (the "recorded, not
+  dispatched" deviation of item 7.15's first pull request is gone).
   `tests/scripting.rs`: unit tests by algorithm step; the six html5lib
   `scripted_*.dat` tree-construction cases (2 pass, 4 listed: they need
   item 7.12's DOM methods); and 21 vendored WPT `execution-timing/` pages
@@ -103,6 +106,77 @@ Tier 0, target tier 0: safe Rust, tested, nothing proven. So far:
   `NotSupportedError` naming themselves. `tests/bindings.rs` runs script
   against parsed documents, with checks transcribed from WPT's `dom/` and
   `html/` tests (testharness.js needs more of the engine than it has).
+
+- **Events and input** (item 7.14), in `events`, `activation`,
+  `user_activation`, `page::{event, ui_events, handlers, forms, input}` and
+  `scripting::input`:
+  - *Dispatch* (`events`): DOM §2.9† with the event path, the capture, target
+    and bubble phases, `stopPropagation`, `stopImmediatePropagation`,
+    `preventDefault`, passive listeners and `once`/`signal`, and now the
+    activation target: for a `MouseEvent` named `click`, the target (or, if
+    the click bubbles, the nearest ancestor) with activation behavior runs
+    its legacy-pre-activation behavior before the listeners and its
+    activation behavior after them, or its legacy-canceled-activation
+    behavior if the event was canceled. `tests/activation.rs` (7 tests, the
+    standard's steps) and `tests/events.rs`.
+  - *UI events* (`page::ui_events`): `UIEvent`, `MouseEvent`, `WheelEvent`,
+    `KeyboardEvent`, `FocusEvent` and `InputEvent` with their constructors,
+    dictionaries and `init*` methods. Not implemented: `PointerEvent`,
+    `CompositionEvent`, `TextEvent`, `layerX` and `layerY` (they are the
+    client position), `getModifierState` for keys other than Control, Shift,
+    Alt and Meta.
+  - *Input* (`scripting::Page::{click, key, wheel, scrolled, set_focus}`,
+    `page::input`): the renderer passes the node it hit-tested. A click is
+    `mousemove`, `mousedown`, focus change, `mouseup`, `click`; a key is
+    `keydown`, `keypress`, `beforeinput`, the change, `input`, `keyup` with
+    the default actions of Tab (sequential focus navigation), Enter (follow a
+    link, click a button or checkbox, implicit submission, a line break in a
+    `textarea`), Space (click on `keyup`) and Backspace; a wheel turn is a
+    cancelable `wheel` event (its default action, scrolling, is the
+    renderer's); the page's scroll is a `scroll` event at the document;
+    focus is `blur`, `focusout`, `focus`, `focusin` in that order and
+    `document.activeElement`, `focus()`, `blur()`, `tabIndex`; a text control
+    that changed since it got focus fires `change` when it loses it.
+  - *Default actions* (`page::forms`, `activation`): following a link
+    (`PageHooks::navigate`: the renderer sends `Navigate`, or runs a
+    `javascript:` URL in the page), submitting a form (the submission
+    algorithm from its step 9 and the entry list are `clazel-forms`' proven
+    `submit_exec`; a `GET` is `navigate`, a `POST` is `PageHooks::submit`,
+    the kernel's `Submit`), resetting a form, toggling a checkbox, checking a
+    radio button (with the group), clicking a `label`'s control. A disabled
+    form control gets no mouse events.
+  - *Event handlers* (`page::handlers`, HTML §8.1.8†): the `on*` IDL
+    attributes of `Window`, `Document`, the elements and `AbortSignal` (the
+    generated bindings call `Platform::event_handler_get` and
+    `event_handler_set`), and the content attributes, compiled when first
+    read or called; the handler's place among the listeners is where it was
+    first set; `return false` cancels; a `body`'s Window-reflecting handlers
+    are the Window's.
+  - *User activation* (`user_activation`, HTML §6.4†): the window's
+    transient (5 s), sticky and history-action activation, notified by
+    `mousedown` and by `keydown` (except Escape) before they are
+    dispatched, `navigator.userActivation`, `consume_user_activation`.
+    The renderer-side `window.open` and `target=_blank` of item 7.16 ask it
+    before sending `OpenTab`; the kernel's own record, for
+    `theorem_popup_needs_input`, is the kernel's (it sees every `Input` it
+    forwards): that is the hook, and nothing here reads the kernel.
+  - *What is not done, and the deviations*: the handler content attribute's
+    function has the global scope only (no element, form and document scope
+    chain: the engine has no `with` and no `Function()`); `onerror` gets
+    only the event (there is no `ErrorEvent`); a `submit` event is a plain
+    `Event` (no `SubmitEvent.submitter`) and constraint validation is not
+    run; a link's `target` is ignored (this tab; item 7.16's `OpenTab`);
+    text editing has no caret or selection (typing appends, Backspace
+    deletes the last character); `HTMLInputElement`, `HTMLFormElement` and
+    the other control interfaces are not exposed (item 7.13), so script
+    reads a control's value through the page (`Page::control_value`);
+    `mouseover`, `mouseout`, `mouseenter`, `mouseleave`, `dblclick`,
+    `contextmenu`, `auxclick` and the pointer events are not fired; only the
+    main button; hit testing ignores `z-index`, clipping and `pointer-events`.
+  - `tests/ui_events.rs`: 48 tests of the above through a parsed document
+    and the input API. The WPT `dom/events` pages that need only the
+    stand-in harness are run by `tests/wpt_events.rs`; the rest are listed
+    there with the reason.
 
 Item 7.1 vendored the test
 data later items run: the WPT `testharness.js` tests (`tests/data/wpt-web/`) and

@@ -30,8 +30,9 @@
 //! [`Page::fetched`]. The renderer turns them into the kernel's
 //! `FetchScript` and its `ScriptResponse`/`ScriptBody`/`ScriptEnd`.
 //!
-//! **Events** are recorded, not dispatched ([`FiredEvent`]): item 7.12's
-//! bindings bring `addEventListener` and the `on*` handlers.
+//! **Events** the page fires ([`FiredEvent`]) are dispatched to the
+//! listeners and `on*` event handlers of the page's bindings, in order, after
+//! the step that fired them; the user's input is [`input`]'s UI events.
 //!
 //! **What the engine does not do yet** is reported, not hidden: a script
 //! the compiler or interpreter cannot run yet gives a [`Report::Engine`],
@@ -42,6 +43,7 @@ pub mod dom;
 mod element;
 mod encodings;
 pub mod globals;
+pub mod input;
 pub mod javascript_url;
 mod module;
 mod parser;

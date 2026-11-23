@@ -38,6 +38,12 @@ clazel-mime = { path = "../clazel-mime", version = "=0.0.0" }
 clazel-url = { path = "../clazel-url", version = "=0.0.0" }
 clazel-percent = { path = "../clazel-percent", version = "=0.0.0" }
 
+# Item 7.14, default actions and activation behavior (`src/activation.rs`,
+# `src/page/forms.rs`): a form control's type and whether it is disabled, its
+# form owner, and the form submission algorithm (HTML §4.10.21.3†) with the
+# entry list it builds, all `clazel-forms`' functions.
+clazel-forms = { path = "../clazel-forms", version = "=0.0.0" }
+
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
 # the shipped code today (the serializer and the selector queries, tested; nothing else yet); `target-tier` is what

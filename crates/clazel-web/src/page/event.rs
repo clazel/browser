@@ -23,15 +23,17 @@ use clazel_webidl::generated::bindings::*;
 use clazel_webidl::platform::ObjectKey;
 
 use super::{
-    EventData, HookCall, LogLevel, Object, Page, WINDOW, dom_error, local_or_undefined, page,
-    points_to_units, str_units, type_error, units_to_points,
+    EventData, HookCall, LogLevel, Object, Page, WINDOW, dom_error, forms, handlers,
+    local_or_undefined, page, points_to_units, str_units, type_error, units_to_points,
 };
 use crate::events::{
-    self, AddOptions, Event, EventInit as Init, Invocation, ListenerId, SignalId, TargetId,
+    self, AddOptions, Event, EventInit as Init, Invocation, ListenerId, Listeners, SignalId,
+    TargetId,
 };
+use crate::ui::HANDLER_ID_BASE;
 
 /// The event target a key names: a node, the window, or another object.
-fn target_of(page: &Page, key: ObjectKey) -> Option<TargetId> {
+pub(super) fn target_of(page: &Page, key: ObjectKey) -> Option<TargetId> {
     if key == WINDOW {
         return Some(TargetId::Window);
     }
@@ -47,7 +49,7 @@ fn target_of(page: &Page, key: ObjectKey) -> Option<TargetId> {
 }
 
 /// The key of an event target.
-fn key_of_target(t: TargetId) -> ObjectKey {
+pub(super) fn key_of_target(t: TargetId) -> ObjectKey {
     match t {
         TargetId::Window => WINDOW,
         TargetId::Node(n) => Page::node_key(n),
@@ -122,6 +124,23 @@ impl events::Host for JsInvoke<'_, '_> {
             .find(|(id, _)| *id == call.listener.0)
             .map(|(_, h)| h.clone());
         let current = call.event.current_target().map(key_of_target);
+        // An event handler (HTML §8.1.8†): "the event handler processing
+        // algorithm", not a callback to `handleEvent`.
+        if call.listener.0 >= HANDLER_ID_BASE {
+            let cancel = handlers::run(scope, call.listener, self.event, current);
+            if let Ok(p) = page(scope) {
+                if let Ok(true) = cancel
+                    && let Some(Object::Event(d)) = p.object_mut(self.event)
+                {
+                    d.event.prevent_default();
+                }
+                core::mem::swap(&mut p.listeners, call.listeners);
+                if let Some(Object::Event(d)) = p.object_mut(self.event) {
+                    *call.event = d.event.clone();
+                }
+            }
+            return;
+        }
         let result = (|| -> Result<()> {
             let Some(cb) = callback else { return Ok(()) };
             let f = scope.local(&cb)?;
@@ -152,6 +171,44 @@ impl events::Host for JsInvoke<'_, '_> {
     /// The document has a Window (DOM "get the parent" of a Document).
     fn has_window(&self, document: usize, _event: &Event) -> bool {
         document == 0
+    }
+
+    fn has_activation_behavior(&mut self, node: usize) -> bool {
+        match page(self.scope) {
+            Ok(p) => crate::activation::kind_of(&p.arena, node).is_some(),
+            Err(_) => false,
+        }
+    }
+
+    fn legacy_pre_activation_behavior(&mut self, node: usize) {
+        if let Ok(p) = page(self.scope) {
+            forms::legacy_pre_activation(p, node);
+        }
+    }
+
+    fn legacy_canceled_activation_behavior(&mut self, node: usize) {
+        if let Ok(p) = page(self.scope) {
+            forms::legacy_canceled_activation(p, node);
+        }
+    }
+
+    fn activation_behavior(&mut self, node: usize, event: &Event, listeners: &mut Listeners) {
+        let target = match event.target() {
+            Some(TargetId::Node(n)) => Some(n),
+            _ => None,
+        };
+        let Ok(p) = page(self.scope) else { return };
+        core::mem::swap(&mut p.listeners, listeners);
+        let _ = forms::activation_behavior(self.scope, node, target);
+        if let Ok(p) = page(self.scope) {
+            core::mem::swap(&mut p.listeners, listeners);
+        }
+    }
+
+    fn prepare_listeners(&mut self, target: TargetId, event_type: &[u32], listeners: &mut Listeners) {
+        if let Ok(p) = page(self.scope) {
+            handlers::prepare(&p.arena, &mut p.ui, listeners, target, event_type);
+        }
     }
 }
 
@@ -606,6 +663,28 @@ impl AbortControllerImpl for Page {
         let signal = new_signal(scope)?;
         Ok(page(scope)?.add_object(Object::AbortController { signal }))
     }
+}
+
+/// DOM §2.10† "fire an event": a trusted `Event` named `name` at `target` with
+/// the given `bubbles`, `cancelable` and `composed`, dispatched. Returns false
+/// if a listener canceled it.
+///
+/// # Errors
+/// What a listener's exception does not (it is reported); engine errors.
+pub(crate) fn fire_with(
+    scope: &mut Scope<'_>,
+    target: TargetId,
+    name: &str,
+    init: Init,
+) -> Result<bool> {
+    let t = now(scope)?;
+    let event = Event::new_trusted(&super::str_points(name), init, t);
+    let key = page(scope)?.add_object(Object::Event(Box::new(EventData {
+        event,
+        interface: InterfaceId::Event,
+        detail: None,
+    })));
+    dispatch(scope, target, key)
 }
 
 /// DOM §2.10† "fire an event" named `name` at `target`, as the platform does

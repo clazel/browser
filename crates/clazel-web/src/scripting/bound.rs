@@ -121,6 +121,9 @@ impl Page {
             clazel_webidl::generated::bindings::install::<page::Page>(scope, &realm)?;
             page::console::install(scope, &realm)?;
             install(scope, &realm)?;
+            // Item 7.14: the parser-made `on*` content attributes are event
+            // handlers from the start, in tree order.
+            page::handlers::scan(scope.host_mut::<page::Page>()?);
             Ok(realm)
         })?;
         Ok(Page { rt, realm })

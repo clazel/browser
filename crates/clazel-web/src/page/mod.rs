@@ -37,7 +37,11 @@
 
 pub mod console;
 pub mod event;
+pub mod forms;
+pub mod handlers;
+pub mod input;
 pub mod node;
+pub mod ui_events;
 pub mod window;
 
 use std::collections::HashMap;
@@ -90,6 +94,16 @@ pub trait PageHooks: Send {
     /// 7.16's `UpdateUrl`, which is not built yet.
     fn update_url(&mut self, url: &str, replace: bool) {
         let _ = (url, replace);
+    }
+    /// HTML §4.10.21.3† "plan to navigate" for a form submitted with a body
+    /// (`POST`): the renderer sends the kernel's `Submit` (item 6.16). A
+    /// `GET` is [`PageHooks::navigate`]; the default does that for a `GET` and
+    /// nothing for a `POST`.
+    fn submit(&mut self, url: &str, method: &str, content_type: &str, body: &[u8]) {
+        let _ = (content_type, body);
+        if method == "GET" {
+            self.navigate(url, false);
+        }
     }
     /// `history.go(delta)`, `back` and `forward` (HTML §7.4.?
     /// "traverse the history by a delta").
@@ -169,6 +183,17 @@ pub enum HookCall {
     },
     /// [`PageHooks::traverse_history`].
     Traverse(i32),
+    /// [`PageHooks::submit`].
+    Submit {
+        /// The URL, serialized.
+        url: String,
+        /// `POST`.
+        method: String,
+        /// The body's content type.
+        content_type: String,
+        /// The body.
+        body: Vec<u8>,
+    },
     /// [`PageHooks::log`].
     Log(LogLevel, String),
 }
@@ -215,6 +240,7 @@ pub(crate) enum Object {
     Location,
     History,
     Navigator,
+    UserActivation,
 }
 
 /// A page: the document, its platform objects and their wrappers.
@@ -241,6 +267,9 @@ pub struct Page {
     /// What HTML's script processing keeps (item 7.15,
     /// [`crate::scripting`]), if the page runs scripts through it.
     pub(crate) script: Option<Box<crate::scripting::state::PageState>>,
+    /// The UI state of item 7.14: form control state, focus, user
+    /// activation, the data of UI events and the event handlers.
+    pub(crate) ui: crate::ui::Ui,
 }
 
 impl core::fmt::Debug for Page {
@@ -293,6 +322,7 @@ impl Page {
             navigator: None,
             random: 0x9E37_79B9_7F4A_7C15,
             script: None,
+            ui: crate::ui::Ui::default(),
         }
     }
 
@@ -360,6 +390,12 @@ impl Page {
             HookCall::Navigate { url, replace } => self.hooks.navigate(url, *replace),
             HookCall::UpdateUrl { url, replace } => self.hooks.update_url(url, *replace),
             HookCall::Traverse(d) => self.hooks.traverse_history(*d),
+            HookCall::Submit {
+                url,
+                method,
+                content_type,
+                body,
+            } => self.hooks.submit(url, method, content_type, body),
             HookCall::Log(level, text) => self.hooks.log(*level, text),
         }
         self.hook_calls.push(call);
@@ -443,6 +479,7 @@ impl Platform for Page {
             Object::Location => InterfaceId::Location,
             Object::History => InterfaceId::History,
             Object::Navigator => InterfaceId::Navigator,
+            Object::UserActivation => InterfaceId::UserActivation,
         })
     }
 
@@ -486,6 +523,23 @@ impl Platform for Page {
         let page = page(scope)?;
         let name: Vec<u32> = name.chars().map(u32::from).collect();
         Ok(node::attribute_value(&page.arena, e, &name).map(|v| points_to_units(&v)))
+    }
+
+    fn event_handler_get<'s>(
+        scope: &mut Scope<'s>,
+        this: ObjectKey,
+        event: &str,
+    ) -> Result<Option<Local<'s>>> {
+        handlers::get(scope, this, event)
+    }
+
+    fn event_handler_set<'s>(
+        scope: &mut Scope<'s>,
+        this: ObjectKey,
+        event: &str,
+        value: Option<Local<'s>>,
+    ) -> Result<()> {
+        handlers::set(scope, this, event, value)
     }
 
     fn reflect_set(
