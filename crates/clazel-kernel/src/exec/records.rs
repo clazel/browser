@@ -401,6 +401,29 @@ pub open spec fn titles_view(v: Seq<TitledRecord>) -> Seq<Titled> {
     v.map_values(|x: TitledRecord| x@)
 }
 
+/// A document's URL set by `UpdateUrl` (item 7.16), viewed as [`DocUrl`].
+pub struct DocUrlRecord {
+    /// The renderer's id.
+    pub id: u64,
+    /// The renderer's lock.
+    pub lock: ParsedOrigin,
+    /// The URL, as code points.
+    pub url: Vec<u32>,
+}
+
+impl View for DocUrlRecord {
+    type V = DocUrl;
+
+    open spec fn view(&self) -> DocUrl {
+        DocUrl { id: self.id as nat, lock: self.lock@, url: self.url@ }
+    }
+}
+
+/// The view of the document URLs.
+pub open spec fn doc_urls_view(v: Seq<DocUrlRecord>) -> Seq<DocUrl> {
+    v.map_values(|x: DocUrlRecord| x@)
+}
+
 /// A style sheet fetch in flight (item 5.19), viewed as [`SubFetch`].
 pub struct SubFetchRecord {
     /// The renderer that asked.
@@ -503,6 +526,8 @@ pub struct StateRecord {
     pub subcounts: Vec<SubCountRecord>,
     /// The GPU crash policy's state (item 5.17c).
     pub gpu: GpuStateRecord,
+    /// The documents' URLs set by `UpdateUrl` (item 7.16).
+    pub doc_urls: Vec<DocUrlRecord>,
 }
 
 /// A renderer's GPU record (item 5.17c), viewed as [`GpuRec`].
@@ -597,6 +622,7 @@ impl View for StateRecord {
             subfetches: subfetches_view(self.subfetches@),
             subcounts: subcounts_view(self.subcounts@),
             gpu: self.gpu@,
+            doc_urls: doc_urls_view(self.doc_urls@),
         }
     }
 }
@@ -633,12 +659,14 @@ pub fn init_record<F: super::fetch::FetchFnsExec>() -> (s: StateRecord)
         subfetches: Vec::new(),
         subcounts: Vec::new(),
         gpu: GpuStateRecord { recs: Vec::new(), demoted: false, sites: Vec::new() },
+        doc_urls: Vec::new(),
     };
     proof {
         assert(subfetches_view(s.subfetches@) =~= Seq::<SubFetch>::empty());
         assert(subcounts_view(s.subcounts@) =~= Seq::<SubCount>::empty());
         assert(viewports_view(s.viewports@) =~= Seq::<TabViewport>::empty());
         assert(titles_view(s.titles@) =~= Seq::<Titled>::empty());
+        assert(doc_urls_view(s.doc_urls@) =~= Seq::<DocUrl>::empty());
         assert(gpu_recs_view(s.gpu.recs@) =~= Seq::<GpuRec>::empty());
         assert(sites_view(s.gpu.sites@) =~= Seq::<SiteExit>::empty());
         assert(conns_view(s.conns@) =~= Seq::<Connection>::empty());

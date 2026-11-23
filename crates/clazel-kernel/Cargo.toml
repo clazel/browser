@@ -141,6 +141,11 @@ theorems = [
     # `subfetch_theorems.rs`; the noninterference over `FetchScript` is
     # `FetchStyle`'s (`subfetch_rel.rs`), whose lemmas take the `script` flag.
     "theorem_script_fetch_shape",
+    # Phase 7 item 7.16: URL updates (`UpdateUrl`, `pushState` and
+    # `replaceState`). The statements are in `statements.rs`; the proof, the
+    # invariant and the noninterference facts about document URLs in
+    # `url_rel.rs`.
+    "theorem_url_update_same_origin",
     # Phase 5 item 5.17c: the GPU crash policy. The statements are in
     # `statements.rs`; the proofs in `gpu_theorems.rs`, the noninterference
     # over `GpuExited` and its declassified parts in `gpu_rel.rs`.

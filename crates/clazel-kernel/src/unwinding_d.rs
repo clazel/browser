@@ -53,6 +53,7 @@ pub proof fn lemma_rel_same_table(rules: Seq<clazel_psl::spec::Rule>, urls: UrlF
         crate::invariant::jar_no_public_suffix(rules, s2b.jar),
         s1b.viewports == s2b.viewports,
         crate::domain::titles_of_domain(rules, s1b.titles, d) == crate::domain::titles_of_domain(rules, s2b.titles, d),
+        crate::domain::doc_urls_of_domain(rules, s1b.doc_urls, d) == crate::domain::doc_urls_of_domain(rules, s2b.doc_urls, d),
         crate::domain::subfetches_of_domain(rules, s1b.subfetches, d) == crate::domain::subfetches_of_domain(rules, s2b.subfetches, d),
         crate::domain::subcounts_of_domain(rules, s1b.subcounts, d) == crate::domain::subcounts_of_domain(rules, s2b.subcounts, d),
         s1b.gpu == s1.gpu,
@@ -416,6 +417,26 @@ pub proof fn lemma_d_event(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fet
                     crate::surface_rel::lemma_titles_set_same(rules, s1.titles, s2.titles, r.id, r.lock, title, d);
                     lemma_rel_same_table(rules, urls, d, s1, s2, s1b, s2b);
                     assert(o1 == o2);
+                } else if let clazel_ipc::message::spec::Message::UpdateUrl { replace, url } = m {
+                    // Item 7.16: the same document URL set (or none) under
+                    // the same lock in both runs, and nothing sent.
+                    let (s1b, o1) = step(rules, urls, fetch, s1, e);
+                    let (s2b, o2) = step(rules, urls, fetch, s2, e);
+                    crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s1, e);
+                    crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s2, e);
+                    crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, fetch, s1, e);
+                    crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, fetch, s2, e);
+                    crate::url_rel::lemma_update_url_shape(urls, s1, r, url);
+                    crate::url_rel::lemma_update_url_shape(urls, s2, r, url);
+                    if url.len() > 0 {
+                        if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+                            if let Some(resolved) = (urls.resolve)(r.url, relative) {
+                                crate::url_rel::lemma_doc_urls_set_same(rules, s1.doc_urls, s2.doc_urls, r.id, r.lock, resolved, d);
+                            }
+                        }
+                    }
+                    lemma_rel_same_table(rules, urls, d, s1, s2, s1b, s2b);
+                    assert(o1 == o2);
                 } else if is_sub_request(m) {
                     lemma_d_fetch_sub(rules, urls, fetch, d, s1, s2, id, bytes, m);
                 } else {
@@ -427,6 +448,8 @@ pub proof fn lemma_d_event(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fet
                     crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s1, e);
                     crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s2, e);
                     assert(s1b == s1 && s2b == s2);
+                    // Item 7.16: the document URL a `Show` names is `d`'s.
+                    crate::url_rel::lemma_doc_url_of_rel(rules, urls, d, s1, s2, r);
                     assert(o1 == o2);
                 }
             },

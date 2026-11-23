@@ -424,7 +424,7 @@ pub proof fn lemma_paint_address_bar(rules: Seq<clazel_psl::spec::Rule>, urls: U
             crate::net_theorems::lemma_closes_of_tab(s.conns, r.tab);
             let closes = closes_of_tab(s.conns, r.tab);
             assert forall|k: int| 0 <= k < out.len() && (#[trigger] out[k]) is Paint implies exists|i2: int|
-                0 <= i2 < s.renderers.len() && s.renderers[i2].id == id && s.renderers[i2].committed && out[k]->Paint_url == s.renderers[i2].url
+                0 <= i2 < s.renderers.len() && s.renderers[i2].id == id && s.renderers[i2].committed && out[k]->Paint_url == doc_url_of(s.doc_urls, s.renderers[i2])
                     && out[k]->Paint_tab == s.renderers[i2].tab && out[k]->Paint_title == title_of(s.titles, s.renderers[i2]) by {
                 if k > 0 {
                     assert(out[k] == closes[k - 1]);
@@ -432,7 +432,7 @@ pub proof fn lemma_paint_address_bar(rules: Seq<clazel_psl::spec::Rule>, urls: U
             }
         } else {
             assert forall|k: int| 0 <= k < out.len() && (#[trigger] out[k]) is Paint implies exists|i2: int|
-                0 <= i2 < s.renderers.len() && s.renderers[i2].id == id && s.renderers[i2].committed && out[k]->Paint_url == s.renderers[i2].url
+                0 <= i2 < s.renderers.len() && s.renderers[i2].id == id && s.renderers[i2].committed && out[k]->Paint_url == doc_url_of(s.doc_urls, s.renderers[i2])
                     && out[k]->Paint_tab == s.renderers[i2].tab && out[k]->Paint_title == title_of(s.titles, s.renderers[i2]) by {
                 assert(k == 0);
             }

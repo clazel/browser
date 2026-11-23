@@ -767,6 +767,9 @@ pub fn navigate_tab_exec<U: UrlFnsExec, F: FetchFnsExec>(
                         s.subfetches = super::subfetch::end_subfetches_exec::<F>(table, old.id, &old.lock);
                         let counts = super::subfetch::new_document_counts_exec(s.subcounts.as_slice(), old.id, &old.lock);
                         s.subcounts = counts;
+                        // Item 7.16: the old document's URL goes.
+                        let doc_urls = super::surfaces::forget_doc_url_exec(s.doc_urls.as_slice(), old.id, &old.lock);
+                        s.doc_urls = doc_urls;
                         let ghost old_renderers = s.renderers@;
                         let rec = RendererRecord { committed: true, id: old.id, tab: old.tab, url: copy(url), lock: old.lock, pending: None };
                         let ghost rv = rec@;
@@ -1375,6 +1378,7 @@ pub fn net_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRec
                     let subfetches = s.subfetches;
                     let subcounts = s.subcounts;
                     let gpu = s.gpu;
+                    let doc_urls = s.doc_urls;
                     let mut renderers = renderers;
                     let ghost old_renderers = renderers@;
                     let rec = renderers.remove(i);
@@ -1389,7 +1393,7 @@ pub fn net_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRec
                             proof {
                                 assert(false);
                             }
-                            (StateRecord { renderers, jar, storage, next_id, conns, next_conn, now, viewports, titles, subfetches, subcounts, gpu }, no_outputs())
+                            (StateRecord { renderers, jar, storage, next_id, conns, next_conn, now, viewports, titles, subfetches, subcounts, gpu, doc_urls }, no_outputs())
                         },
                         Some(nav) => {
                             let nurl = nav.url;
@@ -1434,7 +1438,7 @@ pub fn net_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRec
                                 lemma_ok_remove::<F>(old_renderers, i as int);
                                 lemma_ok_insert::<F>(old_renderers.remove(i as int), i as int, rec2);
                             }
-                            let s1 = StateRecord { renderers, jar: jar1, storage, next_id, conns: conns1, next_conn, now, viewports, titles, subfetches, subcounts, gpu };
+                            let s1 = StateRecord { renderers, jar: jar1, storage, next_id, conns: conns1, next_conn, now, viewports, titles, subfetches, subcounts, gpu, doc_urls };
                             carry_out_exec::<U, F>(urls, s1, ctab, &partition, Some(conn), actions)
                         },
                     }
@@ -1526,6 +1530,8 @@ proof fn lemma_handle_message_idle(rules: Seq<clazel_psl::spec::Rule>, urls: Url
     ensures
         handle_message(rules, urls, fetch, s, Renderer { pending: None, ..r }, m) == handle_message(rules, urls, fetch, s, r, m),
 {
+    // Item 7.16: the document URL is read by id, lock and committed URL.
+    crate::url_rel::lemma_doc_url_of_fields(s.doc_urls, Renderer { pending: None, ..r }, r);
 }
 
 /// [`handle_message`]: a message that decoded, from the renderer at index `i`.
@@ -1652,11 +1658,13 @@ pub fn handle_message_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, 
             },
         },
         Msg::Display { title, text, links } => {
-            let outs = one_output(OutputRecord::Show { tab: r.tab, url: copy(r.url.as_slice()), title, text, links });
+            let outs = one_output(OutputRecord::Show { tab: r.tab, url: super::surfaces::doc_url_of_exec(s.doc_urls.as_slice(), &r), title, text, links });
             (s, outs)
         },
         Msg::FetchStyle { request, url } => super::subfetch::fetch_sub_exec(urls, fetch, s, &r, false, request, url.as_slice()),
         Msg::FetchScript { request, url } => super::subfetch::fetch_sub_exec(urls, fetch, s, &r, true, request, url.as_slice()),
+        // Item 7.16: `update_url`.
+        Msg::UpdateUrl { replace: _, url } => update_url_exec(urls, s, &r, url.as_slice()),
         Msg::Title { title } => {
             let mut s = s;
             let titles = super::surfaces::set_title_exec(s.titles.as_slice(), r.id, &r.lock, title);
@@ -1664,6 +1672,49 @@ pub fn handle_message_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, 
             (s, no_outputs())
         },
         _ => (s, no_outputs()),
+    }
+}
+
+/// [`update_url`]: an accepted `UpdateUrl` sets the sender's document URL.
+pub fn update_url_exec<U: UrlFnsExec>(urls: &U, s: StateRecord, r: &RendererRecord, url: &[u8]) -> (out: (StateRecord, Vec<OutputRecord>))
+    ensures
+        result_view(out) == update_url(urls.urls(), s@, r@, url@),
+        out.0.renderers@ == s.renderers@,
+        out.0.subfetches@ == s.subfetches@,
+        out.0.subcounts@ == s.subcounts@,
+        out.0.storage@ == s.storage@,
+        out.0.jar@ == s.jar@,
+        out.0.conns@ == s.conns@,
+        out.0.gpu == s.gpu,
+        out.0.next_id == s.next_id,
+        out.0.next_conn == s.next_conn,
+        out.0.now == s.now,
+{
+    if url.len() == 0 {
+        return (s, no_outputs());
+    }
+    match clazel_encoding::utf8::decode::decode_without_bom_or_fail(url) {
+        None => (s, no_outputs()),
+        Some(relative) => match urls.resolve(r.url.as_slice(), relative.as_slice()) {
+            None => (s, no_outputs()),
+            Some(resolved) => {
+                let accept = match r.lock {
+                    ParsedOrigin::Tuple { .. } => match lock_of_url_exec(urls, resolved.as_slice(), r.id) {
+                        Some(l) => origin_eq_exec(&l, &r.lock),
+                        None => false,
+                    },
+                    ParsedOrigin::Opaque(_) => false,
+                };
+                if accept {
+                    let mut s = s;
+                    let doc_urls = super::surfaces::set_doc_url_exec(s.doc_urls.as_slice(), r.id, &r.lock, resolved);
+                    s.doc_urls = doc_urls;
+                    (s, no_outputs())
+                } else {
+                    (s, no_outputs())
+                }
+            },
+        },
     }
 }
 
@@ -1726,7 +1777,7 @@ pub fn from_renderer_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s
                         Some(r) => r.committed,
                         None => false,
                     };
-                    let display = matches!(m, Msg::Display { .. } | Msg::Title { .. } | Msg::FetchStyle { .. } | Msg::FetchScript { .. } | Msg::Submit { .. });
+                    let display = matches!(m, Msg::Display { .. } | Msg::Title { .. } | Msg::FetchStyle { .. } | Msg::FetchScript { .. } | Msg::Submit { .. } | Msg::UpdateUrl { .. });
                     if clazel_ipc::message::codec::is_from_renderer(&m) && (committed || !display) {
                         handle_message_exec(urls, fetch, s, i, m)
                     } else {

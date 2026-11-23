@@ -598,6 +598,7 @@ pub proof fn lemma_navigate_tab_wf(
                 lemma_renderers_wf_update(urls, s.renderers, s.next_id, i, r, s.next_id);
                 crate::net_wf::lemma_navigations_wf_update(rules, s.renderers, i, r);
                 crate::net_wf::lemma_conns_wf_update(s.renderers, s.conns, s.next_conn, i, r);
+                crate::url_rel::lemma_doc_urls_wf_forget(urls, s.doc_urls, old.id, old.lock);
             } else {
                 let id = s.next_id;
                 let r = Renderer { committed: true, id, tab, url, lock, pending: None };
@@ -812,6 +813,10 @@ pub proof fn lemma_step_preserves_wf(rules: Seq<clazel_psl::spec::Rule>, urls: U
                                 lemma_lock_valid(urls, r.url, r.id, r.lock);
                                 lemma_storage_call_wf(s, r, m);
                             }
+                        },
+                        // Item 7.16.
+                        clazel_ipc::message::spec::Message::UpdateUrl { replace, url } => {
+                            crate::url_rel::lemma_update_url_wf(rules, urls, s, r, url);
                         },
                         clazel_ipc::message::spec::Message::Submit { url, method, content_type, body } => {
             if let Some(req) = submit_request(r, method, content_type, body) {

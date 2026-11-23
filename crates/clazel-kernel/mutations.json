@@ -601,8 +601,8 @@
     {
       "id": "show-under-another-url",
       "file": "src/spec.rs",
-      "find": "Output::Show { tab: r.tab, url: r.url, title, text, links }",
-      "replace": "Output::Show { tab: r.tab, url: r.url.drop_last(), title, text, links }",
+      "find": "Output::Show { tab: r.tab, url: doc_url_of(s.doc_urls, r), title, text, links }",
+      "replace": "Output::Show { tab: r.tab, url: doc_url_of(s.doc_urls, r).drop_last(), title, text, links }",
       "expect": "killed",
       "module": "mutation_lemmas",
       "reason": "A Display is shown under an address that is not the sender's committed URL: ml_display_shows, the core of theorem_address_bar_integrity, is false.",
@@ -615,8 +615,8 @@
     {
       "id": "show-on-the-senders-id",
       "file": "src/spec.rs",
-      "find": "Output::Show { tab: r.tab, url: r.url, title, text, links }",
-      "replace": "Output::Show { tab: r.id, url: r.url, title, text, links }",
+      "find": "Output::Show { tab: r.tab, url: doc_url_of(s.doc_urls, r), title, text, links }",
+      "replace": "Output::Show { tab: r.id, url: doc_url_of(s.doc_urls, r), title, text, links }",
       "expect": "killed",
       "module": "mutation_lemmas",
       "reason": "A Display is shown for the tab whose id is the sender's renderer id, which after a cross-origin navigation is not the sender's tab: ml_display_shows, the core of theorem_show_only_own_tab, is false.",
@@ -629,7 +629,7 @@
     {
       "id": "display-before-commit",
       "file": "src/spec.rs",
-      "find": "Some(m) => if (m is Display || m is Title || m is FetchStyle || m is FetchScript || m is Submit) && !r.committed { None } else { Some(m) },",
+      "find": "Some(m) => if (m is Display || m is Title || m is FetchStyle || m is FetchScript || m is Submit || m is UpdateUrl) && !r.committed { None } else { Some(m) },",
       "replace": "Some(m) => Some(m),",
       "expect": "killed",
       "module": "mutation_lemmas",
@@ -699,8 +699,8 @@
     {
       "id": "paint-tab-is-renderer-id",
       "file": "src/spec.rs",
-      "find": "(s, seq![Output::Paint { tab: r.tab, url: r.url,",
-      "replace": "(s, seq![Output::Paint { tab: r.id, url: r.url,",
+      "find": "(s, seq![Output::Paint { tab: r.tab, url: doc_url_of(s.doc_urls, r),",
+      "replace": "(s, seq![Output::Paint { tab: r.id, url: doc_url_of(s.doc_urls, r),",
       "expect": "killed",
       "module": "surface_rel",
       "reason": "A Paint names the renderer's id as its tab: another tab's content area would show it. ml_gpu_paint (what theorem_paint_only_own_tab and theorem_address_bar_integrity rest on) is false.",
@@ -1075,6 +1075,119 @@
         "file": "src/mutation_lemmas.rs",
         "lemma": "ml_gpu_rule2(-1, -2, 0)",
         "witness": "ml_exit(ml_gpu_exit_state(Some(ml_rec(false, true, seq![-1int, -2int])), false, Seq::<SiteExit>::empty(), 0))[0] == Output::Spawn { id: 0, policy: Policy::GpuSoftware }"
+      }
+    },
+    {
+      "id": "url-update-any-origin",
+      "file": "src/spec.rs",
+      "find": "Some(resolved) => if r.lock is Tuple && lock_of_url(urls, resolved, r.id) == Some(r.lock) {",
+      "replace": "Some(resolved) => if r.lock is Tuple {",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "An UpdateUrl is accepted whatever the URL's origin, so pushState could put another site's URL in the address bar. ml_update_url_checked (the core of theorem_url_update_same_origin) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_update_url_checked(ml_urls_no_origin(), init_state(), ml_renderer(0, ml_tuple(seq![0x68u32, 0x74, 0x74, 0x70])), seq![0x62u8])",
+        "witness": "update_url(ml_urls_no_origin(), init_state(), ml_renderer(0, ml_tuple(seq![0x68u32, 0x74, 0x74, 0x70])), seq![0x62u8]).0.doc_urls.len() == 1 && lock_of_url(ml_urls_no_origin(), update_url(ml_urls_no_origin(), init_state(), ml_renderer(0, ml_tuple(seq![0x68u32, 0x74, 0x74, 0x70])), seq![0x62u8]).0.doc_urls.last().url, 0) is None",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "url-update-opaque-lock",
+      "file": "src/spec.rs",
+      "find": "Some(resolved) => if r.lock is Tuple && lock_of_url(urls, resolved, r.id) == Some(r.lock) {",
+      "replace": "Some(resolved) => if lock_of_url(urls, resolved, r.id) == Some(r.lock) {",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "An opaque-origin renderer's UpdateUrl is accepted: every opaque URL has its lock (lock_of_url gives Opaque(its id) to any opaque origin), so a data: document could show any opaque URL. ml_update_url_checked is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_update_url_checked(ml_urls_opaque(), init_state(), ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), seq![0x62u8])",
+        "witness": "update_url(ml_urls_opaque(), init_state(), ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), seq![0x62u8]).0.doc_urls.len() == 1 && !(ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)).lock is Tuple)",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "doc-url-set-keeps-old",
+      "file": "src/spec.rs",
+      "find": "forget_doc_url(ds, id, lock).push(DocUrl { id, lock, url })",
+      "replace": "ds.push(DocUrl { id, lock, url })",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "A second UpdateUrl leaves the first entry in place, and doc_url_of reads the first: the address bar keeps the old URL. ml_doc_url_set is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_doc_url_set(seq![DocUrl { id: 0, lock: clazel_origin::spec::Origin::Opaque(0nat), url: seq![0x61u32] }], ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), seq![0x62u32])",
+        "witness": "doc_url_of(set_doc_url(seq![DocUrl { id: 0, lock: clazel_origin::spec::Origin::Opaque(0nat), url: seq![0x61u32] }], 0, clazel_origin::spec::Origin::Opaque(0nat), seq![0x62u32]), ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat))) == seq![0x61u32]",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "show-under-committed-url",
+      "file": "src/spec.rs",
+      "find": "Output::Show { tab: r.tab, url: doc_url_of(s.doc_urls, r), title, text, links }",
+      "replace": "Output::Show { tab: r.tab, url: r.url, title, text, links }",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "A Display is shown under the committed URL after an accepted pushState: the address line is not the document's URL. ml_display_shows (the core of theorem_address_bar_integrity, restated for item 7.16) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_display_shows(Seq::<clazel_psl::spec::Rule>::empty(), crate::counterexamples::ce_urls(), crate::counterexamples::ce_fetch(), ml_doc_state(clazel_origin::spec::Origin::Opaque(0nat), seq![0x62u32]), ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), Seq::<u8>::empty(), Seq::<u8>::empty(), Seq::<Seq<u8>>::empty())",
+        "witness": "handle_message(Seq::<clazel_psl::spec::Rule>::empty(), crate::counterexamples::ce_urls(), crate::counterexamples::ce_fetch(), ml_doc_state(clazel_origin::spec::Origin::Opaque(0nat), seq![0x62u32]), ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), clazel_ipc::message::spec::Message::Display { title: Seq::<u8>::empty(), text: Seq::<u8>::empty(), links: Seq::<Seq<u8>>::empty() }).1[0]->Show_url == seq![0x61u32] && doc_url_of(ml_doc_state(clazel_origin::spec::Origin::Opaque(0nat), seq![0x62u32]).doc_urls, ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat))) == seq![0x62u32]",
+        "reveal": []
+      }
+    },
+    {
+      "id": "paint-under-committed-url",
+      "file": "src/spec.rs",
+      "find": "(s, seq![Output::Paint { tab: r.tab, url: doc_url_of(s.doc_urls, r),",
+      "replace": "(s, seq![Output::Paint { tab: r.tab, url: r.url,",
+      "expect": "killed",
+      "module": "surface_rel",
+      "reason": "A Paint is labelled with the committed URL after an accepted pushState. ml_gpu_paint (what theorem_address_bar_integrity's second half rests on) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_gpu_paint(State { doc_urls: seq![DocUrl { id: 1, lock: clazel_origin::spec::Origin::Opaque(1nat), url: seq![0x62u32] }], ..ml_gpu_state(true, true) }, 1, ml_frame_ready(0))",
+        "witness": "from_gpu(State { doc_urls: seq![DocUrl { id: 1, lock: clazel_origin::spec::Origin::Opaque(1nat), url: seq![0x62u32] }], ..ml_gpu_state(true, true) }, 1, ml_frame_ready(0)).1.len() == 1 && from_gpu(State { doc_urls: seq![DocUrl { id: 1, lock: clazel_origin::spec::Origin::Opaque(1nat), url: seq![0x62u32] }], ..ml_gpu_state(true, true) }, 1, ml_frame_ready(0)).1[0] is Paint && find_by_id((State { doc_urls: seq![DocUrl { id: 1, lock: clazel_origin::spec::Origin::Opaque(1nat), url: seq![0x62u32] }], ..ml_gpu_state(true, true) }).renderers, 1, 0) == Some(0int) && (State { doc_urls: seq![DocUrl { id: 1, lock: clazel_origin::spec::Origin::Opaque(1nat), url: seq![0x62u32] }], ..ml_gpu_state(true, true) }).renderers.len() > 0 && from_gpu(State { doc_urls: seq![DocUrl { id: 1, lock: clazel_origin::spec::Origin::Opaque(1nat), url: seq![0x62u32] }], ..ml_gpu_state(true, true) }, 1, ml_frame_ready(0)).1[0]->Paint_url == seq![0x61u32] && doc_url_of((State { doc_urls: seq![DocUrl { id: 1, lock: clazel_origin::spec::Origin::Opaque(1nat), url: seq![0x62u32] }], ..ml_gpu_state(true, true) }).doc_urls, (State { doc_urls: seq![DocUrl { id: 1, lock: clazel_origin::spec::Origin::Opaque(1nat), url: seq![0x62u32] }], ..ml_gpu_state(true, true) }).renderers[0]) == seq![0x62u32]",
+        "reveal": []
+      }
+    },
+    {
+      "id": "commit-keeps-doc-url",
+      "file": "src/spec.rs",
+      "find": "doc_urls: forget_doc_url(s.doc_urls, old.id, old.lock),",
+      "replace": "doc_urls: s.doc_urls,",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "A same-origin commit keeps the old document's pushState URL, so the address bar names a URL the new document never had. ml_commit_forgets_doc_url is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_commit_forgets_doc_url(ml_urls_tuple(), ml_commit_state(), 0, seq![0x63u32], script_document(Seq::<u8>::empty()), 0, ml_tuple(seq![0x68u32, 0x74, 0x74, 0x70]))",
+        "witness": "ml_commit_state().doc_urls.len() == 1 && forget_doc_url(ml_commit_state().doc_urls, 0, ml_tuple(seq![0x68u32, 0x74, 0x74, 0x70])).len() == 0",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "update-url-before-commit",
+      "file": "src/spec.rs",
+      "find": "|| m is Submit || m is UpdateUrl) && !r.committed",
+      "replace": "|| m is Submit) && !r.committed",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "A renderer that has committed nothing may send UpdateUrl. ml_uncommitted_update_url, the case theorem_url_update_same_origin's committed sender rests on, is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_uncommitted_update_url(Renderer { committed: false, ..ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)) }, seq![0x00u8, 0x00, 0x00, 0x04, 0x83, 0x11, 0xF4, 0x60])",
+        "witness": "decode_renderer_frame(seq![0x00u8, 0x00, 0x00, 0x04, 0x83, 0x11, 0xF4, 0x60]) == Some(clazel_ipc::message::spec::Message::UpdateUrl { replace: false, url: Seq::<u8>::empty() }) && accepted_message(Renderer { committed: false, ..ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)) }, seq![0x00u8, 0x00, 0x00, 0x04, 0x83, 0x11, 0xF4, 0x60]) is Some",
+        "reveal": []
       }
     }
   ]

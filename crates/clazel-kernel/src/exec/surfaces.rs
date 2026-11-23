@@ -259,6 +259,128 @@ pub fn set_title_exec(ts: &[TitledRecord], id: u64, lock: &clazel_origin::exec::
 }
 
 // ---------------------------------------------------------------------
+// Document URLs (item 7.16).
+// ---------------------------------------------------------------------
+
+/// [`doc_url_of`] reads past entries that are not the renderer's.
+proof fn lemma_doc_url_of_skip(ds: Seq<DocUrl>, r: Renderer, k: int)
+    requires
+        0 <= k < ds.len(),
+        !(ds[k].id == r.id && ds[k].lock == r.lock),
+    ensures
+        doc_url_of(ds.skip(k), r) == doc_url_of(ds.skip(k + 1), r),
+{
+    assert(ds.skip(k)[0] == ds[k]);
+    assert(ds.skip(k).drop_first() =~= ds.skip(k + 1));
+}
+
+/// [`doc_url_of`]: the URL of renderer `r`'s document.
+pub fn doc_url_of_exec(ds: &[DocUrlRecord], r: &RendererRecord) -> (out: Vec<u32>)
+    ensures
+        out@ == doc_url_of(doc_urls_view(ds@), r@),
+{
+    let ghost dv = doc_urls_view(ds@);
+    let mut k: usize = 0;
+    proof {
+        assert(dv.skip(0) =~= dv);
+    }
+    while k < ds.len()
+        invariant
+            k <= ds.len(),
+            dv == doc_urls_view(ds@),
+            doc_url_of(dv, r@) == doc_url_of(dv.skip(k as int), r@),
+        decreases ds.len() - k,
+    {
+        if let Some(t) = ds.get(k) {
+            proof {
+                assert(dv[k as int] == t@);
+                assert(dv.skip(k as int)[0] == t@);
+            }
+            if t.id == r.id && origin_eq_exec(&t.lock, &r.lock) {
+                return copy(t.url.as_slice());
+            }
+            proof {
+                lemma_doc_url_of_skip(dv, r@, k as int);
+            }
+        }
+        // Never saturates: k < ds.len().
+        k = k.saturating_add(1);
+    }
+    proof {
+        assert(dv.skip(ds.len() as int) =~= Seq::<DocUrl>::empty());
+    }
+    copy(r.url.as_slice())
+}
+
+/// A copy of a document URL entry.
+fn clone_doc_url(t: &DocUrlRecord) -> (out: DocUrlRecord)
+    ensures
+        out@ == t@,
+{
+    DocUrlRecord { id: t.id, lock: clone_origin(&t.lock), url: copy(t.url.as_slice()) }
+}
+
+/// [`forget_doc_url`]: the entries that are not renderer `id`'s with `lock`.
+pub fn forget_doc_url_exec(ds: &[DocUrlRecord], id: u64, lock: &clazel_origin::exec::ParsedOrigin) -> (out: Vec<DocUrlRecord>)
+    ensures
+        doc_urls_view(out@) == forget_doc_url(doc_urls_view(ds@), id as nat, lock@),
+{
+    let ghost dv = doc_urls_view(ds@);
+    let mut out: Vec<DocUrlRecord> = Vec::new();
+    let mut k: usize = 0;
+    proof {
+        reveal(Seq::filter);
+        assert(dv.take(0) =~= Seq::<DocUrl>::empty());
+        assert(doc_urls_view(out@) =~= Seq::<DocUrl>::empty());
+    }
+    while k < ds.len()
+        invariant
+            k <= ds.len(),
+            dv == doc_urls_view(ds@),
+            doc_urls_view(out@) == dv.take(k as int).filter(|x: DocUrl| !(x.id == id as nat && x.lock == lock@)),
+        decreases ds.len() - k,
+    {
+        if let Some(t) = ds.get(k) {
+            proof {
+                reveal(Seq::filter);
+                assert(dv.take(k as int + 1).drop_last() =~= dv.take(k as int));
+                assert(dv.take(k as int + 1).last() == t@);
+            }
+            if !(t.id == id && origin_eq_exec(&t.lock, lock)) {
+                let ghost before = out@;
+                let c = clone_doc_url(t);
+                out.push(c);
+                proof {
+                    assert(doc_urls_view(out@) =~= doc_urls_view(before).push(t@));
+                }
+            }
+        }
+        // Never saturates: k < ds.len().
+        k = k.saturating_add(1);
+    }
+    proof {
+        assert(dv.take(ds.len() as int) =~= dv);
+    }
+    out
+}
+
+/// [`set_doc_url`]: renderer `id`'s document URL, under `lock`, is `url`.
+pub fn set_doc_url_exec(ds: &[DocUrlRecord], id: u64, lock: &clazel_origin::exec::ParsedOrigin, url: Vec<u32>) -> (out: Vec<DocUrlRecord>)
+    ensures
+        doc_urls_view(out@) == set_doc_url(doc_urls_view(ds@), id as nat, lock@, url@),
+{
+    let mut out = forget_doc_url_exec(ds, id, lock);
+    let ghost before = out@;
+    let entry = DocUrlRecord { id, lock: clone_origin(lock), url };
+    let ghost ev = entry@;
+    out.push(entry);
+    proof {
+        assert(doc_urls_view(out@) =~= doc_urls_view(before).push(ev));
+    }
+    out
+}
+
+// ---------------------------------------------------------------------
 // Outputs.
 // ---------------------------------------------------------------------
 
@@ -451,7 +573,7 @@ pub fn from_gpu_exec<F: FetchFnsExec>(s: StateRecord, id: u64, bytes: &[u8]) -> 
                     let (vw, vh, _vs) = viewport_of_exec(s.viewports.as_slice(), tab);
                     if width <= vw && height <= vh {
                         let (url, title) = match s.renderers.get(i) {
-                            Some(r) => (copy(r.url.as_slice()), title_of_exec(s.titles.as_slice(), r)),
+                            Some(r) => (doc_url_of_exec(s.doc_urls.as_slice(), r), title_of_exec(s.titles.as_slice(), r)),
                             None => (Vec::new(), Vec::new()),
                         };
                         let outs = one_output(OutputRecord::Paint { tab, url, title, buffer, width, height });

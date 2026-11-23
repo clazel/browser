@@ -67,6 +67,8 @@ pub proof fn lemma_navigate_tab_consistency(
             crate::net_rel::lemma_rel_conn_tabs(s1, s2, s1b, s2b);
             // Item 5.18: a replaced renderer's title is forgotten in both runs.
             crate::surface_rel::lemma_titles_forget_same(rules, s1.titles, s2.titles, old.id, old.lock, d);
+            // Item 7.16: a kept renderer's document URL is forgotten in both runs.
+            crate::url_rel::lemma_doc_urls_forget_same(rules, s1.doc_urls, s2.doc_urls, old.id, old.lock, d);
             // Item 5.19: a kept renderer's sub-fetches end in both runs.
             crate::subfetch_rel::lemma_end_domain(rules, s1.subfetches, s2.subfetches, old.id, old.lock, d);
             crate::subfetch_rel::lemma_new_document_domain(rules, s1.subcounts, s2.subcounts, old.id, old.lock, d);
@@ -136,6 +138,8 @@ pub proof fn lemma_rel_after_update(
         s2b.viewports == s2.viewports,
         s1b.titles == s1.titles,
         s2b.titles == s2.titles,
+        s1b.doc_urls == s1.doc_urls,
+        s2b.doc_urls == s2.doc_urls,
         s1b.subfetches == s1.subfetches,
         s2b.subfetches == s2.subfetches,
         s1b.subcounts == s1.subcounts,
@@ -229,6 +233,7 @@ pub proof fn lemma_rel_from_sets(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
         s1.gpu.demoted == s2.gpu.demoted,
         s1.gpu.sites == s2.gpu.sites,
         crate::domain::gpu_recs_of_domain(rules, s1.gpu.recs, d) == crate::domain::gpu_recs_of_domain(rules, s2.gpu.recs, d),
+        crate::domain::doc_urls_of_domain(rules, s1.doc_urls, d) == crate::domain::doc_urls_of_domain(rules, s2.doc_urls, d),
     ensures
         crate::noninterference::rel(rules, urls, d, s1, s2),
 {

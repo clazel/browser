@@ -87,6 +87,10 @@ proof fn lemma_handle_no_show(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, 
             }
         }
         },
+        // Item 7.16: no output.
+        clazel_ipc::message::spec::Message::UpdateUrl { replace, url } => {
+            crate::url_rel::lemma_update_url_shape(urls, s, r, url);
+        },
         clazel_ipc::message::spec::Message::Navigate { url } => {
             if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
                 if let Some(resolved) = (urls.resolve)(r.url, relative) {
@@ -296,7 +300,7 @@ pub proof fn theorem_address_bar_integrity(rules: Seq<clazel_psl::spec::Rule>, u
                 if m is Display {
                     assert(r.committed);
                     assert forall|k: int| 0 <= k < out.len() && (#[trigger] out[k]) is Show implies exists|j: int|
-                        0 <= j < s.renderers.len() && s.renderers[j].id == id && s.renderers[j].committed && out[k]->Show_url == s.renderers[j].url
+                        0 <= j < s.renderers.len() && s.renderers[j].id == id && s.renderers[j].committed && out[k]->Show_url == doc_url_of(s.doc_urls, s.renderers[j])
                             && out[k]->Show_tab == s.renderers[j].tab by {
                         assert(k == 0);
                         assert(s.renderers[i].id == id);

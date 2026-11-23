@@ -44,6 +44,7 @@ pub open spec fn ml_state_one() -> State {
         subfetches: Seq::empty(),
         subcounts: Seq::empty(),
         gpu: init_gpu(),
+        doc_urls: Seq::empty(),
     }
 }
 
@@ -442,7 +443,7 @@ pub proof fn ml_display_shows(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, 
     ensures
         handle_message(rules, urls, fetch, s, r, clazel_ipc::message::spec::Message::Display { title, text, links }) == (
             s,
-            seq![Output::Show { tab: r.tab, url: r.url, title, text, links }],
+            seq![Output::Show { tab: r.tab, url: doc_url_of(s.doc_urls, r), title, text, links }],
         ),
 {
 }
@@ -542,6 +543,7 @@ pub open spec fn ml_gpu_state(committed: bool, sized: bool) -> State {
             demoted: false,
             sites: seq![],
         },
+        doc_urls: Seq::empty(),
     }
 }
 
@@ -568,6 +570,7 @@ pub proof fn ml_gpu_paint(s: State, id: nat, bytes: Seq<u8>)
             &&& s.renderers[0].committed
             &&& p->Paint_buffer < ring_size()
             &&& fits(viewport_of(s, s.renderers[0].tab), p->Paint_width, p->Paint_height)
+            &&& p->Paint_url == doc_url_of(s.doc_urls, s.renderers[0])
         },
 {
     crate::surface_rel::lemma_from_gpu_shape(s, id, bytes);
@@ -884,6 +887,136 @@ pub proof fn ml_gpu_ready_paints()
     crate::gpu_theorems::lemma_gpu_of_with(ml_gpu_cold(), GpuRec { running: true, ..gpu_of(ml_gpu_cold(), ml_gpu_renderer(true)) }, ml_gpu_renderer(true));
     assert(gpu_of(s, ml_gpu_renderer(true)).running);
     assert(decode_gpu_frame(ml_frame_ready(0)) == Some(clazel_ipc::message::spec::Message::FrameReady { buffer: 0, width: 1, height: 1 })) by (compute_only);
+}
+
+// ---------------------------------------------------------------------
+// Item 7.16: URL updates.
+// ---------------------------------------------------------------------
+
+/// URL functions under which a URL resolves to itself and has no origin.
+pub open spec fn ml_urls_no_origin() -> UrlFns {
+    UrlFns {
+        origin_of: |u: Seq<u32>| None::<clazel_origin::spec::Origin>,
+        path_of: |u: Seq<u32>| Seq::<u8>::empty(),
+        resolve: |b: Seq<u32>, i: Seq<u32>| Some(i),
+    }
+}
+
+/// URL functions under which a URL resolves to itself and has an opaque
+/// origin.
+pub open spec fn ml_urls_opaque() -> UrlFns {
+    UrlFns {
+        origin_of: |u: Seq<u32>| Some(clazel_origin::spec::Origin::Opaque(7nat)),
+        path_of: |u: Seq<u32>| Seq::<u8>::empty(),
+        resolve: |b: Seq<u32>, i: Seq<u32>| Some(i),
+    }
+}
+
+/// A state with no renderer whose only document URL is `url`, of renderer 0
+/// locked to `lock`.
+pub open spec fn ml_doc_state(lock: clazel_origin::spec::Origin, url: Seq<u32>) -> State {
+    State { doc_urls: seq![DocUrl { id: 0, lock, url }], ..init_state() }
+}
+
+/// What an `UpdateUrl` does to the document URLs: nothing, or one entry,
+/// last, under the sender's id and lock, which is a tuple lock and the
+/// entry's URL's lock: the core of `theorem_url_update_same_origin`.
+pub proof fn ml_update_url_checked(urls: UrlFns, s: State, r: Renderer, url: Seq<u8>)
+    ensures
+        update_url(urls, s, r, url).0.doc_urls == s.doc_urls || ({
+            let ds = update_url(urls, s, r, url).0.doc_urls;
+            &&& ds.len() > 0
+            &&& r.lock is Tuple
+            &&& ds.last().id == r.id
+            &&& ds.last().lock == r.lock
+            &&& lock_of_url(urls, ds.last().url, r.id) == Some(r.lock)
+        }),
+{
+}
+
+/// [`doc_url_of`] after [`set_doc_url`] for the same renderer is the URL
+/// set.
+pub proof fn ml_doc_url_set(ds: Seq<DocUrl>, r: Renderer, url: Seq<u32>)
+    ensures
+        doc_url_of(set_doc_url(ds, r.id, r.lock, url), r) == url,
+{
+    let f = forget_doc_url(ds, r.id, r.lock);
+    assert forall|k: int| 0 <= k < f.len() implies !((#[trigger] f[k]).id == r.id && f[k].lock == r.lock) by {
+        assert(f.contains(f[k]));
+        clazel_cookie::storage::isolation::lemma_filter_elem(ds, |x: DocUrl| !(x.id == r.id && x.lock == r.lock), f[k]);
+    }
+    ml_doc_url_push(f, r, DocUrl { id: r.id, lock: r.lock, url });
+}
+
+/// [`doc_url_of`] of entries none of which is `r`'s, then one that is.
+pub proof fn ml_doc_url_push(f: Seq<DocUrl>, r: Renderer, x: DocUrl)
+    requires
+        forall|k: int| 0 <= k < f.len() ==> !((#[trigger] f[k]).id == r.id && f[k].lock == r.lock),
+        x.id == r.id,
+        x.lock == r.lock,
+    ensures
+        doc_url_of(f.push(x), r) == x.url,
+    decreases f.len(),
+{
+    if f.len() == 0 {
+        assert(f.push(x)[0] == x);
+    } else {
+        let g = f.drop_first();
+        assert(f.push(x)[0] == f[0]);
+        assert(f.push(x).drop_first() =~= g.push(x));
+        assert forall|k: int| 0 <= k < g.len() implies !((#[trigger] g[k]).id == r.id && g[k].lock == r.lock) by {
+            assert(g[k] == f[k + 1]);
+        }
+        ml_doc_url_push(g, r, x);
+    }
+}
+
+/// A renderer that is not committed may not send `UpdateUrl`: the case
+/// `theorem_url_update_same_origin` excludes (its URL is not one it
+/// committed).
+pub proof fn ml_uncommitted_update_url(r: Renderer, bytes: Seq<u8>)
+    requires
+        !r.committed,
+        decode_renderer_frame(bytes) matches Some(m) && m is UpdateUrl,
+    ensures
+        accepted_message(r, bytes) is None,
+{
+}
+
+/// URL functions under which a URL resolves to itself and has the tuple
+/// origin `http://a`.
+pub open spec fn ml_urls_tuple() -> UrlFns {
+    UrlFns {
+        origin_of: |u: Seq<u32>| Some(ml_tuple(seq![0x68u32, 0x74, 0x74, 0x70])),
+        path_of: |u: Seq<u32>| Seq::<u8>::empty(),
+        resolve: |b: Seq<u32>, i: Seq<u32>| Some(i),
+    }
+}
+
+/// A state with one committed renderer (id 0, tab 0) locked to `http://a`,
+/// whose document URL is `b`.
+pub open spec fn ml_commit_state() -> State {
+    let lock = ml_tuple(seq![0x68u32, 0x74, 0x74, 0x70]);
+    State {
+        renderers: seq![ml_renderer(0, lock)],
+        next_id: 1,
+        doc_urls: seq![DocUrl { id: 0, lock, url: seq![0x62u32] }],
+        ..init_state()
+    }
+}
+
+/// A commit to the same renderer forgets its document URL: the new
+/// document's URL is the committed one, not the old one's `pushState` URL.
+pub proof fn ml_commit_forgets_doc_url(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, doc: Document, i: int, lock: clazel_origin::spec::Origin)
+    requires
+        0 <= i < s.renderers.len(),
+        find_by_tab(s.renderers, tab, 0) == Some(i),
+        lock_of_url(urls, url, s.next_id) == Some(lock),
+        lock is Tuple,
+        lock == s.renderers[i].lock,
+    ensures
+        navigate_tab(urls, s, tab, url, doc).0.doc_urls == forget_doc_url(s.doc_urls, s.renderers[i].id, lock),
+{
 }
 
 } // verus!

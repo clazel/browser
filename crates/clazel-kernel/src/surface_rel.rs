@@ -400,7 +400,7 @@ pub proof fn lemma_from_gpu_shape(s: State, id: nat, bytes: Seq<u8>)
                 && from_gpu(s, id, bytes).1.len() <= 1 && (from_gpu(s, id, bytes).1.len() == 1 ==> gpu_of(s, s.renderers[i]).running && from_gpu(s, id, bytes).1[0]
                     == Output::Paint {
                     tab: s.renderers[i].tab,
-                    url: s.renderers[i].url,
+                    url: doc_url_of(s.doc_urls, s.renderers[i]),
                     title: title_of(s.titles, s.renderers[i]),
                     buffer: decode_gpu_frame(bytes)->Some_0->FrameReady_buffer,
                     width: decode_gpu_frame(bytes)->Some_0->FrameReady_width,
@@ -485,6 +485,7 @@ pub proof fn lemma_d_gpu_event(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns,
         lemma_kill_both(rules, urls, d, s1, s2, i1, i2, id);
     } else {
         lemma_title_of_rel(rules, urls, d, s1, s2, r);
+        crate::url_rel::lemma_doc_url_of_rel(rules, urls, d, s1, s2, r);
         crate::gpu_rel::lemma_gpu_of_rel(rules, urls, d, s1, s2, r);
         assert(s2.renderers[i2] == r);
         assert(step(rules, urls, fetch, s1, e).1 == step(rules, urls, fetch, s2, e).1);
