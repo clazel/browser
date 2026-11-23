@@ -35,9 +35,13 @@
 //!   yet), and `console` calls [`PageHooks::log`]. The page also records
 //!   every call ([`Page::hook_calls`]).
 
+pub mod attr;
 pub mod console;
 pub mod event;
+pub mod fragment;
+pub mod mutation;
 pub mod node;
+pub mod range;
 pub mod window;
 
 use std::collections::HashMap;
@@ -177,6 +181,12 @@ pub(crate) enum Object {
     Location,
     History,
     Navigator,
+    Attr(attr::AttrState),
+    NamedNodeMap(usize),
+    DataSet(usize),
+    MutationObserver(u64),
+    MutationRecord(Box<mutation::Record>),
+    Range(range::RangeState),
 }
 
 /// A page: the document, its platform objects and their wrappers.
@@ -200,6 +210,8 @@ pub struct Page {
     pub(crate) history: Option<ObjectKey>,
     pub(crate) navigator: Option<ObjectKey>,
     pub(crate) random: u64,
+    pub(crate) mo: mutation::Observers,
+    pub(crate) attr_index: HashMap<(usize, u8, Vec<u32>), ObjectKey>,
 }
 
 impl core::fmt::Debug for Page {
@@ -251,6 +263,8 @@ impl Page {
             history: None,
             navigator: None,
             random: 0x9E37_79B9_7F4A_7C15,
+            mo: mutation::Observers::default(),
+            attr_index: HashMap::new(),
         }
     }
 
@@ -373,6 +387,12 @@ impl Platform for Page {
             Object::Location => InterfaceId::Location,
             Object::History => InterfaceId::History,
             Object::Navigator => InterfaceId::Navigator,
+            Object::Attr(_) => InterfaceId::Attr,
+            Object::NamedNodeMap(_) => InterfaceId::NamedNodeMap,
+            Object::DataSet(_) => InterfaceId::DOMStringMap,
+            Object::MutationObserver(_) => InterfaceId::MutationObserver,
+            Object::MutationRecord(_) => InterfaceId::MutationRecord,
+            Object::Range(_) => InterfaceId::Range,
         })
     }
 
@@ -428,8 +448,8 @@ impl Platform for Page {
         let page = page(scope)?;
         let name: Vec<u32> = name.chars().map(u32::from).collect();
         match value {
-            Some(v) => node::set_attribute_value(&mut page.arena, e, &name, units_to_points(&v)),
-            None => node::remove_attribute_named(&mut page.arena, e, &name),
+            Some(v) => node::set_attribute_value(page, e, &name, units_to_points(&v)),
+            None => node::remove_attribute_named(page, e, &name),
         }
         Ok(())
     }

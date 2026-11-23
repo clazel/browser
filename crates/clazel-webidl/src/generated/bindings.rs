@@ -29,9 +29,6 @@
 // - Document.implementation: interface DOMImplementation is not exposed
 // - Document.createCDATASection: interface CDATASection is not exposed
 // - Document.createProcessingInstruction: interface ProcessingInstruction is not exposed
-// - Document.createAttribute: interface Attr is not exposed
-// - Document.createAttributeNS: interface Attr is not exposed
-// - Document.createRange: interface Range is not exposed
 // - Document.createNodeIterator: interface NodeIterator is not exposed
 // - Document.createTreeWalker: interface TreeWalker is not exposed
 // - Document (anonymous Getter): indexed and named properties need exotic objects
@@ -127,12 +124,6 @@
 // - CharacterData.streamAfterHTMLUnsafe: WritableStream is not in the vendored IDL
 // - CharacterData.streamReplaceWithHTMLUnsafe: WritableStream is not in the vendored IDL
 // - Text.assignedSlot: interface HTMLSlotElement is not exposed
-// - Element.attributes: interface NamedNodeMap is not exposed
-// - Element.getAttributeNode: interface Attr is not exposed
-// - Element.getAttributeNodeNS: interface Attr is not exposed
-// - Element.setAttributeNode: interface Attr is not exposed
-// - Element.setAttributeNodeNS: interface Attr is not exposed
-// - Element.removeAttributeNode: interface Attr is not exposed
 // - Element.attachShadow: interface ShadowRoot is not exposed
 // - Element.shadowRoot: interface ShadowRoot is not exposed
 // - Element.customElementRegistry: interface CustomElementRegistry is not exposed
@@ -227,7 +218,6 @@
 // - HTMLElement.onwebkitanimationstart: event handler (HTML §8.1.8.1, not implemented)
 // - HTMLElement.onwebkittransitionend: event handler (HTML §8.1.8.1, not implemented)
 // - HTMLElement.onwheel: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.dataset: interface DOMStringMap is not exposed
 // - HTMLBodyElement.onafterprint: event handler (HTML §8.1.8.1, not implemented)
 // - HTMLBodyElement.onbeforeprint: event handler (HTML §8.1.8.1, not implemented)
 // - HTMLBodyElement.onbeforeunload: event handler (HTML §8.1.8.1, not implemented)
@@ -248,6 +238,9 @@
 // - HTMLBodyElement.onunload: event handler (HTML §8.1.8.1, not implemented)
 // - NodeList iterable: needs Symbol.iterator
 // - DOMTokenList iterable: needs Symbol.iterator
+// - DOMStringMap (anonymous Getter): indexed and named properties need exotic objects
+// - DOMStringMap (anonymous Setter): indexed and named properties need exotic objects
+// - DOMStringMap (anonymous Deleter): indexed and named properties need exotic objects
 // - Window.navigation: interface Navigation is not exposed
 // - Window.customElements: interface CustomElementRegistry is not exposed
 // - Window.locationbar: interface BarProp is not exposed
@@ -418,6 +411,10 @@ pub enum InterfaceId {
     Comment,
     /// `Element`.
     Element,
+    /// `Attr`.
+    Attr,
+    /// `NamedNodeMap`.
+    NamedNodeMap,
     /// `HTMLElement`.
     HTMLElement,
     /// `HTMLUnknownElement`.
@@ -444,6 +441,18 @@ pub enum InterfaceId {
     HTMLCollection,
     /// `DOMTokenList`.
     DOMTokenList,
+    /// `DOMStringMap`.
+    DOMStringMap,
+    /// `MutationObserver`.
+    MutationObserver,
+    /// `MutationRecord`.
+    MutationRecord,
+    /// `AbstractRange`.
+    AbstractRange,
+    /// `NodeRange`.
+    NodeRange,
+    /// `Range`.
+    Range,
     /// `Window`.
     Window,
     /// `Location`.
@@ -470,6 +479,8 @@ impl InterfaceId {
         InterfaceId::Text,
         InterfaceId::Comment,
         InterfaceId::Element,
+        InterfaceId::Attr,
+        InterfaceId::NamedNodeMap,
         InterfaceId::HTMLElement,
         InterfaceId::HTMLUnknownElement,
         InterfaceId::HTMLHtmlElement,
@@ -483,6 +494,12 @@ impl InterfaceId {
         InterfaceId::NodeList,
         InterfaceId::HTMLCollection,
         InterfaceId::DOMTokenList,
+        InterfaceId::DOMStringMap,
+        InterfaceId::MutationObserver,
+        InterfaceId::MutationRecord,
+        InterfaceId::AbstractRange,
+        InterfaceId::NodeRange,
+        InterfaceId::Range,
         InterfaceId::Window,
         InterfaceId::Location,
         InterfaceId::History,
@@ -506,6 +523,8 @@ impl InterfaceId {
             InterfaceId::Text => "Text",
             InterfaceId::Comment => "Comment",
             InterfaceId::Element => "Element",
+            InterfaceId::Attr => "Attr",
+            InterfaceId::NamedNodeMap => "NamedNodeMap",
             InterfaceId::HTMLElement => "HTMLElement",
             InterfaceId::HTMLUnknownElement => "HTMLUnknownElement",
             InterfaceId::HTMLHtmlElement => "HTMLHtmlElement",
@@ -519,6 +538,12 @@ impl InterfaceId {
             InterfaceId::NodeList => "NodeList",
             InterfaceId::HTMLCollection => "HTMLCollection",
             InterfaceId::DOMTokenList => "DOMTokenList",
+            InterfaceId::DOMStringMap => "DOMStringMap",
+            InterfaceId::MutationObserver => "MutationObserver",
+            InterfaceId::MutationRecord => "MutationRecord",
+            InterfaceId::AbstractRange => "AbstractRange",
+            InterfaceId::NodeRange => "NodeRange",
+            InterfaceId::Range => "Range",
             InterfaceId::Window => "Window",
             InterfaceId::Location => "Location",
             InterfaceId::History => "History",
@@ -543,6 +568,8 @@ impl InterfaceId {
             InterfaceId::Text => Some(InterfaceId::CharacterData),
             InterfaceId::Comment => Some(InterfaceId::CharacterData),
             InterfaceId::Element => Some(InterfaceId::Node),
+            InterfaceId::Attr => Some(InterfaceId::Node),
+            InterfaceId::NamedNodeMap => None,
             InterfaceId::HTMLElement => Some(InterfaceId::Element),
             InterfaceId::HTMLUnknownElement => Some(InterfaceId::HTMLElement),
             InterfaceId::HTMLHtmlElement => Some(InterfaceId::HTMLElement),
@@ -556,6 +583,12 @@ impl InterfaceId {
             InterfaceId::NodeList => None,
             InterfaceId::HTMLCollection => None,
             InterfaceId::DOMTokenList => None,
+            InterfaceId::DOMStringMap => None,
+            InterfaceId::MutationObserver => None,
+            InterfaceId::MutationRecord => None,
+            InterfaceId::AbstractRange => None,
+            InterfaceId::NodeRange => Some(InterfaceId::AbstractRange),
+            InterfaceId::Range => Some(InterfaceId::NodeRange),
             InterfaceId::Window => Some(InterfaceId::EventTarget),
             InterfaceId::Location => None,
             InterfaceId::History => None,
@@ -844,6 +877,55 @@ fn dict_import_node_options<'s, P: AllInterfaces>(scope: &mut Scope<'s>, v: Loca
     let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("selfOnly")) ? };
     let self_only = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
     Ok(ImportNodeOptions { self_only })
+}
+
+/// `dictionary MutationObserverInit` (WebIDL §3.2.18†), with its ancestors' members.
+#[derive(Clone, Debug)]
+pub struct MutationObserverInit {
+    /// `sequence<DOMString> attributeFilter`.
+    pub attribute_filter: Option<Vec<DomString>>,
+    /// `boolean attributeOldValue`.
+    pub attribute_old_value: Option<bool>,
+    /// `boolean attributes`.
+    pub attributes: Option<bool>,
+    /// `boolean characterData`.
+    pub character_data: Option<bool>,
+    /// `boolean characterDataOldValue`.
+    pub character_data_old_value: Option<bool>,
+    /// `boolean childList = ...`.
+    pub child_list: bool,
+    /// `boolean subtree = ...`.
+    pub subtree: bool,
+}
+
+/// ES to `MutationObserverInit` (WebIDL §3.2.18†):
+/// 1. If Type(V) is not Undefined, Null or Object, then throw a TypeError.
+/// 3. For each dictionary dictionary in dictionaries (least derived first),
+///    each member in lexicographic order: if V is undefined or null, let
+///    esMemberValue be undefined, otherwise ? Get(V, key). If it is not
+///    undefined, convert it; else if the member has a default value, use it;
+///    else if the member is required, throw a TypeError.
+fn dict_mutation_observer_init<'s, P: AllInterfaces>(scope: &mut Scope<'s>, v: Local<'s>) -> Result<MutationObserverInit> {
+    let _: core::marker::PhantomData<P> = core::marker::PhantomData;
+    let nullish = convert::is_nullish(scope, v);
+    if !nullish && !convert::is_object(scope, v) {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Value is not a MutationObserverInit dictionary"));
+    }
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("attributeFilter")) ? };
+    let attribute_filter = if scope.kind(m) == ValueKind::Undefined { None } else { Some(convert::sequence(scope, m, |scope, item| { let x = convert::dom_string(scope, item, false)?; Ok(x) })?) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("attributeOldValue")) ? };
+    let attribute_old_value = if scope.kind(m) == ValueKind::Undefined { None } else { Some(convert::boolean(scope, m)) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("attributes")) ? };
+    let attributes = if scope.kind(m) == ValueKind::Undefined { None } else { Some(convert::boolean(scope, m)) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("characterData")) ? };
+    let character_data = if scope.kind(m) == ValueKind::Undefined { None } else { Some(convert::boolean(scope, m)) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("characterDataOldValue")) ? };
+    let character_data_old_value = if scope.kind(m) == ValueKind::Undefined { None } else { Some(convert::boolean(scope, m)) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("childList")) ? };
+    let child_list = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("subtree")) ? };
+    let subtree = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    Ok(MutationObserverInit { attribute_filter, attribute_old_value, attributes, character_data, character_data_old_value, child_list, subtree })
 }
 
 /// `dictionary ParseHTMLUnsafeOptions` (WebIDL §3.2.18†), with its ancestors' members.
@@ -1858,9 +1940,21 @@ pub trait DocumentImpl: Platform {
     fn adopt_node<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _node: ObjectKey) -> Result<ObjectKey> {
         Err(platform::not_implemented::<Self>(scope, "Document.adoptNode"))
     }
+    /// `Attr createAttribute(DOMString localName)`.
+    fn create_attribute<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _local_name: DomString) -> Result<ObjectKey> {
+        Err(platform::not_implemented::<Self>(scope, "Document.createAttribute"))
+    }
+    /// `Attr createAttributeNS(DOMString? namespace, DOMString qualifiedName)`.
+    fn create_attribute_ns<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _namespace: Option<DomString>, _qualified_name: DomString) -> Result<ObjectKey> {
+        Err(platform::not_implemented::<Self>(scope, "Document.createAttributeNS"))
+    }
     /// `Event createEvent(DOMString interface)`.
     fn create_event<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _interface: DomString) -> Result<ObjectKey> {
         Err(platform::not_implemented::<Self>(scope, "Document.createEvent"))
+    }
+    /// `Range createRange()`.
+    fn create_range<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<ObjectKey> {
+        Err(platform::not_implemented::<Self>(scope, "Document.createRange"))
     }
     /// `static Document parseHTMLUnsafe((TrustedHTML or DOMString) html, optional (ParseHTMLUnsafeOptions or TrustedHTMLParserOptions) options)`.
     fn parse_html_unsafe<'s>(scope: &mut Scope<'s>, _html: DomString, _options: ParseHTMLUnsafeOptions) -> Result<ObjectKey> {
@@ -2216,6 +2310,10 @@ pub trait ElementImpl: Platform {
     fn set_slot<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _value: DomString) -> Result<()> {
         Err(platform::not_implemented::<Self>(scope, "Element.slot"))
     }
+    /// The getter of `readonly attribute NamedNodeMap attributes`.
+    fn attributes<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<ObjectKey> {
+        Err(platform::not_implemented::<Self>(scope, "Element.attributes"))
+    }
     /// The getter of `attribute (TrustedHTML or DOMString) innerHTML`.
     fn inner_html<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<DomString> {
         Err(platform::not_implemented::<Self>(scope, "Element.innerHTML"))
@@ -2299,6 +2397,26 @@ pub trait ElementImpl: Platform {
     /// `boolean hasAttributeNS(DOMString? namespace, DOMString localName)`.
     fn has_attribute_ns<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _namespace: Option<DomString>, _local_name: DomString) -> Result<bool> {
         Err(platform::not_implemented::<Self>(scope, "Element.hasAttributeNS"))
+    }
+    /// `Attr? getAttributeNode(DOMString qualifiedName)`.
+    fn get_attribute_node<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _qualified_name: DomString) -> Result<Option<ObjectKey>> {
+        Err(platform::not_implemented::<Self>(scope, "Element.getAttributeNode"))
+    }
+    /// `Attr? getAttributeNodeNS(DOMString? namespace, DOMString localName)`.
+    fn get_attribute_node_ns<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _namespace: Option<DomString>, _local_name: DomString) -> Result<Option<ObjectKey>> {
+        Err(platform::not_implemented::<Self>(scope, "Element.getAttributeNodeNS"))
+    }
+    /// `Attr? setAttributeNode(Attr attr)`.
+    fn set_attribute_node<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _attr: ObjectKey) -> Result<Option<ObjectKey>> {
+        Err(platform::not_implemented::<Self>(scope, "Element.setAttributeNode"))
+    }
+    /// `Attr? setAttributeNodeNS(Attr attr)`.
+    fn set_attribute_node_ns<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _attr: ObjectKey) -> Result<Option<ObjectKey>> {
+        Err(platform::not_implemented::<Self>(scope, "Element.setAttributeNodeNS"))
+    }
+    /// `Attr removeAttributeNode(Attr attr)`.
+    fn remove_attribute_node<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _attr: ObjectKey) -> Result<ObjectKey> {
+        Err(platform::not_implemented::<Self>(scope, "Element.removeAttributeNode"))
     }
     /// `Element? closest(DOMString selectors)`.
     fn closest<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _selectors: DomString) -> Result<Option<ObjectKey>> {
@@ -2427,6 +2545,80 @@ pub trait ElementImpl: Platform {
     /// `undefined remove()`.
     fn remove<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<()> {
         Err(platform::not_implemented::<Self>(scope, "Element.remove"))
+    }
+}
+
+/// What the platform implements for `interface Attr : Node`. Each method's
+/// default throws a `NotSupportedError`.
+pub trait AttrImpl: Platform {
+    /// The getter of `readonly attribute DOMString? namespaceURI`.
+    fn namespace_uri<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<Option<DomString>> {
+        Err(platform::not_implemented::<Self>(scope, "Attr.namespaceURI"))
+    }
+    /// The getter of `readonly attribute DOMString? prefix`.
+    fn prefix<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<Option<DomString>> {
+        Err(platform::not_implemented::<Self>(scope, "Attr.prefix"))
+    }
+    /// The getter of `readonly attribute DOMString localName`.
+    fn local_name<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<DomString> {
+        Err(platform::not_implemented::<Self>(scope, "Attr.localName"))
+    }
+    /// The getter of `readonly attribute DOMString name`.
+    fn name<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<DomString> {
+        Err(platform::not_implemented::<Self>(scope, "Attr.name"))
+    }
+    /// The getter of `attribute DOMString value`.
+    fn value<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<DomString> {
+        Err(platform::not_implemented::<Self>(scope, "Attr.value"))
+    }
+    /// The setter of `attribute DOMString value`.
+    fn set_value<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _value: DomString) -> Result<()> {
+        Err(platform::not_implemented::<Self>(scope, "Attr.value"))
+    }
+    /// The getter of `readonly attribute Element? ownerElement`.
+    fn owner_element<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<Option<ObjectKey>> {
+        Err(platform::not_implemented::<Self>(scope, "Attr.ownerElement"))
+    }
+    /// The getter of `readonly attribute boolean specified`.
+    fn specified<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<bool> {
+        Err(platform::not_implemented::<Self>(scope, "Attr.specified"))
+    }
+}
+
+/// What the platform implements for `interface NamedNodeMap`. Each method's
+/// default throws a `NotSupportedError`.
+pub trait NamedNodeMapImpl: Platform {
+    /// The getter of `readonly attribute unsigned long length`.
+    fn length<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<u32> {
+        Err(platform::not_implemented::<Self>(scope, "NamedNodeMap.length"))
+    }
+    /// `Attr? item(unsigned long index)`.
+    fn item<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _index: u32) -> Result<Option<ObjectKey>> {
+        Err(platform::not_implemented::<Self>(scope, "NamedNodeMap.item"))
+    }
+    /// `Attr? getNamedItem(DOMString qualifiedName)`.
+    fn get_named_item<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _qualified_name: DomString) -> Result<Option<ObjectKey>> {
+        Err(platform::not_implemented::<Self>(scope, "NamedNodeMap.getNamedItem"))
+    }
+    /// `Attr? getNamedItemNS(DOMString? namespace, DOMString localName)`.
+    fn get_named_item_ns<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _namespace: Option<DomString>, _local_name: DomString) -> Result<Option<ObjectKey>> {
+        Err(platform::not_implemented::<Self>(scope, "NamedNodeMap.getNamedItemNS"))
+    }
+    /// `Attr? setNamedItem(Attr attr)`.
+    fn set_named_item<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _attr: ObjectKey) -> Result<Option<ObjectKey>> {
+        Err(platform::not_implemented::<Self>(scope, "NamedNodeMap.setNamedItem"))
+    }
+    /// `Attr? setNamedItemNS(Attr attr)`.
+    fn set_named_item_ns<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _attr: ObjectKey) -> Result<Option<ObjectKey>> {
+        Err(platform::not_implemented::<Self>(scope, "NamedNodeMap.setNamedItemNS"))
+    }
+    /// `Attr removeNamedItem(DOMString qualifiedName)`.
+    fn remove_named_item<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _qualified_name: DomString) -> Result<ObjectKey> {
+        Err(platform::not_implemented::<Self>(scope, "NamedNodeMap.removeNamedItem"))
+    }
+    /// `Attr removeNamedItemNS(DOMString? namespace, DOMString localName)`.
+    fn remove_named_item_ns<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _namespace: Option<DomString>, _local_name: DomString) -> Result<ObjectKey> {
+        Err(platform::not_implemented::<Self>(scope, "NamedNodeMap.removeNamedItemNS"))
     }
 }
 
@@ -2560,6 +2752,10 @@ pub trait HTMLElementImpl: Platform {
     /// The setter of `attribute DOMString inputMode`.
     fn set_input_mode<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _value: DomString) -> Result<()> {
         Err(platform::not_implemented::<Self>(scope, "HTMLElement.inputMode"))
+    }
+    /// The getter of `readonly attribute DOMStringMap dataset`.
+    fn dataset<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<ObjectKey> {
+        Err(platform::not_implemented::<Self>(scope, "HTMLElement.dataset"))
     }
     /// The getter of `attribute DOMString nonce`.
     fn nonce<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<DomString> {
@@ -2840,6 +3036,204 @@ pub trait DOMTokenListImpl: Platform {
     /// `boolean supports(DOMString token)`.
     fn supports<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _token: DomString) -> Result<bool> {
         Err(platform::not_implemented::<Self>(scope, "DOMTokenList.supports"))
+    }
+}
+
+/// What the platform implements for `interface DOMStringMap`. Each method's
+/// default throws a `NotSupportedError`.
+pub trait DOMStringMapImpl: Platform {
+}
+
+/// What the platform implements for `interface MutationObserver`. Each method's
+/// default throws a `NotSupportedError`.
+pub trait MutationObserverImpl: Platform {
+    /// `undefined observe(Node target, optional MutationObserverInit options)`.
+    fn observe<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _target: ObjectKey, _options: MutationObserverInit) -> Result<()> {
+        Err(platform::not_implemented::<Self>(scope, "MutationObserver.observe"))
+    }
+    /// `undefined disconnect()`.
+    fn disconnect<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<()> {
+        Err(platform::not_implemented::<Self>(scope, "MutationObserver.disconnect"))
+    }
+    /// `sequence<MutationRecord> takeRecords()`.
+    fn take_records<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<Vec<ObjectKey>> {
+        Err(platform::not_implemented::<Self>(scope, "MutationObserver.takeRecords"))
+    }
+    /// `constructor(MutationCallback callback)`: the new platform object.
+    fn constructor<'s>(scope: &mut Scope<'s>, _callback: Local<'s>) -> Result<ObjectKey> {
+        Err(platform::not_implemented::<Self>(scope, "new MutationObserver"))
+    }
+}
+
+/// What the platform implements for `interface MutationRecord`. Each method's
+/// default throws a `NotSupportedError`.
+pub trait MutationRecordImpl: Platform {
+    /// The getter of `readonly attribute DOMString type`.
+    fn type_<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<DomString> {
+        Err(platform::not_implemented::<Self>(scope, "MutationRecord.type"))
+    }
+    /// The getter of `readonly attribute Node target`.
+    fn target<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<ObjectKey> {
+        Err(platform::not_implemented::<Self>(scope, "MutationRecord.target"))
+    }
+    /// The getter of `readonly attribute NodeList addedNodes`.
+    fn added_nodes<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<ObjectKey> {
+        Err(platform::not_implemented::<Self>(scope, "MutationRecord.addedNodes"))
+    }
+    /// The getter of `readonly attribute NodeList removedNodes`.
+    fn removed_nodes<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<ObjectKey> {
+        Err(platform::not_implemented::<Self>(scope, "MutationRecord.removedNodes"))
+    }
+    /// The getter of `readonly attribute Node? previousSibling`.
+    fn previous_sibling<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<Option<ObjectKey>> {
+        Err(platform::not_implemented::<Self>(scope, "MutationRecord.previousSibling"))
+    }
+    /// The getter of `readonly attribute Node? nextSibling`.
+    fn next_sibling<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<Option<ObjectKey>> {
+        Err(platform::not_implemented::<Self>(scope, "MutationRecord.nextSibling"))
+    }
+    /// The getter of `readonly attribute DOMString? attributeName`.
+    fn attribute_name<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<Option<DomString>> {
+        Err(platform::not_implemented::<Self>(scope, "MutationRecord.attributeName"))
+    }
+    /// The getter of `readonly attribute DOMString? attributeNamespace`.
+    fn attribute_namespace<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<Option<DomString>> {
+        Err(platform::not_implemented::<Self>(scope, "MutationRecord.attributeNamespace"))
+    }
+    /// The getter of `readonly attribute DOMString? oldValue`.
+    fn old_value<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<Option<DomString>> {
+        Err(platform::not_implemented::<Self>(scope, "MutationRecord.oldValue"))
+    }
+}
+
+/// What the platform implements for `interface AbstractRange`. Each method's
+/// default throws a `NotSupportedError`.
+pub trait AbstractRangeImpl: Platform {
+    /// The getter of `readonly attribute unsigned long startOffset`.
+    fn start_offset<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<u32> {
+        Err(platform::not_implemented::<Self>(scope, "AbstractRange.startOffset"))
+    }
+    /// The getter of `readonly attribute unsigned long endOffset`.
+    fn end_offset<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<u32> {
+        Err(platform::not_implemented::<Self>(scope, "AbstractRange.endOffset"))
+    }
+    /// The getter of `readonly attribute boolean collapsed`.
+    fn collapsed<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<bool> {
+        Err(platform::not_implemented::<Self>(scope, "AbstractRange.collapsed"))
+    }
+}
+
+/// What the platform implements for `interface NodeRange : AbstractRange`. Each method's
+/// default throws a `NotSupportedError`.
+pub trait NodeRangeImpl: Platform {
+    /// The getter of `readonly attribute Node startContainer`.
+    fn start_container<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<ObjectKey> {
+        Err(platform::not_implemented::<Self>(scope, "NodeRange.startContainer"))
+    }
+    /// The getter of `readonly attribute Node endContainer`.
+    fn end_container<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<ObjectKey> {
+        Err(platform::not_implemented::<Self>(scope, "NodeRange.endContainer"))
+    }
+}
+
+/// What the platform implements for `interface Range : NodeRange`. Each method's
+/// default throws a `NotSupportedError`.
+pub trait RangeImpl: Platform {
+    /// The getter of `readonly attribute Node commonAncestorContainer`.
+    fn common_ancestor_container<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<ObjectKey> {
+        Err(platform::not_implemented::<Self>(scope, "Range.commonAncestorContainer"))
+    }
+    /// `undefined setStart(Node node, unsigned long offset)`.
+    fn set_start<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _node: ObjectKey, _offset: u32) -> Result<()> {
+        Err(platform::not_implemented::<Self>(scope, "Range.setStart"))
+    }
+    /// `undefined setEnd(Node node, unsigned long offset)`.
+    fn set_end<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _node: ObjectKey, _offset: u32) -> Result<()> {
+        Err(platform::not_implemented::<Self>(scope, "Range.setEnd"))
+    }
+    /// `undefined setStartBefore(Node node)`.
+    fn set_start_before<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _node: ObjectKey) -> Result<()> {
+        Err(platform::not_implemented::<Self>(scope, "Range.setStartBefore"))
+    }
+    /// `undefined setStartAfter(Node node)`.
+    fn set_start_after<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _node: ObjectKey) -> Result<()> {
+        Err(platform::not_implemented::<Self>(scope, "Range.setStartAfter"))
+    }
+    /// `undefined setEndBefore(Node node)`.
+    fn set_end_before<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _node: ObjectKey) -> Result<()> {
+        Err(platform::not_implemented::<Self>(scope, "Range.setEndBefore"))
+    }
+    /// `undefined setEndAfter(Node node)`.
+    fn set_end_after<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _node: ObjectKey) -> Result<()> {
+        Err(platform::not_implemented::<Self>(scope, "Range.setEndAfter"))
+    }
+    /// `undefined collapse(optional boolean toStart)`.
+    fn collapse<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _to_start: bool) -> Result<()> {
+        Err(platform::not_implemented::<Self>(scope, "Range.collapse"))
+    }
+    /// `undefined selectNode(Node node)`.
+    fn select_node<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _node: ObjectKey) -> Result<()> {
+        Err(platform::not_implemented::<Self>(scope, "Range.selectNode"))
+    }
+    /// `undefined selectNodeContents(Node node)`.
+    fn select_node_contents<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _node: ObjectKey) -> Result<()> {
+        Err(platform::not_implemented::<Self>(scope, "Range.selectNodeContents"))
+    }
+    /// `short compareBoundaryPoints(unsigned short how, Range sourceRange)`.
+    fn compare_boundary_points<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _how: u16, _source_range: ObjectKey) -> Result<i16> {
+        Err(platform::not_implemented::<Self>(scope, "Range.compareBoundaryPoints"))
+    }
+    /// `undefined deleteContents()`.
+    fn delete_contents<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<()> {
+        Err(platform::not_implemented::<Self>(scope, "Range.deleteContents"))
+    }
+    /// `DocumentFragment extractContents()`.
+    fn extract_contents<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<ObjectKey> {
+        Err(platform::not_implemented::<Self>(scope, "Range.extractContents"))
+    }
+    /// `DocumentFragment cloneContents()`.
+    fn clone_contents<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<ObjectKey> {
+        Err(platform::not_implemented::<Self>(scope, "Range.cloneContents"))
+    }
+    /// `undefined insertNode(Node node)`.
+    fn insert_node<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _node: ObjectKey) -> Result<()> {
+        Err(platform::not_implemented::<Self>(scope, "Range.insertNode"))
+    }
+    /// `undefined surroundContents(Node newParent)`.
+    fn surround_contents<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _new_parent: ObjectKey) -> Result<()> {
+        Err(platform::not_implemented::<Self>(scope, "Range.surroundContents"))
+    }
+    /// `Range cloneRange()`.
+    fn clone_range<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<ObjectKey> {
+        Err(platform::not_implemented::<Self>(scope, "Range.cloneRange"))
+    }
+    /// `undefined detach()`.
+    fn detach<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<()> {
+        Err(platform::not_implemented::<Self>(scope, "Range.detach"))
+    }
+    /// `boolean isPointInRange(Node node, unsigned long offset)`.
+    fn is_point_in_range<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _node: ObjectKey, _offset: u32) -> Result<bool> {
+        Err(platform::not_implemented::<Self>(scope, "Range.isPointInRange"))
+    }
+    /// `short comparePoint(Node node, unsigned long offset)`.
+    fn compare_point<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _node: ObjectKey, _offset: u32) -> Result<i16> {
+        Err(platform::not_implemented::<Self>(scope, "Range.comparePoint"))
+    }
+    /// `boolean intersectsNode(Node node)`.
+    fn intersects_node<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _node: ObjectKey) -> Result<bool> {
+        Err(platform::not_implemented::<Self>(scope, "Range.intersectsNode"))
+    }
+    /// `DocumentFragment createContextualFragment((TrustedHTML or DOMString) string)`.
+    fn create_contextual_fragment<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _string: DomString) -> Result<ObjectKey> {
+        Err(platform::not_implemented::<Self>(scope, "Range.createContextualFragment"))
+    }
+    /// `constructor()`: the new platform object.
+    fn constructor<'s>(scope: &mut Scope<'s>) -> Result<ObjectKey> {
+        Err(platform::not_implemented::<Self>(scope, "new Range"))
+    }
+    /// `stringifier;`: the string the object converts to.
+    fn stringify<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<DomString> {
+        Err(platform::not_implemented::<Self>(scope, "Range.toString"))
     }
 }
 
@@ -3255,6 +3649,8 @@ pub trait AllInterfaces: Platform
     + TextImpl
     + CommentImpl
     + ElementImpl
+    + AttrImpl
+    + NamedNodeMapImpl
     + HTMLElementImpl
     + HTMLUnknownElementImpl
     + HTMLHtmlElementImpl
@@ -3268,6 +3664,12 @@ pub trait AllInterfaces: Platform
     + NodeListImpl
     + HTMLCollectionImpl
     + DOMTokenListImpl
+    + DOMStringMapImpl
+    + MutationObserverImpl
+    + MutationRecordImpl
+    + AbstractRangeImpl
+    + NodeRangeImpl
+    + RangeImpl
     + WindowImpl
     + LocationImpl
     + HistoryImpl
@@ -3289,6 +3691,8 @@ impl<T: Platform
     + TextImpl
     + CommentImpl
     + ElementImpl
+    + AttrImpl
+    + NamedNodeMapImpl
     + HTMLElementImpl
     + HTMLUnknownElementImpl
     + HTMLHtmlElementImpl
@@ -3302,6 +3706,12 @@ impl<T: Platform
     + NodeListImpl
     + HTMLCollectionImpl
     + DOMTokenListImpl
+    + DOMStringMapImpl
+    + MutationObserverImpl
+    + MutationRecordImpl
+    + AbstractRangeImpl
+    + NodeRangeImpl
+    + RangeImpl
     + WindowImpl
     + LocationImpl
     + HistoryImpl
@@ -4892,6 +5302,36 @@ fn op_document_adopt_node<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Ar
     Ok(v)
 }
 
+/// The operation `Document.createAttribute` (WebIDL §3.7.6†).
+fn op_document_create_attribute<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'createAttribute' on 'Document': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::dom_string(scope, v, false)?;
+    let r = <P as DocumentImpl>::create_attribute(scope, this, a0)?;
+    let v = convert::from_interface::<P>(scope, r)?;
+    Ok(v)
+}
+
+/// The operation `Document.createAttributeNS` (WebIDL §3.7.6†).
+fn op_document_create_attribute_ns<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    if args.len() < 2 {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'createAttributeNS' on 'Document': 2 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = if convert::is_nullish(scope, v) { None } else { Some(convert::dom_string(scope, v, false)?) };
+    let v = args.get(1);
+    let a1 = convert::dom_string(scope, v, false)?;
+    let r = <P as DocumentImpl>::create_attribute_ns(scope, this, a0, a1)?;
+    let v = convert::from_interface::<P>(scope, r)?;
+    Ok(v)
+}
+
 /// The operation `Document.createEvent` (WebIDL §3.7.6†).
 fn op_document_create_event<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
     let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
@@ -4902,6 +5342,15 @@ fn op_document_create_event<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &
     let v = args.get(0);
     let a0 = convert::dom_string(scope, v, false)?;
     let r = <P as DocumentImpl>::create_event(scope, this, a0)?;
+    let v = convert::from_interface::<P>(scope, r)?;
+    Ok(v)
+}
+
+/// The operation `Document.createRange` (WebIDL §3.7.6†).
+fn op_document_create_range<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let r = <P as DocumentImpl>::create_range(scope, this)?;
     let v = convert::from_interface::<P>(scope, r)?;
     Ok(v)
 }
@@ -5916,6 +6365,20 @@ fn set_element_slot<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>
     Ok(scope.undefined())
 }
 
+/// The getter of `Element.attributes` (WebIDL §3.7.5.1†).
+fn get_element_attributes<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Element)?;
+
+    let _ = &this;
+    if let Some(v) = platform::same_object::<P>(scope, this, "Element.attributes")? {
+        return Ok(v);
+    }
+    let r = <P as ElementImpl>::attributes(scope, this)?;
+    let v = convert::from_interface::<P>(scope, r)?;
+    platform::keep_same_object::<P>(scope, this, "Element.attributes", v)?;
+    Ok(v)
+}
+
 /// The getter of `Element.innerHTML` (WebIDL §3.7.5.1†).
 fn get_element_inner_html<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
     let this = platform::this_object::<P>(scope, args, InterfaceId::Element)?;
@@ -6177,6 +6640,78 @@ fn op_element_has_attribute_ns<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args
     let a1 = convert::dom_string(scope, v, false)?;
     let r = <P as ElementImpl>::has_attribute_ns(scope, this, a0, a1)?;
     let v = scope.boolean(r);
+    Ok(v)
+}
+
+/// The operation `Element.getAttributeNode` (WebIDL §3.7.6†).
+fn op_element_get_attribute_node<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Element)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'getAttributeNode' on 'Element': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::dom_string(scope, v, false)?;
+    let r = <P as ElementImpl>::get_attribute_node(scope, this, a0)?;
+    let v = match r { Some(x) => convert::from_interface::<P>(scope, x)?, None => scope.null() };
+    Ok(v)
+}
+
+/// The operation `Element.getAttributeNodeNS` (WebIDL §3.7.6†).
+fn op_element_get_attribute_node_ns<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Element)?;
+
+    if args.len() < 2 {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'getAttributeNodeNS' on 'Element': 2 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = if convert::is_nullish(scope, v) { None } else { Some(convert::dom_string(scope, v, false)?) };
+    let v = args.get(1);
+    let a1 = convert::dom_string(scope, v, false)?;
+    let r = <P as ElementImpl>::get_attribute_node_ns(scope, this, a0, a1)?;
+    let v = match r { Some(x) => convert::from_interface::<P>(scope, x)?, None => scope.null() };
+    Ok(v)
+}
+
+/// The operation `Element.setAttributeNode` (WebIDL §3.7.6†).
+fn op_element_set_attribute_node<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Element)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'setAttributeNode' on 'Element': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::interface::<P>(scope, v, InterfaceId::Attr)?;
+    let r = <P as ElementImpl>::set_attribute_node(scope, this, a0)?;
+    let v = match r { Some(x) => convert::from_interface::<P>(scope, x)?, None => scope.null() };
+    Ok(v)
+}
+
+/// The operation `Element.setAttributeNodeNS` (WebIDL §3.7.6†).
+fn op_element_set_attribute_node_ns<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Element)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'setAttributeNodeNS' on 'Element': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::interface::<P>(scope, v, InterfaceId::Attr)?;
+    let r = <P as ElementImpl>::set_attribute_node_ns(scope, this, a0)?;
+    let v = match r { Some(x) => convert::from_interface::<P>(scope, x)?, None => scope.null() };
+    Ok(v)
+}
+
+/// The operation `Element.removeAttributeNode` (WebIDL §3.7.6†).
+fn op_element_remove_attribute_node<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Element)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'removeAttributeNode' on 'Element': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::interface::<P>(scope, v, InterfaceId::Attr)?;
+    let r = <P as ElementImpl>::remove_attribute_node(scope, this, a0)?;
+    let v = convert::from_interface::<P>(scope, r)?;
     Ok(v)
 }
 
@@ -6612,6 +7147,215 @@ fn op_element_remove<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s
 
     <P as ElementImpl>::remove(scope, this)?;
     Ok(scope.undefined())
+}
+
+/// The interface object of `Attr`: [[Call]] and [[Construct]] (WebIDL §3.7.1†).
+fn ctor_attr<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let _ = args;
+    let _: core::marker::PhantomData<P> = core::marker::PhantomData;
+    Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Illegal constructor"))
+}
+
+/// The getter of `Attr.namespaceURI` (WebIDL §3.7.5.1†).
+fn get_attr_namespace_uri<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Attr)?;
+
+    let _ = &this;
+    let r = <P as AttrImpl>::namespace_uri(scope, this)?;
+    let v = match r { Some(x) => convert::from_dom_string(scope, &x), None => scope.null() };
+    Ok(v)
+}
+
+/// The getter of `Attr.prefix` (WebIDL §3.7.5.1†).
+fn get_attr_prefix<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Attr)?;
+
+    let _ = &this;
+    let r = <P as AttrImpl>::prefix(scope, this)?;
+    let v = match r { Some(x) => convert::from_dom_string(scope, &x), None => scope.null() };
+    Ok(v)
+}
+
+/// The getter of `Attr.localName` (WebIDL §3.7.5.1†).
+fn get_attr_local_name<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Attr)?;
+
+    let _ = &this;
+    let r = <P as AttrImpl>::local_name(scope, this)?;
+    let v = convert::from_dom_string(scope, &r);
+    Ok(v)
+}
+
+/// The getter of `Attr.name` (WebIDL §3.7.5.1†).
+fn get_attr_name<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Attr)?;
+
+    let _ = &this;
+    let r = <P as AttrImpl>::name(scope, this)?;
+    let v = convert::from_dom_string(scope, &r);
+    Ok(v)
+}
+
+/// The getter of `Attr.value` (WebIDL §3.7.5.1†).
+fn get_attr_value<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Attr)?;
+
+    let _ = &this;
+    let r = <P as AttrImpl>::value(scope, this)?;
+    let v = convert::from_dom_string(scope, &r);
+    Ok(v)
+}
+
+/// The setter of `Attr.value` (WebIDL §3.7.5.2†).
+fn set_attr_value<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Attr)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let v = args.get(0);
+    let value = convert::dom_string(scope, v, false)?;
+    <P as AttrImpl>::set_value(scope, this, value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Attr.ownerElement` (WebIDL §3.7.5.1†).
+fn get_attr_owner_element<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Attr)?;
+
+    let _ = &this;
+    let r = <P as AttrImpl>::owner_element(scope, this)?;
+    let v = match r { Some(x) => convert::from_interface::<P>(scope, x)?, None => scope.null() };
+    Ok(v)
+}
+
+/// The getter of `Attr.specified` (WebIDL §3.7.5.1†).
+fn get_attr_specified<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Attr)?;
+
+    let _ = &this;
+    let r = <P as AttrImpl>::specified(scope, this)?;
+    let v = scope.boolean(r);
+    Ok(v)
+}
+
+/// The interface object of `NamedNodeMap`: [[Call]] and [[Construct]] (WebIDL §3.7.1†).
+fn ctor_named_node_map<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let _ = args;
+    let _: core::marker::PhantomData<P> = core::marker::PhantomData;
+    Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Illegal constructor"))
+}
+
+/// The getter of `NamedNodeMap.length` (WebIDL §3.7.5.1†).
+fn get_named_node_map_length<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::NamedNodeMap)?;
+
+    let _ = &this;
+    let r = <P as NamedNodeMapImpl>::length(scope, this)?;
+    let v = scope.number(f64::from(r));
+    Ok(v)
+}
+
+/// The operation `NamedNodeMap.item` (WebIDL §3.7.6†).
+fn op_named_node_map_item<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::NamedNodeMap)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'item' on 'NamedNodeMap': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::unsigned_long(scope, v, IntegerFlags { enforce_range: false, clamp: false })?;
+    let r = <P as NamedNodeMapImpl>::item(scope, this, a0)?;
+    let v = match r { Some(x) => convert::from_interface::<P>(scope, x)?, None => scope.null() };
+    Ok(v)
+}
+
+/// The operation `NamedNodeMap.getNamedItem` (WebIDL §3.7.6†).
+fn op_named_node_map_get_named_item<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::NamedNodeMap)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'getNamedItem' on 'NamedNodeMap': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::dom_string(scope, v, false)?;
+    let r = <P as NamedNodeMapImpl>::get_named_item(scope, this, a0)?;
+    let v = match r { Some(x) => convert::from_interface::<P>(scope, x)?, None => scope.null() };
+    Ok(v)
+}
+
+/// The operation `NamedNodeMap.getNamedItemNS` (WebIDL §3.7.6†).
+fn op_named_node_map_get_named_item_ns<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::NamedNodeMap)?;
+
+    if args.len() < 2 {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'getNamedItemNS' on 'NamedNodeMap': 2 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = if convert::is_nullish(scope, v) { None } else { Some(convert::dom_string(scope, v, false)?) };
+    let v = args.get(1);
+    let a1 = convert::dom_string(scope, v, false)?;
+    let r = <P as NamedNodeMapImpl>::get_named_item_ns(scope, this, a0, a1)?;
+    let v = match r { Some(x) => convert::from_interface::<P>(scope, x)?, None => scope.null() };
+    Ok(v)
+}
+
+/// The operation `NamedNodeMap.setNamedItem` (WebIDL §3.7.6†).
+fn op_named_node_map_set_named_item<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::NamedNodeMap)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'setNamedItem' on 'NamedNodeMap': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::interface::<P>(scope, v, InterfaceId::Attr)?;
+    let r = <P as NamedNodeMapImpl>::set_named_item(scope, this, a0)?;
+    let v = match r { Some(x) => convert::from_interface::<P>(scope, x)?, None => scope.null() };
+    Ok(v)
+}
+
+/// The operation `NamedNodeMap.setNamedItemNS` (WebIDL §3.7.6†).
+fn op_named_node_map_set_named_item_ns<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::NamedNodeMap)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'setNamedItemNS' on 'NamedNodeMap': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::interface::<P>(scope, v, InterfaceId::Attr)?;
+    let r = <P as NamedNodeMapImpl>::set_named_item_ns(scope, this, a0)?;
+    let v = match r { Some(x) => convert::from_interface::<P>(scope, x)?, None => scope.null() };
+    Ok(v)
+}
+
+/// The operation `NamedNodeMap.removeNamedItem` (WebIDL §3.7.6†).
+fn op_named_node_map_remove_named_item<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::NamedNodeMap)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'removeNamedItem' on 'NamedNodeMap': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::dom_string(scope, v, false)?;
+    let r = <P as NamedNodeMapImpl>::remove_named_item(scope, this, a0)?;
+    let v = convert::from_interface::<P>(scope, r)?;
+    Ok(v)
+}
+
+/// The operation `NamedNodeMap.removeNamedItemNS` (WebIDL §3.7.6†).
+fn op_named_node_map_remove_named_item_ns<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::NamedNodeMap)?;
+
+    if args.len() < 2 {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'removeNamedItemNS' on 'NamedNodeMap': 2 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = if convert::is_nullish(scope, v) { None } else { Some(convert::dom_string(scope, v, false)?) };
+    let v = args.get(1);
+    let a1 = convert::dom_string(scope, v, false)?;
+    let r = <P as NamedNodeMapImpl>::remove_named_item_ns(scope, this, a0, a1)?;
+    let v = convert::from_interface::<P>(scope, r)?;
+    Ok(v)
 }
 
 /// The interface object of `HTMLElement`: [[Call]] and [[Construct]] (WebIDL §3.7.1†).
@@ -7091,6 +7835,20 @@ fn set_html_element_input_mode<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args
     let value = convert::dom_string(scope, v, false)?;
     <P as HTMLElementImpl>::set_input_mode(scope, this, value)?;
     Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.dataset` (WebIDL §3.7.5.1†).
+fn get_html_element_dataset<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    if let Some(v) = platform::same_object::<P>(scope, this, "HTMLElement.dataset")? {
+        return Ok(v);
+    }
+    let r = <P as HTMLElementImpl>::dataset(scope, this)?;
+    let v = convert::from_interface::<P>(scope, r)?;
+    platform::keep_same_object::<P>(scope, this, "HTMLElement.dataset", v)?;
+    Ok(v)
 }
 
 /// The getter of `HTMLElement.nonce` (WebIDL §3.7.5.1†).
@@ -8241,6 +8999,533 @@ fn op_dom_token_list_supports<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args:
     let a0 = convert::dom_string(scope, v, false)?;
     let r = <P as DOMTokenListImpl>::supports(scope, this, a0)?;
     let v = scope.boolean(r);
+    Ok(v)
+}
+
+/// The interface object of `DOMStringMap`: [[Call]] and [[Construct]] (WebIDL §3.7.1†).
+fn ctor_dom_string_map<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let _ = args;
+    let _: core::marker::PhantomData<P> = core::marker::PhantomData;
+    Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Illegal constructor"))
+}
+
+/// The interface object of `MutationObserver`: [[Call]] and [[Construct]] (WebIDL §3.7.1†).
+fn ctor_mutation_observer<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    // §3.7.1† step 1: "If NewTarget is undefined, then throw a TypeError."
+    let Some(new_target) = args.new_target() else {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Constructor MutationObserver requires 'new'"));
+    };
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to construct 'MutationObserver': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::callback_function(scope, v)?;
+    let key = <P as MutationObserverImpl>::constructor(scope, a0)?;
+    // "internally create a new object implementing the interface" with
+    // the prototype from NewTarget (§3.7.1†, §3.8.1†).
+    let fallback = platform::prototype::<P>(scope, InterfaceId::MutationObserver)?;
+    let proto = scope.get_prototype_from_constructor(new_target, fallback)?;
+    let interface = scope.host_mut::<P>()?.interface_of(key).unwrap_or(InterfaceId::MutationObserver);
+    platform::wrap_with_prototype::<P>(scope, key, interface, proto)
+}
+
+/// The operation `MutationObserver.observe` (WebIDL §3.7.6†).
+fn op_mutation_observer_observe<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::MutationObserver)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'observe' on 'MutationObserver': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::interface::<P>(scope, v, InterfaceId::Node)?;
+    let v = args.get(1);
+    let a1 = if scope.kind(v) == ValueKind::Undefined { { let u = scope.undefined(); dict_mutation_observer_init::<P>(scope, u)? } } else { dict_mutation_observer_init::<P>(scope, v)? };
+    <P as MutationObserverImpl>::observe(scope, this, a0, a1)?;
+    Ok(scope.undefined())
+}
+
+/// The operation `MutationObserver.disconnect` (WebIDL §3.7.6†).
+fn op_mutation_observer_disconnect<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::MutationObserver)?;
+
+    <P as MutationObserverImpl>::disconnect(scope, this)?;
+    Ok(scope.undefined())
+}
+
+/// The operation `MutationObserver.takeRecords` (WebIDL §3.7.6†).
+fn op_mutation_observer_take_records<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::MutationObserver)?;
+
+    let r = <P as MutationObserverImpl>::take_records(scope, this)?;
+    let v = { let mut items = Vec::new(); for x in r { let v = convert::from_interface::<P>(scope, x)?; items.push(v); } convert::from_sequence(scope, &items)? };
+    Ok(v)
+}
+
+/// The interface object of `MutationRecord`: [[Call]] and [[Construct]] (WebIDL §3.7.1†).
+fn ctor_mutation_record<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let _ = args;
+    let _: core::marker::PhantomData<P> = core::marker::PhantomData;
+    Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Illegal constructor"))
+}
+
+/// The getter of `MutationRecord.type` (WebIDL §3.7.5.1†).
+fn get_mutation_record_type_<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::MutationRecord)?;
+
+    let _ = &this;
+    let r = <P as MutationRecordImpl>::type_(scope, this)?;
+    let v = convert::from_dom_string(scope, &r);
+    Ok(v)
+}
+
+/// The getter of `MutationRecord.target` (WebIDL §3.7.5.1†).
+fn get_mutation_record_target<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::MutationRecord)?;
+
+    let _ = &this;
+    if let Some(v) = platform::same_object::<P>(scope, this, "MutationRecord.target")? {
+        return Ok(v);
+    }
+    let r = <P as MutationRecordImpl>::target(scope, this)?;
+    let v = convert::from_interface::<P>(scope, r)?;
+    platform::keep_same_object::<P>(scope, this, "MutationRecord.target", v)?;
+    Ok(v)
+}
+
+/// The getter of `MutationRecord.addedNodes` (WebIDL §3.7.5.1†).
+fn get_mutation_record_added_nodes<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::MutationRecord)?;
+
+    let _ = &this;
+    if let Some(v) = platform::same_object::<P>(scope, this, "MutationRecord.addedNodes")? {
+        return Ok(v);
+    }
+    let r = <P as MutationRecordImpl>::added_nodes(scope, this)?;
+    let v = convert::from_interface::<P>(scope, r)?;
+    platform::keep_same_object::<P>(scope, this, "MutationRecord.addedNodes", v)?;
+    Ok(v)
+}
+
+/// The getter of `MutationRecord.removedNodes` (WebIDL §3.7.5.1†).
+fn get_mutation_record_removed_nodes<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::MutationRecord)?;
+
+    let _ = &this;
+    if let Some(v) = platform::same_object::<P>(scope, this, "MutationRecord.removedNodes")? {
+        return Ok(v);
+    }
+    let r = <P as MutationRecordImpl>::removed_nodes(scope, this)?;
+    let v = convert::from_interface::<P>(scope, r)?;
+    platform::keep_same_object::<P>(scope, this, "MutationRecord.removedNodes", v)?;
+    Ok(v)
+}
+
+/// The getter of `MutationRecord.previousSibling` (WebIDL §3.7.5.1†).
+fn get_mutation_record_previous_sibling<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::MutationRecord)?;
+
+    let _ = &this;
+    let r = <P as MutationRecordImpl>::previous_sibling(scope, this)?;
+    let v = match r { Some(x) => convert::from_interface::<P>(scope, x)?, None => scope.null() };
+    Ok(v)
+}
+
+/// The getter of `MutationRecord.nextSibling` (WebIDL §3.7.5.1†).
+fn get_mutation_record_next_sibling<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::MutationRecord)?;
+
+    let _ = &this;
+    let r = <P as MutationRecordImpl>::next_sibling(scope, this)?;
+    let v = match r { Some(x) => convert::from_interface::<P>(scope, x)?, None => scope.null() };
+    Ok(v)
+}
+
+/// The getter of `MutationRecord.attributeName` (WebIDL §3.7.5.1†).
+fn get_mutation_record_attribute_name<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::MutationRecord)?;
+
+    let _ = &this;
+    let r = <P as MutationRecordImpl>::attribute_name(scope, this)?;
+    let v = match r { Some(x) => convert::from_dom_string(scope, &x), None => scope.null() };
+    Ok(v)
+}
+
+/// The getter of `MutationRecord.attributeNamespace` (WebIDL §3.7.5.1†).
+fn get_mutation_record_attribute_namespace<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::MutationRecord)?;
+
+    let _ = &this;
+    let r = <P as MutationRecordImpl>::attribute_namespace(scope, this)?;
+    let v = match r { Some(x) => convert::from_dom_string(scope, &x), None => scope.null() };
+    Ok(v)
+}
+
+/// The getter of `MutationRecord.oldValue` (WebIDL §3.7.5.1†).
+fn get_mutation_record_old_value<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::MutationRecord)?;
+
+    let _ = &this;
+    let r = <P as MutationRecordImpl>::old_value(scope, this)?;
+    let v = match r { Some(x) => convert::from_dom_string(scope, &x), None => scope.null() };
+    Ok(v)
+}
+
+/// The interface object of `AbstractRange`: [[Call]] and [[Construct]] (WebIDL §3.7.1†).
+fn ctor_abstract_range<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let _ = args;
+    let _: core::marker::PhantomData<P> = core::marker::PhantomData;
+    Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Illegal constructor"))
+}
+
+/// The getter of `AbstractRange.startOffset` (WebIDL §3.7.5.1†).
+fn get_abstract_range_start_offset<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::AbstractRange)?;
+
+    let _ = &this;
+    let r = <P as AbstractRangeImpl>::start_offset(scope, this)?;
+    let v = scope.number(f64::from(r));
+    Ok(v)
+}
+
+/// The getter of `AbstractRange.endOffset` (WebIDL §3.7.5.1†).
+fn get_abstract_range_end_offset<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::AbstractRange)?;
+
+    let _ = &this;
+    let r = <P as AbstractRangeImpl>::end_offset(scope, this)?;
+    let v = scope.number(f64::from(r));
+    Ok(v)
+}
+
+/// The getter of `AbstractRange.collapsed` (WebIDL §3.7.5.1†).
+fn get_abstract_range_collapsed<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::AbstractRange)?;
+
+    let _ = &this;
+    let r = <P as AbstractRangeImpl>::collapsed(scope, this)?;
+    let v = scope.boolean(r);
+    Ok(v)
+}
+
+/// The interface object of `NodeRange`: [[Call]] and [[Construct]] (WebIDL §3.7.1†).
+fn ctor_node_range<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let _ = args;
+    let _: core::marker::PhantomData<P> = core::marker::PhantomData;
+    Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Illegal constructor"))
+}
+
+/// The getter of `NodeRange.startContainer` (WebIDL §3.7.5.1†).
+fn get_node_range_start_container<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::NodeRange)?;
+
+    let _ = &this;
+    let r = <P as NodeRangeImpl>::start_container(scope, this)?;
+    let v = convert::from_interface::<P>(scope, r)?;
+    Ok(v)
+}
+
+/// The getter of `NodeRange.endContainer` (WebIDL §3.7.5.1†).
+fn get_node_range_end_container<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::NodeRange)?;
+
+    let _ = &this;
+    let r = <P as NodeRangeImpl>::end_container(scope, this)?;
+    let v = convert::from_interface::<P>(scope, r)?;
+    Ok(v)
+}
+
+/// The interface object of `Range`: [[Call]] and [[Construct]] (WebIDL §3.7.1†).
+fn ctor_range<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    // §3.7.1† step 1: "If NewTarget is undefined, then throw a TypeError."
+    let Some(new_target) = args.new_target() else {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Constructor Range requires 'new'"));
+    };
+    let key = <P as RangeImpl>::constructor(scope)?;
+    // "internally create a new object implementing the interface" with
+    // the prototype from NewTarget (§3.7.1†, §3.8.1†).
+    let fallback = platform::prototype::<P>(scope, InterfaceId::Range)?;
+    let proto = scope.get_prototype_from_constructor(new_target, fallback)?;
+    let interface = scope.host_mut::<P>()?.interface_of(key).unwrap_or(InterfaceId::Range);
+    platform::wrap_with_prototype::<P>(scope, key, interface, proto)
+}
+
+/// The getter of `Range.commonAncestorContainer` (WebIDL §3.7.5.1†).
+fn get_range_common_ancestor_container<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Range)?;
+
+    let _ = &this;
+    let r = <P as RangeImpl>::common_ancestor_container(scope, this)?;
+    let v = convert::from_interface::<P>(scope, r)?;
+    Ok(v)
+}
+
+/// `Range`'s `stringifier;` as `toString` (WebIDL §3.7.?).
+fn op_range_to_string<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Range)?;
+    let s = <P as RangeImpl>::stringify(scope, this)?;
+    Ok(scope.string_utf16(&s))
+}
+
+/// The operation `Range.setStart` (WebIDL §3.7.6†).
+fn op_range_set_start<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Range)?;
+
+    if args.len() < 2 {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'setStart' on 'Range': 2 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::interface::<P>(scope, v, InterfaceId::Node)?;
+    let v = args.get(1);
+    let a1 = convert::unsigned_long(scope, v, IntegerFlags { enforce_range: false, clamp: false })?;
+    <P as RangeImpl>::set_start(scope, this, a0, a1)?;
+    Ok(scope.undefined())
+}
+
+/// The operation `Range.setEnd` (WebIDL §3.7.6†).
+fn op_range_set_end<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Range)?;
+
+    if args.len() < 2 {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'setEnd' on 'Range': 2 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::interface::<P>(scope, v, InterfaceId::Node)?;
+    let v = args.get(1);
+    let a1 = convert::unsigned_long(scope, v, IntegerFlags { enforce_range: false, clamp: false })?;
+    <P as RangeImpl>::set_end(scope, this, a0, a1)?;
+    Ok(scope.undefined())
+}
+
+/// The operation `Range.setStartBefore` (WebIDL §3.7.6†).
+fn op_range_set_start_before<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Range)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'setStartBefore' on 'Range': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::interface::<P>(scope, v, InterfaceId::Node)?;
+    <P as RangeImpl>::set_start_before(scope, this, a0)?;
+    Ok(scope.undefined())
+}
+
+/// The operation `Range.setStartAfter` (WebIDL §3.7.6†).
+fn op_range_set_start_after<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Range)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'setStartAfter' on 'Range': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::interface::<P>(scope, v, InterfaceId::Node)?;
+    <P as RangeImpl>::set_start_after(scope, this, a0)?;
+    Ok(scope.undefined())
+}
+
+/// The operation `Range.setEndBefore` (WebIDL §3.7.6†).
+fn op_range_set_end_before<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Range)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'setEndBefore' on 'Range': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::interface::<P>(scope, v, InterfaceId::Node)?;
+    <P as RangeImpl>::set_end_before(scope, this, a0)?;
+    Ok(scope.undefined())
+}
+
+/// The operation `Range.setEndAfter` (WebIDL §3.7.6†).
+fn op_range_set_end_after<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Range)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'setEndAfter' on 'Range': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::interface::<P>(scope, v, InterfaceId::Node)?;
+    <P as RangeImpl>::set_end_after(scope, this, a0)?;
+    Ok(scope.undefined())
+}
+
+/// The operation `Range.collapse` (WebIDL §3.7.6†).
+fn op_range_collapse<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Range)?;
+
+    let v = args.get(0);
+    let a0 = if scope.kind(v) == ValueKind::Undefined { false } else { convert::boolean(scope, v) };
+    <P as RangeImpl>::collapse(scope, this, a0)?;
+    Ok(scope.undefined())
+}
+
+/// The operation `Range.selectNode` (WebIDL §3.7.6†).
+fn op_range_select_node<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Range)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'selectNode' on 'Range': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::interface::<P>(scope, v, InterfaceId::Node)?;
+    <P as RangeImpl>::select_node(scope, this, a0)?;
+    Ok(scope.undefined())
+}
+
+/// The operation `Range.selectNodeContents` (WebIDL §3.7.6†).
+fn op_range_select_node_contents<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Range)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'selectNodeContents' on 'Range': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::interface::<P>(scope, v, InterfaceId::Node)?;
+    <P as RangeImpl>::select_node_contents(scope, this, a0)?;
+    Ok(scope.undefined())
+}
+
+/// The operation `Range.compareBoundaryPoints` (WebIDL §3.7.6†).
+fn op_range_compare_boundary_points<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Range)?;
+
+    if args.len() < 2 {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'compareBoundaryPoints' on 'Range': 2 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::unsigned_short(scope, v, IntegerFlags { enforce_range: false, clamp: false })?;
+    let v = args.get(1);
+    let a1 = convert::interface::<P>(scope, v, InterfaceId::Range)?;
+    let r = <P as RangeImpl>::compare_boundary_points(scope, this, a0, a1)?;
+    let v = scope.number(f64::from(r));
+    Ok(v)
+}
+
+/// The operation `Range.deleteContents` (WebIDL §3.7.6†).
+fn op_range_delete_contents<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Range)?;
+
+    <P as RangeImpl>::delete_contents(scope, this)?;
+    Ok(scope.undefined())
+}
+
+/// The operation `Range.extractContents` (WebIDL §3.7.6†).
+fn op_range_extract_contents<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Range)?;
+
+    let r = <P as RangeImpl>::extract_contents(scope, this)?;
+    let v = convert::from_interface::<P>(scope, r)?;
+    Ok(v)
+}
+
+/// The operation `Range.cloneContents` (WebIDL §3.7.6†).
+fn op_range_clone_contents<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Range)?;
+
+    let r = <P as RangeImpl>::clone_contents(scope, this)?;
+    let v = convert::from_interface::<P>(scope, r)?;
+    Ok(v)
+}
+
+/// The operation `Range.insertNode` (WebIDL §3.7.6†).
+fn op_range_insert_node<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Range)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'insertNode' on 'Range': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::interface::<P>(scope, v, InterfaceId::Node)?;
+    <P as RangeImpl>::insert_node(scope, this, a0)?;
+    Ok(scope.undefined())
+}
+
+/// The operation `Range.surroundContents` (WebIDL §3.7.6†).
+fn op_range_surround_contents<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Range)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'surroundContents' on 'Range': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::interface::<P>(scope, v, InterfaceId::Node)?;
+    <P as RangeImpl>::surround_contents(scope, this, a0)?;
+    Ok(scope.undefined())
+}
+
+/// The operation `Range.cloneRange` (WebIDL §3.7.6†).
+fn op_range_clone_range<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Range)?;
+
+    let r = <P as RangeImpl>::clone_range(scope, this)?;
+    let v = convert::from_interface::<P>(scope, r)?;
+    Ok(v)
+}
+
+/// The operation `Range.detach` (WebIDL §3.7.6†).
+fn op_range_detach<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Range)?;
+
+    <P as RangeImpl>::detach(scope, this)?;
+    Ok(scope.undefined())
+}
+
+/// The operation `Range.isPointInRange` (WebIDL §3.7.6†).
+fn op_range_is_point_in_range<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Range)?;
+
+    if args.len() < 2 {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'isPointInRange' on 'Range': 2 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::interface::<P>(scope, v, InterfaceId::Node)?;
+    let v = args.get(1);
+    let a1 = convert::unsigned_long(scope, v, IntegerFlags { enforce_range: false, clamp: false })?;
+    let r = <P as RangeImpl>::is_point_in_range(scope, this, a0, a1)?;
+    let v = scope.boolean(r);
+    Ok(v)
+}
+
+/// The operation `Range.comparePoint` (WebIDL §3.7.6†).
+fn op_range_compare_point<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Range)?;
+
+    if args.len() < 2 {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'comparePoint' on 'Range': 2 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::interface::<P>(scope, v, InterfaceId::Node)?;
+    let v = args.get(1);
+    let a1 = convert::unsigned_long(scope, v, IntegerFlags { enforce_range: false, clamp: false })?;
+    let r = <P as RangeImpl>::compare_point(scope, this, a0, a1)?;
+    let v = scope.number(f64::from(r));
+    Ok(v)
+}
+
+/// The operation `Range.intersectsNode` (WebIDL §3.7.6†).
+fn op_range_intersects_node<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Range)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'intersectsNode' on 'Range': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::interface::<P>(scope, v, InterfaceId::Node)?;
+    let r = <P as RangeImpl>::intersects_node(scope, this, a0)?;
+    let v = scope.boolean(r);
+    Ok(v)
+}
+
+/// The operation `Range.createContextualFragment` (WebIDL §3.7.6†).
+fn op_range_create_contextual_fragment<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Range)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'createContextualFragment' on 'Range': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::dom_string(scope, v, false)?;
+    let r = <P as RangeImpl>::create_contextual_fragment(scope, this, a0)?;
+    let v = convert::from_interface::<P>(scope, r)?;
     Ok(v)
 }
 
@@ -9715,7 +11000,10 @@ pub fn install<P: AllInterfaces>(scope: &mut Scope<'_>, realm: &clazel_js::Realm
         install::operation(scope, proto, "createComment", 1, op_document_create_comment::<P>, false)?;
         install::operation(scope, proto, "importNode", 1, op_document_import_node::<P>, false)?;
         install::operation(scope, proto, "adoptNode", 1, op_document_adopt_node::<P>, false)?;
+        install::operation(scope, proto, "createAttribute", 1, op_document_create_attribute::<P>, false)?;
+        install::operation(scope, proto, "createAttributeNS", 2, op_document_create_attribute_ns::<P>, false)?;
         install::operation(scope, proto, "createEvent", 1, op_document_create_event::<P>, false)?;
+        install::operation(scope, proto, "createRange", 0, op_document_create_range::<P>, false)?;
         install::operation(scope, ctor, "parseHTMLUnsafe", 1, op_document_static_parse_html_unsafe::<P>, false)?;
         install::operation(scope, ctor, "parseHTML", 1, op_document_static_parse_html::<P>, false)?;
         install::operation(scope, proto, "getElementsByName", 1, op_document_get_elements_by_name::<P>, false)?;
@@ -9902,6 +11190,7 @@ pub fn install<P: AllInterfaces>(scope: &mut Scope<'_>, realm: &clazel_js::Realm
         install::attribute(scope, proto, "className", get_element_class_name::<P>, Some(Box::new(set_element_class_name::<P>)), false)?;
         install::attribute(scope, proto, "classList", get_element_class_list::<P>, Some(Box::new(set_element_class_list::<P>)), false)?;
         install::attribute(scope, proto, "slot", get_element_slot::<P>, Some(Box::new(set_element_slot::<P>)), false)?;
+        install::attribute(scope, proto, "attributes", get_element_attributes::<P>, None, false)?;
         install::attribute(scope, proto, "innerHTML", get_element_inner_html::<P>, Some(Box::new(set_element_inner_html::<P>)), false)?;
         install::attribute(scope, proto, "outerHTML", get_element_outer_html::<P>, Some(Box::new(set_element_outer_html::<P>)), false)?;
         install::attribute(scope, proto, "children", get_element_children::<P>, None, false)?;
@@ -9921,6 +11210,11 @@ pub fn install<P: AllInterfaces>(scope: &mut Scope<'_>, realm: &clazel_js::Realm
         install::operation(scope, proto, "toggleAttribute", 1, op_element_toggle_attribute::<P>, false)?;
         install::operation(scope, proto, "hasAttribute", 1, op_element_has_attribute::<P>, false)?;
         install::operation(scope, proto, "hasAttributeNS", 2, op_element_has_attribute_ns::<P>, false)?;
+        install::operation(scope, proto, "getAttributeNode", 1, op_element_get_attribute_node::<P>, false)?;
+        install::operation(scope, proto, "getAttributeNodeNS", 2, op_element_get_attribute_node_ns::<P>, false)?;
+        install::operation(scope, proto, "setAttributeNode", 1, op_element_set_attribute_node::<P>, false)?;
+        install::operation(scope, proto, "setAttributeNodeNS", 1, op_element_set_attribute_node_ns::<P>, false)?;
+        install::operation(scope, proto, "removeAttributeNode", 1, op_element_remove_attribute_node::<P>, false)?;
         install::operation(scope, proto, "closest", 1, op_element_closest::<P>, false)?;
         install::operation(scope, proto, "matches", 1, op_element_matches::<P>, false)?;
         install::operation(scope, proto, "webkitMatchesSelector", 1, op_element_webkit_matches_selector::<P>, false)?;
@@ -9954,6 +11248,58 @@ pub fn install<P: AllInterfaces>(scope: &mut Scope<'_>, realm: &clazel_js::Realm
         install::operation(scope, proto, "replaceWith", 0, op_element_replace_with::<P>, false)?;
         install::operation(scope, proto, "remove", 0, op_element_remove::<P>, false)?;
     install::expose(scope, global, "Element", ctor)?;
+    }
+    // `interface Attr` (WebIDL §3.7.1† interface object, §3.7.3† interface
+    // prototype object).
+    {
+    let parent_ctor = scope.host_mut::<P>()?.bindings().interface_objects.get(&InterfaceId::Node).cloned();
+    let parent_ctor = match parent_ctor { Some(h) => Some(scope.local(&h)?), None => None };
+    let parent_proto = Some(platform::prototype::<P>(scope, InterfaceId::Node)?);
+    let ctor = install::interface_object(scope, "Attr", 0, parent_ctor, ctor_attr::<P>)?;
+    let proto = scope.new_object()?;
+    if let Some(pp) = parent_proto {
+        scope.set_prototype_of(proto, pp)?;
+    }
+    install::link(scope, ctor, proto)?;
+    let h = scope.persist(proto);
+    scope.host_mut::<P>()?.bindings().prototypes.insert(InterfaceId::Attr, h);
+    let h = scope.persist(ctor);
+    scope.host_mut::<P>()?.bindings().interface_objects.insert(InterfaceId::Attr, h);
+    let _ = (&ctor, &proto, &global);
+        install::attribute(scope, proto, "namespaceURI", get_attr_namespace_uri::<P>, None, false)?;
+        install::attribute(scope, proto, "prefix", get_attr_prefix::<P>, None, false)?;
+        install::attribute(scope, proto, "localName", get_attr_local_name::<P>, None, false)?;
+        install::attribute(scope, proto, "name", get_attr_name::<P>, None, false)?;
+        install::attribute(scope, proto, "value", get_attr_value::<P>, Some(Box::new(set_attr_value::<P>)), false)?;
+        install::attribute(scope, proto, "ownerElement", get_attr_owner_element::<P>, None, false)?;
+        install::attribute(scope, proto, "specified", get_attr_specified::<P>, None, false)?;
+    install::expose(scope, global, "Attr", ctor)?;
+    }
+    // `interface NamedNodeMap` (WebIDL §3.7.1† interface object, §3.7.3† interface
+    // prototype object).
+    {
+    let parent_ctor: Option<Local<'_>> = None;
+    let parent_proto: Option<Local<'_>> = None;
+    let ctor = install::interface_object(scope, "NamedNodeMap", 0, parent_ctor, ctor_named_node_map::<P>)?;
+    let proto = scope.new_object()?;
+    if let Some(pp) = parent_proto {
+        scope.set_prototype_of(proto, pp)?;
+    }
+    install::link(scope, ctor, proto)?;
+    let h = scope.persist(proto);
+    scope.host_mut::<P>()?.bindings().prototypes.insert(InterfaceId::NamedNodeMap, h);
+    let h = scope.persist(ctor);
+    scope.host_mut::<P>()?.bindings().interface_objects.insert(InterfaceId::NamedNodeMap, h);
+    let _ = (&ctor, &proto, &global);
+        install::attribute(scope, proto, "length", get_named_node_map_length::<P>, None, false)?;
+        install::operation(scope, proto, "item", 1, op_named_node_map_item::<P>, false)?;
+        install::operation(scope, proto, "getNamedItem", 1, op_named_node_map_get_named_item::<P>, false)?;
+        install::operation(scope, proto, "getNamedItemNS", 2, op_named_node_map_get_named_item_ns::<P>, false)?;
+        install::operation(scope, proto, "setNamedItem", 1, op_named_node_map_set_named_item::<P>, false)?;
+        install::operation(scope, proto, "setNamedItemNS", 1, op_named_node_map_set_named_item_ns::<P>, false)?;
+        install::operation(scope, proto, "removeNamedItem", 1, op_named_node_map_remove_named_item::<P>, false)?;
+        install::operation(scope, proto, "removeNamedItemNS", 2, op_named_node_map_remove_named_item_ns::<P>, false)?;
+    install::expose(scope, global, "NamedNodeMap", ctor)?;
     }
     // `interface HTMLElement` (WebIDL §3.7.1† interface object, §3.7.3† interface
     // prototype object).
@@ -9994,6 +11340,7 @@ pub fn install<P: AllInterfaces>(scope: &mut Scope<'_>, realm: &clazel_js::Realm
         install::attribute(scope, proto, "enterKeyHint", get_html_element_enter_key_hint::<P>, Some(Box::new(set_html_element_enter_key_hint::<P>)), false)?;
         install::attribute(scope, proto, "isContentEditable", get_html_element_is_content_editable::<P>, None, false)?;
         install::attribute(scope, proto, "inputMode", get_html_element_input_mode::<P>, Some(Box::new(set_html_element_input_mode::<P>)), false)?;
+        install::attribute(scope, proto, "dataset", get_html_element_dataset::<P>, None, false)?;
         install::attribute(scope, proto, "nonce", get_html_element_nonce::<P>, Some(Box::new(set_html_element_nonce::<P>)), false)?;
         install::attribute(scope, proto, "autofocus", get_html_element_autofocus::<P>, Some(Box::new(set_html_element_autofocus::<P>)), false)?;
         install::attribute(scope, proto, "tabIndex", get_html_element_tab_index::<P>, Some(Box::new(set_html_element_tab_index::<P>)), false)?;
@@ -10280,6 +11627,164 @@ pub fn install<P: AllInterfaces>(scope: &mut Scope<'_>, realm: &clazel_js::Realm
         install::operation(scope, proto, "replace", 2, op_dom_token_list_replace::<P>, false)?;
         install::operation(scope, proto, "supports", 1, op_dom_token_list_supports::<P>, false)?;
     install::expose(scope, global, "DOMTokenList", ctor)?;
+    }
+    // `interface DOMStringMap` (WebIDL §3.7.1† interface object, §3.7.3† interface
+    // prototype object).
+    {
+    let parent_ctor: Option<Local<'_>> = None;
+    let parent_proto: Option<Local<'_>> = None;
+    let ctor = install::interface_object(scope, "DOMStringMap", 0, parent_ctor, ctor_dom_string_map::<P>)?;
+    let proto = scope.new_object()?;
+    if let Some(pp) = parent_proto {
+        scope.set_prototype_of(proto, pp)?;
+    }
+    install::link(scope, ctor, proto)?;
+    let h = scope.persist(proto);
+    scope.host_mut::<P>()?.bindings().prototypes.insert(InterfaceId::DOMStringMap, h);
+    let h = scope.persist(ctor);
+    scope.host_mut::<P>()?.bindings().interface_objects.insert(InterfaceId::DOMStringMap, h);
+    let _ = (&ctor, &proto, &global);
+    install::expose(scope, global, "DOMStringMap", ctor)?;
+    }
+    // `interface MutationObserver` (WebIDL §3.7.1† interface object, §3.7.3† interface
+    // prototype object).
+    {
+    let parent_ctor: Option<Local<'_>> = None;
+    let parent_proto: Option<Local<'_>> = None;
+    let ctor = install::interface_object(scope, "MutationObserver", 1, parent_ctor, ctor_mutation_observer::<P>)?;
+    let proto = scope.new_object()?;
+    if let Some(pp) = parent_proto {
+        scope.set_prototype_of(proto, pp)?;
+    }
+    install::link(scope, ctor, proto)?;
+    let h = scope.persist(proto);
+    scope.host_mut::<P>()?.bindings().prototypes.insert(InterfaceId::MutationObserver, h);
+    let h = scope.persist(ctor);
+    scope.host_mut::<P>()?.bindings().interface_objects.insert(InterfaceId::MutationObserver, h);
+    let _ = (&ctor, &proto, &global);
+        install::operation(scope, proto, "observe", 1, op_mutation_observer_observe::<P>, false)?;
+        install::operation(scope, proto, "disconnect", 0, op_mutation_observer_disconnect::<P>, false)?;
+        install::operation(scope, proto, "takeRecords", 0, op_mutation_observer_take_records::<P>, false)?;
+    install::expose(scope, global, "MutationObserver", ctor)?;
+    }
+    // `interface MutationRecord` (WebIDL §3.7.1† interface object, §3.7.3† interface
+    // prototype object).
+    {
+    let parent_ctor: Option<Local<'_>> = None;
+    let parent_proto: Option<Local<'_>> = None;
+    let ctor = install::interface_object(scope, "MutationRecord", 0, parent_ctor, ctor_mutation_record::<P>)?;
+    let proto = scope.new_object()?;
+    if let Some(pp) = parent_proto {
+        scope.set_prototype_of(proto, pp)?;
+    }
+    install::link(scope, ctor, proto)?;
+    let h = scope.persist(proto);
+    scope.host_mut::<P>()?.bindings().prototypes.insert(InterfaceId::MutationRecord, h);
+    let h = scope.persist(ctor);
+    scope.host_mut::<P>()?.bindings().interface_objects.insert(InterfaceId::MutationRecord, h);
+    let _ = (&ctor, &proto, &global);
+        install::attribute(scope, proto, "type", get_mutation_record_type_::<P>, None, false)?;
+        install::attribute(scope, proto, "target", get_mutation_record_target::<P>, None, false)?;
+        install::attribute(scope, proto, "addedNodes", get_mutation_record_added_nodes::<P>, None, false)?;
+        install::attribute(scope, proto, "removedNodes", get_mutation_record_removed_nodes::<P>, None, false)?;
+        install::attribute(scope, proto, "previousSibling", get_mutation_record_previous_sibling::<P>, None, false)?;
+        install::attribute(scope, proto, "nextSibling", get_mutation_record_next_sibling::<P>, None, false)?;
+        install::attribute(scope, proto, "attributeName", get_mutation_record_attribute_name::<P>, None, false)?;
+        install::attribute(scope, proto, "attributeNamespace", get_mutation_record_attribute_namespace::<P>, None, false)?;
+        install::attribute(scope, proto, "oldValue", get_mutation_record_old_value::<P>, None, false)?;
+    install::expose(scope, global, "MutationRecord", ctor)?;
+    }
+    // `interface AbstractRange` (WebIDL §3.7.1† interface object, §3.7.3† interface
+    // prototype object).
+    {
+    let parent_ctor: Option<Local<'_>> = None;
+    let parent_proto: Option<Local<'_>> = None;
+    let ctor = install::interface_object(scope, "AbstractRange", 0, parent_ctor, ctor_abstract_range::<P>)?;
+    let proto = scope.new_object()?;
+    if let Some(pp) = parent_proto {
+        scope.set_prototype_of(proto, pp)?;
+    }
+    install::link(scope, ctor, proto)?;
+    let h = scope.persist(proto);
+    scope.host_mut::<P>()?.bindings().prototypes.insert(InterfaceId::AbstractRange, h);
+    let h = scope.persist(ctor);
+    scope.host_mut::<P>()?.bindings().interface_objects.insert(InterfaceId::AbstractRange, h);
+    let _ = (&ctor, &proto, &global);
+        install::attribute(scope, proto, "startOffset", get_abstract_range_start_offset::<P>, None, false)?;
+        install::attribute(scope, proto, "endOffset", get_abstract_range_end_offset::<P>, None, false)?;
+        install::attribute(scope, proto, "collapsed", get_abstract_range_collapsed::<P>, None, false)?;
+    install::expose(scope, global, "AbstractRange", ctor)?;
+    }
+    // `interface NodeRange` (WebIDL §3.7.1† interface object, §3.7.3† interface
+    // prototype object).
+    {
+    let parent_ctor = scope.host_mut::<P>()?.bindings().interface_objects.get(&InterfaceId::AbstractRange).cloned();
+    let parent_ctor = match parent_ctor { Some(h) => Some(scope.local(&h)?), None => None };
+    let parent_proto = Some(platform::prototype::<P>(scope, InterfaceId::AbstractRange)?);
+    let ctor = install::interface_object(scope, "NodeRange", 0, parent_ctor, ctor_node_range::<P>)?;
+    let proto = scope.new_object()?;
+    if let Some(pp) = parent_proto {
+        scope.set_prototype_of(proto, pp)?;
+    }
+    install::link(scope, ctor, proto)?;
+    let h = scope.persist(proto);
+    scope.host_mut::<P>()?.bindings().prototypes.insert(InterfaceId::NodeRange, h);
+    let h = scope.persist(ctor);
+    scope.host_mut::<P>()?.bindings().interface_objects.insert(InterfaceId::NodeRange, h);
+    let _ = (&ctor, &proto, &global);
+        install::attribute(scope, proto, "startContainer", get_node_range_start_container::<P>, None, false)?;
+        install::attribute(scope, proto, "endContainer", get_node_range_end_container::<P>, None, false)?;
+    install::expose(scope, global, "NodeRange", ctor)?;
+    }
+    // `interface Range` (WebIDL §3.7.1† interface object, §3.7.3† interface
+    // prototype object).
+    {
+    let parent_ctor = scope.host_mut::<P>()?.bindings().interface_objects.get(&InterfaceId::NodeRange).cloned();
+    let parent_ctor = match parent_ctor { Some(h) => Some(scope.local(&h)?), None => None };
+    let parent_proto = Some(platform::prototype::<P>(scope, InterfaceId::NodeRange)?);
+    let ctor = install::interface_object(scope, "Range", 0, parent_ctor, ctor_range::<P>)?;
+    let proto = scope.new_object()?;
+    if let Some(pp) = parent_proto {
+        scope.set_prototype_of(proto, pp)?;
+    }
+    install::link(scope, ctor, proto)?;
+    let h = scope.persist(proto);
+    scope.host_mut::<P>()?.bindings().prototypes.insert(InterfaceId::Range, h);
+    let h = scope.persist(ctor);
+    scope.host_mut::<P>()?.bindings().interface_objects.insert(InterfaceId::Range, h);
+    let _ = (&ctor, &proto, &global);
+    let c = scope.number(0.0);
+    install::constant(scope, &[ctor, proto], "START_TO_START", c)?;
+    let c = scope.number(1.0);
+    install::constant(scope, &[ctor, proto], "START_TO_END", c)?;
+    let c = scope.number(2.0);
+    install::constant(scope, &[ctor, proto], "END_TO_END", c)?;
+    let c = scope.number(3.0);
+    install::constant(scope, &[ctor, proto], "END_TO_START", c)?;
+        install::attribute(scope, proto, "commonAncestorContainer", get_range_common_ancestor_container::<P>, None, false)?;
+        install::operation(scope, proto, "toString", 0, op_range_to_string::<P>, false)?;
+        install::operation(scope, proto, "setStart", 2, op_range_set_start::<P>, false)?;
+        install::operation(scope, proto, "setEnd", 2, op_range_set_end::<P>, false)?;
+        install::operation(scope, proto, "setStartBefore", 1, op_range_set_start_before::<P>, false)?;
+        install::operation(scope, proto, "setStartAfter", 1, op_range_set_start_after::<P>, false)?;
+        install::operation(scope, proto, "setEndBefore", 1, op_range_set_end_before::<P>, false)?;
+        install::operation(scope, proto, "setEndAfter", 1, op_range_set_end_after::<P>, false)?;
+        install::operation(scope, proto, "collapse", 0, op_range_collapse::<P>, false)?;
+        install::operation(scope, proto, "selectNode", 1, op_range_select_node::<P>, false)?;
+        install::operation(scope, proto, "selectNodeContents", 1, op_range_select_node_contents::<P>, false)?;
+        install::operation(scope, proto, "compareBoundaryPoints", 2, op_range_compare_boundary_points::<P>, false)?;
+        install::operation(scope, proto, "deleteContents", 0, op_range_delete_contents::<P>, false)?;
+        install::operation(scope, proto, "extractContents", 0, op_range_extract_contents::<P>, false)?;
+        install::operation(scope, proto, "cloneContents", 0, op_range_clone_contents::<P>, false)?;
+        install::operation(scope, proto, "insertNode", 1, op_range_insert_node::<P>, false)?;
+        install::operation(scope, proto, "surroundContents", 1, op_range_surround_contents::<P>, false)?;
+        install::operation(scope, proto, "cloneRange", 0, op_range_clone_range::<P>, false)?;
+        install::operation(scope, proto, "detach", 0, op_range_detach::<P>, false)?;
+        install::operation(scope, proto, "isPointInRange", 2, op_range_is_point_in_range::<P>, false)?;
+        install::operation(scope, proto, "comparePoint", 2, op_range_compare_point::<P>, false)?;
+        install::operation(scope, proto, "intersectsNode", 1, op_range_intersects_node::<P>, false)?;
+        install::operation(scope, proto, "createContextualFragment", 1, op_range_create_contextual_fragment::<P>, false)?;
+    install::expose(scope, global, "Range", ctor)?;
     }
     // `interface Window` (WebIDL §3.7.1† interface object, §3.7.3† interface
     // prototype object).

@@ -26,9 +26,10 @@ clazel-webidl = { path = "../clazel-webidl", version = "=0.0.0" }
 clazel-url = { path = "../clazel-url", version = "=0.0.0" }
 clazel-base64 = { path = "../clazel-base64", version = "=0.0.0" }
 
-# The parser that the serializer's round-trip tests feed
-# (`tests/conformance_round_trip.rs`).
-[dev-dependencies]
+# The HTML fragment parser behind `innerHTML`, `outerHTML`,
+# `insertAdjacentHTML` and `createContextualFragment`
+# (`src/page/fragment.rs`); the serializer's round-trip tests
+# (`tests/conformance_round_trip.rs`) feed it as well.
 clazel-treebuilder = { path = "../clazel-treebuilder", version = "=0.0.0" }
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about

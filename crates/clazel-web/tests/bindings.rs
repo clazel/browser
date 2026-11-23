@@ -444,13 +444,13 @@ fn unimplemented_members_say_so() -> Test {
     let r = run(
         &mut rt,
         &realm,
-        "var r = []; try { document.body.innerHTML = '<b>'; } catch (e) { r.push(e.name, e.message); }\n\
+        "var r = []; try { document.body.moveBefore(document.createElement('b'), null); } catch (e) { r.push(e.name, e.message); }\n\
          try { setTimeout(function () {}, 0); } catch (e) { r.push(e.name); }\n\
          r = r.join('|');",
     )?;
     assert_eq!(
         r,
-        "NotSupportedError|Element.innerHTML is not implemented|NotSupportedError"
+        "NotSupportedError|Element.moveBefore is not implemented|NotSupportedError"
     );
     Ok(())
 }
