@@ -346,7 +346,8 @@ pub open spec fn net_jar_frame_statement(rules: Seq<clazel_psl::spec::Rule>, url
 }
 
 /// The tab an event is about, for connections: the sender's tab for a
-/// `FromRenderer` of a renderer that exists, the tab of a `NavigateTab`, the
+/// `FromRenderer` of a renderer that exists (item 7.16: the tab a popup opens,
+/// for its accepted `OpenTab`), the tab of a `NavigateTab`, the
 /// tab an `OpenTab` without a script opens (whose fetch it starts, item
 /// 4.12), the tab of the renderer that exits, the owner of the
 /// connection of a `Net` (when it is open), and (item 5.18) the tab of the
@@ -354,8 +355,13 @@ pub open spec fn net_jar_frame_statement(rules: Seq<clazel_psl::spec::Rule>, url
 /// events are about no tab.
 pub open spec fn event_tab(s: State, e: Event) -> Option<nat> {
     match e {
-        Event::FromRenderer { id, .. } => match find_by_id(s.renderers, id, 0) {
-            Some(i) => Some(s.renderers[i].tab),
+        Event::FromRenderer { id, bytes } => match find_by_id(s.renderers, id, 0) {
+            // Item 7.16: a popup's fetch is the new tab's, as an `OpenTab`'s.
+            Some(i) => if accepted_message(s.renderers[i], bytes) matches Some(clazel_ipc::message::spec::Message::OpenTab { .. }) {
+                Some(s.next_id)
+            } else {
+                Some(s.renderers[i].tab)
+            },
             None => None,
         },
         Event::NavigateTab { tab, .. } => Some(tab),
@@ -730,14 +736,22 @@ pub open spec fn gpu_restarted(s: State, e: Event, x: nat) -> bool {
 }
 
 /// `theorem_input_only_to_own_tab`: the user's input on `tab` changes no
-/// state and gives exactly one output, the `Input` frame to `tab`'s
-/// renderer, or none if the tab has no renderer.
+/// state but (item 7.16, restated) the transient user activation of the
+/// tab's renderer, which a click or a key to a committed one sets to the
+/// window ([`set_activation`]), and gives exactly one output, the `Input`
+/// frame to `tab`'s renderer, or none if the tab has no renderer.
 pub open spec fn input_only_to_own_tab_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, input: UserInput) -> bool {
     let (s1, out) = step(rules, urls, fetch, s, Event::Input { tab, input });
-    &&& s1 == s
     &&& match find_by_tab(s.renderers, tab, 0) {
-        None => out == Seq::<Output>::empty(),
-        Some(i) => out == seq![Output::ToRenderer { id: s.renderers[i].id, bytes: input_frame(input) }],
+        None => s1 == s && out == Seq::<Output>::empty(),
+        Some(i) => {
+            &&& s1 == (if s.renderers[i].committed && is_activating_input(input) {
+                State { acts: set_activation(s.acts, s.renderers[i].id, s.renderers[i].lock, activation_window()), ..s }
+            } else {
+                s
+            })
+            &&& out == seq![Output::ToRenderer { id: s.renderers[i].id, bytes: input_frame(input) }]
+        },
     }
 }
 
