@@ -314,7 +314,7 @@ pub proof fn lemma_sub_body_fits_frame(request: u64, bytes: Seq<u8>)
     let t = seq![Token::Array(3), Token::Uint(116), Token::Uint(request), Token::Bytes(bytes)];
     let rest = seq![Token::Uint(request), Token::Bytes(bytes)];
     assert(t =~= seq![Token::Array(3), Token::Uint(116)] + rest);
-    lemma_items_head(3, 111, rest);
+    lemma_items_head(3, 116, rest);
     lemma_items_step(rest, 2);
     assert(rest[0] == Token::Uint(request));
     assert(rest.drop_first() =~= seq![Token::Bytes(bytes)]);
