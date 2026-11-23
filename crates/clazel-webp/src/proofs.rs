@@ -651,13 +651,36 @@ use crate::vp8::transform::{inverse_dct, inverse_wht};
 use crate::vp8::yuv::yuv_to_rgb;
 
 /// The boolean decoder (RFC 6386 section 7.3) over any 4 bytes, any
-/// probabilities, 6 decisions and a literal: no panic, `inv` kept after
-/// each.
+/// probabilities, 6 decisions and a literal: no panic, and `inv_any` (the
+/// part of the invariant that holds for every input) kept after each. A
+/// partition whose first byte is 0xFF can break the RFC's `value < range <<
+/// 8` (see `bool_decoder_rfc_invariant`), so `inv` is not claimed here.
 #[kani::proof]
 #[kani::solver(minisat)]
 #[kani::unwind(12)]
 fn bool_decoder_any() {
     let data: [u8; 4] = kani::any();
+    let mut d = BoolDecoder::new(&data);
+    assert!(d.inv_any());
+    for _ in 0..6 {
+        let p: u8 = kani::any();
+        let _ = d.read_bool(p);
+        assert!(d.inv_any());
+    }
+    let _ = d.read_literal(3);
+    assert!(d.inv_any());
+}
+
+/// The RFC's invariant (`inv`, with `value < range << 8`) holds at the
+/// start of every partition the RFC's encoder can write (its first byte is
+/// below 0xFF, so `value < 255 << 8`) and is kept by 6 decisions and a
+/// literal at any probabilities.
+#[kani::proof]
+#[kani::solver(minisat)]
+#[kani::unwind(12)]
+fn bool_decoder_rfc_invariant() {
+    let data: [u8; 4] = kani::any();
+    kani::assume(data[0] < 0xFF);
     let mut d = BoolDecoder::new(&data);
     assert!(d.inv());
     for _ in 0..6 {

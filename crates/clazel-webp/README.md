@@ -166,14 +166,15 @@ extended (`VP8X`) one, since its first bytes do not show which codec its
 images use. A simple lossless (`VP8L`) file is `Coding::Base` and keeps the
 6.8 size; a `VP8 ` chunk under a lossless config is refused.
 
-State, honestly: **built; tier unchanged at 0.** Eight harnesses were written
-in `src/proofs.rs` for item 6.9; six are harnesses and two are not. Measured
+State, honestly: **built; tier unchanged at 0.** Nine harnesses were written
+in `src/proofs.rs` for item 6.9; seven are harnesses and two are not. Measured
 locally, each run on its own under Kani 0.68.0 (CBMC 6.11.0) on a machine shared
 with other jobs (so the times are upper bounds):
 
 | Harness | Result |
 |---------|--------|
-| `bool_decoder_any` | **FAILS**, 13 s, 214 MB: `assert!(d.inv())` straight after `BoolDecoder::new` fails when the first input byte is 0xFF, since then `value` is at least `255 << 8`, which is not under `range << 8` (`inv`'s claim, and the comment on `value`, are false for that input; the bytes are 'any'). Neither the harness nor the code was changed: the fix (a weaker `inv` at the start, or clamping in `new`, which would differ from the RFC's arithmetic on streams no encoder writes) is the maintainer's. |
+| `bool_decoder_any` | proves (2026-11-23, local, with `bool_decoder_rfc_invariant` in one run): any 4 bytes, 6 decisions and a literal, no panic and `inv_any` (range and counters) kept. It first asserted `inv`, which fails when the first byte is 0xFF (`value` is then at least `255 << 8`, not under `range << 8`); no encoder writes that start, and the decoder stays total on it (every operation wraps or shifts). The code is unchanged; the harness now claims only what holds for any input |
+| `bool_decoder_rfc_invariant` | proves (same run): from a first byte below 0xFF (every start the RFC's encoder can write), `inv`, the RFC's `value < range << 8` included, is kept by 6 decisions and a literal |
 | `subblock_predict_any` | proves, 63 s, 710 MB, after raising `unwind` from 12 to 18 (the `all` over the 16 pixels of a subblock needs 17; at 12 it failed its unwinding assertion). A widening, not a narrowing |
 | `predict_block_edges_any` | proves, 27 s, 357 MB |
 | `loop_filter_any` | proves, 5 s, 313 MB |
@@ -181,9 +182,9 @@ with other jobs (so the times are upper bounds):
 | `yuv_to_rgb_any` | proves, 2 s, 180 MB |
 | `container_alpha`, `container_vp8` | **not harnesses**: no verdict in 40 minutes each (6 to 7 GB resident, MiniSat, `unwind(6)`); see the `// NOT a harness:` block in `src/proofs.rs`. The `ALPH` and `VP8 ` container phases are covered by unit tests, differential tests and Miri, not machine-checked |
 
-So the crate has 75 harnesses (the 69 of item 6.8 and 6), of which one,
-`bool_decoder_any`, fails as it stands. The 69 of 6.8 and the other five here
-were all run: the slowest are `act_dist_sym_predictor` (about 10.5 minutes,
+So the crate has 76 harnesses (the 69 of item 6.8 and 7). CI's run of
+2026-11-23 passed the other 74 and failed the first form of `bool_decoder_any`,
+since split as above. The 69 of 6.8 and the other five here were all run: the slowest are `act_dist_sym_predictor` (about 10.5 minutes,
 3.4 GB), `container_anim` (about 10 minutes, 2.6 GB) and `act_dist_sym_palette`
 (about 8 minutes, 3.5 GB). The whole-frame
 decode is not harnessed. Tests: all 14 Wuffs lossy files equal `image-webp`

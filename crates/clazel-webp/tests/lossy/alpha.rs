@@ -156,7 +156,7 @@ fn alpha_of_every_filter_and_compression_agrees() -> Result<(), String> {
         }
     }
     println!(
-        "clazel-conformance: suite=\"lossy with ALPH vs image-webp 0.2.4\" pass={} fail={} total={n}",
+        "clazel-conformance: suite=\"lossy with ALPH vs image-webp 0.2.4\" pass={} xfail=0 fail={} total={n}",
         usize::try_from(n).unwrap_or(0).saturating_sub(bad.len()),
         bad.len()
     );

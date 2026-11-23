@@ -63,6 +63,18 @@ impl<'a> BoolDecoder<'a> {
         }
     }
 
+    /// The part of the invariant that holds for every input, a hostile one
+    /// included: `range` and the counters in their ranges. The RFC's bound
+    /// on `value` (in `inv`) holds only from a start the RFC's encoder can
+    /// write: a first byte of 0xFF can put `value` at or above
+    /// `range << 8`. The decoder is still total then (every operation wraps
+    /// or shifts) and decodes some bits; the caller's checks on what they
+    /// mean are unchanged.
+    #[cfg(any(test, kani))]
+    pub(crate) fn inv_any(&self) -> bool {
+        (128..=255).contains(&self.range) && self.bit_count < 8 && self.next >= 2
+    }
+
     /// The invariant: `range` and `value` are in the ranges the RFC's
     /// comments give (`value < range << 8` is what makes every later `value`
     /// fit 16 bits), and the counters are in theirs.

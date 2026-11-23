@@ -319,7 +319,7 @@ fn lossy_written_frames_agree_with_the_reference() {
         }
     }
     println!(
-        "clazel-conformance: suite=\"lossy frames written by tests/lossy vs image-webp 0.2.4\" pass={} refused={refused} fail={} total={count}",
+        "clazel-conformance: suite=\"lossy frames written by tests/lossy vs image-webp 0.2.4\" pass={} xfail={refused} fail={} total={count}",
         usize::try_from(count)
             .unwrap_or(0)
             .saturating_sub(bad.len())
