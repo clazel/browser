@@ -102,6 +102,30 @@ pub open spec fn append_data_ensures(doc: Document, n: NodeId, data: Seq<u32>, o
     out == append_data(doc, n, data)
 }
 
+/// Precondition of `Arena::set_data(n, data)`: `n` is a `Text`, `Comment`
+/// or `ProcessingInstruction` node (DOM's `CharacterData`).
+pub open spec fn set_data_requires(doc: Document, n: NodeId) -> bool {
+    &&& wf(doc)
+    &&& valid(doc, n)
+    &&& (doc.nodes[n as int].kind is Text || doc.nodes[n as int].kind is Comment
+        || doc.nodes[n as int].kind is ProcessingInstruction)
+}
+
+/// Contract for `Arena::set_data(n, data)`.
+pub open spec fn set_data_ensures(doc: Document, n: NodeId, data: Seq<u32>, out: Document) -> bool {
+    out == set_data(doc, n, data)
+}
+
+/// Precondition of `Arena::set_wrapper(n, w)`: `n` is a node of the arena.
+pub open spec fn set_wrapper_requires(doc: Document, n: NodeId) -> bool {
+    wf(doc) && valid(doc, n)
+}
+
+/// Contract for `Arena::set_wrapper(n, w)`.
+pub open spec fn set_wrapper_ensures(doc: Document, n: NodeId, w: Option<nat>, out: Document) -> bool {
+    out == set_wrapper(doc, n, w)
+}
+
 /// Precondition of `Arena::append_attribute(e, attr)`: `e` is an element.
 pub open spec fn append_attribute_requires(doc: Document, e: NodeId) -> bool {
     wf(doc) && valid(doc, e) && doc.nodes[e as int].kind is Element

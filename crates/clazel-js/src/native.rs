@@ -111,6 +111,11 @@ pub enum Callable {
 /// open question 14).
 pub type NativeFn = dyn for<'s> Fn(&mut Scope<'s>, &Args<'s>) -> Result<Local<'s>> + Send + Sync;
 
+/// What [`Scope::shared_function`] takes: the same type as [`NativeFn`]
+/// (every native closure is `Sync` and re-entrant), kept as a name so
+/// embedders written against either spelling build.
+pub type SharedNativeFn = NativeFn;
+
 /// An answer from an exotic hook: do what an ordinary object does, or here is
 /// the answer.
 #[derive(Clone, Copy, Debug)]

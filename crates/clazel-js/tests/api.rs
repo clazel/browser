@@ -972,11 +972,12 @@ fn what_the_vm_lacks_says_so() -> Test {
         let object = scope.new_object()?;
         let key = Key::from("a");
         let not_implemented = |r: Result<()>| matches!(r, Err(Error::NotImplemented(_)));
-        assert!(not_implemented(scope.new_array(0).map(|_| ())));
-        assert!(not_implemented(scope.new_array_from(&[]).map(|_| ())));
-        assert!(not_implemented(
-            scope.delete_property(object, key).map(|_| ())
-        ));
+        // Arrays and `delete_property` were in this list until the VM had
+        // them (item 7.12 wired them): they now work, which the assertions
+        // keep checking.
+        assert!(scope.new_array(0).is_ok());
+        assert!(scope.new_array_from(&[]).is_ok());
+        assert!(scope.delete_property(object, key)?);
         assert!(not_implemented(scope.new_promise().map(|_| ())));
         assert!(not_implemented(scope.promise_resolve(object).map(|_| ())));
         assert!(not_implemented(scope.new_array_buffer(vec![1]).map(|_| ())));

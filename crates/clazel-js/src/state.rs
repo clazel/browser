@@ -97,7 +97,6 @@ impl State {
     }
 }
 
-/// The message of the error an operation the interpreter lacks gives.
 pub(crate) const NOT_YET: &str = "an operation the interpreter does not implement yet";
 
 /// The VM's reason a run ended, as the API's error. A thrown value becomes an

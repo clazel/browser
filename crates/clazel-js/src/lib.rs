@@ -43,7 +43,7 @@ pub use host::{
     CompileStrings, DefaultHost, DynamicCodeKind, Host, Job, JobCallback, RejectionOperation,
     Resize,
 };
-pub use native::{Args, Callable, Exotic, HostObject, NativeFn, Tracer};
+pub use native::{Args, Callable, Exotic, HostObject, NativeFn, SharedNativeFn, Tracer};
 pub use runtime::{Config, JitMode, Limits, Runtime, Terminator};
 pub use scope::{Resolvers, Scope};
 pub use value::{

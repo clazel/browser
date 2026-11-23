@@ -22,10 +22,16 @@
 //! module scripts as far as the engine goes, `javascript:` URLs and
 //! `performance.now()`, through `clazel-js`'s embedding API.
 //!
+//! Item 7.12's platform is [`page`]: the page's platform objects (the DOM,
+//! events, `Window`, `Location`, `History`, `Navigator`, `console`) exposed
+//! to script through `clazel-webidl`'s generated bindings and `clazel-js`'s
+//! embedding API.
+//!
 //! Tier 0 (`Cargo.toml`): safe Rust, tested, nothing proven.
 
 pub mod event_loop;
 pub mod events;
+pub mod page;
 pub mod scripting;
 pub mod selectors;
 pub mod serialize;

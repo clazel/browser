@@ -200,6 +200,10 @@ pub struct Descriptor {
     pub value: Option<Value>,
     /// `[[Writable]]`.
     pub writable: Option<bool>,
+    /// `[[Get]]`: a function or `undefined`.
+    pub get: Option<Value>,
+    /// `[[Set]]`: a function or `undefined`.
+    pub set: Option<Value>,
     /// `[[Enumerable]]`.
     pub enumerable: Option<bool>,
     /// `[[Configurable]]`.
@@ -214,10 +218,14 @@ pub struct Descriptor {
 ///    a. Let enumerable be ToBoolean(? Get(Obj, "enumerable")).
 ///    b. Set desc.[[Enumerable]] to enumerable.
 /// 5. to 10. The same for "configurable", "value" and "writable".
-/// 11. to 14. "get" and "set": accessors are not yet, `NotYet`.
-/// 15. If desc has a [[Get]] or [[Set]] field and a [[Value]] or
-///     [[Writable]] field, throw a TypeError (not reachable while accessors
-///     are `NotYet`).
+/// 11. Let hasGet be ? HasProperty(Obj, "get").
+/// 12. If hasGet is true, then a. Let getter be ? Get(Obj, "get"). b. If
+///     IsCallable(getter) is false and getter is not undefined, throw a
+///     TypeError exception. c. Set desc.[[Get]] to getter.
+/// 13. and 14. The same for "set".
+/// 15. If desc has a [[Get]] or [[Set]] field, then a. If desc has a
+///     [[Value]] or [[Writable]] field, throw a TypeError exception.
+/// 16. Return desc.
 fn to_property_descriptor(vm: &mut Vm, obj: Value) -> Result<Descriptor, Abrupt> {
     if !vm.heap().is_object(obj) {
         return Err(vm.type_error("Property description must be an object"));
@@ -236,12 +244,21 @@ fn to_property_descriptor(vm: &mut Vm, obj: Value) -> Result<Descriptor, Abrupt>
     let writable = field(vm, "writable")?;
     let get = field(vm, "get")?;
     let set = field(vm, "set")?;
-    if get.is_some() || set.is_some() {
-        return Err(Abrupt::NotYet("accessor property descriptors".into()));
+    for f in [get, set].into_iter().flatten() {
+        if f != Value::UNDEFINED && !vm.heap().is_callable(f) {
+            return Err(vm.type_error("Getter or setter must be a function"));
+        }
+    }
+    if (get.is_some() || set.is_some()) && (value.is_some() || writable.is_some()) {
+        return Err(vm.type_error(
+            "Invalid property descriptor. Cannot both specify accessors and a value or writable attribute",
+        ));
     }
     Ok(Descriptor {
         value,
         writable: writable.map(|v| vm.to_boolean(v)),
+        get,
+        set,
         enumerable: enumerable.map(|v| vm.to_boolean(v)),
         configurable: configurable.map(|v| vm.to_boolean(v)),
     })
@@ -279,6 +296,8 @@ pub fn define_property_or_throw(
     let d = PropDesc {
         value: desc.value,
         writable: desc.writable,
+        get: desc.get,
+        set: desc.set,
         enumerable: desc.enumerable,
         configurable: desc.configurable,
     };

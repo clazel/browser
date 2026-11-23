@@ -380,4 +380,35 @@ pub proof fn ml_fragment_takes_children()
     theorem_append_wf(ml_doc_template(), 4, 1);
 }
 
+/// `theorem_set_data_wf` on [`ml_doc_data`]: setting the data `[1]` to
+/// `[2]` leaves 2 first.
+pub proof fn ml_set_data_replaces()
+    ensures
+        set_data(ml_doc_data(), 1, seq![2u32]).nodes[1].kind->Text_data[0] == 2u32,
+{
+    let d0 = new_document(seq![]);
+    theorem_new_document_wf(seq![]);
+    assert(creatable(new_document(seq![]), NodeKind::Text { data: seq![1u32] })) by (compute_only);
+    assert(can_create(new_document(seq![]), 1)) by (compute_only);
+    theorem_create_node_wf(d0, NodeKind::Text { data: seq![1u32] });
+    assert(ml_doc_data().nodes[1].kind == (NodeKind::Text { data: seq![1u32] })) by (compute_only);
+    assert(ml_doc_data().nodes.len() == 2) by (compute_only);
+    theorem_set_data_wf(ml_doc_data(), 1, seq![2u32]);
+}
+
+/// `theorem_set_wrapper_wf` on [`ml_doc_data`]: node 1's wrapper slot
+/// becomes 7.
+pub proof fn ml_set_wrapper_sets()
+    ensures
+        set_wrapper(ml_doc_data(), 1, Some(7nat)).nodes[1].wrapper == Some(7nat),
+{
+    let d0 = new_document(seq![]);
+    theorem_new_document_wf(seq![]);
+    assert(creatable(new_document(seq![]), NodeKind::Text { data: seq![1u32] })) by (compute_only);
+    assert(can_create(new_document(seq![]), 1)) by (compute_only);
+    theorem_create_node_wf(d0, NodeKind::Text { data: seq![1u32] });
+    assert(ml_doc_data().nodes.len() == 2) by (compute_only);
+    theorem_set_wrapper_wf(ml_doc_data(), 1, Some(7nat));
+}
+
 } // verus!
