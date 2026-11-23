@@ -69,7 +69,7 @@ proof fn lemma_cons_no_show(o: Output, rest: Seq<Output>)
 /// with replies to the sender, or starts a navigation.
 proof fn lemma_handle_no_show(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, r: Renderer, m: clazel_ipc::message::spec::Message)
     requires
-        crate::invariant::renderers_wf(urls, s.renderers, s.next_id),
+        crate::invariant::kernel_wf(rules, urls, s),
         !(m is Display),
     ensures
         no_show(handle_message(rules, urls, fetch, s, r, m).1),
@@ -117,7 +117,33 @@ proof fn lemma_handle_no_show(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, 
         clazel_ipc::message::spec::Message::Fetch { .. } => {
             crate::api_rel::lemma_api_msg_shape(rules, urls, fetch, s, r, m);
         },
+        // Item 7.16: a popup is the host's `OpenTab`.
+        clazel_ipc::message::spec::Message::OpenTab { url } => {
+            crate::popup_rel::lemma_popup_resolved(rules, urls, fetch, s, r, url);
+            if let Some(resolved) = crate::popup_rel::popup_resolved(urls, s, r, url) {
+                lemma_open_tab_no_show(rules, urls, fetch, s, resolved, None);
+            }
+        },
         _ => {},
+    }
+}
+
+/// `open_tab` shows nothing: it spawns, and starts the new tab's fetch.
+proof fn lemma_open_tab_no_show(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, url: Seq<u32>, script: Option<Seq<u8>>)
+    requires
+        crate::invariant::kernel_wf(rules, urls, s),
+    ensures
+        no_show(open_tab(rules, urls, fetch, s, url, script).1),
+{
+    let id = s.next_id;
+    if let Some(lock) = lock_of_url(urls, url, id) {
+        if script is None {
+            let rn = Renderer { committed: false, id, tab: id, url, lock, pending: None };
+            let sp = State { renderers: s.renderers.push(rn), next_id: id + 1, ..s };
+            crate::invariant::lemma_open_tab_push_wf(rules, urls, s, url, lock, false);
+            lemma_begin_no_show(rules, urls, fetch, sp, id, url, clazel_fetch::request::spec::get_req());
+            lemma_cons_no_show(Output::Spawn { id, policy: Policy::Renderer }, begin_navigation(rules, urls, fetch, sp, id, url, clazel_fetch::request::spec::get_req()).1);
+        }
     }
 }
 

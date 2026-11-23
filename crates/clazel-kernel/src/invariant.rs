@@ -818,6 +818,23 @@ pub proof fn lemma_step_preserves_wf(rules: Seq<clazel_psl::spec::Rule>, urls: U
                         clazel_ipc::message::spec::Message::UpdateUrl { replace, url } => {
                             crate::url_rel::lemma_update_url_wf(rules, urls, s, r, url);
                         },
+                        // Item 7.16: a popup spends the activation, then is the
+                        // host's `OpenTab` without a script.
+                        clazel_ipc::message::spec::Message::OpenTab { url } => {
+                            if activation_left(s.acts, r) > 0 {
+                                if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+                                    if let Some(resolved) = (urls.resolve)(r.url, relative) {
+                                        let id = s.next_id;
+                                        if let Some(lock) = lock_of_url(urls, resolved, id) {
+                                            lemma_open_tab_push_wf(rules, urls, s, resolved, lock, false);
+                                            let rn = Renderer { committed: false, id, tab: id, url: resolved, lock, pending: None };
+                                            let s1 = State { renderers: s.renderers.push(rn), next_id: id + 1, ..s };
+                                            crate::net_wf::lemma_begin_navigation_wf(rules, urls, fetch, s1, id, resolved, clazel_fetch::request::spec::get_req());
+                                        }
+                                    }
+                                }
+                            }
+                        },
                         clazel_ipc::message::spec::Message::Submit { url, method, content_type, body } => {
             if let Some(req) = submit_request(r, method, content_type, body) {
                             if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {

@@ -147,6 +147,13 @@ pub proof fn theorem_reply_only_to_sender(rules: Seq<clazel_psl::spec::Rule>, ur
                 } else if m is UpdateUrl {
                     // Item 7.16: an `UpdateUrl` has no output.
                     crate::url_rel::lemma_update_url_shape(urls, s, r, m->UpdateUrl_url);
+                } else if let clazel_ipc::message::spec::Message::OpenTab { url } = m {
+                    // Item 7.16: a popup is the host's `OpenTab`: the new renderer
+                    // is spawned and told, and nothing else is sent.
+                    crate::popup_rel::lemma_popup_resolved(rules, urls, fetch, s, r, url);
+                    if let Some(resolved) = crate::popup_rel::popup_resolved(urls, s, r, url) {
+                        crate::popup_rel::lemma_open_tab_outputs(rules, urls, fetch, s, resolved);
+                    }
                 } else if m is Fetch {
                     // Item 7.16: a `Fetch` answers its sender and asks for
                     // its sender's sub-fetch connections only.

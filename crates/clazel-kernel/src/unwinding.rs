@@ -69,6 +69,8 @@ pub proof fn lemma_navigate_tab_consistency(
             crate::surface_rel::lemma_titles_forget_same(rules, s1.titles, s2.titles, old.id, old.lock, d);
             // Item 7.16: a kept renderer's document URL is forgotten in both runs.
             crate::url_rel::lemma_doc_urls_forget_same(rules, s1.doc_urls, s2.doc_urls, old.id, old.lock, d);
+            // Item 7.16: and so is its user activation.
+            crate::popup_rel::lemma_acts_forget_same(rules, s1.acts, s2.acts, old.id, old.lock, d);
             // Item 5.19: a kept renderer's sub-fetches end in both runs.
             crate::subfetch_rel::lemma_end_domain(rules, s1.subfetches, s2.subfetches, old.id, old.lock, d);
             crate::subfetch_rel::lemma_new_document_domain(rules, s1.subcounts, s2.subcounts, old.id, old.lock, d);
@@ -140,6 +142,8 @@ pub proof fn lemma_rel_after_update(
         s2b.titles == s2.titles,
         s1b.doc_urls == s1.doc_urls,
         s2b.doc_urls == s2.doc_urls,
+        s1b.acts == s1.acts,
+        s2b.acts == s2.acts,
         s1b.subfetches == s1.subfetches,
         s2b.subfetches == s2.subfetches,
         s1b.subcounts == s1.subcounts,
@@ -234,6 +238,7 @@ pub proof fn lemma_rel_from_sets(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
         s1.gpu.sites == s2.gpu.sites,
         crate::domain::gpu_recs_of_domain(rules, s1.gpu.recs, d) == crate::domain::gpu_recs_of_domain(rules, s2.gpu.recs, d),
         crate::domain::doc_urls_of_domain(rules, s1.doc_urls, d) == crate::domain::doc_urls_of_domain(rules, s2.doc_urls, d),
+        crate::domain::acts_of_domain(rules, s1.acts, d) == crate::domain::acts_of_domain(rules, s2.acts, d),
     ensures
         crate::noninterference::rel(rules, urls, d, s1, s2),
 {
@@ -443,6 +448,8 @@ pub proof fn lemma_tick_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: Ur
         let k = choose|k: int| 0 <= k < s1.renderers.len() && s1.renderers[k] == x;
     }
     assert(s1b.conns == s1.conns && s2b.conns == s2.conns && s1b.next_conn == s1.next_conn && s2b.next_conn == s2.next_conn && s1b.renderers == s1.renderers && s2b.renderers == s2.renderers);
+    // Item 7.16: every activation ages by the same tick in both runs.
+    crate::popup_rel::lemma_acts_age_same(rules, s1.acts, s2.acts, d);
     lemma_rel_from_sets(rules, urls, d, s1b, s2b);
 }
 

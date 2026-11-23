@@ -66,6 +66,13 @@ pub proof fn lemma_local_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
                 }
             }
         }
+        // Item 7.16: a popup that opens a tab has a declassified part.
+        if let clazel_ipc::message::spec::Message::OpenTab { url } = m {
+            crate::popup_rel::lemma_popup_resolved(rules, urls, fetch, s, r, url);
+            if crate::popup_rel::popup_resolved(urls, s, r, url) is Some {
+                assert(false);
+            }
+        }
         if is_sub_request(m) {
             crate::subfetch_rel::lemma_fetch_sub_shape(rules, urls, fetch, s, r, m is FetchScript, sub_request_id(m), sub_request_url(m));
         }
@@ -113,6 +120,13 @@ pub proof fn lemma_local_table(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns,
                 if let Some(resolved) = (urls.resolve)(r.url, relative) {
                     assert(false);
                 }
+            }
+        }
+        // Item 7.16: a popup that opens a tab has a declassified part.
+        if let clazel_ipc::message::spec::Message::OpenTab { url } = m {
+            crate::popup_rel::lemma_popup_resolved(rules, urls, fetch, s, r, url);
+            if crate::popup_rel::popup_resolved(urls, s, r, url) is Some {
+                assert(false);
             }
         }
     }

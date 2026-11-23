@@ -1266,7 +1266,7 @@ pub proof fn lemma_handle_message_conns(rules: Seq<clazel_psl::spec::Rule>, urls
                 s,
                 r,
                 m,
-            )) == begin_navigation(rules, urls, fetch, s, r.tab, resolved, req))
+            )) == begin_navigation(rules, urls, fetch, s, r.tab, resolved, req)) || (m is OpenTab && exists|resolved: Seq<u32>| #[trigger] (handle_message(rules, urls, fetch, s, r, m)) == popup_result(rules, urls, fetch, s, r, resolved))
         }),
 {
     match m {
@@ -1309,6 +1309,18 @@ pub proof fn lemma_handle_message_conns(rules: Seq<clazel_psl::spec::Rule>, urls
         clazel_ipc::message::spec::Message::Fetch { .. } => {
             crate::api_rel::lemma_api_msg_shape(rules, urls, fetch, s, r, m);
         },
+        // Item 7.16: a popup with a live activation is the host's `OpenTab` of
+        // the resolved URL on the state with the activation spent; otherwise
+        // nothing happens.
+        clazel_ipc::message::spec::Message::OpenTab { url } => {
+            if activation_left(s.acts, r) > 0 {
+                if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+                    if let Some(resolved) = (urls.resolve)(r.url, relative) {
+                        assert(handle_message(rules, urls, fetch, s, r, m) == popup_result(rules, urls, fetch, s, r, resolved));
+                    }
+                }
+            }
+        },
         _ => {
             crate::lock::lemma_storage_call_frame(s, r, m);
         },
@@ -1319,7 +1331,7 @@ pub proof fn lemma_handle_message_conns(rules: Seq<clazel_psl::spec::Rule>, urls
 pub proof fn lemma_step_non_navigate_conns(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat, bytes: Seq<u8>)
     requires
         find_by_id(s.renderers, id, 0) is Some,
-        accepted_message(s.renderers[find_by_id(s.renderers, id, 0)->Some_0], bytes) matches Some(m) && !(m is Navigate) && !(m is Submit),
+        accepted_message(s.renderers[find_by_id(s.renderers, id, 0)->Some_0], bytes) matches Some(m) && !(m is Navigate) && !(m is Submit) && !(m is OpenTab),
     ensures
         step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).0.conns == s.conns,
         step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).0.next_conn == s.next_conn,
@@ -1365,6 +1377,15 @@ pub proof fn lemma_local_conns(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns,
                 if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
                     if let Some(resolved) = (urls.resolve)(r.url, relative) {
                         if lock_of_url(urls, resolved, s.next_id) is Some {
+                            assert(false);
+                        }
+                    }
+                }
+            } else if let clazel_ipc::message::spec::Message::OpenTab { url } = m {
+                // Item 7.16: a popup that passes has a declassified part.
+                if activation_left(s.acts, r) > 0 {
+                    if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+                        if let Some(resolved) = (urls.resolve)(r.url, relative) {
                             assert(false);
                         }
                     }
@@ -1675,6 +1696,34 @@ pub proof fn lemma_own_all_unchanged(s: State, s1: State, out: Seq<Output>, t: O
     lemma_own_unchanged(s, s1, out, t);
 }
 
+/// Item 7.16: a renderer's `OpenTab` that passes is the host's `OpenTab` of
+/// the resolved URL on the state with the activation spent; its connections
+/// are the new tab's.
+pub proof fn lemma_own_all_popup(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, r: Renderer, m: clazel_ipc::message::spec::Message)
+    requires
+        crate::invariant::kernel_wf(rules, urls, s),
+        kernel_wf_conns(s),
+        m is OpenTab,
+    ensures
+        ({
+            let (s1, out) = handle_message(rules, urls, fetch, s, r, m);
+            own_all(s, s1, out, Some(s.next_id))
+        }),
+{
+    let (s1, out) = handle_message(rules, urls, fetch, s, r, m);
+    lemma_handle_message_conns(rules, urls, fetch, s, r, m);
+    if exists|resolved: Seq<u32>| #[trigger] handle_message(rules, urls, fetch, s, r, m) == popup_result(rules, urls, fetch, s, r, resolved) {
+        let resolved = choose|resolved: Seq<u32>| #[trigger] handle_message(rules, urls, fetch, s, r, m) == popup_result(rules, urls, fetch, s, r, resolved);
+        lemma_own_all_open_tab(rules, urls, fetch, s, resolved, None);
+        assert(step(rules, urls, fetch, s, Event::OpenTab { url: resolved, script: None }) == open_tab(rules, urls, fetch, s, resolved, None));
+        let (s1o, outo) = open_tab(rules, urls, fetch, s, resolved, None);
+        assert(s1.conns == s1o.conns && s1.next_conn == s1o.next_conn && s1.renderers == s1o.renderers);
+    } else {
+        assert(s1.conns == s.conns && s1.next_conn == s.next_conn);
+        lemma_own_all_unchanged(s, s1, out, Some(s.next_id));
+    }
+}
+
 /// A renderer's frame.
 pub proof fn lemma_own_all_from_renderer(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat, bytes: Seq<u8>)
     requires
@@ -1701,6 +1750,9 @@ pub proof fn lemma_own_all_from_renderer(rules: Seq<clazel_psl::spec::Rule>, url
                 lemma_handle_message_conns(rules, urls, fetch, s, r, m);
                 if own_none(s, s1, out) {
                     lemma_own_all_unchanged(s, s1, out, t);
+                } else if m is OpenTab {
+                    // Item 7.16: the popup's fetch is the new tab's.
+                    lemma_own_all_popup(rules, urls, fetch, s, r, m);
                 } else {
                     if let clazel_ipc::message::spec::Message::Submit { url, method, content_type, body } = m {
         if let Some(req) = submit_request(r, method, content_type, body) {

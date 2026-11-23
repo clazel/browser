@@ -81,7 +81,7 @@ pub open spec fn message_texts_ok(m: clazel_ipc::message::spec::Message) -> bool
         clazel_ipc::message::spec::Message::StyleResponse { content_type, .. } => bytes_ok(content_type),
         clazel_ipc::message::spec::Message::StyleBody { bytes, .. } => bytes_ok(bytes),
         clazel_ipc::message::spec::Message::StyleEnd { .. } | clazel_ipc::message::spec::Message::StyleFailed { .. } => true,
-        clazel_ipc::message::spec::Message::FetchScript { url, .. } | clazel_ipc::message::spec::Message::UpdateUrl { url, .. } => text_ok(url),
+        clazel_ipc::message::spec::Message::FetchScript { url, .. } | clazel_ipc::message::spec::Message::UpdateUrl { url, .. } | clazel_ipc::message::spec::Message::OpenTab { url } => text_ok(url),
         clazel_ipc::message::spec::Message::ScriptResponse { content_type, .. } => bytes_ok(content_type),
         clazel_ipc::message::spec::Message::ScriptBody { bytes, .. } => bytes_ok(bytes),
         clazel_ipc::message::spec::Message::ScriptEnd { .. } | clazel_ipc::message::spec::Message::ScriptFailed { .. } => true,
@@ -254,6 +254,10 @@ pub proof fn lemma_message_ok(m: clazel_ipc::message::spec::Message)
         clazel_ipc::message::spec::Message::FetchScript { request, url } => {
             lemma_msg(m, 3, 16, seq![clazel_ipc::cbor::spec::Token::Uint(request), clazel_ipc::cbor::spec::Token::Text(url)]);
             lemma_two(clazel_ipc::cbor::spec::Token::Uint(request), clazel_ipc::cbor::spec::Token::Text(url));
+        },
+        clazel_ipc::message::spec::Message::OpenTab { url } => {
+            lemma_msg(m, 2, 21, seq![clazel_ipc::cbor::spec::Token::Text(url)]);
+            lemma_one(clazel_ipc::cbor::spec::Token::Text(url));
         },
         clazel_ipc::message::spec::Message::UpdateUrl { replace, url } => {
             lemma_msg(m, 3, 17, seq![clazel_ipc::cbor::spec::Token::Bool(replace), clazel_ipc::cbor::spec::Token::Text(url)]);
@@ -470,7 +474,7 @@ pub fn message_ok_exec(m: &Msg) -> (r: bool)
         Msg::StyleResponse { content_type, .. } => bytes_ok_exec(content_type.as_slice()),
         Msg::StyleBody { bytes, .. } => bytes_ok_exec(bytes.as_slice()),
         Msg::StyleEnd { .. } | Msg::StyleFailed { .. } => true,
-        Msg::FetchScript { url, .. } | Msg::UpdateUrl { url, .. } => text_ok_exec(url.as_slice()),
+        Msg::FetchScript { url, .. } | Msg::UpdateUrl { url, .. } | Msg::OpenTab { url } => text_ok_exec(url.as_slice()),
         Msg::ScriptResponse { content_type, .. } => bytes_ok_exec(content_type.as_slice()),
         Msg::ScriptBody { bytes, .. } => bytes_ok_exec(bytes.as_slice()),
         Msg::ScriptEnd { .. } | Msg::ScriptFailed { .. } => true,

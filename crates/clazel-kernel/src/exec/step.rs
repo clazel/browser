@@ -770,6 +770,9 @@ pub fn navigate_tab_exec<U: UrlFnsExec, F: FetchFnsExec>(
                         // Item 7.16: the old document's URL goes.
                         let doc_urls = super::surfaces::forget_doc_url_exec(s.doc_urls.as_slice(), old.id, &old.lock);
                         s.doc_urls = doc_urls;
+                        // Item 7.16: the new document has no user activation.
+                        let acts = super::surfaces::forget_activation_exec(s.acts.as_slice(), old.id, &old.lock);
+                        s.acts = acts;
                         let ghost old_renderers = s.renderers@;
                         let rec = RendererRecord { committed: true, id: old.id, tab: old.tab, url: copy(url), lock: old.lock, pending: None };
                         let ghost rv = rec@;
@@ -1390,6 +1393,7 @@ pub fn net_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRec
                     let subcounts = s.subcounts;
                     let gpu = s.gpu;
                     let doc_urls = s.doc_urls;
+                    let acts = s.acts;
                     let mut renderers = renderers;
                     let ghost old_renderers = renderers@;
                     let rec = renderers.remove(i);
@@ -1404,7 +1408,7 @@ pub fn net_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRec
                             proof {
                                 assert(false);
                             }
-                            (StateRecord { renderers, jar, storage, next_id, conns, next_conn, now, viewports, titles, subfetches, subcounts, gpu, doc_urls }, no_outputs())
+                            (StateRecord { renderers, jar, storage, next_id, conns, next_conn, now, viewports, titles, subfetches, subcounts, gpu, doc_urls, acts }, no_outputs())
                         },
                         Some(nav) => {
                             let nurl = nav.url;
@@ -1449,7 +1453,7 @@ pub fn net_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRec
                                 lemma_ok_remove::<F>(old_renderers, i as int);
                                 lemma_ok_insert::<F>(old_renderers.remove(i as int), i as int, rec2);
                             }
-                            let s1 = StateRecord { renderers, jar: jar1, storage, next_id, conns: conns1, next_conn, now, viewports, titles, subfetches, subcounts, gpu, doc_urls };
+                            let s1 = StateRecord { renderers, jar: jar1, storage, next_id, conns: conns1, next_conn, now, viewports, titles, subfetches, subcounts, gpu, doc_urls, acts };
                             carry_out_exec::<U, F>(urls, s1, ctab, &partition, Some(conn), actions)
                         },
                     }
@@ -1478,6 +1482,9 @@ pub fn tick_exec(s: StateRecord, time: u64) -> (out: (StateRecord, Vec<OutputRec
     let jar = evict_expired_exec(s.jar.as_slice(), now);
     s.jar = jar;
     s.now = now;
+    // Item 7.16: one tick of every activation's window.
+    let acts = super::surfaces::age_activations_exec(s.acts.as_slice());
+    s.acts = acts;
     (s, no_outputs())
 }
 
@@ -1530,7 +1537,7 @@ pub fn renderer_exited_exec<F: FetchFnsExec>(s: StateRecord, id: u64) -> (out: (
 pub open spec fn state_ok<F: FetchFnsExec>(urls: UrlFns, s: StateRecord) -> bool {
     &&& crate::invariant::kernel_wf(crate::contract::psl(), urls, s@)
     &&& clazel_cookie::set_cookie::contract::now_in_range(s.now as int)
-    &&& s.next_id < 0xFFFF_FFFF_FFFF_FFFFu64
+    &&& s.next_id + 1 < 0xFFFF_FFFF_FFFF_FFFFu64
     &&& s.next_conn as nat + conn_headroom() <= 0xFFFF_FFFF_FFFF_FFFFnat
     &&& s.exec_wf::<F>()
 }
@@ -1581,6 +1588,8 @@ proof fn lemma_handle_message_idle(rules: Seq<clazel_psl::spec::Rule>, urls: Url
 {
     // Item 7.16: the document URL is read by id, lock and committed URL.
     crate::url_rel::lemma_doc_url_of_fields(s.doc_urls, Renderer { pending: None, ..r }, r);
+    // Item 7.16: an activation is read by id and lock.
+    crate::popup_rel::lemma_activation_left_fields(s.acts, Renderer { pending: None, ..r }, r);
     if let clazel_ipc::message::spec::Message::Fetch { request, method, url, content_type, body, mode, headers } = m {
         lemma_fetch_api_idle(rules, urls, fetch, s, r, request, method, url, content_type, body, mode, headers);
     }
@@ -1598,7 +1607,7 @@ pub fn handle_message_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, 
         result_view(out) == handle_message(crate::contract::psl(), urls.urls(), fetch.fetch(), s@, s@.renderers[i as int], m@),
         out.0.exec_wf::<F>(),
         out.0.now == s.now,
-        out.0.next_id <= s.next_id + 1,
+        out.0.next_id <= s.next_id + 2,
         out.0.next_conn as nat <= s.next_conn as nat + conn_headroom(),
 {
     let ghost sv = s@;
@@ -1722,6 +1731,27 @@ pub fn handle_message_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, 
         },
         // Item 7.16: `update_url`.
         Msg::UpdateUrl { replace: _, url } => update_url_exec(urls, s, &r, url.as_slice()),
+        // Item 7.16: `open_tab_from`, the popup the kernel's own record of a
+        // user input allows.
+        Msg::OpenTab { url } => {
+            if super::surfaces::activation_left_exec(s.acts.as_slice(), &r) == 0 {
+                (s, no_outputs())
+            } else {
+                match clazel_encoding::utf8::decode::decode_without_bom_or_fail(url.as_slice()) {
+                    None => (s, no_outputs()),
+                    Some(relative) => match urls.resolve(r.url.as_slice(), relative.as_slice()) {
+                        None => (s, no_outputs()),
+                        Some(resolved) => {
+                            let (s1, outs) = open_tab_exec::<U, F>(urls, fetch, s, resolved.as_slice(), &None);
+                            let mut s1 = s1;
+                            let acts = super::surfaces::forget_activation_exec(s1.acts.as_slice(), r.id, &r.lock);
+                            s1.acts = acts;
+                            (s1, outs)
+                        },
+                    },
+                }
+            }
+        },
         Msg::Title { title } => {
             let mut s = s;
             let titles = super::surfaces::set_title_exec(s.titles.as_slice(), r.id, &r.lock, title);
@@ -1811,6 +1841,8 @@ pub fn kill_renderer_exec<F: FetchFnsExec>(s: StateRecord, i: usize, id: u64) ->
 }
 
 /// `FromRenderer(id, bytes)` ([`from_renderer`]).
+#[verifier::spinoff_prover]
+#[verifier::rlimit(100)]
 pub fn from_renderer_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRecord, id: u64, bytes: &[u8]) -> (out: (
     StateRecord,
     Vec<OutputRecord>,
@@ -1822,7 +1854,7 @@ pub fn from_renderer_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s
         result_view(out) == from_renderer(crate::contract::psl(), urls.urls(), fetch.fetch(), s@, id as nat, bytes@),
         out.0.exec_wf::<F>(),
         out.0.now == s.now,
-        out.0.next_id <= s.next_id + 1,
+        out.0.next_id <= s.next_id + 2,
         out.0.next_conn as nat <= s.next_conn as nat + conn_headroom(),
 {
     match find_by_id_exec(s.renderers.as_slice(), id) {
@@ -1834,7 +1866,7 @@ pub fn from_renderer_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s
                         Some(r) => r.committed,
                         None => false,
                     };
-                    let display = matches!(m, Msg::Display { .. } | Msg::Title { .. } | Msg::FetchStyle { .. } | Msg::FetchScript { .. } | Msg::Submit { .. } | Msg::UpdateUrl { .. } | Msg::Fetch { .. });
+                    let display = matches!(m, Msg::Display { .. } | Msg::Title { .. } | Msg::FetchStyle { .. } | Msg::FetchScript { .. } | Msg::Submit { .. } | Msg::UpdateUrl { .. } | Msg::OpenTab { .. } | Msg::Fetch { .. });
                     if clazel_ipc::message::codec::is_from_renderer(&m) && (committed || !display) {
                         handle_message_exec(urls, fetch, s, i, m)
                     } else {

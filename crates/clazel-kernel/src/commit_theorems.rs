@@ -466,6 +466,14 @@ proof fn lemma_handle_message_sent(
                 }
             }
         }
+    } else if let clazel_ipc::message::spec::Message::OpenTab { url } = m {
+        // Item 7.16: a popup adds a renderer, as the host's `OpenTab` does.
+        crate::popup_rel::lemma_popup_resolved(rules, urls, fetch, s, r, url);
+        if let Some(resolved) = crate::popup_rel::popup_resolved(urls, s, r, url) {
+            lemma_open_tab_sent(rules, urls, fetch, s, o, resolved, None);
+        } else {
+            assert(s1.renderers == s.renderers);
+        }
     } else {
         assert(s1.renderers == s.renderers);
     }

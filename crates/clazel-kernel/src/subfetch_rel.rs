@@ -744,7 +744,7 @@ pub proof fn lemma_tick_all_shape(s: State, time: int)
             let (s1, out) = tick_all(s, time);
             let t = tick(s, time).0;
             &&& s1 == State { subfetches: s1.subfetches, ..t }
-            &&& t == State { jar: t.jar, now: t.now, ..s }
+            &&& t == State { jar: t.jar, now: t.now, acts: t.acts, ..s }
             &&& sweep_outputs_ok(t, s.subfetches, out)
         }),
 {

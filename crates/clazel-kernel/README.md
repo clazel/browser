@@ -274,6 +274,83 @@ re-proven with `Fetch` in the renderer's messages.
 - `FetchScript`'s cross-origin responses are still handed over whole
   (opaque-response blocking is not built).
 
+## Popups and `javascript:` URLs (phase-7.md item 7.16)
+
+A committed renderer's `OpenTab { url }` (`window.open` and `target=_blank`,
+tag 21) opens a new tab at `url`, resolved against its committed URL, but only
+if the kernel itself recorded a user input to that renderer a short while
+before. There is no reply: a refused popup changes nothing. The tab is the
+host's own `OpenTab` without a script (a new renderer locked to the URL's
+origin that starts the fetch).
+
+### Decisions (taken here, from the plan's goals; each is also in `src/spec.rs`)
+
+1. **The activation is the kernel's own record**, a lock-tagged table
+   (`State::acts`, entries `Activation { id, lock, left }`), set only by the
+   host's `Input` event for a click or a key to a committed renderer (not a
+   scroll), and read only by the pair (id, lock). The message carries
+   nothing about it. A popup spends it (HTML's "consume user activation"); a
+   same-origin commit forgets it.
+2. **Time is a count of kernel steps, not wall time.** The window is
+   `activation_window()` = 1000 `Tick` events: every `Tick` takes one off
+   every entry, and an entry with none left is expired. The host sends a
+   `Tick` before every other event it gives the kernel and whenever it is
+   idle, so a window is at most 1000 host events or idle polls. Only ticks
+   count: a page cannot send one, and another domain's events do not change
+   the count (a `Tick` is public, as the time is).
+3. **A refused popup is silent**, and a popup to a URL that decodes and
+   resolves but has no lock (an invalid origin, a `javascript:` URL) opens no
+   tab and still spends the activation.
+4. **Noninterference.** The activation is in the sender's domain. For every
+   other observer a popup that opens a tab is replaced by the host's `OpenTab`
+   of the resolved URL (`declassified`), as a `Navigate` is by a `NavigateTab`.
+
+`javascript:` URLs: `UrlFns::is_javascript` (the shipped one reads the
+scheme the basic URL parser gives) and `lock_of_url`, through which every URL
+a renderer is locked to passes, refuses it. So the user's typed URL
+(`OpenTab`, `NavigateTab`), a renderer's `Navigate`, `Submit`, `OpenTab` and
+`UpdateUrl`, and the final URL of a fetch never commit one. The renderer
+runs the `javascript:` URLs of links the page drew itself.
+
+### Theorems
+
+`theorem_popup_needs_input` (`popup_theorems.rs`; statement in
+`statements.rs`): over every run from the first state, a frame of renderer
+`id` that opens a tab follows an `Input` event of the run, a click or a key,
+that the kernel delivered to `id` (its step sent `id` the `Input` frame), with
+fewer than `activation_window()` `Tick` events after it.
+`theorem_popup_needs_activation` is its step: the frame is a committed
+renderer's `OpenTab`, the kernel held a live activation for the sender before
+the step, and the step spent it. The proof is the frame lemmas of
+`popup_frame.rs` (no function of the step but the popup adds a tab, and none
+but an `Input` adds or raises an activation) and `lemma_run_acts` (where an
+entry with ticks left over a run comes from).
+
+`theorem_no_javascript_url`: in every reachable state no renderer, committed
+or not, and no document URL holds a URL whose scheme is `javascript`, and
+`open_tab` and `navigate_tab` at one change nothing. The corollary for the
+shipped kernel is the same theorem at `urls::real_urls()`.
+
+`theorem_input_only_to_own_tab` is restated (the activation is the one thing
+an `Input` changes), `event_tab` of `theorem_connection_ownership` names a
+popup's new tab, and the noninterference theorem is re-proven with the
+activations in its relation.
+
+### Not done
+
+- The window is ticks, not seconds: how long it is on the wall is the host's
+  tick rate. HTML's transient activation duration is wall time.
+- The Escape key is not excluded from the keys that activate (the schema
+  fixes no key code).
+- The renderer is not told that a popup was refused (`window.open` would
+  return `null`).
+- Opaque-response blocking for `FetchScript` (and for `Fetch`'s no-cors
+  responses) is not built: it needs Phase 6's ORB (6.17), which is not in
+  this line.
+- No CORS preflight and no credentials mode "include" (see `fetch()` above).
+- The table keeps the entry of a renderer that was replaced, killed or
+  exited (never read again: ids are not reused).
+
 ## The GPU crash policy (phase-5.md item 5.17c)
 
 What `GpuReady { software }`, `GpuRefused` and a GPU process's exit mean, as

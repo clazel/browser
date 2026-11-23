@@ -404,6 +404,16 @@ pub proof fn theorem_lock_set_only_by_navigation(rules: Seq<clazel_psl::spec::Ru
                             }
                         }
                     }
+                    // Item 7.16: a popup is a new renderer, with a new id, as the
+                    // host's `OpenTab` makes it.
+                    if let Some(clazel_ipc::message::spec::Message::OpenTab { url }) = accepted_message(r, bytes) {
+                        crate::popup_rel::lemma_popup_resolved(rules, urls, fetch, s, r, url);
+                        if let Some(resolved) = crate::popup_rel::popup_resolved(urls, s, r, url) {
+                            if let Some(lock) = lock_of_url(urls, resolved, s.next_id) {
+                                lemma_open_tab_stable(rules, urls, fetch, s, resolved, None, lock);
+                            }
+                        }
+                    }
                     if let Some(clazel_ipc::message::spec::Message::Submit { url, method, content_type, body }) = accepted_message(r, bytes) {
                         if let Some(req) = submit_request(r, method, content_type, body) {
                             if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {

@@ -322,8 +322,8 @@ pub proof fn lemma_resize_consistency(
     lemma_user_outputs(rules, urls, d, s1, s2, s1b, s2b, tab, o1, o2);
 }
 
-/// `Input` from related states: the states are unchanged, and `d` gets the
-/// same outputs.
+/// `Input` from related states: the states stay related (an activating
+/// input sets one activation), and `d` gets the same outputs.
 pub proof fn lemma_input_consistency(
     rules: Seq<clazel_psl::spec::Rule>,
     urls: UrlFns,
@@ -346,6 +346,9 @@ pub proof fn lemma_input_consistency(
     if find_by_tab(s1.renderers, tab, 0) is Some {
         crate::net_rel::lemma_same_renderer_by_tab(rules, urls, d, s1, s2, tab);
     }
+    // Item 7.16: an activating input sets the activation of its renderer, of
+    // the observed domain or another.
+    crate::popup_rel::lemma_input_rel(rules, urls, d, s1, s2, tab, input);
     lemma_user_outputs(rules, urls, d, s1, s2, s1b, s2b, tab, o1, o2);
 }
 

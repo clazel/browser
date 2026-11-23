@@ -284,6 +284,12 @@ pub proof fn lemma_handle_message_tables(rules: Seq<clazel_psl::spec::Rule>, url
             crate::lock::lemma_storage_call_frame(s, r, m);
             lemma_storage_call_tables(s, r, m);
         }
+    } else if let clazel_ipc::message::spec::Message::OpenTab { url } = m {
+        // Item 7.16: a popup is the host's `OpenTab`, which keeps the tables.
+        crate::popup_rel::lemma_popup_resolved(rules, urls, fetch, s, r, url);
+        if let Some(resolved) = crate::popup_rel::popup_resolved(urls, s, r, url) {
+            lemma_open_tab_tables(rules, urls, fetch, s, resolved, None);
+        }
     }
 }
 

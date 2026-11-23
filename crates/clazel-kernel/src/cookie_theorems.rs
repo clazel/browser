@@ -150,6 +150,13 @@ pub proof fn theorem_cookie_integrity(rules: Seq<clazel_psl::spec::Rule>, urls: 
                 let r = s.renderers[i];
                 if let Some(m) = accepted_message(r, bytes) {
                     crate::lock::lemma_storage_call_frame(s, r, m);
+                    if let clazel_ipc::message::spec::Message::OpenTab { url } = m {
+                        // Item 7.16: a popup is the host's `OpenTab`.
+                        crate::popup_rel::lemma_popup_resolved(rules, urls, fetch, s, r, url);
+                        if let Some(resolved) = crate::popup_rel::popup_resolved(urls, s, r, url) {
+                            crate::unwind_base::lemma_open_tab_frame(rules, urls, fetch, s, resolved, None);
+                        }
+                    }
                     if let clazel_ipc::message::spec::Message::Submit { url, method, content_type, body } = m {
         if let Some(req) = submit_request(r, method, content_type, body) {
                         if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {

@@ -150,6 +150,15 @@ theorems = [
     # The statements are in `statements.rs`; the proofs in `api_theorems.rs`.
     "theorem_cors_read",
     "theorem_forbidden_headers",
+    # Phase 7 item 7.16: popups (`OpenTab` from a renderer, allowed only with
+    # the kernel's own record of a user input within a window of clock ticks)
+    # and `javascript:` URLs (`lock_of_url` refuses them). The statements are
+    # in `statements.rs`; the proofs in `popup_theorems.rs`, over the frame
+    # lemmas of `popup_frame.rs` and the noninterference facts of
+    # `popup_rel.rs`.
+    "theorem_popup_needs_activation",
+    "theorem_popup_needs_input",
+    "theorem_no_javascript_url",
     # Phase 5 item 5.17c: the GPU crash policy. The statements are in
     # `statements.rs`; the proofs in `gpu_theorems.rs`, the noninterference
     # over `GpuExited` and its declassified parts in `gpu_rel.rs`.
