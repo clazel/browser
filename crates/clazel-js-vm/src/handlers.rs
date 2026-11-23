@@ -977,7 +977,11 @@ impl Vm {
         let i = usize::try_from(k).map_err(|_| Abrupt::Internal("constant index"))?;
         let (pattern, flags) = match self.codes.get(self.cur).and_then(|f| f.code.consts.get(i)) {
             Some(Const::RegExp(site)) => (site.pattern.clone(), site.flags.clone()),
-            _ => return Err(Abrupt::Internal("NewRegExp of a constant that is no literal")),
+            _ => {
+                return Err(Abrupt::Internal(
+                    "NewRegExp of a constant that is no literal",
+                ));
+            }
         };
         let p = JsString::from_units(&pattern).map_err(|_| Abrupt::OutOfMemory)?;
         let f = JsString::from_units(&flags).map_err(|_| Abrupt::OutOfMemory)?;

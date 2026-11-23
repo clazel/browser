@@ -185,13 +185,15 @@ pub enum Intrinsic {
     RegExpConstructor,
     /// `%RegExpStringIteratorPrototype%` (§22.2.9.1†).
     RegExpStringIteratorPrototype,
+    /// `%AggregateError.prototype%` (§20.5.7†).
+    AggregateErrorPrototype,
 }
 
 /// The most natives that may run one inside another.
 const MAX_NATIVE_DEPTH: u32 = 150;
 
 /// How many [`Intrinsic`]s there are.
-const INTRINSICS: usize = 24;
+const INTRINSICS: usize = 25;
 
 /// The hint of ToPrimitive (§7.1.1†).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

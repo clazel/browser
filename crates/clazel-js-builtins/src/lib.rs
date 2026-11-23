@@ -74,6 +74,7 @@ pub mod json;
 pub mod math;
 pub mod number;
 pub mod object;
+pub mod promise;
 pub mod string;
 pub mod symbol;
 pub mod util;
@@ -97,5 +98,6 @@ pub fn install(vm: &mut Vm) -> Result<(), Abrupt> {
     string::install(vm)?;
     math::install(vm)?;
     json::install(vm)?;
+    promise::install(vm)?;
     global::install(vm)
 }

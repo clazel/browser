@@ -82,6 +82,48 @@ impl Vm {
         Ok(o)
     }
 
+    /// Turns the ordinary object `obj` (made by
+    /// [`Vm::create_from_constructor`], so that its prototype comes from
+    /// NewTarget) into a host object: the internal slots of the standard's
+    /// OrdinaryCreateFromConstructor "internalSlotsList".
+    ///
+    /// # Errors
+    /// [`Abrupt::OutOfMemory`], or [`Abrupt::Internal`] if `obj` is not an
+    /// ordinary object.
+    pub fn into_host_object(
+        &mut self,
+        obj: Value,
+        tag: u32,
+        slots: Vec<Value>,
+        data: Option<Arc<dyn Any + Send + Sync>>,
+    ) -> Result<(), Abrupt> {
+        let index = u32::try_from(self.host.objects.len()).map_err(|_| Abrupt::OutOfMemory)?;
+        match self.heap.obj_mut(obj) {
+            Some(o) if o.kind == ObjKind::Plain => o.kind = ObjKind::Host(index),
+            _ => {
+                return Err(Abrupt::Internal(
+                    "into_host_object of a non-ordinary object",
+                ));
+            }
+        }
+        self.host.objects.push(HostObject { tag, slots, data });
+        Ok(())
+    }
+
+    /// Appends a slot to a host object and returns its index (a built-in's
+    /// growable List, such as the values of `Promise.all`).
+    pub fn push_host_slot(&mut self, obj: Value, v: Value) -> Option<usize> {
+        let h = self.host_object_mut(obj)?;
+        h.slots.push(v);
+        h.slots.len().checked_sub(1)
+    }
+
+    /// All the slots of a host object.
+    #[must_use]
+    pub fn host_slots(&self, obj: Value) -> Option<&[Value]> {
+        self.host_object(obj).map(|h| h.slots.as_slice())
+    }
+
     fn host_object(&self, obj: Value) -> Option<&HostObject> {
         match self.heap.obj(obj)?.kind {
             ObjKind::Host(i) => self.host.objects.get(usize::try_from(i).ok()?),
