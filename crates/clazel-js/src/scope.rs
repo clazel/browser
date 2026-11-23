@@ -21,7 +21,7 @@ use crate::code::{
 use crate::error::{Error, ErrorKind, ErrorReport, Exception, Result, not_implemented};
 use crate::host::Host;
 use crate::native::{Args, Callable, HostObject};
-use crate::state::{State, abrupt_to_error, trampoline};
+use crate::state::{Native, State, abrupt_to_error, trampoline};
 use crate::value::{
     Handle, Key, Local, Member, PromiseState, PropertyDescriptor, ValueKind, Weak, WellKnownSymbol,
 };
@@ -541,10 +541,9 @@ impl<'s> Scope<'s> {
 
     /// `IsArray`. Throws for a revoked proxy.
     pub fn is_array(&mut self, value: Local<'_>) -> Result<bool> {
-        // The VM has no Array objects yet, so no value is one.
         self.check_deferred()?;
-        self.val(value)?;
-        Ok(false)
+        let v = self.val(value)?;
+        Ok(self.vm.is_array(v))
     }
 
     /// `IsStrictlyEqual` (`===`).
@@ -634,14 +633,22 @@ impl<'s> Scope<'s> {
 
     /// A new Array of the given length, as `new Array(length)`.
     pub fn new_array(&mut self, length: u32) -> Result<Local<'s>> {
-        let _ = length;
-        not_implemented!("Scope::new_array: the VM has no Array objects yet")
+        self.check_deferred()?;
+        let a = self.vm.array_create(f64::from(length), None);
+        let a = self.run(a)?;
+        Ok(self.lv(a))
     }
 
     /// A new Array holding these values.
     pub fn new_array_from(&mut self, elements: &[Local<'_>]) -> Result<Local<'s>> {
-        let _ = elements;
-        not_implemented!("Scope::new_array_from: the VM has no Array objects yet")
+        self.check_deferred()?;
+        let mut values = Vec::with_capacity(elements.len());
+        for e in elements {
+            values.push(self.val(*e)?);
+        }
+        let a = self.vm.create_array_from_list(&values);
+        let a = self.run(a)?;
+        Ok(self.lv(a))
     }
 
     /// `Get(object, key)`. Runs getters and proxy traps, so can throw.
@@ -678,8 +685,35 @@ impl<'s> Scope<'s> {
     /// `DeletePropertyOrThrow`, but returning `false` for a refusal instead of
     /// throwing, as sloppy-mode `delete` does.
     pub fn delete_property(&mut self, object: Local<'_>, key: Key<'_, '_>) -> Result<bool> {
-        let _ = (object, key);
-        not_implemented!("Scope::delete_property: the heap cannot remove a property yet")
+        self.check_deferred()?;
+        let o = self.object(object)?;
+        let k = self.heap_key(key)?;
+        let done = self.vm.delete_property(o, k);
+        self.run(done)
+    }
+
+    /// `[[GetOwnProperty]]` (`Object.getOwnPropertyDescriptor`): the own
+    /// property's complete descriptor, or `None`.
+    pub fn get_own_property(
+        &mut self,
+        object: Local<'_>,
+        key: Key<'_, '_>,
+    ) -> Result<Option<PropertyDescriptor<'s>>> {
+        self.check_deferred()?;
+        let o = self.object(object)?;
+        let k = self.heap_key(key)?;
+        let found = self.vm.own_property_descriptor(o, k);
+        let Some(d) = self.run(found)? else {
+            return Ok(None);
+        };
+        Ok(Some(PropertyDescriptor {
+            value: d.value.map(|v| self.lv(v)),
+            writable: d.writable,
+            get: d.get.map(|v| self.lv(v)),
+            set: d.set.map(|v| self.lv(v)),
+            enumerable: d.enumerable,
+            configurable: d.configurable,
+        }))
     }
 
     /// `DefinePropertyOrThrow`: `Object.defineProperty`.
@@ -691,18 +725,31 @@ impl<'s> Scope<'s> {
     ) -> Result<()> {
         self.check_deferred()?;
         let o = self.object(object)?;
-        if descriptor.get.is_some() || descriptor.set.is_some() {
-            return Err(Error::NotImplemented(
-                "Scope::define_property with an accessor: the heap has no accessor properties yet",
-            ));
-        }
         let k = self.heap_key(key)?;
         let value = match descriptor.value {
             Some(v) => Some(self.val(v)?),
             None => None,
         };
+        let mut halves = [None, None];
+        for (half, given) in halves.iter_mut().zip([descriptor.get, descriptor.set]) {
+            if let Some(f) = given {
+                let f = self.val(f)?;
+                if f != Value::UNDEFINED && !self.vm.heap().is_callable(f) {
+                    return Err(Error::WrongType("a function or undefined"));
+                }
+                *half = Some(f);
+            }
+        }
+        let [get, set] = halves;
+        if (get.is_some() || set.is_some()) && (value.is_some() || descriptor.writable.is_some()) {
+            return Err(Error::WrongType(
+                "a descriptor with accessors and no value or writable",
+            ));
+        }
         let desc = Descriptor {
             value,
+            get,
+            set,
             writable: descriptor.writable,
             enumerable: descriptor.enumerable,
             configurable: descriptor.configurable,
@@ -900,7 +947,33 @@ impl<'s> Scope<'s> {
         let boxed: Box<crate::native::NativeFn> = Box::new(f);
         self.state_mut()?
             .natives
-            .insert(function.bits(), Some(boxed));
+            .insert(function.bits(), Native::Owned(Some(boxed)));
+        Ok(self.lv(function))
+    }
+
+    /// As [`Scope::function`], for a closure that is also `Sync`: the runtime
+    /// shares it with each call that runs it, so JavaScript can re-enter it
+    /// while it runs (no [`Error::Busy`]). This is what an embedder whose
+    /// natives call back into script (event dispatch, WebIDL callbacks)
+    /// uses; README open question 14.
+    pub fn shared_function(
+        &mut self,
+        name: &str,
+        length: u32,
+        callable: Callable,
+        f: impl for<'a> Fn(&mut Scope<'a>, &Args<'a>) -> Result<Local<'a>> + Send + Sync + 'static,
+    ) -> Result<Local<'s>> {
+        self.check_deferred()?;
+        let length = i32::try_from(length).unwrap_or(i32::MAX);
+        let made = match callable {
+            Callable::Function => self.vm.new_native(name, length, trampoline),
+            Callable::Constructor => self.vm.new_native_constructor(name, length, trampoline),
+        };
+        let function = self.run(made)?;
+        let shared: std::sync::Arc<crate::native::SharedNativeFn> = std::sync::Arc::new(f);
+        self.state_mut()?
+            .natives
+            .insert(function.bits(), Native::Shared(shared));
         Ok(self.lv(function))
     }
 

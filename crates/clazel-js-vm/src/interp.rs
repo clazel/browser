@@ -1,4 +1,4 @@
-//! The interpreter loop (phase-7.md item 7.8, first slice).
+//! The units.extend(key_text.units());nterpreter loop (phase-7.md item 7.8, first slice).
 //!
 //! [`Vm`] owns the frame region ([`crate::frame`]), the heap
 //! ([`crate::heap`]) and the loaded code. [`Vm::run`] and [`Vm::call`] push a
@@ -613,6 +613,63 @@ impl Vm {
         }
     }
 
+    /// InstanceofOperator ( V, target ), §13.10.2†:
+    /// 1. If target is not an Object, throw a TypeError exception.
+    /// 2. Let instOfHandler be ? GetMethod(target, %Symbol.hasInstance%).
+    /// 3. (If it is not undefined, call it.) The VM has no Symbols yet, so no
+    ///    object has an @@hasInstance method of its own, and
+    ///    %Function.prototype%'s is OrdinaryHasInstance itself: steps 2 and 3
+    ///    are step 5 here.
+    /// 4. If IsCallable(target) is false, throw a TypeError exception.
+    /// 5. Return ? OrdinaryHasInstance(target, V).
+    ///
+    /// OrdinaryHasInstance ( C, O ), §7.3.21†:
+    /// 1. If IsCallable(C) is false, return false.
+    /// 2. If C has a [[BoundTargetFunction]] internal slot, then a. Let BC be
+    ///    C.[[BoundTargetFunction]]. b. Return ? InstanceofOperator(O, BC).
+    /// 3. If O is not an Object, return false.
+    /// 4. Let P be ? Get(C, "prototype").
+    /// 5. If P is not an Object, throw a TypeError exception.
+    /// 6. Repeat, a. Set O to ? O.[[GetPrototypeOf]](). b. If O is null,
+    ///    return false. c. If SameValue(P, O) is true, return true.
+    ///
+    /// # Errors
+    /// The TypeErrors above, and what a `prototype` getter throws.
+    pub fn instance_of(&mut self, v: Value, target: Value) -> Result<bool, Abrupt> {
+        let mut c = target;
+        for _ in 0..crate::heap::MAX_PROTO_DEPTH {
+            if !self.heap.is_object(c) {
+                return Err(self.type_error("Right-hand side of 'instanceof' is not an object"));
+            }
+            if !self.heap.is_callable(c) {
+                return Err(self.type_error("Right-hand side of 'instanceof' is not callable"));
+            }
+            match self.heap.obj(c).map(|o| o.kind) {
+                Some(ObjKind::Bound(i)) => c = self.bound_fn(i)?.target,
+                _ => break,
+            }
+        }
+        if !self.heap.is_object(v) {
+            return Ok(false);
+        }
+        let kp = self.atoms.k_prototype;
+        let p = self.get_value(c, kp)?;
+        if !self.heap.is_object(p) {
+            return Err(self.type_error("Function has non-object prototype in instanceof check"));
+        }
+        let mut o = v;
+        for _ in 0..crate::heap::MAX_PROTO_DEPTH {
+            o = self.heap.proto_of(o).unwrap_or(Value::NULL);
+            if !self.heap.is_object(o) {
+                return Ok(false);
+            }
+            if o == p {
+                return Ok(true);
+            }
+        }
+        Err(Abrupt::Internal("prototype chain too long"))
+    }
+
     pub(crate) fn bound_fn(&self, i: u32) -> Result<BoundFn, Abrupt> {
         usize::try_from(i)
             .ok()
@@ -1132,6 +1189,11 @@ impl Vm {
                 let found = self.heap.find(o, key)?.is_some();
                 self.w(dst, Value::boolean(found))?;
             }
+            Instr::InstanceOf { dst, a, b } => {
+                let (v, target) = (self.r(a)?, self.r(b)?);
+                let r = self.instance_of(v, target)?;
+                self.w(dst, Value::boolean(r))?;
+            }
             Instr::NewObject { dst } => {
                 let proto = self.atoms.object_proto;
                 let o = self.heap.new_object(proto, ObjKind::Plain)?;
@@ -1287,8 +1349,7 @@ impl Vm {
             // property access reads (`GetSuperBase`, not yet implemented), so
             // it is accepted and not stored.
             Instr::SetHomeObject { .. } => {}
-            // DefineMethodProperty (§15.4.5†) for a method (form 0); the
-            // accessor forms need accessor properties, not yet.
+            // DefineMethodProperty (§15.4.5†) for a method (form 0).
             Instr::DefineMethod {
                 obj,
                 key,
@@ -1308,6 +1369,38 @@ impl Vm {
                         | if enumerable { Attrs::ENUMERABLE } else { 0 },
                 );
                 self.heap.define(o, pk, f, attrs)?;
+            }
+            // The getter (form 1) and setter (form 2) of MethodDefinition
+            // evaluation (§15.4.5†): SetFunctionName(closure, propKey, "get" or
+            // "set") (§10.2.9† step 5), then DefinePropertyOrThrow(object,
+            // propKey, PropertyDescriptor { [[Get]] or [[Set]]: closure,
+            // [[Enumerable]]: enumerable, [[Configurable]]: true }).
+            Instr::DefineMethod {
+                obj,
+                key,
+                func,
+                form: form @ (1 | 2),
+                enumerable,
+            } => {
+                let (o, k, f) = (self.r(obj)?, self.r(key)?, self.r(func)?);
+                let key_text = self.coerce_js_string(k)?;
+                let pk = self.heap.intern(&key_text)?;
+                let mut units: Vec<u16> = if form == 1 { "get " } else { "set " }
+                    .encode_utf16()
+                    .collect();
+                units.extend((0..key_text.len()).filter_map(|i| key_text.unit(i)));
+                let name = JsString::from_units(&units).map_err(|_| Abrupt::OutOfMemory)?;
+                let name = self.heap.new_string(name)?;
+                let kn = self.atoms.k_name;
+                self.heap.define(f, kn, name, Attrs(Attrs::CONFIGURABLE))?;
+                let desc = crate::props::PropDesc {
+                    get: (form == 1).then_some(f),
+                    set: (form == 2).then_some(f),
+                    enumerable: Some(enumerable),
+                    configurable: Some(true),
+                    ..crate::props::PropDesc::default()
+                };
+                self.define_property_or_throw(o, pk, &desc)?;
             }
             Instr::InitGlobalLexical { key, src } => {
                 let key = self.key_const(key)?;
