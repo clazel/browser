@@ -777,8 +777,14 @@ version = "0.0.0"
 dependencies = [
  "clazel-css",
  "clazel-dom",
+ "clazel-encoding",
+ "clazel-html",
+ "clazel-js",
+ "clazel-mime",
+ "clazel-percent",
  "clazel-selectors",
  "clazel-treebuilder",
+ "clazel-url",
 ]
 
 [[package]]

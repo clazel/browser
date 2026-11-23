@@ -40,6 +40,48 @@ Tier 0, target tier 0: safe Rust, tested, nothing proven. So far:
   would pass a cap fails and changes nothing. `tests/event_loop.rs` has the
   unit tests and hand transcriptions of WPT `timers/` and `microtask-queuing/`
   orderings (which need a JS engine to run).
+- **`scripting`** (item 7.15, the script half): a document parsed with the
+  scripting flag on by `clazel-treebuilder`'s incremental driver, and its
+  scripts run through `clazel-js`'s embedding API. `scripting::Page` is one
+  document and one `Runtime`, whose `Host` holds the page's state. Each
+  module cites the algorithms and steps it transcribes and lists its
+  modelling choices:
+  - `element`: "prepare the script element" (HTML §4.12.1.1†) acting on
+    the parser's `ScriptReady`: the type string, classic and module
+    scripts, inline and external ones (fetched through the embedder:
+    `Page::take_requests` and `Page::fetched`), `async`, `defer`, the
+    pending parsing-blocking script, `nomodule`, `event`/`for`; "mark as
+    ready", "execute the script element" with `document.currentScript`;
+    "create a classic script" and "run a classic script", with exceptions
+    reported and a microtask checkpoint when the last script returns.
+  - `parser`: the "text" insertion mode's end tag "script" steps around
+    preparation (script nesting level, parser pause flag, the insertion
+    point), the tokenizer blocked on a parsing-blocking script, "abort a
+    parser" and "the end" (deferred scripts, `DOMContentLoaded`, the load
+    event's wait for async scripts).
+  - `write`: `document.write`, `writeln`, `open` and `close`: writes are
+    inserted at the insertion point and parsed before the rest; `open`
+    after the load starts a script-created parser on an empty document.
+  - `module`: module scripts' HTML half (the module map, "fetch a single
+    module script" with its MIME type check, HostLoadImportedModule,
+    "fetch the descendants of and link", "run a module script"). The engine
+    half (`parse_module`, linking, evaluation, promises) is
+    `NotImplemented` in `clazel-js` today, so a module script ends in an
+    engine report and an `error` event; dynamic `import()` and top-level
+    `await` wait on the same engine pieces.
+  - `javascript_url`: "evaluate a javascript: URL" in the page.
+  - `time`: `performance.now()`, coarsened to 100 µs.
+  - `globals`: the minimum the scripts need before item 7.12's bindings,
+    through the embedding API: `document` (`write`, `writeln`, `open`,
+    `close`, `currentScript`), `performance.now`, and one wrapper object
+    per node. Item 7.12 replaces it.
+
+  Events are recorded, not dispatched (no listeners exist before 7.12).
+  `tests/scripting.rs`: unit tests by algorithm step; the six html5lib
+  `scripted_*.dat` tree-construction cases (2 pass, 4 listed: they need
+  item 7.12's DOM methods); and 21 vendored WPT `execution-timing/` pages
+  run with a stand-in for `testharness.js` and `testlib.js` (the engine
+  cannot run `testharness.js` yet): 17 pass, 4 listed.
 
 Item 7.1 vendored the test
 data later items run: the WPT `testharness.js` tests (`tests/data/wpt-web/`) and
