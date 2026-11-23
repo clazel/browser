@@ -34,12 +34,48 @@ use std::fmt;
 // The Direct3D 12 declarations: used on Windows, and tested on every target.
 #[cfg(any(windows, test))]
 mod d3d12_abi;
+// Executable code regions and `enter` (jit.md item J.7).
+#[cfg(all(
+    any(target_os = "linux", target_os = "macos", windows),
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
+mod code;
+#[cfg(all(
+    any(target_os = "linux", target_os = "macos", windows),
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
+mod enter;
 #[cfg(target_os = "linux")]
 pub mod linux;
 #[cfg(target_os = "macos")]
 pub mod macos;
 #[cfg(windows)]
 pub mod windows;
+
+#[cfg(all(
+    any(target_os = "linux", target_os = "macos", windows),
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
+pub use code::{
+    CODE_START, CONTEXT_BYTES, CONTEXT_WORDS, CodeError, Context, EXIT_CODE_WORD, Exit, Validated,
+};
+#[cfg(all(
+    any(target_os = "linux", target_os = "macos", windows),
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
+pub use enter::enter;
+#[cfg(all(
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
+pub use linux::code::CodeRegion;
+#[cfg(all(
+    target_os = "macos",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
+pub use macos::code::CodeRegion;
+#[cfg(all(windows, any(target_arch = "x86_64", target_arch = "aarch64")))]
+pub use windows::code::CodeRegion;
 
 #[cfg(target_os = "linux")]
 use linux::fill_random as os_fill_random;
