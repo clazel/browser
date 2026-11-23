@@ -532,6 +532,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "writes files")]
     fn rule_11_rejects_a_renamed_dependency_outside_the_listed_crates() -> Result<(), String> {
         let bad = scratch_crate("planted-renamer", &["s"])?;
         let scan = scan_crate(&bad)?;
