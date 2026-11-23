@@ -43,18 +43,38 @@ pub struct SharedCode {
 
 /// A read-write mapping of a [`SharedCode`], for the writer. Unmapped on
 /// drop.
-#[derive(Debug)]
 pub struct CodeWriter {
     base: usize,
     len: usize,
 }
 
+impl std::fmt::Debug for CodeWriter {
+    /// Prints the length only: the address is not shown, so safe code cannot
+    /// learn where the mapping is from a `{:?}` (the code-region API hands out
+    /// no addresses).
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CodeWriter")
+            .field("len", &self.len)
+            .finish_non_exhaustive()
+    }
+}
+
 /// A read-execute mapping of a [`SharedCode`], for the renderer. Unmapped on
 /// drop. [`crate::enter`] runs code in it.
-#[derive(Debug)]
 pub struct CodeRegion {
     base: usize,
     len: usize,
+}
+
+impl std::fmt::Debug for CodeRegion {
+    /// Prints the length only: the address is not shown, so safe code cannot
+    /// learn where the mapping is from a `{:?}` (the code-region API hands out
+    /// no addresses).
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CodeRegion")
+            .field("len", &self.len)
+            .finish_non_exhaustive()
+    }
 }
 
 /// The seals every region carries: the size can never change.
