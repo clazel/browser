@@ -26,6 +26,7 @@
 //! | 14 | renderer to kernel | `FetchStyle` | request (unsigned), url (text) |
 //! | 16 | renderer to kernel | `FetchScript` | request (unsigned), url (text) |
 //! | 17 | renderer to kernel | `UpdateUrl` | replace (bool), url (text) |
+//! | 21 | renderer to kernel | `OpenTab` | url (text) |
 //! | 20 | renderer to kernel | `Fetch` | request (unsigned), method (text), url (text), content type (bytes), body (bytes), mode (unsigned), headers (array of text) |
 //! | 15 | GPU process to kernel | `FrameReady` | buffer (unsigned), width (unsigned), height (unsigned) |
 //! | 18 | GPU process to kernel | `GpuReady` | software (bool) |
@@ -137,6 +138,15 @@
 //! what it does not use). The tags 20 and 119 to 122 are the next free ones
 //! (13 is left unused, as every retired tag is). Header names and values are
 //! text, so a header value that is not UTF-8 cannot be sent (listed).
+//!
+//! The third slice of 7.16 adds popups. `OpenTab` is `window.open` and
+//! `target=_blank`: a committed renderer asks the kernel to open a new tab at
+//! `url`, as written (resolved by the kernel against the committed URL, as
+//! `Navigate`'s is). It has no reply. The kernel opens the tab only if it
+//! recorded a user input to that renderer a short while before (the kernel's
+//! own record of transient user activation, never the renderer's word: no
+//! field says so), and refuses it silently otherwise, as it refuses a URL it
+//! cannot lock. The tag 21 is the next free one.
 //!
 //! Two rules are part of the schema's spec ([`message_fields`], and
 //! `lemmas::lemma_no_identity_fields`):
@@ -329,6 +339,11 @@ pub enum Message {
         /// Whether it is `replaceState` (`pushState` otherwise).
         replace: bool,
         /// The URL the document asks to have, as the script wrote it.
+        url: Seq<u8>,
+    },
+    /// Renderer to kernel: `window.open` and `target=_blank` (item 7.16).
+    OpenTab {
+        /// The URL of the new tab, as the script or the link wrote it.
         url: Seq<u8>,
     },
     /// Kernel to renderer: the script's response arrived (item 7.16).
@@ -534,6 +549,7 @@ pub open spec fn is_from_renderer(m: Message) -> bool {
         | Message::Navigate { .. }
         | Message::FetchScript { .. }
         | Message::UpdateUrl { .. }
+        | Message::OpenTab { .. }
         | Message::Fetch { .. }
         | Message::Submit { .. }
         | Message::Display { .. }
@@ -665,6 +681,7 @@ pub open spec fn message_fields(m: Message) -> Seq<Field> {
         Message::StyleFailed { .. } => seq![Field::Request],
         Message::FetchScript { .. } => seq![Field::Request, Field::Url],
         Message::UpdateUrl { .. } => seq![Field::Replace, Field::Url],
+        Message::OpenTab { .. } => seq![Field::Url],
         Message::ScriptResponse { .. } => seq![Field::Request, Field::ContentType],
         Message::ScriptBody { .. } => seq![Field::Request, Field::BodyBytes],
         Message::ScriptEnd { .. } => seq![Field::Request],
@@ -777,6 +794,7 @@ pub open spec fn message_tokens(m: Message) -> Seq<Token> {
         Message::StyleFailed { request } => seq![Token::Array(2), Token::Uint(113), Token::Uint(request)],
         Message::FetchScript { request, url } => seq![Token::Array(3), Token::Uint(16), Token::Uint(request), Token::Text(url)],
         Message::UpdateUrl { replace, url } => seq![Token::Array(3), Token::Uint(17), Token::Bool(replace), Token::Text(url)],
+        Message::OpenTab { url } => seq![Token::Array(2), Token::Uint(21), Token::Text(url)],
         Message::ScriptResponse { request, content_type } => seq![Token::Array(3), Token::Uint(115), Token::Uint(request), Token::Bytes(content_type)],
         Message::ScriptBody { request, bytes } => seq![Token::Array(3), Token::Uint(116), Token::Uint(request), Token::Bytes(bytes)],
         Message::ScriptEnd { request } => seq![Token::Array(2), Token::Uint(117), Token::Uint(request)],
@@ -856,6 +874,8 @@ pub open spec fn parse_fields(tag: u64, f: Seq<Token>) -> Option<Message> {
                 _ => None,
             }
         } else { None }
+    } else if tag == 21 {
+        if f.len() == 1 { match f[0] { Token::Text(s) => Some(Message::OpenTab { url: s }), _ => None } } else { None }
     } else if tag == 18 {
         if f.len() == 1 { match f[0] { Token::Bool(b) => Some(Message::GpuReady { software: b }), _ => None } } else { None }
     } else if tag == 19 {
