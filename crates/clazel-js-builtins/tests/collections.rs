@@ -198,3 +198,33 @@ fn weak_collections() -> Result<(), String> {
         ),
     ])
 }
+
+#[test]
+fn get_or_insert() -> Result<(), String> {
+    let not_callable = throws("TypeError", "new Map().getOrInsertComputed(1, 2)");
+    let weak_key = throws("TypeError", "new WeakMap().getOrInsert(1, 2)");
+    check(&[
+        (
+            "var m = new Map([[1, 'a']]); var r = m.getOrInsert(1, 'b') + m.getOrInsert(-0, 'z') + m.get(0) + m.size;",
+            "azz2",
+        ),
+        (
+            "var m = new Map(); var calls = 0; var a = m.getOrInsertComputed('k', function (k) { calls++; return k + '!'; }); var b = m.getOrInsertComputed('k', function () { calls++; return 'no'; }); var r = a + b + calls;",
+            "k!k!1",
+        ),
+        (
+            "var m = new Map(); m.getOrInsertComputed('k', function (k) { m.set(k, 'inner'); return 'outer'; }); var r = m.get('k') + m.size;",
+            "outer1",
+        ),
+        (
+            "var o = {}; var w = new WeakMap(); var r = w.getOrInsert(o, 1) + w.getOrInsert(o, 2) + w.getOrInsertComputed({}, function () { return 5; });",
+            "7",
+        ),
+        (&not_callable, "true"),
+        (&weak_key, "true"),
+        (
+            "var r; try { Object.setPrototypeOf(Object.prototype, {}); } catch (e) { r = e.constructor === TypeError; } r = r + ',' + Object.setPrototypeOf(Object.prototype, null);",
+            "true,[object Object]",
+        ),
+    ])
+}

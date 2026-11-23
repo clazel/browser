@@ -380,6 +380,12 @@ impl Vm {
         if current == proto {
             return Ok(true);
         }
+        // %Object.prototype% is an immutable prototype exotic object
+        // (§10.4.7.1† SetImmutablePrototype): 3. If SameValue(V, current)
+        // is true, return true. 4. Return false.
+        if obj == self.intrinsic(Intrinsic::ObjectPrototype) {
+            return Ok(false);
+        }
         if !self.heap.is_extensible(obj) {
             return Ok(false);
         }

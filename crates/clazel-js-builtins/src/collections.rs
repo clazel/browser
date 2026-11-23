@@ -25,8 +25,9 @@
 //! # Differences from the standard, all listed
 //!
 //! - **Tables are not compacted** (see `clazel_js_vm::collections`).
-//! - **`Map.prototype.getOrInsert`, `getOrInsertComputed`** and their `WeakMap`
-//!   forms (a proposal newer than the edition) are absent.
+//! - **`getOrInsert` and `getOrInsertComputed`** of `Map` and `WeakMap` (the
+//!   "upsert" proposal, newer than the pinned edition) are present, as the
+//!   proposal's text has them.
 
 use crate::iterator::iter_result;
 use crate::symbol::to_string_tag;
@@ -318,6 +319,14 @@ fn install_map(vm: &mut Vm) -> Result<(), Abrupt> {
     method(vm, proto, "entries", 0, map_entries)?;
     method(vm, proto, "forEach", 1, map_for_each)?;
     method(vm, proto, "get", 1, map_get)?;
+    method(vm, proto, "getOrInsert", 2, map_get_or_insert)?;
+    method(
+        vm,
+        proto,
+        "getOrInsertComputed",
+        2,
+        map_get_or_insert_computed,
+    )?;
     method(vm, proto, "has", 1, map_has)?;
     method(vm, proto, "keys", 0, map_keys)?;
     method(vm, proto, "set", 2, map_set)?;
@@ -482,6 +491,47 @@ fn map_for_each(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrup
 fn map_get(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
     require(vm, this, TAG_MAP, "Map")?;
     Ok(vm.table_get(this, arg(args, 0)).unwrap_or(Value::UNDEFINED))
+}
+
+/// `Map.prototype.getOrInsert ( key, value )` (upsert proposal):
+/// 1. Let M be the this value. 2. Perform ? RequireInternalSlot(M, [[MapData]]).
+/// 3. Set key to CanonicalizeKeyedCollectionKey(key). 4. For each Record p of
+///    M.[[MapData]], do a. If p.[[Key]] is not empty and SameValue(p.[[Key]],
+///    key) is true, return p.[[Value]]. 5. Set p to the Record { [[Key]]: key,
+///    [[Value]]: value }. 6. Append p to M.[[MapData]]. 7. Return value.
+fn map_get_or_insert(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
+    require(vm, this, TAG_MAP, "Map")?;
+    let key = canonical(arg(args, 0));
+    if let Some(v) = vm.table_get(this, key) {
+        return Ok(v);
+    }
+    vm.table_set(this, key, arg(args, 1));
+    Ok(arg(args, 1))
+}
+
+/// `Map.prototype.getOrInsertComputed ( key, callbackfn )` (upsert proposal):
+/// 1. Let M be the this value. 2. Perform ? RequireInternalSlot(M, [[MapData]]).
+/// 3. If IsCallable(callbackfn) is false, throw a TypeError exception. 4. Set
+///    key to CanonicalizeKeyedCollectionKey(key). 5. For each Record p of
+///    M.[[MapData]], do a. If p.[[Key]] is not empty and SameValue(p.[[Key]],
+///    key) is true, return p.[[Value]]. 6. Let value be ? Call(callbackfn,
+///    undefined, « key »). 7. For each Record p of M.[[MapData]], do a. If
+///    p.[[Key]] is not empty and SameValue(p.[[Key]], key) is true, then i. Set
+///    p.[[Value]] to value. ii. Return value. 8. Set p to the Record { [[Key]]:
+///    key, [[Value]]: value }. 9. Append p to M.[[MapData]]. 10. Return value.
+fn map_get_or_insert_computed(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
+    require(vm, this, TAG_MAP, "Map")?;
+    let f = arg(args, 1);
+    if !vm.heap().is_callable(f) {
+        return Err(vm.type_error("Map.prototype.getOrInsertComputed: callback is not a function"));
+    }
+    let key = canonical(arg(args, 0));
+    if let Some(v) = vm.table_get(this, key) {
+        return Ok(v);
+    }
+    let value = vm.call(f, Value::UNDEFINED, &[key])?;
+    vm.table_set(this, key, value);
+    Ok(value)
 }
 
 /// `Map.prototype.has ( key )`, §24.1.3.7†: ... return true; 4. Return false.
@@ -1021,6 +1071,14 @@ fn install_weak(vm: &mut Vm) -> Result<(), Abrupt> {
     )?;
     method(vm, proto, "delete", 1, weak_map_delete)?;
     method(vm, proto, "get", 1, weak_map_get)?;
+    method(vm, proto, "getOrInsert", 2, weak_map_get_or_insert)?;
+    method(
+        vm,
+        proto,
+        "getOrInsertComputed",
+        2,
+        weak_map_get_or_insert_computed,
+    )?;
     method(vm, proto, "has", 1, weak_map_has)?;
     method(vm, proto, "set", 2, weak_map_set)?;
     to_string_tag(vm, proto, "WeakMap")?;
@@ -1066,6 +1124,48 @@ fn weak_map_get(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrup
         return Ok(Value::UNDEFINED);
     }
     Ok(vm.table_get(this, arg(args, 0)).unwrap_or(Value::UNDEFINED))
+}
+
+/// `WeakMap.prototype.getOrInsert ( key, value )` (upsert proposal): as
+/// `Map.prototype.getOrInsert`, after "3. If CanBeHeldWeakly(key) is false,
+/// throw a TypeError exception." and without the canonicalization.
+fn weak_map_get_or_insert(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
+    require(vm, this, TAG_WEAK_MAP, "WeakMap")?;
+    if !can_be_held_weakly(vm, arg(args, 0))? {
+        return Err(vm.type_error("Invalid value used as weak map key"));
+    }
+    if let Some(v) = vm.table_get(this, arg(args, 0)) {
+        return Ok(v);
+    }
+    vm.table_set(this, arg(args, 0), arg(args, 1));
+    Ok(arg(args, 1))
+}
+
+/// `WeakMap.prototype.getOrInsertComputed ( key, callbackfn )` (upsert
+/// proposal): as `Map.prototype.getOrInsertComputed`, after "3. If
+/// CanBeHeldWeakly(key) is false, throw a TypeError exception." and "4. If
+/// IsCallable(callbackfn) is false, throw a TypeError exception."
+fn weak_map_get_or_insert_computed(
+    vm: &mut Vm,
+    this: Value,
+    args: &[Value],
+) -> Result<Value, Abrupt> {
+    require(vm, this, TAG_WEAK_MAP, "WeakMap")?;
+    if !can_be_held_weakly(vm, arg(args, 0))? {
+        return Err(vm.type_error("Invalid value used as weak map key"));
+    }
+    let f = arg(args, 1);
+    if !vm.heap().is_callable(f) {
+        return Err(
+            vm.type_error("WeakMap.prototype.getOrInsertComputed: callback is not a function")
+        );
+    }
+    if let Some(v) = vm.table_get(this, arg(args, 0)) {
+        return Ok(v);
+    }
+    let value = vm.call(f, Value::UNDEFINED, &[arg(args, 0)])?;
+    vm.table_set(this, arg(args, 0), value);
+    Ok(value)
 }
 
 /// `WeakMap.prototype.has ( key )`, §24.3.3.4†: as `get`, with true and false.
