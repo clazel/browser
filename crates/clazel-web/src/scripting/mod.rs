@@ -54,7 +54,7 @@ use clazel_js::{Config, Error, Limits, Realm, RealmOptions, Result, Runtime, Sco
 use clazel_treebuilder::exec::incremental::Incremental;
 
 use element::ScriptResult;
-use state::{Doc, EndPhase, FetchFor, PageHost, PageState, state};
+use state::{Doc, EndPhase, FetchFor, PageState, arena, state};
 pub use state::{
     EventTarget, FiredEvent, NetworkError, Readiness, Report, Request, RequestKind, Response,
 };
@@ -112,6 +112,7 @@ impl Page {
         let st = PageState {
             realm: None,
             doc: Doc::Parsing(Box::new(parser)),
+            finished: None,
             encoding,
             tentative,
             reparse: None,
@@ -145,7 +146,12 @@ impl Page {
             clock,
             time_origin_us,
         };
-        let mut rt = Runtime::new(Config::new(limits), PageHost::new(st))?;
+        // The host is the bindings' page (item 7.12) with this state in it;
+        // its own tree stays empty until the parser is done (`state`).
+        let mut host =
+            crate::page::Page::new(Arena::new(Vec::new()), &url, Box::new(crate::page::NoHooks));
+        host.script = Some(Box::new(st));
+        let mut rt = Runtime::new(Config::new(limits), host)?;
         let realm = rt.scope(|scope| -> Result<Realm> {
             let realm = scope.create_realm(RealmOptions::default())?;
             state(scope)?.realm = Some(realm.clone());
@@ -222,7 +228,7 @@ impl Page {
 
     /// Calls `f` with the document's tree.
     pub fn with_document<R>(&mut self, f: impl FnOnce(&Arena) -> R) -> Result<R> {
-        self.rt.scope(|scope| Ok(f(state(scope)?.doc.arena())))
+        self.rt.scope(|scope| Ok(f(arena(scope)?)))
     }
 
     /// The reports since the last call.

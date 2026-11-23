@@ -125,7 +125,8 @@ pub(crate) fn document_open(scope: &mut Scope<'_>) -> Result<()> {
     // 9. and 10. Erase event listeners and handlers: there are none.
     // 11. "Replace all with null within document, without firing any
     //     mutation events": a new tree, and a new generation.
-    let url = dom::document_url(st.doc.arena());
+    let url = dom::document_url(super::state::arena(scope)?);
+    let st = state(scope)?;
     st.generation = st.generation.saturating_add(1);
     st.wrappers.clear();
     st.scripts.clear();

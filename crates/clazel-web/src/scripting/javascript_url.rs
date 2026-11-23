@@ -62,7 +62,7 @@ pub(crate) fn evaluate(scope: &mut Scope<'_>, url: &str) -> Result<Option<String
         return Ok(None);
     };
     // 4. to 6. Settings, base URL, "create a classic script".
-    let base = dom::document_base_url(state(scope)?.doc.arena())
+    let base = dom::document_base_url(super::state::arena(scope)?)
         .map(|u| dom::serialize(&u))
         .unwrap_or_default();
     let script = create_classic_script(scope, &source, url.to_owned(), base)?;

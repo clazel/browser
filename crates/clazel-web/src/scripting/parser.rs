@@ -317,14 +317,11 @@ fn update_readiness(st: &mut PageState, readiness: Readiness) {
 
 /// The parser is done with: the document keeps the tree.
 fn finish_parser(st: &mut PageState) {
-    let doc = core::mem::replace(
-        &mut st.doc,
-        Doc::Done(clazel_dom::exec::Arena::new(Vec::new())),
-    );
-    st.doc = match doc {
-        Doc::Parsing(p) => Doc::Done(p.into_parser().arena),
-        done @ Doc::Done(_) => done,
-    };
+    let doc = core::mem::replace(&mut st.doc, Doc::Done);
+    if let Doc::Parsing(p) = doc {
+        // The tree goes to the page (`state` moves it).
+        st.finished = Some(p.into_parser().arena);
+    }
     st.script_created = false;
 }
 

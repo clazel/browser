@@ -218,18 +218,22 @@ pub(crate) fn prepare(scope: &mut Scope<'_>, el: usize) -> Result<()> {
     // 4. "If parser document is non-null and el does not have an async
     //    attribute, then set el's force async to true." (Read below, once
     //    the attributes are copied.)
-    let arena = st.doc.arena();
-    let Some(attributes) = dom::html_element(arena, el, "script") else {
-        return Ok(());
+    let document_encoding = st.encoding;
+    let snap = {
+        let arena = super::state::arena(scope)?;
+        let Some(attributes) = dom::html_element(arena, el, "script") else {
+            return Ok(());
+        };
+        Snapshot {
+            attributes: Attrs::of(attributes),
+            // 5. "Let source text be el's child text content."
+            source_text: dom::child_text_content(arena, el),
+            connected: dom::is_connected(arena, el),
+            base_url: dom::document_base_url(arena),
+            document_url: dom::text(&dom::document_url(arena)),
+        }
     };
-    let snap = Snapshot {
-        attributes: Attrs::of(attributes),
-        // 5. "Let source text be el's child text content."
-        source_text: dom::child_text_content(arena, el),
-        connected: dom::is_connected(arena, el),
-        base_url: dom::document_base_url(arena),
-        document_url: dom::text(&dom::document_url(arena)),
-    };
+    let st = state(scope)?;
     let a = &snap.attributes;
     let Some(script) = st.scripts.get_mut(&el) else {
         return Ok(());
@@ -315,7 +319,7 @@ pub(crate) fn prepare(scope: &mut Scope<'_>, el: usize) -> Result<()> {
     let encoding = a
         .get("charset")
         .and_then(get_an_encoding)
-        .unwrap_or(st.encoding);
+        .unwrap_or(document_encoding);
     // 22. and 23. The crossorigin attribute's state: present or not (the
     //     credentials mode is the kernel's, item 7.16).
     let cors = a.has("crossorigin");

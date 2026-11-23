@@ -370,6 +370,7 @@ fn finish_import(
 /// finish the load when the module map entry is done.
 pub(crate) fn host_load_imported_module(
     st: &mut PageState,
+    document: &clazel_dom::exec::Arena,
     scope: &mut Scope<'_>,
     referrer: Referrer<'_>,
     request: &ModuleRequest,
@@ -385,7 +386,7 @@ pub(crate) fn host_load_imported_module(
         _ => None,
     };
     let base = base
-        .or_else(|| dom::document_base_url(st.doc.arena()).map(|u| dom::serialize(&u)))
+        .or_else(|| dom::document_base_url(st.doc.arena(document)).map(|u| dom::serialize(&u)))
         .unwrap_or_default();
     // 8. "Let url be the result of resolving a module specifier given
     //    referencingScript and moduleRequest.[[Specifier]], catching any

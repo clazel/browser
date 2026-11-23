@@ -11,13 +11,11 @@
 //! script from inside `document.write`) finds the state as the step left it.
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
-use std::hash::{BuildHasher, RandomState};
 
 use clazel_dom::exec::Arena;
 use clazel_encoding::labels::spec::Encoding;
 use clazel_js::{
-    Handle, Host, LoadPayload, Local, ModuleRequest, Realm, Referrer, RejectionOperation, Result,
-    Scope,
+    Handle, LoadPayload, Local, ModuleRequest, Realm, Referrer, RejectionOperation, Result, Scope,
 };
 use clazel_treebuilder::exec::incremental::Incremental;
 
@@ -141,20 +139,21 @@ pub(crate) enum EndPhase {
     Loaded,
 }
 
-/// The document: being parsed (the parser owns the tree), or done.
+/// The document: being parsed (the parser owns the tree), or done (the
+/// tree is the host [`crate::page::Page`]'s `arena`).
 pub(crate) enum Doc {
     /// The document's active parser.
     Parsing(Box<Incremental>),
-    /// The parser is gone; the tree stays.
-    Done(Arena),
+    /// The parser is gone; the tree is the page's.
+    Done,
 }
 
 impl Doc {
-    /// The tree.
-    pub(crate) fn arena(&self) -> &Arena {
+    /// The tree: the parser's while it is parsing, else `done`, the page's.
+    pub(crate) fn arena<'a>(&'a self, done: &'a Arena) -> &'a Arena {
         match self {
             Doc::Parsing(p) => &p.parser().arena,
-            Doc::Done(a) => a,
+            Doc::Done => done,
         }
     }
 
@@ -162,7 +161,7 @@ impl Doc {
     pub(crate) fn parser(&mut self) -> Option<&mut Incremental> {
         match self {
             Doc::Parsing(p) => Some(p),
-            Doc::Done(_) => None,
+            Doc::Done => None,
         }
     }
 }
@@ -201,6 +200,9 @@ pub(crate) struct PageState {
     pub(crate) realm: Option<Realm>,
     /// The document.
     pub(crate) doc: Doc,
+    /// The tree the parser finished with, on its way to the page's `arena`
+    /// ([`state`] moves it).
+    pub(crate) finished: Option<Arena>,
     /// The document's character encoding ("the document's encoding").
     pub(crate) encoding: Encoding,
     /// The confidence of the encoding was tentative when parsing began.
@@ -276,53 +278,38 @@ pub(crate) struct PageState {
     pub(crate) time_origin_us: u64,
 }
 
-/// The engine's host for a page: HTML's answers to ECMA-262's host hooks,
-/// and the page's state.
-pub struct PageHost {
-    pub(crate) state: PageState,
-    draws: u64,
-}
-
-impl PageHost {
-    pub(crate) fn new(state: PageState) -> PageHost {
-        PageHost { state, draws: 0 }
-    }
-}
-
-impl Host for PageHost {
+/// The engine's host hooks for a page that has script state, which
+/// [`crate::page::Page`]'s `Host` implementation calls: HTML's answers to
+/// ECMA-262's host hooks.
+impl PageState {
     /// HTML §8.1.5.? HostLoadImportedModule: see [`super::module`].
-    fn load_imported_module(
+    pub(crate) fn load_imported_module(
         &mut self,
+        document: &Arena,
         scope: &mut Scope<'_>,
         referrer: Referrer<'_>,
         request: &ModuleRequest,
         payload: LoadPayload,
     ) -> Result<()> {
-        super::module::host_load_imported_module(&mut self.state, scope, referrer, request, payload)
+        super::module::host_load_imported_module(self, document, scope, referrer, request, payload)
     }
 
     /// HTML §8.1.5.? HostPromiseRejectionTracker: the "about-to-be-notified
     /// rejected promises list" and `unhandledrejection` are not modelled
     /// (no promises exist yet); a rejection is reported as an exception
     /// would be.
-    fn promise_rejection_tracker(
+    pub(crate) fn promise_rejection_tracker(
         &mut self,
         _scope: &mut Scope<'_>,
         _promise: Local<'_>,
         operation: RejectionOperation,
     ) {
         if operation == RejectionOperation::Reject {
-            self.state.reports.push(Report::Engine {
+            self.reports.push(Report::Engine {
                 script: String::new(),
                 error: "an unhandled promise rejection".to_owned(),
             });
         }
-    }
-
-    fn random_u64(&mut self) -> u64 {
-        // As `DefaultHost`: per-process random keys, a counter hashed.
-        self.draws = self.draws.wrapping_add(1);
-        RandomState::new().hash_one(self.draws)
     }
 }
 
@@ -335,7 +322,30 @@ pub(crate) fn realm(scope: &mut Scope<'_>) -> Result<Realm> {
 }
 
 /// The page's state, from inside a scope. `Err(Busy)` from inside one of
-/// the host's own hooks, which have it as `self` already.
+/// the host's own hooks, which have it as `self` already. A tree the parser
+/// has finished with is moved to the page first (`PageState::finished`).
 pub(crate) fn state<'a>(scope: &'a mut Scope<'_>) -> Result<&'a mut PageState> {
-    Ok(&mut scope.host_mut::<PageHost>()?.state)
+    let page = scope.host_mut::<crate::page::Page>()?;
+    let Some(script) = page.script.as_deref_mut() else {
+        return Err(clazel_js::Error::WrongType("a page with scripting state"));
+    };
+    if let Some(tree) = script.finished.take() {
+        page.arena = tree;
+    }
+    Ok(script)
+}
+
+/// The document's tree, from inside a scope: the parser's while it parses,
+/// else the page's.
+pub(crate) fn arena<'a>(scope: &'a mut Scope<'_>) -> Result<&'a Arena> {
+    let page = scope.host_mut::<crate::page::Page>()?;
+    if let Some(script) = page.script.as_deref_mut()
+        && let Some(tree) = script.finished.take()
+    {
+        page.arena = tree;
+    }
+    Ok(match &page.script {
+        Some(script) => script.doc.arena(&page.arena),
+        None => &page.arena,
+    })
 }
