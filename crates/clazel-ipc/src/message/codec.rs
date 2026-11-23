@@ -160,6 +160,49 @@ pub enum Msg {
         /// The renderer's id for the fetch.
         request: u64,
     },
+    /// Renderer to kernel: `fetch()` or XHR (item 7.16).
+    Fetch {
+        /// The renderer's id for the fetch.
+        request: u64,
+        /// The method.
+        method: Vec<u8>,
+        /// The URL.
+        url: Vec<u8>,
+        /// The body's `Content-Type`.
+        content_type: Vec<u8>,
+        /// The body.
+        body: Vec<u8>,
+        /// The mode: 0 "same-origin", 1 "cors", 2 "no-cors".
+        mode: u64,
+        /// The page's headers: name, value, ...
+        headers: Vec<Vec<u8>>,
+    },
+    /// Kernel to renderer: a fetch's response (item 7.16).
+    FetchResponse {
+        /// The renderer's id for the fetch.
+        request: u64,
+        /// The status; 0 for an opaque response.
+        status: u64,
+        /// The combined `Content-Type`, or empty.
+        content_type: Vec<u8>,
+    },
+    /// Kernel to renderer: the next part of a fetch's body.
+    FetchBody {
+        /// The renderer's id for the fetch.
+        request: u64,
+        /// The octets.
+        bytes: Vec<u8>,
+    },
+    /// Kernel to renderer: a fetch's body is complete.
+    FetchEnd {
+        /// The renderer's id for the fetch.
+        request: u64,
+    },
+    /// Kernel to renderer: a fetch failed.
+    FetchFailed {
+        /// The renderer's id for the fetch.
+        request: u64,
+    },
     /// Kernel to renderer: a document is committed; its body follows in
     /// `Body` frames, then `BodyEnd`.
     Commit {
@@ -281,6 +324,16 @@ pub proof fn lemma_max_script_chunk()
 {
 }
 
+/// [`max_fetch_chunk`] (item 7.16).
+pub const MAX_FETCH_CHUNK: usize = 1_048_559;
+
+/// [`MAX_FETCH_CHUNK`] is the spec's [`max_fetch_chunk`].
+pub proof fn lemma_max_fetch_chunk()
+    ensures
+        MAX_FETCH_CHUNK as nat == max_fetch_chunk(),
+{
+}
+
 /// The view of a list of strings.
 pub open spec fn strings_view(v: Seq<Vec<u8>>) -> Seq<Seq<u8>> {
     v.map_values(|s: Vec<u8>| s@)
@@ -342,6 +395,19 @@ impl View for Msg {
             Msg::ScriptBody { request, bytes } => Message::ScriptBody { request: *request, bytes: bytes@ },
             Msg::ScriptEnd { request } => Message::ScriptEnd { request: *request },
             Msg::ScriptFailed { request } => Message::ScriptFailed { request: *request },
+            Msg::Fetch { request, method, url, content_type, body, mode, headers } => Message::Fetch {
+                request: *request,
+                method: method@,
+                url: url@,
+                content_type: content_type@,
+                body: body@,
+                mode: *mode,
+                headers: strings_view(headers@),
+            },
+            Msg::FetchResponse { request, status, content_type } => Message::FetchResponse { request: *request, status: *status, content_type: content_type@ },
+            Msg::FetchBody { request, bytes } => Message::FetchBody { request: *request, bytes: bytes@ },
+            Msg::FetchEnd { request } => Message::FetchEnd { request: *request },
+            Msg::FetchFailed { request } => Message::FetchFailed { request: *request },
         }
     }
 }
@@ -602,6 +668,30 @@ fn parse_fields(tag: u64, toks: &[Tok]) -> (r: Option<Msg>)
             let a = uint_at(toks, 2)?;
             Some(Msg::StyleFailed { request: a })
         } else { None }
+    } else if tag == 119 {
+        if k == 3 {
+            match (uint_at(toks, 2), uint_at(toks, 3), bytes_at(toks, 4)) {
+                (Some(a), Some(b), Some(c)) => Some(Msg::FetchResponse { request: a, status: b, content_type: c }),
+                _ => None,
+            }
+        } else { None }
+    } else if tag == 120 {
+        if k == 2 {
+            match (uint_at(toks, 2), bytes_at(toks, 3)) {
+                (Some(a), Some(b)) => Some(Msg::FetchBody { request: a, bytes: b }),
+                _ => None,
+            }
+        } else { None }
+    } else if tag == 121 {
+        if k == 1 {
+            let a = uint_at(toks, 2)?;
+            Some(Msg::FetchEnd { request: a })
+        } else { None }
+    } else if tag == 122 {
+        if k == 1 {
+            let a = uint_at(toks, 2)?;
+            Some(Msg::FetchFailed { request: a })
+        } else { None }
     } else if tag == 115 {
         if k == 2 {
             match (uint_at(toks, 2), bytes_at(toks, 3)) {
@@ -728,6 +818,107 @@ fn parse_display(n: u64, toks: &[Tok]) -> (r: Option<Msg>)
     Some(Msg::Display { title, text, links })
 }
 
+/// `Fetch` from the element count `n` and the tokens: see
+/// [`super::spec::parse_fetch`] (item 7.16).
+fn parse_fetch(n: u64, toks: &[Tok]) -> (r: Option<Msg>)
+    requires
+        toks.len() >= 2,
+    ensures
+        option_msg(r) == super::spec::parse_fetch(n, views(toks@).subrange(2, toks.len() as int)),
+{
+    let ghost f = views(toks@).subrange(2, toks.len() as int);
+    assert forall|j: int| 0 <= j < f.len() implies f[j] == views(toks@)[j + 2] by {}
+    if n != 8 || toks.len() < 9 {
+        assert(super::spec::parse_fetch(n, f) is None);
+        return None;
+    }
+    let (request, method, url, content_type, body, mode) = match (uint_at(toks, 2), text_at(toks, 3), text_at(toks, 4), bytes_at(toks, 5), bytes_at(toks, 6), uint_at(toks, 7)) {
+        (Some(a), Some(b), Some(c), Some(d), Some(e), Some(g)) => (a, b, c, d, e, g),
+        _ => {
+            assert(super::spec::parse_fetch(n, f) is None);
+            return None;
+        },
+    };
+    let k = match toks.get(8) {
+        Some(Tok::Array(k)) => *k,
+        _ => {
+            assert(!(views(toks@)[8] is Array));
+            assert(super::spec::parse_fetch(n, f) is None);
+            return None;
+        },
+    };
+    assert(f[0] == crate::cbor::spec::Token::Uint(request));
+    assert(f[1] == crate::cbor::spec::Token::Text(method@));
+    assert(f[2] == crate::cbor::spec::Token::Text(url@));
+    assert(f[3] == crate::cbor::spec::Token::Bytes(content_type@));
+    assert(f[4] == crate::cbor::spec::Token::Bytes(body@));
+    assert(f[5] == crate::cbor::spec::Token::Uint(mode));
+    assert(f[6] == crate::cbor::spec::Token::Array(k));
+    let ghost rest = f.subrange(7, f.len() as int);
+    assert forall|j: int| 0 <= j < rest.len() implies rest[j] == views(toks@)[j + 9] by {}
+    // toks.len() >= 9, so this does not saturate.
+    let count = toks.len().saturating_sub(9);
+    assert(count as nat == rest.len());
+    if k != count as u64 {
+        assert(super::spec::parse_fetch(n, f) is None);
+        return None;
+    }
+    let mut headers: Vec<Vec<u8>> = Vec::new();
+    let mut j: usize = 9;
+    while j < toks.len()
+        invariant
+            9 <= j <= toks.len(),
+            n == 8,
+            f == views(toks@).subrange(2, toks.len() as int),
+            f.len() >= 7,
+            f[0] == crate::cbor::spec::Token::Uint(request),
+            f[1] == crate::cbor::spec::Token::Text(method@),
+            f[2] == crate::cbor::spec::Token::Text(url@),
+            f[3] == crate::cbor::spec::Token::Bytes(content_type@),
+            f[4] == crate::cbor::spec::Token::Bytes(body@),
+            f[5] == crate::cbor::spec::Token::Uint(mode),
+            f[6] == crate::cbor::spec::Token::Array(k),
+            rest == f.subrange(7, f.len() as int),
+            k as nat == rest.len(),
+            rest.len() == toks.len() - 9,
+            forall|x: int| 0 <= x < rest.len() ==> rest[x] == views(toks@)[x + 9],
+            headers@.len() == j - 9,
+            forall|x: int| 0 <= x < j - 9 ==> (#[trigger] rest[x]) is Text && headers@[x]@ == rest[x]->Text_0,
+        decreases toks.len() - j,
+    {
+        match text_at(toks, j) {
+            Some(v) => headers.push(v),
+            None => {
+                assert(!(rest[j - 9] is Text));
+                proof {
+                    super::lemmas::lemma_all_text(rest);
+                }
+                assert(!super::spec::all_text(rest));
+                assert(super::spec::parse_fetch(n, f) is None);
+                return None;
+            },
+        }
+        j = j.saturating_add(1);
+    }
+    proof {
+        super::lemmas::lemma_all_text(rest);
+    }
+    assert(super::spec::all_text(rest));
+    assert(strings_view(headers@) =~= super::spec::texts_of(rest));
+    assert(super::spec::parse_fetch(n, f) == Some(
+        super::spec::Message::Fetch {
+            request,
+            method: method@,
+            url: url@,
+            content_type: content_type@,
+            body: body@,
+            mode,
+            headers: strings_view(headers@),
+        },
+    ));
+    Some(Msg::Fetch { request, method, url, content_type, body, mode, headers })
+}
+
 /// The message in a token sequence.
 fn parse_message(toks: &[Tok]) -> (r: Option<Msg>)
     ensures
@@ -743,6 +934,9 @@ fn parse_message(toks: &[Tok]) -> (r: Option<Msg>)
     let tag = uint_at(toks, 1)?;
     if tag == 10 {
         return parse_display(n, toks);
+    }
+    if tag == 20 {
+        return parse_fetch(n, toks);
     }
     // toks.len() >= 2, so this does not saturate.
     if n == (toks.len() as u64).saturating_sub(1) {
@@ -783,6 +977,7 @@ pub fn is_from_renderer(m: &Msg) -> (r: bool)
             | Msg::FetchStyle { .. }
             | Msg::FetchScript { .. }
             | Msg::UpdateUrl { .. }
+            | Msg::Fetch { .. }
     )
 }
 
@@ -938,6 +1133,60 @@ fn display_tokens(title: &[u8], text: &[u8], links: &[Vec<u8>]) -> (t: Vec<Tok>)
     t
 }
 
+/// The tokens of `Fetch`: [`super::spec::fetch_tokens`] (item 7.16).
+fn fetch_tokens(request: u64, method: &[u8], url: &[u8], content_type: &[u8], body: &[u8], mode: u64, headers: &[Vec<u8>]) -> (t: Vec<Tok>)
+    ensures
+        views(t@) =~= super::spec::fetch_tokens(request, method@, url@, content_type@, body@, mode, strings_view(headers@)),
+{
+    let ghost lv = strings_view(headers@);
+    let mut t = vec![
+        Tok::Array(8),
+        Tok::Uint(20),
+        Tok::Uint(request),
+        Tok::Text(copy(method)),
+        Tok::Text(copy(url)),
+        Tok::Bytes(copy(content_type)),
+        Tok::Bytes(copy(body)),
+        Tok::Uint(mode),
+        Tok::Array(headers.len() as u64),
+    ];
+    let ghost head = views(t@);
+    assert(head =~= seq![
+        crate::cbor::spec::Token::Array(8),
+        crate::cbor::spec::Token::Uint(20),
+        crate::cbor::spec::Token::Uint(request),
+        crate::cbor::spec::Token::Text(method@),
+        crate::cbor::spec::Token::Text(url@),
+        crate::cbor::spec::Token::Bytes(content_type@),
+        crate::cbor::spec::Token::Bytes(body@),
+        crate::cbor::spec::Token::Uint(mode),
+        crate::cbor::spec::Token::Array(headers.len() as u64),
+    ]);
+    let mut j: usize = 0;
+    while j < headers.len()
+        invariant
+            j <= headers.len(),
+            lv == strings_view(headers@),
+            lv.len() == headers@.len(),
+            views(t@) =~= head + super::spec::text_tokens(lv.take(j as int)),
+        decreases headers.len() - j,
+    {
+        let v = match headers.get(j) {
+            Some(l) => copy(l.as_slice()),
+            None => Vec::new(),
+        };
+        proof {
+            lemma_views_push(t@, Tok::Text(v));
+            assert(lv.take(j as int + 1) =~= lv.take(j as int).push(lv[j as int]));
+            assert(super::spec::text_tokens(lv.take(j as int + 1)) =~= super::spec::text_tokens(lv.take(j as int)).push(crate::cbor::spec::Token::Text(lv[j as int])));
+        }
+        t.push(Tok::Text(v));
+        j = j.saturating_add(1);
+    }
+    assert(lv.take(headers.len() as int) =~= lv);
+    t
+}
+
 /// The tokens of a message.
 fn message_tokens(m: &Msg) -> (t: Vec<Tok>)
     ensures
@@ -1001,6 +1250,25 @@ fn message_tokens(m: &Msg) -> (t: Vec<Tok>)
         Msg::ScriptBody { request, bytes } => toks4(Tok::Array(3), Tok::Uint(116), Tok::Uint(*request), Tok::Bytes(copy(bytes.as_slice()))),
         Msg::ScriptEnd { request } => toks3(Tok::Array(2), Tok::Uint(117), Tok::Uint(*request)),
         Msg::ScriptFailed { request } => toks3(Tok::Array(2), Tok::Uint(118), Tok::Uint(*request)),
+        Msg::Fetch { request, method, url, content_type, body, mode, headers } => fetch_tokens(
+            *request,
+            method.as_slice(),
+            url.as_slice(),
+            content_type.as_slice(),
+            body.as_slice(),
+            *mode,
+            headers.as_slice(),
+        ),
+        Msg::FetchResponse { request, status, content_type } => toks5(
+            Tok::Array(4),
+            Tok::Uint(119),
+            Tok::Uint(*request),
+            Tok::Uint(*status),
+            Tok::Bytes(copy(content_type.as_slice())),
+        ),
+        Msg::FetchBody { request, bytes } => toks4(Tok::Array(3), Tok::Uint(120), Tok::Uint(*request), Tok::Bytes(copy(bytes.as_slice()))),
+        Msg::FetchEnd { request } => toks3(Tok::Array(2), Tok::Uint(121), Tok::Uint(*request)),
+        Msg::FetchFailed { request } => toks3(Tok::Array(2), Tok::Uint(122), Tok::Uint(*request)),
     }
 }
 

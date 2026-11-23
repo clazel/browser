@@ -149,6 +149,40 @@ fn all() -> Vec<Msg> {
         },
         Msg::ScriptEnd { request: 9 },
         Msg::ScriptFailed { request: 0 },
+        Msg::Fetch {
+            request: 3,
+            method: t("POST"),
+            url: t("/api?x=1"),
+            content_type: t("text/plain;charset=UTF-8"),
+            body: vec![0x00, 0x7B, 0xFF],
+            mode: 1,
+            headers: vec![t("X-Requested-With"), t("XMLHttpRequest"), t("Accept-Language"), t("en")],
+        },
+        Msg::Fetch {
+            request: 0,
+            method: t("GET"),
+            url: t(""),
+            content_type: Vec::new(),
+            body: Vec::new(),
+            mode: 2,
+            headers: Vec::new(),
+        },
+        Msg::FetchResponse {
+            request: 3,
+            status: 204,
+            content_type: t("application/json"),
+        },
+        Msg::FetchResponse {
+            request: u64::MAX,
+            status: 0,
+            content_type: Vec::new(),
+        },
+        Msg::FetchBody {
+            request: 3,
+            bytes: vec![0x00, 0xFF],
+        },
+        Msg::FetchEnd { request: 3 },
+        Msg::FetchFailed { request: 0 },
         Msg::Submit {
             url: t("http://example.test/login?x=1"),
             method: t("POST"),
@@ -266,6 +300,7 @@ fn the_kernel_decoder_takes_only_renderer_messages() {
                 | Msg::FetchStyle { .. }
                 | Msg::FetchScript { .. }
                 | Msg::UpdateUrl { .. }
+                | Msg::Fetch { .. }
         );
         assert_eq!(
             decode_renderer_message(&bytes).is_some(),
@@ -397,4 +432,21 @@ fn random_bytes_decode_to_one_encoding() {
         decoded > rounds / 500,
         "only {decoded} mutated messages still decoded"
     );
+}
+
+#[test]
+fn a_largest_fetch_body_fits_one_frame() {
+    use clazel_ipc::message::codec::MAX_FETCH_CHUNK;
+    let m = Msg::FetchBody {
+        request: u64::MAX,
+        bytes: vec![0x5A; MAX_FETCH_CHUNK],
+    };
+    let frame = encode_framed(&m).unwrap_or_default();
+    assert_eq!(frame.len(), MAX_FRAME + 4);
+    assert_eq!(decode_framed(&frame), Some(m_clone(&m)));
+    let over = Msg::FetchBody {
+        request: u64::MAX,
+        bytes: vec![0x5A; MAX_FETCH_CHUNK + 1],
+    };
+    assert!(encode_framed(&over).is_none());
 }
