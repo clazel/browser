@@ -100,8 +100,8 @@ fn the_image_mime_type_coverage_page_blocks_and_allows_as_orb_says() {
     }
     assert_eq!(differs, DIFFERS.len());
     println!(
-        "clazel-conformance: wpt fetch/orb img-mime-types-coverage {agree} of {} rows agree ({differs} follow the current standard, not the test)",
-        passes.len() + fails.len()
+        "clazel-conformance: suite=\"WPT fetch/orb img-mime-types-coverage (xfail: rows where the test follows an older draft than Fetch PR 1755)\" pass={} xfail={differs} fail=0 total={agree}",
+        agree - differs
     );
 }
 
@@ -118,7 +118,7 @@ fn a_png_mislabeled_as_html_or_unlabeled_is_allowed_after_sniffing() {
     let unlabeled = response(200, vec![], PNG);
     assert!(safelist_check_exec(&unlabeled));
     println!(
-        "clazel-conformance: wpt fetch/orb img-png-mislabeled-as-html, img-png-unlabeled 2 of 2 rows agree"
+        "clazel-conformance: suite=\"WPT fetch/orb img-png-mislabeled-as-html and img-png-unlabeled\" pass=2 xfail=0 fail=0 total=2"
     );
 }
 
@@ -217,5 +217,4 @@ fn rows_of_the_standards_steps_that_the_wpt_pages_do_not_reach() {
     // A 404 with an image's bytes is still sniffed as an image (step 9
     // precedes the status check).
     assert!(safelist_check_exec(&response(404, vec![], PNG)));
-    println!("clazel-conformance: orb step rows (all assertions of this test) agree");
 }

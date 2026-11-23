@@ -1193,7 +1193,7 @@
       "certificate": {
         "file": "src/orb/contract.rs",
         "lemma": "super::examples::lemma_example_safelisted()",
-        "witness": "super::examples::kernel_says(200, seq![super::examples::content_type(super::examples::text_css())], seq![])"
+        "witness": "!super::examples::kernel_says(200, seq![super::examples::content_type(super::examples::text_css())], seq![])"
       }
     },
     {
@@ -1207,7 +1207,7 @@
       "certificate": {
         "file": "src/orb/contract.rs",
         "lemma": "super::examples::lemma_example_never_sniffed()",
-        "witness": "!super::examples::kernel_says(200, seq![super::examples::content_type(super::examples::application_pdf())], super::examples::png())"
+        "witness": "super::examples::kernel_says(200, seq![super::examples::content_type(super::examples::application_pdf())], super::examples::png())"
       }
     },
     {
@@ -1221,7 +1221,7 @@
       "certificate": {
         "file": "src/orb/contract.rs",
         "lemma": "super::examples::lemma_example_nosniff_html()",
-        "witness": "!super::examples::kernel_says(200, seq![super::examples::content_type(super::examples::text_html()), super::examples::nosniff_line()], super::examples::png())"
+        "witness": "super::examples::kernel_says(200, seq![super::examples::content_type(super::examples::text_html()), super::examples::nosniff_line()], super::examples::png())"
       }
     },
     {
@@ -1235,7 +1235,7 @@
       "certificate": {
         "file": "src/orb/contract.rs",
         "lemma": "super::examples::lemma_example_partial()",
-        "witness": "!super::examples::kernel_says(206, seq![super::examples::content_type(super::examples::image_png())], super::examples::png())"
+        "witness": "super::examples::kernel_says(206, seq![super::examples::content_type(super::examples::image_png())], super::examples::png())"
       }
     },
     {
@@ -1249,7 +1249,7 @@
       "certificate": {
         "file": "src/orb/contract.rs",
         "lemma": "super::examples::lemma_example_sniffed_image()",
-        "witness": "super::examples::kernel_says(200, seq![super::examples::content_type(super::examples::text_html())], super::examples::png())"
+        "witness": "!super::examples::kernel_says(200, seq![super::examples::content_type(super::examples::text_html())], super::examples::png())"
       }
     },
     {
@@ -1263,7 +1263,7 @@
       "certificate": {
         "file": "src/orb/contract.rs",
         "lemma": "super::examples::lemma_example_unknown_refused()",
-        "witness": "!super::examples::kernel_says(200, seq![], seq![0x3Cu8, 0x68, 0x74, 0x6D, 0x6C, 0x3E])"
+        "witness": "super::examples::kernel_says(200, seq![], seq![0x3Cu8, 0x68, 0x74, 0x6D, 0x6C, 0x3E])"
       }
     }
   ]
