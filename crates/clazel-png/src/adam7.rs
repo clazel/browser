@@ -4,9 +4,11 @@
 //!
 //! A pass takes the pixels `(x0 + i * dx, y0 + j * dy)` of the image, for
 //! `i` and `j` counting from 0, as long as they are inside it. Kani proves
-//! (`proofs.rs`) for every width and height up to 2^14 that the pass sizes
-//! add up to the image's, every pass pixel is inside the image, and every
-//! image pixel is in exactly one pass.
+//! (`proofs.rs`) for every width and height up to 2^14 that every pass pixel
+//! is inside the image and every image pixel is in exactly one pass; that the
+//! pass sizes add up to the image's follows (the counts along one axis are
+//! proven to split as the passes do, the sum is then algebra), but is not a
+//! harness of its own: the model checker does not finish it.
 
 /// One pass: its first pixel and its steps.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -93,7 +95,7 @@ pub fn pass(interlaced: bool, index: u8) -> Option<Pass> {
 }
 
 /// The number of pixels `start, start + step, ...` that are below `len`.
-fn axis(len: u32, start: u32, step: u32) -> u32 {
+pub(crate) fn axis(len: u32, start: u32, step: u32) -> u32 {
     match len.checked_sub(start) {
         None | Some(0) => 0,
         Some(rest) => rest

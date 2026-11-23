@@ -29,6 +29,8 @@ use crate::pixel::{ColorType, Layout, Trns};
 use crate::work::{self, Parts};
 
 mod image;
+#[cfg(kani)]
+pub(crate) use image::Flow;
 
 /// 5.2: the eight bytes every PNG datastream starts with.
 const SIGNATURE: [u8; 8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
@@ -748,7 +750,27 @@ impl<E: Engine> Png<E> {
         let (px, py, pw, ph) = self.prev_rect;
         let phase_ok = match self.phase {
             Phase::Signature | Phase::Header => self.have < 8,
-            Phase::Gather => self.have < self.need && usize::from(self.need) <= HOLD,
+            // A gathered chunk is read whole (`chunk_start` checks its
+            // length against what `gather_of` asks for) but for fdAT's
+            // image data after its sequence number; the bytes gathered are
+            // the bytes of the chunk used.
+            Phase::Gather => {
+                self.have < self.need
+                    && usize::from(self.need) <= HOLD
+                    && self.at == u32::from(self.have)
+                    && u32::from(self.need) <= self.len
+                    && match self.kind {
+                        Kind::Fdat => true,
+                        // IHDR is the first chunk: nothing has been read.
+                        Kind::Ihdr => {
+                            u32::from(self.need) == self.len
+                                && !self.header_done
+                                && self.stage == Stage::Idle
+                        }
+                        Kind::Actl | Kind::Fctl | Kind::Trns => u32::from(self.need) == self.len,
+                        _ => false,
+                    }
+            }
             Phase::Crc => self.have < 4,
             Phase::Skip => self.at < self.len,
             Phase::Palette => self.at < self.len && self.kind == Kind::Plte,
@@ -944,49 +966,135 @@ impl<E: Engine> Decoder for Png<E> {
     }
 }
 
-/// One of `options`, chosen symbolically.
+/// One of `first` and `rest`, chosen symbolically. With no `rest` it is
+/// `first` itself, not a symbolic index assumed to be 0: the model checker
+/// then drops the code of every other case (a symbolic phase keeps every
+/// phase's code in the formula).
 #[cfg(kani)]
-fn pick<T: Copy>(options: &[T]) -> Option<T> {
+fn pick<T: Copy>(first: T, rest: &[T]) -> T {
+    if rest.is_empty() {
+        return first;
+    }
     let i: usize = kani::any();
-    kani::assume(i < options.len());
-    options.get(i).copied()
+    kani::assume(i <= rest.len());
+    match i.checked_sub(1) {
+        None => first,
+        Some(j) => rest.get(j).copied().unwrap_or(first),
+    }
 }
 
 #[cfg(kani)]
-fn any_frame_info() -> Option<FrameInfo> {
-    Some(FrameInfo {
+fn any_frame_info() -> FrameInfo {
+    FrameInfo {
         x: kani::any(),
         y: kani::any(),
         width: kani::any(),
         height: kani::any(),
         delay_num: kani::any(),
         delay_den: kani::any(),
-        dispose: pick(&[Dispose::None, Dispose::Background, Dispose::Previous])?,
-        blend: pick(&[Blend::Source, Blend::Over])?,
+        dispose: pick(Dispose::None, &[Dispose::Background, Dispose::Previous]),
+        blend: pick(Blend::Source, &[Blend::Over]),
         animated: kani::any(),
-    })
+    }
 }
 
-/// Any state of a decoder of a 2 by 2 canvas, with `Phase` one of `phases`
-/// and every other field symbolic (the harness assumes `inv` on top).
+/// Every kind of chunk.
 #[cfg(kani)]
-fn any_png_in(phases: &[Phase]) -> Option<Png<crate::proofs::AnyEngine>> {
+const ALL_KINDS: [Kind; 8] = [
+    Kind::Plte,
+    Kind::Trns,
+    Kind::Idat,
+    Kind::Iend,
+    Kind::Actl,
+    Kind::Fctl,
+    Kind::Fdat,
+    Kind::Other,
+];
+
+/// Which states of the decoder a harness runs over: one phase, and for the
+/// phases whose work depends on the kind of chunk, one group of kinds. Every
+/// other field is symbolic (the harness assumes `state_inv` on top, which
+/// ties `kind` to the phase for `Palette`, `Trns` and `Data`). Together the
+/// variants cover every phase and, in it, every kind (`Gather` and `Crc` by
+/// groups).
+#[cfg(kani)]
+#[derive(Clone, Copy)]
+pub(crate) enum At {
+    Signature,
+    Header,
+    /// Gathering a chunk's bytes, by the chunk's kind (the only kinds
+    /// `chunk_start` gathers; `state_inv` excludes the others).
+    GatherIhdr,
+    GatherActl,
+    GatherFctl,
+    GatherTrns,
+    GatherFdat,
+    Skip,
+    Palette,
+    TrnsData,
+    /// The data of IDAT or fdAT, in each stage of the frame.
+    DataIdle,
+    DataActive,
+    DataFinished,
+    /// The CRC of IEND, of IDAT or fdAT (which may complete a frame), or of
+    /// any other chunk.
+    CrcIend,
+    CrcData,
+    CrcOther,
+    Ended,
+    Spent,
+}
+
+/// Runs `body` on a decoder of a 2 by 2 canvas in the states of `at`, with
+/// every other field symbolic (the harness assumes `state_inv` on top). The
+/// state is built in place: moving it through an `Option` made the model
+/// checker lose the phase as a constant.
+#[cfg(kani)]
+pub(crate) fn with_png_at(at: At, body: impl FnOnce(&mut Png<crate::proofs::AnyEngine>)) {
     // A canvas of exactly 2 by 2: the template compares the bytes of its
     // arrays past the buffers, and the model checker follows every access.
-    let config = Config::new(Format::Png, 2, 2, FrameCount::Unknown).ok()?;
-    let mut p = Png::<crate::proofs::AnyEngine>::start(&config).ok()?;
-    p.phase = pick(phases)?;
-    p.kind = pick(&[
-        Kind::Ihdr,
-        Kind::Plte,
-        Kind::Trns,
-        Kind::Idat,
-        Kind::Iend,
-        Kind::Actl,
-        Kind::Fctl,
-        Kind::Fdat,
-        Kind::Other,
-    ])?;
+    let Ok(config) = Config::new(Format::Png, 2, 2, FrameCount::Unknown) else {
+        return;
+    };
+    let Ok(mut p) = Png::<crate::proofs::AnyEngine>::start(&config) else {
+        return;
+    };
+    let mut stage = None;
+    let (phase, kind, kinds): (Phase, Kind, &[Kind]) = match at {
+        At::Signature => (Phase::Signature, Kind::Ihdr, &ALL_KINDS),
+        At::Header => (Phase::Header, Kind::Ihdr, &ALL_KINDS),
+        At::GatherIhdr => (Phase::Gather, Kind::Ihdr, &[]),
+        At::GatherActl => (Phase::Gather, Kind::Actl, &[]),
+        At::GatherFctl => (Phase::Gather, Kind::Fctl, &[]),
+        At::GatherTrns => (Phase::Gather, Kind::Trns, &[]),
+        At::GatherFdat => (Phase::Gather, Kind::Fdat, &[]),
+        At::Skip => (Phase::Skip, Kind::Ihdr, &ALL_KINDS),
+        At::Palette => (Phase::Palette, Kind::Plte, &[]),
+        At::TrnsData => (Phase::Trns, Kind::Trns, &[]),
+        At::DataIdle => {
+            stage = Some(Stage::Idle);
+            (Phase::Data, Kind::Idat, &[Kind::Fdat])
+        }
+        At::DataActive => {
+            stage = Some(Stage::Active);
+            (Phase::Data, Kind::Idat, &[Kind::Fdat])
+        }
+        At::DataFinished => {
+            stage = Some(Stage::Finished);
+            (Phase::Data, Kind::Idat, &[Kind::Fdat])
+        }
+        At::CrcIend => (Phase::Crc, Kind::Iend, &[]),
+        At::CrcData => (Phase::Crc, Kind::Idat, &[Kind::Fdat]),
+        At::CrcOther => (
+            Phase::Crc,
+            Kind::Ihdr,
+            &[Kind::Plte, Kind::Trns, Kind::Actl, Kind::Fctl, Kind::Other],
+        ),
+        At::Ended => (Phase::Ended, Kind::Ihdr, &ALL_KINDS),
+        At::Spent => (Phase::Spent, Kind::Ihdr, &ALL_KINDS),
+    };
+    p.phase = phase;
+    p.kind = pick(kind, kinds);
     p.len = kani::any();
     p.at = kani::any();
     p.crc = kani::any();
@@ -995,17 +1103,19 @@ fn any_png_in(phases: &[Phase]) -> Option<Png<crate::proofs::AnyEngine>> {
     p.need = kani::any();
     p.header_done = kani::any();
     p.layout = Layout {
-        color: pick(&[
+        color: pick(
             ColorType::Gray,
-            ColorType::Rgb,
-            ColorType::Indexed,
-            ColorType::GrayAlpha,
-            ColorType::Rgba,
-        ])?,
+            &[
+                ColorType::Rgb,
+                ColorType::Indexed,
+                ColorType::GrayAlpha,
+                ColorType::Rgba,
+            ],
+        ),
         depth: kani::any(),
     };
     p.interlaced = kani::any();
-    p.trns = match pick(&[0u8, 1, 2])? {
+    p.trns = match pick(0u8, &[1, 2]) {
         0 => Trns::None,
         1 => Trns::Gray(kani::any()),
         _ => Trns::Rgb(kani::any(), kani::any(), kani::any()),
@@ -1013,7 +1123,7 @@ fn any_png_in(phases: &[Phase]) -> Option<Png<crate::proofs::AnyEngine>> {
     p.palette_len = kani::any();
     p.seen_plte = kani::any();
     p.seen_trns = kani::any();
-    p.idat = pick(&[Idat::NotYet, Idat::Open, Idat::Closed])?;
+    p.idat = pick(Idat::NotYet, &[Idat::Open, Idat::Closed]);
     p.animation = if kani::any() {
         Some(Animation {
             frames: kani::any(),
@@ -1025,14 +1135,17 @@ fn any_png_in(phases: &[Phase]) -> Option<Png<crate::proofs::AnyEngine>> {
     p.next_seq = kani::any();
     p.fctl_seen = kani::any();
     p.pending = if kani::any() {
-        Some(any_frame_info()?)
+        Some(any_frame_info())
     } else {
         None
     };
-    p.frame = any_frame_info()?;
+    p.frame = any_frame_info();
     p.has_frame = kani::any();
-    p.stage = pick(&[Stage::Idle, Stage::Active, Stage::Finished])?;
-    p.data_kind = pick(&[Kind::Idat, Kind::Fdat, Kind::Other])?;
+    p.stage = match stage {
+        Some(s) => s,
+        None => pick(Stage::Idle, &[Stage::Active, Stage::Finished]),
+    };
+    p.data_kind = pick(Kind::Idat, &[Kind::Fdat, Kind::Other]);
     p.report = kani::any();
     p.pass = kani::any();
     p.row = kani::any();
@@ -1044,66 +1157,52 @@ fn any_png_in(phases: &[Phase]) -> Option<Png<crate::proofs::AnyEngine>> {
     p.frames_done = kani::any();
     p.anim_begun = kani::any();
     p.default_hidden = kani::any();
-    p.prev_dispose = pick(&[Dispose::None, Dispose::Background, Dispose::Previous])?;
+    p.prev_dispose = pick(Dispose::None, &[Dispose::Background, Dispose::Previous]);
     p.prev_rect = (kani::any(), kani::any(), kani::any(), kani::any());
-    Some(p)
-}
-
-/// Every phase.
-#[cfg(kani)]
-pub(crate) fn any_png() -> Option<Png<crate::proofs::AnyEngine>> {
-    any_png_in(&[
-        Phase::Signature,
-        Phase::Header,
-        Phase::Gather,
-        Phase::Skip,
-        Phase::Palette,
-        Phase::Trns,
-        Phase::Data,
-        Phase::Crc,
-        Phase::Ended,
-        Phase::Spent,
-    ])
-}
-
-/// Every phase but the image data's.
-#[cfg(kani)]
-pub(crate) fn any_png_control() -> Option<Png<crate::proofs::AnyEngine>> {
-    any_png_in(&[
-        Phase::Signature,
-        Phase::Header,
-        Phase::Gather,
-        Phase::Skip,
-        Phase::Palette,
-        Phase::Trns,
-        Phase::Crc,
-    ])
-}
-
-/// The phase of image data.
-#[cfg(kani)]
-pub(crate) fn any_png_data() -> Option<Png<crate::proofs::AnyEngine>> {
-    any_png_in(&[Phase::Data])
+    body(&mut p);
 }
 
 /// What the harnesses ask of a state.
 #[cfg(kani)]
 impl<E: Engine> Png<E> {
-    /// No frame's data has begun.
-    pub(crate) fn idle_stage(&self) -> bool {
-        self.stage == Stage::Idle
-    }
-
     /// A frame is being received.
     pub(crate) fn active_frame(&self) -> bool {
         self.stage == Stage::Active && self.has_frame
+    }
+
+    /// A frame is being received and its scanlines are not all in.
+    pub(crate) fn receiving_rows(&self) -> bool {
+        self.stage == Stage::Active && !self.rows_done
+    }
+
+    /// The state the invariant describes but for the scanline, which is
+    /// complete: `complete_row`'s.
+    pub(crate) fn full_row_inv(&mut self) -> bool {
+        let have = self.row_have;
+        if !self.receiving_rows() || have != self.row_len.saturating_add(1) {
+            return false;
+        }
+        self.row_have = self.row_len;
+        let ok = self.state_inv();
+        self.row_have = have;
+        ok && self.has_frame
+    }
+
+    /// Sets the colour type (before the invariant is assumed).
+    pub(crate) fn set_color(&mut self, color: ColorType) {
+        self.layout.color = color;
+    }
+
+    /// Sets the frame's blend operation.
+    pub(crate) fn set_blend(&mut self, blend: Blend) {
+        self.frame.blend = blend;
     }
 
     /// Makes the scanline buffer hold a whole scanline (its filter-type byte
     /// and `row_len` bytes), which is the state `feed` calls `finish_row` in
     /// and which the invariant (a scanline in progress is shorter) excludes.
     pub(crate) fn complete_row(&mut self) -> bool {
-        if self.stage != Stage::Active || self.rows_done {
+        if !self.receiving_rows() {
             return false;
         }
         self.row_have = self.row_len.saturating_add(1);
