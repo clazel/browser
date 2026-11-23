@@ -1,0 +1,43 @@
+{
+  "mutations": [
+    {
+      "id": "load-accepts-unchecked-index",
+      "file": "src/typing.rs",
+      "find": "stk[n - 1],\n                Ty::Idx(region, ty_size(ty)),",
+      "replace": "stk[n - 1],\n                Ty::I64,",
+      "expect": "killed",
+      "reason": "Lets a load take any i64, not an index a bounds_check has checked: a load with no check would type, so example_unchecked_load_rejected is false (and tc_sound no longer holds).",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_unchecked_load_rejected()",
+        "witness": "tc(lay1(), ctx_load(), then(Instr::LocalGet(0), Instr::Load { region: 0, ty: Ty::I64 }), seq![]) is Some"
+      }
+    },
+    {
+      "id": "idx-subtyping-reversed",
+      "file": "src/typing.rs",
+      "find": "(Ty::Idx(r, n), Ty::Idx(s, m)) => r == s && m <= n,",
+      "replace": "(Ty::Idx(r, n), Ty::Idx(s, m)) => r == s && n <= m,",
+      "expect": "killed",
+      "reason": "Reverses the size order of Idx subtyping, so a 4-byte bounds check would license an 8-byte load: example_short_check_rejected is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_short_check_rejected()",
+        "witness": "tc(lay1(), ctx_load(), then(Instr::LocalGet(0), then(Instr::BoundsCheck { region: 0, size: 4, code: 7 }, Instr::Load { region: 0, ty: Ty::I64 })), seq![]) is Some"
+      }
+    },
+    {
+      "id": "branch-allows-dead-code",
+      "file": "src/typing.rs",
+      "find": "Some(Flow::Diverges)\n            } else {\n                None\n            }\n        },\n        // Wasm core §3.3.8 `br_if l`",
+      "replace": "Some(Flow::Falls(stk))\n            } else {\n                None\n            }\n        },\n        // Wasm core §3.3.8 `br_if l`",
+      "expect": "killed",
+      "reason": "Types `br l` as falling through with the stack unchanged, so code after a branch is accepted (difference 1 of the typing from Wasm): example_dead_code_rejected is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_dead_code_rejected()",
+        "witness": "tc(lay1(), ctx_load(), then(Instr::Br(0), Instr::Nop), seq![Ty::I64]) is Some"
+      }
+    }
+  ]
+}

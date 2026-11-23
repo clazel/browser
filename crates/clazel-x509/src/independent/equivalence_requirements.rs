@@ -13,7 +13,7 @@
 //! | `version_rules` | always | `theorem_version_rules` |
 //! | `signature_algorithms_agree` | one way: `equivalence_signature.rs`; RSA NULL against absent stays | `theorem_signature_algorithms` |
 //! | `issuer_non_empty` | always | `theorem_issuer_non_empty` |
-//! | `subject_rule` | **not enforced** | `example_path_conditions_hold` |
+//! | `subject_rule` | target: `path/profile.rs` steps 1 and 4; intermediates: implied by `issuer_non_empty` of the next certificate | `theorem_subject_rule_target`, `example_path_conditions_hold` |
 //! | `extensions_acceptable` | any role, for a relying party with every form | `theorem_extensions_acceptable` |
 //! | `no_duplicate_extensions` | always, and stricter: RFC 5280 covers foreign ids | `theorem_no_duplicates` |
 //! | `key_identifiers_non_critical` | any role | `theorem_key_identifiers` |
@@ -28,19 +28,18 @@
 //! `value_closed` and the name form predicates are what those use, and are
 //! proven through them. `lemma_is_ca` states the first directly.
 //!
-//! **The three clauses production does not enforce.** Each binds the issuer,
-//! and each is a choice, not an oversight, in the crate's tests or specs:
-//! - `subject_rule`, the critical subjectAltName of an empty subject:
-//!   `tests/limbo/expected_failures.rs`, `CABF_SAN_CRITICALITY` ("the profile
-//!   adds no rule"; `rfc5280::san::noncritical-with-empty-subject`).
+//! **The clauses production does not enforce.** Each binds the issuer, and
+//! each is a choice, not an oversight, in the crate's specs:
 //! - `basic_constraints_rules`' "flagged as critical": neither `leaf/spec.rs`
 //!   nor §6.1.4 (k) reads the flag of basicConstraints, and RFC 5280 §6.1.4 (k)
-//!   does not ask it of a relying party.
+//!   does not ask it of a relying party. A modelling choice in `path/spec.rs`'s
+//!   header: two NSS roots are non-critical.
 //! - `ca_only_extensions`' policyConstraints on a target: `path/profile.rs`
-//!   refuses nameConstraints there and has no rule for policyConstraints.
+//!   refuses nameConstraints there and, as a modelling choice in its header,
+//!   not policyConstraints, which RFC 5280 §6.1.5 (b) processes.
 //!
-//! X.501 9.3's `name_types_distinct`: `name/spec.rs` has no such rule and
-//! production does not parse the Name.
+//! X.501 9.3's `name_types_distinct`: `name/spec.rs` has no such rule (a
+//! modelling choice in its header) and production does not parse the Name.
 
 #[allow(unused_imports)]
 use vstd::prelude::*;
@@ -84,6 +83,8 @@ use crate::name_constraints::spec as nc;
 #[cfg(verus_only)]
 use crate::path::parsed::spec as ps;
 #[cfg(verus_only)]
+use crate::path::profile as pf;
+#[cfg(verus_only)]
 use crate::path::spec as pt;
 #[cfg(verus_only)]
 use crate::policy_constraints::spec as pc;
@@ -91,6 +92,8 @@ use crate::policy_constraints::spec as pc;
 use crate::spec as h;
 #[cfg(verus_only)]
 use crate::tbs::spec as t;
+#[cfg(verus_only)]
+use crate::time::spec as tm;
 
 verus! {
 
@@ -803,6 +806,139 @@ pub proof fn theorem_ca_only(p: ps::PathCert, y: s::Certificate)
             e::id_ce_policy_constraints(),
         )),
 {
+}
+
+// ---------------------------------------------------------------------
+// 7.2.1, the subject of a target.
+// ---------------------------------------------------------------------
+
+/// An encoding of a SEQUENCE with no contents: a Name with no RDN.
+pub open spec fn empty_sequence(t: i::Tlv) -> bool {
+    i::has_tag(t, 0, 16, true) && t.contents.len() == 0
+}
+
+/// X.690 8.1.2.2 and 8.1.3.4: an empty SEQUENCE is the two octets 30 00.
+/// Universal 16 constructed has the one identifier octet 0x30, and a length
+/// of 0 the short form (10.1 refuses a long one below 128).
+pub proof fn lemma_empty_sequence_octets(input: Seq<u8>)
+    requires
+        i::parse_tlv(input) is Some,
+        empty_sequence(i::parse_tlv(input)->Some_0),
+    ensures
+        i::parse_tlv(input)->Some_0.encoding =~= seq![0x30u8, 0x00],
+{
+    let leading = input[0];
+    assert(leading % 32 < 31);
+    assert(leading == 0x30u8) by (nonlinear_arith)
+        requires
+            (leading / 64) as nat == 0,
+            (leading / 32) % 2 == 1,
+            (leading % 32) as nat == 16,
+    ;
+    assert(input[1] == 0u8);
+}
+
+/// Every empty SEQUENCE `parse_tlvs` reads is the two octets 30 00.
+pub proof fn lemma_tlvs_empty_sequences(input: Seq<u8>, k: int)
+    requires
+        i::parse_tlvs(input) is Some,
+        0 <= k < i::parse_tlvs(input)->Some_0.len(),
+        empty_sequence(i::parse_tlvs(input)->Some_0[k]),
+    ensures
+        i::parse_tlvs(input)->Some_0[k].encoding =~= seq![0x30u8, 0x00],
+    decreases input.len(),
+{
+    let t = i::parse_tlv(input)->Some_0;
+    let rest = input.subrange(t.encoding.len() as int, input.len() as int);
+    if k == 0 {
+        lemma_empty_sequence_octets(input);
+    } else {
+        lemma_tlvs_empty_sequences(rest, k - 1);
+    }
+}
+
+/// The frame's subject, if it has no contents, is the two octets 30 00.
+pub proof fn lemma_frame_subject_octets(der: Seq<u8>, f: CertificateFrame)
+    requires
+        decode_certificate_frame(der) == Some(f),
+        f.to_be_signed.subject.contents.len() == 0,
+    ensures
+        f.to_be_signed.subject.encoding =~= seq![0x30u8, 0x00],
+{
+    let u = i::parse_single(der)->Some_0;
+    let l = s::sequence_elements(u)->Some_0;
+    let e0 = s::sequence_elements(l[0])->Some_0;
+    let m = s::after_version(e0);
+    lemma_tlvs_empty_sequences(l[0].contents, (m + 4) as int);
+}
+
+/// The crate's basicConstraints is the one `check_extensions` reads.
+pub proof fn lemma_path_basic(der: Seq<u8>)
+    requires
+        ps::parse_path_cert(der) is Some,
+    ensures
+        lf::optional_basic_constraints(ps::parse_path_cert(der)->Some_0.extensions) == Some(
+            ps::parse_path_cert(der)->Some_0.basic,
+        ),
+{
+}
+
+/// **7.2.1, `subject_rule`, for a target.** `leaf_profile` step 1
+/// (`check_extensions` step 3) refuses a CA, and step 4 an empty subject
+/// without a critical subjectAltName, so a target it accepts keeps the
+/// clause. The Names and the key are asked to decode, as in
+/// [`theorem_issuer_non_empty`], since production does not parse them.
+#[verifier::spinoff_prover]
+pub proof fn theorem_subject_rule_target(der: Seq<u8>, reference: h::ReferenceIdentity, now: tm::CertificateTime)
+    requires
+        der.len() < two64(),
+        ps::parse_path_cert(der) is Some,
+        path_conditions(ps::parse_path_cert(der)->Some_0),
+        pf::leaf_profile(ps::parse_path_cert(der)->Some_0, reference, now) is Ok,
+        s::decode_name(decode_certificate_frame(der)->Some_0.to_be_signed.issuer) is Some,
+        s::decode_name(decode_certificate_frame(der)->Some_0.to_be_signed.subject) is Some,
+        s::decode_subject_public_key_info(
+            decode_certificate_frame(der)->Some_0.to_be_signed.subject_public_key_info,
+        ) is Some,
+    ensures
+        s::decode_certificate(der) is Some,
+        r::subject_rule(s::decode_certificate(der)->Some_0),
+{
+    hide(ps::parse_path_cert);
+    hide(decode_certificate_frame);
+    hide(lf::check_extensions);
+    theorem_path_cert_fwd(der);
+    let p = ps::parse_path_cert(der)->Some_0;
+    let f = decode_certificate_frame(der)->Some_0;
+    theorem_frame_completes(der, f);
+    let y = s::decode_certificate(der)->Some_0;
+    let v = r::extensions_of(y);
+    assert(v == listed(f.to_be_signed.extensions));
+    assert(!r::is_ca_certificate(y)) by {
+        reveal(ps::parse_path_cert);
+        reveal(lf::check_extensions);
+        lemma_path_basic(der);
+        lemma_is_ca(p, y);
+    }
+    if y.to_be_signed.subject.rdn_sequence.len() == 0 {
+        let g = f.to_be_signed.subject;
+        let l = s::sequence_elements(g)->Some_0;
+        lemma_rdn_list_len(l, 0);
+        if g.contents.len() > 0 {
+            lemma_some_element(g, l);
+        }
+        assert(g.contents.len() == 0);
+        assert(g.encoding =~= seq![0x30u8, 0x00]) by {
+            reveal(decode_certificate_frame);
+            lemma_frame_subject_octets(der, f);
+        }
+        assert(pf::subject_is_empty(p));
+        assert(pf::san_is_critical(p));
+        lemma_oids();
+        lemma_find(p.extensions, v, x::subject_alt_name_oid(), 0);
+        let idx = lf::find_extension_index(p.extensions, x::subject_alt_name_oid(), 0)->Some_0;
+        assert(extension_agree(p.extensions[idx], v[idx]));
+    }
 }
 
 // ---------------------------------------------------------------------

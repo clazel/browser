@@ -64,9 +64,18 @@ const PLACES: &[(&str, Place)] = &[
     ("clazel-html", Place::Renderer),
     ("clazel-treebuilder", Place::Renderer),
     ("clazel-dom", Place::Renderer),
+    // Phase 7's script-facing crates (item 7.1 creates them empty).
+    ("clazel-web", Place::Renderer),
+    ("clazel-webidl", Place::Renderer),
+    ("clazel-js-regexp", Place::Renderer),
+    ("clazel-js-number", Place::Renderer),
     ("clazel-text", Place::Renderer),
     ("clazel-css", Place::Renderer),
     ("clazel-selectors", Place::Renderer),
+    ("clazel-js-lexer", Place::Renderer),
+    ("clazel-js-vm", Place::Renderer),
+    ("clazel-js-heap", Place::Renderer),
+    ("clazel-js-syntax", Place::Renderer),
     ("clazel-style", Place::Renderer),
     ("clazel-font", Place::Renderer),
     ("clazel-layout", Place::Renderer),
@@ -74,16 +83,31 @@ const PLACES: &[(&str, Place)] = &[
     ("clazel-image-shape", Place::Renderer),
     ("clazel-gif", Place::Renderer),
     ("clazel-forms", Place::Renderer),
+    ("clazel-png", Place::Renderer),
+    ("clazel-svg", Place::Renderer),
+    ("clazel-jpeg", Place::Renderer),
+    ("clazel-webp", Place::Renderer),
     // The GPU process (item 5.17b): sandboxed and one per tab like the renderer.
     // The detail image has no panel for it yet; item 5.27 adds one.
     ("clazel-gpu", Place::Renderer),
+    // Item 6.2: DEFLATE and zlib, run by the renderer's image decoders (PNG, later).
+    ("clazel-deflate", Place::Renderer),
     ("clazel-displaylist", Place::Primitive),
     ("clazel-encoding", Place::Primitive),
     ("clazel-url", Place::Primitive),
     ("clazel-idna", Place::Primitive),
     ("clazel-percent", Place::Primitive),
     ("clazel-base64", Place::Primitive),
+    // JSON text to values and QuoteJSONString (phase 7 item 7.11).
+    ("clazel-json", Place::Primitive),
     ("clazel-mime", Place::Primitive),
+    // The JIT's instruction-set layer (docs/phases/jit.md item J.2 creates them empty).
+    ("clazel-x64", Place::Primitive),
+    ("clazel-a64", Place::Primitive),
+    // The JIT's validators (item J.6), linked into whichever process validates.
+    ("clazel-codecheck", Place::Primitive),
+    // The JIT's low-level IR (item J.5).
+    ("clazel-lir", Place::Renderer),
     ("clazel-ipc", Place::Primitive),
     ("clazel-sandbox", Place::Os),
     ("clazel-sys", Place::Os),

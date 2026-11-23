@@ -1,0 +1,49 @@
+{
+  "mutations": [
+    {
+      "id": "add-with-carry-carry-inverted",
+      "file": "src/spec.rs",
+      "find": "let flag_c = if result == unsigned_sum {",
+      "replace": "let flag_c = if result != unsigned_sum {",
+      "expect": "killed",
+      "reason": "Inverts the carry flag of AddWithCarry (sail-arm v8_base.sail): 0xFFFFFFFF + 1 would set Z but clear C, so `b.hs` after `adds` would branch the wrong way and example_add_with_carry is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_add_with_carry()",
+        "witness": "add_with_carry(32, 0xFFFF_FFFF, 1, 0).1 == 0b0100int",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "add-with-carry-no-overflow-flag",
+      "file": "src/spec.rs",
+      "find": "flag_n * 8 + flag_z * 4 + flag_c * 2 + flag_v)",
+      "replace": "flag_n * 8 + flag_z * 4 + flag_c * 2)",
+      "expect": "killed",
+      "reason": "Never sets V: 0x7FFFFFFF + 1 overflows as a signed add, so AddWithCarry must set V; without it `b.vs` and the signed conditions are wrong and example_add_with_carry is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_add_with_carry()",
+        "witness": "add_with_carry(32, 0x7FFF_FFFF, 1, 0).1 == 0b1000int",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "bcond-imm19-at-bit-4",
+      "file": "src/spec.rs",
+      "find": "((imm19 as int) % 0x8_0000) * 0x20 + (\n        cond as int)",
+      "replace": "((imm19 as int) % 0x8_0000) * 0x10 + (\n        cond as int)",
+      "expect": "killed",
+      "reason": "Places B.cond's imm19 at bit 4 instead of bit 5 (decode_b_cond: imm19 @ 5): `b.eq #8` would encode as 54000020, so example_branches is false.",
+      "certificate": {
+        "file": "src/examples.rs",
+        "lemma": "example_branches()",
+        "witness": "encode(Instr::BCond { cond: 0, imm19: 2 }) == 0x5400_0020u32"
+      }
+    }
+  ]
+}

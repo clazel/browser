@@ -651,7 +651,7 @@ proof fn lemma_wire_ends_with_body(url: clazel_url::url::spec::Url, req: clazel_
             let body = clazel_fetch::request::spec::body_bytes(req);
             assert(bytes == head + body);
             assert(bytes.len() == head.len() + body.len());
-            assert(bytes.subrange(bytes.len() - body.len(), bytes.len()) =~= body);
+            assert(bytes.subrange(bytes.len() - body.len(), bytes.len() as int) =~= body);
         },
         _ => {},
     }

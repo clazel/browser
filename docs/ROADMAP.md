@@ -13,7 +13,8 @@ Windows job, and Phase 5 adds the window and GPU drawing on Windows. The rest of
 phase 8 stays: the proofs (Verus, Kani) and `scripts/verify.sh` are not run on
 Windows.
 
-**Non-goals for now:** JIT compilation, extensions, DRM, WebGL/WebGPU.
+**Non-goals for now:** extensions, DRM, WebGL/WebGPU. (JIT compilation was a
+non-goal until 2026-11-16; it is now part of Phase 7.)
 
 Each phase ends in something you can run.
 
@@ -95,9 +96,22 @@ Detailed plan: [phases/phase-6.md](phases/phase-6.md).
 **Status: planned (2026-11-16); decisions in item 6.0 taken the same day.**
 
 ## Phase 7: JavaScript
-Interpreter only, no JIT. The GC uses an index-based arena so the heap stays
-in safe Rust. DOM bindings.
-*Exit:* common sites work, more slowly than in a JIT-based browser.
+A baseline JIT is the main path, on Windows x86-64, Linux x86-64 and macOS
+arm64 from the start (decided 2026-11-16). A thin interpreter loop over the
+same op handlers runs cold code, serves as the JIT-off mode and is the
+reference for testing. Every code blob passes a tier 2 validator for its
+instruction set before it can run, which proves the code stays in its
+memory regions and jumps only inside itself. Each op's code is proven to
+refine the bytecode semantics, a Verus spec. The GC uses an index-based
+arena so the heap stays in safe Rust. DOM bindings. The machine-code half
+(instruction-set specs, IR, back ends, validators) is built so that a later
+WebAssembly front end reuses it.
+Detailed plan: [phases/phase-7.md](phases/phase-7.md); the JIT in
+[phases/jit.md](phases/jit.md).
+**Status: planned (2026-11-16); decisions in items 7.0 and J.0 taken; no
+item started.**
+*Exit:* common sites work; Test262 gives the same results with the JIT on
+and off on all three platforms.
 
 ## Phase 8: Windows port, compatibility grind
 Windows proofs (the AppContainer backend, base CI job and Phase 5's window exist, see Platforms). WPT score tracking, CSS breadth,

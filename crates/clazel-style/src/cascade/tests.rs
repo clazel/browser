@@ -732,3 +732,119 @@ fn font_weight_stays_in_one_to_one_thousand() {
     assert_eq!(weight("bolder"), n(900_000_000));
     assert_eq!(weight("lighter"), n(400_000_000));
 }
+
+/// Item 6.11: the `background-*` longhands compute (CSS Backgrounds 3 §2.1, §2.4, §2.6,
+/// §2.9).
+#[test]
+fn background_layers_compute() {
+    // A document parse and a cascade: about 0.01 s natively, over the 0.002 s a Miri test may
+    // take (CI measured Miri 25,000 to 30,000 times slower); the arithmetic is covered natively.
+    if cfg!(miri) {
+        return;
+    }
+    let d = Doc::new(
+        "<!DOCTYPE html><div id=a style=\"background-image: url(x.png), url(y.png); \
+         background-repeat: no-repeat, repeat-x; background-position: right 10px; \
+         background-size: 50% auto\"></div><div id=b></div>\
+         <div id=c style=\"background-image: url(p.png), none, linear-gradient(red, blue); \
+         background-repeat: space round; background-position: bottom; \
+         background-size: cover, contain; background-clip: content-box\"></div>",
+    );
+    // The initial layer.
+    let b = d.style("b").backgrounds;
+    assert_eq!(b, Backgrounds::initial());
+    assert!(b.is_none());
+    let url = |s: &str| BgImage::Url(s.chars().map(u32::from).collect());
+    let pct = |n: i64| Lp::Percent(Num::from_int(n));
+    // Two layers (the first is closest to the user): `no-repeat` is both axes (§2.4) and
+    // `repeat-x` is `repeat no-repeat`; the lists of one value are repeated for the second
+    // layer (§2.1); `right 10px` is 100% horizontally and 10px vertically (§2.6).
+    let a = d.style("a").backgrounds.layers();
+    assert_eq!(
+        a.iter().map(|l| l.image.clone()).collect::<Vec<_>>(),
+        vec![url("x.png"), url("y.png")]
+    );
+    assert_eq!(
+        a.iter().map(|l| l.repeat).collect::<Vec<_>>(),
+        vec![
+            [BgRepeat::NoRepeat; 2],
+            [BgRepeat::Repeat, BgRepeat::NoRepeat]
+        ]
+    );
+    assert_eq!(
+        a.iter().map(|l| l.position).collect::<Vec<_>>(),
+        vec![[pct(100), Lp::Px64(10 * 64)]; 2]
+    );
+    assert_eq!(
+        a.iter().map(|l| l.size).collect::<Vec<_>>(),
+        vec![BgSize::Explicit([Some(pct(50)), None]); 2]
+    );
+    // §2.1: three layers (a gradient is a layer that paints nothing); the lists repeat.
+    let c = d.style("c").backgrounds.layers();
+    assert_eq!(
+        c.iter().map(|l| l.image.clone()).collect::<Vec<_>>(),
+        vec![url("p.png"), BgImage::None, BgImage::None]
+    );
+    assert_eq!(
+        c.iter().map(|l| l.repeat).collect::<Vec<_>>(),
+        vec![[BgRepeat::Space, BgRepeat::Round]; 3]
+    );
+    // §2.6: a single `bottom` is `50% 100%`.
+    assert_eq!(
+        c.iter().map(|l| l.position).collect::<Vec<_>>(),
+        vec![[pct(50), pct(100)]; 3]
+    );
+    // §2.9: `cover, contain` repeated for the third layer.
+    assert_eq!(
+        c.iter().map(|l| l.size).collect::<Vec<_>>(),
+        vec![BgSize::Cover, BgSize::Contain, BgSize::Cover]
+    );
+    assert_eq!(
+        c.iter().map(|l| (l.origin, l.clip)).collect::<Vec<_>>(),
+        vec![(BgBox::Padding, BgBox::Content); 3]
+    );
+}
+
+/// Item 6.11: a `url()` in a sheet is relative to the sheet's URL, in a `style` element or
+/// attribute to the document's (CSS Values 4 §4.5).
+#[test]
+fn background_urls_resolve_against_their_sheet() {
+    // As above: skipped under Miri; `urls::tests` cover the resolution there.
+    if cfg!(miri) {
+        return;
+    }
+    let arena = parse(
+        "<!DOCTYPE html><link rel=stylesheet href=s/a.css>\
+         <style>#e { background-image: url(i/e.png) }</style>\
+         <div id=l></div><div id=e></div><div id=s style=\"background-image: url(s.png)\"></div>",
+    );
+    let code = |s: &str| s.chars().map(u32::from).collect::<Vec<u32>>();
+    let mut sources = collect(&arena);
+    sources.document_url = Some(code("http://example.com/dir/page.html"));
+    let sheet = crate::sources::StyleSheet::parse(&code("#l { background-image: url(../l.png) }"));
+    for s in &mut sources.sheets {
+        if matches!(s.owner, crate::sources::Owner::Link(_)) {
+            s.sheet = Some(sheet.clone());
+            s.url = Some(code("http://cdn.test/css/s/a.css"));
+        }
+    }
+    let device = Device::screen(800, 600);
+    let table = if cfg!(miri) {
+        cascade_with(&ua::sheets().for_document(&arena), &arena, &sources, device)
+    } else {
+        cascade(&arena, &sources, device)
+    };
+    let url_of = |id: &str| -> String {
+        let urls = by_id(&arena, id)
+            .and_then(|n| table.get(n))
+            .map(|s| s.backgrounds.image.clone())
+            .unwrap_or_default();
+        match urls.as_slice() {
+            [BgImage::Url(u)] => u.iter().filter_map(|&c| char::from_u32(c)).collect(),
+            _ => String::new(),
+        }
+    };
+    assert_eq!(url_of("l"), "http://cdn.test/css/l.png");
+    assert_eq!(url_of("e"), "http://example.com/dir/i/e.png");
+    assert_eq!(url_of("s"), "http://example.com/dir/s.png");
+}

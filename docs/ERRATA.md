@@ -929,3 +929,47 @@ it evidently means. Each entry records what we specified instead.
   columns it spans (`span_contribution` in
   `crates/clazel-layout/src/table/measure.rs`).
 - **Reported upstream:** not yet.
+
+## ECMA-262 Number::multiply drops the sign of a zero product with `+0`
+
+- **Spec:** ECMA-262, ES2026 (`tc39/ecma262` commit
+  `0248456c758431e4bb8e5d26333ff1865123c9cd`), §6.1.6.1.4 Number::multiply,
+  <https://tc39.es/ecma262/#sec-numeric-types-number-multiply>
+- **Text:** steps 4 and 5 handle only an operand that is `-0`
+  ("If x is -0, then ... If y is -0, then ..."); step 6 is "Return
+  𝔽(ℝ(x) × ℝ(y))", and §6.1.6.1's "the Number value for x" gives `-0` only
+  when x < 0 (its rule "replace +0 with -0 if and only if x < 0").
+- **Problem:** for `x = +0` and `y = -5`, steps 1 to 5 do not apply and
+  ℝ(x) × ℝ(y) = 0, so step 6 returns `+0`. IEEE 754, and every engine, give
+  `-0` (`0 * -5` is `-0`); the same holds for a negative finite `x` and
+  `y = +0`. The sign rule of the older text ("the sign of the result is
+  positive if both operands have the same sign, negative if the operands have
+  different signs") is what is meant. The rest of the whole `spec.html` was
+  searched for another place that supplies the sign of a zero product, and
+  none does.
+- **We specify:** a zero result has the sign of the exclusive or of the
+  operand signs, as an added step 5a (`number_multiply` in
+  `crates/clazel-js-vm/src/spec.rs`).
+- **Reported upstream:** not yet.
+
+## RFC 1951 §3.2.5 says the extra bits are most-significant bit first
+
+- **Spec:** RFC 1951, "DEFLATE Compressed Data Format Specification version
+  1.3", May 1996, <https://www.rfc-editor.org/rfc/rfc1951#section-3.2.5>
+  (plain text SHA-256 `5ebf4b5b7fe1c3a0c0ab9aa3ac8c0f3853a7dc484905e76e03b0b0f301350009`)
+- **Text:** "The extra bits should be interpreted as a machine integer
+  stored with the most-significant bit first, e.g., bits 1110 represent the
+  value 14."
+- **Problem:** §3.1.1 says "Data elements other than Huffman codes are
+  packed starting with the least-significant bit of the data element", and
+  the extra bits are not a Huffman code. Read literally the two sentences
+  disagree about the order of the bits of a length's or distance's extra
+  field. Every decoder (zlib, `miniz_oxide`, Wuffs) reads them least
+  significant bit first, as §3.1.1 says, and the test streams only decode
+  that way.
+- **We specify:** the extra bits are read least significant bit first, like
+  every other non-Huffman data element (`bits_value` in
+  `crates/clazel-deflate/src/spec.rs`). The sentence is read as saying the
+  value is an ordinary integer (bits "1110" written most significant first
+  are 14), not as an order of transmission.
+- **Reported upstream:** not yet.

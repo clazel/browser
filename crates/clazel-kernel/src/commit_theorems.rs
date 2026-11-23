@@ -553,6 +553,9 @@ proof fn lemma_run_sent(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch:
         all_sent(run_state(rules, urls, fetch, s, t).renderers, o + run_outputs(rules, urls, fetch, s, t)),
     decreases t.len(),
 {
+    // Only `lemma_step_sent` is needed of `step`; its unfolded definition
+    // (larger with item 6.16's `Submit`) ran the solver out of resources.
+    hide(step);
     if t.len() == 0 {
         assert(o + run_outputs(rules, urls, fetch, s, t) =~= o);
     } else {

@@ -1,0 +1,29 @@
+[package]
+name = "clazel-js-syntax"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "The JavaScript parser for Clazel's Phase 7 browser (phase-7.md item 7.3): the AST, the specification of what a correct parse is (ECMA-262 section 13 onward, ASI, early errors) and the parser's contract."
+
+[dependencies]
+vstd = "=0.0.0-2026-10-04-0306"
+clazel-js-lexer = { path = "../clazel-js-lexer" }
+
+# Verification tier (docs/VERIFICATION.md). Tier 0: the AST, the specification
+# and the contract (item 7.3, first half, CLAUDE.md rule 3), and the parser
+# (second half). Proven (src/check.rs): the arena the parser returns is well
+# formed, inside the source text and at most MAX_DEPTH high. Not proven: that it
+# is the parse the specification defines (that is tested: tests/), so the
+# parser does not implement the contract's trait, there are no Kani harnesses
+# (Tier 1) and no independent transcription (Tier 2). `target-tier` is 1
+# (phase-7.md, Crates).
+[package.metadata.clazel]
+tier = 0
+target-tier = 1
+
+[package.metadata.verus]
+verify = true
+
+[lints]
+workspace = true

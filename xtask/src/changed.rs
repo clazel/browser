@@ -336,6 +336,7 @@ mod tests {
                 }
             )),
             manifest: PathBuf::new(),
+            sys_renamed_as: Vec::new(),
             tier: None,
             target_tier: None,
             verus: false,
