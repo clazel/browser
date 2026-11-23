@@ -23,11 +23,13 @@
 //! Sequential DCT, Huffman coding (SOF0 baseline, SOF1 extended with 8-bit
 //! samples: up to 4 tables of each kind, 16-bit quantizers), 1, 3 or 4
 //! components at any sampling factors from 1 to 4 that divide the largest,
-//! interleaved or in one scan per component, with restart intervals. Output
-//! is straight RGBA8, always opaque. SOF2 (progressive) is item 6.6 and is
-//! refused with [`clazel_image_shape::Error::Unsupported`]; so are arithmetic
-//! coding, lossless, hierarchical and 12-bit images, and two-component
-//! images.
+//! interleaved or in one scan per component, with restart intervals; and
+//! progressive DCT, Huffman coding (SOF2, item 6.6, Annex G: spectral
+//! selection and successive approximation, DC and AC first scans and
+//! refinements, EOB runs; `progressive.rs`). Output is straight RGBA8,
+//! always opaque. Arithmetic coding, lossless, hierarchical and 12-bit
+//! images, and two-component images, are refused with
+//! [`clazel_image_shape::Error::Unsupported`].
 //!
 //! # Listed choices
 //!
@@ -56,7 +58,7 @@
 //!    a duplicate component id are errors.
 //! 6. **Tables**: a scan needs its Huffman and quantization tables defined
 //!    before it (the quantization table is latched at the start of the scan,
-//!    as libjpeg does); the scan header's `Ss`, `Se`, `Ah`, `Al` are
+//!    as libjpeg does); a sequential scan header's `Ss`, `Se`, `Ah`, `Al` are
 //!    ignored; DC and AC selectors may be 0 to 3; a DC symbol over 15 and
 //!    an over-subscribed code are errors, the all-ones code is accepted
 //!    (`huffman.rs`).
@@ -70,21 +72,53 @@
 //!    be decoded.
 //! 8. **The work buffer** holds the decoded planes of every component, padded
 //!    to whole MCUs, and its size is a function of the config alone, so it
-//!    is the worst case, four planes of `(w + 31) * (h + 31)` bytes (the
-//!    largest padding at sampling factors of 4), whatever the frame header
-//!    turns out to say; the decoder uses what it needs. A caller bounding
-//!    memory counts it. (A decoder that keeps only a few MCU rows would
-//!    need far less; the context rows of fancy upsampling make that a
-//!    larger program, left for later.)
+//!    is the worst case whatever the frame header turns out to say; the
+//!    decoder uses what it needs. The config's coding says which: four
+//!    planes of `(w + 31) * (h + 31)` bytes for a sequential frame, and
+//!    `6 * (w + 31) * (h + 35)` for a progressive one (see 11), which is
+//!    refused at its frame header if the config says sequential, and the
+//!    other way round. A caller bounding memory counts it: about 387 MiB for
+//!    a progressive image at the largest size (2^13 by 2^13), besides the
+//!    256 MiB pixel buffer. (A decoder that keeps only a few MCU rows would
+//!    need far less; the context rows of fancy upsampling make that a larger
+//!    program, left for later.)
 //! 9. **One frame**: after EOI `step` says `FrameDone`, then
 //!    `NoMoreFrames`.
+//! 10. **Progressive scans** (`progressive.rs`): the scan header's `Ss`,
+//!     `Se`, `Ah`, `Al` are checked as libjpeg-turbo's `start_pass` does (DC
+//!     scans `Se = 0`; AC scans one component, `Ss <= Se <= 63`; a refinement
+//!     has `Al = Ah - 1`; `Al <= 13`), but that a refinement continues the
+//!     point transform of the scan before it is not (libjpeg warns only). A
+//!     scan needs only the Huffman tables its kind reads. The quantization
+//!     table of a component is latched at its first scan. A progressive
+//!     frame of more than **100 scans** is refused (`Unsupported`): a scan
+//!     costs the blocks of the image however little data it has (an `EOBn`
+//!     run covers up to 32767 blocks per symbol), so a never-ending sequence
+//!     of scans would be unbounded work. A component needs at least one
+//!     scan; coefficients no scan sent stay zero (a missing refinement
+//!     gives a blurrier image, not an error). A run that puts a
+//!     coefficient, or a refined new coefficient, past `Se` is an error (a
+//!     `ZRL` that ends at or past `Se` ends the block, as libjpeg does), and
+//!     so is a coefficient that does not fit 16 bits, as in choice 7. The
+//!     EOB run does not outlast a restart interval.
+//! 11. **Progressive memory**: the whole coefficient plane is kept, as `i16`
+//!     in the work buffer, and the inverse DCT runs at EOI into 8-bit planes
+//!     in the same memory (the argument is on
+//!     `progressive::finish_plane`): `2 * 64 * bw * bh + 64 * bw` bytes per
+//!     component. That is at most `2 * (w + 31) * (h + 35)`, so every 1 or
+//!     3-component frame fits choice 8's buffer and a 4-component frame
+//!     fits when its components are subsampled enough that they add up to
+//!     three full ones; a 4-component full-resolution progressive frame
+//!     (4:4:4:4 CMYK) is refused with `Unsupported`, at its frame header.
 //!
 //! # Verification
 //!
 //! Tier 1 target (`Cargo.toml`): the Kani harnesses of `proofs.rs` and
 //! `idct.rs`, listed with their bounds in the README, cover the leaf
-//! functions and the block decoder; **the marker state machine and `step`
-//! itself have none yet** (README, "What Kani does not cover"). The invariant
+//! functions, the block decoder and (item 6.6) one bit of each progressive
+//! scan kind (`progressive.rs`; written, not yet run by Kani, README);
+//! **the marker state machine and `step` itself have none yet** (README,
+//! "What Kani does not cover"). The invariant
 //! is `Jpeg::state_inv` (`decoder.rs`); every index is a checked `get` and
 //! every operation checked, so `inv` is about the ranges of counters, not
 //! memory.
@@ -98,6 +132,7 @@ mod huffman;
 mod idct;
 mod markers;
 mod output;
+mod progressive;
 #[cfg(kani)]
 mod proofs;
 

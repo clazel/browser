@@ -29,11 +29,16 @@ pub const FILES_TESTIMAGES: &[&str] = &[
 /// `tests/data/jpeg-corpus/`.
 pub const FILES_CORPUS: &[&str] = &["corpus.pack"];
 
+/// `tests/data/jpeg-progressive/` (phase-6.md item 6.6): the progressive
+/// files and libjpeg-turbo's scan script.
+pub const FILES_PROGRESSIVE: &[&str] = &["progressive.pack", "test.scan"];
+
 /// The files of the suite in `dir`, by its name.
 fn files_of(name: &str) -> Result<&'static [&'static str], String> {
     match name {
         "libjpeg-turbo-testimages" => Ok(FILES_TESTIMAGES),
         "jpeg-corpus" => Ok(FILES_CORPUS),
+        "jpeg-progressive" => Ok(FILES_PROGRESSIVE),
         _ => Err(format!("no JPEG list for suite {name:?}")),
     }
 }

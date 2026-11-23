@@ -23,6 +23,11 @@
 //!   is one to one over every size up to 3 by 3.
 //! - [`ycc_any`], [`cmyk_any`]: colour conversion over every input equals
 //!   its closed form.
+//! - the progressive scans (item 6.6), one harness per scan kind:
+//!   `prog_dc_first_bits`, `prog_dc_refine_bit`, `prog_ac_first_code`,
+//!   `prog_ac_refine_code` and `prog_ac_refine_correction`: one bit of the
+//!   progressive block machine in a concrete stage, counters, band and
+//!   coefficients symbolic; see the section at the end of this file.
 //! - [`block_machine_any`]: one bit of a block (the stage, the Huffman code so
 //!   far and the position symbolic) with Huffman tables that passed
 //!   construction: no panic, and the block invariant kept.
@@ -32,6 +37,7 @@ use crate::block::{Block, Stage};
 use crate::huffman::{MAX_LEN, Next, Table};
 use crate::idct::{idct, range_limit};
 use crate::output::{Plane, cmyk_to_rgb, orient, swaps, ycc_to_rgb};
+use crate::progressive::{Prog, ScanKind, Stage as ProgStage};
 
 /// A bit reader in any state with the invariant takes bits in order and a
 /// loaded byte gives its 8 bits.
@@ -249,4 +255,81 @@ fn block_machine_any() {
     if let Ok(false) = block.bit(bit, &dc, &ac, &mut pred) {
         assert!(block.inv());
     }
+}
+
+// ------------------------------------------------------------ progressive
+//
+// One harness per scan kind (item 6.6), each over one bit of the machine of
+// `progressive.rs` in one concrete stage, with the counters, the band, the
+// point transform, the pending run and the 64 coefficients symbolic within
+// the invariant, and Huffman tables of the `Table::any` kind. Each asserts
+// that nothing panics or overflows and that the invariant holds after a bit
+// that did not finish the block (and that a finished block leaves the machine
+// idle). `unwind(66)` covers the longest loop, the walk over a band in the
+// refinement scan.
+
+/// One bit with the machine in `stage` of a scan of `kind`.
+fn one_progressive_bit(kind: ScanKind, stage: ProgStage, tables: bool) {
+    let mut m = Prog::any_in(kind, stage);
+    // The tables are only made for the stages that read a code.
+    let (dc, ac) = if tables {
+        (Some(Table::any()), Some(Table::any()))
+    } else {
+        (None, None)
+    };
+    let mut pred: i32 = kani::any();
+    let bit: u8 = kani::any();
+    kani::assume(bit <= 1);
+    match m.bit(bit, dc.as_ref(), ac.as_ref(), &mut pred) {
+        Ok(false) => assert!(m.inv()),
+        Ok(true) => assert!(m.stage() == ProgStage::Idle),
+        Err(_) => {}
+    }
+}
+
+/// DC first (G.1.2.1, Figure G.2): the bits of the difference, the sum with
+/// the predictor and the shift by `Al` never overflow, and a value that does
+/// not fit 16 bits is an error.
+#[kani::proof]
+#[kani::solver(kissat)]
+#[kani::unwind(18)]
+fn prog_dc_first_bits() {
+    one_progressive_bit(ScanKind::DcFirst, ProgStage::DcBits, false);
+}
+
+/// DC refinement (Figure G.4): one bit ORed into the coefficient at `Al`.
+#[kani::proof]
+#[kani::solver(kissat)]
+#[kani::unwind(18)]
+fn prog_dc_refine_bit() {
+    one_progressive_bit(ScanKind::DcRefine, ProgStage::DcBit, false);
+}
+
+/// AC first (Figure G.3): a symbol of any table at any position in the
+/// band: `ZRL`, `EOBn`, a run past the band, a coefficient.
+#[kani::proof]
+#[kani::solver(kissat)]
+#[kani::unwind(18)]
+fn prog_ac_first_code() {
+    one_progressive_bit(ScanKind::AcFirst, ProgStage::AcCode, true);
+}
+
+/// AC refinement (Figure G.7): a symbol of any table, with the walk over the
+/// band that follows (correction bits wanted, a new coefficient placed, the
+/// end of the band) over any coefficients.
+#[kani::proof]
+#[kani::solver(kissat)]
+#[kani::unwind(66)]
+fn prog_ac_refine_code() {
+    one_progressive_bit(ScanKind::AcRefine, ProgStage::AcCode, true);
+}
+
+/// AC refinement, a correction bit: the walk over the rest of the band after
+/// it, over any coefficients, and the correction of a coefficient near the
+/// ends of the `i16` range.
+#[kani::proof]
+#[kani::solver(kissat)]
+#[kani::unwind(66)]
+fn prog_ac_refine_correction() {
+    one_progressive_bit(ScanKind::AcRefine, ProgStage::CorrBit, false);
 }

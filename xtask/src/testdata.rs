@@ -228,6 +228,7 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         jpeg::FILES_TESTIMAGES,
     ),
     ("jpeg-corpus", jpeg::convert, jpeg::FILES_CORPUS),
+    ("jpeg-progressive", jpeg::convert, jpeg::FILES_PROGRESSIVE),
     ("wuffs-webp", wuffs_webp::convert, wuffs_webp::FILES),
     // Phase 7 item 7.1: files later items read as files; each converts to an
     // inventory of paths, sizes and hashes (see inventory.rs).
