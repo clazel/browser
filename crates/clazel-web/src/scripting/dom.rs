@@ -170,3 +170,10 @@ pub(crate) fn document_base_url(arena: &Arena) -> Option<ParsedUrl> {
 pub(crate) fn serialize(url: &ParsedUrl) -> String {
     text(&url.serialize(false))
 }
+
+/// The document base URL, serialized, or the empty string.
+pub(crate) fn serialize_or_empty(arena: &Arena) -> String {
+    document_base_url(arena)
+        .map(|u| serialize(&u))
+        .unwrap_or_default()
+}

@@ -126,6 +126,22 @@ impl Page {
         Ok(Page { rt, realm })
     }
 
+    /// Runs `source` as a classic script named `name` in the page's realm
+    /// (an uncaught exception is reported, as for any script), then the
+    /// microtask checkpoint and the events it fired.
+    ///
+    /// # Errors
+    /// An error that stops the page (termination, out of memory).
+    pub fn run_source(&mut self, name: &str, source: &str) -> Result<()> {
+        self.rt.scope(|scope| {
+            let base = dom::serialize_or_empty(super::state::arena(scope)?);
+            let cps = dom::cps(source);
+            let script = super::element::create_classic_script(scope, &cps, name.to_owned(), base)?;
+            super::element::run_classic_script(scope, &script)?;
+            flush_events(scope)
+        })
+    }
+
     /// The page clock's reading, in whole milliseconds.
     ///
     /// # Errors

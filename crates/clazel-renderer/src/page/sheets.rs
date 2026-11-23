@@ -23,6 +23,19 @@ use clazel_style::sources::Owner;
 use clazel_url::url::record::ParsedUrl;
 
 use super::state::SheetWait;
+use std::collections::HashMap;
+
+/// What a linked sheet answered, kept by `href` so that a restyle after a
+/// script reads it again.
+#[derive(Debug, Clone)]
+pub struct Cached {
+    /// The `Content-Type` value, or empty.
+    pub content_type: Vec<u8>,
+    /// Whether the response had the document's origin.
+    pub same_origin: bool,
+    /// The body.
+    pub body: Vec<u8>,
+}
 
 /// Whether `a` and `b` are same origin (HTML §7.1.1): both tuple origins
 /// (`http`, `https`, `ws`, `wss`, `ftp`) with equal schemes, hosts and ports.
@@ -72,6 +85,38 @@ impl SheetWait {
                 // render-blocking, and with no fetch at all every link is
                 // as a failed one.
                 w.sources.link_loaded(i, FAILED, encoding);
+            }
+        }
+        w
+    }
+
+    /// The wait for `sources` collected again from a document that a script
+    /// changed, with nothing awaited: a link answered before (`cache`, by
+    /// `href`) is loaded from its answer, and any other is as a failed
+    /// fetch (a script that adds a link does not get its sheet).
+    pub fn rebuild(
+        sources: Sources,
+        cache: &HashMap<Vec<u32>, Cached>,
+        encoding: Encoding,
+    ) -> SheetWait {
+        let mut w = SheetWait {
+            sources,
+            pending: Vec::new(),
+        };
+        for i in w.sources.pending_links() {
+            let cached = w.href(i).and_then(|h| cache.get(&h));
+            match cached {
+                Some(c) => {
+                    let response = Response {
+                        content_type: (!c.content_type.is_empty())
+                            .then_some(c.content_type.as_slice()),
+                        same_origin: c.same_origin,
+                        ok: true,
+                        body: &c.body,
+                    };
+                    w.sources.link_loaded(i, response, encoding);
+                }
+                None => w.sources.link_loaded(i, FAILED, encoding),
             }
         }
         w

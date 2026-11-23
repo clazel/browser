@@ -660,6 +660,7 @@ dependencies = [
  "clazel-gpu",
  "clazel-html",
  "clazel-ipc",
+ "clazel-js",
  "clazel-layout",
  "clazel-mime",
  "clazel-sandbox",
@@ -668,6 +669,7 @@ dependencies = [
  "clazel-text",
  "clazel-treebuilder",
  "clazel-url",
+ "clazel-web",
 ]
 
 [[package]]
