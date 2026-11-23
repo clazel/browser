@@ -71,7 +71,7 @@ pub fn tokenizer_state(s: &TokenizerState) -> (r: State)
 }
 
 /// The list `v` in reverse order (popping it gives the first first).
-fn reversed<T>(v: Vec<T>) -> (r: Vec<T>)
+pub(crate) fn reversed<T>(v: Vec<T>) -> (r: Vec<T>)
     ensures
         r@.len() == v@.len(),
         forall|i: int| 0 <= i < v@.len() ==> #[trigger] r@[i] == v@[v@.len() - 1 - i],
