@@ -4,9 +4,8 @@
 //! `@@toStringTag`.
 //!
 //! The Symbol values themselves are the VM's ([`Vm::new_symbol`],
-//! [`Vm::well_known_symbol`]). `Symbol.prototype.description` is an accessor
-//! property (§20.4.3.2†), and this slice has none, so it is absent. The
-//! GlobalSymbolRegistry (§20.4.2.2.1†) is an object without a prototype,
+//! [`Vm::well_known_symbol`]). `Symbol.prototype.description` is the accessor
+//! property of §20.4.3.2†. The GlobalSymbolRegistry (§20.4.2.2.1†) is an object without a prototype,
 //! keyed by the registered strings, that only the VM's intrinsics table
 //! holds ([`Intrinsic::SymbolRegistry`]).
 
@@ -54,6 +53,8 @@ pub fn install(vm: &mut Vm) -> Result<(), Abrupt> {
     method(vm, ctor, "keyFor", 1, key_for)?;
     method(vm, proto, "toString", 0, to_string)?;
     method(vm, proto, "valueOf", 0, value_of)?;
+    let kd = crate::util::key(vm, "description")?;
+    crate::util::accessor(vm, proto, kd, "description", Some(get_description), None)?;
     // §20.4.3.5† `Symbol.prototype [ @@toPrimitive ] ( hint )`: its `name`
     // is "[Symbol.toPrimitive]"; { [[Writable]]: false, [[Configurable]]:
     // true }.
@@ -190,4 +191,16 @@ fn to_string(vm: &mut Vm, this: Value, _args: &[Value]) -> Result<Value, Abrupt>
 /// 1. Return ? ThisSymbolValue(this value).
 fn value_of(vm: &mut Vm, this: Value, _args: &[Value]) -> Result<Value, Abrupt> {
     this_symbol_value(vm, this)
+}
+
+/// `get Symbol.prototype.description`, §20.4.3.2†:
+/// 1. Let s be the this value.
+/// 2. Let sym be ? ThisSymbolValue(s).
+/// 3. Return sym.[[Description]].
+fn get_description(vm: &mut Vm, this: Value, _args: &[Value]) -> Result<Value, Abrupt> {
+    let sym = this_symbol_value(vm, this)?;
+    Ok(vm
+        .heap()
+        .symbol(sym)
+        .map_or(Value::UNDEFINED, |s| s.description))
 }

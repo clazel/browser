@@ -387,3 +387,55 @@ fn limits_and_hostile_patterns() -> Result<(), String> {
         other => Err(format!("expected Terminated, got {other:?}")),
     }
 }
+
+/// The flag properties and `@@species` are the standard's accessors
+/// (§22.2.6†, §22.2.5.2†): on `RegExp.prototype`, not on each instance, and
+/// `flags` follows what `Get` sees.
+#[test]
+fn flag_accessors_and_species() -> Result<(), String> {
+    let bad_this = throws(
+        "TypeError",
+        "Object.getOwnPropertyDescriptor(RegExp.prototype, 'global').get.call({})",
+    );
+    let non_object = throws(
+        "TypeError",
+        "Object.getOwnPropertyDescriptor(RegExp.prototype, 'flags').get.call(1)",
+    );
+    check(&[
+        (
+            "var d = Object.getOwnPropertyDescriptor(RegExp.prototype, 'global'); var r = typeof d.get + ',' + d.set + ',' + d.enumerable + ',' + d.configurable + ',' + d.get.name;",
+            "function,undefined,false,true,get global",
+        ),
+        (
+            "var r = Object.getOwnPropertyNames(/a/g).join();",
+            "lastIndex",
+        ),
+        (
+            "var r = RegExp.prototype.global + ',' + RegExp.prototype.flags + ',' + RegExp.prototype.source;",
+            "undefined,,(?:)",
+        ),
+        ("var r = /a/dgimsuy.flags + /a/v.flags;", "dgimsuyv"),
+        (
+            "var r = /a/g.global + ',' + /a/.global + ',' + /a/y.sticky + ',' + /a/u.unicode;",
+            "true,false,true,true",
+        ),
+        // `flags` reads the other accessors with Get, so an own property wins.
+        (
+            "var x = /a/; Object.defineProperty(x, 'global', {value: true}); var r = x.flags;",
+            "g",
+        ),
+        ("var r = RegExp[Symbol.species] === RegExp;", "true"),
+        (
+            "var d = Object.getOwnPropertyDescriptor(RegExp, Symbol.species); var r = typeof d.get + ',' + d.get.name + ',' + d.set;",
+            "function,get [Symbol.species],undefined",
+        ),
+        ("var r = Promise[Symbol.species] === Promise;", "true"),
+        ("var r = Array[Symbol.species] === Array;", "true"),
+        (
+            "var r = Symbol('d').description + ',' + Symbol().description;",
+            "d,undefined",
+        ),
+        (&bad_this, "true"),
+        (&non_object, "true"),
+    ])
+}

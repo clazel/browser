@@ -27,11 +27,6 @@
 //!
 //! # Differences from the standard, all listed
 //!
-//! - **`get Promise [ @@species ]`** (§27.2.4.9†) is an accessor, and the VM
-//!   has none: it is a data property of `%Promise%` holding `%Promise%`
-//!   itself. A subclass made without `class` (which cannot extend a built-in
-//!   in this VM yet) would read `%Promise%` through its prototype chain, not
-//!   itself.
 //! - **HostPromiseRejectionTracker** (§27.2.1.9†) is not called: no host
 //!   exists yet that wants it.
 //! - **HostMakeJobCallback and HostCallJobCallback** (§9.5.3†, §9.5.4†) are
@@ -39,8 +34,7 @@
 
 use crate::symbol::to_string_tag;
 use crate::util::{
-    CONFIGURABLE_ONLY, arg, caught, constructor, define, get, invoke, method, new_object_with,
-    species_constructor,
+    arg, caught, constructor, define, get, invoke, method, new_object_with, species_constructor,
 };
 use clazel_js_heap::symbol as wk;
 use clazel_js_heap::value::Value;
@@ -128,10 +122,9 @@ pub fn install(vm: &mut Vm) -> Result<(), Abrupt> {
     method(vm, ctor, "resolve", 1, resolve)?;
     method(vm, ctor, "try", 1, try_fn)?;
     method(vm, ctor, "withResolvers", 0, with_resolvers)?;
-    // §27.2.4.9†: `get Promise [ @@species ]` returns the this value; the VM
-    // has no accessors, so the data property holds the constructor itself.
+    // §27.2.4.9†: `get Promise [ @@species ]` returns the this value.
     let ks = vm.well_known_key(wk::SPECIES)?;
-    vm.heap_mut().define(ctor, ks, ctor, CONFIGURABLE_ONLY)?;
+    crate::util::accessor(vm, ctor, ks, "[Symbol.species]", Some(get_species), None)?;
     method(vm, proto, "catch", 1, catch)?;
     method(vm, proto, "finally", 1, finally)?;
     method(vm, proto, "then", 2, then)?;
@@ -1099,4 +1092,9 @@ fn then(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
     let c = species_constructor(vm, this, default)?;
     let cap = new_promise_capability(vm, c)?;
     perform_promise_then(vm, this, arg(args, 0), arg(args, 1), Some(cap))
+}
+
+/// `get Promise [ @@species ]`, §27.2.4.9†: 1. Return the this value.
+fn get_species(_vm: &mut Vm, this: Value, _args: &[Value]) -> Result<Value, Abrupt> {
+    Ok(this)
 }

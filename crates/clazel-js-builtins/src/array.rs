@@ -13,12 +13,9 @@
 //! "mathematical values" of the algorithms (indices up to 2^53 - 1) are `f64`,
 //! which holds them exactly.
 //!
-//! **`get Array [ @@species ]`** (§23.1.2.5†) is an accessor, and this
-//! slice has no accessor properties, so `Array` has no `@@species`
-//! property. ArraySpeciesCreate reads `C[@@species]` as the standard says;
-//! when the lookup finds no such property at all, it uses `C` itself, which
-//! is what the missing getter (`return this`) would give. A `@@species`
-//! property a script defines is honoured, `null` and `undefined` included.
+//! **`get Array [ @@species ]`** (§23.1.2.5†) is the standard's accessor
+//! property of `Array` (it returns the this value), and ArraySpeciesCreate
+//! reads `C[@@species]` with `Get`.
 //!
 //! Not here: `Array.fromAsync` (Promises).
 
@@ -49,6 +46,8 @@ pub fn install(vm: &mut Vm) -> Result<(), Abrupt> {
     method(vm, ctor, "isArray", 1, is_array)?;
     method(vm, ctor, "of", 0, array_of)?;
     method(vm, ctor, "from", 1, array_from)?;
+    let ks = vm.well_known_key(wk::SPECIES)?;
+    crate::util::accessor(vm, ctor, ks, "[Symbol.species]", Some(get_species), None)?;
     let methods: [(&str, i32, clazel_js_vm::interp::NativeFn); 37] = [
         ("at", 1, at),
         ("concat", 1, concat),
@@ -197,6 +196,11 @@ fn same_value_zero(vm: &Vm, a: Value, b: Value) -> bool {
     vm.same_value(a, b)
 }
 
+/// `get Array [ @@species ]`, §23.1.2.5†: 1. Return the this value.
+fn get_species(_vm: &mut Vm, this: Value, _args: &[Value]) -> Result<Value, Abrupt> {
+    Ok(this)
+}
+
 /// ArraySpeciesCreate ( originalArray, length ), §10.4.2.3†:
 /// 1. If IsArray(originalArray) is false, return ? ArrayCreate(length).
 /// 2. Let C be ? Get(originalArray, "constructor").
@@ -204,9 +208,6 @@ fn same_value_zero(vm: &Vm, a: Value, b: Value) -> bool {
 /// 4. If C is an Object, then
 ///    a. Set C to ? Get(C, @@species).
 ///    b. If C is null, set C to undefined.
-///    (When C has no `@@species` property at all, C stays itself: the
-///    stand-in for the missing `get Array [ @@species ]`, see the module
-///    header.)
 /// 5. If C is undefined, return ? ArrayCreate(length).
 /// 6. If IsConstructor(C) is false, throw a TypeError exception.
 /// 7. Return ? Construct(C, « 𝔽(length) »).
@@ -218,11 +219,9 @@ fn species_create(vm: &mut Vm, original: Value, length: f64) -> Result<Value, Ab
     let mut c = vm.get_value(original, kc)?;
     if vm.heap().is_object(c) {
         let ks = vm.well_known_key(wk::SPECIES)?;
-        if vm.heap().find(c, ks)?.is_some() {
-            c = vm.get_value(c, ks)?;
-            if c == Value::NULL {
-                c = Value::UNDEFINED;
-            }
+        c = vm.get_value(c, ks)?;
+        if c == Value::NULL {
+            c = Value::UNDEFINED;
         }
     }
     if c == Value::UNDEFINED || c == vm.intrinsic(Intrinsic::ArrayConstructor) {

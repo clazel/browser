@@ -25,22 +25,11 @@
 //!
 //! # Differences from the standard, all listed
 //!
-//! - **The flag accessors** (`flags`, `source`, `global`, `ignoreCase`,
-//!   `multiline`, `dotAll`, `unicode`, `unicodeSets`, `sticky`, `hasIndices`,
-//!   §22.2.6†) are accessor properties of `RegExp.prototype`, and the VM has
-//!   none. Each RegExp instance instead has them as own, non-writable,
-//!   non-enumerable, configurable data properties, set by RegExpInitialize.
-//!   Reading `/a/g.global` and the generic algorithms that `Get` them
-//!   (`@@replace` reads `flags`) work; `RegExp.prototype.global` is
-//!   `undefined` (not a getter that returns `undefined`), `RegExp.prototype.flags`
-//!   is `undefined` (the standard's `""`), and `Object.getOwnPropertyNames`
-//!   of a RegExp lists these names after `lastIndex`. The standard's `flags`
-//!   getter reads `hasIndices`, `global`, ... with `Get`, so redefining
-//!   `global` on an instance changes the `flags` the algorithms see; here
-//!   `flags` is a stored string, so it does not (about ten Test262 tests of
-//!   `RegExp.prototype[@@match]` and `[@@replace]` observe this).
-//! - **`get RegExp [ @@species ]`** (§22.2.5.2†) is a data property holding
-//!   `%RegExp%`, as for `Promise`.
+//! - **The flag accessors and `@@species`** are the standard's: `flags`,
+//!   `source`, `global`, ... (§22.2.6†) are accessor properties of
+//!   `RegExp.prototype`, and `get RegExp [ @@species ]` (§22.2.5.2†) an
+//!   accessor of `RegExp`, as the VM has them (accessor properties). The
+//!   getters of the flags are `RegExpHasFlag` (§22.2.6.3.1†).
 //! - **The legacy static properties** (`RegExp.$1`, `RegExp.lastMatch`, ...,
 //!   the proposal "legacy RegExp features") are absent.
 //! - **A match copies the input** to a `Vec<u16>`, so a loop that runs `exec`
@@ -53,7 +42,7 @@ use crate::iterator::{code_point_at, iter_result};
 use crate::string::{NamedLookup, get_substitution};
 use crate::symbol::to_string_tag;
 use crate::util::{
-    CONFIGURABLE_ONLY, METHOD, arg, constructor, get, js_string, method, number, same_value, set,
+    METHOD, accessor, arg, constructor, get, js_string, method, number, same_value, set,
     species_constructor, string, to_integer_or_infinity,
 };
 use clazel_js_heap::shape::Attrs;
@@ -115,7 +104,23 @@ pub fn install(vm: &mut Vm) -> Result<(), Abrupt> {
     vm.set_intrinsic(Intrinsic::RegExpConstructor, ctor);
     method(vm, ctor, "escape", 1, escape)?;
     let ks = vm.well_known_key(wk::SPECIES)?;
-    vm.heap_mut().define(ctor, ks, ctor, CONFIGURABLE_ONLY)?;
+    accessor(vm, ctor, ks, "[Symbol.species]", Some(get_species), None)?;
+    let getters: [(&str, clazel_js_vm::interp::NativeFn); 10] = [
+        ("dotAll", get_dot_all),
+        ("flags", get_flags),
+        ("global", get_global),
+        ("hasIndices", get_has_indices),
+        ("ignoreCase", get_ignore_case),
+        ("multiline", get_multiline),
+        ("source", get_source),
+        ("sticky", get_sticky),
+        ("unicode", get_unicode),
+        ("unicodeSets", get_unicode_sets),
+    ];
+    for (name, f) in getters {
+        let k = crate::util::key(vm, name)?;
+        accessor(vm, proto, k, name, Some(f), None)?;
+    }
 
     method(vm, proto, "compile", 2, compile)?;
     method(vm, proto, "exec", 1, exec)?;
@@ -294,8 +299,6 @@ fn regexp_alloc(vm: &mut Vm, new_target: Value) -> Result<Value, Abrupt> {
 /// 22. Perform ? Set(obj, "lastIndex", +0𝔽, true).
 /// 23. Return obj.
 ///
-/// (The flag properties of the module header's first difference are defined
-/// between steps 21 and 22.)
 fn regexp_initialize(
     vm: &mut Vm,
     obj: Value,
@@ -344,62 +347,150 @@ fn regexp_initialize(
             flags: parsed_flags,
         })),
     );
-    define_flag_properties(vm, obj, parsed_flags, &pu, &fu)?;
     set(vm, obj, "lastIndex", Value::int32(0))?;
     Ok(obj)
 }
 
-/// The module header's first difference: the accessors of §22.2.6†
-/// (`get RegExp.prototype.global` ... `get RegExp.prototype.flags`, `get
-/// RegExp.prototype.source`) as own data properties.
-fn define_flag_properties(
-    vm: &mut Vm,
-    obj: Value,
-    f: Flags,
-    pattern: &[u16],
-    flags: &[u16],
-) -> Result<(), Abrupt> {
-    let attrs = Attrs(Attrs::CONFIGURABLE);
-    let bools = [
-        ("hasIndices", f.has_indices),
-        ("global", f.global),
-        ("ignoreCase", f.ignore_case),
-        ("multiline", f.multiline),
-        ("dotAll", f.dot_all),
-        ("unicode", f.unicode),
-        ("unicodeSets", f.unicode_sets),
-        ("sticky", f.sticky),
-    ];
-    for (name, on) in bools {
-        let k = crate::util::key(vm, name)?;
-        vm.heap_mut().define(obj, k, Value::boolean(on), attrs)?;
+/// RegExpHasFlag ( R, codeUnit ), §22.2.6.3.1†:
+/// 1. If R is not an Object, throw a TypeError exception.
+/// 2. If R does not have an [[OriginalFlags]] internal slot, then
+///    a. If SameValue(R, %RegExp.prototype%) is true, return undefined.
+///    b. Otherwise, throw a TypeError exception.
+/// 3. Let flags be R.[[OriginalFlags]].
+/// 4. If flags contains codeUnit, return true.
+/// 5. Return false.
+fn regexp_has_flag(vm: &mut Vm, r: Value, flag: u8) -> Result<Value, Abrupt> {
+    if !vm.heap().is_object(r) {
+        return Err(vm.type_error("RegExp flag getter called on a non-object"));
     }
-    // §22.2.6.4† `get RegExp.prototype.flags` step 4 onwards: the flags in
-    // the order of Table 70, "dgimsuvy".
+    match compiled_of(vm, r) {
+        Some(c) => {
+            let f = c.flags;
+            let on = match flag {
+                b'd' => f.has_indices,
+                b'g' => f.global,
+                b'i' => f.ignore_case,
+                b'm' => f.multiline,
+                b's' => f.dot_all,
+                b'u' => f.unicode,
+                b'v' => f.unicode_sets,
+                _ => f.sticky,
+            };
+            Ok(Value::boolean(on))
+        }
+        None if r == vm.intrinsic(Intrinsic::RegExpPrototype) => Ok(Value::UNDEFINED),
+        None => Err(vm.type_error("RegExp flag getter called on a non-RegExp object")),
+    }
+}
+
+/// `get RegExp.prototype.hasIndices`, §22.2.6.4†: 1. Let R be the this value.
+/// 2. Let cu be the code unit 0x0064 (LATIN SMALL LETTER D). 3. Return ?
+/// RegExpHasFlag(R, cu).
+fn get_has_indices(vm: &mut Vm, this: Value, _a: &[Value]) -> Result<Value, Abrupt> {
+    regexp_has_flag(vm, this, b'd')
+}
+
+/// `get RegExp.prototype.global`, §22.2.6.6†: RegExpHasFlag(R, "g").
+fn get_global(vm: &mut Vm, this: Value, _a: &[Value]) -> Result<Value, Abrupt> {
+    regexp_has_flag(vm, this, b'g')
+}
+
+/// `get RegExp.prototype.ignoreCase`, §22.2.6.7†: RegExpHasFlag(R, "i").
+fn get_ignore_case(vm: &mut Vm, this: Value, _a: &[Value]) -> Result<Value, Abrupt> {
+    regexp_has_flag(vm, this, b'i')
+}
+
+/// `get RegExp.prototype.multiline`, §22.2.6.10†: RegExpHasFlag(R, "m").
+fn get_multiline(vm: &mut Vm, this: Value, _a: &[Value]) -> Result<Value, Abrupt> {
+    regexp_has_flag(vm, this, b'm')
+}
+
+/// `get RegExp.prototype.dotAll`, §22.2.6.3†: RegExpHasFlag(R, "s").
+fn get_dot_all(vm: &mut Vm, this: Value, _a: &[Value]) -> Result<Value, Abrupt> {
+    regexp_has_flag(vm, this, b's')
+}
+
+/// `get RegExp.prototype.unicode`, §22.2.6.15†: RegExpHasFlag(R, "u").
+fn get_unicode(vm: &mut Vm, this: Value, _a: &[Value]) -> Result<Value, Abrupt> {
+    regexp_has_flag(vm, this, b'u')
+}
+
+/// `get RegExp.prototype.unicodeSets`, §22.2.6.16†: RegExpHasFlag(R, "v").
+fn get_unicode_sets(vm: &mut Vm, this: Value, _a: &[Value]) -> Result<Value, Abrupt> {
+    regexp_has_flag(vm, this, b'v')
+}
+
+/// `get RegExp.prototype.sticky`, §22.2.6.14†: RegExpHasFlag(R, "y").
+fn get_sticky(vm: &mut Vm, this: Value, _a: &[Value]) -> Result<Value, Abrupt> {
+    regexp_has_flag(vm, this, b'y')
+}
+
+/// `get RegExp.prototype.flags`, §22.2.6.5†:
+/// 1. Let R be the this value.
+/// 2. If R is not an Object, throw a TypeError exception.
+/// 3. Let codeUnits be a new empty List.
+/// 4. Let hasIndices be ToBoolean(? Get(R, "hasIndices")).
+/// 5. If hasIndices is true, append the code unit 0x0064 to codeUnits.
+/// 6. to 19. The same for "global" (g), "ignoreCase" (i), "multiline" (m),
+///    "dotAll" (s), "unicode" (u), "unicodeSets" (v) and "sticky" (y), in
+///    that order.
+/// 20. Return the String value whose code units are the elements of the List
+///     codeUnits.
+fn get_flags(vm: &mut Vm, this: Value, _a: &[Value]) -> Result<Value, Abrupt> {
+    if !vm.heap().is_object(this) {
+        return Err(vm.type_error("RegExp.prototype.flags getter called on a non-object"));
+    }
     let mut text = String::new();
-    for (c, on) in [
-        ('d', f.has_indices),
-        ('g', f.global),
-        ('i', f.ignore_case),
-        ('m', f.multiline),
-        ('s', f.dot_all),
-        ('u', f.unicode),
-        ('v', f.unicode_sets),
-        ('y', f.sticky),
+    for (name, c) in [
+        ("hasIndices", 'd'),
+        ("global", 'g'),
+        ("ignoreCase", 'i'),
+        ("multiline", 'm'),
+        ("dotAll", 's'),
+        ("unicode", 'u'),
+        ("unicodeSets", 'v'),
+        ("sticky", 'y'),
     ] {
-        if on {
+        let v = get(vm, this, name)?;
+        if vm.to_boolean(v) {
             text.push(c);
         }
     }
-    let _ = flags;
-    let fv = string(vm, &text)?;
-    let k = crate::util::key(vm, "flags")?;
-    vm.heap_mut().define(obj, k, fv, attrs)?;
-    let src = escape_regexp_pattern(pattern);
-    let sv = units_value(vm, &src)?;
-    let k = crate::util::key(vm, "source")?;
-    vm.heap_mut().define(obj, k, sv, attrs)?;
-    Ok(())
+    string(vm, &text)
+}
+
+/// `get RegExp.prototype.source`, §22.2.6.12†:
+/// 1. Let R be the this value.
+/// 2. If R is not an Object, throw a TypeError exception.
+/// 3. If R does not have an [[OriginalSource]] internal slot, then
+///    a. If SameValue(R, %RegExp.prototype%) is true, return "(?:)".
+///    b. Otherwise, throw a TypeError exception.
+/// 4. Assert: R has an [[OriginalFlags]] internal slot.
+/// 5. Let src be R.[[OriginalSource]].
+/// 6. Let flags be R.[[OriginalFlags]].
+/// 7. Return EscapeRegExpPattern(src, flags).
+fn get_source(vm: &mut Vm, this: Value, _a: &[Value]) -> Result<Value, Abrupt> {
+    if !vm.heap().is_object(this) {
+        return Err(vm.type_error("RegExp.prototype.source getter called on a non-object"));
+    }
+    if compiled_of(vm, this).is_none() {
+        if this == vm.intrinsic(Intrinsic::RegExpPrototype) {
+            return string(vm, "(?:)");
+        }
+        return Err(vm.type_error("RegExp.prototype.source getter called on a non-RegExp object"));
+    }
+    let src = vm.host_slot(this, S_SOURCE).unwrap_or(Value::UNDEFINED);
+    let units = match vm.heap().string(src) {
+        Some(s) => units_of(s),
+        None => Vec::new(),
+    };
+    let escaped = escape_regexp_pattern(&units);
+    units_value(vm, &escaped)
+}
+
+/// `get RegExp [ @@species ]`, §22.2.5.2†: 1. Return the this value.
+fn get_species(_vm: &mut Vm, this: Value, _a: &[Value]) -> Result<Value, Abrupt> {
+    Ok(this)
 }
 
 /// EscapeRegExpPattern ( P, F ), §22.2.6.13.1†: a pattern text that, in a
