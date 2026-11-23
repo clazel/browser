@@ -1690,7 +1690,7 @@ pub fn update_url_exec<U: UrlFnsExec>(urls: &U, s: StateRecord, r: &RendererReco
         out.0.next_conn == s.next_conn,
         out.0.now == s.now,
 {
-    if url.len() == 0 {
+    if url.is_empty() {
         return (s, no_outputs());
     }
     match clazel_encoding::utf8::decode::decode_without_bom_or_fail(url) {

@@ -174,6 +174,54 @@ the new event, outputs and message. The ownership and limits proofs rest on
 an invariant of reachable states (`subfetch_tables_wf`: each key once, each
 serial below its renderer's counter).
 
+## URL updates (phase-7.md item 7.16)
+
+A committed renderer's `UpdateUrl { replace, url }` (`history.pushState`
+and `history.replaceState`, tag 17) changes what the address bar shows for
+its tab, and nothing else. The renderer runs HTML's "shared history
+push/replace state steps" and throws its own `SecurityError`; the kernel
+only decides whether the address bar follows. There is no reply.
+
+### Decisions (taken here, from the plan's goals; each is also in `src/spec.rs`)
+
+1. **The document URL is a lock-tagged table** (`State::doc_urls`, entries
+   `DocUrl { id, lock, url }`), as 5.18's titles are, not the renderer's
+   `url`, which stays the URL last committed. So a renderer's record never
+   changes on an `UpdateUrl`, every theorem about renderer records
+   (`theorem_lock_set_only_by_navigation`,
+   `theorem_committed_only_after_commit`) is unchanged, and
+   noninterference compares only the observer's entries. A same-origin
+   commit forgets the renderer's entry.
+2. **Accepted only when the URL's lock is the renderer's tuple lock.** The
+   URL is decoded and resolved against the committed URL (as `Navigate`'s
+   is); an empty URL, a URL that does not resolve, one of another origin,
+   or any URL from an opaque-origin renderer changes nothing.
+3. **What reads it:** the `url` of `Show` and `Paint`. Not the base of the
+   URLs the kernel resolves, and not `document.cookie`'s path, which stay
+   the committed URL (listed below).
+
+### Theorems
+
+`theorem_url_update_same_origin`: an accepted `UpdateUrl` has no output and
+changes only the sender's entry, to a URL whose origin is the sender's tuple
+lock; and in every reachable state every renderer's document URL has the
+renderer's lock (`doc_urls_wf`, part of `kernel_wf`, with
+`theorem_lock_is_committed_origin`). `theorem_address_bar_integrity` is
+restated: a `Show` or `Paint` names the document URL. The noninterference
+theorem is re-proven with the new table in its relation.
+
+### Not done
+
+- HTML lets a document change its URL's username or password and forbids
+  it; the kernel checks only the origin (the renderer refuses the rest).
+- An opaque-origin document (`data:`, `file:`, `about:blank`) cannot update
+  the address bar, though HTML lets it change the fragment.
+- The kernel resolves a renderer's relative URLs, and `document.cookie`
+  matches paths, against the committed URL, not the document's URL after a
+  `pushState`.
+- The table keeps the entry of a renderer that was replaced, killed or
+  exited (never read again: ids are not reused).
+
 ## The GPU crash policy (phase-5.md item 5.17c)
 
 What `GpuReady { software }`, `GpuRefused` and a GPU process's exit mean, as
