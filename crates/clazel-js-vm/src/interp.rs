@@ -30,6 +30,12 @@
 //! - **A step budget.** [`Vm::set_budget`] bounds the back-edges and calls a
 //!   run may make, and ends the run as [`Abrupt::Terminated`] when it is
 //!   spent: a host's deterministic form of the `Terminator`.
+//! - **Limits (phase-7.md 7.19).** The heap's byte limit
+//!   ([`Vm::set_heap_limit`]) and the region's slot limit make an op throw a
+//!   `RangeError` where the spec has no limit, and so does one native call
+//!   more than [`Vm::set_native_depth_limit`] allows. The heap-limit error
+//!   comes without a collection first: the VM does not use the collector of
+//!   item 7.6 yet.
 //! - **No inline-cache entries for globals or prototype hits**, only own data
 //!   properties of non-dictionary shapes, as `spec::IcEntry` models.
 //!
@@ -156,8 +162,27 @@ pub enum Intrinsic {
     ArrayConstructor,
 }
 
-/// The most natives that may run one inside another.
-const MAX_NATIVE_DEPTH: u32 = 150;
+/// The most natives that may run one inside another, until
+/// [`Vm::set_native_depth_limit`] says otherwise (and one more nested run of
+/// the interpreter loop, see [`Vm::execute`]).
+///
+/// Both live on the host stack. Measured on aarch64 macOS (2026-11), one
+/// level of JS calling a native that calls JS back (`forEach`, `map`,
+/// `call`) takes about 40 KB of it in an unoptimised build and about 1.5 KB
+/// in an optimised one. 32 levels is about 1.3 MB unoptimised, which a
+/// 2 MiB thread (Rust's default, and what tests run on) holds with room for
+/// its caller. An embedder on a larger stack may raise it.
+pub const DEFAULT_NATIVE_DEPTH: u32 = 32;
+
+/// The deepest nesting the VM's own recursive algorithms (`JSON.parse`,
+/// `JSON.stringify`) take, until [`Vm::set_nesting_depth_limit`] says
+/// otherwise: `clazel-json`'s own bound, so the default changes nothing.
+pub const DEFAULT_NESTING_DEPTH: u32 = 512;
+
+/// The RegExp backtrack stack's size in entries, until
+/// [`Vm::set_regexp_backtrack_limit`] says otherwise (`clazel-js-regexp`'s own
+/// default).
+pub const DEFAULT_REGEXP_BACKTRACK: u64 = 1 << 20;
 
 /// How many [`Intrinsic`]s there are.
 const INTRINSICS: usize = 12;
@@ -291,8 +316,16 @@ pub struct Vm {
     /// How many natives are running, one inside another (each re-enters the
     /// interpreter or another native on the host stack).
     pub(crate) native_depth: u32,
+    /// How many runs of the interpreter loop are on the host stack (see
+    /// [`Vm::execute`]).
+    pub(crate) reentry_depth: u32,
     pub(crate) terminator: Terminator,
     pub(crate) budget: u64,
+    /// The limits of phase-7.md 7.19 that the VM checks itself (see the
+    /// setters).
+    pub(crate) native_limit: u32,
+    pub(crate) nesting_limit: u32,
+    pub(crate) regexp_backtrack_limit: u64,
     pub(crate) atoms: Atoms,
     /// The embedder's state (`clazel-js`'s runtime), see [`Vm::set_embedder`].
     pub(crate) embedder: Option<Box<dyn Any + Send>>,
@@ -360,8 +393,12 @@ impl Vm {
             new_target: Value::UNDEFINED,
             active: Value::UNDEFINED,
             native_depth: 0,
+            reentry_depth: 0,
             terminator: Terminator::new(),
             budget: u64::MAX,
+            native_limit: DEFAULT_NATIVE_DEPTH,
+            nesting_limit: DEFAULT_NESTING_DEPTH,
+            regexp_backtrack_limit: DEFAULT_REGEXP_BACKTRACK,
             atoms,
             embedder: None,
         })
@@ -401,6 +438,88 @@ impl Vm {
     /// run ends as [`Abrupt::Terminated`].
     pub fn set_budget(&mut self, steps: u64) {
         self.budget = steps;
+    }
+
+    // -----------------------------------------------------------------
+    // Limits (phase-7.md 7.19). Each is the embedder's; the defaults are
+    // the constants above.
+    // -----------------------------------------------------------------
+
+    /// Sets the heap's byte limit ([`crate::heap::Heap`]'s byte count). An
+    /// allocation past it is a `RangeError`, made from a small reserve past
+    /// the limit (see [`Vm::execute`]); bytes already counted stay counted.
+    pub fn set_heap_limit(&mut self, bytes: u64) {
+        self.heap.set_byte_limit(bytes);
+    }
+
+    /// Sets how many natives may run one inside another; one more is a
+    /// `RangeError`. The host stack must hold that many re-entries of the
+    /// interpreter: see [`DEFAULT_NATIVE_DEPTH`].
+    pub fn set_native_depth_limit(&mut self, depth: u32) {
+        self.native_limit = depth;
+    }
+
+    /// The nesting limit of the VM's recursive built-ins.
+    #[must_use]
+    pub fn nesting_depth_limit(&self) -> u32 {
+        self.nesting_limit
+    }
+
+    /// Sets the nesting limit of the VM's recursive built-ins (`JSON.parse`,
+    /// `JSON.stringify`); each also has a fixed bound of its own, and the
+    /// smaller applies.
+    pub fn set_nesting_depth_limit(&mut self, depth: u32) {
+        self.nesting_limit = depth;
+    }
+
+    /// The RegExp backtrack stack's size in entries, for the RegExp
+    /// built-ins.
+    #[must_use]
+    pub fn regexp_backtrack_limit(&self) -> u64 {
+        self.regexp_backtrack_limit
+    }
+
+    /// Sets the RegExp backtrack stack's size in entries.
+    pub fn set_regexp_backtrack_limit(&mut self, entries: u64) {
+        self.regexp_backtrack_limit = entries;
+    }
+
+    /// The termination check for a native in a long loop of its own (one
+    /// that calls no function, so the interpreter's checks at calls and
+    /// back-edges do not see it).
+    ///
+    /// # Errors
+    /// [`Abrupt::Terminated`] once the [`Terminator`] is set.
+    pub fn check_terminated(&self) -> Result<(), Abrupt> {
+        if self.terminator.is_set() {
+            return Err(Abrupt::Terminated);
+        }
+        Ok(())
+    }
+
+    /// The `RangeError` that reports the heap limit, made from the reserve
+    /// past it; [`Abrupt::OutOfMemory`] when even the reserve is spent.
+    ///
+    /// phase-7.md 7.19 asks for a full collection before the error. The VM
+    /// does not use the collector of item 7.6 yet, so there is nothing to
+    /// collect: the error comes at once.
+    pub(crate) fn heap_limit_error(&mut self) -> Abrupt {
+        let was = self.heap.set_reserve_open(true);
+        let e = self.range_error("Out of memory: the heap limit was reached");
+        self.heap.set_reserve_open(was);
+        match e {
+            Abrupt::Throw(v) => Abrupt::Throw(v),
+            _ => Abrupt::OutOfMemory,
+        }
+    }
+
+    /// `r`, with [`Abrupt::OutOfMemory`] turned into the `RangeError` that
+    /// reports the heap limit ([`Vm::heap_limit_error`]).
+    pub(crate) fn report_heap_limit<T>(&mut self, r: Result<T, Abrupt>) -> Result<T, Abrupt> {
+        match r {
+            Err(Abrupt::OutOfMemory) => Err(self.heap_limit_error()),
+            other => other,
+        }
     }
 
     /// The global object.
@@ -519,7 +638,10 @@ impl Vm {
     pub fn call(&mut self, callee: Value, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
         let kind = self.heap.obj(callee).map(|o| o.kind);
         match kind {
-            Some(ObjKind::Native(i)) => self.invoke_native(i, callee, this, args, Value::UNDEFINED),
+            Some(ObjKind::Native(i)) => {
+                let r = self.invoke_native(i, callee, this, args, Value::UNDEFINED);
+                self.report_heap_limit(r)
+            }
             Some(ObjKind::Bound(i)) => {
                 let b = self.bound_fn(i)?;
                 let mut all = b.args;
@@ -562,7 +684,7 @@ impl Vm {
         let (f, _) = self.native(i)?;
         // Natives nest on the host stack (`join` of an array that holds
         // itself): a bound keeps that from overflowing it.
-        if self.native_depth >= MAX_NATIVE_DEPTH {
+        if self.native_depth >= self.native_limit {
             return Err(self.range_error("Maximum call stack size exceeded"));
         }
         let saved = (self.active, self.new_target);
@@ -719,9 +841,34 @@ impl Vm {
 
     /// Runs the running frame (which has no caller in the region) until it
     /// returns, unwinding exceptions through the frames above it.
+    ///
+    /// An op that runs out of heap ([`Abrupt::OutOfMemory`]: the byte or cell
+    /// limit, or a string past its length limit) throws a `RangeError`
+    /// instead, which a `catch` can see (phase-7.md 7.19); see
+    /// [`Vm::heap_limit_error`].
+    ///
+    /// Every entry but the outermost is a re-entry from inside an op or a
+    /// native (a callback of `forEach`, the `toString` that ToPrimitive
+    /// calls), which takes host stack as a native does. The entries are
+    /// counted, and one more than [`Vm::set_native_depth_limit`] allows is a
+    /// `RangeError` (phase-7.md 7.19): so a native that calls back into JS
+    /// can run at the limit, and a chain of calls through ops alone (`'' +
+    /// o` in `o.toString`) is bounded too.
     pub(crate) fn execute(&mut self) -> Result<Value, Abrupt> {
+        if self.reentry_depth > self.native_limit {
+            return Err(self.range_error("Maximum call stack size exceeded"));
+        }
+        self.reentry_depth = self.reentry_depth.saturating_add(1);
+        let r = self.execute_loop();
+        self.reentry_depth = self.reentry_depth.saturating_sub(1);
+        r
+    }
+
+    /// The loop of [`Vm::execute`].
+    fn execute_loop(&mut self) -> Result<Value, Abrupt> {
         loop {
-            match self.step() {
+            let stepped = self.step();
+            match self.report_heap_limit(stepped) {
                 Ok(Flow::Continue) => {}
                 Ok(Flow::Done(v)) => return Ok(v),
                 Err(Abrupt::Throw(v)) => {

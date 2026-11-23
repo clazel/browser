@@ -138,7 +138,35 @@ pub struct Found {
     pub own: bool,
 }
 
+/// What one cell stands for in the heap's byte count (phase-7.md 7.19's heap
+/// limit), before its payload: the arena slot, the enum and its tag.
+pub const CELL_BYTES: u64 = 64;
+
+/// What one own property added to an object stands for in the byte count:
+/// its value slot and its share of the shape table (an estimate).
+pub const PROPERTY_BYTES: u64 = 32;
+
+/// The room past the byte limit that only [`Heap::set_reserve_open`] opens: the
+/// `RangeError` that reports the limit must itself be allocated. Each report
+/// takes a few hundred bytes of it, so a script that catches the error and
+/// allocates again for ever uses the reserve up after some hundreds of
+/// catches, and then ends in `OutOfMemory`, which it cannot catch.
+pub const RESERVE_BYTES: u64 = 64 * 1024;
+
 /// The heap: the arena of cells, the shape table and the key interner.
+///
+/// # The byte limit (phase-7.md 7.19)
+///
+/// Besides the arena's cell limit, the heap counts bytes: [`CELL_BYTES`] for
+/// every cell, a string's code units (one byte each for a Latin-1 string, two
+/// otherwise), eight bytes for every slot an object or environment is made
+/// with, and [`PROPERTY_BYTES`] for every property added later. An
+/// allocation that would pass [`Heap::set_byte_limit`] is
+/// [`HeapError::Full`], which the interpreter reports as a `RangeError`. The
+/// count is an estimate of the memory, not a measurement: the shape table
+/// and the interned keys are counted only through [`PROPERTY_BYTES`], and the
+/// `Vec`s' spare capacity not at all. Nothing is freed (the VM does not use
+/// the collector of item 7.6 yet), so the count only grows.
 #[derive(Debug)]
 pub struct Heap {
     arena: Arena<Cell>,
@@ -146,6 +174,33 @@ pub struct Heap {
     keys: Interner,
     /// The interned `length`, which an array keeps in slot 0.
     length_key: Key,
+    /// The bytes counted so far (see the type's docs).
+    bytes: u64,
+    /// The byte limit, `u64::MAX` for none.
+    byte_limit: u64,
+    /// Whether [`RESERVE_BYTES`] past the limit may be used now.
+    reserve_open: bool,
+}
+
+/// The bytes a new cell counts for.
+fn cell_bytes(cell: &Cell) -> u64 {
+    let payload = match cell {
+        Cell::Str(s) => {
+            let len = u64::try_from(s.len()).unwrap_or(u64::MAX);
+            if s.is_latin1() {
+                len
+            } else {
+                len.saturating_mul(2)
+            }
+        }
+        Cell::Object(o) => u64::try_from(o.slots.len())
+            .unwrap_or(u64::MAX)
+            .saturating_mul(8),
+        Cell::Env(e) => u64::try_from(e.slots.len())
+            .unwrap_or(u64::MAX)
+            .saturating_mul(8),
+    };
+    CELL_BYTES.saturating_add(payload)
 }
 
 impl Heap {
@@ -164,6 +219,9 @@ impl Heap {
             shapes: Shapes::new(),
             keys,
             length_key,
+            bytes: 0,
+            byte_limit: u64::MAX,
+            reserve_open: false,
         }
     }
 
@@ -173,13 +231,60 @@ impl Heap {
         self.arena.live()
     }
 
+    /// The bytes counted so far (see the type's docs).
+    #[must_use]
+    pub fn bytes(&self) -> u64 {
+        self.bytes
+    }
+
+    /// The byte limit.
+    #[must_use]
+    pub fn byte_limit(&self) -> u64 {
+        self.byte_limit
+    }
+
+    /// Sets the byte limit. Bytes already counted stay counted: a limit below
+    /// them makes every later allocation [`HeapError::Full`].
+    pub fn set_byte_limit(&mut self, limit: u64) {
+        self.byte_limit = limit;
+    }
+
+    /// Opens or closes the [`RESERVE_BYTES`] past the limit, for the error
+    /// object that reports the limit, and returns whether it was open.
+    pub fn set_reserve_open(&mut self, open: bool) -> bool {
+        core::mem::replace(&mut self.reserve_open, open)
+    }
+
+    /// Counts `n` more bytes, or refuses if that passes the limit.
+    fn charge(&mut self, n: u64) -> Result<(), HeapError> {
+        let limit = if self.reserve_open {
+            self.byte_limit.saturating_add(RESERVE_BYTES)
+        } else {
+            self.byte_limit
+        };
+        let next = self.bytes.checked_add(n).ok_or(HeapError::Full)?;
+        if next > limit {
+            return Err(HeapError::Full);
+        }
+        self.bytes = next;
+        Ok(())
+    }
+
     /// Allocates a cell and returns the reference to it as a value.
     ///
     /// # Errors
-    /// [`HeapError::Full`] if the arena is full.
+    /// [`HeapError::Full`] if the arena is full or the byte limit would be
+    /// passed.
     pub fn alloc(&mut self, cell: Cell) -> Result<Value, HeapError> {
-        let r = self.arena.alloc(cell)?;
-        Ok(Value::heap_ref(r))
+        let n = cell_bytes(&cell);
+        self.charge(n)?;
+        match self.arena.alloc(cell) {
+            Ok(r) => Ok(Value::heap_ref(r)),
+            Err(e) => {
+                self.bytes = self.bytes.saturating_sub(n);
+                Err(e.into())
+            }
+        }
     }
 
     /// Allocates a string.
@@ -465,6 +570,7 @@ impl Heap {
         if let Some((slot, _)) = self.shapes.lookup(shape, key) {
             return self.set_slot(obj, slot, value);
         }
+        self.charge(PROPERTY_BYTES)?;
         let (next, slot) = self.shapes.add_property(shape, key, attrs)?;
         let o = self.obj_mut(obj).ok_or(HeapError::Corrupt)?;
         let i = usize::try_from(slot).map_err(|_| HeapError::Full)?;
