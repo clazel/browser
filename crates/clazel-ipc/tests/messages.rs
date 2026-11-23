@@ -139,7 +139,9 @@ fn all() -> Vec<Msg> {
             replace: true,
             url: t(""),
         },
-        Msg::OpenTab { url: t("/popup?a=1") },
+        Msg::OpenTab {
+            url: t("/popup?a=1"),
+        },
         Msg::OpenTab { url: t("") },
         Msg::ScriptResponse {
             request: u64::MAX,
