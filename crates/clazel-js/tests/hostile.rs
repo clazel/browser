@@ -43,6 +43,7 @@ fn outcome(scope: &mut Scope<'_>, realm: &Realm, text: &str) -> Result<Option<St
 fn global_string(scope: &mut Scope<'_>, realm: &Realm, name: &str) -> Result<String> {
     let global = scope.global(realm)?;
     let value = scope.get(global, Key::from(name))?;
+    let value = scope.to_string(value)?;
     scope.string_to_string_lossy(value)
 }
 
@@ -80,8 +81,10 @@ fn an_endless_loop_is_terminated_from_another_thread() -> Test {
         assert!(started.elapsed() < Duration::from_secs(10));
     }
     rt.terminator().clear();
+    // Neither `catch` nor `finally` ran. (Under Miri the flag can be set
+    // before the script starts, so `after` may not exist yet either.)
     let after = rt.scope(|scope| global_string(scope, &realm, "after"))?;
-    assert_eq!(after, "no");
+    assert!(after == "no" || after == "undefined", "{after}");
     Ok(())
 }
 
@@ -94,7 +97,7 @@ fn an_endless_loop_is_terminated_from_another_thread() -> Test {
 fn unbounded_recursion_is_a_range_error() -> Test {
     let limits = Limits {
         // The region is the JS stack; a smaller one is reached sooner.
-        value_stack_bytes: if cfg!(miri) { 64 << 10 } else { 4 << 20 },
+        value_stack_bytes: if cfg!(miri) { 16 << 10 } else { 4 << 20 },
         ..Limits::recommended()
     };
     let (mut rt, realm) = runtime(limits)?;
@@ -191,7 +194,7 @@ fn an_array_grown_for_ever_is_a_range_error() -> Test {
     let (probe, _) = runtime(Limits::recommended())?;
     let base = probe.heap_used()?;
     let limits = Limits {
-        heap_bytes: base + if cfg!(miri) { 16 << 10 } else { 1 << 20 },
+        heap_bytes: base + if cfg!(miri) { 4 << 10 } else { 1 << 20 },
         ..Limits::recommended()
     };
     for page in [
@@ -210,11 +213,11 @@ fn an_array_grown_for_ever_is_a_range_error() -> Test {
 
 /// 10^6 nested arrays in source: the parser's depth bound makes it a
 /// `SyntaxError` before anything runs, and with a lower `nesting_depth` the
-/// embedder's limit does the same. Under Miri, 10^4 levels (still past
-/// every bound).
+/// embedder's limit does the same. Under Miri, 3 000 levels (still past
+/// every bound: the parse tree's height is over 1024).
 #[test]
 fn deeply_nested_source_is_a_syntax_error() -> Test {
-    let n = if cfg!(miri) { 10_000 } else { 1_000_000 };
+    let n = if cfg!(miri) { 3_000 } else { 1_000_000 };
     let (mut rt, realm) = runtime(Limits::recommended())?;
     let page = format!("var a = {}{};", "[".repeat(n), "]".repeat(n));
     let name = rt.scope(|scope| outcome(scope, &realm, &page))?;
@@ -239,10 +242,11 @@ fn deeply_nested_source_is_a_syntax_error() -> Test {
 
 /// 10^6 nested arrays in JSON: `JSON.parse` throws a `SyntaxError` (the
 /// nesting bound of phase-7.md 7.11, lowered by `nesting_depth`), and
-/// `JSON.stringify` of a deep object a `RangeError`. Under Miri, 10^4 levels.
+/// `JSON.stringify` of a deep object a `RangeError`. Under Miri, 2 000 levels (past
+/// `clazel-json`'s 512).
 #[test]
 fn deeply_nested_json_is_an_error() -> Test {
-    let n = if cfg!(miri) { 10_000 } else { 1_000_000 };
+    let n = if cfg!(miri) { 2_000 } else { 1_000_000 };
     let text = format!("{}{}", "[".repeat(n), "]".repeat(n));
     let (mut rt, realm) = runtime(Limits {
         nesting_depth: 16,
