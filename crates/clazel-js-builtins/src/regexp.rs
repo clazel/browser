@@ -93,13 +93,12 @@ struct Compiled {
 /// The most entries the matcher's backtrack stack may hold.
 ///
 /// This is the one place the embedder's `Limits::regexp_backtrack_entries`
-/// (`clazel-js`, the `claude/js-limits` pull request) reaches the matcher:
-/// that branch adds `Vm::regexp_backtrack_limit`, and this function is then
-/// `usize::try_from(vm.regexp_backtrack_limit()).unwrap_or(usize::MAX)`. Until
-/// then it is the matcher's own default, a million entries.
+/// (`clazel-js`, phase-7.md 7.19) reaches the matcher, through
+/// `Vm::regexp_backtrack_limit`. Its default is the matcher's own, a million
+/// entries.
 #[must_use]
-pub fn backtrack_limit(_vm: &Vm) -> usize {
-    Limits::default().max_stack
+pub fn backtrack_limit(vm: &Vm) -> usize {
+    usize::try_from(vm.regexp_backtrack_limit()).unwrap_or(usize::MAX)
 }
 
 /// Installs `RegExp`, `RegExp.prototype` and `%RegExpStringIteratorPrototype%`.
