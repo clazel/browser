@@ -395,14 +395,7 @@ pub fn define_property_or_throw(
     k: clazel_js_heap::string::Key,
     desc: &Descriptor,
 ) -> Result<(), Abrupt> {
-    let d = PropDesc {
-        value: desc.value,
-        writable: desc.writable,
-        get: desc.get,
-        set: desc.set,
-        enumerable: desc.enumerable,
-        configurable: desc.configurable,
-    };
+    let d = to_prop_desc(desc);
     vm.define_property_or_throw(obj, k, &d)
 }
 
@@ -422,7 +415,7 @@ pub fn define_property_or_throw(
 /// 8. If Desc has an [[Enumerable]] field, ... "enumerable".
 /// 9. If Desc has a [[Configurable]] field, ... "configurable".
 /// 10. Return obj.
-fn from_property_descriptor(vm: &mut Vm, desc: Option<PropDesc>) -> Result<Value, Abrupt> {
+pub fn from_property_descriptor(vm: &mut Vm, desc: Option<PropDesc>) -> Result<Value, Abrupt> {
     let Some(d) = desc else {
         return Ok(Value::UNDEFINED);
     };
@@ -1090,5 +1083,18 @@ fn lookup_legacy_accessor(
         if !vm.heap().is_object(o) {
             return Ok(Value::UNDEFINED);
         }
+    }
+}
+
+/// A [`Descriptor`] as the VM's [`PropDesc`].
+#[must_use]
+pub fn to_prop_desc(desc: &Descriptor) -> PropDesc {
+    PropDesc {
+        value: desc.value,
+        writable: desc.writable,
+        get: desc.get,
+        set: desc.set,
+        enumerable: desc.enumerable,
+        configurable: desc.configurable,
     }
 }

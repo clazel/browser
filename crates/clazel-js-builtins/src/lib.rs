@@ -80,6 +80,7 @@ pub mod math;
 pub mod number;
 pub mod object;
 pub mod promise;
+pub mod reflect;
 pub mod regexp;
 pub mod string;
 pub mod symbol;
@@ -107,5 +108,6 @@ pub fn install(vm: &mut Vm) -> Result<(), Abrupt> {
     promise::install(vm)?;
     regexp::install(vm)?;
     collections::install(vm)?;
+    reflect::install(vm)?;
     global::install(vm)
 }

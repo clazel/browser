@@ -296,7 +296,60 @@ impl Vm {
         if !self.heap.is_object(base) {
             return Err(self.type_error("Cannot set properties of a null super base"));
         }
-        let ok = match self.heap.find(base, k)? {
+        let ok = self.ordinary_set(base, k, v, this)?;
+        if !ok && self.strict() {
+            let name = self.key_text(k);
+            return Err(self.type_error(&format!("Cannot assign to read only property '{name}'")));
+        }
+        Ok(())
+    }
+
+    /// `[[Get]] ( P, Receiver )` of an ordinary (or Array exotic) object,
+    /// OrdinaryGet §10.1.8.1†: the property found on the chain of `obj`, its
+    /// getter called with `receiver`.
+    ///
+    /// # Errors
+    /// What a getter throws.
+    pub fn get_with_receiver(
+        &mut self,
+        obj: Value,
+        key: Key,
+        receiver: Value,
+    ) -> Result<Value, Abrupt> {
+        match self.heap.find(obj, key)? {
+            Some(f) => self.found_value(f, receiver),
+            None => Ok(Value::UNDEFINED),
+        }
+    }
+
+    /// `[[Set]] ( P, V, Receiver )` of an ordinary (or Array exotic) object,
+    /// OrdinarySet §10.1.9.1† with OrdinarySetWithOwnDescriptor §10.1.9.2†,
+    /// the descriptor being the one found on the chain of `obj`:
+    /// 2. If IsDataDescriptor(ownDesc) is true, then a. If ownDesc.[[Writable]]
+    ///    is false, return false. b. If Receiver is not an Object, return
+    ///    false. c. Let existingDescriptor be ? Receiver.[[GetOwnProperty]](P).
+    ///    d. If existingDescriptor is not undefined, then i. If
+    ///    IsAccessorDescriptor(existingDescriptor) is true, return false. ii.
+    ///    If existingDescriptor.[[Writable]] is false, return false. iii. Let
+    ///    valueDesc be the PropertyDescriptor { [[Value]]: V }. iv. Return ?
+    ///    Receiver.[[DefineOwnProperty]](P, valueDesc). e. Else, i. Return ?
+    ///    CreateDataProperty(Receiver, P, V).
+    /// 3. (An accessor) 4. Let setter be ownDesc.[[Set]]. 5. If setter is
+    ///    undefined, return false. 6. Perform ? Call(setter, Receiver, « V »).
+    ///    7. Return true.
+    ///
+    /// A property that is not found is the writable data property of step 1.b.
+    ///
+    /// # Errors
+    /// What a setter or the definition throws.
+    pub fn ordinary_set(
+        &mut self,
+        obj: Value,
+        k: Key,
+        v: Value,
+        receiver: Value,
+    ) -> Result<bool, Abrupt> {
+        match self.heap.find(obj, k)? {
             Some(f) if f.attrs.0 & ACCESSOR != 0 => {
                 let pair = self
                     .heap
@@ -307,20 +360,15 @@ impl Vm {
                     .accessor(pair)
                     .ok_or(Abrupt::Internal("accessor pair"))?;
                 if setter == Value::UNDEFINED {
-                    false
+                    Ok(false)
                 } else {
-                    self.call(setter, this, &[v])?;
-                    true
+                    self.call(setter, receiver, &[v])?;
+                    Ok(true)
                 }
             }
-            Some(f) if f.attrs.0 & Attrs::WRITABLE == 0 => false,
-            _ => self.set_on_receiver(this, k, v)?,
-        };
-        if !ok && self.strict() {
-            let name = self.key_text(k);
-            return Err(self.type_error(&format!("Cannot assign to read only property '{name}'")));
+            Some(f) if f.attrs.0 & Attrs::WRITABLE == 0 => Ok(false),
+            _ => self.set_on_receiver(receiver, k, v),
         }
-        Ok(())
     }
 
     /// Steps 2.b to 2.e of OrdinarySetWithOwnDescriptor (see [`Vm::set_super`]).
