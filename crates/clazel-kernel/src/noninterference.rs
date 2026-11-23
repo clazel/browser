@@ -133,7 +133,7 @@ pub open spec fn rel_conn(s1: State, s2: State) -> bool {
 /// same titles of `d`'s locks (another domain's `Title`, dropped by the
 /// purge, changes only an entry under its own lock). Item 5.19: the same
 /// sub-fetches and counts under the observer's locks. Item 7.16: the same
-/// document URLs under the observer's locks.
+/// document URLs and the same user activations under the observer's locks.
 pub open spec fn rel(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, s1: State, s2: State) -> bool {
     &&& crate::invariant::kernel_wf(rules, urls, s1)
     &&& crate::invariant::kernel_wf(rules, urls, s2)
@@ -156,6 +156,7 @@ pub open spec fn rel(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate:
     &&& s1.gpu.sites == s2.gpu.sites
     &&& crate::domain::gpu_recs_of_domain(rules, s1.gpu.recs, d) == crate::domain::gpu_recs_of_domain(rules, s2.gpu.recs, d)
     &&& crate::domain::doc_urls_of_domain(rules, s1.doc_urls, d) == crate::domain::doc_urls_of_domain(rules, s2.doc_urls, d)
+    &&& crate::domain::acts_of_domain(rules, s1.acts, d) == crate::domain::acts_of_domain(rules, s2.acts, d)
 }
 
 // ---------------------------------------------------------------------

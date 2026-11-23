@@ -39,7 +39,14 @@
 //!   titles of the domain's renderers ([`titles_of_domain`]). Item 7.16
 //!   adds their document URLs ([`doc_urls_of_domain`]): another domain's
 //!   `UpdateUrl` has no declassified part, and changes only an entry under
-//!   its own lock.
+//!   its own lock. Item 7.16 also adds their transient user activations
+//!   ([`acts_of_domain`]): an `Input` is the user's and kept for every
+//!   observer, and a `Tick` is public, so another domain's events change an
+//!   activation only through its own renderer's popup, which has a
+//!   declassified part (below) but spends only an entry under its own lock.
+//!   The declassified part of a renderer's `OpenTab` is the host's `OpenTab`
+//!   at the resolved URL, without a script: what crosses domains is that a tab
+//!   opened there.
 //! - **Item 5.19.** A `SubNet` event belongs to the domain of the renderer
 //!   whose sub-fetch it reports on, and has no declassified part: the
 //!   sub-fetch exists only because that renderer asked. Sub-fetch connection
@@ -129,6 +136,8 @@ pub struct Observation {
     pub titles: Seq<Titled>,
     /// The document URLs of its renderers (item 7.16).
     pub doc_urls: Seq<DocUrl>,
+    /// The activations of its renderers (item 7.16).
+    pub acts: Seq<Activation>,
 }
 
 /// The sub-fetches of `fs` whose lock is in domain `d` (item 5.19).
@@ -152,6 +161,12 @@ pub open spec fn doc_urls_of_domain(rules: Seq<clazel_psl::spec::Rule>, ds: Seq<
     ds.filter(|x: DocUrl| domain_of_lock(rules, x.lock) == d)
 }
 
+/// The activations of `acs` whose lock is in domain `d` (item 7.16), in
+/// order.
+pub open spec fn acts_of_domain(rules: Seq<clazel_psl::spec::Rule>, acs: Seq<Activation>, d: Domain) -> Seq<Activation> {
+    acs.filter(|x: Activation| domain_of_lock(rules, x.lock) == d)
+}
+
 /// The GPU records of `gs` whose lock is in domain `d` (item 5.17c), in
 /// order.
 pub open spec fn gpu_recs_of_domain(rules: Seq<clazel_psl::spec::Rule>, gs: Seq<GpuRec>, d: Domain) -> Seq<GpuRec> {
@@ -168,6 +183,7 @@ pub open spec fn obs(rules: Seq<clazel_psl::spec::Rule>, s: State, d: Domain) ->
         viewports: s.viewports,
         titles: titles_of_domain(rules, s.titles, d),
         doc_urls: doc_urls_of_domain(rules, s.doc_urls, d),
+        acts: acts_of_domain(rules, s.acts, d),
     }
 }
 
@@ -246,6 +262,22 @@ pub open spec fn declassified(urls: UrlFns, s: State, e: Event) -> Option<Event>
                                     None => None,
                                     Some(resolved) => Some(Event::SubmitTab { tab: r.tab, url: resolved, req }),
                                 },
+                            },
+                        }
+                    },
+                    // Item 7.16: a `window.open` the kernel accepts (the sender is
+                    // committed and holds a live activation, which is in its own
+                    // domain) whose URL decodes and resolves is, for every other
+                    // observer, the host's `OpenTab` of the resolved URL without
+                    // a script. Any other `OpenTab` opens nothing.
+                    Some(clazel_ipc::message::spec::Message::OpenTab { url }) => if !r.committed || activation_left(s.acts, r) == 0 {
+                        None
+                    } else {
+                        match clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+                            None => None,
+                            Some(relative) => match (urls.resolve)(r.url, relative) {
+                                None => None,
+                                Some(resolved) => Some(Event::OpenTab { url: resolved, script: None }),
                             },
                         }
                     },

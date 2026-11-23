@@ -552,6 +552,78 @@
 //! - **`replace` is not read.** The kernel keeps no session history, so
 //!   `pushState` and `replaceState` do the same thing to it.
 //!
+//! # Popups (phase-7.md item 7.16)
+//!
+//! - **`OpenTab { url }`** is `window.open` and `target=_blank`
+//!   ([`open_tab_from`]). A committed renderer asks the kernel to open a new
+//!   tab at `url`, resolved against its committed URL as `Navigate`'s is. The
+//!   kernel does it only if it holds **transient user activation** for the
+//!   sender, which it recorded itself from a real [`Event::Input`] the host
+//!   delivered to the sender's tab (a click or a key; not a scroll): the
+//!   renderer's word is never read, and no field of the message says so. The
+//!   tab is the host's own `OpenTab` without a script
+//!   ([`open_tab`]): a new renderer locked to the URL's origin that starts the
+//!   fetch. An `OpenTab` before the renderer's first commit is a disallowed
+//!   frame (killed), as `UpdateUrl` is. There is no reply: a refused popup
+//!   changes nothing and the renderer is not told (a deviation: `window.open`
+//!   would return `null`; the renderer cannot tell a refusal from a tab that
+//!   failed to load).
+//! - **Activation is a lock-tagged table** ([`Activation`], [`State::acts`]),
+//!   as 5.18's titles and 7.16's document URLs are: an entry carries the
+//!   renderer's id and lock and is read only by that pair
+//!   ([`activation_left`]). An activating input to a committed renderer
+//!   (re)sets its entry to [`activation_window`] (HTML §6.4.3 "activation
+//!   notification"); a popup that passes consumes it (HTML "consume user
+//!   activation"); a same-origin commit forgets it (the new document has
+//!   none); a renderer replaced, killed or exited leaves its entry, never
+//!   read again because ids are not reused (the table grows by at most one
+//!   entry per renderer that was ever given an input, as the GPU records
+//!   do).
+//! - **Time is a count of the kernel's own steps, not wall time.** The
+//!   window is [`activation_window`] (1000) **clock ticks**: every `Tick`
+//!   event lowers every entry by one ([`age_activations`], saturating at 0),
+//!   and an entry with 0 left is expired. A tick is the only step that
+//!   measures time, and the host sends one before every other event it gives
+//!   the kernel and whenever it is idle (`clazel::Browser::event` and its
+//!   pump), so a window of N ticks is at most N host events or idle polls
+//!   after the input. What the kernel can check, it checks: the theorem
+//!   [`crate::statements::popup_needs_input_statement`] counts `Tick` events
+//!   between the `Input` and the popup. How long that is on the wall depends
+//!   on the host's tick rate, not on the page (a page cannot send the kernel
+//!   a `Tick`); that is the deviation from HTML's wall-time "transient
+//!   activation duration" (listed). Only ticks are counted, not the
+//!   renderer's own frames, so a page that sends many frames does not shorten
+//!   its window, and one other domain's events never change it (a `Tick` is
+//!   public: `crate::domain::obs` holds the time).
+//! - **Which inputs activate**: kind 0 (a click) and kind 2 (a key), as
+//!   HTML's activation-triggering input events (`mousedown`, `pointerup`,
+//!   `keydown`) are; not kind 1 (a scroll). The schema fixes no key code, so
+//!   HTML's exclusion of the Escape key is not made (listed).
+//! - **A popup's URL** that decodes and resolves but has no lock (an invalid
+//!   origin, a `javascript:` URL: below) opens no tab and still consumes the
+//!   activation, as a blocked `window.open` does in browsers that consume
+//!   before navigating; one that does not decode or resolve changes nothing.
+//! - **Noninterference.** A popup from a renderer of another domain is
+//!   replaced in a purge by the host's `OpenTab` without a script at the
+//!   resolved URL ([`crate::domain::declassified`]): what crosses domains is
+//!   that a tab opened at that URL, as for a `Navigate`. Its decision to open
+//!   (the activation) stays in its own domain.
+//!
+//! # `javascript:` URLs (phase-7.md item 7.16)
+//!
+//! - **The kernel refuses scheme `javascript`** in [`lock_of_url`], which
+//!   every URL a renderer is locked to passes through: a URL the user types
+//!   (`OpenTab`, `NavigateTab`, from the host), a renderer's `Navigate`,
+//!   `Submit`, `OpenTab` and `UpdateUrl`, and the final URL of a fetch (a
+//!   redirect to a `javascript:` URL ends the navigation as one with no
+//!   lock does). The renderer runs the `javascript:` URLs of links the page
+//!   drew itself (HTML §7.4.2.2 of "navigate", step 12's script-URL case,
+//!   which the document's own scripts handle); the kernel never commits one.
+//!   Whether a string is one is a parameter ([`UrlFns::is_javascript`]), as
+//!   its origin is; the shipped instantiation reads the scheme the basic
+//!   URL parser gives ([`crate::urls`]). `theorem_no_javascript_url`: no
+//!   renderer, committed or not, ever holds a `javascript:` URL.
+//!
 //! # The GPU crash policy (phase-5.md item 5.17c)
 //!
 //! The item's four rules over the host's new event `GpuExited` and 5.18's
@@ -664,6 +736,10 @@ pub struct UrlFns {
     /// serialization of the result of parsing `input` against the absolute
     /// URL `base`, or `None` for failure.
     pub resolve: Resolver,
+    /// Whether the absolute URL string parses to a URL whose scheme is
+    /// `javascript` (item 7.16). The kernel never locks a renderer to one
+    /// ([`lock_of_url`]).
+    pub is_javascript: spec_fn(Seq<u32>) -> bool,
 }
 
 // ---------------------------------------------------------------------
@@ -782,6 +858,18 @@ pub struct DocUrl {
     pub lock: clazel_origin::spec::Origin,
     /// The document's URL, absolute.
     pub url: Seq<u32>,
+}
+
+/// A renderer's transient user activation (item 7.16): the clock ticks it has
+/// left, since the kernel last delivered it an activating input. See the
+/// modelling choices.
+pub struct Activation {
+    /// The renderer's id.
+    pub id: nat,
+    /// The renderer's lock.
+    pub lock: clazel_origin::spec::Origin,
+    /// The ticks left; 0 is expired.
+    pub left: nat,
 }
 
 /// One event of the user's on a tab's content area (item 5.18): the fields
@@ -917,6 +1005,9 @@ pub struct State {
     /// The documents' URLs set by `pushState` and `replaceState` (item
     /// 7.16), at most one per renderer.
     pub doc_urls: Seq<DocUrl>,
+    /// The renderers' transient user activations (item 7.16), at most one
+    /// per renderer.
+    pub acts: Seq<Activation>,
 }
 
 /// What can happen to the kernel.
@@ -1212,7 +1303,7 @@ pub struct Document {
 
 /// The kernel before anything happens.
 pub open spec fn init_state() -> State {
-    State { renderers: seq![], jar: seq![], storage: Map::empty(), next_id: 0, conns: seq![], next_conn: 0, now: 0, viewports: seq![], titles: seq![], subfetches: seq![], subcounts: seq![], gpu: init_gpu(), doc_urls: seq![] }
+    State { renderers: seq![], jar: seq![], storage: Map::empty(), next_id: 0, conns: seq![], next_conn: 0, now: 0, viewports: seq![], titles: seq![], subfetches: seq![], subcounts: seq![], gpu: init_gpu(), doc_urls: seq![], acts: seq![] }
 }
 
 // ---------------------------------------------------------------------
@@ -1360,10 +1451,16 @@ pub open spec fn lock_of_origin(o: clazel_origin::spec::Origin, id: nat) -> Opti
 
 /// The lock of renderer `id` committed to `url`, if the kernel accepts the
 /// URL.
+///
+/// Item 7.16: never one whose scheme is `javascript` ([`UrlFns::is_javascript`]).
 pub open spec fn lock_of_url(urls: UrlFns, url: Seq<u32>, id: nat) -> Option<clazel_origin::spec::Origin> {
-    match (urls.origin_of)(url) {
-        Some(o) => lock_of_origin(o, id),
-        None => None,
+    if (urls.is_javascript)(url) {
+        None
+    } else {
+        match (urls.origin_of)(url) {
+            Some(o) => lock_of_origin(o, id),
+            None => None,
+        }
     }
 }
 
@@ -1613,6 +1710,8 @@ pub open spec fn navigate_tab(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, d
                         // Item 7.16: the new document's URL is the one
                         // committed, not the old one's `pushState` URL.
                         doc_urls: forget_doc_url(s.doc_urls, old.id, old.lock),
+                        // The new document has no user activation.
+                        acts: forget_activation(s.acts, old.id, old.lock),
                         ..s
                     }, seq![
                         Output::ToRenderer { id: old.id, bytes: commit_frames(url, doc) },
@@ -2068,7 +2167,8 @@ pub open spec fn net(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: Fe
 /// `Tick(time)`.
 pub open spec fn tick(s: State, time: int) -> (State, Seq<Output>) {
     let now = if time > s.now { time } else { s.now };
-    (State { jar: clazel_cookie::storage::spec::evict_expired(s.jar, now), now, ..s }, seq![])
+    // Item 7.16: every activation has one tick fewer left.
+    (State { jar: clazel_cookie::storage::spec::evict_expired(s.jar, now), now, acts: age_activations(s.acts), ..s }, seq![])
 }
 
 /// `RendererExited(id)`: the renderer and its tab are gone, and the
@@ -2176,6 +2276,49 @@ pub open spec fn set_doc_url(ds: Seq<DocUrl>, id: nat, lock: clazel_origin::spec
     forget_doc_url(ds, id, lock).push(DocUrl { id, lock, url })
 }
 
+/// The transient activation window (item 7.16), in clock ticks: see the
+/// modelling choices.
+pub open spec fn activation_window() -> nat {
+    1000
+}
+
+/// An input that is a user activation (HTML §6.4.3, "activation triggering
+/// input event"): a click (kind 0) or a key (kind 2), not a scroll (kind 1).
+pub open spec fn is_activating_input(input: UserInput) -> bool {
+    input.kind == 0 || input.kind == 2
+}
+
+/// The ticks left of renderer `r`'s activation: those of the first entry
+/// with its id and its lock, or 0 if it has none.
+pub open spec fn activation_left(acts: Seq<Activation>, r: Renderer) -> nat
+    decreases acts.len(),
+{
+    if acts.len() == 0 {
+        0
+    } else if acts[0].id == r.id && acts[0].lock == r.lock {
+        acts[0].left
+    } else {
+        activation_left(acts.drop_first(), r)
+    }
+}
+
+/// `acts` without the activation of renderer `id` locked to `lock`.
+pub open spec fn forget_activation(acts: Seq<Activation>, id: nat, lock: clazel_origin::spec::Origin) -> Seq<Activation> {
+    acts.filter(|x: Activation| !(x.id == id && x.lock == lock))
+}
+
+/// `acts` with the activation of renderer `id` locked to `lock` set to
+/// `left` ticks: any earlier one is removed and the new one goes last.
+pub open spec fn set_activation(acts: Seq<Activation>, id: nat, lock: clazel_origin::spec::Origin, left: nat) -> Seq<Activation> {
+    forget_activation(acts, id, lock).push(Activation { id, lock, left })
+}
+
+/// One tick of the clock: every activation has one fewer left (none goes
+/// below 0).
+pub open spec fn age_activations(acts: Seq<Activation>) -> Seq<Activation> {
+    acts.map_values(|x: Activation| Activation { left: if x.left > 0 { (x.left - 1) as nat } else { 0 }, ..x })
+}
+
 /// The frame of `Viewport` for `v`.
 pub open spec fn viewport_frame(v: Viewport) -> Seq<u8> {
     reply_frame(clazel_ipc::message::spec::Message::Viewport { width: v.width, height: v.height, scale: v.scale })
@@ -2242,10 +2385,21 @@ pub open spec fn resize(s: State, tab: nat, v: Viewport) -> (State, Seq<Output>)
 
 /// The user's input on the content area of `tab` (item 5.18): one `Input`
 /// to the tab's renderer, and no state change.
+///
+/// Item 7.16: a click or a key to a committed renderer is a user activation
+/// of it ([`set_activation`]), recorded here and nowhere else.
 pub open spec fn user_input(s: State, tab: nat, input: UserInput) -> (State, Seq<Output>) {
     match find_by_tab(s.renderers, tab, 0) {
         None => (s, seq![]),
-        Some(i) => (s, seq![Output::ToRenderer { id: s.renderers[i].id, bytes: input_frame(input) }]),
+        Some(i) => {
+            let r = s.renderers[i];
+            let acts = if r.committed && is_activating_input(input) {
+                set_activation(s.acts, r.id, r.lock, activation_window())
+            } else {
+                s.acts
+            };
+            (State { acts, ..s }, seq![Output::ToRenderer { id: r.id, bytes: input_frame(input) }])
+        },
     }
 }
 
@@ -2937,6 +3091,38 @@ pub open spec fn update_url(urls: UrlFns, s: State, r: Renderer, url: Seq<u8>) -
     }
 }
 
+/// `OpenTab { url }` (item 7.16) of the committed renderer `r`: HTML's
+/// "window open steps" (§7.2.2.1,
+/// <https://html.spec.whatwg.org/multipage/nav-history-apis.html#window-open-steps>)
+/// as the kernel decides them:
+///
+/// - step 5, "If the user agent has been configured to block popups ... or
+///   `sourceDocument` does not have transient activation": a renderer with
+///   no live activation ([`activation_left`] 0, which the kernel recorded
+///   from a real input) opens nothing and changes nothing;
+/// - "consume user activation" (HTML §6.4.3): the activation is spent
+///   ([`forget_activation`]) whether or not the URL then opens a tab;
+/// - step 6.4, "parse the URL" relative to the sender's document: the text
+///   decoded as UTF-8 and resolved against the committed URL, as `Navigate`'s
+///   is; a URL that does not decode or resolve changes nothing;
+/// - the new tab is the host's own `OpenTab` without a script ([`open_tab`]):
+///   a URL with no lock (including scheme `javascript`) opens none.
+///
+/// There is no reply.
+pub open spec fn open_tab_from(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, r: Renderer, url: Seq<u8>) -> (State, Seq<Output>) {
+    if activation_left(s.acts, r) == 0 {
+        (s, seq![])
+    } else {
+        match clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+            None => (s, seq![]),
+            Some(relative) => match (urls.resolve)(r.url, relative) {
+                None => (s, seq![]),
+                Some(resolved) => open_tab(rules, urls, fetch, State { acts: forget_activation(s.acts, r.id, r.lock), ..s }, resolved, None),
+            },
+        }
+    }
+}
+
 // ---------------------------------------------------------------------
 // `fetch()` and XHR (phase-7.md item 7.16).
 // ---------------------------------------------------------------------
@@ -3398,7 +3584,7 @@ pub open spec fn decode_renderer_frame(bytes: Seq<u8>) -> Option<clazel_ipc::mes
 /// is committed.
 pub open spec fn accepted_message(r: Renderer, bytes: Seq<u8>) -> Option<clazel_ipc::message::spec::Message> {
     match decode_renderer_frame(bytes) {
-        Some(m) => if (m is Display || m is Title || m is FetchStyle || m is FetchScript || m is Submit || m is UpdateUrl || m is Fetch) && !r.committed {
+        Some(m) => if (m is Display || m is Title || m is FetchStyle || m is FetchScript || m is Submit || m is UpdateUrl || m is OpenTab || m is Fetch) && !r.committed {
             None
         } else {
             Some(m)
@@ -3482,6 +3668,9 @@ pub open spec fn handle_message(
         clazel_ipc::message::spec::Message::FetchScript { request, url } => fetch_script(rules, urls, fetch, s, r, request, url),
         // Item 7.16: `pushState` and `replaceState`.
         clazel_ipc::message::spec::Message::UpdateUrl { replace, url } => update_url(urls, s, r, url),
+        // Item 7.16: `window.open`, only with the kernel's own record of a
+        // user input.
+        clazel_ipc::message::spec::Message::OpenTab { url } => open_tab_from(rules, urls, fetch, s, r, url),
         // Item 7.16: `fetch()` and XHR.
         clazel_ipc::message::spec::Message::Fetch { request, method, url, content_type, body, mode, headers } => fetch_api(
             rules,

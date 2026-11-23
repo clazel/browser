@@ -429,7 +429,9 @@ pub open spec fn navigation_event(e: Event) -> bool {
         Event::SubmitTab { .. } => true,
         Event::Net { .. } => true,
         Event::FromRenderer { bytes, .. } => decode_renderer_frame(bytes) matches Some(clazel_ipc::message::spec::Message::Navigate { .. })
-            || decode_renderer_frame(bytes) matches Some(clazel_ipc::message::spec::Message::Submit { .. }),
+            || decode_renderer_frame(bytes) matches Some(clazel_ipc::message::spec::Message::Submit { .. })
+            // Item 7.16: a popup adds a renderer (a new tab).
+            || decode_renderer_frame(bytes) matches Some(clazel_ipc::message::spec::Message::OpenTab { .. }),
         _ => false,
     }
 }
@@ -1108,6 +1110,93 @@ pub open spec fn header_safe_wire(bytes: Seq<u8>) -> bool {
     exists|url: clazel_url::url::spec::Url, req: clazel_fetch::request::spec::Req, cookie: Seq<u8>|
         #![trigger clazel_fetch::transducer::contract::is_wire_request(url, req, cookie, bytes)]
         clazel_fetch::transducer::contract::is_wire_request(url, req, cookie, bytes) && clazel_fetch::request::spec::author_headers_ok(req.headers)
+}
+
+// ---------------------------------------------------------------------
+// Popups and `javascript:` URLs (phase-7.md item 7.16).
+// ---------------------------------------------------------------------
+
+/// Tab `t` is the tab of some renderer of `rs`.
+pub open spec fn tab_open(rs: Seq<Renderer>, t: nat) -> bool {
+    exists|j: int| 0 <= j < rs.len() && (#[trigger] rs[j]).tab == t
+}
+
+/// The step from `s` to `s1` opened a tab: some renderer of `s1` is in a tab
+/// no renderer of `s` was in. (A navigation replaces a tab's renderer, and
+/// keeps its tab.)
+pub open spec fn new_tab_in(s: State, s1: State) -> bool {
+    exists|i: int| 0 <= i < s1.renderers.len() && !tab_open(s.renderers, (#[trigger] s1.renderers[i]).tab)
+}
+
+/// The number of `Tick` events in `t`: the kernel's clock steps, which
+/// measure the activation window ([`activation_window`]).
+pub open spec fn tick_count(t: Seq<Event>) -> nat
+    decreases t.len(),
+{
+    if t.len() == 0 {
+        0
+    } else {
+        tick_count(t.drop_first()) + (if t[0] is Tick { 1nat } else { 0nat })
+    }
+}
+
+/// `theorem_popup_needs_input` (item 7.16), the step: whatever frame `bytes`
+/// renderer `id` sends, if the kernel opens a tab on it, the frame is a
+/// committed renderer's `OpenTab`, the kernel held a live activation for the
+/// sender before the step (its own record, [`activation_left`] above 0), and
+/// the step spent it. A frame that finds no live activation opens no tab.
+pub open spec fn popup_needs_activation_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat, bytes: Seq<u8>) -> bool {
+    let s1 = step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).0;
+    new_tab_in(s, s1) ==> match find_by_id(s.renderers, id, 0) {
+        None => false,
+        Some(i) => {
+            let r = s.renderers[i];
+            &&& r.committed
+            &&& accepted_message(r, bytes) matches Some(clazel_ipc::message::spec::Message::OpenTab { .. })
+            &&& activation_left(s.acts, r) > 0
+            &&& activation_left(s1.acts, r) == 0
+        },
+    }
+}
+
+/// `theorem_popup_needs_input` (item 7.16), the trace, with the window stated
+/// as a number of kernel steps (see the modelling choices): over every run
+/// from the kernel's first state, `u` and then the frame `bytes` of renderer
+/// `id`, if that frame opens a tab, then an `Input` event of the user in `u`
+/// was delivered to renderer `id` (the kernel's step on it sent `id` the
+/// `Input` frame: the renderer was in the tab the host named), the input was
+/// a click or a key, and fewer than [`activation_window`] `Tick` events
+/// follow it in `u`. So a tab a renderer opens follows a user input to that
+/// renderer within the window, and a renderer that was never given an input
+/// opens none.
+pub open spec fn popup_needs_input_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, u: Seq<Event>, id: nat, bytes: Seq<u8>) -> bool {
+    let s = run_state(rules, urls, fetch, init_state(), u);
+    let s1 = step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).0;
+    new_tab_in(s, s1) ==> exists|j: int|
+        0 <= j < u.len() && (#[trigger] u[j]) is Input && is_activating_input(u[j]->Input_input) && step(rules, urls, fetch, run_state(rules, urls, fetch, init_state(), u.take(j)), u[j]).1
+            == seq![Output::ToRenderer { id, bytes: input_frame(u[j]->Input_input) }] && tick_count(u.subrange(j + 1, u.len() as int)) < activation_window()
+}
+
+/// `theorem_no_javascript_url` (item 7.16), the state: in every reachable
+/// state no renderer, committed or not, holds a URL whose scheme is
+/// `javascript` ([`UrlFns::is_javascript`]), and neither does any document
+/// URL an `UpdateUrl` set. So the address bar never shows one and no
+/// renderer is ever committed at one.
+pub open spec fn no_javascript_url_statement(urls: UrlFns, s: State) -> bool {
+    &&& forall|i: int| 0 <= i < s.renderers.len() ==> !(urls.is_javascript)((#[trigger] s.renderers[i]).url)
+    &&& forall|k: int| 0 <= k < s.doc_urls.len() ==> !(urls.is_javascript)((#[trigger] s.doc_urls[k]).url)
+}
+
+/// `theorem_no_javascript_url` (item 7.16), the entry points: a `javascript:`
+/// URL typed into a new tab (the host's `OpenTab`, with or without a script)
+/// changes nothing and sends nothing, a commit at one changes nothing, and
+/// a renderer's `Navigate`, `Submit`, `OpenTab` and `UpdateUrl` to one start
+/// no navigation and open no tab (`lock_of_url` refuses it).
+pub open spec fn javascript_refused_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, url: Seq<u32>, script: Option<Seq<u8>>, tab: nat, doc: Document) -> bool {
+    (urls.is_javascript)(url) ==> {
+        &&& step(rules, urls, fetch, s, Event::OpenTab { url, script }) == (s, seq![])
+        &&& navigate_tab(urls, s, tab, url, doc) == (s, seq![])
+    }
 }
 
 // ---------------------------------------------------------------------
