@@ -287,3 +287,51 @@ pub fn species_constructor(vm: &mut Vm, o: Value, default: Value) -> Result<Valu
     }
     Err(vm.type_error("object.constructor[Symbol.species] is not a constructor"))
 }
+
+/// The own property keys of an object in `[[OwnPropertyKeys]]` order
+/// (OrdinaryOwnPropertyKeys, §10.1.11.1†): the array indices in ascending
+/// order, then the other String keys in creation order, then the Symbol keys
+/// in creation order.
+#[must_use]
+pub fn own_property_keys(vm: &Vm, obj: Value) -> Vec<Key> {
+    let mut keys: Vec<Key> = vm
+        .heap()
+        .own_properties(obj)
+        .into_iter()
+        .map(|(k, _, _)| k)
+        .collect();
+    keys.extend(
+        vm.heap()
+            .own_symbol_properties(obj)
+            .into_iter()
+            .map(|(k, _, _)| k),
+    );
+    keys
+}
+
+/// Defines an accessor property of `obj` that is not enumerable and is
+/// configurable (the attributes of the standard's accessor properties, §17†):
+/// its getter and setter are native functions named `get name` and `set name`
+/// (`name` is the key's text, or `[description]` for a Symbol).
+///
+/// # Errors
+/// As [`define`].
+pub fn accessor(
+    vm: &mut Vm,
+    obj: Value,
+    k: Key,
+    name: &str,
+    getter: Option<NativeFn>,
+    setter: Option<NativeFn>,
+) -> Result<(), Abrupt> {
+    let get = match getter {
+        Some(f) => vm.new_native(&format!("get {name}"), 0, f)?,
+        None => Value::UNDEFINED,
+    };
+    let set = match setter {
+        Some(f) => vm.new_native(&format!("set {name}"), 1, f)?,
+        None => Value::UNDEFINED,
+    };
+    let d = clazel_js_vm::props::PropDesc::accessor(get, set, Attrs(Attrs::CONFIGURABLE));
+    vm.define_property_or_throw(obj, k, &d)
+}
