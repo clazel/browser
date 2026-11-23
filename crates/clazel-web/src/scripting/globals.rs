@@ -97,9 +97,8 @@ pub(crate) fn wrapper<'s>(scope: &mut Scope<'s>, node: usize) -> Result<Local<'s
 pub(crate) fn set_current_script(scope: &mut Scope<'_>, node: Option<usize>) -> Result<()> {
     state(scope)?.current_script = node;
     let document = document_object(scope)?;
-    if scope.as_boolean(document).is_none()
-        && scope.kind(document) == clazel_js::ValueKind::Undefined
-    {
+    // No `document` object yet (only while the page is being made).
+    if scope.kind(document) == clazel_js::ValueKind::Undefined {
         return Ok(());
     }
     let value = match node {
