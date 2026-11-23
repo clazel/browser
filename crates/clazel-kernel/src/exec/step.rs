@@ -1582,6 +1582,7 @@ proof fn lemma_fetch_api_idle(
 /// A message is handled by a renderer's fields, not by its navigation (which
 /// only `Navigate` starts, through its tab).
 #[verifier::spinoff_prover]
+#[verifier::rlimit(100)]
 proof fn lemma_handle_message_idle(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, r: Renderer, m: clazel_ipc::message::spec::Message)
     ensures
         handle_message(rules, urls, fetch, s, Renderer { pending: None, ..r }, m) == handle_message(rules, urls, fetch, s, r, m),
@@ -1595,9 +1596,22 @@ proof fn lemma_handle_message_idle(rules: Seq<clazel_psl::spec::Rule>, urls: Url
     }
 }
 
+/// [`error_unlocked`] (item 7.16): the code a `Navigate` or `Submit` to a URL
+/// with no lock is answered with.
+pub fn error_unlocked_exec<U: UrlFnsExec>(urls: &U, url: &[u32]) -> (code: u64)
+    ensures
+        code == error_unlocked(urls.urls(), url@),
+{
+    if urls.is_javascript(url) {
+        5
+    } else {
+        3
+    }
+}
+
 /// [`handle_message`]: a message that decoded, from the renderer at index `i`.
 #[verifier::spinoff_prover]
-#[verifier::rlimit(40)]
+#[verifier::rlimit(150)]
 pub fn handle_message_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRecord, i: usize, m: Msg) -> (out: (StateRecord, Vec<OutputRecord>))
     requires
         state_ok::<F>(urls.urls(), s),
@@ -1678,7 +1692,9 @@ pub fn handle_message_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, 
                 },
                 Some(resolved) => {
                     if lock_of_url_exec(urls, resolved.as_slice(), s.next_id).is_none() {
-                        let e = Msg::Error { code: 3 };
+                        // Item 7.16: a `javascript:` URL is one the kernel never fetches.
+                        let code = error_unlocked_exec(urls, resolved.as_slice());
+                        let e = Msg::Error { code };
                         let outs = reply_exec(&r, &e);
                         (s, outs)
                     } else {
@@ -1708,7 +1724,8 @@ pub fn handle_message_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, 
                     },
                     Some(resolved) => {
                         if lock_of_url_exec(urls, resolved.as_slice(), s.next_id).is_none() {
-                            let e = Msg::Error { code: 3 };
+                            let code = error_unlocked_exec(urls, resolved.as_slice());
+                            let e = Msg::Error { code };
                             let outs = reply_exec(&r, &e);
                             (s, outs)
                         } else {

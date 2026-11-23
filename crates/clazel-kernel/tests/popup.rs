@@ -185,14 +185,7 @@ fn a_renderer_cannot_navigate_to_a_javascript_url() {
             url: b"javascript:alert(1)".to_vec(),
         },
     );
-    // An error to the sender, and no fetch.
-    assert!(
-        out.iter().all(|o| !matches!(o, Out::Connect(..))),
-        "{out:?}"
-    );
-    assert!(
-        out.iter()
-            .any(|o| matches!(o, Out::To(id, Msg::Error { .. }) if *id == a)),
-        "{out:?}"
-    );
+    // `Error { code: 5 }` to the sender (not fetched, as before 7.16), and no
+    // fetch.
+    assert_eq!(out, vec![Out::To(a, Msg::Error { code: 5 })]);
 }

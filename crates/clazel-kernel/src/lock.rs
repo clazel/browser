@@ -358,6 +358,8 @@ pub proof fn lemma_stable_same(urls: UrlFns, rs: Seq<Renderer>, next_id: nat)
 }
 
 /// **`theorem_lock_is_committed_origin`, part 2.**
+#[verifier::spinoff_prover]
+#[verifier::rlimit(100)]
 pub proof fn theorem_lock_set_only_by_navigation(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
     requires
         reachable(rules, urls, fetch, s),

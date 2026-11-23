@@ -310,7 +310,10 @@ scheme the basic URL parser gives) and `lock_of_url`, through which every URL
 a renderer is locked to passes, refuses it. So the user's typed URL
 (`OpenTab`, `NavigateTab`), a renderer's `Navigate`, `Submit`, `OpenTab` and
 `UpdateUrl`, and the final URL of a fetch never commit one. The renderer
-runs the `javascript:` URLs of links the page drew itself.
+runs the `javascript:` URLs of links the page drew itself. A renderer's
+`Navigate` or `Submit` to one is answered `Error { code: 5 }` (not fetched), as
+it was before the lock refused it, so WPT's `url/` rows for `javascript:` URLs
+still see the same reply.
 
 ### Theorems
 
