@@ -837,7 +837,9 @@ fn wpt_execution_timing() -> Result<()> {
     let mut xfail = 0usize;
     let mut failed = Vec::new();
     let mut stale = Vec::new();
-    let stride = if cfg!(miri) { 7 } else { 1 };
+    // Under Miri every 11th page (two pages, about 130 s): each builds a
+    // runtime and its built-ins, which Miri takes about 60 s for.
+    let stride = if cfg!(miri) { 11 } else { 1 };
     for (name, html) in ET_PAGES.iter().step_by(stride) {
         let url = format!("{ET_DIR}{name}");
         let mut h = Harness::at(&url, html, Encoding::Utf8, false)?;
