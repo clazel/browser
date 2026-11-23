@@ -4,7 +4,7 @@ version = "0.0.0"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "A WebP decoder (Phase 6 item 6.8): the RIFF container, VP8X, ANIM and ANMF with every frame composited, and VP8L lossless decoding (transforms, colour cache, meta prefix codes, backward references); lossy VP8 is item 6.9 and is refused. A resumable step function over caller-owned buffers, implementing clazel-image-shape's Decoder."
+description = "A WebP decoder (Phase 6 items 6.8 and 6.9): the RIFF container, VP8X, ANIM and ANMF with every frame composited, and VP8L lossless decoding (transforms, colour cache, meta prefix codes, backward references); and lossy VP8 key frames (item 6.9: RFC 6386, with the `ALPH` alpha plane). A resumable step function over caller-owned buffers, implementing clazel-image-shape's Decoder."
 
 [dependencies]
 # The decoder interface (item 6.3), our own crate with no dependencies, so no

@@ -5,10 +5,12 @@
 //! Citations are to RFC 9649 by section; the listed choices are in `lib.rs`.
 
 use clazel_image_shape::{
-    Buffers, Config, ConfigStatus, Decoder, Error, Format, FrameCount, Status, Step,
+    Buffers, Coding, Config, ConfigStatus, Decoder, Error, Format, FrameCount, Status, Step,
 };
 
+use crate::alpha::{self, AlphaHeader};
 use crate::compose::blend_row;
+use crate::vp8;
 use crate::vp8l::Vp8l;
 use crate::work::{Parts, work_len};
 
@@ -84,6 +86,11 @@ pub(crate) enum Phase {
     Anmf,
     /// A `VP8L` payload, to the lossless decoder.
     Payload,
+    /// An `ALPH` payload: its header byte, then the alpha bitstream (item 6.9).
+    Alpha,
+    /// A `VP8 ` payload, gathered whole into the frame's pixel buffer and
+    /// decoded at its last byte (item 6.9).
+    Vp8,
     /// The rest of a payload to skip.
     Skip,
     /// The padding byte after an odd-sized chunk.
@@ -92,6 +99,25 @@ pub(crate) enum Phase {
     Ended,
     /// An error happened.
     Spent,
+}
+
+/// Where the alpha plane of the current frame stands (item 6.9).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AlphaState {
+    /// No `ALPH` chunk was read for this frame.
+    None,
+    /// Inside an `ALPH` chunk, before its header byte.
+    Start,
+    /// Inside an `ALPH` chunk of raw bytes.
+    Raw,
+    /// Inside an `ALPH` chunk of a lossless stream.
+    Lossless,
+    /// The plane is in the work buffer, unfiltered.
+    Done,
+    /// The `ALPH` chunk was bad: an error if a `VP8 ` chunk follows, since a
+    /// `VP8L` image does not use it (section 2.7.1.2: "A frame containing a
+    /// 'VP8L' Chunk SHOULD NOT contain this chunk").
+    Failed(&'static str),
 }
 
 /// What one byte did.
@@ -109,6 +135,9 @@ pub struct Webp {
     /// The file is an animation (the config says its frame count is not
     /// known): the work buffer has a frame buffer.
     animated: bool,
+    /// The file has or may have lossy images (the config says
+    /// [`Coding::Lossy`]): the work buffer has the alpha and lossy parts.
+    lossy: bool,
     phase: Phase,
     hold: [u8; 16],
     have: u8,
@@ -128,6 +157,14 @@ pub struct Webp {
     anim: Animation,
     /// The current frame's bitstream was decoded into the frame buffer.
     have_image: bool,
+    /// The alpha plane of the frame (item 6.9), its header (the filtering and
+    /// compression methods) and the bytes of it read so far.
+    alpha: AlphaState,
+    alpha_header: AlphaHeader,
+    alpha_pos: u32,
+    /// The size of the `VP8 ` chunk, and the bytes of it gathered so far.
+    vp8_size: u32,
+    vp8_pos: u32,
     /// The frame being read (animations), and the last one completed.
     cur: FrameInfo,
     last: FrameInfo,
@@ -263,7 +300,13 @@ impl Webp {
                 Ok(Event::Continue)
             }
             Phase::Pad => self.sub_done(parts),
-            Phase::Vp8x | Phase::Anim | Phase::Anmf | Phase::Payload | Phase::Skip => {
+            Phase::Vp8x
+            | Phase::Anim
+            | Phase::Anmf
+            | Phase::Payload
+            | Phase::Alpha
+            | Phase::Vp8
+            | Phase::Skip => {
                 self.chunk_left = self
                     .chunk_left
                     .checked_sub(1)
@@ -271,6 +314,8 @@ impl Webp {
                 let phase = self.phase;
                 match phase {
                     Phase::Payload => return self.payload_byte(b, parts),
+                    Phase::Alpha => return self.alpha_byte(b, parts),
+                    Phase::Vp8 => return self.vp8_byte(b, parts),
                     Phase::Vp8x => {
                         if self.gather(b, 10) {
                             self.on_vp8x(parts)?;
@@ -341,13 +386,41 @@ impl Webp {
             _ => {}
         }
         match &fourcc {
-            // Sections 2.5 and 2.6; lossy decoding is item 6.9.
+            // Sections 2.5 and 2.6: the bitstream chunks.
             b"VP8 " if self.animated && !self.in_anmf => {
                 Err(bad("image data outside a frame in an animation"))
             }
-            b"VP8 " => Err(Error::Unsupported(
-                "lossy WebP (a VP8 chunk): decoding it is item 6.9",
-            )),
+            b"VP8 " => {
+                // The work buffer was sized without the lossy parts.
+                if !self.lossy {
+                    return Err(bad("a VP8 chunk in a file whose config is lossless"));
+                }
+                if self.have_image {
+                    return Err(bad("two bitstreams in one frame"));
+                }
+                if size < 10 {
+                    return Err(bad("a VP8 chunk of under 10 bytes"));
+                }
+                // An `ALPH` chunk that was bad matters now: this image uses it.
+                if let AlphaState::Failed(why) = self.alpha {
+                    return Err(bad(why));
+                }
+                // The chunk is gathered into the frame's RGBA buffer (4 bytes to
+                // the pixel), or into the work space if it is at most `SPARE`
+                // bytes (listed choice 11 of `lib.rs`).
+                let (w, h) = self.image_size();
+                let room = u64::from(w).saturating_mul(u64::from(h)).saturating_mul(4);
+                let small = usize::try_from(size).is_ok_and(|s| s <= vp8::SPARE);
+                if !small && u64::from(size) > room {
+                    return Err(Error::Unsupported(
+                        "a VP8 chunk larger than 4 bytes to the pixel of its frame",
+                    ));
+                }
+                self.vp8_size = size;
+                self.vp8_pos = 0;
+                self.phase = Phase::Vp8;
+                Ok(Event::Continue)
+            }
             b"VP8L" if self.animated && !self.in_anmf => {
                 Err(bad("image data outside a frame in an animation"))
             }
@@ -364,6 +437,9 @@ impl Webp {
                     self.canvas()
                 };
                 self.vp8l = Vp8l::new(w, h);
+                // A lossless image has its own alpha: an `ALPH` chunk before it
+                // is not used.
+                self.alpha = AlphaState::None;
                 self.phase = Phase::Payload;
                 Ok(Event::Continue)
             }
@@ -389,13 +465,25 @@ impl Webp {
                 self.phase = Phase::Anmf;
                 Ok(Event::Continue)
             }
-            // `ALPH`, `ICCP`, `EXIF`, `XMP ` and unknown chunks are skipped
-            // (sections 2.7.1.2 to 2.7.1.6); `ALPH` belongs to `VP8 `
-            // (item 6.9) and "A frame containing a 'VP8L' Chunk SHOULD NOT
-            // contain this chunk".
+            // Section 2.7.1.2: `ALPH` comes before the `VP8 ` chunk it belongs to
+            // (section 2.7: "['ALPH']" is listed before the bitstream). It is
+            // decoded as it arrives; one that arrives after the image or a
+            // second one is skipped (listed choice).
+            b"ALPH" if self.animated && !self.in_anmf => {
+                Err(bad("an ALPH chunk outside a frame in an animation"))
+            }
+            b"ALPH"
+                if self.lossy && size > 0 && !self.have_image && self.alpha == AlphaState::None =>
+            {
+                self.alpha = AlphaState::Start;
+                self.phase = Phase::Alpha;
+                Ok(Event::Continue)
+            }
+            // `ICCP`, `EXIF`, `XMP ` and unknown chunks are skipped (sections
+            // 2.7.1.4 to 2.7.1.6).
             _ => {
-                if self.animated && !self.in_anmf && &fourcc == b"ALPH" {
-                    return Err(bad("an ALPH chunk outside a frame in an animation"));
+                if size == 0 && &fourcc == b"ALPH" && self.alpha == AlphaState::None {
+                    self.alpha = AlphaState::Failed("an empty ALPH chunk");
                 }
                 self.phase = Phase::Skip;
                 if self.chunk_left == 0 {
@@ -473,6 +561,7 @@ impl Webp {
             },
         };
         self.have_image = false;
+        self.alpha = AlphaState::None;
         self.in_anmf = true;
         self.anmf_left = self.chunk_left;
         self.chunk_left = 0;
@@ -508,6 +597,13 @@ impl Webp {
             }
             return Ok(Event::Continue);
         }
+        self.frame_ready(parts)
+    }
+
+    /// A frame's bitstream is decoded (into the pixel buffer of a still image,
+    /// the frame buffer of an animation): a still image is done, a frame of an
+    /// animation waits for the rest of its chunk.
+    fn frame_ready(&mut self, parts: &mut Parts<'_>) -> Result<Event, Error> {
         if !self.animated {
             // A still image: its frame is the canvas.
             let (width, height) = self.canvas();
@@ -532,6 +628,167 @@ impl Webp {
             self.phase = Phase::Skip;
             Ok(Event::Continue)
         }
+    }
+
+    /// The size of the image the next bitstream is: the frame of an
+    /// animation, else the canvas.
+    fn image_size(&self) -> (u32, u32) {
+        if self.animated {
+            (self.cur.width, self.cur.height)
+        } else {
+            self.canvas()
+        }
+    }
+
+    /// One byte of an `ALPH` payload (RFC 9649 section 2.7.1.2, `alpha.rs`).
+    /// A bad one is remembered, not an error, until a `VP8 ` chunk would use
+    /// it; the rest of the chunk is then skipped.
+    fn alpha_byte(&mut self, b: u8, parts: &mut Parts<'_>) -> Result<Event, Error> {
+        let last = self.chunk_left == 0;
+        let (w, h) = self.image_size();
+        let pixels = usize::try_from(w)
+            .ok()
+            .and_then(|w| w.checked_mul(usize::try_from(h).ok()?))
+            .ok_or(bad("a frame size overflow"))?;
+        let failed = match self.alpha {
+            AlphaState::Start => match alpha::parse_header(b) {
+                Ok(header) => {
+                    self.alpha_header = header;
+                    self.alpha_pos = 0;
+                    if header.compression == 0 {
+                        self.alpha = AlphaState::Raw;
+                    } else {
+                        self.vp8l = Vp8l::new_headerless(w, h);
+                        self.alpha = AlphaState::Lossless;
+                    }
+                    // A chunk of only its header byte has no plane.
+                    last.then_some("an ALPH chunk with no alpha data")
+                }
+                Err(Error::Malformed(why)) => Some(why),
+                Err(_) => Some("a bad ALPH chunk"),
+            },
+            AlphaState::Raw => {
+                let at = usize::try_from(self.alpha_pos).unwrap_or(usize::MAX);
+                // "Raw data: a byte sequence of length = width * height";
+                // bytes after those are ignored.
+                if at < pixels {
+                    if let Some(slot) = parts.alpha.get_mut(at) {
+                        *slot = b;
+                    }
+                    self.alpha_pos = self.alpha_pos.saturating_add(1);
+                }
+                if usize::try_from(self.alpha_pos).unwrap_or(0) >= pixels {
+                    self.alpha_finish(parts, w, pixels);
+                    None
+                } else {
+                    last.then_some("an ALPH plane shorter than the frame")
+                }
+            }
+            AlphaState::Lossless => {
+                self.vp8l.push(b, last);
+                let bytes = pixels.checked_mul(4).ok_or(bad("a frame size overflow"))?;
+                let target = if self.animated {
+                    parts.frame.get_mut(..bytes)
+                } else {
+                    Some(&mut *parts.pixels)
+                }
+                .ok_or(bad("a frame larger than the canvas"))?;
+                match self.vp8l.advance(&mut parts.scratch, target) {
+                    Ok(true) => {
+                        let plane = parts
+                            .alpha
+                            .get_mut(..pixels)
+                            .ok_or(bad("an alpha plane too short"))?;
+                        alpha::green_to_alpha(target, plane);
+                        self.alpha_finish(parts, w, pixels);
+                        None
+                    }
+                    Ok(false) => last.then_some("an ALPH stream that ends before the plane"),
+                    Err(Error::Malformed(why)) => Some(why),
+                    Err(_) => Some("a bad ALPH stream"),
+                }
+            }
+            // Not reached: the phase is `Alpha` only in the states above.
+            _ => None,
+        };
+        if let Some(why) = failed {
+            self.alpha = AlphaState::Failed(why);
+        }
+        if last {
+            return self.chunk_end(parts);
+        }
+        if failed.is_some() || self.alpha == AlphaState::Done {
+            // The rest of the chunk is not looked at.
+            self.phase = Phase::Skip;
+        }
+        Ok(Event::Continue)
+    }
+
+    /// The alpha plane is complete: undo its filtering (section 2.7.1.2).
+    fn alpha_finish(&mut self, parts: &mut Parts<'_>, width: u32, pixels: usize) {
+        let w = usize::try_from(width).unwrap_or(1);
+        if let Some(plane) = parts.alpha.get_mut(..pixels) {
+            alpha::unfilter(plane, w, self.alpha_header.filter);
+        }
+        self.alpha = AlphaState::Done;
+    }
+
+    /// One byte of a `VP8 ` payload: gathered into the frame's RGBA buffer
+    /// (or, for a chunk of at most `vp8::SPARE` bytes, into the work space);
+    /// the last byte decodes the whole frame (`vp8/mod.rs`, the planes are in
+    /// the work space) and converts it into the RGBA buffer.
+    fn vp8_byte(&mut self, b: u8, parts: &mut Parts<'_>) -> Result<Event, Error> {
+        let (w, h) = self.image_size();
+        let pixels = usize::try_from(w)
+            .ok()
+            .and_then(|w| w.checked_mul(usize::try_from(h).ok()?))
+            .ok_or(bad("a frame size overflow"))?;
+        let bytes = pixels.checked_mul(4).ok_or(bad("a frame size overflow"))?;
+        let target = if self.animated {
+            parts.frame.get_mut(..bytes)
+        } else {
+            Some(&mut *parts.pixels)
+        }
+        .ok_or(bad("a frame larger than the canvas"))?;
+        let (spare, planes) = parts
+            .lossy
+            .split_at_mut_checked(vp8::SPARE)
+            .ok_or(bad("the work space is too small for a frame"))?;
+        let small = usize::try_from(self.vp8_size).is_ok_and(|s| s <= vp8::SPARE);
+        let at = usize::try_from(self.vp8_pos).unwrap_or(usize::MAX);
+        let slot = if small {
+            spare.get_mut(at)
+        } else {
+            target.get_mut(at)
+        };
+        if let Some(slot) = slot {
+            *slot = b;
+        }
+        self.vp8_pos = self.vp8_pos.saturating_add(1);
+        if self.chunk_left != 0 {
+            return Ok(Event::Continue);
+        }
+        // The last byte: the chunk is in the first `vp8_pos` bytes.
+        let len = usize::try_from(self.vp8_pos).unwrap_or(usize::MAX);
+        let data = if small {
+            spare.get(..len)
+        } else {
+            target.get(..len)
+        }
+        .ok_or(bad("a VP8 chunk past its buffer"))?;
+        vp8::decode(data, w, h, planes)?;
+        let alpha = if self.alpha == AlphaState::Done {
+            Some(
+                parts
+                    .alpha
+                    .get(..pixels)
+                    .ok_or(bad("an alpha plane too short"))?,
+            )
+        } else {
+            None
+        };
+        vp8::to_rgba(planes, w, h, alpha, target)?;
+        self.frame_ready(parts)
     }
 
     /// A chunk's payload is used up: its padding byte, or what is next.
@@ -618,6 +875,8 @@ impl Webp {
                         }
                     })
                 && (!self.in_anmf || self.anmf_left <= self.riff_left)
+                // The lossy phases run only with the lossy parts.
+                && (self.lossy || !matches!(self.phase, Phase::Alpha | Phase::Vp8))
                 // Between chunks no chunk is open.
                 && (!matches!(self.phase, Phase::ChunkHdr | Phase::Pad)
                     || (self.chunk_left == 0 && !self.padded))
@@ -625,6 +884,14 @@ impl Webp {
                 && self.cur.top.saturating_add(self.cur.height) <= ch
                 && self.last.left.saturating_add(self.last.width) <= cw
                 && self.last.top.saturating_add(self.last.height) <= ch
+                // The alpha plane and the gathered `VP8 ` chunk are in their
+                // regions (the canvas is the largest a frame can be).
+                && u64::from(self.alpha_pos) <= u64::from(cw).saturating_mul(u64::from(ch))
+                && u64::from(self.vp8_pos)
+                    <= u64::from(cw)
+                        .saturating_mul(u64::from(ch))
+                        .saturating_mul(4)
+                        .max(u64::try_from(vp8::SPARE).unwrap_or(0))
                 && self.vp8l.inv(groups))
     }
 }
@@ -700,13 +967,17 @@ impl Decoder for Webp {
         else {
             return more;
         };
+        // The coding: an extended file may hold `VP8 ` images, which the
+        // first bytes do not show, so it is given the lossy work space too.
         let ready = |w: u32, h: u32, frames: FrameCount| -> Result<ConfigStatus, Error> {
-            Ok(ConfigStatus::Ready(Config::new(
-                Format::Webp,
-                w,
-                h,
-                frames,
-            )?))
+            let coding = if kind == b'L' {
+                Coding::Base
+            } else {
+                Coding::Lossy
+            };
+            Ok(ConfigStatus::Ready(
+                Config::new(Format::Webp, w, h, frames)?.with_coding(coding)?,
+            ))
         };
         match kind {
             // Section 2.7, Figure 7: flags, 3 reserved bytes, canvas width
@@ -775,7 +1046,9 @@ impl Decoder for Webp {
 
     fn work_len(config: &Config) -> Result<usize, Error> {
         let animated = matches!(config.frames(), FrameCount::Unknown);
-        work_len(config.width(), config.height(), animated).ok_or(bad("work buffer size overflow"))
+        let lossy = config.coding() == Coding::Lossy;
+        work_len(config.width(), config.height(), animated, lossy)
+            .ok_or(bad("work buffer size overflow"))
     }
 
     fn start(config: &Config) -> Result<Webp, Error> {
@@ -795,6 +1068,7 @@ impl Decoder for Webp {
         Ok(Webp {
             config: *config,
             animated: matches!(config.frames(), FrameCount::Unknown),
+            lossy: config.coding() == Coding::Lossy,
             phase: Phase::Riff,
             hold: [0; 16],
             have: 0,
@@ -810,6 +1084,14 @@ impl Decoder for Webp {
                 loops: 0,
             },
             have_image: false,
+            alpha: AlphaState::None,
+            alpha_header: AlphaHeader {
+                filter: 0,
+                compression: 0,
+            },
+            alpha_pos: 0,
+            vp8_size: 0,
+            vp8_pos: 0,
             cur: blank,
             last: blank,
             has_frame: false,
@@ -835,6 +1117,7 @@ impl Decoder for Webp {
             cw,
             ch,
             self.animated,
+            self.lossy,
         ) else {
             return Err(self.fail(Error::Buffers));
         };
@@ -861,7 +1144,12 @@ impl Decoder for Webp {
         let Ok(plen) = self.config.rgba_len() else {
             return false;
         };
-        let Some(wlen) = work_len(self.config.width(), self.config.height(), self.animated) else {
+        let Some(wlen) = work_len(
+            self.config.width(),
+            self.config.height(),
+            self.animated,
+            self.lossy,
+        ) else {
             return false;
         };
         let groups = crate::work::group_cap(self.config.width(), self.config.height())
@@ -882,7 +1170,15 @@ pub(crate) fn any_webp(phase: Phase) -> Option<Webp> {
     } else {
         FrameCount::Known(1)
     };
-    let config = Config::new(Format::Webp, 2, 2, frames).ok()?;
+    let coding = if kani::any() {
+        Coding::Lossy
+    } else {
+        Coding::Base
+    };
+    let config = Config::new(Format::Webp, 2, 2, frames)
+        .ok()?
+        .with_coding(coding)
+        .ok()?;
     let mut w = Webp::start(&config).ok()?;
     w.phase = phase;
     w.hold = kani::any();
@@ -895,6 +1191,20 @@ pub(crate) fn any_webp(phase: Phase) -> Option<Webp> {
     w.first_chunk = kani::any();
     w.seen_anim = kani::any();
     w.have_image = kani::any();
+    w.alpha = match kani::any::<u8>() % 5 {
+        0 => AlphaState::None,
+        1 => AlphaState::Start,
+        2 => AlphaState::Raw,
+        3 => AlphaState::Done,
+        _ => AlphaState::Failed("a bad ALPH chunk"),
+    };
+    w.alpha_header = AlphaHeader {
+        filter: kani::any::<u8>() & 3,
+        compression: kani::any::<u8>() & 1,
+    };
+    w.alpha_pos = kani::any();
+    w.vp8_size = kani::any();
+    w.vp8_pos = kani::any();
     w.has_frame = kani::any();
     w.frames = kani::any();
     let any_frame = || FrameInfo {
@@ -922,6 +1232,13 @@ pub(crate) fn any_webp(phase: Phase) -> Option<Webp> {
 #[cfg(kani)]
 impl Webp {
     /// The file is an animation (for the harnesses).
+    /// The bytes of the current chunk not yet read (for the harnesses: a
+    /// `VP8 ` payload's last byte decodes a whole frame, which is not
+    /// harnessed here).
+    pub(crate) fn kani_chunk_left(&self) -> u32 {
+        self.chunk_left
+    }
+
     pub(crate) fn kani_animated(&self) -> bool {
         self.animated
     }

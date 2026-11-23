@@ -1,8 +1,8 @@
-//! A WebP decoder (phase-6.md item 6.8): the RIFF container, animation
-//! frames composited onto a canvas, and VP8L lossless decoding, as a
-//! resumable step function over caller-owned buffers implementing
-//! [`clazel_image_shape::Decoder`]. Lossy `VP8 ` data is item 6.9; here it is
-//! recognised and refused.
+//! A WebP decoder (phase-6.md items 6.8 and 6.9): the RIFF container,
+//! animation frames composited onto a canvas, VP8L lossless decoding, and
+//! lossy VP8 key frames (`vp8/`) with their `ALPH` alpha plane (`alpha.rs`),
+//! as a resumable step function over caller-owned buffers implementing
+//! [`clazel_image_shape::Decoder`].
 //!
 //! # The standard
 //!
@@ -29,9 +29,9 @@
 //!
 //! - **Container**: `RIFF` size `WEBP`, then the simple lossless format
 //!   (`VP8L`) or the extended one (`VP8X`, flags and canvas size, with
-//!   `ICCP`, `EXIF`, `XMP ` and unknown chunks skipped, `ALPH` skipped).
-//!   `VP8 ` (lossy) is recognised, its size read by `decode_config`, and
-//!   `step` says [`Error::Unsupported`](clazel_image_shape::Error::Unsupported).
+//!   `ICCP`, `EXIF`, `XMP ` and unknown chunks skipped, `ALPH` decoded).
+//!   `VP8 ` (lossy) is decoded by `vp8/` (RFC 6386, see its header for the
+//!   pinned text and its own listed choices, which are items 13 to 17 here).
 //! - **Animation**: `ANIM` and `ANMF`. **Every frame** is decoded into the
 //!   frame buffer and composited onto the canvas (the pixel buffer, straight
 //!   RGBA8) with the previous frame's disposal method applied first;
@@ -70,8 +70,13 @@
 //!    `ANMF` before the `ANIM` is an error, and each frame needs exactly one
 //!    bitstream, which must be the size of the frame; a frame must lie
 //!    inside the canvas (section 2.7.2).
-//! 5. **`ALPH`** is skipped: it belongs with lossy data (item 6.9), and "A
-//!    frame containing a 'VP8L' Chunk SHOULD NOT contain this chunk".
+//! 5. **`ALPH`** (RFC 9649 section 2.7.1.2) is decoded when it comes before
+//!    a `VP8 ` chunk, filtered or not, raw or lossless-compressed; the
+//!    reserved and preprocessing bits are ignored. One that is bad (or an
+//!    empty one) is an error only if a `VP8 ` chunk follows, since a `VP8L`
+//!    image does not use it ("A frame containing a 'VP8L' Chunk SHOULD NOT
+//!    contain this chunk"); a second one, or one after the image, is
+//!    skipped; without one a lossy image is opaque.
 //! 6. **The RIFF size** ends the stream: trailing data is ignored (section
 //!    2.4: "Readers MAY parse such files, ignoring the trailing data"), a
 //!    chunk that does not fit in what contains it is an error, and the
@@ -99,7 +104,29 @@
 //!     about 11.6 kB (colour cache, code lengths, colour table) plus 12 bytes
 //!     per block of 4 by 4 pixels (the three sub-images), plus 6.4 kB per
 //!     prefix code group held (at most 1,024), plus, for an animation, a
-//!     frame buffer as large as the canvas (`work.rs` has the table).
+//!     frame buffer as large as the canvas, plus, **for a file whose config says
+//!     `Coding::Lossy`** (a simple `VP8 ` file, or any `VP8X` file, since its
+//!     first bytes do not show which codec its images use), 1 byte per pixel
+//!     for the alpha plane and about 1.5 bytes per pixel (macroblock aligned)
+//!     and 1 kB for the lossy planes (`work.rs`, `vp8/mod.rs`). A simple
+//!     `VP8L` file is `Coding::Base` and has neither; a `VP8 ` chunk under
+//!     such a config is `Malformed`, and an `ALPH` chunk is skipped.
+//! 13. **Lossy decoding** (`vp8/mod.rs` lists its choices 1 to 10): key frames
+//!     only; a frame not shown, of version over 3, or of another size than
+//!     the container's is `Malformed`; `color_space` and `clamping_type` are
+//!     ignored; partitions past the end of the chunk, or too short for what
+//!     is read, are `Malformed`; 16-bit storage as the RFC says.
+//! 14. **YUV to RGB** is libwebp's fixed-point conversion with fancy
+//!     upsampling (`vp8/yuv.rs` cites the constants), alpha straight.
+//! 15. **A `VP8 ` chunk is gathered whole** before decoding, in the frame's
+//!     RGBA buffer (so at most 4 bytes to the pixel) or, if at most 1,024
+//!     bytes, in the work space; a larger one is `Unsupported`. The frame is
+//!     decoded in the call that gives the chunk's last byte.
+//! 16. **A key frame with segmentation on and no segment data** has absolute
+//!     values of 0 (libwebp's and `image-webp`'s reading; the reference
+//!     decoder's is delta).
+//! 17. **Loop filter levels** clamp twice, as the reference decoder's
+//!     `calculate_filter_parameters` (section 20.6).
 //!
 //! # Verification
 //!
@@ -110,6 +137,7 @@
 //! and the stated properties of the parts, and `inv` is about the ranges of
 //! the counters.
 
+mod alpha;
 mod bits;
 mod compose;
 mod decoder;
@@ -118,6 +146,7 @@ mod huffman;
 #[cfg(kani)]
 mod proofs;
 mod transform;
+mod vp8;
 mod vp8l;
 mod work;
 
