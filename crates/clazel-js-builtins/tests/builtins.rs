@@ -656,8 +656,9 @@ fn math_builtin() -> Result<(), String> {
         ),
         ("Math.PI = 3; var r = Math.PI > 3.14;", "true"),
         (
+            // §21.3.1.9: Math[@@toStringTag] is "Math" (§20.1.3.6 step 15).
             "var r = Object.prototype.toString.call(Math);",
-            "[object Object]",
+            "[object Math]",
         ),
         (
             "var r = Math.max.length + ',' + Math.pow.length + ',' + Math.abs.length;",

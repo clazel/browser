@@ -13,9 +13,10 @@
 //!   `JSON.stringify` stops at 128 levels with a `RangeError`, where the
 //!   standard has no bound (it recurses on the host stack, which must not
 //!   overflow; an unoptimised frame is several KB, and tests run on 2 MB).
-//! - No `BigInt` (`toJSON` is looked up on Objects only) and no Symbols (a
-//!   Symbol is never a value here), so those steps of the algorithms do not
-//!   exist yet.
+//! - No `BigInt` (`toJSON` is looked up on Objects only), so those steps of
+//!   the algorithms do not exist yet. A Symbol value serializes as
+//!   `undefined` (SerializeJSONProperty, §25.5.2.2† step 11) and Symbol keys
+//!   are never listed (EnumerableOwnProperties lists String keys only).
 //! - The reviver's third argument (the source text context of the JSON
 //!   parse-with-source proposal) is not passed.
 
@@ -38,7 +39,8 @@ pub fn install(vm: &mut Vm) -> Result<(), Abrupt> {
     let json = vm.new_object()?;
     method(vm, json, "parse", 2, parse)?;
     method(vm, json, "stringify", 3, stringify)?;
-    // §25.5.3†: `JSON[@@toStringTag]` is "JSON" (no Symbols yet, so absent).
+    // §25.5.3† `JSON [ @@toStringTag ]`: "JSON".
+    crate::symbol::to_string_tag(vm, json, "JSON")?;
     crate::util::global(vm, "JSON", json)
 }
 
@@ -232,10 +234,13 @@ struct State {
     stack: Vec<Value>,
 }
 
-/// The primitive inside a Boolean, Number or String wrapper object.
+/// The primitive inside a Boolean, Number or String wrapper object (a
+/// Symbol object is not one: SerializeJSONProperty, §25.5.2.2† step 4,
+/// unwraps only [[NumberData]], [[StringData]], [[BooleanData]] and
+/// [[BigIntData]], so it serializes as an object).
 fn wrapped(vm: &Vm, v: Value) -> Option<Value> {
     match vm.heap().obj(v).map(|o| o.kind) {
-        Some(ObjKind::Primitive(p)) => Some(p),
+        Some(ObjKind::Primitive(p)) if !vm.heap().is_symbol(p) => Some(p),
         _ => None,
     }
 }

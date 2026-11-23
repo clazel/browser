@@ -20,6 +20,7 @@ pub fn install(vm: &mut Vm) -> Result<(), Abrupt> {
     let proto = vm.intrinsic(Intrinsic::ObjectPrototype);
     let ctor = constructor(vm, "Object", 1, object, proto)?;
     method(vm, proto, "hasOwnProperty", 1, has_own_property_fn)?;
+    method(vm, proto, "toLocaleString", 0, to_locale_string)?;
     method(vm, proto, "toString", 0, to_string)?;
     method(vm, proto, "valueOf", 0, value_of)?;
     method(vm, ctor, "keys", 1, keys)?;
@@ -68,7 +69,8 @@ fn has_own_property_fn(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value
 ///    [[Call]]), "Error" ([[ErrorData]]), "Boolean", "Number" or "String"
 ///    ([[BooleanData]], [[NumberData]], [[StringData]]), "Date", "RegExp",
 ///    or else "Object".
-/// 15. and 16. `@@toStringTag` is not consulted (no Symbols yet).
+/// 15. Let tag be ? Get(O, @@toStringTag).
+/// 16. If tag is not a String, set tag to builtinTag.
 /// 17. Return the string-concatenation of "[object ", tag, and "]".
 fn to_string(vm: &mut Vm, this: Value, _args: &[Value]) -> Result<Value, Abrupt> {
     if this == Value::UNDEFINED {
@@ -87,12 +89,39 @@ fn to_string(vm: &mut Vm, this: Value, _args: &[Value]) -> Result<Value, Abrupt>
             Some(ObjKind::Primitive(p)) => match p.decode() {
                 Decoded::Bool(_) => "Boolean",
                 Decoded::Int32(_) | Decoded::Double(_) => "Number",
-                _ => "String",
+                _ if vm.heap().is_string(p) => "String",
+                _ => "Object",
             },
             _ => "Object",
         }
     };
+    let k = vm.well_known_key(clazel_js_heap::symbol::TO_STRING_TAG)?;
+    let t = vm.get_value(o, k)?;
+    if let Some(t) = vm.heap().string(t) {
+        let mut units: Vec<u16> = "[object ".encode_utf16().collect();
+        units.extend(t.units());
+        units.push(u16::from(b']'));
+        let s = clazel_js_heap::string::JsString::from_units(&units)
+            .map_err(|_| Abrupt::OutOfMemory)?;
+        return crate::util::js_string(vm, s);
+    }
     string(vm, &format!("[object {tag}]"))
+}
+
+/// `Object.prototype.toLocaleString ( [ reserved1 [ , reserved2 ] ] )`,
+/// §20.1.3.5†:
+/// 1. Let O be the this value.
+/// 2. Return ? Invoke(O, "toString").
+///
+/// Invoke ( V, P [ , argumentsList ] ), §7.3.20†: GetV(V, P), then Call;
+/// a value that is not callable is a TypeError.
+fn to_locale_string(vm: &mut Vm, this: Value, _args: &[Value]) -> Result<Value, Abrupt> {
+    let k = key(vm, "toString")?;
+    let f = vm.get_value(this, k)?;
+    if !vm.heap().is_callable(f) {
+        return Err(vm.type_error("toString is not a function"));
+    }
+    vm.call(f, this, &[])
 }
 
 /// `Object.prototype.valueOf ( )`, §20.1.3.7†:
