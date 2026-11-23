@@ -80,6 +80,10 @@ pub enum ObjKind {
         /// The index of the next code unit.
         next: u32,
     },
+    /// An object with internal slots a built-in defines (`[[PromiseState]]`,
+    /// `[[RegExpMatcher]]`, ...): its row in the VM's table of host objects
+    /// (`crate::host`).
+    Host(u32),
 }
 
 /// `[[ArrayLikeIterationKind]]` of an Array Iterator (§23.1.5.1†).

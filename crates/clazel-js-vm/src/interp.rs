@@ -169,13 +169,29 @@ pub enum Intrinsic {
     /// prototype that no script can reach (its keys are the registered
     /// strings, its values the Symbols).
     SymbolRegistry,
+    /// `%Promise.prototype%` (§27.2.5†).
+    PromisePrototype,
+    /// `%Promise%` (§27.2.3†).
+    PromiseConstructor,
+    /// The built-in function of PromiseReactionJob (§27.2.2.1†): the callee
+    /// of the job HostEnqueuePromiseJob queues for a reaction.
+    PromiseReactionJob,
+    /// The built-in function of PromiseResolveThenableJob (§27.2.2.2†).
+    PromiseResolveThenableJob,
+    /// `%RegExp.prototype%` (§22.2.6†).
+    RegExpPrototype,
+    /// `%RegExp%` (§22.2.4†): the constructor a regular expression literal
+    /// runs (`NewRegExp`, RegExpCreate §22.2.3.1†).
+    RegExpConstructor,
+    /// `%RegExpStringIteratorPrototype%` (§22.2.9.1†).
+    RegExpStringIteratorPrototype,
 }
 
 /// The most natives that may run one inside another.
 const MAX_NATIVE_DEPTH: u32 = 150;
 
 /// How many [`Intrinsic`]s there are.
-const INTRINSICS: usize = 17;
+const INTRINSICS: usize = 24;
 
 /// The hint of ToPrimitive (§7.1.1†).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -319,6 +335,9 @@ pub struct Vm {
     pub(crate) atoms: Atoms,
     /// The embedder's state (`clazel-js`'s runtime), see [`Vm::set_embedder`].
     pub(crate) embedder: Option<Box<dyn Any + Send>>,
+    /// Host objects, the slots of native functions and the job queue
+    /// ([`crate::host`]).
+    pub(crate) host: crate::host::HostState,
 }
 
 impl Vm {
@@ -404,6 +423,7 @@ impl Vm {
             budget: u64::MAX,
             atoms,
             embedder: None,
+            host: crate::host::HostState::default(),
         })
     }
 
@@ -511,8 +531,8 @@ impl Vm {
                     (ConstVal::Value(self.heap.new_string(s)?), Some(key))
                 }
                 Const::BigInt(_) => (ConstVal::Unsupported("BigInt literals"), None),
-                Const::RegExp(_) => (ConstVal::Unsupported("RegExp literals"), None),
                 Const::GlobalDeclarations(_)
+                | Const::RegExp(_)
                 | Const::Template(_)
                 | Const::ArgumentsMap(_)
                 | Const::EvalScope(_) => (ConstVal::Record, None),
@@ -1468,6 +1488,12 @@ impl Vm {
                 }
                 .unwrap_or_default();
                 return Err(self.throw_kind(kind, &text));
+            }
+            // RegExpCreate (§22.2.3.1†) for a regular expression literal
+            // (§13.2.7.3† step 3): `%RegExp%` makes the object.
+            Instr::NewRegExp { dst, k } => {
+                let v = self.new_regexp(k)?;
+                self.w(dst, v)?;
             }
             other => return Err(Abrupt::NotYet(op_name(&other))),
         }

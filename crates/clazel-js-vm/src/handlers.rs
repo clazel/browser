@@ -964,6 +964,27 @@ impl Vm {
         Ok(self.heap.new_object(proto, kind)?)
     }
 
+    /// `NewRegExp`: the literal of constant `k` (§13.2.7.3† "Runtime
+    /// Semantics: Evaluation" of RegularExpressionLiteral, steps 1 to 4: the
+    /// BodyText and FlagText, then RegExpCreate(pattern, flags), §22.2.3.1†).
+    /// The object is made by `%RegExp%`, which `clazel-js-builtins` installs;
+    /// a VM without it has no RegExp literals (`NotYet`).
+    pub(crate) fn new_regexp(&mut self, k: u32) -> Result<Value, Abrupt> {
+        let ctor = self.intrinsic(Intrinsic::RegExpConstructor);
+        if !self.heap.is_object(ctor) {
+            return Err(Abrupt::NotYet("RegExp literals".into()));
+        }
+        let i = usize::try_from(k).map_err(|_| Abrupt::Internal("constant index"))?;
+        let (pattern, flags) = match self.codes.get(self.cur).and_then(|f| f.code.consts.get(i)) {
+            Some(Const::RegExp(site)) => (site.pattern.clone(), site.flags.clone()),
+            _ => return Err(Abrupt::Internal("NewRegExp of a constant that is no literal")),
+        };
+        let p = JsString::from_units(&pattern).map_err(|_| Abrupt::OutOfMemory)?;
+        let f = JsString::from_units(&flags).map_err(|_| Abrupt::OutOfMemory)?;
+        let (p, f) = (self.heap.new_string(p)?, self.heap.new_string(f)?);
+        self.construct_value(ctor, &[p, f])
+    }
+
     // -----------------------------------------------------------------
     // Globals
     // -----------------------------------------------------------------

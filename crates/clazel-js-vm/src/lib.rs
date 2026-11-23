@@ -32,6 +32,8 @@
 //!   check and the tiering counters;
 //! - [`handlers`]: the handlers (conversions, operators, properties, globals,
 //!   closures), plain methods over the region and the heap;
+//! - [`host`]: objects with internal slots, natives with captured values and
+//!   the job queue, for the built-ins that need them (`Promise`, `RegExp`);
 //! - [`iter`]: Symbols, the iterator protocol behind the iteration ops,
 //!   `for`-`in` and the spread calls.
 //!
@@ -48,6 +50,7 @@ pub mod examples;
 pub mod frame;
 pub mod handlers;
 pub mod heap;
+pub mod host;
 pub mod interp;
 pub mod iter;
 pub mod lemmas;
