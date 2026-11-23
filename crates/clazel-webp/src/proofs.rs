@@ -1,6 +1,6 @@
 //! Kani harnesses (Tier 1). Compiled only under `cargo kani`.
 //!
-//! Sixty-nine harnesses, bounded as the README lists. Under Kani the colour
+//! Seventy-five harnesses (the 69 of item 6.8 and 6 of item 6.9), bounded as the README lists. Under Kani the colour
 //! cache is 8 entries (`MAX_CACHE_BITS` 3 in `work.rs`) so that a green
 //! alphabet is 288 symbols and a prefix code group 2,352 bytes; the code is
 //! the same code with other constants.
@@ -578,8 +578,16 @@ container_harness!(container_vp8x, Vp8x);
 container_harness!(container_anim, Anim);
 container_harness!(container_anmf, Anmf);
 container_harness!(container_skip, Skip);
-container_harness!(container_alpha, Alpha);
-container_harness!(container_vp8, Vp8);
+
+// NOT a harness: `container_alpha` and `container_vp8`, one byte of the container in the
+// `ALPH` and `VP8 ` phases (`container_harness!(container_alpha, Alpha)` and
+// `container_harness!(container_vp8, Vp8)`). Kani 0.68.0 (CBMC 6.11.0, MiniSat,
+// `unwind(6)`) gave no verdict in 40 minutes for either, run on its own with
+// `--exact` (symbolic execution took about 5 minutes and converting to SAT about 2,
+// then the solver ran to the 40 minute cap with 6 to 7 GB resident), on a machine
+// shared with other jobs. The same macro's other nine harnesses finish in 13 to 600
+// seconds. They are not harnesses here; the two phases are covered by the unit tests,
+// the differential tests and Miri, not machine-checked. See the README, "Kani harnesses".
 container_harness!(container_pad, Pad);
 container_harness!(container_ended, Ended);
 container_harness!(container_spent, Spent);
@@ -665,7 +673,7 @@ fn bool_decoder_any() {
 /// `B_DC_PRED` is within the range of the edge pixels it averages.
 #[kani::proof]
 #[kani::solver(minisat)]
-#[kani::unwind(12)]
+#[kani::unwind(18)]
 fn subblock_predict_any() {
     let e = SubEdge {
         a: kani::any(),

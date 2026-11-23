@@ -112,17 +112,22 @@ recorded).
 
 Statements are in `src/proofs.rs` and `src/idct.rs`.
 
-**Item 6.6 added five harnesses that have not been run**: Kani was not run
-(the machine that wrote them is memory-constrained; CI's proof jobs need
-`full-verification` approval), so they are *written, not proven*, and it was
-not even checked that they compile under `cfg(kani)`. `prog_dc_first_bits`,
-`prog_dc_refine_bit`, `prog_ac_first_code`, `prog_ac_refine_code` and
-`prog_ac_refine_correction` each take one bit of the progressive machine in one
-concrete stage of one scan kind, with the counters, band, point transform, run,
-EOB run and the 64 coefficients symbolic within the invariant and Huffman
-tables from `Table::any`; each asserts no panic or overflow and the invariant
-afterwards. The two refinement ones walk a band (`unwind(66)`) and may be the
-heavy ones. The table below and its "12 pass" are 6.5's.
+**Item 6.6 added five harnesses** (`prog_dc_first_bits`, `prog_dc_refine_bit`,
+`prog_ac_first_code`, `prog_ac_refine_code` and `prog_ac_refine_correction`),
+each taking one bit of the progressive machine in one concrete stage of one
+scan kind, with the counters, band, point transform, run, EOB run and the 64
+coefficients symbolic within the invariant and Huffman tables from `Table::any`;
+each asserts no panic or overflow and the invariant afterwards. The two
+refinement ones walk a band (`unwind(66)`). They were first written without
+being run; on the merge of 6.6 onto `main` all 17 harnesses of the crate were
+run, each on its own, `cargo kani --harness NAME` in `crates/clazel-jpeg` under
+Kani 0.68.0 (CBMC 6.11.0) on a macOS machine shared with other jobs (so times
+are upper bounds): **17 of 17 prove**. The five new ones took 17 s and 207 MB
+(`prog_ac_first_code`), 417 s and 3.3 GB (`prog_ac_refine_code`), 329 s and 5.1
+GB (`prog_ac_refine_correction`), 3 s and 207 MB (`prog_dc_first_bits`) and 2 s
+and 206 MB (`prog_dc_refine_bit`): none over 15 minutes or 8 GB, so all ship. The
+table below and its times are 6.5's, run earlier in WSL; on this machine
+`orient_bijection` took 155 s and 3.2 GB and `sample_constant` 28 s and 3.0 GB.
 
 Run in WSL Ubuntu with Kani 0.68.0 (`cargo kani -p clazel-jpeg --harness NAME`), each harness on its own: **12 harnesses, 12 pass**.
 
