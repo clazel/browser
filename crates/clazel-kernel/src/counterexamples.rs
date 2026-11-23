@@ -47,6 +47,7 @@ pub open spec fn ce_urls() -> UrlFns {
     UrlFns {
         origin_of: |u: Seq<u32>| Some(clazel_origin::spec::Origin::Opaque(0nat)),
         path_of: |u: Seq<u32>| Seq::<u8>::empty(),
+        is_javascript: |u: Seq<u32>| false,
         resolve: |b: Seq<u32>, i: Seq<u32>| None::<Seq<u32>>,
     }
 }
@@ -383,7 +384,7 @@ pub open spec fn ce_c0() -> Connection {
 /// counters 1 and (the number of connections opened) `nc`, an empty jar at
 /// time 0.
 pub open spec fn ce_state(rs: Seq<Renderer>, cs: Seq<Connection>, nid: nat, nc: nat) -> State {
-    State { renderers: rs, jar: Seq::<clazel_cookie::storage::spec::Cookie>::empty(), storage: Map::empty(), next_id: nid, conns: cs, next_conn: nc, now: 0, viewports: seq![], titles: seq![], subfetches: seq![], subcounts: seq![], gpu: init_gpu(), doc_urls: seq![] }
+    State { renderers: rs, jar: Seq::<clazel_cookie::storage::spec::Cookie>::empty(), storage: Map::empty(), next_id: nid, conns: cs, next_conn: nc, now: 0, viewports: seq![], titles: seq![], subfetches: seq![], subcounts: seq![], gpu: init_gpu(), doc_urls: seq![], acts: seq![] }
 }
 
 /// Filtering one element.

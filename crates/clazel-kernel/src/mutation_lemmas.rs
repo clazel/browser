@@ -25,6 +25,7 @@ pub open spec fn ml_urls_a() -> UrlFns {
     UrlFns {
         origin_of: |u: Seq<u32>| Some(ml_tuple(seq![0x61u32])),
         path_of: |u: Seq<u32>| Seq::<u8>::empty(),
+        is_javascript: |u: Seq<u32>| false,
         resolve: |b: Seq<u32>, i: Seq<u32>| None::<Seq<u32>>,
     }
 }
@@ -45,6 +46,7 @@ pub open spec fn ml_state_one() -> State {
         subcounts: Seq::empty(),
         gpu: init_gpu(),
         doc_urls: Seq::empty(),
+        acts: Seq::empty(),
     }
 }
 
@@ -544,6 +546,7 @@ pub open spec fn ml_gpu_state(committed: bool, sized: bool) -> State {
             sites: seq![],
         },
         doc_urls: Seq::empty(),
+        acts: Seq::empty(),
     }
 }
 
@@ -899,6 +902,7 @@ pub open spec fn ml_urls_no_origin() -> UrlFns {
     UrlFns {
         origin_of: |u: Seq<u32>| None::<clazel_origin::spec::Origin>,
         path_of: |u: Seq<u32>| Seq::<u8>::empty(),
+        is_javascript: |u: Seq<u32>| false,
         resolve: |b: Seq<u32>, i: Seq<u32>| Some(i),
     }
 }
@@ -909,6 +913,7 @@ pub open spec fn ml_urls_opaque() -> UrlFns {
     UrlFns {
         origin_of: |u: Seq<u32>| Some(clazel_origin::spec::Origin::Opaque(7nat)),
         path_of: |u: Seq<u32>| Seq::<u8>::empty(),
+        is_javascript: |u: Seq<u32>| false,
         resolve: |b: Seq<u32>, i: Seq<u32>| Some(i),
     }
 }
@@ -990,6 +995,7 @@ pub open spec fn ml_urls_tuple() -> UrlFns {
     UrlFns {
         origin_of: |u: Seq<u32>| Some(ml_tuple(seq![0x68u32, 0x74, 0x74, 0x70])),
         path_of: |u: Seq<u32>| Seq::<u8>::empty(),
+        is_javascript: |u: Seq<u32>| false,
         resolve: |b: Seq<u32>, i: Seq<u32>| Some(i),
     }
 }

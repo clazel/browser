@@ -12,6 +12,7 @@ use clazel_url::url::parse::basic_url_parser;
 use clazel_url::url::serialize::url_path_serializer;
 
 use super::fetch::FetchFnsExec;
+use super::locks::u32s_eq;
 use super::records::{EventRecord, StateRecord};
 use super::step::step_exec;
 use super::urls::UrlFnsExec;
@@ -93,6 +94,22 @@ impl UrlFnsExec for RealUrls {
             Some(parsed) => {
                 let origin = url_origin_exec(&parsed, 0);
                 Some(origin)
+            },
+        }
+    }
+
+    fn is_javascript(&self, url: &[u32]) -> (r: bool) {
+        if !all_scalar_values_exec(url) {
+            return false;
+        }
+        match basic_url_parser(url, None) {
+            None => false,
+            Some(parsed) => {
+                let js = vec![0x6Au32, 0x61, 0x76, 0x61, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74];
+                proof {
+                    assert(js@ =~= crate::urls::javascript_scheme());
+                }
+                u32s_eq(parsed.scheme.as_slice(), js.as_slice())
             },
         }
     }
