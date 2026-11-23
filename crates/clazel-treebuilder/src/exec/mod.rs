@@ -13,6 +13,8 @@
 //!   formatting elements".
 //! - [`driver`]: the join with `clazel-html`'s tokenizer ([`driver::parse_real`],
 //!   [`driver::parse_fragment_real`]).
+//! - [`incremental`]: a driver over an input stream that scripts edit at the
+//!   insertion point, pausing for actions (Phase 7 item 7.15).
 //! - [`step`]: the dispatcher, the reprocessing loop and the one-token step
 //!   (§13.2.6), and the parsers' initial states (§13.2.4, §13.4).
 
@@ -29,3 +31,6 @@ pub mod names;
 pub mod stack;
 pub mod step;
 pub mod types;
+// Declared last, so that the declaration order the existing proofs were
+// checked in is unchanged.
+pub mod incremental;

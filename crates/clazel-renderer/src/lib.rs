@@ -362,9 +362,17 @@ pub fn run_graphics<R: Read, W: Write, L: Write>(
                     continue;
                 };
                 match kind {
-                    // A click: hit-test, and follow a link.
+                    // A click: hit-test, and follow a link. A `javascript:`
+                    // URL the page drew is the page's own to run (HTML
+                    // "navigate": it is evaluated in the page, phase-7.md
+                    // item 7.15), never a navigation for the kernel; this
+                    // renderer runs no page scripts yet (`clazel-web`'s
+                    // `scripting::Page` is not hosted here), so it does
+                    // nothing.
                     0 => {
-                        if let Some(url) = p.click(x, y) {
+                        if let Some(url) = p.click(x, y)
+                            && !is_javascript_url(&url)
+                        {
                             send(
                                 w,
                                 &Msg::Navigate {
@@ -388,6 +396,12 @@ pub fn run_graphics<R: Read, W: Write, L: Write>(
             _ => return Err(RunError::Protocol("unexpected message")),
         }
     }
+}
+
+/// Whether a link's URL, as the page's hit regions hold it (parsed and
+/// serialized: the scheme lowercased), is a `javascript:` URL.
+fn is_javascript_url(url: &str) -> bool {
+    url.starts_with("javascript:")
 }
 
 /// Run a script: send each operation and read its reply.

@@ -154,6 +154,22 @@ evidence exists (see "Left" below).
   tokenizer stops it gives end-of-file. `theorem_eof_stops`: the step on
   an end-of-file token stops the parser, from every parser (no
   hypotheses), so the driver's loop ends.
+- **Proven, the incremental driver** (`src/exec/incremental.rs`, Phase 7
+  item 7.15): the same tokenizer and step over an input stream that a
+  script edits at the insertion point (`document.write`), pausing after
+  every step that asks for an action (`ScriptReady` included), at the
+  insertion point, and at the end of an input stream that is not closed (a
+  `document.open` parser). Proven: every call meets its callee's contract,
+  the driver's invariant (the step's `parser_inv` and `reachable_inv`, the
+  tokenizer's `abstracts` and `wf`) holds after every method, every `pump`
+  ends, and the parser after a `pump` is the parser before given some
+  tokens by the spec's step (`contract::incremental_pump_ensures` over
+  `contract::dispatch_seq`). Not proven: that those tokens are the
+  tokenizer's over the input, so not that it equals `parse` (with
+  `document.write` there is no spec `parse` to equal); the conformance
+  suite's document cases run through it too and give `parse_real`'s tree.
+  Its modelling choices (look-ahead past the insertion point, newline
+  normalization per write) are listed in the module.
 - **Independent transcription** (`src/independent/`): W3C HTML 5.2
   §8.2.5 (Recommendation, 14 December 2017), written without reading
   `src/spec/modes/`, proven equal to the spec for 21 of its 23 insertion
@@ -204,9 +220,12 @@ evidence exists (see "Left" below).
   of the spec), the tree printed in the suite's format
   and compared byte for byte: 1,963 of 1,967 pass, and the 4 expected
   failures are the `selectedcontent` restriction above (`webkit02.dat` 44
-  to 47); the 6 `scripted_*.dat` cases need a script engine and are not
-  run. Cases with neither `#script-on` nor `#script-off` run with
-  scripting off only.
+  to 47); the 6 `scripted_*.dat` cases need a script engine, and run in
+  `clazel-web` (`tests/conformance_scripted.rs`, item 7.15). Cases with
+  neither `#script-on` nor `#script-off` are counted with scripting off,
+  and must give the same tree with scripting on (the browser's setting
+  since item 7.15): all 1,931 do. Every document case also runs through
+  the incremental driver, whose tree must be `parse_real`'s: all 1,761 are.
 - **Fragments** (`tests/conformance_fragment.rs`, Phase 7 item 7.13): the
   suite's 206 `#document-fragment` cases through `parse_fragment_real`,
   each run with the scripting flag off and on (none names a flag, and the

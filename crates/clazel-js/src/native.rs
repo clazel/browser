@@ -106,8 +106,10 @@ pub enum Callable {
 /// `Fn`, not `FnMut`: a native function can be re-entered through JavaScript
 /// it calls, so mutable state it needs goes in a host object, in the
 /// [`Host`](crate::Host), or behind a lock, and not in the closure. `Send`
-/// because the [`Runtime`](crate::Runtime) is.
-pub type NativeFn = dyn for<'s> Fn(&mut Scope<'s>, &Args<'s>) -> Result<Local<'s>> + Send;
+/// because the [`Runtime`](crate::Runtime) is, and `Sync` because a call
+/// that re-enters it shares it with the call still running (the README's
+/// open question 14).
+pub type NativeFn = dyn for<'s> Fn(&mut Scope<'s>, &Args<'s>) -> Result<Local<'s>> + Send + Sync;
 
 /// An answer from an exotic hook: do what an ordinary object does, or here is
 /// the answer.

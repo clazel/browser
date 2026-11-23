@@ -16,9 +16,16 @@
 //! §8.6†), with caps for a hostile page (7.19) and time supplied by the
 //! caller.
 //!
+//! Item 7.15's script half is [`scripting`]: a document parsed with the
+//! scripting flag on, its `script` elements prepared and run as the parser
+//! reaches them, `document.write`, `document.open` and `document.close`,
+//! module scripts as far as the engine goes, `javascript:` URLs and
+//! `performance.now()`, through `clazel-js`'s embedding API.
+//!
 //! Tier 0 (`Cargo.toml`): safe Rust, tested, nothing proven.
 
 pub mod event_loop;
 pub mod events;
+pub mod scripting;
 pub mod selectors;
 pub mod serialize;
