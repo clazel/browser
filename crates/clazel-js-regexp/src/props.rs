@@ -13,9 +13,11 @@
 //!   kind for strings.
 //!
 //! `Script` / `Script_Extensions` values are not listed here: there are about
-//! 170 and they change with every Unicode version, so they belong to the
-//! generated tables of item 7.10's second half. [`Names::is_script`] is where
-//! they plug in; [`SyntaxOnly`] accepts every syntactically valid value.
+//! 170 and they change with every Unicode version, so they are in the
+//! generated tables (`crate::tables::SCRIPTS`). [`Names::is_script`] is where
+//! they plug in: [`UcdScripts`] accepts the values of those tables (what
+//! [`crate::parse`] uses), [`SyntaxOnly`] accepts every syntactically valid
+//! value.
 //! `tests/conformance_names.rs` checks the lists below against the vendored
 //! UCD files.
 
@@ -34,6 +36,17 @@ pub struct SyntaxOnly;
 impl Names for SyntaxOnly {
     fn is_script(&self, _value: &str) -> bool {
         true
+    }
+}
+
+/// Accepts the `Script` values of `PropertyValueAliases.txt`: every name and
+/// alias in [`crate::tables::SCRIPTS`], case-sensitively.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct UcdScripts;
+
+impl Names for UcdScripts {
+    fn is_script(&self, value: &str) -> bool {
+        crate::unicode::script_property(value, false).is_some()
     }
 }
 

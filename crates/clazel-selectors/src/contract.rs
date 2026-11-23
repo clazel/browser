@@ -1,8 +1,8 @@
 //! Contracts the executable code is proven to meet, and the statements of the theorems
 //! about the spec. `exec_parse::parse_selector` ensures [`parse_selector_ensures`] of the
 //! view of its result (and that the result is `exec_check::checked`); `exec_match::matches`
-//! ensures [`match_ensures`], and the matching algorithm meets [`match_work_ensures`] by
-//! `theorem_match_total`; `exec_serialize::serialize` ensures [`serialize_ensures`] of the
+//! ensures [`match_ensures`] and `exec_match::matches_scoped` [`match_scoped_ensures`], and
+//! the matching algorithm meets [`match_work_ensures`] by `theorem_match_total`; `exec_serialize::serialize` ensures [`serialize_ensures`] of the
 //! view of its argument (given `ranges_wf` and `list_wf`, which every parse has).
 //! [`specificity_ensures`] is the planned contract of the specificity functions and is not
 //! attached to them: they ensure equality with the spec's `simple_specificity`,
@@ -133,9 +133,23 @@ pub open spec fn match_requires(doc: Document, x: NodeId) -> bool {
     clazel_dom::spec::wf(doc) && x < doc.nodes.len()
 }
 
-/// Contract for `matches(doc, selector, x)`: §21.3 "match a selector against an element".
+/// Contract for `matches_scoped(doc, selector, scope, x)`: §21.3 "match a selector against an
+/// element", with the scoping root `scope` (modelling choices in [`super::spec`]).
+pub open spec fn match_scoped_ensures(
+    doc: Document,
+    selector: Seq<Complex>,
+    scope: Option<NodeId>,
+    x: NodeId,
+    r: bool,
+) -> bool {
+    r == match_a_selector_against_an_element(doc, scope, selector, x)
+}
+
+/// Contract for `matches(doc, selector, x)`: §21.3 "match a selector against an element", with
+/// no scoping root, so that `:scope` is `:root`. The meaning of every caller that has none (a
+/// style sheet) is this one.
 pub open spec fn match_ensures(doc: Document, selector: Seq<Complex>, x: NodeId, r: bool) -> bool {
-    r == match_a_selector_against_an_element(doc, selector, x)
+    match_scoped_ensures(doc, selector, None, x, r)
 }
 
 /// How many nodes the walk for `x` meets when it visits siblings: each node of the chain
@@ -174,8 +188,8 @@ pub open spec fn work_bound(doc: Document, c: Complex, x: NodeId) -> nat {
 /// Contract for matching one complex selector and counting the work, and the statement of
 /// `theorem_match_total` for the algorithm: the answer is the spec's, and the work is
 /// within the bound.
-pub open spec fn match_work_ensures(doc: Document, c: Complex, x: NodeId, r: bool, work: nat) -> bool {
-    &&& r == match_complex(doc, c, c.compounds.len() as int, x)
+pub open spec fn match_work_ensures(doc: Document, scope: Option<NodeId>, c: Complex, x: NodeId, r: bool, work: nat) -> bool {
+    &&& r == match_complex(doc, scope, c, c.compounds.len() as int, x)
     &&& work <= work_bound(doc, c, x)
 }
 
@@ -210,13 +224,14 @@ pub open spec fn parse_total(source: Seq<u32>) -> bool {
 /// `theorem_match_total`: in a well-formed document, the algorithm the exec code runs
 /// gives the spec's answer for every well-formed complex selector and node, within the
 /// work bound. Proven in `super::lemmas`.
-pub open spec fn match_total(doc: Document, c: Complex, x: NodeId) -> bool {
+pub open spec fn match_total(doc: Document, scope: Option<NodeId>, c: Complex, x: NodeId) -> bool {
     (match_requires(doc, x) && complex_wf(c)) ==> match_work_ensures(
         doc,
+        scope,
         c,
         x,
-        dp_match(doc, c, x).0,
-        dp_match(doc, c, x).1,
+        dp_match(doc, scope, c, x).0,
+        dp_match(doc, scope, c, x).1,
     )
 }
 

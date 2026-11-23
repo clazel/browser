@@ -66,8 +66,8 @@ pub proof fn lemma_local_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
                 }
             }
         }
-        if let clazel_ipc::message::spec::Message::FetchStyle { request, url } = m {
-            crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, request, url);
+        if is_sub_request(m) {
+            crate::subfetch_rel::lemma_fetch_sub_shape(rules, urls, fetch, s, r, m is FetchScript, sub_request_id(m), sub_request_url(m));
         }
     } else {
         crate::net_theorems::lemma_closes_of_tab(s.conns, r.tab);
@@ -252,11 +252,13 @@ pub proof fn lemma_local_respect_renderer(rules: Seq<clazel_psl::spec::Rule>, ur
         if let Some(clazel_ipc::message::spec::Message::Title { title }) = accepted_message(r, bytes) {
             crate::surface_rel::lemma_titles_set_other(rules, s1.titles, r.id, r.lock, title, d);
         }
-        // Item 5.19: a `FetchStyle` changes only its sender's sub-fetches and
-        // counts, of another domain.
-        if let Some(clazel_ipc::message::spec::Message::FetchStyle { request, url }) = accepted_message(r, bytes) {
-            crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s1, r, request, url);
-            crate::subfetch_rel::lemma_fetch_style_other(rules, urls, fetch, d, s1, r, request, url);
+        // Items 5.19 and 7.16: a `FetchStyle` or `FetchScript` changes only
+        // its sender's sub-fetches and counts, of another domain.
+        if let Some(m2) = accepted_message(r, bytes) {
+            if is_sub_request(m2) {
+                crate::subfetch_rel::lemma_fetch_sub_shape(rules, urls, fetch, s1, r, m2 is FetchScript, sub_request_id(m2), sub_request_url(m2));
+                crate::subfetch_rel::lemma_fetch_sub_other(rules, urls, fetch, d, s1, r, m2 is FetchScript, sub_request_id(m2), sub_request_url(m2));
+            }
         }
         crate::unwinding_d::lemma_rel_same_table(rules, urls, d, s1, s2, s1b, s2);
     }

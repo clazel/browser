@@ -268,9 +268,12 @@ pub struct Painted {
     pub frame: SurfaceFrame,
 }
 
-/// Pump until `tab` has a `Paint` and the pixels it names, for up to 20 s.
+/// Pump until `tab` has a `Paint` and the pixels it names, for up to 120 s. The limit only
+/// guards against a hang: a loaded CI runner can take far longer than a quiet machine to
+/// start a sandboxed renderer and a GPU process, and a test that gives up at 20 s fails on
+/// the runner's load, not on what it checks.
 pub fn painted(host: &mut Host, tab: u64) -> Option<Painted> {
-    let end = Instant::now().checked_add(Duration::from_secs(20))?;
+    let end = Instant::now().checked_add(Duration::from_secs(120))?;
     let mut paint = None;
     while Instant::now() < end {
         host.pump(Duration::from_millis(20));

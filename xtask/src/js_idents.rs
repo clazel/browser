@@ -17,11 +17,10 @@
 //! of the two properties, the code points above U+007F listed with it, as
 //! maximal ranges, sorted and disjoint.
 
-use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use crate::reviews;
-use crate::unicode::{data_lines, range, read};
+use crate::unicode::{Table, data_lines, emit_chunked, range, read};
 
 /// The vendored data directory, relative to the repository root.
 const DATA_DIR: &str = "crates/clazel-js-regexp/tests/data/ucd-regexp";
@@ -136,6 +135,10 @@ fn ranges(text: &str, name: &str) -> Result<Vec<(u32, u32)>, String> {
     Ok(out)
 }
 
+/// Rows per constant array (the accessors search across chunks, and the
+/// sortedness proof reads one chunk at a time).
+const CHUNK_ROWS: usize = 350;
+
 fn generate(dir: &Path) -> Result<String, String> {
     let text = read(dir, FILE)?;
     let id_start = ranges(&text, "ID_Start")?;
@@ -144,17 +147,17 @@ fn generate(dir: &Path) -> Result<String, String> {
     out.push_str(HEADER);
     table(
         &mut out,
-        "ID_START",
+        "id_start",
         "`ID_Start` above U+007F (DerivedCoreProperties.txt), as maximal ranges.",
         &id_start,
     );
     table(
         &mut out,
-        "ID_CONTINUE",
+        "id_continue",
         "`ID_Continue` above U+007F (DerivedCoreProperties.txt), as maximal ranges.",
         &id_continue,
     );
-    out.push_str("\n} // verus!\n");
+    out.push_str("} // verus!\n");
     Ok(out)
 }
 
@@ -169,7 +172,9 @@ const HEADER: &str = "\
 //
 // What the generator derives: for each of ID_Start and ID_Continue, the
 // code points above U+007F that DerivedCoreProperties.txt lists with it, as
-// maximal ranges (first, last), sorted and disjoint.
+// maximal ranges (first, last), sorted and disjoint. Each table is split
+// into constant arrays of at most 350 rows; `<name>_at(i)` is row `i` as the
+// spec sees it and `<name>_at_exec(i)` returns it, proven equal.
 
 use super::unicode::Range;
 #[allow(unused_imports)]
@@ -179,13 +184,19 @@ verus! {
 ";
 
 fn table(out: &mut String, name: &str, doc: &str, rows: &[(u32, u32)]) {
-    let _ = write!(
+    out.push('\n');
+    emit_chunked(
         out,
-        "\n/// {doc}\n#[verifier::opaque]\npub const {name}: [Range; {}] = [\n",
-        rows.len()
+        &Table {
+            name,
+            doc,
+            row_type: "Range",
+            row_bytes: 8,
+            rows: rows
+                .iter()
+                .map(|(a, b)| format!("Range {{ first: 0x{a:X}, last: 0x{b:X} }}"))
+                .collect(),
+        },
+        CHUNK_ROWS,
     );
-    for (a, b) in rows {
-        let _ = writeln!(out, "    Range {{ first: 0x{a:X}, last: 0x{b:X} }},");
-    }
-    out.push_str("];\n");
 }

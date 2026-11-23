@@ -13,9 +13,18 @@ vstd = "=0.0.0-2026-10-04-0306"
 # shipped code today; `target-tier` is what the policy requires, since this
 # lexes scripts a page chose (phase-7.md 7.0(a)). Tier 0: the spec and the
 # contracts are written (item 7.2, first half, CLAUDE.md rule 3), and the
-# implementation (src/exec.rs) is proven total, panic-free and to tile its
-# input, but not to agree with the spec: it does not meet src/contract.rs
-# yet, and there is no independent transcription or mutation set.
+# implementation (src/exec.rs) is proven total, panic-free, to tile its
+# input and to meet src/contract.rs for every source text, position, goal
+# symbol and Annex B mode (`next_input_element` and `next_token`, which
+# implement `JsLexer` as `ExecLexer`), by Verus with no escape hatch. The
+# spec's ID_Start and ID_Continue above U+007F are the generated Unicode
+# 18.0.0 table, with no axiom, and the lookups are proven to be them. The
+# tier-2 evidence around the spec exists in part: an independent
+# transcription of part of the grammar proven equal to the spec
+# (src/independent.rs, src/equivalence.rs), 28 certified mutation kills
+# (mutations.json) and Test262 conformance suites
+# (tests/conformance_test262.rs). The tier stays 0 until CI's full
+# verification passes on the pull request that raises it (CLAUDE.md rule 7).
 [package.metadata.clazel]
 tier = 0
 target-tier = 2

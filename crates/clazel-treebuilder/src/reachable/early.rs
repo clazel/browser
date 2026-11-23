@@ -10,6 +10,10 @@ use super::helpers::*;
 use super::lists::*;
 #[allow(unused_imports)]
 use super::spec::*;
+#[cfg(verus_only)]
+use crate::host::hostinv::*;
+#[cfg(verus_only)]
+use crate::host::rules::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
@@ -198,6 +202,56 @@ pub proof fn lemma_early_doc(p: Parser)
 // ---------------------------------------------------------------------
 // "initial" and "before html"
 
+/// What the "initial" and "before html" rules do to the document (a
+/// comment, a processing instruction or a DOCTYPE inserted in the
+/// Document, the Document's mode set) keeps the host invariant.
+pub proof fn lemma_early_host(p: Parser, t: Tok)
+    requires
+        reach_core(p),
+    ensures
+        t is Comment ==> host_step(p, insert_comment(p, t->Comment_0, Some(document_location()))),
+        t is Pi ==> host_step(p, insert_pi(p, t->Pi_0, t->Pi_1, Some(document_location()))),
+        t is Doctype ==> host_step(
+            p,
+            initial_doctype(p, t->Doctype_name, t->Doctype_public_id, t->Doctype_system_id, t->Doctype_force_quirks),
+        ),
+        host_step(p, set_document_mode(p, DocumentMode::Quirks)),
+{
+    hide(insert_comment);
+    hide(insert_pi);
+    hide(initial_doctype);
+    hide(set_document_mode);
+    if host_inv(p) {
+        super::doc::lemma_dinv(p);
+        super::doc::lemma_document_pok(p.doc);
+        lemma_dinv_ids(p);
+        if t is Comment {
+            lemma_host_insert_comment(p, t->Comment_0, document_location());
+        }
+        if t is Pi {
+            lemma_host_insert_pi(p, t->Pi_0, t->Pi_1, document_location());
+        }
+        if t is Doctype {
+            lemma_host_initial_doctype(p, t->Doctype_name, t->Doctype_public_id, t->Doctype_system_id, t->Doctype_force_quirks);
+        }
+        lemma_host_set_document_mode(p, DocumentMode::Quirks);
+    }
+}
+
+/// The "initial" rules keep the host invariant.
+pub proof fn lemma_initial_host(env: EncFns, p: Parser, t: Tok)
+    requires
+        reach_core(p),
+    ensures
+        host_next(p, mode_initial(env, p, t)),
+{
+    hide(insert_comment);
+    hide(insert_pi);
+    hide(initial_doctype);
+    hide(set_document_mode);
+    lemma_early_host(p, t);
+}
+
 /// The "initial" rules.
 #[verifier::spinoff_prover]
 pub proof fn lemma_initial_reach(env: EncFns, p: Parser, t: Tok)
@@ -243,9 +297,19 @@ pub proof fn lemma_before_html_push(p: Parser, tt: TagTok)
             let (p1, e) = create_element_for_token(p, tt, Namespace::Html, 0);
             let p2 = insert_element_at(p1, e.id, Some(document_location()));
             let q = Parser { mode: Mode::BeforeHead, ..push(p2, e) };
-            q.stopped || (reach_core(q) && modes_ok(q))
+            (q.stopped || (reach_core(q) && modes_ok(q))) && host_step(p, q)
         }),
 {
+    // Everything this proof needs of DOM "insert" is in the ensures of
+    // `lemma_insert_len` and `lemma_dom_insert_extends`. Its body (adopt,
+    // remove, two arena updates and the insertion and removing steps hooks)
+    // only gives the solver terms to instantiate `wf`'s quantifiers on.
+    hide(dom::insert);
+    if host_inv(p) {
+        super::doc::lemma_dinv(p);
+        lemma_dinv_ids(p);
+        lemma_host_before_html(p, tt);
+    }
     let (p1, e) = create_element_for_token(p, tt, Namespace::Html, 0);
     let p2 = insert_element_at(p1, e.id, Some(document_location()));
     let l = adjusted_location(p1, Some(document_location()));
@@ -294,8 +358,10 @@ pub proof fn lemma_before_html_reach(env: EncFns, p: Parser, t: Tok)
         rules_inv(Rules::Html(Mode::BeforeHtml), p, t),
     ensures
         next_core(mode_before_html(env, p, t)),
+        host_next(p, mode_before_html(env, p, t)),
 {
     lemma_early_doc(p);
+    lemma_early_host(p, t);
     if t is Comment {
         lemma_comment_frame(p, t->Comment_0, Some(document_location()));
         lemma_doc_only(p, insert_comment(p, t->Comment_0, Some(document_location())));
@@ -333,7 +399,10 @@ pub proof fn lemma_insert_head(p: Parser, tt: TagTok)
             let q = Parser { head: Some(e.id), mode: Mode::InHead, ..p1 };
             q.stopped || (reach_core(q) && modes_ok(q))
         }),
+        host_step(p, Parser { head: Some(insert_html_element(p, tt).1.id), mode: Mode::InHead, ..insert_html_element(p, tt).0 }),
 {
+    hide(dom::insert);
+    hide(dom::remove);
     lemma_insert_html_keeps(p, tt);
     let (p1, e) = insert_html_element(p, tt);
     let q = Parser { head: Some(e.id), mode: Mode::InHead, ..p1 };
@@ -356,6 +425,7 @@ pub proof fn lemma_before_head_reach(env: EncFns, p: Parser, t: Tok)
         rules_inv(Rules::Html(Mode::BeforeHead), p, t),
     ensures
         next_core(mode_before_head(env, p, t)),
+        host_next(p, mode_before_head(env, p, t)),
 {
     assert(good(p));
     if t is Char && is_ascii_whitespace(t->Char_0) {
@@ -415,6 +485,7 @@ pub proof fn lemma_generic_text_reach(p: Parser, tt: TagTok, rawtext: bool)
         tt.tag != Tag::Html && tt.tag != Tag::Table,
     ensures
         next_core(Outcome::Done(generic_text_parsing(p, tt, rawtext))),
+        host_next(p, Outcome::Done(generic_text_parsing(p, tt, rawtext))),
 {
     lemma_insert_html_keeps(p, tt);
     let (p1, e) = insert_html_element(p, tt);
@@ -440,6 +511,7 @@ pub proof fn lemma_in_head_script_reach(p: Parser, tt: TagTok)
         tt.tag == Tag::Script,
     ensures
         next_core(Outcome::Done(in_head_script(p, tt))),
+        host_next(p, Outcome::Done(in_head_script(p, tt))),
 {
     lemma_insert_html_keeps(p, tt);
     let (p1, e) = insert_html_element(p, tt);
@@ -480,6 +552,7 @@ pub proof fn lemma_in_head_template_start_reach(p: Parser, tt: TagTok)
         tt.tag == Tag::Template,
     ensures
         next_core(Outcome::Done(in_head_template_start(p, tt))),
+        host_next(p, Outcome::Done(in_head_template_start(p, tt))),
 {
     hide(create_element_for_token);
     hide(insert_element_at);
@@ -492,6 +565,7 @@ pub proof fn lemma_in_head_template_start_reach(p: Parser, tt: TagTok)
     let insertion_location = appropriate_place(p3, None);
     let p4 = push(p3, template);
     if !p4.stopped {
+        lemma_template_start_host(p2, p3, template);
         super::doc::lemma_dinv(p3);
         assert(crate::exec::frame::elem_ok(p3.doc, template));
         crate::exec::frame::lemma_open_push(p3.doc, p3.open, template);
@@ -538,6 +612,7 @@ pub proof fn lemma_in_head_template_end_reach(p: Parser)
         modes_ok(p),
     ensures
         next_core(Outcome::Done(in_head_template_end(p))),
+        host_next(p, Outcome::Done(in_head_template_end(p))),
 {
     if !open_has_html(p, Tag::Template) {
         return;
@@ -579,6 +654,7 @@ pub proof fn lemma_in_head_template_end_reach0(p: Parser)
         open_has_html(p, Tag::Template),
     ensures
         next_core(Outcome::Done(in_head_template_end(p))),
+        host_next(p, Outcome::Done(in_head_template_end(p))),
 {
     if !open_has_html(p, Tag::Template) {
         return;
@@ -639,10 +715,18 @@ pub proof fn lemma_insert_pop_frame(p: Parser, tt: TagTok)
             let q = pop(insert_html_element(p, tt).0);
             q.stopped || (q == (Parser { doc: q.doc, ..p }) && reach_core(q) && modes_ok(q))
         }),
+        host_step(p, pop(insert_html_element(p, tt).0)),
 {
     lemma_insert_html_keeps(p, tt);
     let (p1, e) = insert_html_element(p, tt);
     let q = pop(p1);
+    if host_inv(p1) {
+        if p1.stopped {
+            lemma_host_stopped(p1, q);
+        } else {
+            lemma_host_prefix(p1, q);
+        }
+    }
     if !q.stopped {
         assert(q.open == p.open);
         super::doc::lemma_dinv(p1);
@@ -656,6 +740,7 @@ pub proof fn lemma_in_head_reach(env: EncFns, p: Parser, t: Tok)
         rules_inv(Rules::Html(Mode::InHead), p, t),
     ensures
         next_core(mode_in_head(env, p, t)),
+        host_next(p, mode_in_head(env, p, t)),
 {
     hide(generic_text_parsing);
     hide(in_head_script);
@@ -756,6 +841,7 @@ pub proof fn lemma_in_head_noscript_reach(env: EncFns, p: Parser, t: Tok)
         rules_inv(Rules::Html(Mode::InHeadNoscript), p, t),
     ensures
         next_core(mode_in_head_noscript(env, p, t)),
+        host_next(p, mode_in_head_noscript(env, p, t)),
 {
     assert(p.mode == Mode::InHeadNoscript);
     let o = mode_in_head_noscript(env, p, t);
@@ -798,7 +884,10 @@ pub proof fn lemma_after_head_using_in_head_reach(env: EncFns, p: Parser, t: Tok
     lemma_head_elem_tagged(h);
     let p1 = push(p, head_elem(h));
     super::doc::lemma_dinv(p);
-    lemma_push_keeps(p, head_elem(h));
+    // The stack with the `head` element pushed back need not be ordered as
+    // the document: the push keeps everything but the host invariant, which
+    // `lemma_in_head_case8_wdoc` and `lemma_case8_host` carry to the end.
+    lemma_push_core(p, head_elem(h));
     lemma_html_above_push(p.open, head_elem(h));
     crate::termination::helpers_ranking::lemma_tcount_push(p.open, head_elem(h));
     crate::termination::helpers_ranking::lemma_template_count(p);
@@ -812,6 +901,45 @@ pub proof fn lemma_after_head_using_in_head_reach(env: EncFns, p: Parser, t: Tok
     let o = mode_in_head(env, p1, t);
     if let Outcome::Done(p2) = o {
         lemma_after_head_tail(p, p2, h);
+    }
+}
+
+/// Case 8 of "after head" keeps the host invariant: what the "in head"
+/// rules do to the document for these start tags relates no two older
+/// nodes (`host::rules::lemma_in_head_case8_wdoc`), and the stack at the
+/// end is the one before with at most the new element pushed
+/// (`host::rules::lemma_case8_host`).
+pub proof fn lemma_after_head_using_in_head_host(env: EncFns, p: Parser, t: Tok)
+    requires
+        rules_inv(Rules::Html(Mode::AfterHead), p, t),
+        t is Start && after_head_in_head_tag(t->Start_0.tag),
+    ensures
+        host_next(p, after_head_using_in_head(env, p, t)),
+{
+    hide(mode_in_head);
+    if p.head is None {
+        return;
+    }
+    let h = p.head->Some_0;
+    lemma_head_elem_tagged(h);
+    let p1 = push(p, head_elem(h));
+    super::doc::lemma_dinv(p);
+    lemma_push_core(p, head_elem(h));
+    crate::termination::helpers_early::lemma_in_head_start_done(env, p1, t);
+    lemma_in_head_open(env, p1, t);
+    lemma_in_head_case8_wdoc(env, p1, t);
+    let o = mode_in_head(env, p1, t);
+    if let Outcome::Done(p2) = o {
+        if host_inv(p) {
+            lemma_dinv_ids(p);
+            if !p2.stopped {
+                assert(p2.open.len() == p.open.len() + 1 || p2.open.len() == p.open.len() + 2);
+                if p2.open.len() == p.open.len() + 2 {
+                    assert(p2.open.drop_last() == p1.open);
+                }
+            }
+            lemma_case8_host(p, p2, h, head_elem(h));
+        }
     }
 }
 
@@ -958,6 +1086,7 @@ pub proof fn lemma_after_head_reach(env: EncFns, p: Parser, t: Tok)
         rules_inv(Rules::Html(Mode::AfterHead), p, t),
     ensures
         next_core(mode_after_head(env, p, t)),
+        host_next(p, mode_after_head(env, p, t)),
 {
     hide(after_head_using_in_head);
     hide(insert_html_element);
@@ -996,6 +1125,7 @@ pub proof fn lemma_after_head_reach(env: EncFns, p: Parser, t: Tok)
         }
     } else if t is Start && after_head_in_head_tag(t->Start_0.tag) {
         lemma_after_head_using_in_head_reach(env, p, t);
+        lemma_after_head_using_in_head_host(env, p, t);
     } else if t is End && t->End_0.tag == Tag::Template {
     } else if (t is End && (t->End_0.tag == Tag::Body || t->End_0.tag == Tag::Html || t->End_0.tag == Tag::Br)) || !((t is Start
         && t->Start_0.tag == Tag::Head) || t is End) {
@@ -1016,6 +1146,7 @@ pub proof fn lemma_text_reach(env: EncFns, p: Parser, t: Tok)
         rules_inv(Rules::Html(Mode::Text), p, t),
     ensures
         next_core(mode_text(env, p, t)),
+        host_next(p, mode_text(env, p, t)),
 {
     hide(insert_char);
     assert(p.mode == Mode::Text);

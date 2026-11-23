@@ -74,6 +74,7 @@ pub open spec fn related(
 /// `s`. A node that is not an element has a row of falses.
 pub open spec fn row(
     doc: Document,
+    scope: Option<NodeId>,
     c: Complex,
     s: NodeId,
     parent: Seq<bool>,
@@ -86,6 +87,7 @@ pub open spec fn row(
         |i: int|
             is_element(doc, s) && compound_matches(
                 doc,
+                scope,
                 c.compounds[i],
                 c.compounds[i].len() as int,
                 s,
@@ -107,6 +109,7 @@ pub ghost struct Siblings {
 /// the descendant row `descendant` that every child shares.
 pub open spec fn siblings_loop(
     doc: Document,
+    scope: Option<NodeId>,
     c: Complex,
     kids: Seq<NodeId>,
     j: int,
@@ -119,10 +122,10 @@ pub open spec fn siblings_loop(
     if j <= 0 || j > kids.len() {
         Siblings { previous: falses(n), earlier: falses(n), work: 0 }
     } else {
-        let before = siblings_loop(doc, c, kids, j - 1, parent, descendant);
+        let before = siblings_loop(doc, scope, c, kids, j - 1, parent, descendant);
         let s = kids[j - 1];
         if is_element(doc, s) {
-            let r = row(doc, c, s, parent, descendant, before.previous, before.earlier);
+            let r = row(doc, scope, c, s, parent, descendant, before.previous, before.earlier);
             Siblings { previous: r, earlier: or_rows(before.earlier, r), work: before.work + n }
         } else {
             before
@@ -142,24 +145,25 @@ pub ghost struct Level {
 
 /// The state at node `k` of the chain `ch`. `siblings` says whether the selector has a
 /// sibling combinator, so that the elements before each chain node need rows.
-pub open spec fn level(doc: Document, c: Complex, ch: Seq<NodeId>, k: int, siblings: bool) -> Level
+pub open spec fn level(doc: Document, scope: Option<NodeId>, c: Complex, ch: Seq<NodeId>, k: int, siblings: bool) -> Level
     decreases k,
 {
     let n = c.compounds.len();
     if k <= 0 {
         // The root of the chain has no parent, and so no ancestors and no other siblings.
         Level {
-            row: row(doc, c, ch[0], falses(n), falses(n), falses(n), falses(n)),
+            row: row(doc, scope, c, ch[0], falses(n), falses(n), falses(n), falses(n)),
             descendant: falses(n),
             work: n,
         }
     } else {
-        let up = level(doc, c, ch, k - 1, siblings);
+        let up = level(doc, scope, c, ch, k - 1, siblings);
         let descendant = or_rows(up.row, up.descendant);
         if siblings {
             let kids = children_of(doc, ch[k - 1]);
             let walk = siblings_loop(
                 doc,
+                scope,
                 c,
                 kids,
                 clazel_dom::spec::index_of(kids, ch[k]),
@@ -167,13 +171,13 @@ pub open spec fn level(doc: Document, c: Complex, ch: Seq<NodeId>, k: int, sibli
                 descendant,
             );
             Level {
-                row: row(doc, c, ch[k], up.row, descendant, walk.previous, walk.earlier),
+                row: row(doc, scope, c, ch[k], up.row, descendant, walk.previous, walk.earlier),
                 descendant,
                 work: up.work + walk.work + n,
             }
         } else {
             Level {
-                row: row(doc, c, ch[k], up.row, descendant, falses(n), falses(n)),
+                row: row(doc, scope, c, ch[k], up.row, descendant, falses(n), falses(n)),
                 descendant,
                 work: up.work + n,
             }
@@ -199,9 +203,9 @@ pub open spec fn uses_siblings(c: Complex) -> bool {
 }
 
 /// The algorithm: whether `c` matches `x`, and how many entries of rows it computed.
-pub open spec fn dp_match(doc: Document, c: Complex, x: NodeId) -> (bool, nat) {
+pub open spec fn dp_match(doc: Document, scope: Option<NodeId>, c: Complex, x: NodeId) -> (bool, nat) {
     let ch = chain(doc, x);
-    let top = level(doc, c, ch, ch.len() - 1, uses_siblings(c));
+    let top = level(doc, scope, c, ch, ch.len() - 1, uses_siblings(c));
     (top.row[c.compounds.len() - 1], top.work)
 }
 

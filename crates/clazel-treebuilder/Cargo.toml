@@ -49,6 +49,9 @@ theorems = [
     "theorem_reachable_foreign_content",
     "theorem_reachable_frameset_cell",
     "theorem_reachable_in_body_table",
+    "theorem_host_step",
+    "theorem_reachable_host_acyclic",
+    "theorem_parse_host_acyclic",
 ]
 
 [package.metadata.verus]

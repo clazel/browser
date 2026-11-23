@@ -34,12 +34,42 @@ mod server;
 mod sheets;
 
 use std::process::Command;
+use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use clazel::Host;
 use clazel_kernel::exec::records::EventRecord;
 use gpu::{Fixture, close, device, fixture, host, open, painted, reference};
 use picture::check::decode_png;
 use server::{Reply, Request, field, serve};
+
+/// How long `clazel browse --headless` waits for its frame in these tests (its `--wait`, in
+/// seconds). The program's own default (30 s) is for a person at a terminal; the tests only
+/// need a bound that a hang cannot outlast, and a runner that is busy with other jobs may
+/// need far longer than a quiet one to start a sandboxed renderer and a GPU process.
+const HEADLESS_WAIT_SECONDS: &str = "120";
+
+/// How long a test pumps its in-process host for the renderer to ask for something before
+/// giving up. Like [`HEADLESS_WAIT_SECONDS`]: a bound against hangs, not a measurement.
+const PUMP_LIMIT: std::time::Duration = std::time::Duration::from_secs(120);
+
+static ONE_AT_A_TIME: Mutex<()> = Mutex::new(());
+
+/// Held for the whole of every test here that starts renderer or GPU processes, so that
+/// only one runs at a time in this binary.
+///
+/// Why: each such test starts a sandboxed renderer and a GPU process (a Metal device, or
+/// lavapipe with its worker threads), often several (`clazel --headless` once per page),
+/// and the default test harness runs them all at once, on a runner with 3 or 4 cores. CI's
+/// base job has failed on these tests only when loaded, and never alone: a GPU process
+/// killed by its seccomp filter (SIGSYS) just after it installed the filter, and a renderer
+/// that was not there at the first look. `launch::alone` already serialises the moment of
+/// each start; this serialises the whole of each test, so one test's processes never compete
+/// with another's for the CPU while they start. The tests share no state, so their order
+/// does not matter, and each takes about a second alone. A test that panics poisons nothing
+/// that matters: the guard holds no data.
+fn one_at_a_time() -> MutexGuard<'static, ()> {
+    ONE_AT_A_TIME.lock().unwrap_or_else(PoisonError::into_inner)
+}
 
 /// Whether to run: a GPU device, or fail under CI.
 fn runs() -> bool {
@@ -59,6 +89,7 @@ fn a_hand_built_list_reaches_a_paint_under_the_kernels_url() {
     if !runs() {
         return;
     }
+    let _one = one_at_a_time();
     let f = fixture("browse-gpu-paint");
     assert!(f.is_ok(), "{:?}", f.as_ref().err());
     let Ok(f) = f else { return };
@@ -88,6 +119,7 @@ fn headless(kind: &str) {
     if !runs() {
         return;
     }
+    let _one = one_at_a_time();
     let f = fixture(&format!("browse-gpu-{kind}"));
     assert!(f.is_ok(), "{:?}", f.as_ref().err());
     let Ok(f) = f else { return };
@@ -107,7 +139,7 @@ fn headless(kind: &str) {
         Command::new(&f.clazel)
             .args(["--headless"])
             .arg(&out)
-            .args(["--size", "64x48", &url])
+            .args(["--size", "64x48", "--wait", HEADLESS_WAIT_SECONDS, &url])
             .env("CLAZEL_RENDERER", &f.script)
             .env("CLAZEL_GPU", &f.gpu)
             .env("CLAZEL_TEST_LIST", &f.list),
@@ -229,6 +261,7 @@ fn a_real_page_repaints_for_viewports_and_scrolls_and_follows_a_click() {
     if !runs() {
         return;
     }
+    let _one = one_at_a_time();
     let f = fixture("browse-pipeline");
     assert!(f.is_ok(), "{:?}", f.as_ref().err());
     let Ok(f) = f else { return };
@@ -300,6 +333,7 @@ fn headless_writes_a_real_pages_png() {
     if !runs() {
         return;
     }
+    let _one = one_at_a_time();
     let f = fixture("browse-pipeline-png");
     assert!(f.is_ok(), "{:?}", f.as_ref().err());
     let Ok(f) = f else { return };
@@ -315,7 +349,13 @@ fn headless_writes_a_real_pages_png() {
         Command::new(&f.clazel)
             .args(["--headless"])
             .arg(&out)
-            .args(["--size", "200x120", &format!("http://{}/", server.addr)])
+            .args([
+                "--size",
+                "200x120",
+                "--wait",
+                HEADLESS_WAIT_SECONDS,
+                &format!("http://{}/", server.addr),
+            ])
             .env("CLAZEL_RENDERER", &f.renderer)
             .env("CLAZEL_GPU", &f.gpu),
     );

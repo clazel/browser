@@ -20,7 +20,18 @@
 //!   this slice, since property deletion is a later slice.
 //!
 //! Lookups walk the parent chain, at most [`MAX_FAST_PROPERTIES`] long.
+//!
+//! # Collection (7.6, GC10, GC12, GC13)
+//!
+//! The collector frees shapes ([`Shapes::sweep`]). A shape keeps its parent
+//! alive (a lookup walks the chain), but a parent's *transitions* are weak:
+//! a child no object has is freed, and the transition to it is removed, so
+//! the same property added again makes a new shape. **A shape id is never
+//! reused**: the table keeps a tombstone, and a freed id resolves to nothing
+//! (so an inline cache that cached it cannot hit another shape). [`ROOT`] is
+//! never freed.
 
+use crate::gc::contract::ShapeGraph;
 use crate::string::Key;
 use std::collections::HashMap;
 
@@ -79,8 +90,10 @@ struct Shape {
 /// The table of shapes.
 #[derive(Debug)]
 pub struct Shapes {
-    /// The shape with id `i` is at index `i - 1`.
-    table: Vec<Shape>,
+    /// The shape with id `i` is at index `i - 1`; `None` once freed.
+    table: Vec<Option<Shape>>,
+    /// How many entries are `Some`.
+    live: usize,
 }
 
 impl Default for Shapes {
@@ -94,13 +107,14 @@ impl Shapes {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            table: vec![Shape {
+            table: vec![Some(Shape {
                 parent: None,
                 added: None,
                 slots: 0,
                 transitions: HashMap::new(),
                 dictionary: None,
-            }],
+            })],
+            live: 1,
         }
     }
 
@@ -109,6 +123,7 @@ impl Shapes {
             .ok()
             .and_then(|i| i.checked_sub(1))
             .and_then(|i| self.table.get(i))
+            .and_then(Option::as_ref)
     }
 
     fn get_mut(&mut self, id: ShapeId) -> Option<&mut Shape> {
@@ -116,6 +131,7 @@ impl Shapes {
             .ok()
             .and_then(|i| i.checked_sub(1))
             .and_then(|i| self.table.get_mut(i))
+            .and_then(Option::as_mut)
     }
 
     fn push(&mut self, shape: Shape) -> Result<ShapeId, Error> {
@@ -123,20 +139,69 @@ impl Shapes {
             .ok()
             .and_then(|n| n.checked_add(1))
             .ok_or(Error::TooMany)?;
-        self.table.push(shape);
+        self.table.push(Some(shape));
+        self.live = self.live.saturating_add(1);
         Ok(ShapeId(id))
     }
 
-    /// The number of shapes, [`ROOT`] included.
+    /// The number of live shapes, [`ROOT`] included.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
+        self.live
+    }
+
+    /// Always false: [`ROOT`] is never freed.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.live == 0
+    }
+
+    /// The number of shape ids ever issued, freed ones included: the size
+    /// of the table the collector indexes by shape (id `n` is entry `n - 1`).
+    #[must_use]
+    pub fn issued(&self) -> usize {
         self.table.len()
     }
 
-    /// Always false: [`ROOT`] is there from the start.
+    /// Whether `id` names a live shape.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.table.is_empty()
+    pub fn is_live(&self, id: ShapeId) -> bool {
+        self.get(id).is_some()
+    }
+
+    /// The shape `id` was reached from (a shared shape's parent; a
+    /// dictionary shape and [`ROOT`] have none).
+    #[must_use]
+    pub fn parent(&self, id: ShapeId) -> Option<ShapeId> {
+        self.get(id).and_then(|s| s.parent)
+    }
+
+    /// Free every shape but [`ROOT`] whose flag in `keep` is false (by table
+    /// entry, so shape id `n` is `keep[n - 1]`; one past the end of `keep`
+    /// counts as false), and remove the transitions to the freed shapes
+    /// from the survivors; returns how many were freed. The caller keeps
+    /// every parent of a kept shape (GC10); freed ids are never issued again
+    /// (GC13).
+    pub fn sweep(&mut self, keep: &[bool]) -> usize {
+        let mut freed = 0usize;
+        for (i, slot) in self.table.iter_mut().enumerate() {
+            if i != 0 && slot.is_some() && !keep.get(i).copied().unwrap_or(false) {
+                *slot = None;
+                freed = freed.saturating_add(1);
+            }
+        }
+        self.live = self.live.saturating_sub(freed);
+        let alive: Vec<bool> = self.table.iter().map(Option::is_some).collect();
+        for shape in self.table.iter_mut().flatten() {
+            shape.transitions.retain(|_, to| {
+                usize::try_from(to.0)
+                    .ok()
+                    .and_then(|i| i.checked_sub(1))
+                    .and_then(|i| alive.get(i).copied())
+                    .unwrap_or(false)
+            });
+        }
+        freed
     }
 
     /// Whether `id` is a dictionary shape: unshared, mutated in place, and
@@ -265,6 +330,37 @@ impl Shapes {
     }
 }
 
+impl ShapeGraph for Shapes {
+    fn len(&self) -> usize {
+        self.table.len()
+    }
+
+    fn exists(&self, i: usize) -> bool {
+        self.table.get(i).is_some_and(Option::is_some)
+    }
+
+    fn parent(&self, i: usize) -> Option<usize> {
+        let p = self.table.get(i)?.as_ref()?.parent?;
+        usize::try_from(p.0).ok()?.checked_sub(1)
+    }
+
+    fn each_key(&self, i: usize, f: &mut dyn FnMut(usize)) {
+        let Some(Some(shape)) = self.table.get(i) else {
+            return;
+        };
+        let mut key = |k: Key| {
+            if let Ok(k) = usize::try_from(k.0) {
+                f(k);
+            }
+        };
+        if let Some(d) = &shape.dictionary {
+            d.keys().copied().for_each(&mut key);
+        } else if let Some((k, _)) = shape.added {
+            key(k);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -385,6 +481,33 @@ mod tests {
         assert_eq!(slot, slot1 + 1);
         assert_eq!(t.lookup(d2, Key(1001)), None);
         assert_eq!(t.add_property(d1, extra, Attrs::ALL), Err(Error::Exists));
+        Ok(())
+    }
+
+    #[test]
+    fn a_swept_shape_is_gone_its_transition_too_and_the_root_stays() -> Result<(), Error> {
+        let mut t = Shapes::new();
+        let (s1, _) = t.add_property(ROOT, A, Attrs::ALL)?;
+        let (s2, _) = t.add_property(s1, B, Attrs::ALL)?;
+        let (s3, _) = t.add_property(s1, C, Attrs::ALL)?;
+        assert_eq!((t.len(), t.issued()), (4, 4));
+        assert_eq!(t.parent(s2), Some(s1));
+        // Keep {a} and {a, c}; ask to free the root too, which is refused.
+        assert_eq!(t.sweep(&[false, true, false, true]), 1);
+        assert_eq!((t.len(), t.issued()), (3, 4));
+        assert!(t.is_live(ROOT) && t.is_live(s1) && t.is_live(s3));
+        assert!(!t.is_live(s2));
+        assert_eq!(t.slot_count(s2), None);
+        assert_eq!(t.lookup(s3, A), Some((0, Attrs::ALL)));
+        // Adding `b` to {a} again makes a new shape with a new id.
+        let (again, slot) = t.add_property(s1, B, Attrs::ALL)?;
+        assert_ne!(again, s2);
+        assert_eq!(again, ShapeId(5));
+        assert_eq!(slot, 1);
+        // The surviving transition is still shared.
+        assert_eq!(t.add_property(s1, C, Attrs::ALL)?.0, s3);
+        // A freed shape cannot gain properties.
+        assert_eq!(t.add_property(s2, C, Attrs::ALL), Err(Error::Unknown));
         Ok(())
     }
 }

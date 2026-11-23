@@ -860,57 +860,22 @@ fn string_values_resolve_escapes() -> Result<(), String> {
     Ok(())
 }
 
-/// Constructs this slice does not compile: the feature named, never a panic.
+/// A script and a module are compiled by different entry points: the wrong one
+/// is an internal error, never a panic or a wrong program.
 #[test]
-fn not_yet_compiled() -> Result<(), String> {
-    let cases: &[(&str, &str)] = &[
-        ("function* g() {}", "generators and async functions"),
-        ("async function g() {}", "generators and async functions"),
-        ("async () => 1;", "generators and async functions"),
-        ("async function* g() {}", "generators and async functions"),
-        ("({ *g() {} });", "generator or async methods"),
-        ("class C { async m() {} }", "generator or async methods"),
-        (
-            "function* g() { yield 1; }",
-            "generators and async functions",
-        ),
-        ("with (o) {}", "with statements"),
-        ("eval('1');", "direct eval"),
-        ("/a/;", "regular expression literals"),
-        ("delete x;", "delete of a variable"),
-        ("delete a?.b;", "delete of an optional chain"),
-        (
-            "if (a) function f() {}",
-            "a function declaration as the body of an if or a label",
-        ),
-        ("import('m');", "dynamic import"),
-    ];
-    for &(src, feature) in cases {
-        let c = cps(src);
-        let Ok(ast) = parse(&c, SourceGoal::Script) else {
-            return Err(format!("does not parse: {src}"));
-        };
-        match compile_script(&ast, &c) {
-            Err(CompileError::NotYetCompiled { feature: f, span }) => {
-                assert_eq!(f, feature, "{src}");
-                assert!(span.start <= span.end && span.end <= c.len(), "{src}");
-            }
-            other => return Err(format!("{src}: expected not yet compiled, got {other:?}")),
-        }
-    }
-    // A module.
+fn goal_mismatch() -> Result<(), String> {
     let c = cps("export var a = 1;");
-    if let Ok(ast) = parse(&c, SourceGoal::Module) {
-        assert!(matches!(
-            compile_script(&ast, &c),
-            Err(CompileError::NotYetCompiled {
-                feature: "modules",
-                ..
-            })
-        ));
-    } else {
-        return Err("module does not parse".to_string());
-    }
+    let ast = parse(&c, SourceGoal::Module).map_err(|_| "module does not parse".to_string())?;
+    assert!(matches!(
+        compile_script(&ast, &c),
+        Err(CompileError::Internal(_))
+    ));
+    let c = cps("var a = 1;");
+    let ast = parse(&c, SourceGoal::Script).map_err(|_| "script does not parse".to_string())?;
+    assert!(matches!(
+        clazel_js_vm::compile::compile_module(&ast, &c),
+        Err(CompileError::Internal(_))
+    ));
     Ok(())
 }
 

@@ -13,11 +13,14 @@
 //! `tail`, `split`, `parse_f64`) stand in for slicing and `unwrap`: a failed
 //! lookup gives an empty string or NaN, and the assertion that follows fails.
 
-use clazel_js_number::bigint::Big;
+use clazel_js_number::fixed::FixedBig;
 use clazel_js_number::shortest::shortest_digits;
 use clazel_js_number::{
     RangeError, number_to_string, string_to_number, to_exponential, to_fixed, to_precision,
 };
+
+/// Room for the exact decimal expansions of the midpoints (about 2,600 bits).
+type Big = FixedBig<64>;
 
 /// SplitMix64 (Steele, Lea and Flood 2014): a fixed-seed generator, so a
 /// failure reproduces.

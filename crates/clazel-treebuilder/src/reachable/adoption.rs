@@ -17,6 +17,10 @@ use super::walls::*;
 use crate::exec::modes::adoption::{
     af, ai, ao, finish_end, finish_mid, inner_drop, inner_replace, place_last,
 };
+#[cfg(verus_only)]
+use crate::host::hi::*;
+#[cfg(verus_only)]
+use crate::host::hostinv::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
@@ -47,11 +51,19 @@ pub proof fn lemma_open_update_keeps(p: Parser, i: int, e: Elem)
         in_cell(p) ==> i > last_cell(p.open),
         !p.stopped ==> crate::exec::frame::elem_ok(p.doc, e),
         !p.stopped ==> super::doc::after_ctx(p, e),
+        !p.stopped && host_inv(p) ==> entry_ok(Parser { open: p.open.remove(i), ..p }, i, e),
     ensures
         keeps(p, Parser { open: p.open.update(i, e), ..p }),
         in_cell(p) ==> last_cell(p.open.update(i, e)) == last_cell(p.open),
 {
     let q = Parser { open: p.open.update(i, e), ..p };
+    if host_inv(p) {
+        if p.stopped {
+            lemma_host_stopped(p, q);
+        } else {
+            lemma_host_update_open(p, i, e);
+        }
+    }
     if !p.stopped {
         assert forall|j: int| 0 <= j < q.open.len() && cell_pred()(#[trigger] q.open[j]) implies exists|k: int|
             0 <= k < p.open.len() && (#[trigger] p.open[k]) == q.open[j] by {
@@ -96,10 +108,18 @@ pub proof fn lemma_open_insert_keeps(p: Parser, i: int, e: Elem)
         in_cell(p) ==> i > last_cell(p.open),
         !p.stopped ==> crate::exec::frame::elem_ok(p.doc, e),
         !p.stopped ==> super::doc::after_ctx(p, e),
+        !p.stopped && host_inv(p) ==> entry_ok(p, i, e),
     ensures
         keeps(p, Parser { open: p.open.insert(i, e), ..p }),
 {
     let q = Parser { open: p.open.insert(i, e), ..p };
+    if host_inv(p) {
+        if p.stopped {
+            lemma_host_stopped(p, q);
+        } else {
+            lemma_host_insert_open(p, i, e);
+        }
+    }
     if !p.stopped {
         assert forall|j: int| 0 <= j < q.open.len() && cell_pred()(#[trigger] q.open[j]) implies exists|k: int|
             0 <= k < p.open.len() && (#[trigger] p.open[k]) == q.open[j] by {
@@ -214,6 +234,54 @@ pub open spec fn inner_pre(p: Parser, fe: Elem, fb_id: NodeId, fe_idx: int, node
     &&& in_cell(p) ==> last_cell(p.open) < fe_idx
 }
 
+/// What the inner loop keeps for the host invariant: lastNode is on the
+/// stack from `node_idx` on (below formattingElement), and no entry after
+/// formattingElement is a `table` or `template` element
+/// (`host::wall_clear`).
+pub open spec fn inner_host(p: Parser, fe_idx: int, node_idx: int, last_id: NodeId) -> bool {
+    &&& on_stack_from(p.open, node_idx, last_id)
+    &&& wall_clear(p.open, fe_idx)
+}
+
+/// Element `n` has just been created in `p`'s document: it is a node with
+/// no step up, created after every entry of the stack and after the
+/// redirection map's fragment, and `host::low` (if the document is
+/// `clazel_dom::spec::host_acyclic`).
+pub open spec fn fresh_el(p: Parser, n: NodeId) -> bool {
+    &&& dom::valid(p.doc, n)
+    &&& top(p.doc, n)
+    &&& dom::host_acyclic(p.doc) ==> low(p.doc, n)
+    &&& forall|j: int| 0 <= j < p.open.len() ==> (#[trigger] p.open[j]).id < n
+    &&& match p.redirect {
+        None => true,
+        Some((r, f)) => f < n,
+    }
+}
+
+/// furthestBlock (id `fb_id`) is at index `ib` of the stack and the new
+/// element (id `ne_id`) just below it, a node with no step up created
+/// after every other entry and after the redirection map's fragment, and
+/// `host::low`: what steps 4.27.1 and 4.27.3 need (`hostinv::end_pre`).
+pub open spec fn end_at(p: Parser, fb_id: NodeId, ne_id: NodeId, ib: int) -> bool {
+    &&& 0 <= ib
+    &&& ib + 1 < p.open.len()
+    &&& p.open[ib].id == fb_id
+    &&& p.open[ib + 1].id == ne_id
+    &&& dom::valid(p.doc, ne_id)
+    &&& top(p.doc, ne_id)
+    &&& dom::host_acyclic(p.doc) ==> low(p.doc, ne_id)
+    &&& forall|j: int| 0 <= j < p.open.len() && j != ib + 1 ==> (#[trigger] p.open[j]).id < ne_id
+    &&& match p.redirect {
+        None => true,
+        Some((r, f)) => f < ne_id,
+    }
+}
+
+/// [`end_at`] at some index.
+pub open spec fn end_ready(p: Parser, fb_id: NodeId, ne_id: NodeId) -> bool {
+    exists|ib: int| #[trigger] end_at(p, fb_id, ne_id, ib)
+}
+
 /// Step 4.16.4.
 pub proof fn lemma_inner_drop_keeps(p: Parser, node_id: NodeId, c: nat, fe_id: NodeId)
     requires
@@ -261,9 +329,16 @@ pub proof fn lemma_inner_replace_keeps(
             &&& fe_idx < i
             &&& inner_pre(p1, fe, fb_id, fe_idx, i + 1)
             &&& p1.open[fe_idx - 1] == ca
+            &&& inner_host(p1, fe_idx, i + 1, last.id)
         },
     ensures
         keeps(p1, inner_replace(p1, ca, i, node_id, last, bm).0),
+        !inner_replace(p1, ca, i, node_id, last, bm).0.stopped ==> inner_host(
+            inner_replace(p1, ca, i, node_id, last, bm).0,
+            fe_idx,
+            i,
+            inner_replace(p1, ca, i, node_id, last, bm).1.id,
+        ),
         !inner_replace(p1, ca, i, node_id, last, bm).0.stopped ==> inner_pre(
             inner_replace(p1, ca, i, node_id, last, bm).0,
             fe,
@@ -294,6 +369,15 @@ pub proof fn lemma_inner_replace_keeps(
     lemma_fmt_update_keeps(p2, k, x);
     assert(pa.open == p1.open);
     super::doc::lemma_fresh_after_ctx(p1, new_element);
+    // The new element is fresh: created after every entry of the stack.
+    lemma_dinv_ids_below(p1, new_element.id);
+    assert(fresh_el(pa, new_element.id));
+    lemma_keeps_live(p2, pa);
+    if host_inv(pa) {
+        lemma_host_inv(pa);
+        lemma_dinv_ids(pa);
+        lemma_top_update_ok(pa, i, new_element);
+    }
     lemma_open_update_keeps(pa, i, new_element);
     let p3 = Parser { formatting: p2.formatting.update(k, x), open: p2.open.update(i, new_element), ..p2 };
     assert(p3 == Parser { open: pa.open.update(i, new_element), ..pa });
@@ -302,6 +386,18 @@ pub proof fn lemma_inner_replace_keeps(
     lemma_in_formatting_update(p2.formatting, k, x, fe.id);
     let p4 = dom_insert(p3, last.id, new_element.id, None);
     super::doc::lemma_elem_pok(p3.doc, new_element);
+    // lastNode is an entry below node's index; node is now the new element.
+    let jl = choose|jl: int| i + 1 <= jl < p1.open.len() && (#[trigger] p1.open[jl]).id == last.id;
+    assert(p3.open[jl] == p1.open[jl]);
+    assert(p3.open[i] == new_element);
+    lemma_keeps_live(pa, p3);
+    if host_inv(p3) {
+        lemma_dinv_ids(p3);
+        assert forall|j: int| 0 <= j < p3.open.len() && j != i implies (#[trigger] p3.open[j]).id != new_element.id by {
+            assert(p3.open[j] == p1.open[j]);
+        }
+        lemma_append_to_top(p3, last.id, new_element.id, i, jl);
+    }
     lemma_dom_insert_keeps(p3, last.id, new_element.id, None);
     lemma_keeps_trans(p1, p3, p4);
     let jb = choose|jb: int| i + 1 <= jb < p1.open.len() && (#[trigger] p1.open[jb]).id == fb_id;
@@ -309,6 +405,15 @@ pub proof fn lemma_inner_replace_keeps(
     assert(p4.open[fe_idx - 1] == p1.open[fe_idx - 1]);
     assert(p4.open[jb] == p1.open[jb]);
     assert(inner_pre(p4, fe, fb_id, fe_idx, i));
+    // The new element is no `table` nor `template`: its token is neither.
+    assert(p4.open[i] == new_element);
+    assert(!table_wall(new_element));
+    assert forall|j: int| fe_idx < j < p4.open.len() implies !table_wall(#[trigger] p4.open[j]) by {
+        if j != i {
+            assert(p4.open[j] == p1.open[j]);
+        }
+    }
+    assert(inner_host(p4, fe_idx, i, new_element.id));
 }
 
 /// Step 4.16, the inner loop.
@@ -326,8 +431,15 @@ pub proof fn lemma_ai_keeps(
     requires
         live(p),
         !p.stopped ==> inner_pre(p, fe, fb_id, fe_idx, node_idx) && p.open[fe_idx - 1] == ca,
+        !p.stopped ==> inner_host(p, fe_idx, node_idx, last.id),
     ensures
         keeps(p, ai(p, fe, ca, node_idx, last, counter, bm).0),
+        !ai(p, fe, ca, node_idx, last, counter, bm).0.stopped ==> inner_host(
+            ai(p, fe, ca, node_idx, last, counter, bm).0,
+            fe_idx,
+            fe_idx + 1,
+            ai(p, fe, ca, node_idx, last, counter, bm).1.id,
+        ),
         !ai(p, fe, ca, node_idx, last, counter, bm).0.stopped ==> inner_pre(
             ai(p, fe, ca, node_idx, last, counter, bm).0,
             fe,
@@ -369,6 +481,16 @@ pub proof fn lemma_ai_keeps(
         assert(p2.open[fe_idx - 1] == p1.open[fe_idx - 1]);
         assert(p2.open[jb - 1] == p1.open[jb]);
         assert(inner_pre(p2, fe, fb_id, fe_idx, i));
+        let jl = choose|jl: int| node_idx <= jl < p1.open.len() && (#[trigger] p1.open[jl]).id == last.id;
+        assert(p2.open[jl - 1] == p1.open[jl]);
+        assert forall|j: int| fe_idx < j < p2.open.len() implies !table_wall(#[trigger] p2.open[j]) by {
+            if j < i {
+                assert(p2.open[j] == p1.open[j]);
+            } else {
+                assert(p2.open[j] == p1.open[j + 1]);
+            }
+        }
+        assert(inner_host(p2, fe_idx, i, last.id));
         lemma_ai_keeps(p2, fe, ca, i, last, c, bm, fe_idx, fb_id);
         lemma_keeps_trans(p, p2, ai(p2, fe, ca, i, last, c, bm).0);
     } else {
@@ -383,11 +505,17 @@ pub proof fn lemma_ai_keeps(
     }
 }
 
-/// Steps 4.17 to 4.21.
-pub proof fn lemma_place_last_keeps(p: Parser, ca: Elem, last_id: NodeId)
+/// Steps 4.17 to 4.21. commonAncestor is the entry just above
+/// formattingElement's index `fe_idx`, lastNode an entry below that index,
+/// and no entry after it is a `table` or `template` element
+/// ([`inner_host`]): so lastNode is no host-including inclusive ancestor
+/// of the place it is inserted at (`hostinv::lemma_place_bound`,
+/// `hostinv::lemma_move_ok`).
+pub proof fn lemma_place_last_keeps(p: Parser, ca: Elem, last_id: NodeId, fe_idx: int)
     requires
         live(p),
-        !p.stopped ==> p.open.contains(ca),
+        !p.stopped ==> 1 <= fe_idx < p.open.len() && p.open[fe_idx - 1] == ca,
+        !p.stopped ==> inner_host(p, fe_idx, fe_idx + 1, last_id),
     ensures
         keeps(p, place_last(p, ca, last_id)),
         place_last(p, ca, last_id) == (Parser { doc: place_last(p, ca, last_id).doc, ..p }),
@@ -400,14 +528,25 @@ pub proof fn lemma_place_last_keeps(p: Parser, ca: Elem, last_id: NodeId)
     lemma_dom_remove_keeps(p, last_id);
     if !p.stopped {
         super::doc::lemma_dinv(p);
-        let k = choose|k: int| 0 <= k < p.open.len() && p.open[k] == ca;
-        assert(crate::exec::frame::elem_ok(p.doc, p.open[k]));
+        assert(crate::exec::frame::elem_ok(p.doc, p.open[fe_idx - 1]));
         super::doc::lemma_place_pok(p, Some(ca));
         super::doc::lemma_adjusted_pok(p, Some(appropriate_place(p, Some(ca))));
         super::doc::lemma_pok_extends(p.doc, p1.doc, l.parent);
     }
-    lemma_dom_insert_keeps(p1, last_id, l.parent, l.child);
-    lemma_keeps_trans(p, p1, dom_insert(p1, last_id, l.parent, l.child));
+    if p.stopped || host_inv(p) {
+        if !p.stopped {
+            let jl = choose|jl: int| fe_idx + 1 <= jl < p.open.len() && (#[trigger] p.open[jl]).id == last_id;
+            lemma_dinv_ids(p);
+            lemma_place_bound(p, fe_idx - 1, fe_idx);
+            lemma_move_ok(p, last_id, l.parent, fe_idx, jl);
+        }
+        lemma_dom_insert_keeps(p1, last_id, l.parent, l.child);
+        lemma_keeps_trans(p, p1, dom_insert(p1, last_id, l.parent, l.child));
+    } else {
+        // Without the host invariant there is nothing to keep.
+        lemma_dom_insert_core(p1, last_id, l.parent, l.child);
+        lemma_keeps_core_trans(p, p1, dom_insert(p1, last_id, l.parent, l.child));
+    }
 }
 
 /// Step 4.23's list: the entry at the bookmark.
@@ -452,10 +591,15 @@ pub proof fn lemma_mid_stack_keeps(p: Parser, fe_id: NodeId, fb_id: NodeId, ne: 
             &&& fb_id != fe_id
         },
         in_cell(p) ==> last_cell(p.open) < fe_idx,
+        !p.stopped ==> fresh_el(p, ne.id),
     ensures
         keeps(p, Parser { open: crate::exec::modes::adoption::mid_stack(p, fe_id, fb_id, ne), ..p }),
+        !p.stopped ==> end_ready(Parser { open: crate::exec::modes::adoption::mid_stack(p, fe_id, fb_id, ne), ..p }, fb_id, ne.id),
 {
     if p.stopped {
+        if host_inv(p) {
+            lemma_host_stopped(p, Parser { open: crate::exec::modes::adoption::mid_stack(p, fe_id, fb_id, ne), ..p });
+        }
         return;
     }
     let fef = id_is(fe_id);
@@ -480,8 +624,14 @@ pub proof fn lemma_mid_stack_keeps(p: Parser, fe_id: NodeId, fb_id: NodeId, ne: 
     }
     let at2 = last_index_where(o1, o1.len() as int, |e: Elem| e.id == fb_id) + 1;
     assert(at2 == last_index_where(o1, o1.len() as int, fbf) + 1);
+    lemma_dinv_ids(p);
+    lemma_mid_entry(p, r, at2, ne);
     lemma_open_insert_keeps(pc, at2, ne);
     lemma_keeps_trans(p, pc, Parser { open: pc.open.insert(at2, ne), ..pc });
+    let q = Parser { open: pc.open.insert(at2, ne), ..pc };
+    crate::termination::helpers_ranking::lemma_last_index_where(o1, o1.len() as int, fbf);
+    lemma_mid_shape(p.open, r, at2, ne, fb_id);
+    assert(end_at(q, fb_id, ne.id, at2 - 1));
 }
 
 /// Steps 4.22 to 4.24.
@@ -493,6 +643,11 @@ pub proof fn lemma_finish_mid_keeps(p2: Parser, fe: Elem, fb_id: NodeId, bm: Boo
         keeps(p2, finish_mid(p2, fe, fb_id, bm).0),
         !finish_mid(p2, fe, fb_id, bm).0.stopped ==> super::doc::pok(finish_mid(p2, fe, fb_id, bm).0.doc, fb_id)
             && super::doc::pok(finish_mid(p2, fe, fb_id, bm).0.doc, finish_mid(p2, fe, fb_id, bm).1.id),
+        !finish_mid(p2, fe, fb_id, bm).0.stopped ==> end_ready(
+            finish_mid(p2, fe, fb_id, bm).0,
+            fb_id,
+            finish_mid(p2, fe, fb_id, bm).1.id,
+        ),
 {
     hide(create_element_for_token);
     hide(crate::exec::modes::adoption::mid_list);
@@ -523,6 +678,8 @@ pub proof fn lemma_finish_mid_keeps(p2: Parser, fe: Elem, fb_id: NodeId, bm: Boo
     lemma_mid_list_keeps(p3, fi, entry, bm);
     lemma_keeps_trans(p2, p3, pb);
     super::doc::lemma_fresh_after_ctx(p2, new_element);
+    lemma_dinv_ids_below(p2, new_element.id);
+    assert(fresh_el(pb, new_element.id));
     lemma_mid_stack_keeps(pb, fe.id, fb_id, new_element, fe_idx);
     let p4 = Parser { open: crate::exec::modes::adoption::mid_stack(pb, fe.id, fb_id, new_element), ..pb };
     lemma_keeps_trans(p2, pb, p4);
@@ -545,6 +702,7 @@ pub proof fn lemma_finish_end_keeps(p4: Parser, fb_id: NodeId, ne_id: NodeId)
     requires
         live(p4),
         !p4.stopped ==> super::doc::pok(p4.doc, fb_id) && super::doc::pok(p4.doc, ne_id),
+        !p4.stopped ==> end_ready(p4, fb_id, ne_id),
     ensures
         keeps(p4, finish_end(p4, fb_id, ne_id)),
 {
@@ -561,15 +719,42 @@ pub proof fn lemma_finish_end_keeps(p4: Parser, fb_id: NodeId, ne_id: NodeId)
             crate::exec::modes::in_body_start_lemmas::lemma_doc_extends_refl(p4.doc);
         }
     }
-    lemma_doc_keeps(p4, p5);
     let l2 = adjusted_location(p5, Some(Location { parent: fb_id, child: None }));
+    // Steps 4.27.1 and 4.27.3 keep the host invariant.
+    if !p4.stopped && host_inv(p4) {
+        let ib = choose|ib: int| #[trigger] end_at(p4, fb_id, ne_id, ib);
+        lemma_host_inv(p4);
+        lemma_dinv_ids(p4);
+        lemma_end_pre(p4, fb_id, ne_id, ib);
+        lemma_end_reparent(p4, fb_id, ne_id, ib);
+        lemma_host_reparent(p4, fb_id, ne_id);
+        lemma_end_insert(p4, fb_id, ne_id, ib, l2.parent);
+    }
+    lemma_doc_keeps(p4, p5);
     if !p4.stopped {
         super::doc::lemma_pok_extends(p4.doc, p5.doc, fb_id);
         super::doc::lemma_dinv(p5);
         super::doc::lemma_adjusted_pok(p5, Some(Location { parent: fb_id, child: None }));
     }
-    lemma_dom_insert_keeps(p5, ne_id, l2.parent, l2.child);
-    lemma_keeps_trans(p4, p5, dom_insert(p5, ne_id, l2.parent, l2.child));
+    if p4.stopped || host_inv(p4) {
+        lemma_dom_insert_keeps(p5, ne_id, l2.parent, l2.child);
+        lemma_keeps_trans(p4, p5, dom_insert(p5, ne_id, l2.parent, l2.child));
+    } else {
+        // Without the host invariant there is nothing to keep.
+        lemma_dom_insert_core(p5, ne_id, l2.parent, l2.child);
+        lemma_keeps_core_trans(p4, p5, dom_insert(p5, ne_id, l2.parent, l2.child));
+    }
+}
+
+/// [`end_at`] gives `hostinv::end_pre` when the document is
+/// `clazel_dom::spec::host_acyclic`.
+pub proof fn lemma_end_pre(p: Parser, fb_id: NodeId, ne_id: NodeId, ib: int)
+    requires
+        end_at(p, fb_id, ne_id, ib),
+        dom::host_acyclic(p.doc),
+    ensures
+        end_pre(p, fb_id, ne_id, ib),
+{
 }
 
 /// Steps 4.17 to 4.29.
@@ -577,7 +762,8 @@ pub proof fn lemma_af_keeps(p: Parser, fe: Elem, fb: Elem, ca: Elem, last: Elem,
     requires
         live(p),
         !p.stopped ==> inner_pre(p, fe, fb.id, fe_idx, fe_idx + 1) && fb.id != fe.id,
-        !p.stopped ==> p.open.contains(ca),
+        !p.stopped ==> p.open[fe_idx - 1] == ca,
+        !p.stopped ==> inner_host(p, fe_idx, fe_idx + 1, last.id),
     ensures
         keeps(p, af(p, fe, fb, ca, last, bm)),
 {
@@ -586,7 +772,7 @@ pub proof fn lemma_af_keeps(p: Parser, fe: Elem, fb: Elem, ca: Elem, last: Elem,
         lemma_keeps_refl(p);
         return;
     }
-    lemma_place_last_keeps(p, ca, last.id);
+    lemma_place_last_keeps(p, ca, last.id, fe_idx);
     let p2 = place_last(p, ca, last.id);
     lemma_finish_mid_keeps(p2, fe, fb.id, bm, fe_idx);
     let r = finish_mid(p2, fe, fb.id, bm);
@@ -665,11 +851,14 @@ pub proof fn lemma_ao_keeps(p: Parser, tt: TagTok, counter: nat)
     lemma_liw_last(p.open, p.open.len() as int, fef, fb_idx);
     crate::exec::modes::adoption::lemma_fmt_index_of_found(f, f.len() as int, fe.id, fi);
     assert(inner_pre(p, fe, fb.id, fe_idx, fb_idx));
+    // Step 4.5: formattingElement is in scope, so no `table` or `template`
+    // element is below it in the stack.
+    lemma_scope_wall_clear(p.open, fef);
+    assert(inner_host(p, fe_idx, fb_idx, fb.id));
     lemma_ai_keeps(p, fe, ca, fb_idx, fb, 0, Bookmark::FormattingElement, fe_idx, fb.id);
     let r = ai(p, fe, ca, fb_idx, fb, 0, Bookmark::FormattingElement);
     if !r.0.stopped {
         assert(r.0.open[fe_idx - 1] == ca);
-        assert(r.0.open.contains(ca));
     }
     lemma_af_keeps(r.0, fe, fb, ca, r.1, r.2, fe_idx);
     let p2 = af(r.0, fe, fb, ca, r.1, r.2);

@@ -13,8 +13,10 @@ Part of [Clazel](../../README.md). ECMAScript's Number conversions
 | `bigint_literal_value(&str) -> Option<BigInt>` | The value of a lexer BigInt literal (`n` suffix, `_` separators, §12.9.3†). |
 | `BigInt::to_string_radix(u32)` | BigInt::toString (§6.1.6.2.23†), radix 2 to 36, lowercase; `RangeError` outside that. |
 
-`BigInt` is a sign and a `Big` magnitude (zero is never negative), so the limb
-arithmetic exists once. Conversion takes a word-sized chunk of digits at a
+`BigInt` is a sign and a `Big` magnitude (zero is never negative, unbounded,
+`Vec`-backed). The Number conversions use the fixed-capacity `FixedBig<N>`
+instead (64 limbs for StringToNumber's exact path, 32 for the formatters and
+the tables), which Kani can reason about. Conversion takes a word-sized chunk of digits at a
 time (quadratic), with a bit-extraction path for radix 2, 4, 8, 16 and 32.
 
 † The section numbers are from `phase-7.md`; the spec text is not vendored, so
@@ -46,7 +48,7 @@ Raising the tier to 1 waits for CI's full verification on the pull request.
 
 - Heap storage for BigInts (item 7.5): this crate parses and prints them.
 - Number::toString for a radix other than 10.
-- The powers-of-five tables are computed on first use from `Big`, not stored.
+- The powers-of-five tables are computed on first use from `FixedBig`, not stored.
   A later change can emit them as a checked-in constant, as `cargo xtask
   tables` does for IDNA.
 

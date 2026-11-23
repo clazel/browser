@@ -3,8 +3,9 @@
 //! ([`super::spec::selector_list`]), on the selectors the two have in common.
 //!
 //! What the spec supports and the transcription does not (pseudo-elements, `:link`, `:visited`,
-//! `:any-link`, the user action pseudo-classes) makes the two differ on some inputs, and what the
-//! transcription supports and the spec does not (`:has()`, `:scope`, `:defined`, `of S`) is off
+//! `:any-link`, `:scope` (which the transcription reads only with [`ICtx::ext`] on), the user
+//! action pseudo-classes) makes the two differ on some inputs, and what the
+//! transcription supports and the spec does not (`:has()`, `:defined`, `of S`) is off
 //! when [`ICtx::ext`] is false. So the theorems have two halves:
 //!
 //! - **spec to transcription**: if the spec parses a list to something the transcription has a

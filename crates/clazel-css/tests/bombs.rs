@@ -21,18 +21,32 @@ fn time(input: &[u32]) -> Duration {
     spent
 }
 
-/// Parses at two sizes and fails if the larger is out of proportion. Times are noisy, so the
-/// limit is far above 2 and far below the 16 that quadratic work would give for 4 times the
-/// input, and a time too short to measure is passed.
+/// How many times each size is parsed; the least time counts.
+const RUNS: usize = 7;
+
+/// The least of [`RUNS`] parses of `input`. Preemption, a page fault storm or a busy
+/// neighbour on a loaded runner only ever adds time to a run (macOS full run 44824551100
+/// measured `"[" "]"` at 8.6 ms then 96 ms, 11 times for 4 times the input, in a test binary
+/// sharing the machine with others), so the minimum is the estimate least disturbed by it.
+/// It does not hide worse-than-linear work: that is slow in every run, and its minimum
+/// grows 16-fold for 4 times the input, as the limit below is meant to catch.
+fn fastest(input: &[u32]) -> Duration {
+    (0..RUNS).map(|_| time(input)).min().unwrap_or_default()
+}
+
+/// Parses at two sizes and fails if the larger is out of proportion. Each time is the
+/// minimum of several runs ([`fastest`]), so a pause in one run does not decide the test.
+/// The limit is still far above 4 (4 times the input) and far below the 16 that quadratic
+/// work would give, and a time too short to measure is passed.
 fn linear(open: &str, close: &str) {
     let small = nested(open, close, 50_000);
     let large = nested(open, close, 200_000);
-    let (a, b) = (time(&small), time(&large));
+    let (a, b) = (fastest(&small), fastest(&large));
     println!("{open:?} {close:?}: {a:?} then {b:?}");
     let floor = Duration::from_millis(5);
     assert!(
         b < a.max(floor).saturating_mul(10),
-        "{open:?} {close:?} took {a:?} then {b:?}"
+        "{open:?} {close:?} took {a:?} then {b:?} (least of {RUNS} runs each)"
     );
 }
 

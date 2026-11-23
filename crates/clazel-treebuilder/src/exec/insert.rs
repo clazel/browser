@@ -1157,6 +1157,9 @@ proof fn lemma_chars_at(p: Parser, data: Seq<u32>)
 // mode modules joined the crate; the code did not change (the profile shows
 // `clazel_dom::spec::wf`'s quantifiers instantiated on every node term).
 // Splitting the proof so `wf` is not in context is the preferred fix.
+// Its own solver run: within the limit by itself, it went past it after
+// the other proofs of this module when `host` joined the crate.
+#[verifier::spinoff_prover]
 #[verifier::rlimit(300)]
 fn chars_at_exec(p: &mut ParserBuf, data: &[u32], loc: Location)
     requires

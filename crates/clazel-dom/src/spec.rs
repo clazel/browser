@@ -466,6 +466,28 @@ pub open spec fn create_template_contents(doc: Document, t: NodeId) -> (Document
 // ---------------------------------------------------------------------
 // Mutation algorithms (DOM §4.2.3)
 
+/// The "insertion steps" hook (DOM §4.2.3 "insert", step 7.7.1†: "Run the
+/// insertion steps with inclusiveDescendant."). Other standards define
+/// insertion steps for particular elements (HTML §4.12.1 `script`, §4.8.5
+/// `iframe`, §4.12.3 `template`, and others). A named hook point: here the
+/// hook changes nothing, and is called once, with the root of the inserted
+/// subtree, from [`insert`] only. A later phase that gives a hook an effect
+/// replaces this one definition, and must then re-prove the theorems of
+/// `lemmas.rs` that unfold [`insert`] (each states, in its `ensures`, what
+/// the hook may not change).
+pub open spec fn insertion_steps(doc: Document, inserted: NodeId) -> Document {
+    doc
+}
+
+/// The "removing steps" hook (DOM §4.2.3 "remove", step 12†: "Run the
+/// removing steps with node and parent."). Defined by other standards for
+/// particular elements, as [`insertion_steps`] is. A named hook point
+/// that changes nothing here, called once from [`remove`] only, with the
+/// removed node and its former parent.
+pub open spec fn removing_steps(doc: Document, removed: NodeId, old_parent: NodeId) -> Document {
+    doc
+}
+
 /// DOM §4.2.3 "remove" a node, the steps that change the tree: "1. Let
 /// parent be node's parent. 2. Assert: parent is non-null." ... "7. Remove
 /// node from its parent's children." Steps 3 to 6 and 8 onward update live
@@ -479,12 +501,14 @@ pub open spec fn remove(doc: Document, node: NodeId) -> Document {
     let pn = doc.nodes[p as int];
     // 7.
     let i = index_of(pn.children, node);
-    Document {
+    let removed = Document {
         nodes: doc.nodes.update(p as int, Node { children: pn.children.remove(i), ..pn }).update(
             node as int,
             Node { parent: None, ..doc.nodes[node as int] },
         ),
-    }
+    };
+    // 12.† "Run the removing steps with node and parent."
+    removing_steps(removed, node, p)
 }
 
 /// DOM §4.5 "adopt" a node into its own node document: "1. Let oldDocument
@@ -540,14 +564,17 @@ pub open spec fn insert(doc: Document, node: NodeId, parent: NodeId, child: Opti
         // from the same parent.)
         Some(c) => pn.children.insert(index_of(pn.children, c), node),
     };
-    // 7.4 to 7.7, 8 onward: slots, insertion steps, custom elements,
-    // observers, children changed and post-connection steps; not modelled.
-    Document {
+    let inserted = Document {
         nodes: d1.nodes.update(parent as int, Node { children: kids, ..pn }).update(
             node as int,
             Node { parent: Some(parent), ..d1.nodes[node as int] },
         ),
-    }
+    };
+    // 7.4 to 7.6: slots; 7.7.1† "Run the insertion steps with
+    // inclusiveDescendant."; 7.7.2 onward, 8 onward: custom elements,
+    // observers, children changed and post-connection steps; not modelled
+    // beyond the hook.
+    insertion_steps(inserted, node)
 }
 
 /// DOM §4.2.3 "append" a node to a parent: "pre-insert node into parent
@@ -644,6 +671,841 @@ pub open spec fn set_mode(doc: Document, mode: DocumentMode) -> Document {
         other => other,
     };
     Document { nodes: doc.nodes.update(0, Node { kind: k, ..node }) }
+}
+
+// ---------------------------------------------------------------------
+// Phase 7 item 7.13: the mutation algorithms scripts call
+//
+// Everything below was transcribed from memory of the DOM Standard, not read
+// at the pinned commit: its section and step numbers carry the mark †
+// (docs/phases/phase-7.md's convention), and must be checked against the
+// pinned snapshot before a review relies on them. The algorithms are
+// §4.2.3 "ensure pre-insertion validity", "pre-insert", "insert" (for a
+// DocumentFragment too), "replace", "replace all", §4.4 "clone a node" and
+// §4.9 "change", "remove" and "replace an attribute".
+//
+// Modelling choices of this part, in addition to those at the top of the
+// file:
+// - **Errors are values.** "Throw a HierarchyRequestError / NotFoundError"
+//   becomes returning `Some(DomError)` from an `_error` function; an
+//   algorithm that throws leaves the tree unchanged, because every check
+//   runs before the first change. A caller (Phase 7's bindings) turns the
+//   value into a `DOMException`.
+// - **A DocumentFragment may be inserted.** The restriction of
+//   [`insert_requires`] (the node is not a fragment) belongs to the
+//   parser's calls; [`insert_any`] below handles a fragment, as step 4 of
+//   "insert" does. A fragment is still never a child (`wf`), so inserting
+//   one moves its children and leaves it empty and parentless.
+// - **The only `CharacterData` interfaces are `Text`, `Comment` and
+//   `ProcessingInstruction`**, as the arena has no `CDATASection` (a
+//   `Text` subclass, so "node is a Text node" would cover it).
+// - **"Host-including inclusive ancestor"** (§4.2) is
+//   [`is_host_including_inclusive_ancestor`]: walk parents to the root, and
+//   from a fragment root that has a host continue at the host. The walk is
+//   deterministic, so a node it reaches it reaches within `nodes.len()`
+//   steps (it visits each node at most once before repeating), which is
+//   the fuel.
+// - **Index arguments.** An attribute is named by its position in the
+//   element's attribute list (DOM names the `Attr` object); the position
+//   is a precondition, as the attribute's presence in the list is.
+// - **Attributes' "handle attribute changes"** (queues records, runs
+//   attribute change steps) is not modelled, as in [`append_attribute`].
+// - **Steps 5 and 6 are checked against a second statement.** The checks
+//   of "ensure pre-insertion validity" and "replace" (their steps 5 and 6)
+//   are written as DOM writes them. [`children_rules_hold`] says the same
+//   thing as a property of the tree: only a document has a doctype child,
+//   and a document's children have no `Text`, at most one element, at most
+//   one doctype and no doctype after the element
+//   ([`document_children_ok`]). `ops_lemmas`'s theorems prove, for a node
+//   with no parent (a fragment never has one), that a call passes steps 5
+//   and 6 exactly when the tree after the insertion obeys the rules.
+//   (A node that has a parent is first removed from it by "adopt"; the
+//   theorems do not cover that case, and DOM's checks count such a node
+//   among its new parent's children, so they would refuse some calls the
+//   rules allow.)
+// - **"Clone a node" is shallow in [`clone_node`]**, with the clone children
+//   flag unset. The flag set is [`deep_clone`], a relation (see "Deep
+//   cloning" below).
+// - **A template** is an element whose template contents is non-null (the
+//   parser creates the contents of every `template` it creates). Its clone
+//   gets contents of its own (HTML §4.12.3 "when a template element is
+//   created"); the copied element's form owner is null (a created element
+//   has none).
+// - **The node limit applies to clones** like to creation: a clone that
+//   needs `k` new nodes is refused (the arena unchanged) unless the arena
+//   can hold `k` more.
+// - **The hooks** [`insertion_steps`] and [`removing_steps`] are called
+//   from [`insert`] and [`remove`], so every algorithm below reaches them
+//   through those two.
+// ---------------------------------------------------------------------
+
+/// The `DOMException` names the algorithms below throw.
+pub enum DomError {
+    /// "HierarchyRequestError"
+    HierarchyRequest,
+    /// "NotFoundError"
+    NotFound,
+}
+
+/// The kinds of node the validity checks count among a parent's children.
+pub enum NodeTag {
+    /// An `Element`.
+    Element,
+    /// A `Text` node.
+    Text,
+    /// A `DocumentType` (a "doctype").
+    DocumentType,
+}
+
+/// A node of kind `k` is a node of the tag `t`.
+pub open spec fn has_tag(k: NodeKind, t: NodeTag) -> bool {
+    match t {
+        NodeTag::Element => k is Element,
+        NodeTag::Text => k is Text,
+        NodeTag::DocumentType => k is DocumentType,
+    }
+}
+
+/// How many of `kids` have the tag `t`, other than `skip` (a node, or none).
+/// Defined from the end, so that appending a child adds its share.
+pub open spec fn count_tag(doc: Document, kids: Seq<NodeId>, t: NodeTag, skip: Option<NodeId>) -> nat
+    decreases kids.len(),
+{
+    if kids.len() == 0 {
+        0
+    } else {
+        let last = kids.last();
+        count_tag(doc, kids.drop_last(), t, skip) + if has_tag(doc.nodes[last as int].kind, t) && skip != Some(last) {
+            1nat
+        } else {
+            0nat
+        }
+    }
+}
+
+/// DOM §4.2 "next sibling": "the first following sibling", null if there is
+/// none (or no parent).
+pub open spec fn next_sibling(doc: Document, n: NodeId) -> Option<NodeId> {
+    match parent(doc, n) {
+        None => None,
+        Some(p) => {
+            let i = index_of(children(doc, p), n);
+            if 0 <= i && i + 1 < children(doc, p).len() {
+                Some(children(doc, p)[i + 1])
+            } else {
+                None
+            }
+        },
+    }
+}
+
+/// `a` is `x` or one of its first `fuel` host-including ancestors (§4.2).
+pub open spec fn host_including_within(doc: Document, a: NodeId, x: NodeId, fuel: nat) -> bool
+    decreases fuel,
+{
+    if x == a {
+        true
+    } else if fuel == 0 {
+        false
+    } else {
+        match parent(doc, x) {
+            Some(p) => host_including_within(doc, a, p, (fuel - 1) as nat),
+            None => match doc.nodes[x as int].kind {
+                // x is a root: "if B's root has a non-null host and A is a
+                // host-including inclusive ancestor of B's root's host".
+                NodeKind::DocumentFragment { host: Some(h) } => host_including_within(doc, a, h, (fuel - 1) as nat),
+                _ => false,
+            },
+        }
+    }
+}
+
+/// DOM §4.2 "host-including inclusive ancestor": "An object A is a
+/// host-including inclusive ancestor of an object B, if either A is an
+/// inclusive ancestor of B, or if B's root has a non-null host and A is a
+/// host-including inclusive ancestor of B's root's host."
+pub open spec fn is_host_including_inclusive_ancestor(doc: Document, a: NodeId, x: NodeId) -> bool {
+    host_including_within(doc, a, x, doc.nodes.len())
+}
+
+/// The statements of step 6 of "ensure pre-insertion validity"† about a
+/// `parent` that is a document, switched on the interface `node`
+/// implements. True means "throw a HierarchyRequestError".
+pub open spec fn pre_insert_document_violation(doc: Document, node: NodeId, parent: NodeId, child: Option<NodeId>) -> bool {
+    let kids = children(doc, parent);
+    // "child is non-null and a doctype is following child" and "an element
+    // is preceding child": the siblings after / before child.
+    let after = match child {
+        Some(c) => count_tag(doc, kids.subrange(index_of(kids, c) + 1, kids.len() as int), NodeTag::DocumentType, None),
+        None => 0,
+    };
+    let before = match child {
+        Some(c) => count_tag(doc, kids.subrange(0, index_of(kids, c)), NodeTag::Element, None),
+        None => 0,
+    };
+    let child_is_doctype = match child {
+        Some(c) => doc.nodes[c as int].kind is DocumentType,
+        None => false,
+    };
+    match doc.nodes[node as int].kind {
+        // "DocumentFragment: If node has more than one element child or has
+        // a Text node child. Otherwise, if node has one element child and
+        // either parent has an element child, child is a doctype, or child
+        // is non-null and a doctype is following child."
+        NodeKind::DocumentFragment { .. } => {
+            let elements = count_tag(doc, children(doc, node), NodeTag::Element, None);
+            let texts = count_tag(doc, children(doc, node), NodeTag::Text, None);
+            elements > 1 || texts > 0 || (elements == 1 && (count_tag(doc, kids, NodeTag::Element, None) > 0 || child_is_doctype
+                || after > 0))
+        },
+        // "Element: parent has an element child, child is a doctype, or
+        // child is non-null and a doctype is following child."
+        NodeKind::Element { .. } => count_tag(doc, kids, NodeTag::Element, None) > 0 || child_is_doctype || after > 0,
+        // "DocumentType: parent has a doctype child, child is non-null and
+        // an element is preceding child, or child is null and parent has an
+        // element child."
+        NodeKind::DocumentType { .. } => count_tag(doc, kids, NodeTag::DocumentType, None) > 0 || before > 0 || (child is None
+            && count_tag(doc, kids, NodeTag::Element, None) > 0),
+        _ => false,
+    }
+}
+
+/// DOM §4.2.3† "ensure pre-insertion validity" of `node` into `parent`
+/// before `child`: the error the algorithm throws, or none.
+/// "1. If parent is not a Document, DocumentFragment, or Element node,
+/// then throw a "HierarchyRequestError" DOMException. 2. If node is a
+/// host-including inclusive ancestor of parent, then throw a
+/// "HierarchyRequestError". 3. If child is non-null and its parent is not
+/// parent, then throw a "NotFoundError". 4. If node is not a
+/// DocumentFragment, DocumentType, Element, or CharacterData node, then
+/// throw a "HierarchyRequestError". 5. If either node is a Text node and
+/// parent is a document, or node is a doctype and parent is not a
+/// document, then throw a "HierarchyRequestError". 6. If parent is a
+/// document, and any of the statements below, switched on the interface
+/// node implements, are true, then throw a "HierarchyRequestError"."
+pub open spec fn pre_insert_error(doc: Document, node: NodeId, parent: NodeId, child: Option<NodeId>) -> Option<DomError> {
+    // 1.
+    if !may_have_children(doc.nodes[parent as int].kind) {
+        Some(DomError::HierarchyRequest)
+    }
+    // 2.
+    else if is_host_including_inclusive_ancestor(doc, node, parent) {
+        Some(DomError::HierarchyRequest)
+    }
+    // 3.
+    else if child is Some && doc.nodes[child->Some_0 as int].parent != Some(parent) {
+        Some(DomError::NotFound)
+    }
+    // 4. (Every kind but a Document is one of the listed.)
+    else if doc.nodes[node as int].kind is Document {
+        Some(DomError::HierarchyRequest)
+    }
+    // 5.
+    else if (doc.nodes[node as int].kind is Text && doc.nodes[parent as int].kind is Document) || (doc.nodes[node as int].kind is DocumentType
+        && !(doc.nodes[parent as int].kind is Document)) {
+        Some(DomError::HierarchyRequest)
+    }
+    // 6.
+    else if doc.nodes[parent as int].kind is Document && pre_insert_document_violation(doc, node, parent, child) {
+        Some(DomError::HierarchyRequest)
+    } else {
+        None
+    }
+}
+
+/// What the callers of the algorithms below guarantee of their ids: they
+/// name nodes of a well-formed arena.
+pub open spec fn ids_requires(doc: Document, node: NodeId, parent: NodeId, child: Option<NodeId>) -> bool {
+    &&& wf(doc)
+    &&& valid(doc, node)
+    &&& valid(doc, parent)
+    &&& match child {
+        None => true,
+        Some(c) => valid(doc, c),
+    }
+}
+
+/// DOM §4.2.3 "remove" every child of `parent`, "in tree order": the
+/// first `n` remaining children are removed, one after the other.
+pub open spec fn remove_children_n(doc: Document, parent: NodeId, n: nat) -> Document
+    decreases n,
+{
+    if n == 0 || children(doc, parent).len() == 0 {
+        doc
+    } else {
+        remove_children_n(remove(doc, children(doc, parent)[0]), parent, (n - 1) as nat)
+    }
+}
+
+/// "Remove all parent's children, in tree order" (DOM §4.2.3† "replace
+/// all" step 5, "insert" step 4.1).
+pub open spec fn remove_children(doc: Document, parent: NodeId) -> Document {
+    remove_children_n(doc, parent, children(doc, parent).len())
+}
+
+/// Insert each of `nodes`, in order, into `parent` before `child` (DOM
+/// §4.2.3 "insert" step 7, "For each node in nodes, in tree order"), each
+/// a node that is not a `DocumentFragment`.
+pub open spec fn insert_list(doc: Document, nodes: Seq<NodeId>, parent: NodeId, child: Option<NodeId>) -> Document
+    decreases nodes.len(),
+{
+    if nodes.len() == 0 {
+        doc
+    } else {
+        insert_list(insert(doc, nodes[0], parent, child), nodes.drop_first(), parent, child)
+    }
+}
+
+/// DOM §4.2.3 "insert" a `DocumentFragment` `node` into `parent` before
+/// `child` (null: `None`): "1. Let nodes be node's children, if node is a
+/// DocumentFragment node; otherwise « node ». 2. Let count be nodes's size.
+/// 3. If count is 0, then return. 4. If node is a DocumentFragment node:
+/// 1. Remove its children with the suppress observers flag set. 2. Queue a
+/// tree mutation record for node with « », nodes, null, and null." (not
+/// modelled) "5. If child is non-null: …" (live ranges, not modelled) "6.
+/// Let previousSibling be …" (observers, not modelled) "7. For each node
+/// in nodes, in tree order: …" ([`insert_list`]; each node has no parent,
+/// so step 7.1's adopt changes nothing).
+pub open spec fn insert_fragment(doc: Document, node: NodeId, parent: NodeId, child: Option<NodeId>) -> Document {
+    // 1. and 2.
+    let nodes = children(doc, node);
+    // 3.
+    if nodes.len() == 0 {
+        doc
+    } else {
+        // 4.1
+        let d1 = remove_children(doc, node);
+        // 7.
+        insert_list(d1, nodes, parent, child)
+    }
+}
+
+/// DOM §4.2.3 "insert" for any `node`: a `DocumentFragment` by
+/// [`insert_fragment`], any other node by [`insert`] (the parser's
+/// operation, whose steps 1 to 4 do nothing for « node »).
+pub open spec fn insert_any(doc: Document, node: NodeId, parent: NodeId, child: Option<NodeId>) -> Document {
+    if doc.nodes[node as int].kind is DocumentFragment {
+        insert_fragment(doc, node, parent, child)
+    } else {
+        insert(doc, node, parent, child)
+    }
+}
+
+/// DOM §4.2.3† "pre-insert" `node` into `parent` before `child`, on a
+/// valid call: "1. Ensure pre-insertion validity of node, parent, and
+/// child." (An error leaves the tree as it is: [`pre_insert_error`].) "2.
+/// Let referenceChild be child. 3. If referenceChild is node, then set
+/// referenceChild to node's next sibling. 4. Insert node into parent before
+/// referenceChild. 5. Return node."
+pub open spec fn pre_insert(doc: Document, node: NodeId, parent: NodeId, child: Option<NodeId>) -> Document {
+    // 1.
+    if pre_insert_error(doc, node, parent, child) is Some {
+        doc
+    } else {
+        // 2. and 3.
+        let reference_child = if child == Some(node) {
+            next_sibling(doc, node)
+        } else {
+            child
+        };
+        // 4.
+        insert_any(doc, node, parent, reference_child)
+    }
+}
+
+/// The statements of step 6 of "replace"† about a `parent` that is a
+/// document; true means "throw a HierarchyRequestError". They differ from
+/// pre-insert's: "an element child that is not child", and a doctype
+/// following (or an element preceding) `child`.
+pub open spec fn replace_document_violation(doc: Document, child: NodeId, node: NodeId, parent: NodeId) -> bool {
+    let kids = children(doc, parent);
+    let i = index_of(kids, child);
+    let after = count_tag(doc, kids.subrange(i + 1, kids.len() as int), NodeTag::DocumentType, None);
+    let before = count_tag(doc, kids.subrange(0, i), NodeTag::Element, None);
+    match doc.nodes[node as int].kind {
+        // "DocumentFragment: If node has more than one element child or has
+        // a Text node child. Otherwise, if node has one element child and
+        // either parent has an element child that is not child or a doctype
+        // is following child."
+        NodeKind::DocumentFragment { .. } => {
+            let elements = count_tag(doc, children(doc, node), NodeTag::Element, None);
+            let texts = count_tag(doc, children(doc, node), NodeTag::Text, None);
+            elements > 1 || texts > 0 || (elements == 1 && (count_tag(doc, kids, NodeTag::Element, Some(child)) > 0 || after > 0))
+        },
+        // "Element: parent has an element child that is not child or a
+        // doctype is following child."
+        NodeKind::Element { .. } => count_tag(doc, kids, NodeTag::Element, Some(child)) > 0 || after > 0,
+        // "DocumentType: parent has a doctype child that is not child, or
+        // an element is preceding child."
+        NodeKind::DocumentType { .. } => count_tag(doc, kids, NodeTag::DocumentType, Some(child)) > 0 || before > 0,
+        _ => false,
+    }
+}
+
+/// Steps 1 to 6 of DOM §4.2.3† "replace" `child` with `node` within
+/// `parent`: the error it throws, or none. "1. If parent is not a
+/// Document, DocumentFragment, or Element node, then throw a
+/// "HierarchyRequestError". 2. If node is a host-including inclusive
+/// ancestor of parent, then throw a "HierarchyRequestError". 3. If child's
+/// parent is not parent, then throw a "NotFoundError". 4. If node is not a
+/// DocumentFragment, DocumentType, Element, or CharacterData node, then
+/// throw a "HierarchyRequestError". 5. If either node is a Text node and
+/// parent is a document, or node is a doctype and parent is not a
+/// document, then throw a "HierarchyRequestError". 6. If parent is a
+/// document, and any of the statements below, switched on the interface
+/// node implements, are true, then throw a "HierarchyRequestError"."
+pub open spec fn replace_error(doc: Document, child: NodeId, node: NodeId, parent: NodeId) -> Option<DomError> {
+    // 1.
+    if !may_have_children(doc.nodes[parent as int].kind) {
+        Some(DomError::HierarchyRequest)
+    }
+    // 2.
+    else if is_host_including_inclusive_ancestor(doc, node, parent) {
+        Some(DomError::HierarchyRequest)
+    }
+    // 3.
+    else if doc.nodes[child as int].parent != Some(parent) {
+        Some(DomError::NotFound)
+    }
+    // 4.
+    else if doc.nodes[node as int].kind is Document {
+        Some(DomError::HierarchyRequest)
+    }
+    // 5.
+    else if (doc.nodes[node as int].kind is Text && doc.nodes[parent as int].kind is Document) || (doc.nodes[node as int].kind is DocumentType
+        && !(doc.nodes[parent as int].kind is Document)) {
+        Some(DomError::HierarchyRequest)
+    }
+    // 6.
+    else if doc.nodes[parent as int].kind is Document && replace_document_violation(doc, child, node, parent) {
+        Some(DomError::HierarchyRequest)
+    } else {
+        None
+    }
+}
+
+/// DOM §4.2.3† "replace" `child` with `node` within `parent`, on a valid
+/// call. "7. Let referenceChild be child's next sibling. 8. If
+/// referenceChild is node, then set referenceChild to node's next sibling.
+/// 9. Let previousSibling be child's previous sibling. 10. Let
+/// removedNodes be the empty set. 11. If child's parent is non-null, then:
+/// 1. Set removedNodes to « child ». 2. Remove child with the suppress
+/// observers flag set. 12. Let nodes be node's children if node is a
+/// DocumentFragment node; otherwise « node ». 13. Insert node into parent
+/// before referenceChild with the suppress observers flag set. 14. Queue a
+/// tree mutation record … 15. Return child." Steps 9, 10, 12 (only
+/// `nodes`' size matters to "insert") and 14 touch observers only. An
+/// error (steps 1 to 6) leaves the tree as it is.
+pub open spec fn replace(doc: Document, child: NodeId, node: NodeId, parent: NodeId) -> Document {
+    if replace_error(doc, child, node, parent) is Some {
+        doc
+    } else {
+        // 7.
+        let reference0 = next_sibling(doc, child);
+        // 8.
+        let reference_child = if reference0 == Some(node) {
+            next_sibling(doc, node)
+        } else {
+            reference0
+        };
+        // 11.
+        let d1 = if doc.nodes[child as int].parent is Some {
+            remove(doc, child)
+        } else {
+            doc
+        };
+        // 13.
+        insert_any(d1, node, parent, reference_child)
+    }
+}
+
+/// What a caller of [`replace_all`] guarantees: `parent` may have children,
+/// `node` (if any) is not a document and not a host-including inclusive
+/// ancestor of `parent`. (The standard's callers, `textContent` and
+/// `replaceChildren`, have established what "insert" needs; DOM's "replace
+/// all" checks nothing itself.)
+pub open spec fn replace_all_requires(doc: Document, node: Option<NodeId>, parent: NodeId) -> bool {
+    &&& wf(doc)
+    &&& valid(doc, parent)
+    &&& may_have_children(doc.nodes[parent as int].kind)
+    &&& match node {
+        None => true,
+        Some(n) => valid(doc, n) && !(doc.nodes[n as int].kind is Document) && !is_host_including_inclusive_ancestor(doc, n, parent),
+    }
+}
+
+/// DOM §4.2.3† "replace all with a node `node` within a node `parent`":
+/// "1. Let removedNodes be parent's children. 2. Let addedNodes be the
+/// empty set. 3. If node is a DocumentFragment node, then set addedNodes to
+/// node's children. 4. Otherwise, if node is non-null, set addedNodes to «
+/// node ». 5. Remove all parent's children, in tree order, with the
+/// suppress observers flag set. 6. If node is non-null, then insert node
+/// into parent before null with the suppress observers flag set. 7. If
+/// either addedNodes or removedNodes is not empty, then queue a tree
+/// mutation record for parent with addedNodes, removedNodes, null, and
+/// null." Steps 1 to 4 and 7 only feed observers.
+pub open spec fn replace_all(doc: Document, node: Option<NodeId>, parent: NodeId) -> Document {
+    // 5.
+    let d1 = remove_children(doc, parent);
+    // 6.
+    match node {
+        Some(n) => insert_any(d1, n, parent, None),
+        None => d1,
+    }
+}
+
+// ---------------------------------------------------------------------
+// Cloning (DOM §4.4† "clone a node")
+
+/// The kind of the copy made by steps 2 and 3 of "clone a node"†: "2. If
+/// node is an element, then: create an element with … node's local name,
+/// node's namespace, node's namespace prefix …. Let copy be the result.
+/// Then, for each attribute in node's attribute list: Let copyAttribute be
+/// a clone of attribute. Append copyAttribute to copy. 3. Otherwise, let
+/// copy be a node that implements the same interfaces as node, and
+/// fulfills these additional requirements, switching on the interface node
+/// implements: … DocumentType: Set copy's name, public ID, and system ID to
+/// those of node. … Text, Comment: Set copy's data to that of node.
+/// ProcessingInstruction: Set copy's target and data to those of node. Any
+/// other node: Do nothing." A created element has no template contents
+/// (yet) and no form owner. A document is not cloned here (one per arena).
+pub open spec fn clone_kind(k: NodeKind) -> NodeKind {
+    match k {
+        NodeKind::Element { namespace, prefix, local_name, attributes, .. } => NodeKind::Element {
+            namespace,
+            prefix,
+            local_name,
+            attributes,
+            template_contents: None,
+            form_owner: None,
+        },
+        NodeKind::DocumentFragment { .. } => NodeKind::DocumentFragment { host: None },
+        other => other,
+    }
+}
+
+/// A template element (see the modelling choices).
+pub open spec fn is_template(k: NodeKind) -> bool {
+    k is Element && k->Element_template_contents is Some
+}
+
+/// How many nodes cloning `node` creates: the copy, and for a template its
+/// contents too.
+pub open spec fn clone_count(doc: Document, node: NodeId) -> nat {
+    if is_template(doc.nodes[node as int].kind) {
+        2
+    } else {
+        1
+    }
+}
+
+/// DOM §4.4† "clone a node" `node`, with the clone children flag unset:
+/// "1. If document is not given, let document be node's node document."
+/// (One document.) "2.", "3." ([`clone_kind`]). "4. Set copy's node
+/// document and document to document." (Implicit.) "5. Run any cloning
+/// steps defined for node in other applicable specifications and pass copy,
+/// node, document, and the clone children flag if set, as parameters."
+/// (HTML §4.12.3: a template's cloning steps return when the flag is
+/// unset; its copy was created with template contents, step 2.) "6. If the
+/// clone children flag is set, …" (never.) "7. Return copy." The copy's id
+/// is the next one; a template's contents' is the one after.
+pub open spec fn clone_node(doc: Document, node: NodeId) -> (Document, NodeId) {
+    // 2. and 3.
+    let (d1, copy) = create_node(doc, clone_kind(doc.nodes[node as int].kind));
+    // 5.
+    if is_template(doc.nodes[node as int].kind) {
+        (create_template_contents(d1, copy).0, copy)
+    } else {
+        (d1, copy)
+    }
+}
+
+/// What the caller of [`clone_node`] guarantees: `node` is a node of a
+/// well-formed arena, and not its document.
+pub open spec fn clone_requires(doc: Document, node: NodeId) -> bool {
+    &&& wf(doc)
+    &&& valid(doc, node)
+    &&& !(doc.nodes[node as int].kind is Document)
+}
+
+// ---------------------------------------------------------------------
+// Deep cloning (DOM §4.4† "clone a node" with the clone children flag)
+//
+// Modelling choices of this part:
+// - **The spec is a relation, not a function.** DOM's step 6 recurses, and
+//   the order of its recursion does not fix which node id each copy gets.
+//   What it fixes is the shape: the copy is a fresh tree that is the
+//   "unfolding" of the host-including subtree of `node` (children, and a
+//   template's contents), each copied node carrying its source's kind. So
+//   the spec says exactly that: the new nodes are `base .. base + m`, and a
+//   map `src` from each new node (by offset) to the node it copies is
+//   consistent at every edge ([`deep_clone_src`]). A new node other than the
+//   copy has a parent or a host, so no node outside the copy is made. Any
+//   assignment of ids that satisfies it is a correct clone.
+// - **Template contents are cloned by HTML §4.12.3's cloning steps:** "1. If
+//   the clone children flag is not set in the calling clone algorithm,
+//   return. 2. Let copied contents be the result of cloning all the children
+//   of node's template contents, with document set to copy's template
+//   contents's node document, and the clone children flag set. 3. Append
+//   copied contents to copy's template contents." The copy's contents is the
+//   fragment "create an element" made ([`clone_node`], shallow); its source
+//   is the source's contents, and its children are copies of that
+//   fragment's children, which is how every node is related to its source.
+// - **A refusal changes nothing, and happens only when the copy cannot
+//   fit** (`contract::clone_deep_ensures`): the arena is rolled back to what
+//   it was, and a refusal is allowed only if the arena cannot hold
+//   [`subtree_size`] more nodes. A clone that succeeds is [`wf`], so within
+//   the node limit, and adds exactly [`subtree_size`] nodes: the copy is the
+//   unfolding of the source's host-including subtree, nothing more.
+// - **The source arena must be host-acyclic** ([`host_acyclic`], required by
+//   `contract::clone_deep_requires`). [`wf`] forbids a cycle of parents but
+//   not one through a template's host (a template that is a descendant of
+//   its own contents); the unfolding of such a subtree is infinite, so a
+//   clone of it can only be refused although [`subtree_size`] (a count of
+//   nodes) is small. The arenas the DOM algorithms build never have one (the
+//   pre-insertion check refuses to insert a host-including inclusive
+//   ancestor of the parent), and `host_acyclic_lemmas` proves it: every
+//   operation keeps [`host_acyclic`], so it is an invariant that a caller
+//   gets from [`new_document`] and the operations. It is not part of [`wf`]
+//   because the parser's raw [`insert`] and [`reparent_children`] check only
+//   the inclusive-ancestor half of step 2, and `clazel-treebuilder` has not
+//   been proven to exclude the host half.
+// - **A fragment that is cloned directly** (a template's contents is the
+//   only kind) gets no host: "any other node: do nothing" (§4.4† step 3).
+
+/// Node `b + t` of `out` is the copy of `src[t]`, where `b` is the arena's
+/// length before the clone and `m` the number of new nodes. This is the
+/// local meaning of §4.4† steps 2 and 3 (the copy's kind: [`clone_kind`]
+/// with its template contents linked as HTML §4.12.3's cloning steps say),
+/// of step 6 ("for each child of node's children, in tree order: let
+/// childCopy be the result of cloning child …, and append childCopy to
+/// copy": the copy's children are copies of the source's, in order), and
+/// of HTML's steps 2 and 3 (the contents' children are copies).
+pub open spec fn deep_copy_kind(doc: Document, out: Document, src: Seq<NodeId>, t: int) -> bool {
+    let b = doc.nodes.len();
+    let m = src.len();
+    let s = doc.nodes[src[t] as int];
+    let n = out.nodes[b + t];
+    // The copy is a new node: no wrapper, and but for the root a parent or
+    // a host (the root has no parent).
+    &&& n.wrapper is None
+    &&& t == 0 ==> n.parent is None
+    &&& t > 0 ==> (n.parent is Some || (n.kind is DocumentFragment && n.kind->DocumentFragment_host is Some))
+    // 2. and 3.: the copy's kind.
+    &&& match s.kind {
+        NodeKind::Document { .. } => false,
+        NodeKind::Element { namespace, prefix, local_name, attributes, template_contents, .. } => {
+            &&& n.kind is Element
+            &&& n.kind->Element_namespace == namespace
+            &&& n.kind->Element_prefix == prefix
+            &&& n.kind->Element_local_name == local_name
+            &&& n.kind->Element_attributes == attributes
+            &&& n.kind->Element_form_owner is None
+            // HTML §4.12.3: a template's copy has contents, which copy its
+            // source's.
+            &&& (template_contents is None) == (n.kind->Element_template_contents is None)
+            &&& template_contents is Some ==> {
+                let c = n.kind->Element_template_contents->Some_0 as int;
+                &&& b <= c < b + m
+                &&& src[c - b] == template_contents->Some_0
+            }
+        },
+        NodeKind::DocumentFragment { .. } => {
+            &&& n.kind is DocumentFragment
+            &&& t == 0 ==> n.kind->DocumentFragment_host is None
+        },
+        other => n.kind == other,
+    }
+}
+
+/// The children of node `b + t` of `out` are copies of those of `src[t]`, in
+/// order (§4.4† step 6, and HTML §4.12.3's step 2 for a template's
+/// contents): "for each child of node's children, in tree order: let
+/// childCopy be the result of cloning child …, and append childCopy to
+/// copy".
+pub open spec fn deep_copy_children(doc: Document, out: Document, src: Seq<NodeId>, t: int) -> bool {
+    let b = doc.nodes.len();
+    let m = src.len();
+    let s = doc.nodes[src[t] as int];
+    let n = out.nodes[b + t];
+    &&& n.children.len() == s.children.len()
+    &&& forall|j: int| 0 <= j < s.children.len() ==> {
+        let c = #[trigger] n.children[j] as int;
+        &&& b <= c < b + m
+        &&& src[c - b] == s.children[j]
+    }
+}
+
+/// Node `b + t` of `out` is the copy of `src[t]`: its own fields
+/// ([`deep_copy_kind`]) and its children ([`deep_copy_children`]).
+pub open spec fn deep_copy_node(doc: Document, out: Document, src: Seq<NodeId>, t: int) -> bool {
+    &&& deep_copy_kind(doc, out, src, t)
+    &&& deep_copy_children(doc, out, src, t)
+}
+
+/// `out` is `doc` with a copy of `node`'s host-including subtree added, as
+/// the nodes `doc.nodes.len() ..`, the first being the copy of `node`, and
+/// `src[t]` the node that the new node `doc.nodes.len() + t` copies.
+pub open spec fn deep_clone_src(doc: Document, node: NodeId, out: Document, src: Seq<NodeId>) -> bool {
+    let b = doc.nodes.len();
+    &&& src.len() >= 1
+    &&& out.nodes.len() == b + src.len()
+    // No existing node changes: the copy is attached to nothing.
+    &&& forall|i: int| 0 <= i < b ==> #[trigger] out.nodes[i] == doc.nodes[i]
+    &&& src[0] == node
+    &&& forall|t: int| 0 <= t < src.len() ==> valid(doc, #[trigger] src[t])
+    &&& forall|t: int| 0 <= t < src.len() ==> #[trigger] deep_copy_node(doc, out, src, t)
+}
+
+/// DOM §4.4† "clone a node" `node` with the clone children flag set:
+/// `out` is the arena after it, and `copy` the copy (the first new node).
+/// ("7. Return copy.") The copy is the id `doc.nodes.len()`.
+pub open spec fn deep_clone(doc: Document, node: NodeId, out: Document, copy: NodeId) -> bool {
+    &&& copy == doc.nodes.len()
+    &&& exists|src: Seq<NodeId>| deep_clone_src(doc, node, out, src)
+}
+
+/// A ranking of the arena's nodes that grows along every parent edge and
+/// every host edge, at node `i`: its rank is below the node count, and above
+/// the rank of its parent and, if it is a fragment with a host, of that host.
+pub open spec fn ranked_at(doc: Document, rank: Seq<nat>, i: int) -> bool {
+    let n = doc.nodes.len();
+    let node = doc.nodes[i];
+    &&& rank[i] < n
+    &&& node.parent is Some ==> node.parent->Some_0 < n && rank[node.parent->Some_0 as int] < rank[i]
+    &&& (node.kind is DocumentFragment && node.kind->DocumentFragment_host is Some) ==> {
+        let h = node.kind->DocumentFragment_host->Some_0;
+        h < n && rank[h as int] < rank[i]
+    }
+}
+
+/// `rank` ranks every node of the arena ([`ranked_at`]).
+pub open spec fn host_ranked(doc: Document, rank: Seq<nat>) -> bool {
+    &&& rank.len() == doc.nodes.len()
+    &&& forall|i: int| 0 <= i < doc.nodes.len() ==> #[trigger] ranked_at(doc, rank, i)
+}
+
+/// The arena has no cycle through parents and template hosts: following a
+/// node's parent, or a parentless fragment's host, never returns to it
+/// (witnessed by a ranking that grows along every such step, with ranks
+/// below the node count). [`wf`] gives the parent half
+/// (its `paths`); the host half is not part of it (see the modelling
+/// choices of deep cloning). Every operation keeps it
+/// (`host_acyclic_lemmas`).
+pub open spec fn host_acyclic(doc: Document) -> bool {
+    exists|rank: Seq<nat>| host_ranked(doc, rank)
+}
+
+/// How many of the first `k` nodes of the arena are host-including
+/// descendants of `node`, counting `node` itself: `node` is a
+/// host-including inclusive ancestor of them (DOM §4.2).
+pub open spec fn subtree_count(doc: Document, node: NodeId, k: nat) -> nat
+    decreases k,
+{
+    if k == 0 {
+        0
+    } else {
+        subtree_count(doc, node, (k - 1) as nat) + if is_host_including_inclusive_ancestor(doc, node, (k - 1) as NodeId) {
+            1nat
+        } else {
+            0nat
+        }
+    }
+}
+
+/// The size of `node`'s host-including subtree: the nodes a deep clone of
+/// `node` copies (its descendants, and those of a template's contents,
+/// which HTML §4.12.3's cloning steps copy too, and the contents).
+pub open spec fn subtree_size(doc: Document, node: NodeId) -> nat {
+    subtree_count(doc, node, doc.nodes.len())
+}
+
+// ---------------------------------------------------------------------
+// Attribute changes (DOM §4.9†)
+
+/// The element `e` with its attribute list replaced by `attrs`.
+pub open spec fn set_attributes(doc: Document, e: NodeId, attrs: Seq<Attr>) -> Document {
+    let node = doc.nodes[e as int];
+    let k = match node.kind {
+        NodeKind::Element { namespace, prefix, local_name, template_contents, form_owner, .. } => NodeKind::Element {
+            namespace,
+            prefix,
+            local_name,
+            attributes: attrs,
+            template_contents,
+            form_owner,
+        },
+        other => other,
+    };
+    Document { nodes: doc.nodes.update(e as int, Node { kind: k, ..node }) }
+}
+
+/// DOM §4.9† "change an attribute" (the `i`th of `e`'s attribute list) "to
+/// value": "1. Let oldValue be attribute's value. 2. Set attribute's value
+/// to value. 3. Handle attribute changes for attribute with attribute's
+/// element, oldValue, and value." (Not modelled.)
+pub open spec fn change_attribute(doc: Document, e: NodeId, i: nat, value: Seq<u32>) -> Document {
+    let attrs = doc.nodes[e as int].kind->Element_attributes;
+    set_attributes(doc, e, attrs.update(i as int, Attr { value, ..attrs[i as int] }))
+}
+
+/// DOM §4.9† "remove an attribute" (the `i`th of `e`'s attribute list):
+/// "1. Let element be attribute's element. 2. Remove attribute from
+/// element's attribute list. 3. Set attribute's element to null. 4. Handle
+/// attribute changes for attribute with element, attribute's value, and
+/// null." (Step 3 is implicit, step 4 not modelled.)
+pub open spec fn remove_attribute(doc: Document, e: NodeId, i: nat) -> Document {
+    set_attributes(doc, e, doc.nodes[e as int].kind->Element_attributes.remove(i as int))
+}
+
+/// DOM §4.9† "replace an attribute" (the `i`th of `e`'s attribute list,
+/// oldAttr) "with newAttr": "1. Replace oldAttr by newAttr in oldAttr's
+/// element's attribute list. 2. Set newAttr's element to oldAttr's
+/// element. 3. Set newAttr's node document to element's node document. 4.
+/// Set oldAttr's element to null. 5. Handle attribute changes for oldAttr
+/// with oldAttr's element, oldAttr's value, and newAttr's value." (Steps 2
+/// to 4 are implicit, step 5 not modelled.)
+pub open spec fn replace_attribute(doc: Document, e: NodeId, i: nat, new_attr: Attr) -> Document {
+    set_attributes(doc, e, doc.nodes[e as int].kind->Element_attributes.update(i as int, new_attr))
+}
+
+/// What the callers of the attribute changes above guarantee: `e` is an
+/// element of a well-formed arena and `i` names one of its attributes.
+pub open spec fn attribute_requires(doc: Document, e: NodeId, i: nat) -> bool {
+    &&& wf(doc)
+    &&& valid(doc, e)
+    &&& doc.nodes[e as int].kind is Element
+    &&& i < doc.nodes[e as int].kind->Element_attributes.len()
+}
+
+// ---------------------------------------------------------------------
+// The children rules, stated on their own (DOM §4.2.3† "ensure
+// pre-insertion validity" steps 5 and 6, "replace" steps 5 and 6)
+
+/// The rules a document's children obey (DOM §4.2.3† steps 5 and 6 of
+/// "ensure pre-insertion validity" keep them true), stated about the
+/// sequence itself, not as checks on an insertion: no `Text` node, at
+/// most one element, at most one doctype, and the doctype is not after the
+/// element. (Comments and processing instructions may be anywhere.)
+pub open spec fn document_children_ok(doc: Document, kids: Seq<NodeId>) -> bool {
+    &&& forall|j: int| 0 <= j < kids.len() ==> !(doc.nodes[#[trigger] kids[j] as int].kind is Text)
+    &&& forall|j: int, k: int| 0 <= j < k < kids.len() ==> !(doc.nodes[#[trigger] kids[j] as int].kind is Element
+        && doc.nodes[#[trigger] kids[k] as int].kind is Element)
+    &&& forall|j: int, k: int| 0 <= j < k < kids.len() ==> !(doc.nodes[#[trigger] kids[j] as int].kind is DocumentType
+        && doc.nodes[#[trigger] kids[k] as int].kind is DocumentType)
+    &&& forall|j: int, k: int| 0 <= j < k < kids.len() ==> !(doc.nodes[#[trigger] kids[j] as int].kind is Element
+        && doc.nodes[#[trigger] kids[k] as int].kind is DocumentType)
+}
+
+/// The children rules hold in the whole arena: only a document has a
+/// doctype child (step 5: "node is a doctype and parent is not a
+/// document"), and the document node's children obey
+/// [`document_children_ok`] (step 6). The document node, `nodes[0]`, is the
+/// only document ([`wf`]).
+pub open spec fn children_rules_hold(doc: Document) -> bool {
+    &&& forall|p: int, j: int| 0 <= p < doc.nodes.len() && !(doc.nodes[p].kind is Document) && 0 <= j < doc.nodes[p].children.len()
+        ==> !(doc.nodes[#[trigger] doc.nodes[p].children[j] as int].kind is DocumentType)
+    &&& 1 <= doc.nodes.len() && document_children_ok(doc, doc.nodes[0].children)
 }
 
 } // verus!

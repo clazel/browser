@@ -1,0 +1,629 @@
+{
+  "mutations": [
+    {
+      "id": "setcc-less-than-uses-wrong-condition",
+      "file": "src/templates.rs",
+      "find": "lir::ICmp::LtS => 12,",
+      "replace": "lir::ICmp::LtS => 13,",
+      "expect": "killed-incidentally",
+      "reason": "The signed less-than comparison would read condition code 13 (`ge`) instead of 12 (`l`). The refinement of the comparison template fails (`flags::lemma_cc_icmp`, then `mid::lemma_mid_cmp`), because the code would compute the opposite of LIR's `lt_s`. It is not labelled `killed`: that needs a certificate, a concrete witness evaluated with `compute_only`, and the refinement statement is quantified over states, which `compute_only` cannot evaluate. So this claims no coverage, though the proof does catch the bug."
+    },
+    {
+      "id": "select-takes-the-wrong-arm",
+      "file": "src/templates.rs",
+      "find": "x64::Instr::Cmovcc { cc: 4, sz: x64::Size::W64, dst: rax(), src: rcx() },",
+      "replace": "x64::Instr::Cmovcc { cc: 5, sz: x64::Size::W64, dst: rax(), src: rcx() },",
+      "expect": "killed-incidentally",
+      "reason": "`select` would take its second value when the condition is nonzero (`cmovne` for `cmove`). `mid::lemma_mid_select` fails, and with it the refinement of `select`. No certificate, for the reason of the first mutation, so no coverage is claimed."
+    },
+    {
+      "id": "frame-overlaps-the-exit-code-word",
+      "file": "src/spec.rs",
+      "find": "    abi::exit_code_off() + 8\n}",
+      "replace": "    abi::exit_code_off()\n}",
+      "expect": "killed-incidentally",
+      "reason": "Frame slot 0 would be the exit-code word, so an exit sequence would overwrite a local. `steps::lemma_abi_consts` (which pins the frame to bytes 264 and up, and 31 slots) fails, and so do the proofs that rest on it. No certificate: the theorem that fails is about the constants, and `compute_only` would need a witness that is itself the mutated constant; no coverage is claimed."
+    },
+    {
+      "id": "regions-may-overlap-the-frame",
+      "file": "src/spec.rs",
+      "find": "    forall|a: nat| #[trigger] in_regions(lay, a) ==> !in_exit_area(ctxb, a as int)",
+      "replace": "    true",
+      "expect": "killed-incidentally",
+      "reason": "A region may then overlap the context's exit area, where the frame is, so a store to a slot could change a byte LIR's memory holds. `rel::lemma_store_finish` fails (it needs the region bytes outside the exit area to be unchanged by the store). No certificate (the statement is quantified), so no coverage is claimed."
+    },
+    {
+      "id": "preserved-forgets-the-stack-pointer",
+      "file": "src/spec.rs",
+      "find": "    preserved_mem(m, m2) && m2.rgf[abi::sp_reg() as int] == m.rgf[abi::sp_reg() as int]\n}",
+      "replace": "    preserved_mem(m, m2)\n}",
+      "expect": "killed-incidentally",
+      "reason": "Drops the claim that a template leaves `rsp` as it was. Every template still leaves `rsp` unchanged, so no theorem becomes false for the mutant; but the control-flow refinement (`cfspec::cf_refines`) states `preserved_r`, which includes `rsp`, and `cfop::lemma_preserved_to_r` derives it from `preserved`, so that derivation no longer goes through. Only a proof step breaks: not coverage. A certified kill needs a theorem the mutant falsifies, which `rsp` preservation by the code between exits (the confinement theorem, jit.md exit criterion 2) will give once the back end is tied to it."
+    },
+    {
+      "id": "a64-cset-signed-less-than-uses-wrong-condition",
+      "module": "a64::flags",
+      "file": "src/a64/templates.rs",
+      "find": "        lir::ICmp::LtS => 10,",
+      "replace": "        lir::ICmp::LtS => 11,",
+      "expect": "killed",
+      "reason": "The A64 template for a signed less-than comparison would give `cset` the condition `lt` (11) instead of its inverse `ge` (10) (a `cset` is `csinc` on the inverse of the condition that sets the result), so it would return 0 where LIR's `lt_s` is 1: after `cmp 1, 2` the `N` and `V` flags differ, so `lt` holds. `flags::lemma_cc_icmp_blank32` is false for the mutant at `lt_s`, 32 bits, 1 and 2.",
+      "certificate": {
+        "file": "src/a64/flags.rs",
+        "lemma": "lemma_cc_icmp_blank32(lir::ICmp::LtS, 1, 2)",
+        "witness": "isa::condition_holds(isa::set_nzcv(blank(), cmp_nzcv(32, 1, 2)), super::templates::cset_cond(lir::ICmp::LtS)) == true && lir::icmp(lir::ICmp::LtS, 32, 1, 2) == true",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "a64-cset-equal-uses-wrong-condition",
+      "module": "a64::flags",
+      "file": "src/a64/templates.rs",
+      "find": "        lir::ICmp::Eq => 1,",
+      "replace": "        lir::ICmp::Eq => 0,",
+      "expect": "killed",
+      "reason": "The A64 template for `eq` would give `cset` the condition `eq` (0) instead of its inverse `ne` (1), so it would return 0 where LIR's `eq` is 1: after `cmp 1, 1` the `Z` flag is set. `flags::lemma_cc_icmp_blank32` is false for the mutant at `eq`, 32 bits, 1 and 1.",
+      "certificate": {
+        "file": "src/a64/flags.rs",
+        "lemma": "lemma_cc_icmp_blank32(lir::ICmp::Eq, 1, 1)",
+        "witness": "isa::condition_holds(isa::set_nzcv(blank(), cmp_nzcv(32, 1, 1)), super::templates::cset_cond(lir::ICmp::Eq)) == true && lir::icmp(lir::ICmp::Eq, 32, 1, 1) == true",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "a64-cset-unsigned-less-than-uses-wrong-condition",
+      "module": "a64::flags",
+      "file": "src/a64/templates.rs",
+      "find": "        lir::ICmp::LtU => 2,",
+      "replace": "        lir::ICmp::LtU => 3,",
+      "expect": "killed",
+      "reason": "The A64 template for an unsigned less-than comparison would give `cset` the condition `lo` (3) instead of its inverse `hs` (2), so it would return 0 where LIR's `lt_u` is 1: after `cmp 1, 2` the carry is clear, so `lo` holds. `flags::lemma_cc_icmp_blank32` is false for the mutant at `lt_u`, 32 bits, 1 and 2.",
+      "certificate": {
+        "file": "src/a64/flags.rs",
+        "lemma": "lemma_cc_icmp_blank32(lir::ICmp::LtU, 1, 2)",
+        "witness": "isa::condition_holds(isa::set_nzcv(blank(), cmp_nzcv(32, 1, 2)), super::templates::cset_cond(lir::ICmp::LtU)) == true && lir::icmp(lir::ICmp::LtU, 32, 1, 2) == true",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "a64-cset-unsigned-greater-than-uses-wrong-condition",
+      "module": "a64::flags",
+      "file": "src/a64/templates.rs",
+      "find": "        lir::ICmp::GtU => 9,",
+      "replace": "        lir::ICmp::GtU => 8,",
+      "expect": "killed",
+      "reason": "The A64 template for an unsigned greater-than comparison would give `cset` the condition `hi` (8) instead of its inverse `ls` (9), so it would return 0 where LIR's `gt_u` is 1: after `cmp 2, 1` the carry is set and `Z` clear, so `hi` holds. `flags::lemma_cc_icmp_blank32` is false for the mutant at `gt_u`, 32 bits, 2 and 1.",
+      "certificate": {
+        "file": "src/a64/flags.rs",
+        "lemma": "lemma_cc_icmp_blank32(lir::ICmp::GtU, 2, 1)",
+        "witness": "isa::condition_holds(isa::set_nzcv(blank(), cmp_nzcv(32, 2, 1)), super::templates::cset_cond(lir::ICmp::GtU)) == true && lir::icmp(lir::ICmp::GtU, 32, 2, 1) == true",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "a64-chunk-one-uses-the-wrong-divisor",
+      "module": "a64::bitmid",
+      "file": "src/a64/templates.rs",
+      "find": "        ((v / 0x1_0000) % 0x1_0000) as u16",
+      "replace": "        ((v / 0x2_0000) % 0x1_0000) as u16",
+      "expect": "killed",
+      "reason": "The second 16-bit chunk of a constant (the `movk ..., lsl #16` immediate) would be taken from bit 17 instead of bit 16, so the four chunks no longer add up to the word: for 0x10000 the chunks would all be 0. `bitmid::lemma_chunks` is false for the mutant at 0x10000.",
+      "certificate": {
+        "file": "src/a64/bitmid.rs",
+        "lemma": "lemma_chunks(0x1_0000u64)",
+        "witness": "super::templates::chunk(0x1_0000u64, 1) == 0u16"
+      }
+    },
+    {
+      "id": "a64-neg-loads-the-wrong-mask",
+      "module": "a64::bitmid",
+      "file": "src/a64/templates.rs",
+      "find": "            imm16: 0x8000,",
+      "replace": "            imm16: 0x4000,",
+      "expect": "killed",
+      "reason": "The `movz` of the `f64.neg` template would load 2^62 instead of the sign bit 2^63 into `x1`, so `eor` would flip the wrong bit. `bitmid::lemma_neg_template_mask` (which `lemma_mid_neg` rests on) is false for the mutant.",
+      "certificate": {
+        "file": "src/a64/bitmid.rs",
+        "lemma": "lemma_neg_template_mask()",
+        "witness": "(match super::templates::neg_mid()[0] { isa::Instr::MoveWide { sf, opcode, d, imm16, hw } => chunk_val(imm16, hw) == 0x4000_0000_0000_0000int, _ => false }) == true"
+      }
+    },
+    {
+      "id": "a64-slot-immediate-scaled-by-four",
+      "module": "a64::steps",
+      "file": "src/a64/spec.rs",
+      "find": "    (slot_disp(j) / 8) as u16",
+      "replace": "    (slot_disp(j) / 4) as u16",
+      "expect": "killed",
+      "reason": "The `imm12` of a frame slot's `ldr`/`str` is the displacement divided by the access size, 8; divided by 4 every slot access would land at twice the offset (slot 0 at 528, outside the context). `steps::lemma_slot_imm` is false for the mutant at slot 0.",
+      "certificate": {
+        "file": "src/a64/steps.rs",
+        "lemma": "lemma_slot_imm(0)",
+        "witness": "slot_imm(0) == 66u16"
+      }
+    },
+    {
+      "id": "mem-access-index-is-scaled",
+      "module": "cfmemvalid",
+      "file": "src/cftemplates.rs",
+      "find": "index: Some(x64::Index { reg: rcx(), scale: 0 })",
+      "replace": "index: Some(x64::Index { reg: rcx(), scale: 1 })",
+      "expect": "killed",
+      "reason": "The access `[rsi + 2 rcx]` would scale the checked index, which reaches past the region; the validator refuses any scale but 1. `cfmemvalid::lemma_access_accepted` (the validator's `access_ok` admits `[rsi + rcx]` after the check) is false for the mutant at region 0, 8 bytes, a load.",
+      "certificate": {
+        "file": "src/cfmemvalid.rs",
+        "lemma": "lemma_access_accepted(0, 8, 8, false)",
+        "witness": "!clazel_codecheck::spec::access_ok(seq![clazel_codecheck::spec::Binding { reg: 6, fact: clazel_codecheck::spec::Fact::Base(0) }, clazel_codecheck::spec::Binding { reg: 2, fact: clazel_codecheck::spec::Fact::Unknown }, clazel_codecheck::spec::Binding { reg: 0, fact: clazel_codecheck::spec::Fact::Unknown }, clazel_codecheck::spec::Binding { reg: 1, fact: clazel_codecheck::spec::Fact::Idx(0, 8) }], clazel_codecheck::spec::Access { mem: ix_mem(), size: 8, store: false })"
+      }
+    },
+    {
+      "id": "mem-access-base-register",
+      "module": "cfmemvalid",
+      "file": "src/cftemplates.rs",
+      "find": "x64::Mem { base: rsi(), index: Some(",
+      "replace": "x64::Mem { base: rdi(), index: Some(",
+      "expect": "killed",
+      "reason": "The access would use `rdi` as the base, which is not known to hold the region's base. `cfmemvalid::lemma_access_accepted` (the validator's `access_ok` admits `[rsi + rcx]` after the check) is false for the mutant at region 0, 8 bytes, a load.",
+      "certificate": {
+        "file": "src/cfmemvalid.rs",
+        "lemma": "lemma_access_accepted(0, 8, 8, false)",
+        "witness": "!clazel_codecheck::spec::access_ok(seq![clazel_codecheck::spec::Binding { reg: 6, fact: clazel_codecheck::spec::Fact::Base(0) }, clazel_codecheck::spec::Binding { reg: 2, fact: clazel_codecheck::spec::Fact::Unknown }, clazel_codecheck::spec::Binding { reg: 0, fact: clazel_codecheck::spec::Fact::Unknown }, clazel_codecheck::spec::Binding { reg: 1, fact: clazel_codecheck::spec::Fact::Idx(0, 8) }], clazel_codecheck::spec::Access { mem: ix_mem(), size: 8, store: false })"
+      }
+    },
+    {
+      "id": "mem-access-index-register",
+      "module": "cfmemvalid",
+      "file": "src/cftemplates.rs",
+      "find": "Index { reg: rcx(), scale: 0 }",
+      "replace": "Index { reg: rdx(), scale: 0 }",
+      "expect": "killed",
+      "reason": "The access would use `rdx`, the check's scratch register, not the checked and masked index. `cfmemvalid::lemma_access_accepted` (the validator's `access_ok` admits `[rsi + rcx]` after the check) is false for the mutant at region 0, 8 bytes, a load.",
+      "certificate": {
+        "file": "src/cfmemvalid.rs",
+        "lemma": "lemma_access_accepted(0, 8, 8, false)",
+        "witness": "!clazel_codecheck::spec::access_ok(seq![clazel_codecheck::spec::Binding { reg: 6, fact: clazel_codecheck::spec::Fact::Base(0) }, clazel_codecheck::spec::Binding { reg: 2, fact: clazel_codecheck::spec::Fact::Unknown }, clazel_codecheck::spec::Binding { reg: 0, fact: clazel_codecheck::spec::Fact::Unknown }, clazel_codecheck::spec::Binding { reg: 1, fact: clazel_codecheck::spec::Fact::Idx(0, 8) }], clazel_codecheck::spec::Access { mem: ix_mem(), size: 8, store: false })"
+      }
+    },
+    {
+      "id": "mem-access-displacement",
+      "module": "cfmemvalid",
+      "file": "src/cftemplates.rs",
+      "find": "scale: 0 }), disp: 0 }",
+      "replace": "scale: 0 }), disp: 8 }",
+      "expect": "killed",
+      "reason": "The access would have a displacement of 8, which the validator refuses (it checked `i + n`, not `i + 8 + n`). `cfmemvalid::lemma_access_accepted` (the validator's `access_ok` admits `[rsi + rcx]` after the check) is false for the mutant at region 0, 8 bytes, a load.",
+      "certificate": {
+        "file": "src/cfmemvalid.rs",
+        "lemma": "lemma_access_accepted(0, 8, 8, false)",
+        "witness": "!clazel_codecheck::spec::access_ok(seq![clazel_codecheck::spec::Binding { reg: 6, fact: clazel_codecheck::spec::Fact::Base(0) }, clazel_codecheck::spec::Binding { reg: 2, fact: clazel_codecheck::spec::Fact::Unknown }, clazel_codecheck::spec::Binding { reg: 0, fact: clazel_codecheck::spec::Fact::Unknown }, clazel_codecheck::spec::Binding { reg: 1, fact: clazel_codecheck::spec::Fact::Idx(0, 8) }], clazel_codecheck::spec::Access { mem: ix_mem(), size: 8, store: false })"
+      }
+    },
+    {
+      "id": "i32-access-reads-eight-bytes",
+      "module": "cfmemvalid",
+      "file": "src/cftemplates.rs",
+      "find": "MTy::I32 => x64::Size::W32,",
+      "replace": "MTy::I32 => x64::Size::W64,",
+      "expect": "killed",
+      "reason": "An `i32` load or store would move 8 bytes after a check of 4, reading or overwriting 4 bytes of the next element. `cfmemvalid::lemma_mty_sz_bytes` (the operand size moves as many bytes as the type has) is false for the mutant at `i32`.",
+      "certificate": {
+        "file": "src/cfmemvalid.rs",
+        "lemma": "lemma_mty_sz_bytes(MTy::I32)",
+        "witness": "x64::nbytes(mty_sz(MTy::I32)) != MTy::I32.size()"
+      }
+    },
+    {
+      "id": "f64-access-is-four-bytes",
+      "module": "cfmemvalid",
+      "file": "src/cfspec.rs",
+      "find": "MTy::F64 => 8,",
+      "replace": "MTy::F64 => 4,",
+      "expect": "killed",
+      "reason": "An `f64` access would be checked for 4 bytes and move 8 (in the statement's `MTy::size`, which the check's size is taken from). `cfmemvalid::lemma_mty_size_is_lir` (the access size is LIR's `ty_size`) is false for the mutant at `f64`.",
+      "certificate": {
+        "file": "src/cfmemvalid.rs",
+        "lemma": "lemma_mty_size_is_lir(MTy::F64)",
+        "witness": "lir::ty_size(MTy::F64.lir_ty()) != MTy::F64.size()"
+      }
+    },
+    {
+      "id": "bounds-check-exits-with-zero",
+      "module": "cfmemvalid",
+      "file": "src/cftemplates.rs",
+      "find": "MemOp::BoundsCheck { code, .. } => code,",
+      "replace": "MemOp::BoundsCheck { code, .. } => 0,",
+      "expect": "killed",
+      "reason": "A failing `bounds_check` would exit with code 0, not its own code, which LIR's `Exit` carries. `cfmemvalid::lemma_bc_exit_code` is false for the mutant at code 9.",
+      "certificate": {
+        "file": "src/cfmemvalid.rs",
+        "lemma": "lemma_bc_exit_code(0, 1, 9)",
+        "witness": "mem_exit_code(MemOp::BoundsCheck { region: 0, size: 1, code: 9 }) != 9u32"
+      }
+    },
+    {
+      "id": "br-table-chain-jumps-on-not-equal",
+      "module": "cfmemvalid",
+      "file": "src/cftemplates.rs",
+      "find": "jcc_i(4, rel),",
+      "replace": "jcc_i(5, rel),",
+      "expect": "killed",
+      "reason": "A `br_table` entry would jump when the index differs from the entry's number (`jne` for `je`), so it would take the first target for every index but 0. `cfmemvalid::lemma_brt_cc` (the entry's condition code is `eq`'s) is false for the mutant.",
+      "certificate": {
+        "file": "src/cfmemvalid.rs",
+        "lemma": "lemma_brt_cc(0, 0)",
+        "witness": "brt_entry(0, 0)[2]->Jcc_cc != crate::templates::cc_of(lir::ICmp::Eq)"
+      }
+    },
+    {
+      "id": "emitter-max-size-differs-from-spec",
+      "module": "cfemit",
+      "file": "src/cfemit.rs",
+      "find": "pub const MAX_SIZE: usize = 0x2000_0000;",
+      "replace": "pub const MAX_SIZE: usize = 0x4000_0000;",
+      "expect": "killed",
+      "reason": "The emitter would translate bodies up to 2^30 bytes where the spec's `cf_prog_ok` stops at `max_size` (2^29), so it would return a blob for a program the contract says has no translation, and a displacement could leave the range `labels_fit` covers. `cfemit::lemma_emitter_limits` (the emitter's limit is the spec's) is false for the mutant.",
+      "certificate": {
+        "file": "src/cfemit.rs",
+        "lemma": "lemma_emitter_limits()",
+        "witness": "MAX_SIZE as nat != max_size()"
+      }
+    },
+    {
+      "id": "emitter-max-targets-differs-from-spec",
+      "module": "cfemit",
+      "file": "src/cfemit.rs",
+      "find": "pub const MAX_TARGETS: usize = 0x10000;",
+      "replace": "pub const MAX_TARGETS: usize = 0x20000;",
+      "expect": "killed",
+      "reason": "The emitter would accept a `br_table` of up to 2^17 targets where `cf_flow` refuses more than `max_targets` (2^16). `cfemit::lemma_emitter_limits` is false for the mutant.",
+      "certificate": {
+        "file": "src/cfemit.rs",
+        "lemma": "lemma_emitter_limits()",
+        "witness": "MAX_TARGETS as nat != max_targets()"
+      }
+    },
+    {
+      "id": "a64-load-access-index-register",
+      "module": "a64::cfmemvalid",
+      "file": "src/a64/cftemplates.rs",
+      "find": "load: true,\n                t: x0(),\n                n: x3(),\n                m: x1(),",
+      "replace": "load: true,\n                t: x0(),\n                n: x3(),\n                m: x2(),",
+      "expect": "killed",
+      "reason": "A load's access would index with `x2`, the check's scratch register for the bound, not the checked and masked index in `x1`. `a64::cfmemvalid::lemma_load_access_accepted` (the validator's `access_ok` admits the template's access after the check) is false for the mutant at region 0, 8 bytes.",
+      "certificate": {
+        "file": "src/a64/cfmemvalid.rs",
+        "lemma": "lemma_load_access_accepted()",
+        "witness": "!clazel_codecheck::a64::spec::access_ok(after_check(0, 8), clazel_codecheck::a64::spec::mem_access(mem_tail(MemOp::Load { region: 0, ty: MTy::I64 }, 0, 1)[0])->Some_0)"
+      }
+    },
+    {
+      "id": "a64-load-access-is-scaled",
+      "module": "a64::cfmemvalid",
+      "file": "src/a64/cftemplates.rs",
+      "find": "m: x1(),\n                s: false,\n            },\n            store_slot(",
+      "replace": "m: x1(),\n                s: true,\n            },\n            store_slot(",
+      "expect": "killed",
+      "reason": "A load's index would be shifted left by the access size (`S = 1`), so it would read at `base + 8 * index`, past the checked range. `a64::cfmemvalid::lemma_load_access_accepted` is false for the mutant (the validator's `access_ok` refuses a shifted index).",
+      "certificate": {
+        "file": "src/a64/cfmemvalid.rs",
+        "lemma": "lemma_load_access_accepted()",
+        "witness": "!clazel_codecheck::a64::spec::access_ok(after_check(0, 8), clazel_codecheck::a64::spec::mem_access(mem_tail(MemOp::Load { region: 0, ty: MTy::I64 }, 0, 1)[0])->Some_0)"
+      }
+    },
+    {
+      "id": "a64-store-access-index-register",
+      "module": "a64::cfmemvalid",
+      "file": "src/a64/cftemplates.rs",
+      "find": "t: x4(),\n                n: x3(),\n                m: x1(),",
+      "replace": "t: x4(),\n                n: x3(),\n                m: x2(),",
+      "expect": "killed",
+      "reason": "A store's access would index with `x2`, the check's scratch register for the bound, not the checked index. `a64::cfmemvalid::lemma_store_access_accepted` is false for the mutant at region 0, 8 bytes.",
+      "certificate": {
+        "file": "src/a64/cfmemvalid.rs",
+        "lemma": "lemma_store_access_accepted()",
+        "witness": "!clazel_codecheck::a64::spec::access_ok(after_check(0, 8), clazel_codecheck::a64::spec::mem_access(mem_tail(MemOp::Store { region: 0, ty: MTy::I64 }, 0, 2)[0])->Some_0)"
+      }
+    },
+    {
+      "id": "a64-i32-access-is-64-bit",
+      "module": "a64::cfmemvalid",
+      "file": "src/a64/cftemplates.rs",
+      "find": "MTy::I32 => isa::Width::W32,",
+      "replace": "MTy::I32 => isa::Width::W64,",
+      "expect": "killed",
+      "reason": "An `i32` access would be a 64-bit `ldr`/`str` (8 bytes) while its check admits 4: it would read or write past the checked range. `a64::cfmemvalid::lemma_mty_sf_bytes` (an access moves as many bytes as its type has) is false for the mutant at `i32`.",
+      "certificate": {
+        "file": "src/a64/cfmemvalid.rs",
+        "lemma": "lemma_mty_sf_bytes(MTy::I32)",
+        "witness": "sf_bytes(mty_sf(MTy::I32)) != MTy::I32.size()"
+      }
+    },
+    {
+      "id": "a64-bounds-check-exits-with-zero",
+      "module": "a64::cfmemvalid",
+      "file": "src/a64/cftemplates.rs",
+      "find": "MemOp::BoundsCheck { code, .. } => code as u16,",
+      "replace": "MemOp::BoundsCheck { code, .. } => 0u16,",
+      "expect": "killed",
+      "reason": "A failing `bounds_check` would exit with code 0, not its own code, which LIR's `Exit` carries. `a64::cfmemvalid::lemma_bc_exit_code` is false for the mutant at code 9.",
+      "certificate": {
+        "file": "src/a64/cfmemvalid.rs",
+        "lemma": "lemma_bc_exit_code(0, 1, 9)",
+        "witness": "mem_exit_code(MemOp::BoundsCheck { region: 0, size: 1, code: 9 }) as u32 != 9u32"
+      }
+    },
+    {
+      "id": "a64-br-table-chain-branches-on-not-equal",
+      "module": "a64::cfmemvalid",
+      "file": "src/a64/cftemplates.rs",
+      "find": "bcond_i(0, rel),",
+      "replace": "bcond_i(1, rel),",
+      "expect": "killed",
+      "reason": "A `br_table` entry would branch when the index differs from the entry's number (`b.ne` for `b.eq`), so it would take the first target for every index but 0. `a64::cfmemvalid::lemma_brt_cond` (the entry's condition is `eq`, 0) is false for the mutant.",
+      "certificate": {
+        "file": "src/a64/cfmemvalid.rs",
+        "lemma": "lemma_brt_cond(0, 0)",
+        "witness": "brt_entry(0, 0)[2]->BCond_cond != 0u8"
+      }
+    },
+    {
+      "id": "a64-branch-displacement-is-in-bytes",
+      "module": "a64::cfmemvalid",
+      "file": "src/a64/cftemplates.rs",
+      "find": "isa::Instr::B { imm26: (rel / 4) as i32 }",
+      "replace": "isa::Instr::B { imm26: (rel / 2) as i32 }",
+      "expect": "killed",
+      "reason": "A `b` would carry half the byte displacement where the machine scales its field by 4, so every branch would go twice as far. `a64::cfmemvalid::lemma_b_words` (a `b` 8 bytes on has `imm26` 2) is false for the mutant.",
+      "certificate": {
+        "file": "src/a64/cfmemvalid.rs",
+        "lemma": "lemma_b_words()",
+        "witness": "b_i(8)->B_imm26 != 2i32"
+      }
+    },
+    {
+      "id": "a64-br-if-branches-on-zero",
+      "module": "a64::cfmemvalid",
+      "file": "src/a64/cftemplates.rs",
+      "find": "Node::BrIf(l) => cond_pre(nl, h, false, if l < offs.len() {",
+      "replace": "Node::BrIf(l) => cond_pre(nl, h, true, if l < offs.len() {",
+      "expect": "killed",
+      "reason": "`br_if` would branch on a zero condition (`cbz` for `cbnz`). `a64::cfmemvalid::lemma_brif_branches_on_nonzero` is false for the mutant.",
+      "certificate": {
+        "file": "src/a64/cfmemvalid.rs",
+        "lemma": "lemma_brif_branches_on_nonzero()",
+        "witness": "ctmpl(Node::BrIf(0), 0, 1, seq![8int])[1]->CompareBranch_iszero != false"
+      }
+    },
+    {
+      "id": "a64-emitter-max-words-differs-from-spec",
+      "module": "a64::cfemit",
+      "file": "src/a64/cfemit.rs",
+      "find": "pub const MAX_WORDS: usize = 0x2_0000;",
+      "replace": "pub const MAX_WORDS: usize = 0x4_0000;",
+      "expect": "killed",
+      "reason": "The emitter would translate bodies up to 2^20 bytes where the spec's `cf_prog_ok` stops at `max_size` (2^19), so it would return a blob for a program the contract says has no translation, and a `cbz` could be asked to reach farther than its 19 bits. `a64::cfemit::lemma_emitter_limits` (the emitter's limit is the spec's) is false for the mutant.",
+      "certificate": {
+        "file": "src/a64/cfemit.rs",
+        "lemma": "lemma_emitter_limits()",
+        "witness": "4 * MAX_WORDS as nat != max_size()"
+      }
+    },
+    {
+      "id": "a64-emitter-max-targets-differs-from-spec",
+      "module": "a64::cfemit",
+      "file": "src/a64/cfemit.rs",
+      "find": "pub const MAX_TARGETS: usize = 0x10000;",
+      "replace": "pub const MAX_TARGETS: usize = 0x20000;",
+      "expect": "killed",
+      "reason": "The emitter would accept a `br_table` of up to 2^17 targets where the spec stops at `max_targets` (2^16, the most a 16-bit `movz` immediate can number), so a target's index would be truncated. `a64::cfemit::lemma_emitter_limits` is false for the mutant.",
+      "certificate": {
+        "file": "src/a64/cfemit.rs",
+        "lemma": "lemma_emitter_limits()",
+        "witness": "MAX_TARGETS as nat != max_targets()"
+      }
+    },
+    {
+      "id": "front-int32-tag-test-uses-the-wrong-tag",
+      "module": "front::trace",
+      "file": "src/front/arith.rs",
+      "find": "pub open spec fn tag_hi() -> u64 {\n    0xFFF9_0000\n}",
+      "replace": "pub open spec fn tag_hi() -> u64 {\n    0xFFFA_0000\n}",
+      "expect": "killed",
+      "reason": "The int32 test of the small-integer lowerings would compare the high half of a word with the tag of the specials (0xFFFA) instead of int32's (0xFFF9), so it would reject every int32 and accept `undefined`, `null` and the booleans. `trace::lemma_tag_test` (a word's high half is the tag exactly when it is an int32) is false for the mutant at the int32 5.",
+      "certificate": {
+        "file": "src/front/trace.rs",
+        "lemma": "lemma_tag_test(0xFFF9_0000_0000_0005u64)",
+        "witness": "((0xFFF9_0000_0000_0005u64 >> 32u64) == super::arith::tag_hi()) == false && js::is_int32(0xFFF9_0000_0000_0005u64) == true"
+      }
+    },
+    {
+      "id": "front-result-is-tagged-as-a-special",
+      "module": "front::arith",
+      "file": "src/front/arith.rs",
+      "find": "pub open spec fn tag_bits() -> u64 {\n    0xFFF9_0000_0000_0000\n}",
+      "replace": "pub open spec fn tag_bits() -> u64 {\n    0xFFFA_0000_0000_0000\n}",
+      "expect": "killed",
+      "reason": "The word the lowering stores for an int32 result would carry the specials' tag (0xFFFA) instead of int32's (0xFFF9), so a sum would be stored as a non-value. `arith::lemma_fits_bv` (the tagged low half of a fitting result is `enc_int32` of it) is false for the mutant at 5.",
+      "certificate": {
+        "file": "src/front/arith.rs",
+        "lemma": "lemma_fits_bv(5i64)",
+        "witness": "tagged(5u64) != js::enc_int32(5i32)"
+      }
+    },
+    {
+      "id": "front-subtract-lowers-to-add",
+      "module": "front::arith",
+      "file": "src/front/arith.rs",
+      "find": "lir::IBin::Add\n    } else if k == 1 {\n        lir::IBin::Sub",
+      "replace": "lir::IBin::Add\n    } else if k == 1 {\n        lir::IBin::Add",
+      "expect": "killed",
+      "reason": "The lowering of `Sub` would emit a 64-bit `add`. `arith::lemma_ibin64` (the 64-bit operation of `k` is the machine's add, subtract or multiply) is false for the mutant at `k = 1`, 5 and 3: it gives 8, not 2.",
+      "certificate": {
+        "file": "src/front/arith.rs",
+        "lemma": "lemma_ibin64(1nat, 5u64, 3u64)",
+        "witness": "lir::ibin64(ibin_of(1nat), 5u64, 3u64) == 8u64",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "front-sign-extension-zero-extends",
+      "module": "front::arith",
+      "file": "src/front/arith.rs",
+      "find": "    ((x as i32) as i64) as u64\n}",
+      "replace": "    (x as i64) as u64\n}",
+      "expect": "killed",
+      "reason": "The sign extension of a payload would zero-extend, so `-1 + 1` in the lowering would be computed as `4294967295 + 1`. `arith::lemma_sx` (`i64.extend_i32_s` computes `sext`) is false for the mutant at 0xFFFF_FFFF.",
+      "certificate": {
+        "file": "src/front/arith.rs",
+        "lemma": "lemma_sx(0xFFFF_FFFFu32)",
+        "witness": "lir::wrap(64, lir::signed_of(32, 0xFFFF_FFFFu32 as int)) as u64 == 0xFFFF_FFFF_FFFF_FFFFu64",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "front-handler-codes-collide",
+      "module": "front::dispatch",
+      "file": "src/front/spec.rs",
+      "find": "        js::HandlerId::Sub => 1,",
+      "replace": "        js::HandlerId::Sub => 0,",
+      "expect": "killed",
+      "reason": "`Sub` would exit with `Add`'s code, so the host would run the wrong handler. `dispatch::lemma_handler_index_inverse` (decoding an exit code gives back the handler) is false for the mutant at `Sub`.",
+      "certificate": {
+        "file": "src/front/dispatch.rs",
+        "lemma": "lemma_handler_index_inverse(js::HandlerId::Sub)",
+        "witness": "handler_index(js::HandlerId::Sub) == 0nat && handler_of_index(0nat) == Some(js::HandlerId::Add)"
+      }
+    },
+    {
+      "id": "front-less-than-lowers-to-less-or-equal",
+      "module": "front::intcmp",
+      "file": "src/front/intcmp.rs",
+      "find": "    if k == 0 {\n        lir::ICmp::LtS\n",
+      "replace": "    if k == 0 {\n        lir::ICmp::LeS\n",
+      "expect": "killed",
+      "reason": "`Lt` would be lowered to a signed `<=` on the sign-extended payloads, so `5 < 5` would store `true`. `intcmp::lemma_cmp_word` (the comparison's word is the encoding of the integers' comparison) is false for the mutant at `Lt` of 5 and 5: the word is `true`'s, the integers' comparison is false.",
+      "certificate": {
+        "file": "src/front/intcmp.rs",
+        "lemma": "lemma_cmp_word(0nat, 0xFFF9_0000_0000_0005u64, 0xFFF9_0000_0000_0005u64)",
+        "witness": "js::is_int32(0xFFF9_0000_0000_0005u64) == true && cmp_word(0nat, super::arith::sext(super::arith::lo32(0xFFF9_0000_0000_0005u64)), super::arith::sext(super::arith::lo32(0xFFF9_0000_0000_0005u64))) == js::TRUE && js::enc_bool(cmp_truth(0nat, js::int32_of(0xFFF9_0000_0000_0005u64) as int, js::int32_of(0xFFF9_0000_0000_0005u64) as int)) == js::FALSE",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "front-strict-equal-lowers-to-not-equal-truth",
+      "module": "front::intcmp",
+      "file": "src/front/intcmp.rs",
+      "find": "    } else if k == 4 {\n        ia == ib\n",
+      "replace": "    } else if k == 4 {\n        ia != ib\n",
+      "expect": "killed",
+      "reason": "The truth value `StrictEq` is compared against would be `!=`, so the lowering's `eq` word (true for `5 === 5`) would disagree with it. `intcmp::lemma_cmp_word` is false for the mutant at `StrictEq` of 5 and 5.",
+      "certificate": {
+        "file": "src/front/intcmp.rs",
+        "lemma": "lemma_cmp_word(4nat, 0xFFF9_0000_0000_0005u64, 0xFFF9_0000_0000_0005u64)",
+        "witness": "js::is_int32(0xFFF9_0000_0000_0005u64) == true && cmp_word(4nat, super::arith::sext(super::arith::lo32(0xFFF9_0000_0000_0005u64)), super::arith::sext(super::arith::lo32(0xFFF9_0000_0000_0005u64))) == js::TRUE && js::enc_bool(cmp_truth(4nat, js::int32_of(0xFFF9_0000_0000_0005u64) as int, js::int32_of(0xFFF9_0000_0000_0005u64) as int)) == js::FALSE",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "front-shift-count-reduced-modulo-64",
+      "module": "front::bitops",
+      "file": "src/front/bitops.rs",
+      "find": "    ((ib as u32) as nat) % 32\n",
+      "replace": "    ((ib as u32) as nat) % 64\n",
+      "expect": "killed",
+      "reason": "The shift count the semantics uses would be reduced modulo 64 instead of 32, so `1 << 32` would be `2^32` (wrapped to 0) while the lowering masks the count to five bits and gives 1. `bitops::lemma_bit_word` (the lowering's word is the encoding of the int32 result) is false for the mutant at `Shl` of 1 and 32.",
+      "certificate": {
+        "file": "src/front/bitops.rs",
+        "lemma": "lemma_bit_word(3nat, 0xFFF9_0000_0000_0001u64, 0xFFF9_0000_0000_0020u64)",
+        "witness": "js::is_int32(0xFFF9_0000_0000_0001u64) == true && js::is_int32(0xFFF9_0000_0000_0020u64) == true && bit_word(3nat, super::arith::sext(super::arith::lo32(0xFFF9_0000_0000_0001u64)), super::arith::sext(super::arith::lo32(0xFFF9_0000_0000_0020u64))) != js::enc_int32(bit_res(3nat, js::int32_of(0xFFF9_0000_0000_0001u64), js::int32_of(0xFFF9_0000_0000_0020u64)))",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "front-truth-flag-tests-the-payload-against-one",
+      "module": "front::truth",
+      "file": "src/front/truth.rs",
+      "find": "lir::bool_i32(lir::bool_i32(super::arith::lo32(va) == 0) == 0),",
+      "replace": "lir::bool_i32(lir::bool_i32(super::arith::lo32(va) == 1) == 0),",
+      "expect": "killed",
+      "reason": "The truth flag of an int32 would test its payload against 1 instead of 0, so the int32 `0` would be truthy. `truth::lemma_tr_t` (the truth flag is non-zero exactly when `to_boolean_fast` is `Some(true)`) is false for the mutant at the int32 0.",
+      "certificate": {
+        "file": "src/front/truth.rs",
+        "lemma": "lemma_tr_t(0xFFF9_0000_0000_0000u64)",
+        "witness": "tr_g(0xFFF9_0000_0000_0000u64) != 0u32 && tr_t(0xFFF9_0000_0000_0000u64) != 0u32 && js::to_boolean_fast(0xFFF9_0000_0000_0000u64) == Some(false)",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "front-inc-guard-excludes-the-wrong-value",
+      "module": "front::unops",
+      "file": "src/front/unops.rs",
+      "find": "        ia != 2147483647\n",
+      "replace": "        ia != 2147483646\n",
+      "expect": "killed",
+      "reason": "The set of int32 operands `Inc` is lowered for would exclude `2^31 - 2` instead of `2^31 - 1`, so the guard (which tests against `2^31 - 1`) would let through a value the semantics says is not covered. `unops::lemma_un_g` (the flag is non-zero exactly for an int32 the fast result covers) is false for the mutant at `Inc` of `2^31 - 2`.",
+      "certificate": {
+        "file": "src/front/unops.rs",
+        "lemma": "lemma_un_g(0nat, 0xFFF9_0000_7FFF_FFFEu64)",
+        "witness": "js::is_int32(0xFFF9_0000_7FFF_FFFEu64) == true && un_g(0nat, 0xFFF9_0000_7FFF_FFFEu64) != 0u32 && un_cond(0nat, js::int32_of(0xFFF9_0000_7FFF_FFFEu64)) == false",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "front-decrement-result-is-an-increment",
+      "module": "front::unops",
+      "file": "src/front/unops.rs",
+      "find": "    } else if k == 1 {\n        ((ia as int) - 1) as i32\n",
+      "replace": "    } else if k == 1 {\n        ((ia as int) + 1) as i32\n",
+      "expect": "killed",
+      "reason": "The int32 `Dec` is specified to give would be `a + 1`, so the lowering's word (`a - 1`, tagged) would disagree. `unops::lemma_un_word` (the value block's word is the encoding of the int32 result) is false for the mutant at `Dec` of 5: the word is 4, the result 6.",
+      "certificate": {
+        "file": "src/front/unops.rs",
+        "lemma": "lemma_un_word(1nat, 0xFFF9_0000_0000_0005u64)",
+        "witness": "js::is_int32(0xFFF9_0000_0000_0005u64) == true && un_word(1nat, super::arith::sext(super::arith::lo32(0xFFF9_0000_0000_0005u64))) != js::enc_int32(un_res(1nat, js::int32_of(0xFFF9_0000_0000_0005u64)))",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "front-negative-key-has-the-wrong-sign",
+      "module": "front::numord",
+      "file": "src/front/numord.rs",
+      "find": "        -pos_bits((-n) as nat)\n",
+      "replace": "        pos_bits((-n) as nat)\n",
+      "expect": "killed",
+      "reason": "The sign-magnitude key of the double a negative integer stands for would be positive, so `-1` and `1` would have the same key. `numord::lemma_korder_mono` (the key is strictly increasing) is false for the mutant at -1 and 1.",
+      "certificate": {
+        "file": "src/front/numord.rs",
+        "lemma": "lemma_korder_mono(-1int, 1int)",
+        "witness": "korder(-1int) == korder(1int)",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    }
+  ]
+}

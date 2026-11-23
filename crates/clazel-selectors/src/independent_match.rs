@@ -278,6 +278,7 @@ pub proof fn lemma_child_of_parent(doc: Document, p: NodeId, par: NodeId)
 /// The spec's scan for the nearest earlier element that matches.
 pub proof fn lemma_prev_elem(
     doc: Document,
+    scope: Option<NodeId>,
     c: Complex,
     n: int,
     ch: Seq<NodeId>,
@@ -286,9 +287,9 @@ pub proof fn lemma_prev_elem(
 )
     requires
         0 <= k < ch.len(),
-        forall|y: NodeId| is_element(doc, y) ==> match_complex(doc, c, n, y) == #[trigger] q(y),
+        forall|y: NodeId| is_element(doc, y) ==> match_complex(doc, scope, c, n, y) == #[trigger] q(y),
     ensures
-        previous_element_matches(doc, c, n, ch, k) == (cnt_el(doc, ch, k + 1) > 0 && q(
+        previous_element_matches(doc, scope, c, n, ch, k) == (cnt_el(doc, ch, k + 1) > 0 && q(
             i_elements(doc, ch)[cnt_el(doc, ch, k + 1) - 1],
         )),
     decreases k,
@@ -298,15 +299,16 @@ pub proof fn lemma_prev_elem(
     assert(is_element(doc, ch[k]) == i_is_el(doc, ch[k]));
     if i_is_el(doc, ch[k]) {
         lemma_elements_nth(doc, ch, k);
-        assert(match_complex(doc, c, n, ch[k]) == q(ch[k]));
-        assert(previous_element_matches(doc, c, n, ch, k) == match_complex(doc, c, n, ch[k]));
+        assert(match_complex(doc, scope, c, n, ch[k]) == q(ch[k]));
+        assert(previous_element_matches(doc, scope, c, n, ch, k) == match_complex(doc, scope, c, n, ch[k]));
         assert(cnt_el(doc, ch, k + 1) == cnt_el(doc, ch, k) + 1);
         assert(i_elements(doc, ch)[cnt_el(doc, ch, k + 1) - 1] == ch[k]);
     } else {
         if k > 0 {
-            lemma_prev_elem(doc, c, n, ch, k - 1, q);
-            assert(previous_element_matches(doc, c, n, ch, k) == previous_element_matches(
+            lemma_prev_elem(doc, scope, c, n, ch, k - 1, q);
+            assert(previous_element_matches(doc, scope, c, n, ch, k) == previous_element_matches(
                 doc,
+                scope,
                 c,
                 n,
                 ch,
@@ -315,7 +317,7 @@ pub proof fn lemma_prev_elem(
         } else {
             assert(ch.subrange(0, 0) =~= Seq::<NodeId>::empty());
             assert(cnt_el(doc, ch, 0) == 0);
-            assert(previous_element_matches(doc, c, n, ch, k) == false);
+            assert(previous_element_matches(doc, scope, c, n, ch, k) == false);
         }
     }
 }
@@ -323,6 +325,7 @@ pub proof fn lemma_prev_elem(
 /// The spec's scan over all earlier siblings.
 pub proof fn lemma_earlier(
     doc: Document,
+    scope: Option<NodeId>,
     c: Complex,
     n: int,
     ch: Seq<NodeId>,
@@ -331,19 +334,19 @@ pub proof fn lemma_earlier(
 )
     requires
         0 <= k < ch.len(),
-        forall|y: NodeId| is_element(doc, y) ==> match_complex(doc, c, n, y) == #[trigger] q(y),
+        forall|y: NodeId| is_element(doc, y) ==> match_complex(doc, scope, c, n, y) == #[trigger] q(y),
     ensures
-        some_earlier_sibling_matches(doc, c, n, ch, k) == exists|k2: int|
+        some_earlier_sibling_matches(doc, scope, c, n, ch, k) == exists|k2: int|
             0 <= k2 <= k && i_is_el(doc, #[trigger] ch[k2]) && q(ch[k2]),
     decreases k,
 {
     reveal_with_fuel(some_earlier_sibling_matches, 2);
     assert(is_element(doc, ch[k]) == i_is_el(doc, ch[k]));
     if k > 0 {
-        lemma_earlier(doc, c, n, ch, k - 1, q);
+        lemma_earlier(doc, scope, c, n, ch, k - 1, q);
     }
     if i_is_el(doc, ch[k]) {
-        assert(match_complex(doc, c, n, ch[k]) == q(ch[k]));
+        assert(match_complex(doc, scope, c, n, ch[k]) == q(ch[k]));
     }
     if exists|k2: int| 0 <= k2 <= k && i_is_el(doc, #[trigger] ch[k2]) && q(ch[k2]) {
         let k2 = choose|k2: int| 0 <= k2 <= k && i_is_el(doc, #[trigger] ch[k2]) && q(ch[k2]);
@@ -351,16 +354,17 @@ pub proof fn lemma_earlier(
             assert(0 <= k2 <= k - 1 && i_is_el(doc, ch[k2]) && q(ch[k2]));
         }
     }
-    if k > 0 && some_earlier_sibling_matches(doc, c, n, ch, k - 1) {
+    if k > 0 && some_earlier_sibling_matches(doc, scope, c, n, ch, k - 1) {
         let k2 = choose|k2: int| 0 <= k2 <= k - 1 && i_is_el(doc, #[trigger] ch[k2]) && q(ch[k2]);
         assert(0 <= k2 <= k && i_is_el(doc, ch[k2]) && q(ch[k2]));
     }
-    assert(some_earlier_sibling_matches(doc, c, n, ch, k) == ((is_element(doc, ch[k]) && match_complex(
+    assert(some_earlier_sibling_matches(doc, scope, c, n, ch, k) == ((is_element(doc, ch[k]) && match_complex(
         doc,
+        scope,
         c,
         n,
         ch[k],
-    )) || (k > 0 && some_earlier_sibling_matches(doc, c, n, ch, k - 1))));
+    )) || (k > 0 && some_earlier_sibling_matches(doc, scope, c, n, ch, k - 1))));
 }
 
 /// What the transcription's next-sibling relation says, in terms of the element list.
@@ -389,15 +393,16 @@ pub proof fn lemma_related_next(doc: Document, p: NodeId, x: NodeId)
 
 /// The next-sibling combinator: the spec's scan for the previous element is the
 /// transcription's relation to the element before it in the element list.
-pub proof fn lemma_next_sibling_iff(doc: Document, c: Complex, n: int, x: NodeId, q: spec_fn(NodeId) -> bool)
+pub proof fn lemma_next_sibling_iff(doc: Document, scope: Option<NodeId>, c: Complex, n: int, x: NodeId, q: spec_fn(NodeId) -> bool)
     requires
         wf(doc),
         is_element(doc, x),
-        forall|y: NodeId| is_element(doc, y) ==> match_complex(doc, c, n, y) == #[trigger] q(y),
+        forall|y: NodeId| is_element(doc, y) ==> match_complex(doc, scope, c, n, y) == #[trigger] q(y),
     ensures
         (match parent_of(doc, x) {
             Some(_) => previous_element_matches(
                 doc,
+                scope,
                 c,
                 n,
                 inclusive_siblings(doc, x),
@@ -419,7 +424,7 @@ pub proof fn lemma_next_sibling_iff(doc: Document, c: Complex, n: int, x: NodeId
             assert(inclusive_siblings(doc, x) == ch);
             assert(sibling_index(doc, x) == j);
             if j > 0 {
-                lemma_prev_elem(doc, c, n, ch, j - 1, q);
+                lemma_prev_elem(doc, scope, c, n, ch, j - 1, q);
             } else {
                 assert(ch.subrange(0, 0) =~= Seq::<NodeId>::empty());
                 assert(i == 0);
@@ -438,15 +443,16 @@ pub proof fn lemma_next_sibling_iff(doc: Document, c: Complex, n: int, x: NodeId
 }
 
 /// The subsequent-sibling combinator.
-pub proof fn lemma_subsequent_iff(doc: Document, c: Complex, n: int, x: NodeId, q: spec_fn(NodeId) -> bool)
+pub proof fn lemma_subsequent_iff(doc: Document, scope: Option<NodeId>, c: Complex, n: int, x: NodeId, q: spec_fn(NodeId) -> bool)
     requires
         wf(doc),
         is_element(doc, x),
-        forall|y: NodeId| is_element(doc, y) ==> match_complex(doc, c, n, y) == #[trigger] q(y),
+        forall|y: NodeId| is_element(doc, y) ==> match_complex(doc, scope, c, n, y) == #[trigger] q(y),
     ensures
         (match parent_of(doc, x) {
             Some(_) => some_earlier_sibling_matches(
                 doc,
+                scope,
                 c,
                 n,
                 inclusive_siblings(doc, x),
@@ -470,7 +476,7 @@ pub proof fn lemma_subsequent_iff(doc: Document, c: Complex, n: int, x: NodeId, 
             assert(sibling_index(doc, x) == j);
             assert(i_sibs(doc, x) == e);
             if j > 0 {
-                lemma_earlier(doc, c, n, ch, j - 1, q);
+                lemma_earlier(doc, scope, c, n, ch, j - 1, q);
             }
             // (spec => transcription)
             if exists|k2: int| 0 <= k2 <= j - 1 && i_is_el(doc, #[trigger] ch[k2]) && q(ch[k2]) {
@@ -500,13 +506,13 @@ pub proof fn lemma_subsequent_iff(doc: Document, c: Complex, n: int, x: NodeId, 
 }
 
 /// The child combinator.
-pub proof fn lemma_child_iff(doc: Document, c: Complex, n: int, x: NodeId, q: spec_fn(NodeId) -> bool)
+pub proof fn lemma_child_iff(doc: Document, scope: Option<NodeId>, c: Complex, n: int, x: NodeId, q: spec_fn(NodeId) -> bool)
     requires
         is_element(doc, x),
-        forall|y: NodeId| is_element(doc, y) ==> match_complex(doc, c, n, y) == #[trigger] q(y),
+        forall|y: NodeId| is_element(doc, y) ==> match_complex(doc, scope, c, n, y) == #[trigger] q(y),
     ensures
         (match parent_of(doc, x) {
-            Some(p) => is_element(doc, p) && match_complex(doc, c, n, p),
+            Some(p) => is_element(doc, p) && match_complex(doc, scope, c, n, p),
             None => false,
         }) == exists|p: NodeId| i_related(doc, IComb::Child, p, x) && #[trigger] q(p),
 {
@@ -517,7 +523,7 @@ pub proof fn lemma_child_iff(doc: Document, c: Complex, n: int, x: NodeId, q: sp
         Some(par) => {
             assert(parent(doc, x) == Some(par));
             if is_element(doc, par) {
-                assert(match_complex(doc, c, n, par) == q(par));
+                assert(match_complex(doc, scope, c, n, par) == q(par));
                 assert(i_related(doc, IComb::Child, par, x));
             }
         },
@@ -624,6 +630,7 @@ pub proof fn lemma_rhs_step(doc: Document, a: NodeId, f: nat, q: spec_fn(NodeId)
 /// exactly when one is among `a` and the `f - 1` ancestors above it.
 pub proof fn lemma_walk_iff(
     doc: Document,
+    scope: Option<NodeId>,
     c: Complex,
     n: int,
     a: NodeId,
@@ -633,31 +640,32 @@ pub proof fn lemma_walk_iff(
     requires
         wf(doc),
         a < doc.nodes.len(),
-        forall|y: NodeId| is_element(doc, y) ==> match_complex(doc, c, n, y) == #[trigger] q(y),
+        forall|y: NodeId| is_element(doc, y) ==> match_complex(doc, scope, c, n, y) == #[trigger] q(y),
     ensures
-        some_ancestor_matches(doc, c, n, Some(a), f) == rhs_walk(doc, a, f, q),
+        some_ancestor_matches(doc, scope, c, n, Some(a), f) == rhs_walk(doc, a, f, q),
     decreases f,
 {
     if f >= 1 {
         let _ = lemma_wf_witness(doc);
         lemma_rhs_step(doc, a, f, q);
         if is_element(doc, a) {
-            assert(match_complex(doc, c, n, a) == q(a));
+            assert(match_complex(doc, scope, c, n, a) == q(a));
         }
         assert(parent_of(doc, a) == doc.nodes[a as int].parent);
-        assert(some_ancestor_matches(doc, c, n, Some(a), f) == ((is_element(doc, a) && match_complex(
+        assert(some_ancestor_matches(doc, scope, c, n, Some(a), f) == ((is_element(doc, a) && match_complex(
             doc,
+            scope,
             c,
             n,
             a,
-        )) || some_ancestor_matches(doc, c, n, parent_of(doc, a), (f - 1) as nat)));
+        )) || some_ancestor_matches(doc, scope, c, n, parent_of(doc, a), (f - 1) as nat)));
         match parent_of(doc, a) {
             None => {
-                assert(some_ancestor_matches(doc, c, n, None, (f - 1) as nat) == false);
+                assert(some_ancestor_matches(doc, scope, c, n, None, (f - 1) as nat) == false);
             },
             Some(par) => {
                 assert(par < doc.nodes.len());
-                lemma_walk_iff(doc, c, n, par, (f - 1) as nat, q);
+                lemma_walk_iff(doc, scope, c, n, par, (f - 1) as nat, q);
             },
         }
     }
@@ -665,13 +673,13 @@ pub proof fn lemma_walk_iff(
 
 
 /// The descendant combinator.
-pub proof fn lemma_descendant_iff(doc: Document, c: Complex, n: int, x: NodeId, q: spec_fn(NodeId) -> bool)
+pub proof fn lemma_descendant_iff(doc: Document, scope: Option<NodeId>, c: Complex, n: int, x: NodeId, q: spec_fn(NodeId) -> bool)
     requires
         wf(doc),
         is_element(doc, x),
-        forall|y: NodeId| is_element(doc, y) ==> match_complex(doc, c, n, y) == #[trigger] q(y),
+        forall|y: NodeId| is_element(doc, y) ==> match_complex(doc, scope, c, n, y) == #[trigger] q(y),
     ensures
-        some_ancestor_matches(doc, c, n, parent_of(doc, x), doc.nodes.len())
+        some_ancestor_matches(doc, scope, c, n, parent_of(doc, x), doc.nodes.len())
             == exists|p: NodeId| i_related(doc, IComb::Descendant, p, x) && #[trigger] q(p),
 {
     let len = doc.nodes.len();
@@ -686,9 +694,9 @@ pub proof fn lemma_descendant_iff(doc: Document, c: Complex, n: int, x: NodeId, 
         },
         Some(par) => {
             assert(par < len);
-            lemma_walk_iff(doc, c, n, par, len, q);
+            lemma_walk_iff(doc, scope, c, n, par, len, q);
             // spec => transcription
-            if some_ancestor_matches(doc, c, n, Some(par), len) {
+            if some_ancestor_matches(doc, scope, c, n, Some(par), len) {
                 let p = choose|p: NodeId|
                     inclusive_ancestor_within(doc, p, par, (len - 1) as nat) && is_element(doc, p) && #[trigger] q(p);
                 lemma_no_cycle(doc, x, par, (len - 1) as nat);
@@ -1035,6 +1043,18 @@ pub proof fn lemma_wf_nonempty(doc: Document)
     let _ = lemma_wf_witness(doc);
 }
 
+/// `:scope` matches an element as the transcription's does: the scoping root, or the root of
+/// the tree if there is none. (The transcription reads `:scope` only with [`ICtx::ext`] on, so
+/// no spec selector is related to it, and [`theorem_match_equivalent`] leaves `:scope` out;
+/// this says the two definitions of what it matches are equal.)
+pub proof fn lemma_scope_same(doc: Document, scope: Option<NodeId>, x: NodeId)
+    requires
+        x < doc.nodes.len(),
+    ensures
+        pseudo_class_matches(doc, scope, PseudoClass::Scope, x) == i_is_scope(doc, scope, x),
+{
+}
+
 /// A related simple selector matches an element as its transcription does.
 pub proof fn lemma_match_simple(doc: Document, scope: Option<NodeId>, s: Simple, m: ISimple, x: NodeId)
     requires
@@ -1043,7 +1063,7 @@ pub proof fn lemma_match_simple(doc: Document, scope: Option<NodeId>, s: Simple,
         rel_simple(s, m),
         is_element(doc, x),
     ensures
-        simple_matches(doc, s, x) == i_m_simple(doc, scope, m, x),
+        simple_matches(doc, scope, s, x) == i_m_simple(doc, scope, m, x),
     decreases s, 0nat, 0int,
 {
     lemma_wf_nonempty(doc);
@@ -1115,15 +1135,15 @@ pub proof fn lemma_match_simple(doc: Document, scope: Option<NodeId>, s: Simple,
 }
 
 /// The spec's check of the first `k` simple selectors is the quantifier over them.
-pub proof fn lemma_compound_prefix(doc: Document, c: Seq<Simple>, k: int, x: NodeId)
+pub proof fn lemma_compound_prefix(doc: Document, scope: Option<NodeId>, c: Seq<Simple>, k: int, x: NodeId)
     requires
         0 <= k <= c.len(),
     ensures
-        compound_matches(doc, c, k, x) == forall|j: int| 0 <= j < k ==> simple_matches(doc, #[trigger] c[j], x),
+        compound_matches(doc, scope, c, k, x) == forall|j: int| 0 <= j < k ==> simple_matches(doc, scope, #[trigger] c[j], x),
     decreases k,
 {
     if k > 0 {
-        lemma_compound_prefix(doc, c, k - 1, x);
+        lemma_compound_prefix(doc, scope, c, k - 1, x);
     }
 }
 
@@ -1135,13 +1155,13 @@ pub proof fn lemma_match_compound(doc: Document, scope: Option<NodeId>, c: Seq<S
         rel_compound(c, m),
         c.len() > 0,
     ensures
-        compound_matches(doc, c, c.len() as int, x) == i_m_compound(doc, scope, m, x),
+        compound_matches(doc, scope, c, c.len() as int, x) == i_m_compound(doc, scope, m, x),
     decreases c, 1nat, 0int,
 {
     let off = comp_off(c);
-    lemma_compound_prefix(doc, c, c.len() as int, x);
+    lemma_compound_prefix(doc, scope, c, c.len() as int, x);
     if is_element(doc, x) {
-        assert forall|j: int| 0 <= j < m.subs.len() implies simple_matches(doc, c[off + j], x) == i_m_simple(
+        assert forall|j: int| 0 <= j < m.subs.len() implies simple_matches(doc, scope, c[off + j], x) == i_m_simple(
             doc,
             scope,
             m.subs[j],
@@ -1151,39 +1171,40 @@ pub proof fn lemma_match_compound(doc: Document, scope: Option<NodeId>, c: Seq<S
         }
         match m.ty {
             Some(t) => {
-                lemma_type_same(doc, x, c[0], t);
+                lemma_type_same(doc, scope, x, c[0], t);
             },
             None => {},
         }
         // Each side's quantifier is the other's.
         if i_m_compound(doc, scope, m, x) {
-            assert forall|j: int| 0 <= j < c.len() implies simple_matches(doc, #[trigger] c[j], x) by {
+            assert forall|j: int| 0 <= j < c.len() implies simple_matches(doc, scope, #[trigger] c[j], x) by {
                 if j >= off {
-                    assert(simple_matches(doc, c[off + (j - off)], x));
+                    assert(simple_matches(doc, scope, c[off + (j - off)], x));
                 }
             }
         }
-        if compound_matches(doc, c, c.len() as int, x) {
+        if compound_matches(doc, scope, c, c.len() as int, x) {
             assert forall|k: int| 0 <= k < m.subs.len() implies i_m_simple(doc, scope, #[trigger] m.subs[k], x) by {
-                assert(simple_matches(doc, c[off + k], x));
+                assert(simple_matches(doc, scope, c[off + k], x));
             }
         }
     } else {
-        assert(!simple_matches(doc, c[0], x));
+        assert(!simple_matches(doc, scope, c[0], x));
     }
 }
 
 /// The spec's search along a combinator, from `x`, for a complex selector's first `n1` compound
 /// selectors.
-pub open spec fn spec_search(doc: Document, c: Complex, n1: int, x: NodeId, cs: Combinator) -> bool {
+pub open spec fn spec_search(doc: Document, scope: Option<NodeId>, c: Complex, n1: int, x: NodeId, cs: Combinator) -> bool {
     match cs {
-        Combinator::Descendant => some_ancestor_matches(doc, c, n1, parent_of(doc, x), doc.nodes.len()),
+        Combinator::Descendant => some_ancestor_matches(doc, scope, c, n1, parent_of(doc, x), doc.nodes.len()),
         Combinator::Child => match parent_of(doc, x) {
-            Some(p) => is_element(doc, p) && match_complex(doc, c, n1, p),
+            Some(p) => is_element(doc, p) && match_complex(doc, scope, c, n1, p),
             None => false,
         },
         Combinator::NextSibling => previous_element_matches(
             doc,
+            scope,
             c,
             n1,
             inclusive_siblings(doc, x),
@@ -1191,6 +1212,7 @@ pub open spec fn spec_search(doc: Document, c: Complex, n1: int, x: NodeId, cs: 
         ),
         Combinator::SubsequentSibling => some_earlier_sibling_matches(
             doc,
+            scope,
             c,
             n1,
             inclusive_siblings(doc, x),
@@ -1217,7 +1239,7 @@ pub proof fn lemma_comb_step(
         n >= 2,
         rel_comb(cs, cm),
         forall|y: NodeId|
-            is_element(doc, y) ==> #[trigger] match_complex(doc, c, n - 1, y) == i_m_at(
+            is_element(doc, y) ==> #[trigger] match_complex(doc, scope, c, n - 1, y) == i_m_at(
                 doc,
                 scope,
                 m,
@@ -1226,26 +1248,26 @@ pub proof fn lemma_comb_step(
                 y,
             ),
     ensures
-        spec_search(doc, c, n - 1, x, cs) == exists|p: NodeId|
+        spec_search(doc, scope, c, n - 1, x, cs) == exists|p: NodeId|
             #[trigger] i_related(doc, cm, p, x) && i_m_at(doc, scope, m, None, n - 2, p),
 {
     let q = |y: NodeId| i_m_at(doc, scope, m, None, n - 2, y);
-    assert forall|y: NodeId| is_element(doc, y) implies match_complex(doc, c, n - 1, y) == #[trigger] q(y) by {
+    assert forall|y: NodeId| is_element(doc, y) implies match_complex(doc, scope, c, n - 1, y) == #[trigger] q(y) by {
         assert(q(y) == i_m_at(doc, scope, m, None, n - 2, y));
     }
     match cs {
-        Combinator::Descendant => lemma_descendant_iff(doc, c, n - 1, x, q),
-        Combinator::Child => lemma_child_iff(doc, c, n - 1, x, q),
+        Combinator::Descendant => lemma_descendant_iff(doc, scope, c, n - 1, x, q),
+        Combinator::Child => lemma_child_iff(doc, scope, c, n - 1, x, q),
         Combinator::NextSibling => {
-            lemma_next_sibling_iff(doc, c, n - 1, x, q);
+            lemma_next_sibling_iff(doc, scope, c, n - 1, x, q);
             if parent_of(doc, x) is None {
-                assert(previous_element_matches(doc, c, n - 1, inclusive_siblings(doc, x), sibling_index(doc, x) - 1) == false);
+                assert(previous_element_matches(doc, scope, c, n - 1, inclusive_siblings(doc, x), sibling_index(doc, x) - 1) == false);
             }
         },
         Combinator::SubsequentSibling => {
-            lemma_subsequent_iff(doc, c, n - 1, x, q);
+            lemma_subsequent_iff(doc, scope, c, n - 1, x, q);
             if parent_of(doc, x) is None {
-                assert(some_earlier_sibling_matches(doc, c, n - 1, inclusive_siblings(doc, x), sibling_index(doc, x) - 1) == false);
+                assert(some_earlier_sibling_matches(doc, scope, c, n - 1, inclusive_siblings(doc, x), sibling_index(doc, x) - 1) == false);
             }
         },
     }
@@ -1264,14 +1286,14 @@ pub proof fn lemma_comb_step(
 pub proof fn lemma_complex_first(doc: Document, scope: Option<NodeId>, c: Complex, m: IComplex, x: NodeId)
     requires
         rel_complex(c, m),
-        compound_matches(doc, c.compounds[0], c.compounds[0].len() as int, x) == i_m_compound(
+        compound_matches(doc, scope, c.compounds[0], c.compounds[0].len() as int, x) == i_m_compound(
             doc,
             scope,
             m.units[0],
             x,
         ),
     ensures
-        match_complex(doc, c, 1, x) == i_m_at(doc, scope, m, None, 0, x),
+        match_complex(doc, scope, c, 1, x) == i_m_at(doc, scope, m, None, 0, x),
 {
     assert(m.units.len() == c.compounds.len());
     assert(m.lead is None);
@@ -1286,14 +1308,14 @@ pub proof fn lemma_complex_not_element(doc: Document, scope: Option<NodeId>, c: 
         rel_complex(c, m),
         1 <= n <= c.compounds.len(),
         !is_element(doc, x),
-        compound_matches(doc, c.compounds[n - 1], c.compounds[n - 1].len() as int, x) == i_m_compound(
+        compound_matches(doc, scope, c.compounds[n - 1], c.compounds[n - 1].len() as int, x) == i_m_compound(
             doc,
             scope,
             m.units[n - 1],
             x,
         ),
     ensures
-        match_complex(doc, c, n, x) == i_m_at(doc, scope, m, None, n - 1, x),
+        match_complex(doc, scope, c, n, x) == i_m_at(doc, scope, m, None, n - 1, x),
 {
     assert(m.units.len() == c.compounds.len());
     assert(is_element(doc, x) == i_is_el(doc, x));
@@ -1307,16 +1329,16 @@ pub proof fn lemma_complex_later(doc: Document, scope: Option<NodeId>, c: Comple
     requires
         rel_complex(c, m),
         2 <= n <= c.compounds.len(),
-        compound_matches(doc, c.compounds[n - 1], c.compounds[n - 1].len() as int, x) == i_m_compound(
+        compound_matches(doc, scope, c.compounds[n - 1], c.compounds[n - 1].len() as int, x) == i_m_compound(
             doc,
             scope,
             m.units[n - 1],
             x,
         ),
-        spec_search(doc, c, n - 1, x, c.combinators[n - 2]) == exists|p: NodeId|
+        spec_search(doc, scope, c, n - 1, x, c.combinators[n - 2]) == exists|p: NodeId|
             #[trigger] i_related(doc, m.combs[n - 2], p, x) && i_m_at(doc, scope, m, None, n - 2, p),
     ensures
-        match_complex(doc, c, n, x) == i_m_at(doc, scope, m, None, n - 1, x),
+        match_complex(doc, scope, c, n, x) == i_m_at(doc, scope, m, None, n - 1, x),
 {
     assert(m.units.len() == c.compounds.len());
     assert(m.lead is None);
@@ -1332,12 +1354,13 @@ pub proof fn lemma_complex_later(doc: Document, scope: Option<NodeId>, c: Comple
         assert(i_m_at(doc, scope, m, None, n - 2, p));
     }
     assert(i_m_at(doc, scope, m, None, n - 1, x) ==> ex);
-    assert(match_complex(doc, c, n, x) == (compound_matches(
+    assert(match_complex(doc, scope, c, n, x) == (compound_matches(
         doc,
+        scope,
         c.compounds[n - 1],
         c.compounds[n - 1].len() as int,
         x,
-    ) && spec_search(doc, c, n - 1, x, c.combinators[n - 2])));
+    ) && spec_search(doc, scope, c, n - 1, x, c.combinators[n - 2])));
 }
 
 /// One step of [`lemma_match_complex`], given what the induction knows.
@@ -1346,14 +1369,14 @@ pub proof fn lemma_complex_step(doc: Document, scope: Option<NodeId>, c: Complex
         wf(doc),
         rel_complex(c, m),
         1 <= n <= c.compounds.len(),
-        compound_matches(doc, c.compounds[n - 1], c.compounds[n - 1].len() as int, x) == i_m_compound(
+        compound_matches(doc, scope, c.compounds[n - 1], c.compounds[n - 1].len() as int, x) == i_m_compound(
             doc,
             scope,
             m.units[n - 1],
             x,
         ),
         n >= 2 ==> forall|y: NodeId|
-            is_element(doc, y) ==> #[trigger] match_complex(doc, c, n - 1, y) == i_m_at(
+            is_element(doc, y) ==> #[trigger] match_complex(doc, scope, c, n - 1, y) == i_m_at(
                 doc,
                 scope,
                 m,
@@ -1362,7 +1385,7 @@ pub proof fn lemma_complex_step(doc: Document, scope: Option<NodeId>, c: Complex
                 y,
             ),
     ensures
-        match_complex(doc, c, n, x) == i_m_at(doc, scope, m, None, n - 1, x),
+        match_complex(doc, scope, c, n, x) == i_m_at(doc, scope, m, None, n - 1, x),
 {
     if !is_element(doc, x) {
         lemma_complex_not_element(doc, scope, c, m, n, x);
@@ -1385,7 +1408,7 @@ pub proof fn lemma_match_complex(doc: Document, scope: Option<NodeId>, c: Comple
         rel_complex(c, m),
         1 <= n <= c.compounds.len(),
     ensures
-        match_complex(doc, c, n, x) == i_m_at(doc, scope, m, None, n - 1, x),
+        match_complex(doc, scope, c, n, x) == i_m_at(doc, scope, m, None, n - 1, x),
     decreases c, 2nat, n,
 {
     assert(rel_compound(c.compounds[n - 1], m.units[n - 1]));
@@ -1393,7 +1416,7 @@ pub proof fn lemma_match_complex(doc: Document, scope: Option<NodeId>, c: Comple
     lemma_match_compound(doc, scope, c.compounds[n - 1], m.units[n - 1], x);
     if n >= 2 {
         assert forall|y: NodeId|
-            is_element(doc, y) implies #[trigger] match_complex(doc, c, n - 1, y) == i_m_at(
+            is_element(doc, y) implies #[trigger] match_complex(doc, scope, c, n - 1, y) == i_m_at(
             doc,
             scope,
             m,
@@ -1414,7 +1437,7 @@ pub proof fn lemma_match_list(doc: Document, scope: Option<NodeId>, l: Seq<Compl
         uniq_attrs(doc),
         rel_list(l, m),
     ensures
-        match_list(doc, l, l.len() as int, x) == i_m_list(doc, scope, m, x),
+        match_list(doc, scope, l, l.len() as int, x) == i_m_list(doc, scope, m, x),
     decreases l, 4nat, 0int,
 {
     assert(l.len() == m.len());
@@ -1440,6 +1463,7 @@ pub proof fn lemma_i_m_list_exists(doc: Document, scope: Option<NodeId>, m: Seq<
 }
 
 /// The first `k` selectors of a related list.
+#[verifier::rlimit(100)]
 pub proof fn lemma_match_list_prefix(doc: Document, scope: Option<NodeId>, l: Seq<Complex>, m: Seq<IComplex>, k: int, x: NodeId)
     requires
         wf(doc),
@@ -1447,7 +1471,7 @@ pub proof fn lemma_match_list_prefix(doc: Document, scope: Option<NodeId>, l: Se
         rel_list(l, m),
         0 <= k <= l.len(),
     ensures
-        match_list(doc, l, k, x) == exists|j: int|
+        match_list(doc, scope, l, k, x) == exists|j: int|
             0 <= j < k && i_m_complex(doc, scope, #[trigger] m[j], None, x),
     decreases l, 3nat, k,
 {
@@ -1480,7 +1504,7 @@ pub proof fn theorem_match_equivalent(doc: Document, scope: Option<NodeId>, l: S
         uniq_attrs(doc),
         rel_list(l, m),
     ensures
-        match_a_selector_against_an_element(doc, l, x) == i_match_selector(doc, scope, m, x),
+        match_a_selector_against_an_element(doc, scope, l, x) == i_match_selector(doc, scope, m, x),
 {
     lemma_match_list(doc, scope, l, m, x);
     // A selector's compound selectors are not empty, so an element is needed to match.

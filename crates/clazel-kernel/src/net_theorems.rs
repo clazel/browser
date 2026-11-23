@@ -1302,8 +1302,8 @@ pub proof fn lemma_handle_message_conns(rules: Seq<clazel_psl::spec::Rule>, urls
         },
         clazel_ipc::message::spec::Message::CookieGet => {},
         clazel_ipc::message::spec::Message::CookieSet { cookie_string } => {},
-        clazel_ipc::message::spec::Message::FetchStyle { request, url } => {
-            crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, request, url);
+        clazel_ipc::message::spec::Message::FetchStyle { .. } | clazel_ipc::message::spec::Message::FetchScript { .. } => {
+            crate::subfetch_rel::lemma_fetch_sub_shape(rules, urls, fetch, s, r, m is FetchScript, sub_request_id(m), sub_request_url(m));
         },
         _ => {
             crate::lock::lemma_storage_call_frame(s, r, m);

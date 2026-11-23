@@ -1,60 +1,88 @@
-//! The compiler from the AST to bytecode (phase-7.md item 7.7, first and second
-//! slice): [`compile_script`].
+//! The compiler from the AST to bytecode (phase-7.md item 7.7, first to fourth
+//! slice): [`compile_script`] and [`compile_module`].
 //!
 //! # What it compiles
 //!
 //! - **Expressions:** literals (numbers, BigInts, strings, `true`, `false`,
-//!   `null`), identifiers, `this`, the unary, binary, logical, conditional and
-//!   comma operators, assignment (simple, compound, logical and destructuring),
-//!   `++` and `--`, calls and `new` (with spread arguments), member access,
-//!   optional chaining, object literals (data properties, methods, accessors,
-//!   computed names, spread and `__proto__:`) and array literals (with spread),
-//!   template literals and tagged templates, function and arrow function
-//!   expressions, class expressions, `super` properties and `super()`,
-//!   `new.target`, private names (`o.#x`, `#x in o`); `typeof` of a global,
-//!   unary `+` as `ToNumber`.
+//!   `null`, regular expressions), identifiers, `this`, the unary, binary,
+//!   logical, conditional and comma operators, assignment (simple, compound,
+//!   logical and destructuring), `++` and `--`, calls and `new` (with spread
+//!   arguments), direct `eval`, member access, optional chaining, object
+//!   literals (data properties, methods, accessors, computed names, spread and
+//!   `__proto__:`) and array literals (with spread), template literals and
+//!   tagged templates, function, arrow function, generator and async function
+//!   expressions, class expressions, `yield`, `yield*` and `await`, `super`
+//!   properties and `super()`, `new.target`, private names (`o.#x`, `#x in o`);
+//!   `typeof` and `delete` of an identifier, unary `+` as `ToNumber`.
 //! - **Statements:** `var`, `let` and `const` with temporal-dead-zone checks and
-//!   binding patterns, blocks, `if`, `while`, `do`-`while` and `for`, `for`-`in`
-//!   and `for`-`of` (with iterator closing), `switch`, labels, `break`,
-//!   `continue`, `return`, `throw`, `try`/`catch`/`finally` (with a pattern as the
-//!   `catch` parameter), function and class declarations, with Annex B.3.3's
-//!   block-level hoisting.
-//! - **Functions:** default and rest parameters and patterns as parameters, the
-//!   mapped and unmapped `arguments` object; classes with fields, methods,
-//!   accessors, static members and blocks, private names, `extends` and the
-//!   default constructors.
+//!   binding patterns, blocks, `if`, `while`, `do`-`while` and `for`, `for`-`in`,
+//!   `for`-`of` and `for await` (with iterator closing), `switch`, `with`, labels,
+//!   `break`, `continue`, `return`, `throw`, `try`/`catch`/`finally` (with a
+//!   pattern as the `catch` parameter), function, generator, async and class
+//!   declarations, with Annex B.3.3's block-level hoisting.
+//! - **Functions:** default and rest parameters and patterns as parameters (with
+//!   a separate environment for the body when the parameters have expressions),
+//!   the mapped and unmapped `arguments` object (and a `var arguments` that
+//!   shares it); generators, async functions, async arrow functions and async
+//!   generators, and their methods; classes with fields, methods, accessors,
+//!   static members and blocks, private names, `extends` and the default
+//!   constructors; NamedEvaluation of anonymous functions and classes with a
+//!   name known at compile time.
 //! - **Closures:** scope analysis ([`crate::scope`]) puts a binding that no
 //!   inner function refers to in a register and a captured one in a slot of an
 //!   environment object that its scope creates on entry.
+//! - **Modules** ([`compile_module`], §16.2): the body of a module and the static
+//!   record the runtime links ([`crate::module`]): requested modules, import,
+//!   local, indirect and star export entries, the module environment's bindings
+//!   (every binding of the module scope has a slot, so other modules can reach
+//!   an export), `import` bindings read by [`Instr::GetImportBinding`] and
+//!   immutable, namespace imports, `export default` (an expression, an
+//!   anonymous function or class, with NamedEvaluation to `"default"`), and
+//!   top-level `await` (the body is an async function body). `import(...)` and
+//!   `import.meta` are [`Instr::ImportCall`] and [`Instr::ImportMeta`], in scripts
+//!   and modules alike.
+//! - **The rest of the fourth slice:** `delete` of an optional chain, direct
+//!   `eval` with a spread argument ([`Instr::DirectEvalSpread`]), and a function
+//!   declaration as the body of an `if` (Annex B.3.4†, treated as in a block of
+//!   its own) or of a label.
 //!
 //! # What it does not compile yet
 //!
 //! It returns [`CompileError::NotYetCompiled`] with a stated feature, never a
-//! panic: generators and async functions (and generator and async methods,
-//! `for await`), `with` and direct `eval`, modules, regular expression
-//! literals, dynamic `import()`, and the few forms listed on
-//! [`CompileError::NotYetCompiled`]'s users in this file (`delete` of a variable
-//! or of an optional chain, a function declaration as the body of an `if` or a
-//! label).
+//! panic, for a construct it does not compile. After this slice there is none:
+//! every source of the vendored Test262 subset compiles. Linking and evaluating
+//! a module (ResolveExport, GetExportedNames, InitializeEnvironment, the
+//! cyclic and asynchronous evaluation algorithms of §16.2.1.5†) are the
+//! runtime's (7.8), and `compile_eval` is not written (see below).
 //!
 //! # Known gaps in what it compiles
 //!
-//! - A function with a non-simple parameter list has one scope for its
-//!   parameters and its body, where §10.2.11† step 28 has a separate
-//!   environment for the body's `var`s: a closure in a default value sees
-//!   the body's declarations.
-//! - NamedEvaluation (§8.4.5†) of an anonymous function or class assigned to a
-//!   name is not done (only a function's own name, and a class constructor's
-//!   name, are in its template).
 //! - `super()` reads the active function's prototype when the op runs, after
 //!   the arguments are evaluated, where §13.3.7.1† step 5 reads it before; the
 //!   difference shows only if an argument expression changes that prototype.
-//! - `var arguments` in a function body does not share the `arguments`
-//!   object's binding (§10.2.11† step 27.b).
+//! - NamedEvaluation (§8.4.5†) covers a name known when the code is compiled:
+//!   an identifier, an identifier or string key, a private name. A computed
+//!   key, and a numeric key, name a function when `DefineMethod` and its
+//!   siblings run or not at all.
 //! - A member expression's computed key is converted when the access runs, as
 //!   §13.3.3† (ES2024) has it; a computed property name of a literal, a class or
 //!   a pattern is converted when it is evaluated, by
 //!   [`crate::bytecode::Instr::ToPropertyKey`].
+//! - A name that a `with` object or a direct eval's variable object may supply
+//!   is resolved before the right side of an assignment to it, an update or a
+//!   call (§13.15.2 step 1.a), but not for the target of a destructuring
+//!   assignment or a `for` head, which look it up when they store.
+//! - Sloppy direct eval in a parameter expression declares its `var`s in the
+//!   function's variable object, where §19.2.1.3† would use the parameters'
+//!   own environment (§10.2.11† step 20).
+//! - Direct eval's host compile path (`compile_eval`, see
+//!   [`crate::ops::Op::DirectEval`]) is specified, not written: eval code is not
+//!   compiled yet, only the call and the record of the scopes it needs. The same
+//!   goes for `import()` in eval code.
+//! - A labelled function declaration is compiled as a function declaration at
+//!   its position, which is Annex B.3.2†'s reading; `if (x) l: function f() {}`
+//!   does not parse.
+//! - No differential against Boa yet.
 //!
 //! # Conventions of the output
 //!
@@ -81,35 +109,49 @@
 //!
 //! # Where the standard is followed
 //!
-//! Comments cite ECMA-262 (see `spec.rs` for the pinned edition). The steps
-//! this slice implements: §14.15.3 (try-finally completion), §14.7.4.4
+//! Comments cite ECMA-262 (see `spec.rs` for the pinned edition). The third
+//! slice adds §13.2.7.3 (regular expression literals), §15.5.2, §15.5.5 and
+//! §27.5.3 (generators and `yield*`), §15.6, §15.8 and §27.6 to §27.7 (async
+//! functions and async generators), §14.7.5.7 (`for await`), §14.11.2 (`with`),
+//! §13.3.6.1, §19.2.1.1 and §19.2.1.3 (direct eval), §13.5.1.2 (`delete`),
+//! §8.4.5 (NamedEvaluation) and §10.2.11 steps 27 and 28. The steps the second
+//! slice implements: §14.15.3 (try-finally completion), §14.7.4.4
 //! CreatePerIterationEnvironment, §14.12.4 (switch evaluation), §9.1.1.1.5
 //! SetMutableBinding steps 3 to 6, §9.1.1.1.6 GetBindingValue step 2 (TDZ),
 //! §15.2.5 InstantiateOrdinaryFunctionExpression, §10.2.11
 //! FunctionDeclarationInstantiation, §13.15.5 and §14.3.3 (destructuring),
 //! §14.7.5 (`for`-`in` and `for`-`of`), §15.7.14 ClassDefinitionEvaluation,
 //! §13.2.8 (templates), §13.3.9 (optional chains), and Annex B.3.3.1. Section
-//! numbers marked † are from memory (phase-7.md's convention).
+//! numbers marked † are from memory (phase-7.md's convention). The fourth slice
+//! adds §16.2 (modules: ParseModule §16.2.1.6.1†, InitializeEnvironment
+//! §16.2.1.6.4†, §16.2.2 and §16.2.3 for import and export declarations),
+//! §9.1.1.5† (module Environment Records), §13.3.10.1† (`import()`),
+//! §13.3.12.1† (`import.meta`), §13.5.1.2† (`delete` of an optional chain) and
+//! Annex B.3.4† (a function declaration as the body of an `if`).
 
 use crate::bytecode::{
-    Const, ErrorKind, FunctionCode, FunctionKind, GlobalDecls, Handler, Instr, LIMIT, Program, Reg,
-    Span, TemplateSite, VarScoped,
+    Const, ErrorKind, EvalBinding, EvalName, EvalScope, EvalScopeInfo, EvalScopeKind, Flavor,
+    FunctionCode, FunctionKind, GlobalDecls, Handler, Instr, LIMIT, Program, Reg, RegExpSite, Span,
+    TemplateSite, VarScoped,
 };
 use crate::literal::{self, Number};
+use crate::module::{self, ImportName, ModuleBinding, ModuleBindingInit, ModuleProgram};
 use crate::scope::{self, Analysis, BKind, NONE, SKind, Target, span_of};
 use clazel_js_syntax::ast::{Ast, Node, NodeKind, Op as AOp};
 use std::collections::HashMap;
 
 mod classes;
+mod exports;
 mod loops;
 mod misc;
 mod patterns;
+mod suspend;
 
 /// Why a script was not compiled.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CompileError {
-    /// The script uses a construct this slice does not compile (see the module
-    /// header). Not a failure of the compiler: the construct is `feature`, at
+    /// The code uses a construct the compiler does not compile (see the module
+    /// header; none is left in the vendored Test262 subset). Not a failure of the compiler: the construct is `feature`, at
     /// `span`.
     NotYetCompiled {
         /// The construct.
@@ -149,31 +191,58 @@ type R<T> = Result<T, CompileError>;
 /// [`Program`].
 ///
 /// Total: every AST has a result, and the compiler never panics. A script
-/// with a construct of the module header's second list is a
-/// [`CompileError::NotYetCompiled`].
+/// with a construct that the module header lists as not compiled is a
+/// [`CompileError::NotYetCompiled`]. An AST that is a module is
+/// [`CompileError::Internal`]: [`compile_module`] compiles it.
 pub fn compile_script(ast: &Ast, src: &[u32]) -> Result<Program, CompileError> {
+    with_stack(ast, src, compile_inner)
+}
+
+/// Compiles a parsed module (`ast` was parsed from `src` with the module goal)
+/// to a [`ModuleProgram`]: the code of its body and the static record that the
+/// runtime links and evaluates (see [`crate::module`] for its shape).
+///
+/// Total, like [`compile_script`]. An AST that is a script is
+/// [`CompileError::Internal`].
+pub fn compile_module(ast: &Ast, src: &[u32]) -> Result<ModuleProgram, CompileError> {
+    with_stack(ast, src, module_inner)
+}
+
+/// Runs `f` on a thread with a big stack when the AST is large.
+fn with_stack<T: Send>(
+    ast: &Ast,
+    src: &[u32],
+    f: fn(&Ast, &[u32]) -> Result<T, CompileError>,
+) -> Result<T, CompileError> {
     // Compilation recurses once per level of the AST (at most MAX_DEPTH of
     // them, each a few frames): a program that deep needs a bigger stack than
     // a test thread has, as the parser does.
     const SMALL: usize = 256;
     if ast.nodes.len() <= SMALL {
-        return compile_inner(ast, src);
+        return f(ast, src);
     }
     std::thread::scope(|s| {
         match std::thread::Builder::new()
             .stack_size(256 * 1024 * 1024)
-            .spawn_scoped(s, || compile_inner(ast, src))
+            .spawn_scoped(s, || f(ast, src))
         {
             Ok(h) => h
                 .join()
                 .unwrap_or(Err(CompileError::Internal("the compiler thread panicked"))),
-            Err(_) => compile_inner(ast, src),
+            Err(_) => f(ast, src),
         }
     })
 }
 
+fn eval_name_of(an: &Analysis) -> u32 {
+    an.names
+        .iter()
+        .position(|n| n.iter().copied().eq("eval".chars().map(u32::from)))
+        .and_then(|p| u32::try_from(p).ok())
+        .unwrap_or(NONE)
+}
+
 fn compile_inner(ast: &Ast, src: &[u32]) -> Result<Program, CompileError> {
-    scope::check_supported(ast)?;
     let an = scope::analyze(ast, src)?;
     let root = ast.root;
     let rn = ast
@@ -181,17 +250,11 @@ fn compile_inner(ast: &Ast, src: &[u32]) -> Result<Program, CompileError> {
         .get(root as usize)
         .ok_or(CompileError::Internal("no root"))?;
     if rn.kind != NodeKind::Script {
-        return Err(CompileError::NotYetCompiled {
-            feature: "modules",
-            span: span_of(ast, root as usize),
-        });
+        return Err(CompileError::Internal(
+            "compile_script was given a module: use compile_module",
+        ));
     }
-    let eval_name = an
-        .names
-        .iter()
-        .position(|n| n.iter().copied().eq("eval".chars().map(u32::from)))
-        .and_then(|p| u32::try_from(p).ok())
-        .unwrap_or(NONE);
+    let eval_name = eval_name_of(&an);
     let mut cg = Cg {
         ast,
         src,
@@ -200,6 +263,8 @@ fn compile_inner(ast: &Ast, src: &[u32]) -> Result<Program, CompileError> {
         loc: vec![None; an.bindings.len()],
         eval_name,
         name_override: None,
+        module_fns: Vec::new(),
+        module_tla: false,
         f: FnState::new(FunctionKind::Script, false, Span { start: 0, end: 0 }, 0),
     };
     let main = cg.compile_function(root, FunctionKind::Script)?;
@@ -210,6 +275,112 @@ fn compile_inner(ast: &Ast, src: &[u32]) -> Result<Program, CompileError> {
         ))?);
     }
     Ok(Program { functions, main })
+}
+
+/// Whether the body of the module contains `await` or `for await` outside any
+/// function (§16.2.1.6.1† step 7: HasTLA is ContainsAwait of the body, which
+/// does not look inside functions).
+fn module_has_tla(ast: &Ast, an: &Analysis) -> bool {
+    ast.nodes.iter().enumerate().any(|(i, n)| {
+        let awaits =
+            n.kind == NodeKind::AwaitExpression || (n.kind == NodeKind::ForOfStatement && n.flag);
+        awaits
+            && an
+                .owner_scope
+                .get(i)
+                .and_then(|&s| an.scopes.get(s as usize))
+                .is_some_and(|sc| sc.func == 0)
+    })
+}
+
+fn module_inner(ast: &Ast, src: &[u32]) -> Result<ModuleProgram, CompileError> {
+    let an = scope::analyze(ast, src)?;
+    let root = ast.root;
+    let rn = ast
+        .nodes
+        .get(root as usize)
+        .ok_or(CompileError::Internal("no root"))?;
+    if rn.kind != NodeKind::Module {
+        return Err(CompileError::Internal(
+            "compile_module was given a script: use compile_script",
+        ));
+    }
+    let ent = module::entries(ast, src)?;
+    let has_tla = module_has_tla(ast, &an);
+    let eval_name = eval_name_of(&an);
+    let mut cg = Cg {
+        ast,
+        src,
+        an: &an,
+        out: Vec::new(),
+        loc: vec![None; an.bindings.len()],
+        eval_name,
+        name_override: None,
+        module_fns: Vec::new(),
+        module_tla: has_tla,
+        f: FnState::new(FunctionKind::Module, true, Span { start: 0, end: 0 }, 0),
+    };
+    let main = cg.compile_function(root, FunctionKind::Module)?;
+    let module_fns = std::mem::take(&mut cg.module_fns);
+    // The module environment's bindings (§16.2.1.6.4† InitializeEnvironment).
+    let sc_id = an.own_scope.get(root as usize).copied().unwrap_or(NONE);
+    let sc = cg.scope(sc_id)?;
+    let mut bindings = Vec::new();
+    for &b in &sc.bindings {
+        let bd = cg.binding(b)?;
+        // The compiler's own bindings (the module's `this` for its arrow
+        // functions) have no name and are written by the body's first ops.
+        if !matches!(
+            bd.kind,
+            BKind::Var | BKind::Let | BKind::Const | BKind::Import
+        ) {
+            continue;
+        }
+        let name = cg.name_units(bd.name)?;
+        let entry = ent.imports.iter().position(|e| e.local_name == name);
+        let init = match (entry, bd.kind) {
+            (Some(e), _) => {
+                let e32 = u32::try_from(e).map_err(|_| CompileError::TooLarge("imports"))?;
+                match ent.imports.get(e).map(|x| &x.import_name) {
+                    Some(ImportName::Namespace) => ModuleBindingInit::Namespace(e32),
+                    _ => ModuleBindingInit::Import(e32),
+                }
+            }
+            (None, BKind::Var) if bd.decl_fn != NONE => {
+                let idx = module_fns
+                    .iter()
+                    .find(|(f, _)| *f == bd.decl_fn)
+                    .map(|&(_, i)| i)
+                    .ok_or(CompileError::Internal("a module function has no template"))?;
+                ModuleBindingInit::Function(idx)
+            }
+            (None, BKind::Var) => ModuleBindingInit::Undefined,
+            (None, _) => ModuleBindingInit::Uninitialized,
+        };
+        bindings.push(ModuleBinding {
+            name,
+            slot: bd.slot,
+            init,
+        });
+    }
+    let env_size = sc.env_size;
+    let mut functions = Vec::with_capacity(cg.out.len());
+    for f in cg.out {
+        functions.push(f.ok_or(CompileError::Internal(
+            "a function was reserved but not compiled",
+        ))?);
+    }
+    Ok(ModuleProgram {
+        program: Program { functions, main },
+        requested_modules: ent.requested,
+        import_entries: ent.imports,
+        local_export_entries: ent.locals,
+        indirect_export_entries: ent.indirects,
+        star_export_entries: ent.stars,
+        has_tla,
+        env_size,
+        bindings,
+    })
 }
 
 /// How a `break` or `continue` reaches its target, and what a `return` does,
@@ -231,9 +402,10 @@ enum Ctl {
         labels: Vec<u32>,
         brk: usize,
         cont: usize,
-        /// For a `for`-`of` loop: the iterator register, and the label of the
-        /// stub that rethrows (see [`Cg::emit_iter_close`]).
-        close: Option<(Reg, usize)>,
+        /// For a `for`-`of` loop: the iterator register, the label of the
+        /// stub that rethrows (see [`Cg::emit_iter_close`]), and whether the
+        /// loop is a `for await`, whose close awaits.
+        close: Option<(Reg, usize, bool)>,
     },
     Switch {
         labels: Vec<u32>,
@@ -254,6 +426,8 @@ enum Ctl {
 /// The state of the function being compiled.
 struct FnState {
     kind: FunctionKind,
+    /// Whether the function is a generator, an async function or both.
+    flavor: Flavor,
     strict: bool,
     span: Span,
     instrs: Vec<Instr>,
@@ -287,6 +461,7 @@ impl FnState {
     fn new(kind: FunctionKind, strict: bool, span: Span, nparams: u32) -> Self {
         FnState {
             kind,
+            flavor: Flavor::Plain,
             strict,
             span,
             instrs: Vec::new(),
@@ -314,6 +489,7 @@ impl FnState {
 struct FnMeta {
     name: Vec<u16>,
     kind: FunctionKind,
+    flavor: Flavor,
     nparams: u32,
     length: u32,
     span: Span,
@@ -332,6 +508,11 @@ struct Cg<'a> {
     /// The name the next compiled function gets instead of its own (a class
     /// constructor is named for its class).
     name_override: Option<Vec<u16>>,
+    /// For a module: each hoisted function declaration (node) with the index of
+    /// its template, which the module record lists (see [`crate::module`]).
+    module_fns: Vec<(u32, u32)>,
+    /// The module body has top-level `await`: it is an async function body.
+    module_tla: bool,
     f: FnState,
 }
 
@@ -345,12 +526,17 @@ fn final_op_kind(k: NodeKind) -> bool {
         NodeKind::NumericLiteral
             | NodeKind::StringLiteral
             | NodeKind::NullLiteral
+            | NodeKind::RegularExpressionLiteral
             | NodeKind::BooleanLiteral
             | NodeKind::ThisExpression
             | NodeKind::IdentifierReference
             | NodeKind::NewTarget
             | NodeKind::FunctionExpression
+            | NodeKind::GeneratorExpression
+            | NodeKind::AsyncFunctionExpression
+            | NodeKind::AsyncGeneratorExpression
             | NodeKind::ArrowFunction
+            | NodeKind::AsyncArrowFunction
             | NodeKind::MemberExpression
             | NodeKind::CallExpression
             | NodeKind::NewExpression
@@ -634,6 +820,11 @@ impl<'a> Cg<'a> {
     /// releases the temporary with `mark`/`release`.
     fn env_for(&mut self, b: u32, sp: Span) -> R<Reg> {
         let target = self.binding(b)?.scope;
+        self.env_for_scope(target, sp)
+    }
+
+    /// As [`Self::env_for`], for the environment object of scope `target`.
+    fn env_for_scope(&mut self, target: u32, sp: Span) -> R<Reg> {
         let func = self.cur_func_index()?;
         let mut s = self.f.cur_scope;
         let mut hops: u32 = 0;
@@ -708,6 +899,7 @@ impl<'a> Cg<'a> {
         }
         let bd = self.binding(b)?;
         if bd.captured
+            || !self.dyn_scopes(bd.scope)?.is_empty()
             || matches!(
                 bd.kind,
                 BKind::Const
@@ -732,6 +924,21 @@ impl<'a> Cg<'a> {
     /// `dst := value of binding b`, referenced at `refpos`.
     fn read_binding(&mut self, b: u32, refpos: usize, dst: Reg, sp: Span) -> R<()> {
         let bd = self.binding(b)?;
+        if bd.kind == BKind::Import {
+            // §9.1.1.5.1† GetBindingValue of an indirect binding.
+            let m = self.mark();
+            let env = self.env_for(b, sp)?;
+            self.emit(
+                Instr::GetImportBinding {
+                    dst,
+                    env,
+                    idx: bd.slot,
+                },
+                sp,
+            )?;
+            self.release(m);
+            return Ok(());
+        }
         let tdz = self.needs_tdz(b, refpos)?;
         if bd.captured {
             let m = self.mark();
@@ -798,7 +1005,8 @@ impl<'a> Cg<'a> {
         let bd = self.binding(b)?;
         let tdz = self.needs_tdz(b, refpos)?;
         match bd.kind {
-            BKind::Const => {
+            // An import binding is immutable (§9.1.1.5.5† CreateImportBinding).
+            BKind::Const | BKind::Import => {
                 if tdz {
                     self.check_hole(b, sp)?;
                 }
@@ -858,9 +1066,155 @@ impl<'a> Cg<'a> {
         Ok(())
     }
 
+    /// The scopes between the current one and `target` (a binding's scope, or
+    /// [`NONE`] for a global) whose object a reference to a name that none of
+    /// the scopes in between binds must consult first, innermost first, each with
+    /// whether it is a `with` statement's (§9.1.2.1 GetIdentifierReference step 1:
+    /// the environment's HasBinding comes before the outer environment's). A
+    /// `with` body is one; the function scope of sloppy code that calls direct eval
+    /// is another (its variable object, §19.2.1.3†), but only for a reference
+    /// that leaves the function: its own bindings cannot be shadowed by what eval
+    /// declares.
+    fn dyn_scopes(&self, target: u32) -> R<Vec<(u32, bool)>> {
+        let mut out = Vec::new();
+        let mut s = self.f.cur_scope;
+        while s != NONE && s != target {
+            let sc = self.scope(s)?;
+            match sc.kind {
+                SKind::With => out.push((s, true)),
+                SKind::Function | SKind::Body if self.an.dyn_binding.contains_key(&s) => {
+                    out.push((s, false));
+                }
+                _ => {}
+            }
+            s = sc.parent;
+        }
+        Ok(out)
+    }
+
+    /// The dynamic scopes of the identifier reference `n`.
+    fn ident_dyn(&self, n: u32) -> R<Vec<(u32, bool)>> {
+        let b = self.res(n);
+        let target = if b == NONE {
+            NONE
+        } else {
+            self.binding(b)?.scope
+        };
+        self.dyn_scopes(target)
+    }
+
+    /// ResolveBinding of the identifier reference `n` when a dynamic scope lies
+    /// in front of its static resolution (§9.1.2.1 step 1: "If env.HasBinding(name)
+    /// is true, return the Reference Record"): tests each such scope's object
+    /// with [`Instr::WithHas`], innermost first, and leaves the first that has
+    /// the name in the returned register, `undefined` when none does. When
+    /// `this` is wanted (a call, §13.3.6.2† EvaluateCall: the reference's
+    /// WithBaseObject §9.1.1.2.11†), it is that object for a `with` scope and
+    /// `undefined` otherwise. `None` if no dynamic scope applies.
+    fn resolve_dyn(&mut self, n: u32, this: Option<Reg>) -> R<Option<Reg>> {
+        let dyns = self.ident_dyn(n)?;
+        if dyns.is_empty() {
+            return Ok(None);
+        }
+        let sp = self.sp(n);
+        let name = self.name_of(n);
+        let key = self.konst(Const::String(self.name_units(name)?))?;
+        let holder = self.alloc()?;
+        self.emit(Instr::LoadUndefined { dst: holder }, sp)?;
+        if let Some(t) = this {
+            self.emit(Instr::LoadUndefined { dst: t }, sp)?;
+        }
+        let done = self.label();
+        for (s, is_with) in dyns {
+            let m = self.mark();
+            let (obj, found) = (self.alloc()?, self.alloc()?);
+            let slot = self.dyn_slot(s)?;
+            let env = self.env_for_scope(s, sp)?;
+            self.emit(
+                Instr::GetEnvSlot {
+                    dst: obj,
+                    env,
+                    idx: slot,
+                },
+                sp,
+            )?;
+            self.emit(
+                Instr::WithHas {
+                    dst: found,
+                    obj,
+                    key,
+                },
+                sp,
+            )?;
+            let next = self.label();
+            self.jump_if_false(found, next, sp)?;
+            self.emit(
+                Instr::Move {
+                    dst: holder,
+                    src: obj,
+                },
+                sp,
+            )?;
+            if let (Some(t), true) = (this, is_with) {
+                self.emit(Instr::Move { dst: t, src: obj }, sp)?;
+            }
+            self.jump(done, sp)?;
+            self.bind(next)?;
+            self.release(m);
+        }
+        self.bind(done)?;
+        Ok(Some(holder))
+    }
+
+    /// The slot of scope `s`'s environment object that holds its binding object.
+    fn dyn_slot(&self, s: u32) -> R<u32> {
+        let b = self
+            .an
+            .dyn_binding
+            .get(&s)
+            .copied()
+            .ok_or(CompileError::Internal("scope without a binding object"))?;
+        Ok(self.binding(b)?.slot)
+    }
+
     /// `dst := the identifier reference n`: a binding, or a global
     /// (§9.1.2.1 GetIdentifierReference, GetValue §6.2.5.5).
     fn read_ident(&mut self, n: u32, dst: Reg) -> R<()> {
+        let m = self.mark();
+        let h = self.resolve_dyn(n, None)?;
+        self.read_ident_h(n, dst, h)?;
+        self.release(m);
+        Ok(())
+    }
+
+    /// As [`Self::read_ident`], for a reference resolved by
+    /// [`Self::resolve_dyn`] to `holder` (GetBindingValue §9.1.1.2.6†).
+    fn read_ident_h(&mut self, n: u32, dst: Reg, holder: Option<Reg>) -> R<()> {
+        let sp = self.sp(n);
+        let Some(h) = holder else {
+            return self.read_ident_static(n, dst);
+        };
+        let (st, end) = (self.label(), self.label());
+        let name = self.name_of(n);
+        let key = self.konst(Const::String(self.name_units(name)?))?;
+        let target = Self::label_id(st)?;
+        self.emit(Instr::JumpIfUndefined { src: h, target }, sp)?;
+        self.emit(
+            Instr::WithGet {
+                dst,
+                obj: h,
+                key,
+                strict: self.f.strict,
+            },
+            sp,
+        )?;
+        self.jump(end, sp)?;
+        self.bind(st)?;
+        self.read_ident_static(n, dst)?;
+        self.bind(end)
+    }
+
+    fn read_ident_static(&mut self, n: u32, dst: Reg) -> R<()> {
         let sp = self.sp(n);
         let b = self.res(n);
         if b == NONE {
@@ -876,6 +1230,41 @@ impl<'a> Cg<'a> {
 
     /// Assigns `src` to the identifier reference `n` (PutValue §6.2.5.6).
     fn write_ident(&mut self, n: u32, src: Reg) -> R<()> {
+        let m = self.mark();
+        let h = self.resolve_dyn(n, None)?;
+        self.write_ident_h(n, src, h)?;
+        self.release(m);
+        Ok(())
+    }
+
+    /// As [`Self::write_ident`], for a reference resolved by
+    /// [`Self::resolve_dyn`] to `holder` (SetMutableBinding §9.1.1.2.5†).
+    fn write_ident_h(&mut self, n: u32, src: Reg, holder: Option<Reg>) -> R<()> {
+        let sp = self.sp(n);
+        let Some(h) = holder else {
+            return self.write_ident_static(n, src);
+        };
+        let (st, end) = (self.label(), self.label());
+        let name = self.name_of(n);
+        let key = self.konst(Const::String(self.name_units(name)?))?;
+        let target = Self::label_id(st)?;
+        self.emit(Instr::JumpIfUndefined { src: h, target }, sp)?;
+        self.emit(
+            Instr::WithSet {
+                obj: h,
+                key,
+                val: src,
+                strict: self.f.strict,
+            },
+            sp,
+        )?;
+        self.jump(end, sp)?;
+        self.bind(st)?;
+        self.write_ident_static(n, src)?;
+        self.bind(end)
+    }
+
+    fn write_ident_static(&mut self, n: u32, src: Reg) -> R<()> {
         let sp = self.sp(n);
         let b = self.res(n);
         if b == NONE {
@@ -916,7 +1305,14 @@ impl<'a> Cg<'a> {
                 *slot = Some(r);
             }
         }
-        if sc.has_env() {
+        if sc.kind == SKind::Module {
+            // The runtime created the module environment when it linked the
+            // module (§16.2.1.6.4†), and the body runs in it: it is the callee
+            // environment.
+            if sc.has_env() {
+                self.f.env_regs.insert(s, self.f.base_env);
+            }
+        } else if sc.has_env() {
             let parent = if matches!(sc.kind, SKind::Function | SKind::Script) {
                 self.f.base_env
             } else {
@@ -936,7 +1332,17 @@ impl<'a> Cg<'a> {
         self.f.cur_scope = s;
         for &b in &sc.bindings {
             let bd = self.binding(b)?;
+            // A module's declarations were initialized when it was linked.
+            if sc.kind == SKind::Module
+                && matches!(
+                    bd.kind,
+                    BKind::Var | BKind::Let | BKind::Const | BKind::Import
+                )
+            {
+                continue;
+            }
             match bd.kind {
+                BKind::Import => {}
                 BKind::Var => {
                     if bd.param != NONE {
                         if bd.captured {
@@ -945,7 +1351,18 @@ impl<'a> Cg<'a> {
                     } else if bd.decl_fn == NONE {
                         let m = self.mark();
                         let t = self.alloc()?;
-                        self.emit(Instr::LoadUndefined { dst: t }, sp)?;
+                        // §10.2.11† step 28.f.i: in a body scope, a `var` that is
+                        // also a parameter (or `arguments`) starts with that
+                        // binding's value, any other `var` with `undefined`.
+                        let param = if sc.kind == SKind::Body {
+                            self.scope(self.f.fscope)?.names.get(&bd.name).copied()
+                        } else {
+                            None
+                        };
+                        match param {
+                            Some(pb) => self.read_binding(pb, usize::MAX, t, sp)?,
+                            None => self.emit(Instr::LoadUndefined { dst: t }, sp)?,
+                        }
                         self.init_binding(b, t, sp)?;
                         self.release(m);
                     }
@@ -1029,6 +1446,21 @@ impl<'a> Cg<'a> {
                     self.release(m);
                 }
                 BKind::Hidden => {}
+                // Set by the `with` statement, once its object is known.
+                BKind::WithObject => {}
+                BKind::EvalVars => {
+                    // The variable object of sloppy eval code's declarations:
+                    // an ordinary object without a prototype, so that
+                    // WithHas finds only what eval declared and no
+                    // @@unscopables.
+                    let m = self.mark();
+                    let (o, nul) = (self.alloc()?, self.alloc()?);
+                    self.emit(Instr::NewObject { dst: o }, sp)?;
+                    self.emit(Instr::LoadNull { dst: nul }, sp)?;
+                    self.emit(Instr::SetLiteralProto { obj: o, val: nul }, sp)?;
+                    self.init_binding(b, o, sp)?;
+                    self.release(m);
+                }
             }
         }
         // Hoisted function declarations, in source order.
@@ -1039,7 +1471,7 @@ impl<'a> Cg<'a> {
             let m = self.mark();
             // A script's functions were created by `DeclareGlobals` (§16.1.7†
             // step 16), before this prologue.
-            if sc.kind != SKind::Script
+            if !matches!(sc.kind, SKind::Script | SKind::Module)
                 && let Some(&b) = sc.names.get(&name)
                 && self.binding(b)?.decl_fn == fnode
             {
@@ -1082,9 +1514,9 @@ impl<'a> Cg<'a> {
         self.out.push(None);
         // Parameters, name and body.
         let (nparams, length, body): (u32, u32, Option<u32>) = match nd.kind {
-            NodeKind::Script => (0, 0, None),
+            NodeKind::Script | NodeKind::Module => (0, 0, None),
             NodeKind::ClassStaticBlock => (0, 0, Some(self.child(nd, 0)?)),
-            NodeKind::ArrowFunction => {
+            k if scope::is_arrow_kind(k) => {
                 let p = self.child(nd, 0)?;
                 let pn = self.node(p)?;
                 let (np, len) = if pn.kind == NodeKind::FormalParameters {
@@ -1103,7 +1535,7 @@ impl<'a> Cg<'a> {
         let override_name = self.name_override.take();
         let name: Vec<u16> = match nd.kind {
             _ if override_name.is_some() => override_name.unwrap_or_default(),
-            NodeKind::FunctionDeclaration | NodeKind::FunctionExpression => {
+            k if scope::is_decl_kind(k) || scope::is_fexpr_kind(k) => {
                 let nm = self.child(nd, 0)?;
                 if self.node(nm)?.kind == NodeKind::BindingIdentifier {
                     self.name_units(self.name_of(nm))?
@@ -1136,9 +1568,17 @@ impl<'a> Cg<'a> {
         };
         let mut fresh = FnState::new(kind, sc.strict, span, nparams);
         fresh.fscope = sc_id;
+        let flavor = if nd.kind == NodeKind::Module && self.module_tla {
+            // ExecuteAsyncModule (§16.2.1.5.3†): the body is evaluated as an
+            // async function body (AsyncBlockStart).
+            Flavor::Async
+        } else {
+            scope::flavor_of(nd)
+        };
+        fresh.flavor = flavor;
         fresh.simple_params = match nd.kind {
-            NodeKind::Script | NodeKind::ClassStaticBlock => true,
-            NodeKind::ArrowFunction => {
+            NodeKind::Script | NodeKind::Module | NodeKind::ClassStaticBlock => true,
+            k if scope::is_arrow_kind(k) => {
                 let p = self.child(nd, 0)?;
                 self.node(p)?.kind != NodeKind::FormalParameters
                     || scope::is_simple_params(self.ast, p)?
@@ -1155,6 +1595,7 @@ impl<'a> Cg<'a> {
             FnMeta {
                 name,
                 kind,
+                flavor,
                 nparams,
                 length,
                 span,
@@ -1169,6 +1610,7 @@ impl<'a> Cg<'a> {
         let FnMeta {
             name,
             kind,
+            flavor,
             nparams,
             length,
             span,
@@ -1200,6 +1642,7 @@ impl<'a> Cg<'a> {
         let code = FunctionCode {
             name,
             kind,
+            flavor,
             strict: st.strict,
             span,
             nparams,
@@ -1265,6 +1708,26 @@ impl<'a> Cg<'a> {
         self.emit(Instr::DeclareGlobals { k }, sp)
     }
 
+    /// Compiles the module's top-level function declarations to templates (the
+    /// runtime instantiates them when it links the module, §16.2.1.6.4†
+    /// step 27, and the record lists them: [`ModuleBindingInit::Function`]).
+    fn module_functions(&mut self, sc_id: u32) -> R<()> {
+        let sc = self.scope(sc_id)?;
+        for &fnode in &sc.funcs {
+            let fnn = self.node(fnode)?;
+            let name_node = self.child(fnn, 0)?;
+            if self.node(name_node)?.kind != NodeKind::BindingIdentifier {
+                // `export default function () {}` is named "default"
+                // (§16.2.3.7†: the function's name is "default").
+                self.name_override = Some("default".encode_utf16().collect());
+            }
+            let idx = self.compile_function(fnode, FunctionKind::Normal)?;
+            self.name_override = None;
+            self.module_fns.push((fnode, idx));
+        }
+        Ok(())
+    }
+
     /// The prologue, the body and the implicit return of function `nd`.
     fn function_body(&mut self, nd: &Node, sc_id: u32, body: Option<u32>) -> R<()> {
         let span = self.f.span;
@@ -1287,10 +1750,30 @@ impl<'a> Cg<'a> {
         if self.f.kind == FunctionKind::Script {
             self.declare_globals(sc_id, start)?;
         }
+        if self.f.kind == FunctionKind::Module {
+            self.module_functions(sc_id)?;
+        }
         self.enter_scope(sc_id, start)?;
         self.function_prologue(nd, start)?;
+        // The body's own scope, when the parameters have expressions (§10.2.11†
+        // step 28).
+        let body_scope = match body {
+            Some(b) if self.node(b)?.kind == NodeKind::FunctionBody => {
+                self.an.own_scope.get(b as usize).copied().unwrap_or(NONE)
+            }
+            _ => NONE,
+        };
+        if body_scope != NONE {
+            self.enter_scope(body_scope, start)?;
+        }
+        if matches!(self.f.flavor, Flavor::Generator | Flavor::AsyncGenerator) {
+            // EvaluateGeneratorBody §15.5.2† steps 2 to 4: the generator object
+            // is created after FunctionDeclarationInstantiation (step 1), which
+            // this prologue was, and returned to the caller.
+            self.emit(Instr::GeneratorStart, start)?;
+        }
         match nd.kind {
-            NodeKind::Script => {
+            NodeKind::Script | NodeKind::Module => {
                 for &c in &nd.children {
                     self.stmt(c, &[])?;
                 }
@@ -1311,6 +1794,9 @@ impl<'a> Cg<'a> {
                     self.release(m);
                 }
             }
+        }
+        if body_scope != NONE {
+            self.exit_scope(body_scope)?;
         }
         let m = self.mark();
         let t = self.alloc()?;
@@ -1374,14 +1860,14 @@ impl<'a> Cg<'a> {
                 let c = self.expr_any(test)?;
                 self.jump_if_false(c, else_l, self.sp(test))?;
                 self.release(m);
-                self.stmt(cons, &[])?;
+                self.if_clause(cons)?;
                 if self.node(alt)?.kind == NodeKind::Absent {
                     self.bind(else_l)
                 } else {
                     let end_l = self.label();
                     self.jump(end_l, sp)?;
                     self.bind(else_l)?;
-                    self.stmt(alt, &[])?;
+                    self.if_clause(alt)?;
                     self.bind(end_l)
                 }
             }
@@ -1392,6 +1878,10 @@ impl<'a> Cg<'a> {
                 self.for_in_of(n, nd, sp, labels)
             }
             NodeKind::ClassDeclaration => self.class_declaration(n),
+            // ImportDeclaration evaluation (§16.2.2†) is "Return empty": the
+            // imports were bound when the module was linked.
+            NodeKind::ImportDeclaration => Ok(()),
+            NodeKind::ExportDeclaration => self.export_declaration(nd),
             NodeKind::SwitchStatement => self.switch_stmt(n, nd, sp, labels),
             NodeKind::LabelledStatement => {
                 let lab = self.child(nd, 0)?;
@@ -1439,6 +1929,13 @@ impl<'a> Cg<'a> {
                     let t = self.alloc()?;
                     self.emit(Instr::LoadUndefined { dst: t }, sp)?;
                     t
+                } else if self.f.flavor == Flavor::AsyncGenerator {
+                    // §14.10.1 ReturnStatement evaluation step 3.b: in an async
+                    // generator the operand is awaited first.
+                    let v = self.alloc()?;
+                    let e = self.expr_any(e)?;
+                    self.emit_await(e, v, sp)?;
+                    v
                 } else {
                     self.expr_any(e)?
                 };
@@ -1455,8 +1952,53 @@ impl<'a> Cg<'a> {
                 Ok(())
             }
             NodeKind::TryStatement => self.try_stmt(nd, sp),
+            NodeKind::WithStatement => {
+                // §14.11.2† WithStatement evaluation: "Let obj be ?
+                // ToObject(? GetValue(val))" (step 2), a new object
+                // environment over it (steps 3 and 4), then the body.
+                let (e, body) = (self.child(nd, 0)?, self.child(nd, 1)?);
+                let s = self.an.own_scope.get(n as usize).copied().unwrap_or(NONE);
+                let m = self.mark();
+                let obj = self.alloc()?;
+                {
+                    let m2 = self.mark();
+                    let v = self.expr_any(e)?;
+                    self.emit(Instr::ToObject { dst: obj, src: v }, self.sp(e))?;
+                    self.release(m2);
+                }
+                self.enter_scope(s, sp)?;
+                let wb = self
+                    .an
+                    .dyn_binding
+                    .get(&s)
+                    .copied()
+                    .ok_or(CompileError::Internal("with scope without a binding"))?;
+                self.init_binding(wb, obj, sp)?;
+                self.stmt(body, &[])?;
+                self.exit_scope(s)?;
+                self.release(m);
+                Ok(())
+            }
             NodeKind::FunctionDeclaration => self.annexb_copy(n, sp),
+            // Hoisted to the entry of their scope; Annex B.3.3 does not apply to
+            // generators and async functions.
+            NodeKind::GeneratorDeclaration
+            | NodeKind::AsyncFunctionDeclaration
+            | NodeKind::AsyncGeneratorDeclaration => Ok(()),
             _ => Err(CompileError::Internal("unexpected statement kind")),
+        }
+    }
+
+    /// A clause of an `if`: a function declaration there is treated as if it
+    /// were in a block of its own (Annex B.3.4†).
+    fn if_clause(&mut self, c: u32) -> R<()> {
+        match self.an.implicit_blocks.get(&c) {
+            Some(&s) => {
+                self.enter_scope(s, self.sp(c))?;
+                self.stmt(c, &[])?;
+                self.exit_scope(s)
+            }
+            None => self.stmt(c, &[]),
         }
     }
 
@@ -1498,6 +2040,9 @@ impl<'a> Cg<'a> {
     /// names: initialization if `is_init`, else assignment.
     fn assign_to_ident(&mut self, target: u32, init: u32, is_init: bool) -> R<()> {
         let sp = self.sp(target);
+        // §14.3.2.1† and §14.3.1.2† step 3.a: NamedEvaluation of an anonymous
+        // function or class definition with the binding's name.
+        self.named_ident(init, target)?;
         let b = self.res(target);
         if b != NONE {
             let bd = self.binding(b)?;
@@ -2136,6 +2681,13 @@ impl<'a> Cg<'a> {
                 self.emit(Instr::LoadConst { dst: d, k }, sp)
             }
             NodeKind::NullLiteral => self.emit(Instr::LoadNull { dst: d }, sp),
+            NodeKind::RegularExpressionLiteral => {
+                // §13.2.7.3† RegularExpressionLiteral evaluation: a new RegExp
+                // object per evaluation, from the pattern and the flags.
+                let (pattern, flags) = literal::regex_at(self.src, nd.start, nd.end)?;
+                let k = self.konst(Const::RegExp(RegExpSite { pattern, flags }))?;
+                self.emit(Instr::NewRegExp { dst: d, k }, sp)
+            }
             NodeKind::BooleanLiteral => {
                 let flag = self.src.get(nd.start).copied() == Some(u32::from(b't'));
                 self.emit(Instr::LoadBool { dst: d, flag }, sp)
@@ -2145,8 +2697,42 @@ impl<'a> Cg<'a> {
                 self.read_this(b, d, sp)
             }
             NodeKind::IdentifierReference => self.read_ident(n, d),
-            NodeKind::FunctionExpression => self.make_closure(n, d, FunctionKind::Normal),
-            NodeKind::ArrowFunction => self.make_closure(n, d, FunctionKind::Arrow),
+            k if scope::is_fexpr_kind(k) => self.make_closure(n, d, FunctionKind::Normal),
+            k if scope::is_arrow_kind(k) => self.make_closure(n, d, FunctionKind::Arrow),
+            NodeKind::AwaitExpression => {
+                // §15.8.5† AwaitExpression evaluation: "Return ? Await(value)".
+                let m = self.mark();
+                let arg = self.child(nd, 0)?;
+                let v = self.expr_any(arg)?;
+                self.emit_await(v, d, sp)?;
+                self.release(m);
+                Ok(())
+            }
+            NodeKind::YieldExpression => self.yield_expr(nd, d, sp),
+            NodeKind::ImportMeta => self.emit(Instr::ImportMeta { dst: d }, sp),
+            NodeKind::ImportCall => {
+                // EvaluateImportCall (§13.3.10.1†): the specifier, then the
+                // options (undefined when absent), then the op.
+                let m = self.mark();
+                let (spec, opts) = (self.child(nd, 0)?, self.child(nd, 1)?);
+                let (sr, or) = (self.alloc()?, self.alloc()?);
+                self.expr_to(spec, Some(sr), true)?;
+                if self.node(opts)?.kind == NodeKind::Absent {
+                    self.emit(Instr::LoadUndefined { dst: or }, sp)?;
+                } else {
+                    self.expr_to(opts, Some(or), true)?;
+                }
+                self.emit(
+                    Instr::ImportCall {
+                        dst: d,
+                        specifier: sr,
+                        options: or,
+                    },
+                    sp,
+                )?;
+                self.release(m);
+                Ok(())
+            }
             NodeKind::MemberExpression => {
                 let (obj, prop) = (self.child(nd, 0)?, self.child(nd, 1)?);
                 let o = self.operand(obj, &[prop])?;
@@ -2278,9 +2864,39 @@ impl<'a> Cg<'a> {
             }
             AOp::Typeof => {
                 let inner = self.unparen(operand)?;
-                if self.node(inner)?.kind == NodeKind::IdentifierReference
-                    && self.res(inner) == NONE
-                {
+                let is_ident = self.node(inner)?.kind == NodeKind::IdentifierReference;
+                if is_ident && !self.ident_dyn(inner)?.is_empty() {
+                    // The reference is resolved first; a name that no `with`
+                    // object or eval variable has is the static case below.
+                    let m = self.mark();
+                    let t = self.alloc()?;
+                    let h = self.resolve_dyn(inner, None)?;
+                    let (st, end) = (self.label(), self.label());
+                    let target = Self::label_id(st)?;
+                    let h = h.ok_or(CompileError::Internal("dynamic reference lost"))?;
+                    self.emit(Instr::JumpIfUndefined { src: h, target }, sp)?;
+                    let name = self.name_of(inner);
+                    let key = self.konst(Const::String(self.name_units(name)?))?;
+                    self.emit(
+                        Instr::WithGet {
+                            dst: t,
+                            obj: h,
+                            key,
+                            strict: self.f.strict,
+                        },
+                        sp,
+                    )?;
+                    self.jump(end, sp)?;
+                    self.bind(st)?;
+                    if self.res(inner) == NONE {
+                        self.emit(Instr::GetGlobalOrUndefined { dst: t, key }, sp)?;
+                    } else {
+                        self.read_ident_static(inner, t)?;
+                    }
+                    self.bind(end)?;
+                    self.emit(Instr::TypeOf { dst: d, src: t }, sp)?;
+                    self.release(m);
+                } else if is_ident && self.res(inner) == NONE {
                     // §13.5.3.1 step 2.a: `typeof` of an unresolvable reference is
                     // "undefined", and GetGlobal throws for one; step 3 is
                     // GetValue otherwise.
@@ -2318,6 +2934,15 @@ impl<'a> Cg<'a> {
         let result: Reg;
         match tn.kind {
             NodeKind::IdentifierReference => {
+                // §13.15.2 step 1.a: the reference is resolved (ResolveBinding
+                // §9.4.2†, which a `with` object or eval variable object can answer)
+                // before the right side is evaluated.
+                let dynh = self.resolve_dyn(t, None)?;
+                // §13.15.2 steps 1.c, 5.d, 6.d: NamedEvaluation of an anonymous
+                // function definition on the right of `=`, `&&=`, `||=`, `??=`.
+                if nd.op == AOp::Assign || Self::logical_assign(nd.op).is_some() {
+                    self.named_ident(value, t)?;
+                }
                 if nd.op == AOp::Assign {
                     if let Some(r) = self.simple_local(t)? {
                         self.expr_to(value, Some(r), false)?;
@@ -2325,16 +2950,16 @@ impl<'a> Cg<'a> {
                     } else {
                         let v = self.alloc()?;
                         self.expr_to(value, Some(v), true)?;
-                        self.write_ident(t, v)?;
+                        self.write_ident_h(t, v, dynh)?;
                         result = v;
                     }
                 } else if let Some(short) = Self::logical_assign(nd.op) {
                     let cur = self.alloc()?;
-                    self.read_ident(t, cur)?;
+                    self.read_ident_h(t, cur, dynh)?;
                     let end = self.label();
                     self.short_circuit(short, cur, end, sp)?;
                     self.expr_to(value, Some(cur), true)?;
-                    self.write_ident(t, cur)?;
+                    self.write_ident_h(t, cur, dynh)?;
                     self.bind(end)?;
                     result = cur;
                 } else {
@@ -2358,7 +2983,7 @@ impl<'a> Cg<'a> {
                         }
                         None => {
                             let c = self.alloc()?;
-                            self.read_ident(t, c)?;
+                            self.read_ident_h(t, c, dynh)?;
                             c
                         }
                     };
@@ -2371,7 +2996,7 @@ impl<'a> Cg<'a> {
                         .ok_or(CompileError::Internal("unknown compound assignment"))?;
                     self.emit(ins, sp)?;
                     if local.is_none() {
-                        self.write_ident(t, out)?;
+                        self.write_ident_h(t, out, dynh)?;
                     }
                     result = out;
                 }
@@ -2526,10 +3151,13 @@ impl<'a> Cg<'a> {
                         result = r;
                     }
                 } else {
+                    // §13.4.2.1† step 1 (and the like): the reference is resolved
+                    // once, then read and written.
+                    let dynh = self.resolve_dyn(t, None)?;
                     let cur = self.alloc()?;
-                    self.read_ident(t, cur)?;
+                    self.read_ident_h(t, cur, dynh)?;
                     let (old, new) = self.step_values(cur, wanted_old, &step, sp)?;
-                    self.write_ident(t, new)?;
+                    self.write_ident_h(t, new, dynh)?;
                     result = if prefix { new } else { old };
                 }
             }

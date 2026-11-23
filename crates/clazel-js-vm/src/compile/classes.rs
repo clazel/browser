@@ -50,10 +50,12 @@ impl<'a> Cg<'a> {
             .get(&n)
             .ok_or(CompileError::Internal("class without scopes"))?;
         let derived = self.node(heritage)?.kind != NodeKind::Absent;
+        // The class's name: its own, or the name NamedEvaluation (§8.4.5†) gives
+        // an anonymous class (taken before anything else is compiled).
         let class_name: Vec<u16> = if self.node(name_node)?.kind == NodeKind::BindingIdentifier {
             self.name_units(self.name_of(name_node))?
         } else {
-            Vec::new()
+            self.name_override.take().unwrap_or_default()
         };
         let m = self.mark();
         self.enter_scope(info.scope, sp)?;
@@ -275,6 +277,7 @@ impl<'a> Cg<'a> {
             index,
             st,
             FnMeta {
+                flavor: Flavor::Plain,
                 name,
                 kind,
                 nparams: 0,
@@ -351,6 +354,7 @@ impl<'a> Cg<'a> {
             index,
             st,
             FnMeta {
+                flavor: Flavor::Plain,
                 name: Vec::new(),
                 kind: FunctionKind::Method,
                 nparams: 0,
@@ -414,6 +418,11 @@ impl<'a> Cg<'a> {
                     if self.node(init)?.kind == NodeKind::Absent {
                         self.emit(Instr::LoadUndefined { dst: v }, esp)?;
                     } else {
+                        // §15.7.10† ClassFieldDefinition evaluation step 3.b:
+                        // NamedEvaluation of the initializer with the field's name.
+                        if let Some(units) = self.static_key_name(key_node)? {
+                            self.named(init, &units)?;
+                        }
                         self.expr_to(init, Some(v), true)?;
                     }
                     let kk = self.node(key_node)?.kind;

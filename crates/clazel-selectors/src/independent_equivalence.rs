@@ -9,9 +9,11 @@
 //! The two texts do not parse and match the same set of selectors, so the theorems are about
 //! the selectors both have. [`rel_simple`] and the relations around it say which spec selector
 //! is which transcription selector, and they hold of the common ones only: the spec's
-//! `:link`, `:visited`, `:any-link`, user action pseudo-classes and pseudo-elements, which the
+//! `:link`, `:visited`, `:any-link`, `:scope` (which the transcription also has, but behind
+//! [`ICtx::ext`], and so does not parse: [`super::independent_match::lemma_scope_same`] says its
+//! matching is the spec's), user action pseudo-classes and pseudo-elements, which the
 //! transcription takes as invalid, are related to nothing, and so is every transcription
-//! selector the spec has no counterpart for (`:has()`, `:scope`, `:defined`, `of S`: with
+//! selector the spec has no counterpart for (`:has()`, `:defined`, `of S`: with
 //! [`ICtx::ext`] false the transcription parses none of them).
 //!
 //! The matching theorem takes the arena to be well-formed and its elements to have no two

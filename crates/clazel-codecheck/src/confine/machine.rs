@@ -7,7 +7,7 @@
 //! theorem needs (which accesses an instruction makes, what the machine-level
 //! invariant is, what leaving through the exit sequence looks like). Each
 //! instruction set implements it from its own semantics
-//! ([`super::x64::X64`] is the only implementation so far; A64's is later work).
+//! ([`super::x64::X64`] and [`super::a64::instance::A64`]).
 //!
 //! The statement is [`confinement`], a closed spec function. A proof of it for
 //! one machine is a proof function whose `ensures` is `confinement::<M>()`.

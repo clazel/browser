@@ -73,7 +73,10 @@ const PLACES: &[(&str, Place)] = &[
     ("clazel-css", Place::Renderer),
     ("clazel-selectors", Place::Renderer),
     ("clazel-js-lexer", Place::Renderer),
+    ("clazel-js", Place::Renderer),
     ("clazel-js-vm", Place::Renderer),
+    // The global object's built-ins (phase 7 item 7.9).
+    ("clazel-js-builtins", Place::Renderer),
     ("clazel-js-heap", Place::Renderer),
     ("clazel-js-syntax", Place::Renderer),
     ("clazel-style", Place::Renderer),
@@ -108,9 +111,40 @@ const PLACES: &[(&str, Place)] = &[
     ("clazel-codecheck", Place::Primitive),
     // The JIT's low-level IR (item J.5).
     ("clazel-lir", Place::Renderer),
+    // The JIT's back ends (item J.9), the x86-64 one first.
+    ("clazel-jit", Place::Renderer),
     ("clazel-ipc", Place::Primitive),
     ("clazel-sandbox", Place::Os),
     ("clazel-sys", Place::Os),
+];
+
+/// The engine crates (phase-7.md, "The engine as a library"): a program other
+/// than the browser can embed them, so none may depend, directly or through
+/// other crates, on a crate in [`BROWSER`]. `cargo xtask check` enforces this.
+/// `clazel-js*` crates not listed here fail the check too, so a new engine
+/// crate cannot skip the rule by being left out.
+const ENGINE: &[&str] = &[
+    "clazel-js",
+    "clazel-js-builtins",
+    "clazel-js-heap",
+    "clazel-js-lexer",
+    "clazel-js-number",
+    "clazel-js-regexp",
+    "clazel-js-syntax",
+    "clazel-js-vm",
+    "clazel-json",
+];
+
+/// The crates an engine crate must never reach (phase-7.md, "The boundary").
+const BROWSER: &[&str] = &[
+    "clazel-dom",
+    "clazel-webidl",
+    "clazel-web",
+    "clazel-ipc",
+    "clazel-kernel",
+    "clazel-renderer",
+    "clazel-url",
+    "clazel-fetch",
 ];
 
 /// Workspace members that are not part of the browser, so not drawn.
@@ -153,6 +187,49 @@ pub fn placement_problems(names: &[&str]) -> Vec<String> {
                 format!("xtask/src/status.rs: PLACES names {p}, which is no workspace crate")
             }),
     );
+    out
+}
+
+/// Engine crates that reach a browser crate through normal dependencies, and
+/// `clazel-js*` workspace crates missing from [`ENGINE`]. `deps` is each
+/// workspace crate's name with its normal dependencies' names.
+pub fn engine_problems(deps: &[(String, Vec<String>)]) -> Vec<String> {
+    let direct = |name: &str| -> &[String] {
+        deps.iter()
+            .find(|(n, _)| n == name)
+            .map_or(&[][..], |(_, d)| d.as_slice())
+    };
+    let mut out = Vec::new();
+    for (name, _) in deps {
+        if name.starts_with("clazel-js") && !ENGINE.contains(&name.as_str()) {
+            out.push(format!(
+                "{name}: an engine crate (clazel-js*) missing from ENGINE in xtask/src/status.rs"
+            ));
+        }
+    }
+    for e in ENGINE {
+        if !deps.iter().any(|(n, _)| n == e) {
+            out.push(format!(
+                "xtask/src/status.rs: ENGINE names {e}, which is no workspace crate"
+            ));
+            continue;
+        }
+        // Breadth-first over the workspace crates reachable from `e`.
+        let mut seen: Vec<&str> = vec![e];
+        let mut next = 0;
+        while let Some(&cur) = seen.get(next) {
+            next = next.saturating_add(1);
+            for d in direct(cur) {
+                if BROWSER.contains(&d.as_str()) {
+                    out.push(format!(
+                        "{e}: engine crate depends on browser crate {d} (via {cur}); engine crates depend on no browser crate"
+                    ));
+                } else if deps.iter().any(|(n, _)| n == d) && !seen.contains(&d.as_str()) {
+                    seen.push(d.as_str());
+                }
+            }
+        }
+    }
     out
 }
 
@@ -1008,7 +1085,8 @@ pub fn render(
 #[cfg(test)]
 mod tests {
     use super::{
-        PLACES, Place, Rows, SCOREBOARD_PER_LINE, numbers, placement_problems, render, short_count,
+        ENGINE, PLACES, Place, Rows, SCOREBOARD_PER_LINE, engine_problems, numbers,
+        placement_problems, render, short_count,
     };
 
     fn row(cells: &[&str]) -> Vec<String> {
@@ -1123,6 +1201,46 @@ mod tests {
         let mut rows = table();
         rows.insert("clazel-unplaced".into(), row(&["clazel-unplaced"]));
         assert!(render(&rows, &|_| None).is_err());
+    }
+
+    #[test]
+    fn engine_crates_reach_no_browser_crate() {
+        // The engine crates, with these edges, plus the other crates named.
+        let graph = |edges: &[(&str, &[&str])], extra: &[&str]| {
+            let mut deps: Vec<(String, Vec<String>)> = ENGINE
+                .iter()
+                .map(|e| {
+                    let to = edges
+                        .iter()
+                        .find(|(n, _)| n == e)
+                        .map_or(&[][..], |(_, d)| *d);
+                    (
+                        (*e).to_owned(),
+                        to.iter().map(|d| (*d).to_owned()).collect(),
+                    )
+                })
+                .collect();
+            deps.extend(extra.iter().map(|n| ((*n).to_owned(), Vec::new())));
+            engine_problems(&deps)
+        };
+        assert!(graph(&[], &[]).is_empty());
+        // A direct dependency.
+        assert_eq!(
+            graph(&[("clazel-js", &["clazel-dom"])], &["clazel-dom"]).len(),
+            1
+        );
+        // A transitive one, through another engine crate: both are reported.
+        let found = graph(
+            &[
+                ("clazel-js", &["clazel-js-vm"]),
+                ("clazel-js-vm", &["clazel-dom"]),
+            ],
+            &["clazel-dom"],
+        );
+        assert_eq!(found.len(), 2, "{found:?}");
+        // An engine crate left out of ENGINE (a name no real crate has, so the
+        // test does not break when a real crate joins the list).
+        assert_eq!(graph(&[], &["clazel-js-not-listed"]).len(), 1);
     }
 
     #[test]

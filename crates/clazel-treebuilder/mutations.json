@@ -671,6 +671,20 @@
         "lemma": "ml_w3c_in_cell_table()",
         "witness": "mode_in_cell(ml_env(), ml_cell_parser(), ml_named_end(ml_name_table())) is Done"
       }
+    },
+    {
+      "id": "template-start-place-after-push",
+      "file": "src/spec/modes/in_head.rs",
+      "find": "insert_element_at(p4, template.id, Some(insertion_location))",
+      "replace": "insert_element_at(p4, template.id, None)",
+      "expect": "killed",
+      "reason": "The \"in head\" template start tag inserts the template element at the appropriate place computed after it was pushed (step 9 after step 10), so at its own template contents: the element becomes a child of the fragment it hosts, a cycle through the host that wf does not forbid and the guard of \"insert an element at the adjusted insertion location\" (the inclusive-ancestor half of the check) lets through. The document is then not host_acyclic: host::rules::lemma_host_template_start (the rule keeps host_inv, the invariant of theorem_reachable_host_acyclic) is false at a parser whose stack is one element.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_template_not_in_contents()",
+        "witness": "in_head_template_start(ml_host_parser(), ml_template_tok()).doc.nodes.len() == 4 && in_head_template_start(ml_host_parser(), ml_template_tok()).doc.nodes[2].parent == Some(3usize) && in_head_template_start(ml_host_parser(), ml_template_tok()).doc.nodes[3].kind == (NodeKind::DocumentFragment { host: Some(2usize) })"
+      },
+      "module": "host::rules"
     }
   ]
 }

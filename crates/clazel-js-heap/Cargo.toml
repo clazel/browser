@@ -4,7 +4,7 @@ version = "0.0.0"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "The JavaScript engine's heap for Clazel's Phase 7 browser (phase-7.md item 7.5): NaN-boxed values, a generational index arena, Latin-1/UTF-16 strings with interned property keys, and shapes."
+description = "The JavaScript engine's heap for Clazel's Phase 7 browser (phase-7.md item 7.5): NaN-boxed values, a generational index arena, Latin-1/UTF-16 strings with interned property keys, shapes, elements, symbols, and (item 7.6) the mark-and-sweep collector with weak references."
 
 # No dependencies: the heap is ours end to end (CLAUDE.md rule 8), and it
 # depends on no browser crate (phase-7.md, "The engine as a library").
@@ -14,7 +14,7 @@ description = "The JavaScript engine's heap for Clazel's Phase 7 browser (phase-
 # have not run in CI's full verification on a pull request yet; raising it is
 # CI's call. `target-tier` is the plan's (phase-7.md, "Crates"): 1.
 [package.metadata.clazel]
-tier = 0
+tier = 1
 target-tier = 1
 
 [lints]

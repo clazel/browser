@@ -337,10 +337,10 @@ pub proof fn lemma_d_kill(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetc
     crate::unwinding::lemma_rel_from_sets(rules, urls, d, s1b, s2b);
 }
 
-/// A `FetchStyle` of a renderer of `d` (item 5.19): the same outputs, and
-/// related states.
+/// A `FetchStyle` or `FetchScript` of a renderer of `d` (items 5.19 and
+/// 7.16): the same outputs, and related states.
 #[verifier::spinoff_prover]
-pub proof fn lemma_d_fetch_style(
+pub proof fn lemma_d_fetch_sub(
     rules: Seq<clazel_psl::spec::Rule>,
     urls: UrlFns,
     fetch: FetchFns,
@@ -349,15 +349,13 @@ pub proof fn lemma_d_fetch_style(
     s2: State,
     id: nat,
     bytes: Seq<u8>,
-    request: u64,
-    url: Seq<u8>,
+    m: clazel_ipc::message::spec::Message,
 )
     requires
         crate::noninterference::rel(rules, urls, d, s1, s2),
         crate::domain::event_domain(rules, s1, Event::FromRenderer { id, bytes }) == Some(d),
-        accepted_message(s1.renderers[find_by_id(s1.renderers, id, 0)->Some_0], bytes) == Some(
-            clazel_ipc::message::spec::Message::FetchStyle { request, url },
-        ),
+        accepted_message(s1.renderers[find_by_id(s1.renderers, id, 0)->Some_0], bytes) == Some(m),
+        is_sub_request(m),
     ensures
         crate::noninterference::renderer_outs(step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).1) == crate::noninterference::renderer_outs(step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).1),
         crate::noninterference::rel(rules, urls, d, step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).0, step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).0),
@@ -367,15 +365,18 @@ pub proof fn lemma_d_fetch_style(
     let i1 = find_by_id(s1.renderers, id, 0)->Some_0;
     let i2 = find_by_id(s2.renderers, id, 0)->Some_0;
     let r = s1.renderers[i1];
-    assert(step(rules, urls, fetch, s1, e) == fetch_style(rules, urls, fetch, s1, r, request, url));
-    assert(step(rules, urls, fetch, s2, e) == fetch_style(rules, urls, fetch, s2, r, request, url));
+    let script = m is FetchScript;
+    let request = sub_request_id(m);
+    let url = sub_request_url(m);
+    assert(step(rules, urls, fetch, s1, e) == fetch_sub(rules, urls, fetch, s1, r, script, request, url));
+    assert(step(rules, urls, fetch, s2, e) == fetch_sub(rules, urls, fetch, s2, r, script, request, url));
     crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s1, e);
     crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s2, e);
     crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, fetch, s1, e);
     crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, fetch, s2, e);
-    crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s1, r, request, url);
-    crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s2, r, request, url);
-    crate::subfetch_rel::lemma_fetch_style_domain(rules, urls, fetch, d, s1, s2, r, request, url);
+    crate::subfetch_rel::lemma_fetch_sub_shape(rules, urls, fetch, s1, r, script, request, url);
+    crate::subfetch_rel::lemma_fetch_sub_shape(rules, urls, fetch, s2, r, script, request, url);
+    crate::subfetch_rel::lemma_fetch_sub_domain(rules, urls, fetch, d, s1, s2, r, script, request, url);
     let (s1b, o1) = step(rules, urls, fetch, s1, e);
     let (s2b, o2) = step(rules, urls, fetch, s2, e);
     lemma_rel_same_table(rules, urls, d, s1, s2, s1b, s2b);
@@ -415,8 +416,8 @@ pub proof fn lemma_d_event(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fet
                     crate::surface_rel::lemma_titles_set_same(rules, s1.titles, s2.titles, r.id, r.lock, title, d);
                     lemma_rel_same_table(rules, urls, d, s1, s2, s1b, s2b);
                     assert(o1 == o2);
-                } else if let clazel_ipc::message::spec::Message::FetchStyle { request, url } = m {
-                    lemma_d_fetch_style(rules, urls, fetch, d, s1, s2, id, bytes, request, url);
+                } else if is_sub_request(m) {
+                    lemma_d_fetch_sub(rules, urls, fetch, d, s1, s2, id, bytes, m);
                 } else {
                     // `Display` (item 4.12) changes nothing and shows the same
                     // on the same tab in both runs: the sender is the same

@@ -25,6 +25,17 @@ pub fn parse(src: &[u32], goal: SourceGoal) -> Result<Ast, ParseError> {
 /// with `Verified` carries a proof of `spec::derives_root` (modulo the lexer), and
 /// with `Unsupported` is only tested.
 pub fn parse_checked(src: &[u32], goal: SourceGoal) -> Result<(Ast, Derivation), ParseError> {
+    parse_checked_early(src, goal).map(|(ast, d, _)| (ast, d))
+}
+
+/// [`parse_checked`], and what [`crate::arena_early::check_early_canon`] found of the arena:
+/// `Verified` (the third component) means the arena has no early error
+/// (`spec::early_errors_ok`), so `Verified` in both means `spec::is_valid_parse` holds, modulo
+/// the assumptions of [`crate::arena_d`]; `Unsupported` that a rule or node kind is not covered.
+pub fn parse_checked_early(
+    src: &[u32],
+    goal: SourceGoal,
+) -> Result<(Ast, Derivation, Derivation), ParseError> {
     // Recursion is bounded by `MAX_DEPTH` nested nodes, each a few frames; a
     // thread with room for that is cheaper than a stack overflow. Short
     // sources cannot nest that deep.
@@ -45,7 +56,7 @@ pub fn parse_checked(src: &[u32], goal: SourceGoal) -> Result<(Ast, Derivation),
     })
 }
 
-fn parse_inner(src: &[u32], goal: SourceGoal) -> Result<(Ast, Derivation), ParseError> {
+fn parse_inner(src: &[u32], goal: SourceGoal) -> Result<(Ast, Derivation, Derivation), ParseError> {
     let module = goal == SourceGoal::Module;
     let mut p = Parser::new(src, module)?;
     let root = p.parse_program()?;
@@ -67,7 +78,8 @@ fn parse_inner(src: &[u32], goal: SourceGoal) -> Result<(Ast, Derivation), Parse
     if d == Derivation::Failed {
         return Err(ParseError::Syntax);
     }
-    Ok((ast, d))
+    let early = crate::arena_early::check_early_canon(src, &ast.nodes, &p.rec, &gaps, module);
+    Ok((ast, d, early))
 }
 
 /// The nodes reachable from `root`, in their original order, renumbered. The

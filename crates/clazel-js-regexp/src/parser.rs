@@ -58,8 +58,8 @@ type R<T> = Result<T, Error>;
 #[cfg(kani)]
 mod proofs;
 
-/// Parses `pattern` (UTF-16 code units) with `flags`, accepting every
-/// syntactically valid `Script` value in `\p{sc=..}`.
+/// Parses `pattern` (UTF-16 code units) with `flags`, accepting the `Script`
+/// values of the generated tables ([`props::UcdScripts`]) in `\p{sc=..}`.
 ///
 /// ECMA-262 §22.2.3.4† RegExpInitialize step 7 (ParsePattern) and §22.2.1†,
 /// with the early errors of §22.2.1.1†.
@@ -68,7 +68,7 @@ mod proofs;
 ///
 /// [`Error`] if the pattern is a Syntax Error.
 pub fn parse(pattern: &[u16], flags: Flags) -> Result<Pattern, Error> {
-    parse_with(pattern, flags, &props::SyntaxOnly)
+    parse_with(pattern, flags, &props::UcdScripts)
 }
 
 /// [`parse`], checking `Script` and `Script_Extensions` values with `names`.

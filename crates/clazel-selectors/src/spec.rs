@@ -24,7 +24,7 @@
 //! - **meaning** The subset (phase-5.md item 5.5). Supported: the grammar of §18; type,
 //!   universal and namespace selectors (§5); attribute selectors with all seven forms and
 //!   the `i` and `s` flags (§6); class and ID selectors (§6.6, §7); `:link`, `:visited`,
-//!   `:any-link` (§9); `:root`, `:empty`, `:first-child`, `:last-child`, `:only-child`,
+//!   `:any-link` (§9); `:scope` (§9.4); `:root`, `:empty`, `:first-child`, `:last-child`, `:only-child`,
 //!   `:nth-child()`, `:nth-last-child()` and the `-of-type` forms (§15); `:is()`, `:not()`,
 //!   `:where()` (§4); the user action pseudo-classes `:hover`, `:active`, `:focus`,
 //!   `:focus-visible`, `:focus-within` (§11); the four combinators (§16); and the
@@ -34,6 +34,22 @@
 //!   8, because its matching is not linear), the `of S` argument of `:nth-child()` and
 //!   `:nth-last-child()`, the other pseudo-classes and pseudo-elements, and every
 //!   functional pseudo-element.
+//! - **meaning** The scoping root (§9.4 `:scope`, §3.3 "Scoped Selectors", §21.3 "match a
+//!   selector against an element"). §21.3 lets "callers … optionally provide … one or more
+//!   scoping roots, for resolving the `:scope` pseudo-class against". Matching takes at most
+//!   one, `scope: Option<NodeId>`: `Some(r)` is a scoping root, `None` is "no scoping root", in
+//!   which case "`:scope` represents the root of the tree the element is in (equivalent to
+//!   `:host` in a shadow tree, or `:root` otherwise)", and an arena has no shadow trees, so it
+//!   is `:root`. Several roots (every caller of the DOM's "scope-match a selectors string"
+//!   passes one) are left out. A scoping root "may be either a true element or a virtual one
+//!   (such as a `DocumentFragment`)"; only a true element is modelled, so a scoping root that
+//!   is not an element is matched by no element, and a virtual one is not "the parent of any
+//!   root elements in the document fragment it represents" to a combinator (the child and
+//!   descendant combinators relate only elements). §3.3's "it matches an element only if the
+//!   element is a descendant of the scoping root" says which elements a scoped selector may
+//!   return, which is the caller's walk of the descendants, not matching: matching does not
+//!   filter. `None` is what every other entry point passes (a style sheet has no scoping
+//!   root).
 //! - **meaning** `:visited` never matches. No history reaches a renderer, which also closes
 //!   the history-sniffing channel §9.2's note describes. So `:link` matches every element
 //!   HTML says matches "one of `:link` and `:visited`".
@@ -175,6 +191,8 @@ pub enum PseudoClass {
     FocusVisible,
     /// §11.6 `:focus-within`
     FocusWithin,
+    /// §9.4 `:scope`
+    Scope,
 }
 
 /// The four child-indexed pseudo-classes that take `<an+b>`.
@@ -393,6 +411,7 @@ pub open spec fn pseudo_class_name(class: PseudoClass) -> Seq<u32> {
         PseudoClass::FocusWithin => seq![
             0x66u32, 0x6F, 0x63, 0x75, 0x73, 0x2D, 0x77, 0x69, 0x74, 0x68, 0x69, 0x6E,
         ],
+        PseudoClass::Scope => seq![0x73u32, 0x63, 0x6F, 0x70, 0x65],
     }
 }
 
@@ -453,6 +472,8 @@ pub open spec fn pseudo_class_named(name: Seq<u32>) -> Option<PseudoClass> {
         Some(PseudoClass::FocusVisible)
     } else if ascii_case_insensitive_match(name, pseudo_class_name(PseudoClass::FocusWithin)) {
         Some(PseudoClass::FocusWithin)
+    } else if ascii_case_insensitive_match(name, pseudo_class_name(PseudoClass::Scope)) {
+        Some(PseudoClass::Scope)
     } else {
         None
     }
@@ -1738,8 +1759,17 @@ pub open spec fn is_visited(doc: Document, x: NodeId) -> bool {
     false
 }
 
+/// §15.1 `:root`: "the root of the document … in a DOM document, the :root pseudo-class
+/// matches the document element", the element child of the document.
+pub open spec fn is_document_element(doc: Document, x: NodeId) -> bool {
+    match parent_of(doc, x) {
+        Some(p) => p < doc.nodes.len() && doc.nodes[p as int].kind is Document,
+        None => false,
+    }
+}
+
 /// True if the pseudo-class `class` matches the element `x`.
-pub open spec fn pseudo_class_matches(doc: Document, class: PseudoClass, x: NodeId) -> bool {
+pub open spec fn pseudo_class_matches(doc: Document, scope: Option<NodeId>, class: PseudoClass, x: NodeId) -> bool {
     match class {
         // A hyperlink that is not visited matches :link.
         PseudoClass::Link => is_hyperlink(doc, x) && !is_visited(doc, x),
@@ -1751,10 +1781,7 @@ pub open spec fn pseudo_class_matches(doc: Document, class: PseudoClass, x: Node
         ) && is_visited(doc, x)),
         // §15.1: "the root of the document … in a DOM document, the :root pseudo-class
         // matches the document element", the element child of the document.
-        PseudoClass::Root => match parent_of(doc, x) {
-            Some(p) => p < doc.nodes.len() && doc.nodes[p as int].kind is Document,
-            None => false,
-        },
+        PseudoClass::Root => is_document_element(doc, x),
         PseudoClass::Empty => empty_up_to(doc, children_of(doc, x), children_of(doc, x).len() as int),
         // §15.3.3: "Same as :nth-child(1)".
         PseudoClass::FirstChild => child_index(doc, x, false, false) == 1,
@@ -1782,6 +1809,14 @@ pub open spec fn pseudo_class_matches(doc: Document, class: PseudoClass, x: Node
         PseudoClass::Focus => false,
         PseudoClass::FocusVisible => false,
         PseudoClass::FocusWithin => false,
+        // §9.4: ":scope represents this scoping root. … If there is no scoping root then
+        // :scope represents the root of the tree the element is in (equivalent to :host in a
+        // shadow tree, or :root otherwise)." The arena has no shadow trees, so with no
+        // scoping root it is `:root`.
+        PseudoClass::Scope => match scope {
+            Some(root) => x == root,
+            None => is_document_element(doc, x),
+        },
     }
 }
 
@@ -1814,7 +1849,7 @@ pub open spec fn type_name_matches(doc: Document, name: Seq<u32>, x: NodeId) -> 
 // ------------------------------------------------------------------------------------
 
 /// True if the simple selector `s` matches the element `x`.
-pub open spec fn simple_matches(doc: Document, s: Simple, x: NodeId) -> bool
+pub open spec fn simple_matches(doc: Document, scope: Option<NodeId>, s: Simple, x: NodeId) -> bool
     decreases s, 0int, 0int,
 {
     is_element(doc, x) && match s {
@@ -1832,7 +1867,7 @@ pub open spec fn simple_matches(doc: Document, s: Simple, x: NodeId) -> bool
             test,
             attributes_of(doc, x).len() as int,
         ),
-        Simple::PseudoClass { class } => pseudo_class_matches(doc, class, x),
+        Simple::PseudoClass { class } => pseudo_class_matches(doc, scope, class, x),
         // §15.3.1 "elements that are among An+Bth elements from the list composed of their
         // inclusive siblings", §15.3.2 "counting backwards from the end", §15.4 "among
         // elements of the same type".
@@ -1849,31 +1884,31 @@ pub open spec fn simple_matches(doc: Document, s: Simple, x: NodeId) -> bool
         // §4.2: "If the argument, after parsing, is an empty list, the pseudo-class is valid
         // but matches nothing. Otherwise, the pseudo-class matches any element that matches
         // any of the selectors in the list."
-        Simple::Is { arg } => match_list(doc, arg, arg.len() as int, x),
+        Simple::Is { arg } => match_list(doc, scope, arg, arg.len() as int, x),
         // §4.4: "the same syntax and functionality as :is()".
-        Simple::Where { arg } => match_list(doc, arg, arg.len() as int, x),
+        Simple::Where { arg } => match_list(doc, scope, arg, arg.len() as int, x),
         // §4.3: "It represents an element that is not represented by its argument."
-        Simple::Not { arg } => !match_list(doc, arg, arg.len() as int, x),
+        Simple::Not { arg } => !match_list(doc, scope, arg, arg.len() as int, x),
         // A pseudo-element is not an element (modelling choices).
         Simple::PseudoElement { .. } => false,
     }
 }
 
 /// True if each of the first `k` simple selectors of `compound` matches `x`.
-pub open spec fn compound_matches(doc: Document, compound: Seq<Simple>, k: int, x: NodeId) -> bool
+pub open spec fn compound_matches(doc: Document, scope: Option<NodeId>, compound: Seq<Simple>, k: int, x: NodeId) -> bool
     decreases compound, k, 0int,
 {
     if k <= 0 || k > compound.len() {
         true
     } else {
-        compound_matches(doc, compound, k - 1, x) && simple_matches(doc, compound[k - 1], x)
+        compound_matches(doc, scope, compound, k - 1, x) && simple_matches(doc, scope, compound[k - 1], x)
     }
 }
 
 /// True if the complex selector made of the first `n` compound selectors of `c` (and the
 /// combinators between them) matches the element `x`: §21.3 "match a complex selector
 /// against an element".
-pub open spec fn match_complex(doc: Document, c: Complex, n: int, x: NodeId) -> bool
+pub open spec fn match_complex(doc: Document, scope: Option<NodeId>, c: Complex, n: int, x: NodeId) -> bool
     decreases c, n, 0int,
 {
     if n <= 0 || n > c.compounds.len() || n - 2 >= c.combinators.len() {
@@ -1882,7 +1917,7 @@ pub open spec fn match_complex(doc: Document, c: Complex, n: int, x: NodeId) -> 
         let compound = c.compounds[n - 1];
         // "If any simple selectors in the rightmost compound selector does not match the
         // element, return failure."
-        if !compound_matches(doc, compound, compound.len() as int, x) {
+        if !compound_matches(doc, scope, compound, compound.len() as int, x) {
             false
         // "Otherwise, if there is only one compound selector in the complex selector, return
         // success."
@@ -1898,6 +1933,7 @@ pub open spec fn match_complex(doc: Document, c: Complex, n: int, x: NodeId) -> 
                 // §16.1 "an arbitrary descendant of some ancestor element A".
                 Combinator::Descendant => some_ancestor_matches(
                     doc,
+                    scope,
                     c,
                     n - 1,
                     parent_of(doc, x),
@@ -1905,13 +1941,14 @@ pub open spec fn match_complex(doc: Document, c: Complex, n: int, x: NodeId) -> 
                 ),
                 // §16.2 "a childhood relationship between two elements".
                 Combinator::Child => match parent_of(doc, x) {
-                    Some(p) => is_element(doc, p) && match_complex(doc, c, n - 1, p),
+                    Some(p) => is_element(doc, p) && match_complex(doc, scope, c, n - 1, p),
                     None => false,
                 },
                 // §16.3 "the second element immediately follows the first … ignoring
                 // non-element nodes".
                 Combinator::NextSibling => previous_element_matches(
                     doc,
+                    scope,
                     c,
                     n - 1,
                     inclusive_siblings(doc, x),
@@ -1921,6 +1958,7 @@ pub open spec fn match_complex(doc: Document, c: Complex, n: int, x: NodeId) -> 
                 // immediately) the … second one".
                 Combinator::SubsequentSibling => some_earlier_sibling_matches(
                     doc,
+                    scope,
                     c,
                     n - 1,
                     inclusive_siblings(doc, x),
@@ -1935,6 +1973,7 @@ pub open spec fn match_complex(doc: Document, c: Complex, n: int, x: NodeId) -> 
 /// `n` compound selectors of `c` match.
 pub open spec fn some_ancestor_matches(
     doc: Document,
+    scope: Option<NodeId>,
     c: Complex,
     n: int,
     x: Option<NodeId>,
@@ -1947,8 +1986,9 @@ pub open spec fn some_ancestor_matches(
         Some(a) => if fuel == 0 {
             false
         } else {
-            (is_element(doc, a) && match_complex(doc, c, n, a)) || some_ancestor_matches(
+            (is_element(doc, a) && match_complex(doc, scope, c, n, a)) || some_ancestor_matches(
                 doc,
+                scope,
                 c,
                 n,
                 parent_of(doc, a),
@@ -1962,6 +2002,7 @@ pub open spec fn some_ancestor_matches(
 /// 1`, …, is one that the first `n` compound selectors of `c` match.
 pub open spec fn previous_element_matches(
     doc: Document,
+    scope: Option<NodeId>,
     c: Complex,
     n: int,
     sibs: Seq<NodeId>,
@@ -1972,9 +2013,9 @@ pub open spec fn previous_element_matches(
     if j < 0 || j >= sibs.len() {
         false
     } else if is_element(doc, sibs[j]) {
-        match_complex(doc, c, n, sibs[j])
+        match_complex(doc, scope, c, n, sibs[j])
     } else {
-        previous_element_matches(doc, c, n, sibs, j - 1)
+        previous_element_matches(doc, scope, c, n, sibs, j - 1)
     }
 }
 
@@ -1982,6 +2023,7 @@ pub open spec fn previous_element_matches(
 /// first `n` compound selectors of `c` match.
 pub open spec fn some_earlier_sibling_matches(
     doc: Document,
+    scope: Option<NodeId>,
     c: Complex,
     n: int,
     sibs: Seq<NodeId>,
@@ -1992,20 +2034,21 @@ pub open spec fn some_earlier_sibling_matches(
     if j < 0 || j >= sibs.len() {
         false
     } else {
-        (is_element(doc, sibs[j]) && match_complex(doc, c, n, sibs[j]))
-            || some_earlier_sibling_matches(doc, c, n, sibs, j - 1)
+        (is_element(doc, sibs[j]) && match_complex(doc, scope, c, n, sibs[j]))
+            || some_earlier_sibling_matches(doc, scope, c, n, sibs, j - 1)
     }
 }
 
 /// True if one of the first `k` complex selectors of `list` matches `x`.
-pub open spec fn match_list(doc: Document, list: Seq<Complex>, k: int, x: NodeId) -> bool
+pub open spec fn match_list(doc: Document, scope: Option<NodeId>, list: Seq<Complex>, k: int, x: NodeId) -> bool
     decreases list, k, 0int,
 {
     if k <= 0 || k > list.len() {
         false
     } else {
-        match_list(doc, list, k - 1, x) || match_complex(
+        match_list(doc, scope, list, k - 1, x) || match_complex(
             doc,
+            scope,
             list[k - 1],
             list[k - 1].compounds.len() as int,
             x,
@@ -2017,8 +2060,8 @@ pub open spec fn match_list(doc: Document, list: Seq<Complex>, k: int, x: NodeId
 /// selector (which is taken to be a list of complex selectors), match the complex selector
 /// against element … If the matching returns success for any complex selector, then the
 /// algorithm return success; otherwise it returns failure."
-pub open spec fn match_a_selector_against_an_element(doc: Document, selector: Seq<Complex>, x: NodeId) -> bool {
-    match_list(doc, selector, selector.len() as int, x)
+pub open spec fn match_a_selector_against_an_element(doc: Document, scope: Option<NodeId>, selector: Seq<Complex>, x: NodeId) -> bool {
+    match_list(doc, scope, selector, selector.len() as int, x)
 }
 
 // ------------------------------------------------------------------------------------
@@ -2155,15 +2198,15 @@ pub open spec fn list_specificity(list: Seq<Complex>, k: int) -> Specificity
 /// §17: "If the selector is a selector list, this number is calculated for each selector in
 /// the list. For a given matching process against the list, the specificity in effect is that
 /// of the most specific selector in the list that matches." Over the first `k`.
-pub open spec fn specificity_in_effect(doc: Document, list: Seq<Complex>, k: int, x: NodeId) -> Specificity
+pub open spec fn specificity_in_effect(doc: Document, scope: Option<NodeId>, list: Seq<Complex>, k: int, x: NodeId) -> Specificity
     decreases k,
 {
     if k <= 0 || k > list.len() {
         zero()
-    } else if match_complex(doc, list[k - 1], list[k - 1].compounds.len() as int, x) {
-        most_specific(specificity_in_effect(doc, list, k - 1, x), specificity(list[k - 1]))
+    } else if match_complex(doc, scope, list[k - 1], list[k - 1].compounds.len() as int, x) {
+        most_specific(specificity_in_effect(doc, scope, list, k - 1, x), specificity(list[k - 1]))
     } else {
-        specificity_in_effect(doc, list, k - 1, x)
+        specificity_in_effect(doc, scope, list, k - 1, x)
     }
 }
 

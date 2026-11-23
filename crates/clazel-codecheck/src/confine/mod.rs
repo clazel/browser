@@ -5,6 +5,7 @@
 //! does not write the reserved registers.
 //!
 //! - [`machine`]: the statement, once, over an abstract [`machine::Machine`].
+//! - [`a64`]: the A64 instance of the same statement (its own module tree).
 //! - [`x64`]: the x86-64 instance: configuration, machine-level invariant,
 //!   observations. Statement only.
 //! - The x86-64 proof, [`x64proof`], from: [`frame`] (what `effect` leaves
@@ -18,7 +19,9 @@
 //! [`machine`]'s header for exactly what it says and does not say, and
 //! [`x64`]'s for the x86-64 modelling choices. The proof is complete for
 //! x86-64: [`x64proof::theorem_x64`] and [`x64proof::theorem_x64_runs`]. It
-//! uses no axiom. A64's is later work. The crate's tier is unchanged: nothing
+//! uses no axiom. A64's, over the same statement, is in [`a64`]
+//! ([`a64::proof::theorem_a64`] and [`a64::proof::theorem_a64_runs`]), also
+//! with no axiom. The crate's tier is unchanged: nothing
 //! here counts toward a tier until CI's full verification is green
 //! (CLAUDE.md rule 7).
 
@@ -50,6 +53,7 @@ pub mod spec {
     pub use crate::spec::*;
 }
 
+pub mod a64;
 pub mod chain;
 pub mod check;
 pub mod flags;
