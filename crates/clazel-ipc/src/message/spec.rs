@@ -22,6 +22,7 @@
 //! | 10 | renderer to kernel | `Display` | title (text), text (text), links (array of text) |
 //! | 11 | renderer to kernel | `Title` | title (text) |
 //! | 12 | renderer to kernel | `Submit` | url (text), method (text), content type (bytes), body (bytes) |
+//! | 13 | renderer to kernel | `FetchSub` | request (unsigned), destination (unsigned: 0 style, 1 image), url (text) |
 //! | 14 | renderer to kernel | `FetchStyle` | request (unsigned), url (text) |
 //! | 15 | GPU process to kernel | `FrameReady` | buffer (unsigned), width (unsigned), height (unsigned) |
 //! | 18 | GPU process to kernel | `GpuReady` | software (bool) |
@@ -39,6 +40,10 @@
 //! | 111 | kernel to renderer | `StyleBody` | request (unsigned), bytes (bytes, at most [`max_style_chunk`]) |
 //! | 112 | kernel to renderer | `StyleEnd` | request (unsigned) |
 //! | 113 | kernel to renderer | `StyleFailed` | request (unsigned) |
+//! | 115 | kernel to renderer | `SubResponse` | request (unsigned), content type (bytes) |
+//! | 116 | kernel to renderer | `SubBody` | request (unsigned), bytes (bytes, at most [`max_sub_chunk`]) |
+//! | 117 | kernel to renderer | `SubEnd` | request (unsigned) |
+//! | 118 | kernel to renderer | `SubFailed` | request (unsigned) |
 //! | 114 | kernel to GPU process | `GpuViewport` | width (unsigned), height (unsigned), scale (unsigned) |
 //!
 //! `StorageLengthValue` is not in the plan's list, which has no reply for
@@ -78,6 +83,20 @@
 //! field value, or empty), zero or more `StyleBody` and `StyleEnd`, or with
 //! `StyleFailed`, each naming that `request`. The request id is the
 //! renderer's own number for its fetch, not an identity: it names nobody.
+//!
+//! Phase 6 item 6.17 added the sub-resource fetch of decision 6.0(e) B:
+//! `FetchSub { request, destination, url }` asks the kernel to fetch `url`
+//! (resolved against the renderer's committed URL) as a "no-cors" request of
+//! the given destination ([`destination_style`] 0, [`destination_image`] 1;
+//! Phase 7 adds more), and the kernel answers with `SubResponse` (the
+//! response's combined `Content-Type` field value, or empty), zero or more
+//! `SubBody` and `SubEnd`, or with `SubFailed`, each naming that `request`,
+//! as `FetchStyle`'s family does. A destination the kernel does not know is
+//! answered with `SubFailed`; the schema does not narrow it. `FetchStyle`
+//! and the `Style*` messages stay, unchanged, until the renderer sends
+//! `FetchSub` for sheets (item 6.18), when their tags are never used again.
+//! A response that Opaque Response Blocking refuses is `SubFailed` (a network
+//! error), never an empty `SubResponse`.
 //!
 //! Phase 6 item 6.16 added `Submit`, a navigation with a method and a body
 //! (a form submission, HTML §4.10.22.3 step 22 "navigate"), beside `Navigate`,
@@ -272,6 +291,40 @@ pub enum Message {
         /// The renderer's id for the fetch.
         request: u64,
     },
+    /// Renderer to kernel: fetch a sub-resource of a destination (item 6.17).
+    FetchSub {
+        /// The renderer's id for this fetch.
+        request: u64,
+        /// The request's destination: [`destination_style`] or
+        /// [`destination_image`].
+        destination: u64,
+        /// The resource's URL, as the document wrote it.
+        url: Seq<u8>,
+    },
+    /// Kernel to renderer: the sub-resource's response arrived (item 6.17).
+    SubResponse {
+        /// The renderer's id for the fetch.
+        request: u64,
+        /// The response's combined `Content-Type` field value, or empty.
+        content_type: Seq<u8>,
+    },
+    /// Kernel to renderer: the next part of the sub-resource's body.
+    SubBody {
+        /// The renderer's id for the fetch.
+        request: u64,
+        /// The octets.
+        bytes: Seq<u8>,
+    },
+    /// Kernel to renderer: the sub-resource's body is complete.
+    SubEnd {
+        /// The renderer's id for the fetch.
+        request: u64,
+    },
+    /// Kernel to renderer: the fetch failed, was refused, or was blocked.
+    SubFailed {
+        /// The renderer's id for the fetch.
+        request: u64,
+    },
     /// Kernel to renderer: a document is committed; its body follows in
     /// `Body` frames, then `BodyEnd`.
     Commit {
@@ -377,10 +430,28 @@ pub open spec fn max_style_chunk() -> nat {
     (crate::frame::spec::MAX_FRAME - 17) as nat
 }
 
+/// The most octets one `SubBody` carries: as [`max_style_chunk`] (the tag 116
+/// is two octets like 111), so that every `SubBody` of at most this many
+/// octets fits one frame (item 6.17).
+pub open spec fn max_sub_chunk() -> nat {
+    (crate::frame::spec::MAX_FRAME - 17) as nat
+}
+
+/// `FetchSub`'s destination "style".
+pub open spec fn destination_style() -> u64 {
+    0
+}
+
+/// `FetchSub`'s destination "image".
+pub open spec fn destination_image() -> u64 {
+    1
+}
+
 /// Whether `m` is sent by a renderer to the kernel.
 pub open spec fn is_from_renderer(m: Message) -> bool {
     match m {
-        Message::CookieGet
+        Message::FetchSub { .. }
+        | Message::CookieGet
         | Message::CookieSet { .. }
         | Message::StorageGetItem { .. }
         | Message::StorageSetItem { .. }
@@ -461,6 +532,8 @@ pub enum Field {
     KeyCode,
     /// The renderer's own id for a style sheet fetch (item 5.19).
     Request,
+    /// A sub-resource fetch's destination (item 6.17).
+    Destination,
     /// A claimed origin. No message has one.
     Origin,
     /// A renderer id. No message has one.
@@ -508,6 +581,11 @@ pub open spec fn message_fields(m: Message) -> Seq<Field> {
         Message::StyleBody { .. } => seq![Field::Request, Field::BodyBytes],
         Message::StyleEnd { .. } => seq![Field::Request],
         Message::StyleFailed { .. } => seq![Field::Request],
+        Message::FetchSub { .. } => seq![Field::Request, Field::Destination, Field::Url],
+        Message::SubResponse { .. } => seq![Field::Request, Field::ContentType],
+        Message::SubBody { .. } => seq![Field::Request, Field::BodyBytes],
+        Message::SubEnd { .. } => seq![Field::Request],
+        Message::SubFailed { .. } => seq![Field::Request],
     }
 }
 
@@ -584,6 +662,11 @@ pub open spec fn message_tokens(m: Message) -> Seq<Token> {
         Message::StyleBody { request, bytes } => seq![Token::Array(3), Token::Uint(111), Token::Uint(request), Token::Bytes(bytes)],
         Message::StyleEnd { request } => seq![Token::Array(2), Token::Uint(112), Token::Uint(request)],
         Message::StyleFailed { request } => seq![Token::Array(2), Token::Uint(113), Token::Uint(request)],
+        Message::FetchSub { request, destination, url } => seq![Token::Array(4), Token::Uint(13), Token::Uint(request), Token::Uint(destination), Token::Text(url)],
+        Message::SubResponse { request, content_type } => seq![Token::Array(3), Token::Uint(115), Token::Uint(request), Token::Bytes(content_type)],
+        Message::SubBody { request, bytes } => seq![Token::Array(3), Token::Uint(116), Token::Uint(request), Token::Bytes(bytes)],
+        Message::SubEnd { request } => seq![Token::Array(2), Token::Uint(117), Token::Uint(request)],
+        Message::SubFailed { request } => seq![Token::Array(2), Token::Uint(118), Token::Uint(request)],
     }
 }
 
@@ -704,6 +787,31 @@ pub open spec fn parse_fields(tag: u64, f: Seq<Token>) -> Option<Message> {
         if f.len() == 1 { match f[0] { Token::Uint(r) => Some(Message::StyleEnd { request: r }), _ => None } } else { None }
     } else if tag == 113 {
         if f.len() == 1 { match f[0] { Token::Uint(r) => Some(Message::StyleFailed { request: r }), _ => None } } else { None }
+    } else if tag == 13 {
+        if f.len() == 3 {
+            match (f[0], f[1], f[2]) {
+                (Token::Uint(r), Token::Uint(d), Token::Text(u)) => Some(Message::FetchSub { request: r, destination: d, url: u }),
+                _ => None,
+            }
+        } else { None }
+    } else if tag == 115 {
+        if f.len() == 2 {
+            match (f[0], f[1]) {
+                (Token::Uint(r), Token::Bytes(c)) => Some(Message::SubResponse { request: r, content_type: c }),
+                _ => None,
+            }
+        } else { None }
+    } else if tag == 116 {
+        if f.len() == 2 {
+            match (f[0], f[1]) {
+                (Token::Uint(r), Token::Bytes(b)) => Some(Message::SubBody { request: r, bytes: b }),
+                _ => None,
+            }
+        } else { None }
+    } else if tag == 117 {
+        if f.len() == 1 { match f[0] { Token::Uint(r) => Some(Message::SubEnd { request: r }), _ => None } } else { None }
+    } else if tag == 118 {
+        if f.len() == 1 { match f[0] { Token::Uint(r) => Some(Message::SubFailed { request: r }), _ => None } } else { None }
     } else if tag == 114 {
         if f.len() == 3 {
             match (f[0], f[1], f[2]) {

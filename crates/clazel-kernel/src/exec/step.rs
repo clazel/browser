@@ -1655,7 +1655,14 @@ pub fn handle_message_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, 
             let outs = one_output(OutputRecord::Show { tab: r.tab, url: copy(r.url.as_slice()), title, text, links });
             (s, outs)
         },
-        Msg::FetchStyle { request, url } => super::subfetch::fetch_style_exec(urls, fetch, s, &r, request, url.as_slice()),
+        Msg::FetchStyle { request, url } => super::subfetch::fetch_start_exec(urls, fetch, s, &r, (false, 8, 64), request, url.as_slice()),
+        Msg::FetchSub { request, destination, url } => if destination == 0 {
+            super::subfetch::fetch_start_exec(urls, fetch, s, &r, (true, 8, 64), request, url.as_slice())
+        } else if destination == 1 {
+            super::subfetch::fetch_start_exec(urls, fetch, s, &r, (true, 16, 4096), request, url.as_slice())
+        } else {
+            super::subfetch::fetch_start_exec(urls, fetch, s, &r, (true, 0, 0), request, url.as_slice())
+        },
         Msg::Title { title } => {
             let mut s = s;
             let titles = super::surfaces::set_title_exec(s.titles.as_slice(), r.id, &r.lock, title);
@@ -1725,7 +1732,7 @@ pub fn from_renderer_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s
                         Some(r) => r.committed,
                         None => false,
                     };
-                    let display = matches!(m, Msg::Display { .. } | Msg::Title { .. } | Msg::FetchStyle { .. } | Msg::Submit { .. });
+                    let display = matches!(m, Msg::Display { .. } | Msg::Title { .. } | Msg::FetchStyle { .. } | Msg::FetchSub { .. } | Msg::Submit { .. });
                     if clazel_ipc::message::codec::is_from_renderer(&m) && (committed || !display) {
                         handle_message_exec(urls, fetch, s, i, m)
                     } else {

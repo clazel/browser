@@ -629,8 +629,9 @@ pub proof fn lemma_step_gpu_frame(rules: Seq<clazel_psl::spec::Rule>, urls: UrlF
                             }
                         }
                     }
-                    if let clazel_ipc::message::spec::Message::FetchStyle { request, url } = m {
-                        crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, request, url);
+                    if is_sub_request(m) {
+                        let (sub, at_once, per_doc, request, url) = sub_request_args(m);
+                        crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, sub, at_once, per_doc, request, url);
                     }
                 }
             }

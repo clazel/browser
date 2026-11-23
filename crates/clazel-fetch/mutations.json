@@ -1181,6 +1181,90 @@
         "lemma": "super::examples_body::lemma_body_10()",
         "witness": "!(request_bytes_req_cookie(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x70u32]]), query: None, fragment: None }, Req { method: seq![0x50u8, 0x4F, 0x53, 0x54], body: Some(Payload { content_type: seq![0x74u8, 0x65, 0x78, 0x74, 0x2F, 0x70, 0x6C, 0x61, 0x69, 0x6E], bytes: seq![0x61u8, 0x0D, 0x0A, 0x00, 0x62] }), initiator: None, origin_tainted: false }, Seq::<u8>::empty()) == Some(seq![0x50u8, 0x4F, 0x53, 0x54, 0x20, 0x2F, 0x70, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x0D, 0x0A, 0x48, 0x6F, 0x73, 0x74, 0x3A, 0x20, 0x65, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x63, 0x6C, 0x6F, 0x73, 0x65, 0x0D, 0x0A, 0x41, 0x63, 0x63, 0x65, 0x70, 0x74, 0x3A, 0x20, 0x2A, 0x2F, 0x2A, 0x0D, 0x0A, 0x55, 0x73, 0x65, 0x72, 0x2D, 0x41, 0x67, 0x65, 0x6E, 0x74, 0x3A, 0x20, 0x63, 0x6C, 0x61, 0x7A, 0x65, 0x6C, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x54, 0x79, 0x70, 0x65, 0x3A, 0x20, 0x74, 0x65, 0x78, 0x74, 0x2F, 0x70, 0x6C, 0x61, 0x69, 0x6E, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A, 0x4F, 0x72, 0x69, 0x67, 0x69, 0x6E, 0x3A, 0x20, 0x6E, 0x75, 0x6C, 0x6C, 0x0D, 0x0A, 0x0D, 0x0A, 0x61, 0x0D, 0x0A, 0x00, 0x62]))"
       }
+    },
+    {
+      "id": "orb-safelist-skipped",
+      "file": "src/orb/spec.rs",
+      "module": "orb::examples",
+      "find": "if mime_type is Some && is_opaque_response_safelisted(mime_type->Some_0) {",
+      "replace": "if false && is_opaque_response_safelisted(mime_type->Some_0) {",
+      "expect": "killed",
+      "reason": "A safelisted type (a style sheet) is not let through on its type: a cross-origin text/css response with an empty body is refused. lemma_example_safelisted is false.",
+      "certificate": {
+        "file": "src/orb/contract.rs",
+        "lemma": "super::examples::lemma_example_safelisted()",
+        "witness": "!super::examples::kernel_says(200, seq![super::examples::content_type(super::examples::text_css())], seq![])"
+      }
+    },
+    {
+      "id": "orb-never-sniffed-allowed",
+      "file": "src/orb/spec.rs",
+      "module": "orb::examples",
+      "find": "    } else if mime_type is Some && is_opaque_response_blocklisted_never_sniffed(mime_type->Some_0) {",
+      "replace": "    } else if mime_type is Some && !is_opaque_response_blocklisted_never_sniffed(mime_type->Some_0) {",
+      "expect": "killed",
+      "reason": "A PDF is no longer refused on its type: it falls through to sniffing, whose PNG signature lets it through. lemma_example_never_sniffed is false.",
+      "certificate": {
+        "file": "src/orb/contract.rs",
+        "lemma": "super::examples::lemma_example_never_sniffed()",
+        "witness": "super::examples::kernel_says(200, seq![super::examples::content_type(super::examples::application_pdf())], super::examples::png())"
+      }
+    },
+    {
+      "id": "orb-nosniff-ignored",
+      "file": "src/orb/spec.rs",
+      "module": "orb::examples",
+      "find": "mime_type is Some && nosniff && (",
+      "replace": "mime_type is Some && false && (",
+      "expect": "killed",
+      "reason": "An HTML page served with nosniff is no longer refused on its type: it falls through to sniffing. lemma_example_nosniff_html is false.",
+      "certificate": {
+        "file": "src/orb/contract.rs",
+        "lemma": "super::examples::lemma_example_nosniff_html()",
+        "witness": "super::examples::kernel_says(200, seq![super::examples::content_type(super::examples::text_html()), super::examples::nosniff_line()], super::examples::png())"
+      }
+    },
+    {
+      "id": "orb-partial-allowed",
+      "file": "src/orb/spec.rs",
+      "module": "orb::examples",
+      "find": "    else if status == 206 {",
+      "replace": "    else if false {",
+      "expect": "killed",
+      "reason": "A partial response with an image's bytes is let through. lemma_example_partial is false.",
+      "certificate": {
+        "file": "src/orb/contract.rs",
+        "lemma": "super::examples::lemma_example_partial()",
+        "witness": "super::examples::kernel_says(206, seq![super::examples::content_type(super::examples::image_png())], super::examples::png())"
+      }
+    },
+    {
+      "id": "orb-image-not-sniffed",
+      "file": "src/orb/spec.rs",
+      "module": "orb::examples",
+      "find": "clazel_mime::sniff::spec::image_type_pattern_matching(bytes) is Some {",
+      "replace": "clazel_mime::sniff::spec::image_type_pattern_matching(bytes) is None {",
+      "expect": "killed",
+      "reason": "A PNG mislabeled as HTML is no longer let through after sniffing. lemma_example_sniffed_image is false.",
+      "certificate": {
+        "file": "src/orb/contract.rs",
+        "lemma": "super::examples::lemma_example_sniffed_image()",
+        "witness": "!super::examples::kernel_says(200, seq![super::examples::content_type(super::examples::text_html())], super::examples::png())"
+      }
+    },
+    {
+      "id": "orb-kernel-model-lets-unknown-through",
+      "file": "src/orb/spec.rs",
+      "module": "orb::examples",
+      "find": "Model { allow_unknown_type: false, js_not_json: false }",
+      "replace": "Model { allow_unknown_type: true, js_not_json: false }",
+      "expect": "killed",
+      "reason": "The kernel's model lets a response with no type and no image bytes through, as the standard does: the intranet case ORB is for. lemma_example_unknown_refused is false.",
+      "certificate": {
+        "file": "src/orb/contract.rs",
+        "lemma": "super::examples::lemma_example_unknown_refused()",
+        "witness": "super::examples::kernel_says(200, seq![], seq![0x3Cu8, 0x68, 0x74, 0x6D, 0x6C, 0x3E])"
+      }
     }
   ]
 }

@@ -411,6 +411,8 @@ pub struct SubFetchRecord {
     pub serial: u64,
     /// The renderer's own id for it.
     pub request: u64,
+    /// Whether it was asked for by `FetchSub` (the answers are `Sub*`).
+    pub sub: bool,
     /// The renderer's tab.
     pub tab: u64,
     /// The transducer's state.
@@ -434,6 +436,7 @@ impl View for SubFetchRecord {
             lock: self.lock@,
             serial: self.serial as nat,
             request: self.request,
+            sub: self.sub,
             tab: self.tab as nat,
             fetch: self.fetch@,
             hop: self.hop as nat,

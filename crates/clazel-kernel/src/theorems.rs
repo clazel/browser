@@ -142,10 +142,11 @@ pub proof fn theorem_reply_only_to_sender(rules: Seq<clazel_psl::spec::Rule>, ur
             Some(m) => {
                 if let clazel_ipc::message::spec::Message::Display { title, text, links } = m {
                     lemma_reply_display(rules, urls, fetch, s, id, bytes, i);
-                } else if let clazel_ipc::message::spec::Message::FetchStyle { request, url } = m {
-                    // Item 5.19: a `FetchStyle` answers its sender and asks for
-                    // its sender's sub-fetch connections only.
-                    crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, request, url);
+                } else if is_sub_request(m) {
+                    // Items 5.19 and 6.17: a `FetchStyle` or `FetchSub` answers its
+                    // sender and asks for its sender's sub-fetch connections only.
+                    let (sub, at_once, per_doc, request, url) = sub_request_args(m);
+                    crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, sub, at_once, per_doc, request, url);
                 } else if let clazel_ipc::message::spec::Message::Submit { url, method, content_type, body } = m {
         if let Some(req) = submit_request(r, method, content_type, body) {
                     if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {

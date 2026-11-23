@@ -174,6 +174,30 @@ the new event, outputs and message. The ownership and limits proofs rest on
 an invariant of reachable states (`subfetch_tables_wf`: each key once, each
 serial below its renderer's counter).
 
+## Image sub-fetches and Opaque Response Blocking (phase-6.md item 6.17)
+
+A renderer's `FetchSub { request, destination, url }` (destination 0 style, 1
+image; `clazel-ipc`) is 5.19's sub-resource fetch, `fetch_start` in
+`src/spec.rs`, with the answers in the `Sub*` family (`SubFetch::sub`), the
+limits of the destination (an image's: 16 sub-fetches of any kind in flight, 4,096
+started per document; a style sheet's stay 8 and 64, the counts are shared) and
+Fetch's Opaque Response Blocking (`clazel_fetch::orb`) on the final response:
+a refused response is a `SubFailed` (or `StyleFailed`) with no body octet. Credentials are 5.0(h)'s F1, per hop, as for
+sheets. `FetchStyle` and the `Style*` frames are unchanged. 5.19's lemmas over
+`fetch_style` are now over `fetch_start` with the message's
+(`sub_request_args`), so `FetchStyle` and `FetchSub` share them. New:
+`theorem_orb` (`orb_statement`: a frame to a renderer for a sub-fetch is the
+failure frame or the answer of a response ORB allowed), and
+`theorem_subfetch_limits` restated with the largest limits (16 and 4,096).
+**Not done or not verified:** none of the changed proofs or the new ones has
+run through Verus (`sub_actions` gained a context argument and about twenty
+lemmas changed with it, written without the prover: expect errors); the
+`Accept` field for images is the transducer's `*/*`, not Fetch's image value;
+no kernel mutations were added; the Cross-Origin Resource Policy check is not
+implemented; the start of a sub-fetch (`fetch_start`) applies no ORB because
+`start` never produces a final response (not proven as a lemma); `independent.rs`
+is unchanged.
+
 ## The GPU crash policy (phase-5.md item 5.17c)
 
 What `GpuReady { software }`, `GpuRefused` and a GPU process's exit mean, as

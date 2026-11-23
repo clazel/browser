@@ -18,6 +18,9 @@ clazel-origin = { path = "../clazel-origin" }
 clazel-psl = { path = "../clazel-psl" }
 # A `Location` value is UTF-8 decoded before the URL parser (transducer::real).
 clazel-encoding = { path = "../clazel-encoding" }
+# Opaque-response blocking (item 6.17): MIME type parsing, the MIME type
+# groups and the image and audio or video sniffing patterns.
+clazel-mime = { path = "../clazel-mime" }
 
 [dev-dependencies]
 # The reference engines of tests/conformance_differential.rs: rust-url (the
@@ -54,6 +57,8 @@ theorems = [
     "theorem_redirect_method",
     "theorem_post_cookies",
     "theorem_sends_have_valid_req",
+    # Item 6.17: Opaque Response Blocking (src/orb/lemmas.rs).
+    "theorem_orb",
 ]
 
 [package.metadata.verus]

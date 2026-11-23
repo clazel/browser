@@ -110,7 +110,7 @@
       "find": "value >= 24",
       "replace": "value >= 23",
       "expect": "killed",
-      "reason": "Accepts 23 with a one-byte argument (18 17), which \u00a74.2.1 forbids; lemma_reject_non_shortest_24_23 is false.",
+      "reason": "Accepts 23 with a one-byte argument (18 17), which §4.2.1 forbids; lemma_reject_non_shortest_24_23 is false.",
       "certificate": {
         "file": "src/cbor/lemmas.rs",
         "lemma": "super::examples::lemma_reject_non_shortest_24_23()",
@@ -1264,8 +1264,8 @@
     {
       "id": "msg-max-style-chunk",
       "file": "src/message/spec.rs",
-      "find": "(crate::frame::spec::MAX_FRAME - 17) as nat",
-      "replace": "(crate::frame::spec::MAX_FRAME - 16) as nat",
+      "find": "pub open spec fn max_style_chunk() -> nat {\n    (crate::frame::spec::MAX_FRAME - 17) as nat",
+      "replace": "pub open spec fn max_style_chunk() -> nat {\n    (crate::frame::spec::MAX_FRAME - 16) as nat",
       "expect": "killed",
       "reason": "The largest StyleBody (with a 9-octet request id) is one octet too long for a frame. lemma_style_body_fits_frame is false for it, but a certificate on a 1 MiB input is too large to evaluate; the certificate is lemma_max_style_chunk, which ties the codec's MAX_STYLE_CHUNK (1_048_559, the size a_largest_style_body_fits_one_frame checks on the real code) to the spec.",
       "certificate": {
@@ -1324,6 +1324,71 @@
         "file": "src/message/lemmas.rs",
         "lemma": "super::examples::lemma_example_submit()",
         "witness": "decode_renderer_message(seq![0x85u8, 0x0C, 0x62, 0x2F, 0x70, 0x64, 0x50, 0x4F, 0x53, 0x54, 0x41, 0x74, 0x42, 0x61, 0x62]) != Some(Message::Submit { url: seq![0x2Fu8, 0x70], method: seq![0x50u8, 0x4F, 0x53, 0x54], content_type: seq![0x74u8], body: seq![0x61u8, 0x62] })"
+      }
+    },
+    {
+      "id": "msg-fetch-sub-tag",
+      "file": "src/message/spec.rs",
+      "find": "Token::Array(4), Token::Uint(13), Token::Uint(request), Token::Uint(destination)",
+      "replace": "Token::Array(4), Token::Uint(16), Token::Uint(request), Token::Uint(destination)",
+      "expect": "killed",
+      "reason": "FetchSub is written with tag 16, which nothing reads: lemma_decode_encode_message is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "lemma_decode_encode_message(Message::FetchSub { request: 1, destination: 1, url: seq![0x61u8] })",
+        "witness": "message_ok(Message::FetchSub { request: 1, destination: 1, url: seq![0x61u8] }) && decode_message(encode_message(Message::FetchSub { request: 1, destination: 1, url: seq![0x61u8] })) != Some(Message::FetchSub { request: 1, destination: 1, url: seq![0x61u8] })"
+      }
+    },
+    {
+      "id": "msg-fetch-sub-destination-dropped",
+      "file": "src/message/spec.rs",
+      "find": "Token::Uint(13), Token::Uint(request), Token::Uint(destination)",
+      "replace": "Token::Uint(13), Token::Uint(request), Token::Uint(0)",
+      "expect": "killed",
+      "reason": "A FetchSub loses its destination: an image would be fetched as a style sheet. lemma_decode_encode_message is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "lemma_decode_encode_message(Message::FetchSub { request: 1, destination: 1, url: seq![0x61u8] })",
+        "witness": "message_ok(Message::FetchSub { request: 1, destination: 1, url: seq![0x61u8] }) && decode_message(encode_message(Message::FetchSub { request: 1, destination: 1, url: seq![0x61u8] })) != Some(Message::FetchSub { request: 1, destination: 1, url: seq![0x61u8] })"
+      }
+    },
+    {
+      "id": "msg-sub-body-request-dropped",
+      "file": "src/message/spec.rs",
+      "find": "Token::Uint(116), Token::Uint(request), Token::Bytes(bytes)",
+      "replace": "Token::Uint(116), Token::Uint(0), Token::Bytes(bytes)",
+      "expect": "killed",
+      "reason": "A SubBody loses its request id: the renderer would add the bytes to another fetch. lemma_decode_encode_message is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "lemma_decode_encode_message(Message::SubBody { request: 2, bytes: seq![0x61u8] })",
+        "witness": "message_ok(Message::SubBody { request: 2, bytes: seq![0x61u8] }) && decode_message(encode_message(Message::SubBody { request: 2, bytes: seq![0x61u8] })) != Some(Message::SubBody { request: 2, bytes: seq![0x61u8] })"
+      }
+    },
+    {
+      "id": "msg-sub-failed-parse-tag",
+      "file": "src/message/spec.rs",
+      "find": "} else if tag == 118 {",
+      "replace": "} else if tag == 119 {",
+      "expect": "killed",
+      "reason": "The parser reads SubFailed under tag 119: lemma_decode_encode_message is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "lemma_decode_encode_message(Message::SubFailed { request: 1 })",
+        "witness": "message_ok(Message::SubFailed { request: 1 }) && decode_message(encode_message(Message::SubFailed { request: 1 })) != Some(Message::SubFailed { request: 1 })"
+      }
+    },
+    {
+      "id": "msg-fetch-sub-not-from-renderer",
+      "file": "src/message/spec.rs",
+      "find": "        Message::FetchSub { .. }\n        | Message::CookieGet\n",
+      "replace": "        Message::CookieGet\n",
+      "expect": "killed",
+      "reason": "FetchSub is not counted as a renderer message: the kernel would refuse every image fetch. lemma_example_sub is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "super::examples::lemma_example_sub()",
+        "witness": "decode_renderer_message(seq![0x84u8, 0x0D, 0x01, 0x01, 0x65, 0x69, 0x2E, 0x67, 0x69, 0x66]) != Some(Message::FetchSub { request: 1, destination: 1, url: seq![0x69u8, 0x2E, 0x67, 0x69, 0x66] })"
       }
     }
   ]

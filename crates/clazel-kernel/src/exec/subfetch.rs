@@ -551,6 +551,89 @@ pub fn style_frames_exec(request: u64, content_type: &[u8], body: &[u8]) -> (r: 
     out
 }
 
+/// One more step of [`sub_body_frames`].
+proof fn lemma_sub_body_frames_step(request: u64, b: Seq<u8>, pos: nat)
+    requires
+        pos < b.len(),
+    ensures
+        sub_body_frames(request, b.skip(pos as int)) == if b.len() - pos <= clazel_ipc::message::spec::max_sub_chunk() {
+            reply_frame(clazel_ipc::message::spec::Message::SubBody { request, bytes: b.skip(pos as int) })
+        } else {
+            reply_frame(
+                clazel_ipc::message::spec::Message::SubBody {
+                    request,
+                    bytes: b.subrange(pos as int, (pos + clazel_ipc::message::spec::max_sub_chunk()) as int),
+                },
+            ) + sub_body_frames(request, b.skip((pos + clazel_ipc::message::spec::max_sub_chunk()) as int))
+        },
+{
+    let r = b.skip(pos as int);
+    let c = clazel_ipc::message::spec::max_sub_chunk();
+    assert(r.len() == b.len() - pos);
+    if r.len() > c {
+        assert(r.take(c as int) =~= b.subrange(pos as int, (pos + c) as int));
+        assert(r.skip(c as int) =~= b.skip((pos + c) as int));
+    }
+}
+
+/// [`sub_frames`] of a sub-resource with this content type and body.
+pub fn sub_frames_exec(request: u64, content_type: &[u8], body: &[u8]) -> (r: Vec<u8>)
+    ensures
+        r@ == sub_frames(request, Document { content_type: content_type@, kind: kind_document(), body: body@ }),
+{
+    let mut out = reply_frame_exec(&Msg::SubResponse { request, content_type: vstd::slice::slice_to_vec(content_type) });
+    let ghost head = out@;
+    let ghost c = clazel_ipc::message::spec::max_sub_chunk();
+    proof {
+        clazel_ipc::message::codec::lemma_max_sub_chunk();
+        assert(body@.skip(0) =~= body@);
+    }
+    let chunk = clazel_ipc::message::codec::MAX_SUB_CHUNK;
+    let mut pos: usize = 0;
+    while pos < body.len()
+        invariant
+            pos <= body.len(),
+            c == clazel_ipc::message::spec::max_sub_chunk(),
+            chunk as nat == c,
+            head + sub_body_frames(request, body@) == out@ + sub_body_frames(request, body@.skip(pos as int)),
+        decreases body.len() - pos,
+    {
+        proof {
+            lemma_sub_body_frames_step(request, body@, pos as nat);
+        }
+        let rest = body.len().saturating_sub(pos);
+        if rest <= chunk {
+            let piece = reply_frame_exec(&Msg::SubBody { request, bytes: vstd::slice::slice_to_vec(vstd::slice::slice_subrange(body, pos, body.len())) });
+            proof {
+                assert(body@.subrange(pos as int, body.len() as int) =~= body@.skip(pos as int));
+                assert(body@.skip(body.len() as int) =~= Seq::<u8>::empty());
+                assert(sub_body_frames(request, Seq::<u8>::empty()) == Seq::<u8>::empty());
+            }
+            let ghost before = out@;
+            out.extend_from_slice(piece.as_slice());
+            assert(out@ =~= before + piece@);
+            pos = body.len();
+            assert(out@ + sub_body_frames(request, body@.skip(pos as int)) =~= out@);
+        } else {
+            let end = pos.saturating_add(chunk);
+            let piece = reply_frame_exec(&Msg::SubBody { request, bytes: vstd::slice::slice_to_vec(vstd::slice::slice_subrange(body, pos, end)) });
+            let ghost before = out@;
+            out.extend_from_slice(piece.as_slice());
+            assert(out@ =~= before + piece@);
+            pos = end;
+        }
+    }
+    let ghost before = out@;
+    let tail = reply_frame_exec(&Msg::SubEnd { request });
+    out.extend_from_slice(tail.as_slice());
+    proof {
+        assert(body@.skip(body.len() as int) =~= Seq::<u8>::empty());
+        assert(out@ =~= before + tail@);
+        assert(out@ =~= head + sub_body_frames(request, body@) + tail@);
+    }
+    out
+}
+
 /// [`style_failed_frame`].
 pub fn style_failed_frame_exec(request: u64) -> (r: Vec<u8>)
     ensures
@@ -559,22 +642,67 @@ pub fn style_failed_frame_exec(request: u64) -> (r: Vec<u8>)
     reply_frame_exec(&Msg::StyleFailed { request })
 }
 
+/// [`sub_failed_frame`].
+pub fn sub_failed_frame_exec(request: u64) -> (r: Vec<u8>)
+    ensures
+        r@ == sub_failed_frame(request),
+{
+    reply_frame_exec(&Msg::SubFailed { request })
+}
+
+/// [`failed_frame`].
+pub fn failed_frame_exec(sub: bool, request: u64) -> (r: Vec<u8>)
+    ensures
+        r@ == failed_frame(sub, request),
+{
+    if sub {
+        sub_failed_frame_exec(request)
+    } else {
+        style_failed_frame_exec(request)
+    }
+}
+
+/// [`failed_message`].
+pub fn failed_message_exec(sub: bool, request: u64) -> (m: Msg)
+    ensures
+        m@ == failed_message(sub, request),
+{
+    if sub {
+        Msg::SubFailed { request }
+    } else {
+        Msg::StyleFailed { request }
+    }
+}
+
+/// [`answer_frames`] of a resource with this content type and body.
+pub fn answer_frames_exec(sub: bool, request: u64, content_type: &[u8], body: &[u8]) -> (r: Vec<u8>)
+    ensures
+        r@ == answer_frames(sub, request, Document { content_type: content_type@, kind: kind_document(), body: body@ }),
+{
+    if sub {
+        sub_frames_exec(request, content_type, body)
+    } else {
+        style_frames_exec(request, content_type, body)
+    }
+}
+
 // ---------------------------------------------------------------------
 // Actions.
 // ---------------------------------------------------------------------
 
 /// The connection [`sub_actions`] ends on is the one it started from plus
 /// its `Connect`s, at most.
-pub proof fn lemma_sub_actions_hop(id: nat, serial: nat, request: u64, hop: nat, actions: Seq<NetAction>)
+pub proof fn lemma_sub_actions_hop(ctx: SubCtx, id: nat, serial: nat, request: u64, hop: nat, actions: Seq<NetAction>)
     ensures
-        hop <= sub_actions(id, serial, request, hop, actions).0 <= hop + clazel_fetch::transducer::contract::count_connects(actions),
+        hop <= sub_actions(ctx, id, serial, request, hop, actions).0 <= hop + clazel_fetch::transducer::contract::count_connects(actions),
     decreases actions.len(),
 {
     if actions.len() > 0 {
         lemma_count_head(actions);
         match actions[0] {
-            clazel_fetch::transducer::spec::Action::Connect { .. } => lemma_sub_actions_hop(id, serial, request, hop + 1, actions.drop_first()),
+            clazel_fetch::transducer::spec::Action::Connect { .. } => lemma_sub_actions_hop(ctx, id, serial, request, hop + 1, actions.drop_first()),
             clazel_fetch::transducer::spec::Action::Send(_) | clazel_fetch::transducer::spec::Action::Close => lemma_sub_actions_hop(
+                ctx,
                 id,
                 serial,
                 request,
@@ -586,13 +714,15 @@ pub proof fn lemma_sub_actions_hop(id: nat, serial: nat, request: u64, hop: nat,
     }
 }
 
-/// [`sub_actions`].
-pub fn sub_actions_exec(id: u64, serial: u64, request: u64, hop: u64, actions: Vec<ActionBuf>) -> (out: (u64, Vec<OutputRecord>, Option<Vec<u8>>))
+/// [`sub_actions`] in the context of a sub-fetch of family `sub` of a
+/// renderer locked to `lock`. A final response is let through only if
+/// Opaque Response Blocking allows it (item 6.17).
+pub fn sub_actions_exec<F: FetchFnsExec>(fetch: &F, ctx: (bool, &ParsedOrigin), id: u64, serial: u64, request: u64, hop: u64, actions: Vec<ActionBuf>) -> (out: (u64, Vec<OutputRecord>, Option<Vec<u8>>))
     requires
         hop as nat + clazel_fetch::transducer::contract::count_connects(clazel_fetch::transducer::types::actions_view(actions@)) <= 0xFFFF_FFFF_FFFF_FFFFnat,
     ensures
         ({
-            let (h, o, e) = sub_actions(id as nat, serial as nat, request, hop as nat, clazel_fetch::transducer::types::actions_view(actions@));
+            let (h, o, e) = sub_actions(start_ctx(fetch.fetch(), ctx.0, ctx.1@), id as nat, serial as nat, request, hop as nat, clazel_fetch::transducer::types::actions_view(actions@));
             &&& out.0 as nat == h
             &&& outputs_view(out.1@) == o
             &&& match out.2 {
@@ -602,6 +732,8 @@ pub fn sub_actions_exec(id: u64, serial: u64, request: u64, hop: u64, actions: V
         }),
     decreases actions.len(),
 {
+    let sub = ctx.0;
+    let lock = ctx.1;
     let ghost av = clazel_fetch::transducer::types::actions_view(actions@);
     if actions.is_empty() {
         proof {
@@ -619,26 +751,35 @@ pub fn sub_actions_exec(id: u64, serial: u64, request: u64, hop: u64, actions: V
     match act {
         ActionBuf::Connect { host, port, tls } => {
             let h1 = hop.saturating_add(1);
-            let (h, out, end) = sub_actions_exec(id, serial, request, h1, actions);
+            let (h, out, end) = sub_actions_exec(fetch, ctx, id, serial, request, h1, actions);
             let first = one_output(OutputRecord::SubConnect { renderer: id, serial, hop: h1, host, port: port as u64, tls });
             (h, append_outputs(first, out), end)
         },
         ActionBuf::Send(bytes) => {
-            let (h, out, end) = sub_actions_exec(id, serial, request, hop, actions);
+            let (h, out, end) = sub_actions_exec(fetch, ctx, id, serial, request, hop, actions);
             let first = one_output(OutputRecord::SubSend { renderer: id, serial, hop, bytes });
             (h, append_outputs(first, out), end)
         },
         ActionBuf::Close => {
-            let (h, out, end) = sub_actions_exec(id, serial, request, hop, actions);
+            let (h, out, end) = sub_actions_exec(fetch, ctx, id, serial, request, hop, actions);
             let first = one_output(OutputRecord::SubClose { renderer: id, serial, hop });
             (h, append_outputs(first, out), end)
         },
-        ActionBuf::Done { url: _, response } => {
-            let content_type = content_type_exec(response.fields.as_slice());
-            let frames = style_frames_exec(request, content_type.as_slice(), response.body.as_slice());
-            (hop, no_outputs(), Some(frames))
+        ActionBuf::Done { url, response } => {
+            // Item 6.17: ORB (Fetch Main fetch: a refused response is a
+            // network error), decided on the whole response before any frame.
+            let origin = fetch.url_fns().origin(&url);
+            let applies = !origin_eq_exec(&origin, lock);
+            let allowed = clazel_fetch::orb::check::orb_allows_exec(applies, &response);
+            if allowed {
+                let content_type = content_type_exec(response.fields.as_slice());
+                let frames = answer_frames_exec(sub, request, content_type.as_slice(), response.body.as_slice());
+                (hop, no_outputs(), Some(frames))
+            } else {
+                (hop, no_outputs(), Some(failed_frame_exec(sub, request)))
+            }
         },
-        ActionBuf::Fail(_) => (hop, no_outputs(), Some(style_failed_frame_exec(request))),
+        ActionBuf::Fail(_) => (hop, no_outputs(), Some(failed_frame_exec(sub, request))),
     }
 }
 
@@ -656,44 +797,46 @@ pub open spec fn keeps_rest(before: StateRecord, after: StateRecord) -> bool {
     &&& after.next_conn == before.next_conn
 }
 
-/// `FetchStyle { request, url }` of renderer `r` ([`fetch_style`]).
-pub fn fetch_style_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRecord, r: &RendererRecord, request: u64, url: &[u8]) -> (out: (
+/// `FetchStyle` or `FetchSub` of renderer `r` ([`fetch_start`] of family
+/// `sub` with the limits `at_once` and `per_doc`).
+pub fn fetch_start_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRecord, r: &RendererRecord, limits: (bool, u64, u64), request: u64, url: &[u8]) -> (out: (
     StateRecord,
     Vec<OutputRecord>,
 ))
     requires
         subfetches_ok::<F>(s.subfetches@),
     ensures
-        result_view(out) == fetch_style(crate::contract::psl(), urls.urls(), fetch.fetch(), s@, r@, request, url@),
+        result_view(out) == fetch_start(crate::contract::psl(), urls.urls(), fetch.fetch(), s@, r@, limits.0, limits.1 as nat, limits.2 as nat, request, url@),
         subfetches_ok::<F>(out.0.subfetches@),
         keeps_rest(s, out.0),
         out.0.jar@ == s.jar@,
 {
+    let (sub, at_once, per_doc) = limits;
     let ghost sv = s@;
     let (serial, in_document) = subcount_of_exec(s.subcounts.as_slice(), r.id, &r.lock);
     let live = live_subfetches_exec(s.subfetches.as_slice(), r.id, &r.lock);
-    if live >= 8 || in_document >= 64 || serial == 0xFFFF_FFFF_FFFF_FFFFu64 {
-        let outs = reply_exec(r, &Msg::StyleFailed { request });
+    if live >= at_once || in_document >= per_doc || serial == 0xFFFF_FFFF_FFFF_FFFFu64 {
+        let outs = reply_exec(r, &failed_message_exec(sub, request));
         return (s, outs);
     }
     let relative = match clazel_encoding::utf8::decode::decode_without_bom_or_fail(url) {
         Some(v) => v,
         None => {
-            let outs = reply_exec(r, &Msg::StyleFailed { request });
+            let outs = reply_exec(r, &failed_message_exec(sub, request));
             return (s, outs);
         },
     };
     let resolved = match urls.resolve(r.url.as_slice(), relative.as_slice()) {
         Some(v) => v,
         None => {
-            let outs = reply_exec(r, &Msg::StyleFailed { request });
+            let outs = reply_exec(r, &failed_message_exec(sub, request));
             return (s, outs);
         },
     };
     let parsed = match fetch.parse(resolved.as_slice()) {
         Some(p) => p,
         None => {
-            let outs = reply_exec(r, &Msg::StyleFailed { request });
+            let outs = reply_exec(r, &failed_message_exec(sub, request));
             return (s, outs);
         },
     };
@@ -703,9 +846,9 @@ pub fn fetch_style_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: 
         F::nav_ok_idle(&fs);
         reveal_with_fuel(clazel_fetch::transducer::contract::count_connects, 2);
     }
-    let (hop, out, end) = sub_actions_exec(r.id, serial, request, 0, actions);
+    let (hop, out, end) = sub_actions_exec(fetch, (sub, &r.lock), r.id, serial, request, 0, actions);
     proof {
-        lemma_sub_actions_hop(r.id as nat, serial as nat, request, 0, av);
+        lemma_sub_actions_hop(start_ctx(fetch.fetch(), sub, r.lock@), r.id as nat, serial as nat, request, 0, av);
     }
     let counts = set_subcount_exec(s.subcounts.as_slice(), r.id, &r.lock, serial.saturating_add(1), in_document.saturating_add(1));
     let mut s = s;
@@ -715,6 +858,7 @@ pub fn fetch_style_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: 
         lock: r.lock@,
         serial: serial as nat,
         request,
+        sub,
         tab: r.tab as nat,
         fetch: fs@,
         hop: 0,
@@ -730,6 +874,7 @@ pub fn fetch_style_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: 
                 lock: clone_origin(&r.lock),
                 serial,
                 request,
+                sub,
                 tab: r.tab,
                 fetch: fs,
                 hop,
@@ -879,9 +1024,9 @@ pub fn sub_net_exec<F: FetchFnsExec>(fetch: &F, s: StateRecord, renderer: u64, s
     }
     let ghost av = clazel_fetch::transducer::types::actions_view(actions@);
     proof {
-        lemma_sub_actions_hop(renderer as nat, serial as nat, f.request, hop as nat, av);
+        lemma_sub_actions_hop(sub_ctx(fetch.fetch(), fv), renderer as nat, serial as nat, f.request, hop as nat, av);
     }
-    let (h2, out, end) = sub_actions_exec(renderer, serial, f.request, hop, actions);
+    let (h2, out, end) = sub_actions_exec(fetch, (f.sub, &f.lock), renderer, serial, f.request, hop, actions);
     match end {
         None => {
             let rec = SubFetchRecord {
@@ -889,6 +1034,7 @@ pub fn sub_net_exec<F: FetchFnsExec>(fetch: &F, s: StateRecord, renderer: u64, s
                 lock: f.lock,
                 serial: f.serial,
                 request: f.request,
+                sub: f.sub,
                 tab: f.tab,
                 fetch: fs,
                 hop: h2,
@@ -1005,7 +1151,7 @@ pub fn sweep_exec<F: FetchFnsExec>(rs: &[RendererRecord], now: u64, fs: Vec<SubF
         if !live {
             outs = append_outputs(close, outs);
         } else if late {
-            let failed = one_output(OutputRecord::ToRenderer { id: f.renderer, bytes: style_failed_frame_exec(f.request) });
+            let failed = one_output(OutputRecord::ToRenderer { id: f.renderer, bytes: failed_frame_exec(f.sub, f.request) });
             outs = append_outputs(append_outputs(close, failed), outs);
         } else {
             let ghost before = kept@;
