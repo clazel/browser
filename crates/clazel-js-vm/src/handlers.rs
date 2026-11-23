@@ -833,6 +833,9 @@ impl Vm {
                 }
                 true
             }
+            // Step 2.d.vi: CreateDataProperty(Receiver, P, V), which fails on an
+            // object that is not extensible.
+            _ if !self.heap.is_extensible(base) => false,
             _ => {
                 self.heap.define(base, key, v, Attrs::ALL)?;
                 true

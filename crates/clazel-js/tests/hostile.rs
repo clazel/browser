@@ -136,8 +136,9 @@ fn a_regexp_past_the_backtrack_limit_is_a_range_error() -> Test {
     let page = format!("var r = /(?:a|b)*c/.test('{input}');");
     let result = rt.scope(|scope| outcome(scope, &realm, &page))?;
     assert_eq!(result.as_deref(), Some("RangeError"), "{page}");
-    let caught =
-        format!("var r = 'none'; try {{ /(?:a|b)*c/.test('{input}'); }} catch (e) {{ r = e.name; }}");
+    let caught = format!(
+        "var r = 'none'; try {{ /(?:a|b)*c/.test('{input}'); }} catch (e) {{ r = e.name; }}"
+    );
     rt.scope(|scope| {
         assert_eq!(outcome(scope, &realm, &caught)?, None);
         assert_eq!(global_string(scope, &realm, "r")?, "RangeError");

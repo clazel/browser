@@ -159,6 +159,9 @@ pub struct Obj {
     pub proto: Value,
     /// What the object is.
     pub kind: ObjKind,
+    /// `[[Extensible]]` (§10.1.3†): false once `Object.preventExtensions`,
+    /// `seal` or `freeze` ran. No property is added to such an object.
+    pub extensible: bool,
 }
 
 /// A declarative environment (`spec::Class::Env`).
@@ -441,6 +444,7 @@ impl Heap {
             slots: Vec::new(),
             proto,
             kind,
+            extensible: true,
         }))
     }
 
@@ -872,6 +876,12 @@ impl Heap {
     pub fn set_proto(&mut self, obj: Value, proto: Value) -> Result<(), HeapError> {
         self.obj_mut(obj).ok_or(HeapError::Corrupt)?.proto = proto;
         Ok(())
+    }
+
+    /// `[[Extensible]]` of an object (true for a non-object).
+    #[must_use]
+    pub fn is_extensible(&self, obj: Value) -> bool {
+        self.obj(obj).is_none_or(|o| o.extensible)
     }
 
     /// The `[[Prototype]]` of an object.
