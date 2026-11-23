@@ -39,8 +39,8 @@
 //!   children) and keeps its record, as DOM does: a removed node still
 //!   exists and may be inserted again. Freeing unreachable nodes is the job
 //!   of Phase 7's collector.
-//! - **Each node has a wrapper slot** (`wrapper`, a Phase 7 object id,
-//!   always none in Phase 4) and **each element a form owner** (`form_owner`,
+//! - **Each node has a wrapper slot** (`wrapper`, a Phase 7 object id: none
+//!   until the bindings set it with [`set_wrapper`], item 7.12) and **each element a form owner** (`form_owner`,
 //!   HTML §4.10.17.3, set by the parser when it creates the element).
 //! - **Template contents are a child outside `children`.** HTML §4.12.3: a
 //!   template element's template contents is a `DocumentFragment` whose
@@ -203,7 +203,7 @@ pub struct Node {
     pub parent: Option<NodeId>,
     /// "children": an ordered set of nodes.
     pub children: Seq<NodeId>,
-    /// The wrapper slot: a Phase 7 object id, always none here.
+    /// The wrapper slot: a Phase 7 object id; none until [`set_wrapper`].
     pub wrapper: Option<nat>,
 }
 
@@ -640,6 +640,31 @@ pub open spec fn append_data(doc: Document, n: NodeId, data: Seq<u32>) -> Docume
         other => other,
     };
     Document { nodes: doc.nodes.update(n as int, Node { kind: k, ..node }) }
+}
+
+/// DOM §4.10 "replace data" of a `CharacterData` node `n` with offset 0,
+/// count its length and `data`: what the `data` setter does ("set this's
+/// data to the given value" is "replace data with node this, offset 0, count
+/// this's length, and data the given value"). Steps 4 to 6 then insert
+/// `data` and delete all of the old data; no live range is updated (steps 8
+/// to 11, not modelled). A `Text`, `Comment` or `ProcessingInstruction` node
+/// keeps its kind, and a processing instruction its target.
+pub open spec fn set_data(doc: Document, n: NodeId, data: Seq<u32>) -> Document {
+    let node = doc.nodes[n as int];
+    let k = match node.kind {
+        NodeKind::Text { .. } => NodeKind::Text { data },
+        NodeKind::Comment { .. } => NodeKind::Comment { data },
+        NodeKind::ProcessingInstruction { target, .. } => NodeKind::ProcessingInstruction { target, data },
+        other => other,
+    };
+    Document { nodes: doc.nodes.update(n as int, Node { kind: k, ..node }) }
+}
+
+/// Phase 7 item 7.12: node `n`'s wrapper slot becomes `w`, the bindings' id
+/// of its JavaScript object (WebIDL §3.7† "platform objects": one wrapper per
+/// platform object). Nothing else changes.
+pub open spec fn set_wrapper(doc: Document, n: NodeId, w: Option<nat>) -> Document {
+    Document { nodes: doc.nodes.update(n as int, Node { wrapper: w, ..doc.nodes[n as int] }) }
 }
 
 /// DOM §4.9 "append an attribute" `attr` to element `e`: "1. Append
