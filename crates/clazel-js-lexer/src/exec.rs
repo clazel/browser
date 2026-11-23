@@ -1997,6 +1997,15 @@ fn num_zero_digit(src: &[u32], k: usize) -> (r: Option<(usize, bool, bool)>)
 }
 
 /// A non-zero digit.
+///
+/// Proved in a solver of its own (`spinoff_prover`): the proof is sensitive
+/// to what the module's shared solver did before it. When an earlier
+/// function of this module fails (as `id_start_char` and `id_part_char` do
+/// in the mutants `identifier-start-drops-dollar` and
+/// `identifier-part-drops-digits`), the same query, which is otherwise
+/// answered in seconds, ran to the whole of its `rlimit` and took the
+/// mutant past its time limit. A fresh solver gets the query alone.
+#[verifier::spinoff_prover]
 #[verifier::rlimit(400)]
 fn num_nonzero(src: &[u32], k: usize) -> (r: Option<(usize, bool, bool)>)
     requires
