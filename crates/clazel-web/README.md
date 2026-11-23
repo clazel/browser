@@ -173,10 +173,22 @@ Tier 0, target tier 0: safe Rust, tested, nothing proven. So far:
     `mouseover`, `mouseout`, `mouseenter`, `mouseleave`, `dblclick`,
     `contextmenu`, `auxclick` and the pointer events are not fired; only the
     main button; hit testing ignores `z-index`, clipping and `pointer-events`.
+  - `window.event` (the legacy current event, set around each listener) and
+    `document.createEvent` (DOM §4.5†'s table, for the interfaces the
+    bindings expose), and `Event.timeStamp` from the page's clock.
   - `tests/ui_events.rs`: 48 tests of the above through a parsed document
-    and the input API. The WPT `dom/events` pages that need only the
-    stand-in harness are run by `tests/wpt_events.rs`; the rest are listed
-    there with the reason.
+    and the input API. `tests/wpt_events.rs` runs 64 vendored WPT
+    `dom/events/` pages (the `.html` ones, and the `.any.js` and
+    `.window.js` ones inside a page) with a stand-in for `testharness.js`
+    (`tests/support/standin-events.js`: the engine cannot run the real one
+    yet): 38 pages pass (109 subtests), 26 are listed with the reason each
+    (`for...of`, `class extends`, `Promise` and `Object.getOwnPropertyDescriptor`
+    in the engine; `HTMLInputElement` and the other element interfaces, other
+    documents and shadow DOM in item 7.13; `ErrorEvent`; WPT's `/dom/constants.js`,
+    which is not vendored). `CLAZEL_WPT_ONLY=text` runs the pages whose name
+    has the text. WPT's `uievents/` is not vendored, so none of it runs; the
+    `dom/events/scrolling/` and `non-cancelable-when-passive/` pages need a
+    window with layout and are not run.
 
 Item 7.1 vendored the test
 data later items run: the WPT `testharness.js` tests (`tests/data/wpt-web/`) and

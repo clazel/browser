@@ -147,6 +147,9 @@ pub struct Ui {
     /// the embedder asks whether an input reached any, to know whether the
     /// page may have changed.
     pub(crate) listener_calls: u64,
+    /// The `Window`'s "current event" (DOM §2.10† "inner invoke": the legacy
+    /// `window.event`): the event whose listener is running.
+    pub(crate) current_event: Option<clazel_webidl::platform::ObjectKey>,
 }
 
 /// What legacy-pre-activation behavior changed.

@@ -644,12 +644,54 @@ fn install(scope: &mut Scope<'_>, realm: &Realm) -> Result<()> {
     scope.set(global, Key::from("performance"), performance)?;
 
     install_local_storage(scope, global)?;
+    install_window_event(scope, global)?;
     install_document(scope)
 }
 
 /// `localStorage` (HTML §12.2.1†): the methods and `length`, over the page's
 /// hooks (the renderer sends the kernel's `Storage*` messages). Named
 /// property access (`localStorage.key = v`) is not implemented.
+/// DOM §2.10† `window.event` ("legacy": `[Replaceable] readonly attribute
+/// (Event or undefined) event`, which the generator cannot make for its
+/// union with `undefined`): the event whose listener is running, else
+/// `undefined`; assigning replaces it with a data property (WebIDL
+/// §3.7.5.2† "[Replaceable]").
+fn install_window_event(scope: &mut Scope<'_>, global: Local<'_>) -> Result<()> {
+    let get = scope.function("get event", 0, Callable::Function, |scope, _args| {
+        match page::page(scope)?.ui.current_event {
+            Some(k) => clazel_webidl::platform::wrap::<page::Page>(scope, k),
+            None => Ok(scope.undefined()),
+        }
+    })?;
+    let set = scope.function("set event", 1, Callable::Function, |scope, args| {
+        let realm = scope.current_realm()?;
+        let global = scope.global(&realm)?;
+        scope.define_property(
+            global,
+            Key::from("event"),
+            PropertyDescriptor {
+                value: Some(args.get(0)),
+                writable: Some(true),
+                enumerable: Some(true),
+                configurable: Some(true),
+                ..PropertyDescriptor::default()
+            },
+        )?;
+        Ok(scope.undefined())
+    })?;
+    scope.define_property(
+        global,
+        Key::from("event"),
+        PropertyDescriptor {
+            get: Some(get),
+            set: Some(set),
+            enumerable: Some(true),
+            configurable: Some(true),
+            ..PropertyDescriptor::default()
+        },
+    )
+}
+
 fn install_local_storage(scope: &mut Scope<'_>, global: Local<'_>) -> Result<()> {
     fn text(scope: &mut Scope<'_>, v: Local<'_>) -> Result<String> {
         let s = scope.to_string(v)?;

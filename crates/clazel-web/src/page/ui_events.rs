@@ -32,9 +32,11 @@ use crate::ui::{Modifiers, UiData};
 /// processing runs the page, else the hooks' ([`super::PageHooks::now_ms`]).
 pub(crate) fn clock_ms(scope: &mut Scope<'_>) -> Result<f64> {
     if let Ok(st) = crate::scripting::state::state(scope) {
-        // Whole microseconds as milliseconds, so the activation timestamps
-        // and `Event.timeStamp` need no finer clock than the page has.
-        return Ok(st.clock.now_us() as f64 / 1000.0);
+        // Milliseconds since the page's time origin, as `performance.now()`
+        // counts them (and so `Event.timeStamp`: HTML's "current high
+        // resolution time"), without its 100 µs coarsening.
+        let since = st.clock.now_us().saturating_sub(st.time_origin_us);
+        return Ok(since as f64 / 1000.0);
     }
     Ok(page(scope)?.hooks.now_ms())
 }

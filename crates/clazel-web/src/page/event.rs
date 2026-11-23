@@ -97,7 +97,7 @@ fn event_of<'a>(scope: &'a mut Scope<'_>, this: ObjectKey) -> Result<&'a mut Eve
 }
 
 fn now(scope: &mut Scope<'_>) -> Result<f64> {
-    Ok(page(scope)?.hooks.now_ms())
+    super::ui_events::clock_ms(scope)
 }
 
 /// What runs a listener: "inner invoke" (DOM §2.10†) steps 2.10 and 2.11,
@@ -109,8 +109,76 @@ struct JsInvoke<'a, 's> {
     event: ObjectKey,
 }
 
+impl JsInvoke<'_, '_> {
+    /// DOM §2.10† "inner invoke": "Let currentEvent be undefined. If global
+    /// is a Window object, then set currentEvent to global's current event
+    /// ... and set global's current event to event" before the call, and
+    /// after it "set global's current event to currentEvent" (the legacy
+    /// `window.event`).
+    fn with_current_event(&mut self, f: impl FnOnce(&mut Self)) {
+        let saved = match page(self.scope) {
+            Ok(p) => p.ui.current_event.replace(self.event),
+            Err(_) => None,
+        };
+        f(self);
+        if let Ok(p) = page(self.scope) {
+            p.ui.current_event = saved;
+        }
+    }
+}
+
 impl events::Host for JsInvoke<'_, '_> {
     fn invoke(&mut self, call: Invocation<'_>) {
+        self.with_current_event(|this| this.invoke_listener(call));
+    }
+
+    /// The document has a Window (DOM "get the parent" of a Document).
+    fn has_window(&self, document: usize, _event: &Event) -> bool {
+        document == 0
+    }
+
+    fn has_activation_behavior(&mut self, node: usize) -> bool {
+        match page(self.scope) {
+            Ok(p) => crate::activation::kind_of(&p.arena, node).is_some(),
+            Err(_) => false,
+        }
+    }
+
+    fn legacy_pre_activation_behavior(&mut self, node: usize) {
+        if let Ok(p) = page(self.scope) {
+            forms::legacy_pre_activation(p, node);
+        }
+    }
+
+    fn legacy_canceled_activation_behavior(&mut self, node: usize) {
+        if let Ok(p) = page(self.scope) {
+            forms::legacy_canceled_activation(p, node);
+        }
+    }
+
+    fn activation_behavior(&mut self, node: usize, event: &Event, listeners: &mut Listeners) {
+        let target = match event.target() {
+            Some(TargetId::Node(n)) => Some(n),
+            _ => None,
+        };
+        let Ok(p) = page(self.scope) else { return };
+        core::mem::swap(&mut p.listeners, listeners);
+        let _ = forms::activation_behavior(self.scope, node, target);
+        if let Ok(p) = page(self.scope) {
+            core::mem::swap(&mut p.listeners, listeners);
+        }
+    }
+
+    fn prepare_listeners(&mut self, target: TargetId, event_type: &[u32], listeners: &mut Listeners) {
+        if let Ok(p) = page(self.scope) {
+            handlers::prepare(&p.arena, &mut p.ui, listeners, target, event_type);
+        }
+    }
+}
+
+impl JsInvoke<'_, '_> {
+    /// Calls one listener (the body of [`events::Host::invoke`]).
+    fn invoke_listener(&mut self, call: Invocation<'_>) {
         let scope = &mut *self.scope;
         // Put the event and the listener table back for the listener.
         let Ok(p) = page(scope) else { return };
@@ -166,49 +234,6 @@ impl events::Host for JsInvoke<'_, '_> {
         core::mem::swap(&mut p.listeners, call.listeners);
         if let Some(Object::Event(d)) = p.object_mut(self.event) {
             *call.event = d.event.clone();
-        }
-    }
-
-    /// The document has a Window (DOM "get the parent" of a Document).
-    fn has_window(&self, document: usize, _event: &Event) -> bool {
-        document == 0
-    }
-
-    fn has_activation_behavior(&mut self, node: usize) -> bool {
-        match page(self.scope) {
-            Ok(p) => crate::activation::kind_of(&p.arena, node).is_some(),
-            Err(_) => false,
-        }
-    }
-
-    fn legacy_pre_activation_behavior(&mut self, node: usize) {
-        if let Ok(p) = page(self.scope) {
-            forms::legacy_pre_activation(p, node);
-        }
-    }
-
-    fn legacy_canceled_activation_behavior(&mut self, node: usize) {
-        if let Ok(p) = page(self.scope) {
-            forms::legacy_canceled_activation(p, node);
-        }
-    }
-
-    fn activation_behavior(&mut self, node: usize, event: &Event, listeners: &mut Listeners) {
-        let target = match event.target() {
-            Some(TargetId::Node(n)) => Some(n),
-            _ => None,
-        };
-        let Ok(p) = page(self.scope) else { return };
-        core::mem::swap(&mut p.listeners, listeners);
-        let _ = forms::activation_behavior(self.scope, node, target);
-        if let Ok(p) = page(self.scope) {
-            core::mem::swap(&mut p.listeners, listeners);
-        }
-    }
-
-    fn prepare_listeners(&mut self, target: TargetId, event_type: &[u32], listeners: &mut Listeners) {
-        if let Ok(p) = page(self.scope) {
-            handlers::prepare(&p.arena, &mut p.ui, listeners, target, event_type);
         }
     }
 }
@@ -664,6 +689,37 @@ impl AbortControllerImpl for Page {
         let signal = new_signal(scope)?;
         Ok(page(scope)?.add_object(Object::AbortController { signal }))
     }
+}
+
+/// DOM §4.5† `createEvent`'s table and steps (see
+/// [`super::node`]'s `create_event`).
+pub(crate) fn create_event(scope: &mut Scope<'_>, interface: &str) -> Result<ObjectKey> {
+    let lower = interface.to_ascii_lowercase();
+    let which = match lower.as_str() {
+        "event" | "events" | "htmlevents" | "svgevents" => InterfaceId::Event,
+        "customevent" => InterfaceId::CustomEvent,
+        "uievent" | "uievents" => InterfaceId::UIEvent,
+        "mouseevent" | "mouseevents" => InterfaceId::MouseEvent,
+        "keyboardevent" => InterfaceId::KeyboardEvent,
+        "focusevent" => InterfaceId::FocusEvent,
+        _ => {
+            return Err(dom_error(
+                scope,
+                DomErrorName::NotSupportedError,
+                "the event interface is not supported",
+            ));
+        }
+    };
+    let t = now(scope)?;
+    let mut event = Event::new_uninitialized(t);
+    event.set_mouse_event(which.inherits(InterfaceId::MouseEvent));
+    let p = page(scope)?;
+    let key = p.add_object(Object::Event(Box::new(EventData {
+        event,
+        interface: which,
+        detail: None,
+    })));
+    Ok(key)
 }
 
 /// DOM §2.10† "fire an event": a trusted `Event` named `name` at `target` with

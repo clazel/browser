@@ -1157,6 +1157,22 @@ impl DocumentImpl for Page {
         Ok(html_child(&page(scope)?.arena, &["body", "frameset"]).map(key))
     }
 
+    /// DOM §4.5† `createEvent(interface)`: "If interface is an ASCII
+    /// case-insensitive match for any of the strings in the first column of
+    /// the table, set constructor to the interface in the second column;
+    /// if constructor is null, throw a NotSupportedError; create an event
+    /// given constructor ... initialize type to the empty string ... unset
+    /// the initialized flag". The interfaces the bindings do not expose
+    /// (`CompositionEvent`, `DragEvent`, `TextEvent`, ...) are the
+    /// `NotSupportedError` a name the table lacks is.
+    fn create_event<'s>(
+        scope: &mut Scope<'s>,
+        _this: ObjectKey,
+        interface: DomString,
+    ) -> Result<ObjectKey> {
+        super::event::create_event(scope, &String::from_utf16_lossy(&interface))
+    }
+
     /// HTML §6.6.? `activeElement` (DOM's `DocumentOrShadowRoot`): "the
     /// focused area of the document's DOM anchor, if it is an element; else
     /// the body element, or the document element if there is none, or null".
