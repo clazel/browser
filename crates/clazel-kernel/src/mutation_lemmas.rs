@@ -1046,7 +1046,13 @@ pub proof fn ml_cors_mismatch()
     ensures
         !cors_check(ml_acao_response(seq![0x61u8]), seq![0x62u8]),
 {
-    assert(!cors_check(ml_acao_response(seq![0x61u8]), seq![0x62u8])) by (compute_only);
+    let r = ml_acao_response(seq![0x61u8]);
+    assert(r.fields.drop_first() =~= Seq::<clazel_http::field::spec::FieldLine>::empty());
+    assert(clazel_http::field::spec::field_name_eq(r.fields[0].name, lit_acao()));
+    reveal_with_fuel(clazel_http::field::spec::field_values_named, 2);
+    assert(clazel_http::field::spec::field_values_named(r.fields, lit_acao()) =~= seq![seq![0x61u8]]);
+    assert(seq![0x61u8][0] != lit_star()[0]);
+    assert(seq![0x61u8][0] != seq![0x62u8][0]);
 }
 
 /// A response the CORS check would pass is still not readable in mode
@@ -1087,79 +1093,53 @@ pub proof fn ml_uncommitted_fetch(r: Renderer, bytes: Seq<u8>)
 {
 }
 
-/// The kernel drops a page's `Cookie` header from the request it builds.
-pub proof fn ml_api_request_drops_cookie()
+/// The kernel drops a page header Fetch forbids from the request it builds.
+pub proof fn ml_api_request_drops(r: Renderer, method: Seq<u8>, content_type: Seq<u8>, body: Seq<u8>, mode: u64, name: Seq<u8>, value: Seq<u8>)
+    requires
+        submit_request(r, method, content_type, body) is Some,
+        mode <= mode_no_cors(),
+        clazel_fetch::request::spec::author_header_dropped(name),
     ensures
-        api_request(
-            ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)),
-            clazel_fetch::request::spec::lit_get(),
-            seq![],
-            seq![],
-            mode_cors(),
-            seq![seq![0x43u8, 0x6F, 0x6F, 0x6B, 0x69, 0x65], seq![0x61u8]],
-        ) is Some,
-        api_request(
-            ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)),
-            clazel_fetch::request::spec::lit_get(),
-            seq![],
-            seq![],
-            mode_cors(),
-            seq![seq![0x43u8, 0x6F, 0x6F, 0x6B, 0x69, 0x65], seq![0x61u8]],
-        )->Some_0.headers.len() == 0,
+        api_request(r, method, content_type, body, mode, seq![name, value]) is Some,
+        api_request(r, method, content_type, body, mode, seq![name, value])->Some_0.headers.len() == 0,
 {
+    let ts = seq![name, value];
+    assert(ts.subrange(2, 2) =~= Seq::<Seq<u8>>::empty());
+    reveal_with_fuel(header_pairs, 2);
+    let line = clazel_http::field::spec::FieldLine { name, value };
+    assert(header_pairs(ts) == Some(seq![line] + Seq::<clazel_http::field::spec::FieldLine>::empty()));
+    assert(seq![line] + Seq::<clazel_http::field::spec::FieldLine>::empty() =~= seq![line]);
     reveal(Seq::filter);
-    assert(api_request(
-        ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)),
-        clazel_fetch::request::spec::lit_get(),
-        seq![],
-        seq![],
-        mode_cors(),
-        seq![seq![0x43u8, 0x6F, 0x6F, 0x6B, 0x69, 0x65], seq![0x61u8]],
-    ) is Some) by (compute_only);
-    assert(api_request(
-        ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)),
-        clazel_fetch::request::spec::lit_get(),
-        seq![],
-        seq![],
-        mode_cors(),
-        seq![seq![0x43u8, 0x6F, 0x6F, 0x6B, 0x69, 0x65], seq![0x61u8]],
-    )->Some_0.headers.len() == 0) by (compute_only);
+    assert(seq![line].drop_last() =~= Seq::<clazel_http::field::spec::FieldLine>::empty());
+    assert(clazel_fetch::request::spec::filter_author_headers(seq![line]) =~= Seq::<clazel_http::field::spec::FieldLine>::empty());
 }
 
-/// A "same-origin" `Fetch` of a URL of another origin is refused: nothing
-/// starts.
-pub proof fn ml_same_origin_refused()
+/// A "same-origin" `Fetch` of a URL of another origin is refused: the state
+/// does not change.
+pub proof fn ml_same_origin_refused(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns,
+    fetch: FetchFns,
+    s: State,
+    r: Renderer,
+    request: u64,
+    method: Seq<u8>,
+    url: Seq<u8>,
+    content_type: Seq<u8>,
+    body: Seq<u8>,
+    headers: Seq<Seq<u8>>,
+    relative: Seq<u32>,
+    resolved: Seq<u32>,
+    parsed: clazel_url::url::spec::Url,
+)
+    requires
+        clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) == Some(relative),
+        (urls.resolve)(r.url, relative) == Some(resolved),
+        (fetch.parse)(resolved) == Some(parsed),
+        (fetch.urls.origin)(parsed) != r.lock,
     ensures
-        fetch_api(
-            Seq::<clazel_psl::spec::Rule>::empty(),
-            ml_urls_resolving(),
-            crate::counterexamples::ce_fetch(),
-            ml_state_one(),
-            ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)),
-            1,
-            clazel_fetch::request::spec::lit_get(),
-            seq![0x61u8],
-            seq![],
-            seq![],
-            mode_same_origin(),
-            seq![],
-        ).0.subfetches.len() == 0,
+        fetch_api(rules, urls, fetch, s, r, request, method, url, content_type, body, mode_same_origin(), headers).0 == s,
 {
-    reveal(Seq::filter);
-    assert(fetch_api(
-        Seq::<clazel_psl::spec::Rule>::empty(),
-        ml_urls_resolving(),
-        crate::counterexamples::ce_fetch(),
-        ml_state_one(),
-        ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)),
-        1,
-        clazel_fetch::request::spec::lit_get(),
-        seq![0x61u8],
-        seq![],
-        seq![],
-        mode_same_origin(),
-        seq![],
-    ).0.subfetches.len() == 0) by (compute_only);
 }
 
 } // verus!

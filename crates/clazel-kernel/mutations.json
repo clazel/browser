@@ -1284,8 +1284,8 @@
       "reason": "The kernel passes the page's Cookie header on to the request it builds. ml_api_request_drops_cookie is false (and the request would not be built at all).",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
-        "lemma": "ml_api_request_drops_cookie()",
-        "witness": "api_request(ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), clazel_fetch::request::spec::lit_get(), seq![], seq![], mode_cors(), seq![seq![0x43u8, 0x6F, 0x6F, 0x6B, 0x69, 0x65], seq![0x61u8]]) is Some && api_request(ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), clazel_fetch::request::spec::lit_get(), seq![], seq![], mode_cors(), seq![seq![0x43u8, 0x6F, 0x6F, 0x6B, 0x69, 0x65], seq![0x61u8]])->Some_0.headers.len() == 1",
+        "lemma": "ml_api_request_drops(ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), clazel_fetch::request::spec::lit_get(), Seq::<u8>::empty(), Seq::<u8>::empty(), mode_cors(), seq![0x43u8, 0x6F, 0x6F, 0x6B, 0x69, 0x65], seq![0x61u8])",
+        "witness": "submit_request(ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), clazel_fetch::request::spec::lit_get(), Seq::<u8>::empty(), Seq::<u8>::empty()) is Some && clazel_fetch::request::spec::author_header_dropped(seq![0x43u8, 0x6F, 0x6F, 0x6B, 0x69, 0x65]) && api_request(ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), clazel_fetch::request::spec::lit_get(), Seq::<u8>::empty(), Seq::<u8>::empty(), mode_cors(), seq![seq![0x43u8, 0x6F, 0x6F, 0x6B, 0x69, 0x65], seq![0x61u8]]) is Some && api_request(ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), clazel_fetch::request::spec::lit_get(), Seq::<u8>::empty(), Seq::<u8>::empty(), mode_cors(), seq![seq![0x43u8, 0x6F, 0x6F, 0x6B, 0x69, 0x65], seq![0x61u8]])->Some_0.headers.len() == 1",
         "reveal": [
           "Seq::filter"
         ]
@@ -1301,8 +1301,8 @@
       "reason": "A \"same-origin\" Fetch of another origin starts (Fetch §4.1 step 12 makes it a network error). ml_same_origin_refused is false.",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
-        "lemma": "ml_same_origin_refused()",
-        "witness": "fetch_api(Seq::<clazel_psl::spec::Rule>::empty(), ml_urls_resolving(), crate::counterexamples::ce_fetch(), ml_state_one(), ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), 1, clazel_fetch::request::spec::lit_get(), seq![0x61u8], seq![], seq![], mode_same_origin(), seq![]).0.subfetches.len() == 1",
+        "lemma": "ml_same_origin_refused(Seq::<clazel_psl::spec::Rule>::empty(), ml_urls_resolving(), crate::counterexamples::ce_fetch(), ml_state_one(), ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), 1, clazel_fetch::request::spec::lit_get(), seq![0x61u8], Seq::<u8>::empty(), Seq::<u8>::empty(), Seq::<Seq<u8>>::empty(), seq![0x61u32], seq![0x61u32], clazel_fetch::transducer::examples::url_a(None))",
+        "witness": "clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(seq![0x61u8]) == Some(seq![0x61u32]) && (crate::counterexamples::ce_fetch().parse)(seq![0x61u32]) == Some(clazel_fetch::transducer::examples::url_a(None)) && (crate::counterexamples::ce_fetch().urls.origin)(clazel_fetch::transducer::examples::url_a(None)) != clazel_origin::spec::Origin::Opaque(0nat) && fetch_api(Seq::<clazel_psl::spec::Rule>::empty(), ml_urls_resolving(), crate::counterexamples::ce_fetch(), ml_state_one(), ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), 1, clazel_fetch::request::spec::lit_get(), seq![0x61u8], Seq::<u8>::empty(), Seq::<u8>::empty(), mode_same_origin(), Seq::<Seq<u8>>::empty()).0.subfetches.len() == 1",
         "reveal": [
           "Seq::filter"
         ]

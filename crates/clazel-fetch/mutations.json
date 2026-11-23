@@ -1102,8 +1102,8 @@
       "id": "origin-on-get",
       "file": "src/request/spec.rs",
       "module": "request::examples_body",
-      "find": "if req.method == lit_get() || req.method == lit_head() {",
-      "replace": "if req.method == lit_head() {",
+      "find": "if (req.method == lit_get() || req.method == lit_head()) && !req.cors {",
+      "replace": "if req.method == lit_head() && !req.cors {",
       "expect": "killed",
       "reason": "Appends Origin to a GET (Fetch \"append a request Origin header\" step 4 sends it only for other methods). lemma_body_08.",
       "certificate": {
