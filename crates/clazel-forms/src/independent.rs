@@ -124,11 +124,12 @@ pub open spec fn ind_strip_whitespace(s: Seq<u32>) -> Seq<u32> {
 }
 
 /// `ind_first_kept` stays within `s`.
-proof fn lemma_first_kept_bounds(s: Seq<u32>, from: int)
+pub proof fn lemma_first_kept_bounds(s: Seq<u32>, from: int)
     requires
         0 <= from <= s.len(),
     ensures
         from <= ind_first_kept(s, from) <= s.len(),
+        ind_first_kept(s, from) < s.len() ==> !ind_white(s[ind_first_kept(s, from)]),
     decreases s.len() - from,
 {
     if from < s.len() && ind_white(s[from]) {

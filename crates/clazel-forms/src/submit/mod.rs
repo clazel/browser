@@ -6,9 +6,12 @@
 //!   `multipart/form-data` encodings, "picking an encoding for the form" and
 //!   the form submission algorithm's navigation steps.
 //! - [`contract`]: what the executable functions are proven to satisfy.
+//! - [`independent`]: a second transcription of the newline replacement and
+//!   of splitting on ASCII whitespace, proven equal to [`spec`]'s.
 
 pub mod contract;
 pub mod examples;
 pub mod exec;
+pub mod independent;
 pub mod lemmas;
 pub mod spec;
