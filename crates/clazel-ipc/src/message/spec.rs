@@ -4,7 +4,8 @@
 //! A message is a CBOR array (`crate::cbor`) whose first element is an
 //! unsigned integer tag and whose other elements are the message's fields,
 //! in order. Fields are text strings, byte strings, unsigned integers,
-//! booleans, or (one field, `Display`'s links) an array of text strings.
+//! booleans, or (two fields, `Display`'s links and `Fetch`'s headers, each
+//! its message's last) an array of text strings.
 //! Messages go between the kernel and a renderer, or (Phase 5 item 5.18)
 //! between the kernel and the GPU process paired with a renderer.
 //!
@@ -25,6 +26,7 @@
 //! | 14 | renderer to kernel | `FetchStyle` | request (unsigned), url (text) |
 //! | 16 | renderer to kernel | `FetchScript` | request (unsigned), url (text) |
 //! | 17 | renderer to kernel | `UpdateUrl` | replace (bool), url (text) |
+//! | 20 | renderer to kernel | `Fetch` | request (unsigned), method (text), url (text), content type (bytes), body (bytes), mode (unsigned), headers (array of text) |
 //! | 15 | GPU process to kernel | `FrameReady` | buffer (unsigned), width (unsigned), height (unsigned) |
 //! | 18 | GPU process to kernel | `GpuReady` | software (bool) |
 //! | 19 | GPU process to kernel | `GpuRefused` | |
@@ -46,6 +48,10 @@
 //! | 116 | kernel to renderer | `ScriptBody` | request (unsigned), bytes (bytes, at most [`max_script_chunk`]) |
 //! | 117 | kernel to renderer | `ScriptEnd` | request (unsigned) |
 //! | 118 | kernel to renderer | `ScriptFailed` | request (unsigned) |
+//! | 119 | kernel to renderer | `FetchResponse` | request (unsigned), status (unsigned), content type (bytes) |
+//! | 120 | kernel to renderer | `FetchBody` | request (unsigned), bytes (bytes, at most [`max_fetch_chunk`]) |
+//! | 121 | kernel to renderer | `FetchEnd` | request (unsigned) |
+//! | 122 | kernel to renderer | `FetchFailed` | request (unsigned) |
 //!
 //! `StorageLengthValue` is not in the plan's list, which has no reply for
 //! `StorageLength`; the schema needs one.
@@ -117,6 +123,21 @@
 //! address bar changes. The tags 16 and 17 are the first free ones below 100;
 //! 115 to 118 follow 114.
 //!
+//! The second slice of 7.16 adds `fetch()` and XHR. `Fetch` asks the kernel
+//! to fetch `url` (resolved against the committed URL) with `method`, a body
+//! (`content type` and `body`; both empty for none), the page's `headers`
+//! (an array of text strings, name then value, so its length is even) and
+//! the request's mode: 0 "same-origin", 1 "cors", 2 "no-cors". The kernel
+//! answers under `request` with `FetchResponse { status, content type }`,
+//! zero or more `FetchBody` and `FetchEnd`, or with `FetchFailed` (Fetch's
+//! "network error"). An opaque filtered response (a "no-cors" request that
+//! left the document's origin) is `FetchResponse` with status 0 and an empty
+//! content type, then `FetchEnd`: the renderer never receives its body. The
+//! schema does not narrow `method`, `mode` or the headers (the kernel refuses
+//! what it does not use). The tags 20 and 119 to 122 are the next free ones
+//! (13 is left unused, as every retired tag is). Header names and values are
+//! text, so a header value that is not UTF-8 cannot be sent (listed).
+//!
 //! Two rules are part of the schema's spec ([`message_fields`], and
 //! `lemmas::lemma_no_identity_fields`):
 //! - **No message carries a claimed identity.** No origin, renderer id, tab
@@ -140,7 +161,9 @@
 //! - `Display`'s links are a nested array: the message's array has four
 //!   elements (the tag, the title, the text and the links), and its last
 //!   element is an array of text strings, whose tokens follow it
-//!   ([`display_tokens`]). It is the only nested field in the schema.
+//!   ([`display_tokens`]). `Fetch`'s headers are the same shape, its eighth
+//!   and last element ([`fetch_tokens`], item 7.16). They are the only nested
+//!   fields in the schema.
 //! - `Input`'s fields are all present in every kind: a click has a zero
 //!   delta and key, a scroll a zero key, a key a zero position and delta.
 //!   One shape keeps the message exactly its tokens, as `Commit`'s kind
@@ -332,6 +355,49 @@ pub enum Message {
         /// The renderer's id for the fetch.
         request: u64,
     },
+    /// Renderer to kernel: `fetch()` or XHR (item 7.16).
+    Fetch {
+        /// The renderer's id for this fetch.
+        request: u64,
+        /// The method, as the page wrote it.
+        method: Seq<u8>,
+        /// The URL, as the page wrote it.
+        url: Seq<u8>,
+        /// The body's `Content-Type` field value (empty for no body).
+        content_type: Seq<u8>,
+        /// The body's octets (empty for no body).
+        body: Seq<u8>,
+        /// The request's mode: 0 "same-origin", 1 "cors", 2 "no-cors".
+        mode: u64,
+        /// The page's header lines: name, value, name, value, ...
+        headers: Seq<Seq<u8>>,
+    },
+    /// Kernel to renderer: a fetch's response arrived (item 7.16).
+    FetchResponse {
+        /// The renderer's id for the fetch.
+        request: u64,
+        /// The status code; 0 for an opaque filtered response.
+        status: u64,
+        /// The response's combined `Content-Type` field value, or empty.
+        content_type: Seq<u8>,
+    },
+    /// Kernel to renderer: the next part of a fetch's body.
+    FetchBody {
+        /// The renderer's id for the fetch.
+        request: u64,
+        /// The octets.
+        bytes: Seq<u8>,
+    },
+    /// Kernel to renderer: a fetch's body is complete.
+    FetchEnd {
+        /// The renderer's id for the fetch.
+        request: u64,
+    },
+    /// Kernel to renderer: a fetch failed (a network error, or refused).
+    FetchFailed {
+        /// The renderer's id for the fetch.
+        request: u64,
+    },
     /// Kernel to renderer: a document is committed; its body follows in
     /// `Body` frames, then `BodyEnd`.
     Commit {
@@ -447,6 +513,13 @@ pub open spec fn max_script_chunk() -> nat {
     max_style_chunk()
 }
 
+/// The most octets one `FetchBody` carries (item 7.16): [`max_style_chunk`]
+/// (its payload has a `StyleBody`'s shape, with the tag 120 in place of
+/// 111).
+pub open spec fn max_fetch_chunk() -> nat {
+    max_style_chunk()
+}
+
 /// Whether `m` is sent by a renderer to the kernel.
 pub open spec fn is_from_renderer(m: Message) -> bool {
     match m {
@@ -461,6 +534,7 @@ pub open spec fn is_from_renderer(m: Message) -> bool {
         | Message::Navigate { .. }
         | Message::FetchScript { .. }
         | Message::UpdateUrl { .. }
+        | Message::Fetch { .. }
         | Message::Submit { .. }
         | Message::Display { .. }
         | Message::Title { .. }
@@ -536,6 +610,12 @@ pub enum Field {
     Request,
     /// Whether a URL update replaces the current history entry (item 7.16).
     Replace,
+    /// A request's mode (item 7.16).
+    Mode,
+    /// A response's status code (item 7.16).
+    Status,
+    /// The page's request header lines (item 7.16).
+    Headers,
     /// A claimed origin. No message has one.
     Origin,
     /// A renderer id. No message has one.
@@ -589,6 +669,11 @@ pub open spec fn message_fields(m: Message) -> Seq<Field> {
         Message::ScriptBody { .. } => seq![Field::Request, Field::BodyBytes],
         Message::ScriptEnd { .. } => seq![Field::Request],
         Message::ScriptFailed { .. } => seq![Field::Request],
+        Message::Fetch { .. } => seq![Field::Request, Field::Method, Field::Url, Field::ContentType, Field::BodyBytes, Field::Mode, Field::Headers],
+        Message::FetchResponse { .. } => seq![Field::Request, Field::Status, Field::ContentType],
+        Message::FetchBody { .. } => seq![Field::Request, Field::BodyBytes],
+        Message::FetchEnd { .. } => seq![Field::Request],
+        Message::FetchFailed { .. } => seq![Field::Request],
     }
 }
 
@@ -597,6 +682,7 @@ pub open spec fn message_fields(m: Message) -> Seq<Field> {
 pub open spec fn nested_len(m: Message) -> nat {
     match m {
         Message::Display { links, .. } => links.len(),
+        Message::Fetch { headers, .. } => headers.len(),
         _ => 0,
     }
 }
@@ -618,6 +704,30 @@ pub open spec fn text_tokens(ls: Seq<Seq<u8>>) -> Seq<Token> {
 /// the links, the links being an array whose text strings follow it.
 pub open spec fn display_tokens(title: Seq<u8>, text: Seq<u8>, links: Seq<Seq<u8>>) -> Seq<Token> {
     seq![Token::Array(4), Token::Uint(10), Token::Text(title), Token::Text(text), Token::Array(links.len() as u64)] + text_tokens(links)
+}
+
+/// The tokens of `Fetch` (item 7.16): the array of the tag and the seven
+/// fields, the headers being an array whose text strings follow it.
+pub open spec fn fetch_tokens(
+    request: u64,
+    method: Seq<u8>,
+    url: Seq<u8>,
+    content_type: Seq<u8>,
+    body: Seq<u8>,
+    mode: u64,
+    headers: Seq<Seq<u8>>,
+) -> Seq<Token> {
+    seq![
+        Token::Array(8),
+        Token::Uint(20),
+        Token::Uint(request),
+        Token::Text(method),
+        Token::Text(url),
+        Token::Bytes(content_type),
+        Token::Bytes(body),
+        Token::Uint(mode),
+        Token::Array(headers.len() as u64),
+    ] + text_tokens(headers)
 }
 
 /// The tokens of a message: an array of the tag and the fields.
@@ -671,6 +781,11 @@ pub open spec fn message_tokens(m: Message) -> Seq<Token> {
         Message::ScriptBody { request, bytes } => seq![Token::Array(3), Token::Uint(116), Token::Uint(request), Token::Bytes(bytes)],
         Message::ScriptEnd { request } => seq![Token::Array(2), Token::Uint(117), Token::Uint(request)],
         Message::ScriptFailed { request } => seq![Token::Array(2), Token::Uint(118), Token::Uint(request)],
+        Message::Fetch { request, method, url, content_type, body, mode, headers } => fetch_tokens(request, method, url, content_type, body, mode, headers),
+        Message::FetchResponse { request, status, content_type } => seq![Token::Array(4), Token::Uint(119), Token::Uint(request), Token::Uint(status), Token::Bytes(content_type)],
+        Message::FetchBody { request, bytes } => seq![Token::Array(3), Token::Uint(120), Token::Uint(request), Token::Bytes(bytes)],
+        Message::FetchEnd { request } => seq![Token::Array(2), Token::Uint(121), Token::Uint(request)],
+        Message::FetchFailed { request } => seq![Token::Array(2), Token::Uint(122), Token::Uint(request)],
     }
 }
 
@@ -805,6 +920,24 @@ pub open spec fn parse_fields(tag: u64, f: Seq<Token>) -> Option<Message> {
         if f.len() == 1 { match f[0] { Token::Uint(r) => Some(Message::StyleEnd { request: r }), _ => None } } else { None }
     } else if tag == 113 {
         if f.len() == 1 { match f[0] { Token::Uint(r) => Some(Message::StyleFailed { request: r }), _ => None } } else { None }
+    } else if tag == 119 {
+        if f.len() == 3 {
+            match (f[0], f[1], f[2]) {
+                (Token::Uint(r), Token::Uint(st), Token::Bytes(c)) => Some(Message::FetchResponse { request: r, status: st, content_type: c }),
+                _ => None,
+            }
+        } else { None }
+    } else if tag == 120 {
+        if f.len() == 2 {
+            match (f[0], f[1]) {
+                (Token::Uint(r), Token::Bytes(b)) => Some(Message::FetchBody { request: r, bytes: b }),
+                _ => None,
+            }
+        } else { None }
+    } else if tag == 121 {
+        if f.len() == 1 { match f[0] { Token::Uint(r) => Some(Message::FetchEnd { request: r }), _ => None } } else { None }
+    } else if tag == 122 {
+        if f.len() == 1 { match f[0] { Token::Uint(r) => Some(Message::FetchFailed { request: r }), _ => None } } else { None }
     } else if tag == 115 {
         if f.len() == 2 {
             match (f[0], f[1]) {
@@ -869,9 +1002,31 @@ pub open spec fn parse_display(n: u64, f: Seq<Token>) -> Option<Message> {
     }
 }
 
+/// `Fetch` from the element count `n` of its array and the tokens after the
+/// tag (item 7.16): eight elements, six fields, then an array of `k` text
+/// strings that are the last `k` tokens.
+pub open spec fn parse_fetch(n: u64, f: Seq<Token>) -> Option<Message> {
+    if n == 8 && f.len() >= 7 {
+        match (f[0], f[1], f[2], f[3], f[4], f[5], f[6]) {
+            (Token::Uint(r), Token::Text(m), Token::Text(u), Token::Bytes(c), Token::Bytes(b), Token::Uint(mode), Token::Array(k)) => {
+                let rest = f.subrange(7, f.len() as int);
+                if k as nat == rest.len() && all_text(rest) {
+                    Some(Message::Fetch { request: r, method: m, url: u, content_type: c, body: b, mode, headers: texts_of(rest) })
+                } else {
+                    None
+                }
+            },
+            _ => None,
+        }
+    } else {
+        None
+    }
+}
+
 /// The message in a token sequence: an array whose first element is the
-/// tag, and which has exactly the message's fields after it (for `Display`,
-/// whose last field is an array, [`parse_display`]).
+/// tag, and which has exactly the message's fields after it (for `Display`
+/// and `Fetch`, whose last field is an array, [`parse_display`] and
+/// [`parse_fetch`]).
 pub open spec fn parse_message(t: Seq<Token>) -> Option<Message> {
     if t.len() < 2 {
         None
@@ -880,6 +1035,8 @@ pub open spec fn parse_message(t: Seq<Token>) -> Option<Message> {
             (Token::Array(n), Token::Uint(tag)) => {
                 if tag == 10 {
                     parse_display(n, t.subrange(2, t.len() as int))
+                } else if tag == 20 {
+                    parse_fetch(n, t.subrange(2, t.len() as int))
                 } else if n as nat + 1 == t.len() {
                     parse_fields(tag, t.subrange(2, t.len() as int))
                 } else {

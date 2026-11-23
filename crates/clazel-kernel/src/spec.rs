@@ -463,6 +463,50 @@
 //! - **A `Tick` fails a sub-fetch** that started [`subfetch_timeout`] (60)
 //!   seconds ago or more: `StyleFailed`, its connection closed.
 //!
+//! # `fetch()` and XHR (phase-7.md item 7.16)
+//!
+//! Sources: the Fetch Standard at the commit `clazel_fetch::transducer::spec`
+//! pins (`59afe349913d56898c947576216f1c2579308be7`): §2.2.2 (CORS-safelisted
+//! request-headers, CORS-unsafe request-header bytes, forbidden
+//! request-headers), §2.2.6 (opaque filtered responses), §4.1 main fetch
+//! (steps 12 and 14), §4.3 HTTP fetch step 4.4 and §4.9 CORS check.
+//!
+//! - **`Fetch` is a sub-fetch** ([`fetch_api`]): a committed renderer's
+//!   request runs as a [`SubFetch`] with `api` set to its mode, so it shares
+//!   the sub-fetch limits, tables, connections (`Sub*` outputs and
+//!   `SubNet`), timeout and credentials rule (5.0(h): cookies only on hops
+//!   whose URL is the lock's origin, which is credentials mode
+//!   "same-origin"; "include" is not offered, listed). A `Fetch` before the
+//!   renderer's first commit is a disallowed frame (killed).
+//! - **The request** ([`api_request`]) is `GET` without a body or `POST`
+//!   with one (other methods are refused: they need a preflight in mode
+//!   "cors" and are not built by `clazel-fetch`; listed), the page's headers
+//!   without those Fetch forbids and those the client sets itself
+//!   (`clazel_fetch::request::spec::filter_author_headers`), the
+//!   renderer's lock as its origin, and `Origin` on every request in mode
+//!   "cors".
+//! - **No preflight.** A request whose URL is not the lock's origin is
+//!   refused in mode "same-origin", and in modes "cors" and "no-cors" when
+//!   it would need a CORS preflight (a page header, or a body type that is
+//!   not safelisted: [`needs_no_preflight`]). A redirect away from the
+//!   origin drops the page's headers (`clazel_fetch`'s `next_req`). The one
+//!   gap: a same-origin `POST` with a non-safelisted type that its own
+//!   origin's server redirects (307 or 308) to another origin keeps its
+//!   body and type there without a preflight (listed).
+//! - **The answer** ([`api_end`]): a basic response (final URL of the lock's
+//!   origin, no cross-origin hop) or, in mode "cors", one that passed the
+//!   CORS check ([`cors_check`], against `*` or the byte-serialized request
+//!   origin, `null` after a cross-origin hop) is `FetchResponse { status,
+//!   content type }`, `FetchBody` frames and `FetchEnd`; in mode "no-cors"
+//!   anything else is an opaque filtered response (status 0, no body); in
+//!   the other modes anything else, and every `Fail`, is `FetchFailed`.
+//!   Opaque-response blocking is not needed here: a "no-cors" `Fetch` never
+//!   gives the renderer a cross-origin body. (`FetchScript`'s responses are
+//!   still handed over whole, as in the first slice; listed.)
+//! - **What the renderer learns of a readable response** is its status, its
+//!   combined `Content-Type` and its body; not its other headers, its final
+//!   URL or its type (listed).
+//!
 //! # URL updates (phase-7.md item 7.16)
 //!
 //! - **`UpdateUrl { replace, url }`** is `history.pushState` and
@@ -783,6 +827,10 @@ pub struct SubFetch {
     pub partition: crate::domain::Domain,
     /// Whether the renderer's document has since been replaced by a commit.
     pub ended: bool,
+    /// For a `fetch()` or XHR request (`Fetch`, item 7.16), its mode (0
+    /// "same-origin", 1 "cors", 2 "no-cors"), answered with `Fetch*` frames
+    /// ([`api_end`]); `None` for a style sheet or script fetch.
+    pub api: Option<u64>,
 }
 
 /// A renderer's count of sub-fetches (item 5.19).
@@ -1642,7 +1690,7 @@ pub open spec fn begin_navigation(
 pub open spec fn submit_request(r: Renderer, method: Seq<u8>, content_type: Seq<u8>, body: Seq<u8>) -> Option<clazel_fetch::request::spec::Req> {
     if method == clazel_fetch::request::spec::lit_get() {
         if content_type.len() == 0 && body.len() == 0 {
-            Some(clazel_fetch::request::spec::Req { method: method, body: None, initiator: Some(r.lock), origin_tainted: false })
+            Some(clazel_fetch::request::spec::Req { method: method, body: None, initiator: Some(r.lock), origin_tainted: false, headers: seq![], cors: false })
         } else {
             None
         }
@@ -1654,6 +1702,8 @@ pub open spec fn submit_request(r: Renderer, method: Seq<u8>, content_type: Seq<
                     body: Some(clazel_fetch::request::spec::Payload { content_type: content_type, bytes: body }),
                     initiator: Some(r.lock),
                     origin_tainted: false,
+                    headers: seq![],
+                    cors: false,
                 },
             )
         } else {
@@ -2811,6 +2861,7 @@ pub open spec fn fetch_sub(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fet
                             started: s.now,
                             partition: crate::domain::domain_of_renderer(rules, r),
                             ended: false,
+                            api: None,
                         };
                         let (hop, out, end) = sub_actions(r.id, serial, request, script, 0, actions);
                         let counts = set_subcount(s.subcounts, r.id, r.lock, serial + 1, in_document + 1);
@@ -2886,6 +2937,358 @@ pub open spec fn update_url(urls: UrlFns, s: State, r: Renderer, url: Seq<u8>) -
     }
 }
 
+// ---------------------------------------------------------------------
+// `fetch()` and XHR (phase-7.md item 7.16).
+// ---------------------------------------------------------------------
+
+/// Mode "same-origin".
+pub open spec fn mode_same_origin() -> u64 {
+    0
+}
+
+/// Mode "cors".
+pub open spec fn mode_cors() -> u64 {
+    1
+}
+
+/// Mode "no-cors".
+pub open spec fn mode_no_cors() -> u64 {
+    2
+}
+
+/// The page's header texts `ts` (name, value, name, value, ...) as field
+/// lines, in order; `None` if their number is odd.
+pub open spec fn header_pairs(ts: Seq<Seq<u8>>) -> Option<Seq<clazel_http::field::spec::FieldLine>>
+    decreases ts.len(),
+{
+    if ts.len() == 0 {
+        Some(seq![])
+    } else if ts.len() == 1 {
+        None
+    } else {
+        match header_pairs(ts.subrange(2, ts.len() as int)) {
+            Some(rest) => Some(seq![clazel_http::field::spec::FieldLine { name: ts[0], value: ts[1] }] + rest),
+            None => None,
+        }
+    }
+}
+
+/// Fetch §2.2.2: "A CORS-unsafe request-header byte is a byte byte for
+/// which one of the following is true: byte is less than 0x20 and is not
+/// 0x09 HT; byte is 0x22 ("), 0x28 (left parenthesis), 0x29 (right
+/// parenthesis), 0x3A (:), 0x3C (<), 0x3E (>), 0x3F (?), 0x40 (@), 0x5B
+/// ([), 0x5C (\), 0x5D (]), 0x7B ({), 0x7D (}), or 0x7F DEL."
+pub open spec fn cors_unsafe_byte(b: u8) -> bool {
+    (b < 0x20 && b != 0x09) || b == 0x22 || b == 0x28 || b == 0x29 || b == 0x3A || b == 0x3C || b == 0x3E || b == 0x3F || b == 0x40 || b == 0x5B
+        || b == 0x5C || b == 0x5D || b == 0x7B || b == 0x7D || b == 0x7F
+}
+
+/// `application/x-www-form-urlencoded`, `multipart/form-data` and
+/// `text/plain`: the essences a CORS-safelisted `Content-Type` may have.
+pub open spec fn safelisted_essences() -> Seq<Seq<u8>> {
+    seq![
+        seq![0x61u8, 0x70, 0x70, 0x6C, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x2F, 0x78, 0x2D, 0x77, 0x77, 0x77, 0x2D, 0x66, 0x6F, 0x72, 0x6D, 0x2D, 0x75, 0x72, 0x6C, 0x65, 0x6E, 0x63, 0x6F, 0x64, 0x65, 0x64],
+        seq![0x6Du8, 0x75, 0x6C, 0x74, 0x69, 0x70, 0x61, 0x72, 0x74, 0x2F, 0x66, 0x6F, 0x72, 0x6D, 0x2D, 0x64, 0x61, 0x74, 0x61],
+        seq![0x74u8, 0x65, 0x78, 0x74, 0x2F, 0x70, 0x6C, 0x61, 0x69, 0x6E],
+    ]
+}
+
+/// `v`, byte-lowercased, is `e` or starts with `e;`.
+pub open spec fn has_essence(v: Seq<u8>, e: Seq<u8>) -> bool {
+    let l = clazel_fetch::request::spec::byte_lowercase(v);
+    l == e || clazel_fetch::request::spec::starts_with(l, e + seq![0x3Bu8])
+}
+
+/// A body `Content-Type` that needs no CORS preflight (Fetch §2.2.2
+/// "CORS-safelisted request-header", the `content-type` case: at most 128
+/// octets, no CORS-unsafe request-header byte, and a MIME type whose essence
+/// is one of [`safelisted_essences`]), or the empty value of a body with no
+/// type. The MIME type is not parsed: the value must be the essence itself,
+/// in any case, or start with it and `;` (a subset of what parsing accepts;
+/// listed).
+pub open spec fn content_type_safelisted(v: Seq<u8>) -> bool {
+    v.len() == 0 || (v.len() <= 128 && (forall|i: int| 0 <= i < v.len() ==> !cors_unsafe_byte(#[trigger] v[i])) && (exists|k: int|
+        0 <= k < safelisted_essences().len() && has_essence(v, #[trigger] safelisted_essences()[k])))
+}
+
+/// The request a `Fetch` of renderer `r` makes, before its URL is known to
+/// be same-origin or not: `GET` with no body, or `POST` with a body of at
+/// most [`clazel_fetch::request::spec::max_request_body`] octets; the page's
+/// headers in pairs, those Fetch forbids and those the client sets itself
+/// dropped ([`clazel_fetch::request::spec::filter_author_headers`]); the
+/// renderer's lock as the request's origin; `cors` set in mode "cors".
+/// `None` for any other method, an odd number of header texts or a mode
+/// above 2.
+pub open spec fn api_request(r: Renderer, method: Seq<u8>, content_type: Seq<u8>, body: Seq<u8>, mode: u64, headers: Seq<Seq<u8>>) -> Option<
+    clazel_fetch::request::spec::Req,
+> {
+    match (submit_request(r, method, content_type, body), header_pairs(headers)) {
+        (Some(req), Some(lines)) => if mode > mode_no_cors() {
+            None
+        } else {
+            Some(
+                clazel_fetch::request::spec::Req {
+                    headers: clazel_fetch::request::spec::filter_author_headers(lines),
+                    cors: mode == mode_cors(),
+                    ..req
+                },
+            )
+        },
+        _ => None,
+    }
+}
+
+/// A request that leaves the document's origin from its first URL needs no
+/// CORS preflight, which this kernel does not send: no header of the page's
+/// and a safelisted body type (`GET` and `POST` are CORS-safelisted
+/// methods). Fetch §4.1 main fetch step 12 would preflight anything else in
+/// mode "cors", and the `request-no-cors` guard refuses it in mode
+/// "no-cors"; here it is refused in both.
+pub open spec fn needs_no_preflight(req: clazel_fetch::request::spec::Req) -> bool {
+    req.headers.len() == 0 && match req.body {
+        Some(p) => content_type_safelisted(p.content_type),
+        None => true,
+    }
+}
+
+/// "Access-Control-Allow-Origin", byte-lowercased (field names compare
+/// case-insensitively, RFC 9110 §5.1).
+pub open spec fn lit_acao() -> Seq<u8> {
+    seq![
+        0x61u8, 0x63, 0x63, 0x65, 0x73, 0x73, 0x2D, 0x63, 0x6F, 0x6E, 0x74, 0x72, 0x6F, 0x6C, 0x2D, 0x61, 0x6C, 0x6C, 0x6F, 0x77, 0x2D, 0x6F, 0x72, 0x69, 0x67,
+        0x69, 0x6E,
+    ]
+}
+
+/// "*".
+pub open spec fn lit_star() -> Seq<u8> {
+    seq![0x2Au8]
+}
+
+/// "null".
+pub open spec fn lit_null_origin() -> Seq<u8> {
+    seq![0x6Eu8, 0x75, 0x6C, 0x6C]
+}
+
+/// Fetch "byte-serializing a request origin" for a request whose origin is
+/// `lock`: step 2, "If request's redirect-taint is not "same-origin", then
+/// return "null""; step 3, the origin serialized (an opaque one is
+/// "null"), as octets.
+pub open spec fn request_origin(lock: clazel_origin::spec::Origin, tainted: bool) -> Seq<u8> {
+    if tainted {
+        lit_null_origin()
+    } else {
+        clazel_origin::spec::serialization_of_origin(lock).map_values(|c: u32| c as u8)
+    }
+}
+
+/// Fetch §4.9 "CORS check", with credentials mode "same-origin" (the only
+/// one this kernel uses): "1. Let origin be the result of getting
+/// `Access-Control-Allow-Origin` from response's header list. 2. If origin
+/// is null, then return failure. 3. If request's credentials mode is not
+/// "include" and origin is `*`, then return success. 4. If the result of
+/// byte-serializing a request origin with request is not origin, then
+/// return failure. 5. If request's credentials mode is not "include", then
+/// return success." "Getting" is the combined field value (RFC 9110 §5.2).
+pub open spec fn cors_check(response: clazel_http::message::spec::Response, origin: Seq<u8>) -> bool {
+    match clazel_http::field::spec::combined_field_value(response.fields, lit_acao()) {
+        // 2.
+        None => false,
+        // 3., 4. and 5.
+        Some(v) => v == lit_star() || v == origin,
+    }
+}
+
+/// The renderer may read the response a `Fetch` in mode `mode` ended with at
+/// `url`: a basic response (the final URL's origin is the lock and no
+/// redirect left the origin: Fetch's response tainting "basic"), or, in
+/// mode "cors", one that passed [`cors_check`].
+pub open spec fn api_readable(
+    fetch: FetchFns,
+    lock: clazel_origin::spec::Origin,
+    mode: u64,
+    tainted: bool,
+    url: clazel_url::url::spec::Url,
+    response: clazel_http::message::spec::Response,
+) -> bool {
+    ((fetch.urls.origin)(url) == lock && !tainted) || (mode == mode_cors() && cors_check(response, request_origin(lock, tainted)))
+}
+
+/// The `FetchBody` frames of `body`, in order: consecutive pieces of at most
+/// `max_fetch_chunk` octets, none for an empty body.
+pub open spec fn fetch_body_frames(request: u64, body: Seq<u8>) -> Seq<u8>
+    decreases body.len(),
+{
+    if body.len() == 0 {
+        seq![]
+    } else if body.len() <= clazel_ipc::message::spec::max_fetch_chunk() {
+        reply_frame(clazel_ipc::message::spec::Message::FetchBody { request, bytes: body })
+    } else {
+        reply_frame(clazel_ipc::message::spec::Message::FetchBody { request, bytes: body.take(clazel_ipc::message::spec::max_fetch_chunk() as int) })
+            + fetch_body_frames(request, body.skip(clazel_ipc::message::spec::max_fetch_chunk() as int))
+    }
+}
+
+/// The frames of a response the renderer may read: `FetchResponse` with
+/// its status and combined `Content-Type`, the `FetchBody` frames and
+/// `FetchEnd`, as one write.
+pub open spec fn fetch_frames(request: u64, response: clazel_http::message::spec::Response) -> Seq<u8> {
+    reply_frame(
+        clazel_ipc::message::spec::Message::FetchResponse {
+            request,
+            status: response.status_line.status as u64,
+            content_type: response_document(response).content_type,
+        },
+    ) + fetch_body_frames(request, response.body) + reply_frame(clazel_ipc::message::spec::Message::FetchEnd { request })
+}
+
+/// The frames of an opaque filtered response (Fetch §2.2.6: "status is
+/// 0, status message is the empty byte sequence, header list is empty, body
+/// is null"): `FetchResponse` with status 0 and no content type, then
+/// `FetchEnd`.
+pub open spec fn fetch_opaque_frames(request: u64) -> Seq<u8> {
+    reply_frame(clazel_ipc::message::spec::Message::FetchResponse { request, status: 0, content_type: seq![] }) + reply_frame(
+        clazel_ipc::message::spec::Message::FetchEnd { request },
+    )
+}
+
+/// The frame of `FetchFailed`.
+pub open spec fn fetch_failed_frame(request: u64) -> Seq<u8> {
+    reply_frame(clazel_ipc::message::spec::Message::FetchFailed { request })
+}
+
+/// The first action of `actions` that ends a fetch (`Done` or `Fail`).
+pub open spec fn end_action(actions: Seq<NetAction>) -> Option<NetAction>
+    decreases actions.len(),
+{
+    if actions.len() == 0 {
+        None
+    } else if actions[0] is Done || actions[0] is Fail {
+        Some(actions[0])
+    } else {
+        end_action(actions.drop_first())
+    }
+}
+
+/// The answer to a `Fetch` whose transducer ended with `actions`, with
+/// redirect-taint `tainted` (Fetch §4.1 main fetch steps 12 and 14, and
+/// §4.3 HTTP fetch step 4.4's CORS check): a readable response
+/// ([`api_readable`]) is [`fetch_frames`]; otherwise mode "same-origin"
+/// and mode "cors" give a network error (`FetchFailed`) and mode "no-cors"
+/// an opaque filtered response ([`fetch_opaque_frames`]). A `Fail` is a
+/// network error.
+pub open spec fn api_end(fetch: FetchFns, lock: clazel_origin::spec::Origin, request: u64, mode: u64, tainted: bool, actions: Seq<NetAction>) -> Seq<u8> {
+    match end_action(actions) {
+        Some(clazel_fetch::transducer::spec::Action::Done { url, response }) => if api_readable(fetch, lock, mode, tainted, url, response) {
+            fetch_frames(request, response)
+        } else if mode == mode_no_cors() {
+            fetch_opaque_frames(request)
+        } else {
+            fetch_failed_frame(request)
+        },
+        _ => fetch_failed_frame(request),
+    }
+}
+
+/// The frames a sub-fetch ends with: `end`, the `Style*` or `Script*`
+/// frames [`sub_actions`] gave, for a style sheet or script fetch, and
+/// [`api_end`] in its place for a `Fetch`. The transducer's state after the
+/// step is `fs`.
+pub open spec fn api_finish(fetch: FetchFns, f: SubFetch, fs: FetchState, actions: Seq<NetAction>, end: Option<Seq<u8>>) -> Option<Seq<u8>> {
+    match (f.api, end) {
+        (Some(mode), Some(_)) => Some(api_end(fetch, f.lock, f.request, mode, fs.req.origin_tainted, actions)),
+        _ => end,
+    }
+}
+
+/// The frame a sub-fetch fails with: `FetchFailed` for a `Fetch`, else
+/// [`sub_failed_frame`].
+pub open spec fn failed_frame_of(f: SubFetch) -> Seq<u8> {
+    if f.api is Some {
+        fetch_failed_frame(f.request)
+    } else {
+        sub_failed_frame(f.script, f.request)
+    }
+}
+
+/// A committed renderer's `Fetch { request, method, url, content_type,
+/// body, mode, headers }` (item 7.16): refused with `FetchFailed` past the
+/// sub-fetch limits (it counts as a sub-fetch), for a request
+/// [`api_request`] does not build, for a URL that does not decode, resolve
+/// or parse, in mode "same-origin" for a URL of another origin (Fetch §4.1
+/// main fetch step 12, "request's mode is "same-origin"": a network error),
+/// and for a URL of another origin when the request would need a CORS
+/// preflight ([`needs_no_preflight`]). Otherwise a sub-fetch is started
+/// with the request ([`clazel_fetch::transducer::spec::start_req`]), with
+/// `api` set to the mode, by the transducer navigations use; its jar is
+/// the sub-fetches' (cookies on same-origin hops only: credentials mode
+/// "same-origin").
+pub open spec fn fetch_api(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns,
+    fetch: FetchFns,
+    s: State,
+    r: Renderer,
+    request: u64,
+    method: Seq<u8>,
+    url: Seq<u8>,
+    content_type: Seq<u8>,
+    body: Seq<u8>,
+    mode: u64,
+    headers: Seq<Seq<u8>>,
+) -> (State, Seq<Output>) {
+    let (serial, in_document) = subcount_of(s.subcounts, r.id, r.lock);
+    let refused = (s, seq![Output::ToRenderer { id: r.id, bytes: fetch_failed_frame(request) }]);
+    if live_subfetches(s.subfetches, r.id, r.lock) >= max_subfetches_at_once() || in_document >= max_subfetches_per_document() || serial
+        >= max_subfetch_serial() {
+        refused
+    } else {
+        match api_request(r, method, content_type, body, mode, headers) {
+            None => refused,
+            Some(req) => match clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+                None => refused,
+                Some(relative) => match (urls.resolve)(r.url, relative) {
+                    None => refused,
+                    Some(resolved) => match (fetch.parse)(resolved) {
+                        None => refused,
+                        Some(parsed) => if (fetch.urls.origin)(parsed) != r.lock && (mode == mode_same_origin() || !needs_no_preflight(req)) {
+                            refused
+                        } else {
+                            let (fs, actions) = clazel_fetch::transducer::spec::start_req(parsed, req);
+                            let f = SubFetch {
+                                renderer: r.id,
+                                lock: r.lock,
+                                serial,
+                                request,
+                                script: false,
+                                tab: r.tab,
+                                fetch: fs,
+                                hop: 0,
+                                started: s.now,
+                                partition: crate::domain::domain_of_renderer(rules, r),
+                                ended: false,
+                                api: Some(mode),
+                            };
+                            let (hop, out, end) = sub_actions(r.id, serial, request, false, 0, actions);
+                            let end = api_finish(fetch, f, fs, actions, end);
+                            let counts = set_subcount(s.subcounts, r.id, r.lock, serial + 1, in_document + 1);
+                            let table = match end {
+                                None => s.subfetches.push(SubFetch { hop, ..f }),
+                                Some(_) => s.subfetches,
+                            };
+                            let outs = match end {
+                                None => out,
+                                Some(frames) => out + seq![Output::ToRenderer { id: r.id, bytes: frames }],
+                            };
+                            (State { subfetches: table, subcounts: counts, ..s }, outs)
+                        },
+                    },
+                },
+            },
+        }
+    }
+}
+
 /// The message asks for a sub-fetch: a `FetchStyle` or a `FetchScript`.
 pub open spec fn is_sub_request(m: clazel_ipc::message::spec::Message) -> bool {
     m is FetchStyle || m is FetchScript
@@ -2934,6 +3337,8 @@ pub open spec fn sub_net(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns, s:
             let (fs, actions, ops) = clazel_fetch::transducer::spec::step(fetch.http, fetch.urls, f.fetch, input, subfetch_jar(fetch, s, f), s.now);
             let jar = if cred { apply_net_ops(rules, s.jar, ops) } else { s.jar };
             let (h, out, end) = sub_actions(renderer, serial, f.request, f.script, hop, actions);
+            // Item 7.16: a `Fetch` ends with its own frames.
+            let end = api_finish(fetch, f, fs, actions, end);
             let (table, outs) = sub_finish(s.subfetches, SubFetch { fetch: fs, hop: h, ..f }, out, end);
             (State { subfetches: table, jar, ..s }, outs)
         },
@@ -2965,7 +3370,7 @@ pub open spec fn sweep(s: State, fs: Seq<SubFetch>) -> (Seq<SubFetch>, Seq<Outpu
         if !subfetch_live(s, f) {
             (rest, close + out)
         } else if s.now >= f.started + subfetch_timeout() {
-            (rest, close + seq![Output::ToRenderer { id: f.renderer, bytes: sub_failed_frame(f.script, f.request) }] + out)
+            (rest, close + seq![Output::ToRenderer { id: f.renderer, bytes: failed_frame_of(f) }] + out)
         } else {
             (seq![f] + rest, out)
         }
@@ -2993,7 +3398,11 @@ pub open spec fn decode_renderer_frame(bytes: Seq<u8>) -> Option<clazel_ipc::mes
 /// is committed.
 pub open spec fn accepted_message(r: Renderer, bytes: Seq<u8>) -> Option<clazel_ipc::message::spec::Message> {
     match decode_renderer_frame(bytes) {
-        Some(m) => if (m is Display || m is Title || m is FetchStyle || m is FetchScript || m is Submit || m is UpdateUrl) && !r.committed { None } else { Some(m) },
+        Some(m) => if (m is Display || m is Title || m is FetchStyle || m is FetchScript || m is Submit || m is UpdateUrl || m is Fetch) && !r.committed {
+            None
+        } else {
+            Some(m)
+        },
         None => None,
     }
 }
@@ -3073,6 +3482,21 @@ pub open spec fn handle_message(
         clazel_ipc::message::spec::Message::FetchScript { request, url } => fetch_script(rules, urls, fetch, s, r, request, url),
         // Item 7.16: `pushState` and `replaceState`.
         clazel_ipc::message::spec::Message::UpdateUrl { replace, url } => update_url(urls, s, r, url),
+        // Item 7.16: `fetch()` and XHR.
+        clazel_ipc::message::spec::Message::Fetch { request, method, url, content_type, body, mode, headers } => fetch_api(
+            rules,
+            urls,
+            fetch,
+            s,
+            r,
+            request,
+            method,
+            url,
+            content_type,
+            body,
+            mode,
+            headers,
+        ),
         // A message a renderer may not send: unreachable, see
         // `decode_renderer_frame`.
         _ => (s, seq![]),

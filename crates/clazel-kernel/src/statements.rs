@@ -784,6 +784,18 @@ pub open spec fn viewport_only_to_own_tab_statement(
 /// `Tick` sends only `StyleFailed`, each to the renderer of a sub-fetch that
 /// is live at the tick. (A `FetchStyle`'s refusal goes to its sender:
 /// `theorem_reply_only_to_sender`.)
+/// The frames sub-fetch `f` may be answered with: its failure frame
+/// ([`failed_frame_of`]), or, for a style sheet or script fetch, its kind's
+/// frames of some document, and, for a `Fetch` (item 7.16), an opaque
+/// response or the `Fetch*` frames of some response.
+pub open spec fn sub_answer(f: SubFetch, bytes: Seq<u8>) -> bool {
+    bytes == failed_frame_of(f) || match f.api {
+        None => exists|doc: Document| bytes == #[trigger] sub_frames(f.script, f.request, doc),
+        Some(_) => bytes == fetch_opaque_frames(f.request) || exists|response: clazel_http::message::spec::Response|
+            bytes == #[trigger] fetch_frames(f.request, response),
+    }
+}
+
 pub open spec fn subfetch_only_to_requester_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> bool {
     let out = step(rules, urls, fetch, s, e).1;
     forall|k: int|
@@ -792,14 +804,13 @@ pub open spec fn subfetch_only_to_requester_statement(rules: Seq<clazel_psl::spe
                 Some(f) => {
                     &&& out[k]->ToRenderer_id == renderer
                     &&& subfetch_live(s, f)
-                    &&& (out[k]->ToRenderer_bytes == sub_failed_frame(f.script, f.request) || exists|doc: Document|
-                        out[k]->ToRenderer_bytes == #[trigger] sub_frames(f.script, f.request, doc))
+                    &&& sub_answer(f, out[k]->ToRenderer_bytes)
                 },
                 None => false,
             },
             Event::Tick { time } => exists|j: int|
                 0 <= j < s.subfetches.len() && s.subfetches[j].renderer == out[k]->ToRenderer_id && subfetch_live(tick(s, time).0, s.subfetches[j])
-                    && out[k]->ToRenderer_bytes == sub_failed_frame(s.subfetches[j].script, s.subfetches[j].request),
+                    && out[k]->ToRenderer_bytes == failed_frame_of(s.subfetches[j]),
             _ => true,
         }
 }
@@ -997,6 +1008,106 @@ pub open spec fn url_update_same_origin_statement(rules: Seq<clazel_psl::spec::R
 pub open spec fn address_bar_origin_statement(urls: UrlFns, s: State) -> bool {
     forall|i: int|
         0 <= i < s.renderers.len() ==> lock_of_url(urls, doc_url_of(s.doc_urls, #[trigger] s.renderers[i]), s.renderers[i].id) == Some(s.renderers[i].lock)
+}
+
+// ---------------------------------------------------------------------
+// `fetch()` and XHR (phase-7.md item 7.16).
+// ---------------------------------------------------------------------
+
+/// `theorem_cors_read` (item 7.16): whatever the network shell reports on a
+/// `Fetch`'s connection, every frame the step gives its renderer is
+/// `FetchFailed`, an opaque filtered response (no body), or the frames of
+/// the response the transducer ended with, and then that response is one
+/// the renderer may read ([`api_readable`]): a basic response, or, in mode
+/// "cors", one that passed the CORS check. So a renderer receives the body
+/// of a cross-origin response only if the CORS check passed; a "no-cors"
+/// request never gives it one.
+pub open spec fn cors_read_statement(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns,
+    fetch: FetchFns,
+    s: State,
+    renderer: nat,
+    serial: nat,
+    hop: nat,
+    input: NetInput,
+) -> bool {
+    let out = step(rules, urls, fetch, s, Event::SubNet { renderer, serial, hop, input }).1;
+    match subnet_target(s, renderer, serial) {
+        Some(f) => f.api is Some ==> {
+            let (fs, actions, ops) = clazel_fetch::transducer::spec::step(fetch.http, fetch.urls, f.fetch, input, subfetch_jar(fetch, s, f), s.now);
+            forall|k: int|
+                0 <= k < out.len() && (#[trigger] out[k]) is ToRenderer ==> {
+                    &&& out[k]->ToRenderer_id == renderer
+                    &&& (out[k]->ToRenderer_bytes == fetch_failed_frame(f.request) || out[k]->ToRenderer_bytes == fetch_opaque_frames(f.request) || readable_end(
+                        fetch,
+                        f.lock,
+                        f.api->Some_0,
+                        fs.req.origin_tainted,
+                        f.request,
+                        actions,
+                        out[k]->ToRenderer_bytes,
+                    ))
+                }
+        },
+        None => true,
+    }
+}
+
+/// `bytes` are the frames of the response the fetch ended with (`Done`, the
+/// first ending action), and the renderer may read that response
+/// ([`api_readable`]).
+pub open spec fn readable_end(
+    fetch: FetchFns,
+    lock: clazel_origin::spec::Origin,
+    mode: u64,
+    tainted: bool,
+    request: u64,
+    actions: Seq<NetAction>,
+    bytes: Seq<u8>,
+) -> bool {
+    match end_action(actions) {
+        Some(clazel_fetch::transducer::spec::Action::Done { url, response }) => bytes == fetch_frames(request, response) && api_readable(
+            fetch,
+            lock,
+            mode,
+            tainted,
+            url,
+            response,
+        ),
+        _ => false,
+    }
+}
+
+/// `theorem_forbidden_headers` (item 7.16): for the shipped cookie rules
+/// (`fetch.urls.rules == rules`), every request a sub-fetch sends
+/// (`SubSend`, whatever the event) and every request a navigation sends on a
+/// `Net` event (`Send`) is the wire form
+/// ([`clazel_fetch::transducer::contract::is_wire_request`]) of a request
+/// whose page headers name nothing Fetch forbids (§2.2.2, `Cookie`, `Origin`
+/// and `Host` among them) and nothing the client sets itself
+/// ([`clazel_fetch::request::spec::author_headers_ok`]). The page's headers
+/// are the only lines a renderer chooses (`Origin`, `Cookie`, `Host` and the
+/// rest are the kernel's), so no forbidden header a renderer supplied leaves
+/// the kernel on them. (A navigation's request is sent only when the shell
+/// reports its connection open, a `Net` event; that other events give no
+/// `Send` is not part of this statement.)
+pub open spec fn forbidden_headers_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> bool {
+    let out = step(rules, urls, fetch, s, e).1;
+    fetch.urls.rules == rules ==> forall|k: int|
+        0 <= k < out.len() ==> match #[trigger] out[k] {
+            Output::SubSend { bytes, .. } => header_safe_wire(bytes),
+            Output::Send { bytes, .. } => e is Net ==> header_safe_wire(bytes),
+            _ => true,
+        }
+}
+
+/// `bytes` is the wire form of a request whose page headers are all ones
+/// this client may send.
+pub open spec fn header_safe_wire(bytes: Seq<u8>) -> bool {
+    exists|url: clazel_url::url::spec::Url, req: clazel_fetch::request::spec::Req, cookie: Seq<u8>|
+        #![trigger clazel_fetch::transducer::contract::is_wire_request(url, req, cookie, bytes)]
+        clazel_fetch::transducer::contract::is_wire_request(url, req, cookie, bytes) && clazel_fetch::request::spec::author_headers_ok(req.headers)
 }
 
 // ---------------------------------------------------------------------
