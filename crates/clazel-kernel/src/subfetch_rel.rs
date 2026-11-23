@@ -353,6 +353,26 @@ pub proof fn lemma_sub_actions_outputs(id: nat, serial: nat, request: u64, scrip
     }
 }
 
+/// [`end_action`] does not read a `Send`'s octets (item 7.16).
+pub proof fn lemma_end_action_same_but_sends(a: Seq<NetAction>, b: Seq<NetAction>)
+    requires
+        clazel_fetch::transducer::contract::same_but_sends(a, b),
+    ensures
+        end_action(a) == end_action(b),
+    decreases a.len(),
+{
+    if a.len() > 0 {
+        let (ra, rb) = (a.drop_first(), b.drop_first());
+        assert(clazel_fetch::transducer::contract::same_but_sends(ra, rb)) by {
+            assert forall|k: int| 0 <= k < ra.len() implies (#[trigger] ra[k] is Send && rb[k] is Send) || ra[k] == rb[k] by {
+                assert(ra[k] == a[k + 1] && rb[k] == b[k + 1]);
+            }
+        }
+        lemma_end_action_same_but_sends(ra, rb);
+        assert((a[0] is Send && b[0] is Send) || a[0] == b[0]);
+    }
+}
+
 /// Two action lists that differ only in the octets of their `Send`s give
 /// the same connection, the same end, and outputs that differ only in the
 /// octets of their `SubSend`s (none renderer-bound).
@@ -662,7 +682,7 @@ pub open spec fn sweep_outputs_ok(s: State, fs: Seq<SubFetch>, out: Seq<Output>)
         0 <= k < out.len() ==> match #[trigger] out[k] {
             Output::SubClose { renderer, .. } => exists|j: int| 0 <= j < fs.len() && fs[j].renderer == renderer,
             Output::ToRenderer { id, bytes } => exists|j: int|
-                0 <= j < fs.len() && fs[j].renderer == id && subfetch_live(s, fs[j]) && bytes == sub_failed_frame(fs[j].script, fs[j].request),
+                0 <= j < fs.len() && fs[j].renderer == id && subfetch_live(s, fs[j]) && bytes == failed_frame_of(fs[j]),
             _ => false,
         }
 }
@@ -680,11 +700,11 @@ pub proof fn lemma_sweep_shape(s: State, fs: Seq<SubFetch>)
         let (rest, o) = sweep(s, t);
         let out = sweep(s, fs).1;
         let close = if f.hop > 0 { seq![Output::SubClose { renderer: f.renderer, serial: f.serial, hop: f.hop }] } else { Seq::<Output>::empty() };
-        let failed = seq![Output::ToRenderer { id: f.renderer, bytes: sub_failed_frame(f.script, f.request) }];
+        let failed = seq![Output::ToRenderer { id: f.renderer, bytes: failed_frame_of(f) }];
         assert forall|k: int| 0 <= k < out.len() implies match #[trigger] out[k] {
             Output::SubClose { renderer, .. } => exists|j: int| 0 <= j < fs.len() && fs[j].renderer == renderer,
             Output::ToRenderer { id, bytes } => exists|j: int|
-                0 <= j < fs.len() && fs[j].renderer == id && subfetch_live(s, fs[j]) && bytes == sub_failed_frame(fs[j].script, fs[j].request),
+                0 <= j < fs.len() && fs[j].renderer == id && subfetch_live(s, fs[j]) && bytes == failed_frame_of(fs[j]),
             _ => false,
         } by {
             let pre = if !subfetch_live(s, f) {
@@ -706,7 +726,7 @@ pub proof fn lemma_sweep_shape(s: State, fs: Seq<SubFetch>)
                         assert(fs[j + 1] == t[j]);
                     },
                     Output::ToRenderer { id, bytes } => {
-                        let j = choose|j: int| 0 <= j < t.len() && t[j].renderer == id && subfetch_live(s, t[j]) && bytes == sub_failed_frame(t[j].script, t[j].request);
+                        let j = choose|j: int| 0 <= j < t.len() && t[j].renderer == id && subfetch_live(s, t[j]) && bytes == failed_frame_of(t[j]);
                         assert(fs[j + 1] == t[j]);
                     },
                     _ => {},
@@ -744,13 +764,14 @@ pub open spec fn sub_net_after(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchF
     let cred = credentialed(fetch, f.lock, f.fetch.url);
     let (fs, actions, ops) = clazel_fetch::transducer::spec::step(fetch.http, fetch.urls, f.fetch, input, subfetch_jar(fetch, s, f), s.now);
     let (h, out, end) = sub_actions(renderer, serial, f.request, f.script, hop, actions);
+    let end = api_finish(fetch, f, fs, actions, end);
     (sub_finish(s.subfetches, SubFetch { fetch: fs, hop: h, ..f }, out, end).0, if cred { apply_net_ops(rules, s.jar, ops) } else { s.jar })
 }
 
 /// A `SubNet` of a renderer of `d`: related states, and the same
 /// renderer-bound outputs in both runs.
 #[verifier::spinoff_prover]
-#[verifier::rlimit(60)]
+#[verifier::rlimit(150)]
 pub proof fn lemma_d_subnet(
     rules: Seq<clazel_psl::spec::Rule>,
     urls: UrlFns,
@@ -812,7 +833,11 @@ pub proof fn lemma_d_subnet(
                 lemma_renderer_outs_sub(outa, renderer, serial, f.request, f.script, hop, aa);
                 lemma_renderer_outs_sub(outb, renderer, serial, f.request, f.script, hop, ab);
                 let g = SubFetch { fetch: fsa, hop: ha, ..f };
-                if let Some(frames) = enda {
+                // Item 7.16: a `Fetch`'s answer reads the ending action only.
+                lemma_end_action_same_but_sends(aa, ab);
+                assert(fsa == fsb);
+                assert(api_finish(fetch, f, fsa, aa, enda) == api_finish(fetch, f, fsb, ab, endb));
+                if let Some(frames) = api_finish(fetch, f, fsa, aa, enda) {
                     crate::net_rel::lemma_renderer_outs_concat(outa, seq![Output::ToRenderer { id: renderer, bytes: frames }]);
                     crate::net_rel::lemma_renderer_outs_concat(outb, seq![Output::ToRenderer { id: renderer, bytes: frames }]);
                     lemma_drop_domain(rules, s1.subfetches, g, d);
@@ -1053,6 +1078,7 @@ pub proof fn lemma_fetch_sub_domain(
                     started: s1.now,
                     partition: crate::domain::domain_of_renderer(rules, r),
                     ended: false,
+                    api: None,
                 };
                 lemma_push_domain(rules, s1.subfetches, f, d);
                 lemma_push_domain(rules, s2.subfetches, f, d);
@@ -1091,6 +1117,7 @@ pub proof fn lemma_fetch_sub_other(rules: Seq<clazel_psl::spec::Rule>, urls: Url
                     started: s.now,
                     partition: crate::domain::domain_of_renderer(rules, r),
                     ended: false,
+                    api: None,
                 };
                 lemma_push_domain(rules, s.subfetches, f, d);
             }
@@ -1177,7 +1204,7 @@ pub open spec fn d_failures(rules: Seq<clazel_psl::spec::Rule>, s: State, fs: Se
     } else {
         let f = fs[0];
         (if crate::domain::domain_of_lock(rules, f.lock) == d && subfetch_live(s, f) && s.now >= f.started + subfetch_timeout() {
-            seq![Output::ToRenderer { id: f.renderer, bytes: sub_failed_frame(f.script, f.request) }]
+            seq![Output::ToRenderer { id: f.renderer, bytes: failed_frame_of(f) }]
         } else {
             seq![]
         }) + d_failures(rules, s, fs.drop_first(), d)
@@ -1245,7 +1272,7 @@ pub proof fn lemma_sweep_outputs_for(rules: Seq<clazel_psl::spec::Rule>, urls: U
         lemma_sweep_outputs_for(rules, urls, d, s, sb, t, rest);
         let o = sweep(t, rest).1;
         let close = if f.hop > 0 { seq![Output::SubClose { renderer: f.renderer, serial: f.serial, hop: f.hop }] } else { Seq::<Output>::empty() };
-        let failed = seq![Output::ToRenderer { id: f.renderer, bytes: sub_failed_frame(f.script, f.request) }];
+        let failed = seq![Output::ToRenderer { id: f.renderer, bytes: failed_frame_of(f) }];
         let pre = if !subfetch_live(t, f) {
             close
         } else if t.now >= f.started + subfetch_timeout() {

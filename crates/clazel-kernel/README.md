@@ -222,6 +222,58 @@ theorem is re-proven with the new table in its relation.
 - The table keeps the entry of a renderer that was replaced, killed or
   exited (never read again: ids are not reused).
 
+## `fetch()` and XHR (phase-7.md item 7.16)
+
+A committed renderer's `Fetch { request, method, url, content_type, body,
+mode, headers }` (tag 20) runs as a sub-fetch with `api` set to its mode:
+the same limits, tables, `Sub*` connections, timeout and credentials rule
+as a style sheet (cookies only on hops of the lock's origin: credentials
+mode "same-origin"). It is answered with `FetchResponse { status, content
+type }`, `FetchBody` frames and `FetchEnd`, or `FetchFailed`.
+
+### Decisions (taken here, from the plan's goals; each is also in `src/spec.rs`)
+
+1. **The request** is `GET` without a body or `POST` with one; the page's
+   headers in pairs, without those Fetch §2.2.2 forbids or the client sets
+   itself (`Accept`, `User-Agent`, `Content-Type`); the lock as its origin;
+   `Origin` on every request in mode "cors". `clazel-fetch`'s `req_ok`
+   refuses any request that still carries such a header, so the rule holds
+   of every request on the wire, not only of the kernel's filter.
+2. **No CORS preflight.** A request to another origin is refused in mode
+   "same-origin", and in the other modes when it would need a preflight (a
+   page header, or a body type that is not safelisted). A redirect away
+   from the origin drops the page's headers.
+3. **The answer**: a basic response (final URL of the lock's origin, no
+   cross-origin hop) or, in mode "cors", one that passed the CORS check
+   (`*` or the byte-serialized request origin, `null` after a cross-origin
+   hop) is read; in mode "no-cors" anything else is an opaque response
+   (status 0, no body); otherwise `FetchFailed`.
+
+### Theorems
+
+`theorem_cors_read`: every frame a `SubNet` of a `Fetch` gives its renderer
+is `FetchFailed`, an opaque response, or the frames of the response the
+fetch ended with, which is basic or passed the CORS check in mode "cors".
+`theorem_forbidden_headers`: every `SubSend` (and every `Send` of a `Net`
+event) is the wire form of a request whose page headers name nothing Fetch
+forbids or the client sets. `theorem_subfetch_only_to_requester` is restated
+over the `Fetch*` frames; the noninterference and every other theorem are
+re-proven with `Fetch` in the renderer's messages.
+
+### Not done
+
+- Methods other than `GET` and `POST`, and every request that needs a CORS
+  preflight, are refused (no preflight is sent).
+- Credentials mode "include" is not offered.
+- The renderer learns a readable response's status, `Content-Type` and
+  body only: not its other headers, final URL or type.
+- A same-origin `POST` with a non-safelisted type that its server
+  redirects (307, 308) to another origin keeps its body and type there.
+- Fetch's method-override rule (§2.2.2 step 3) is over-approximated: the
+  three names are dropped whatever their value.
+- `FetchScript`'s cross-origin responses are still handed over whole
+  (opaque-response blocking is not built).
+
 ## The GPU crash policy (phase-5.md item 5.17c)
 
 What `GpuReady { software }`, `GpuRefused` and a GPU process's exit mean, as

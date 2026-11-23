@@ -122,6 +122,10 @@ proof fn lemma_from_renderer_no_surface(rules: Seq<clazel_psl::spec::Rule>, urls
                 clazel_ipc::message::spec::Message::FetchStyle { .. } | clazel_ipc::message::spec::Message::FetchScript { .. } => {
                     crate::subfetch_rel::lemma_fetch_sub_shape(rules, urls, fetch, s, r, m is FetchScript, sub_request_id(m), sub_request_url(m));
                 },
+                // Item 7.16.
+                clazel_ipc::message::spec::Message::Fetch { .. } => {
+                    crate::api_rel::lemma_api_msg_shape(rules, urls, fetch, s, r, m);
+                },
                 _ => {},
             },
         }

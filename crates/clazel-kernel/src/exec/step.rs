@@ -1233,7 +1233,15 @@ pub fn submit_request_exec(r: &RendererRecord, method: &[u8], content_type: Vec<
 {
     if clazel_fetch::request::build::is_get(method) {
         if content_type.is_empty() && body.is_empty() {
-            let q = clazel_fetch::request::build::ReqBuf { method: vstd::slice::slice_to_vec(method), body: None, initiator: Some(clone_origin(&r.lock)), origin_tainted: false };
+            let q = clazel_fetch::request::build::ReqBuf {
+                method: vstd::slice::slice_to_vec(method),
+                body: None,
+                initiator: Some(clone_origin(&r.lock)),
+                origin_tainted: false,
+                headers: Vec::new(),
+                cors: false,
+            };
+            assert(clazel_http::field::types::lines_view(q.headers@) =~= Seq::<clazel_http::field::spec::FieldLine>::empty());
             Some(q)
         } else {
             None
@@ -1245,7 +1253,10 @@ pub fn submit_request_exec(r: &RendererRecord, method: &[u8], content_type: Vec<
                 body: Some(clazel_fetch::request::build::PayloadBuf { content_type, bytes: body }),
                 initiator: Some(clone_origin(&r.lock)),
                 origin_tainted: false,
+                headers: Vec::new(),
+                cors: false,
             };
+            assert(clazel_http::field::types::lines_view(q.headers@) =~= Seq::<clazel_http::field::spec::FieldLine>::empty());
             Some(q)
         } else {
             None
@@ -1524,14 +1535,55 @@ pub open spec fn state_ok<F: FetchFnsExec>(urls: UrlFns, s: StateRecord) -> bool
     &&& s.exec_wf::<F>()
 }
 
+/// A `Fetch` reads the renderer's id, lock, tab and committed URL only.
+#[verifier::spinoff_prover]
+proof fn lemma_fetch_api_idle(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns,
+    fetch: FetchFns,
+    s: State,
+    r: Renderer,
+    request: u64,
+    method: Seq<u8>,
+    url: Seq<u8>,
+    content_type: Seq<u8>,
+    body: Seq<u8>,
+    mode: u64,
+    headers: Seq<Seq<u8>>,
+)
+    ensures
+        fetch_api(rules, urls, fetch, s, Renderer { pending: None, ..r }, request, method, url, content_type, body, mode, headers) == fetch_api(
+            rules,
+            urls,
+            fetch,
+            s,
+            r,
+            request,
+            method,
+            url,
+            content_type,
+            body,
+            mode,
+            headers,
+        ),
+{
+    let r0 = Renderer { pending: None, ..r };
+    assert(crate::domain::domain_of_renderer(rules, r0) == crate::domain::domain_of_renderer(rules, r));
+    assert(api_request(r0, method, content_type, body, mode, headers) == api_request(r, method, content_type, body, mode, headers));
+}
+
 /// A message is handled by a renderer's fields, not by its navigation (which
 /// only `Navigate` starts, through its tab).
+#[verifier::spinoff_prover]
 proof fn lemma_handle_message_idle(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, r: Renderer, m: clazel_ipc::message::spec::Message)
     ensures
         handle_message(rules, urls, fetch, s, Renderer { pending: None, ..r }, m) == handle_message(rules, urls, fetch, s, r, m),
 {
     // Item 7.16: the document URL is read by id, lock and committed URL.
     crate::url_rel::lemma_doc_url_of_fields(s.doc_urls, Renderer { pending: None, ..r }, r);
+    if let clazel_ipc::message::spec::Message::Fetch { request, method, url, content_type, body, mode, headers } = m {
+        lemma_fetch_api_idle(rules, urls, fetch, s, r, request, method, url, content_type, body, mode, headers);
+    }
 }
 
 /// [`handle_message`]: a message that decoded, from the renderer at index `i`.
@@ -1663,6 +1715,11 @@ pub fn handle_message_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, 
         },
         Msg::FetchStyle { request, url } => super::subfetch::fetch_sub_exec(urls, fetch, s, &r, false, request, url.as_slice()),
         Msg::FetchScript { request, url } => super::subfetch::fetch_sub_exec(urls, fetch, s, &r, true, request, url.as_slice()),
+        // Item 7.16: `fetch_api`.
+        Msg::Fetch { request, method, url, content_type, body, mode, headers } => {
+            let f = Msg::Fetch { request, method, url, content_type, body, mode, headers };
+            super::api::fetch_api_exec(urls, fetch, s, &r, f)
+        },
         // Item 7.16: `update_url`.
         Msg::UpdateUrl { replace: _, url } => update_url_exec(urls, s, &r, url.as_slice()),
         Msg::Title { title } => {
@@ -1777,7 +1834,7 @@ pub fn from_renderer_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s
                         Some(r) => r.committed,
                         None => false,
                     };
-                    let display = matches!(m, Msg::Display { .. } | Msg::Title { .. } | Msg::FetchStyle { .. } | Msg::FetchScript { .. } | Msg::Submit { .. } | Msg::UpdateUrl { .. });
+                    let display = matches!(m, Msg::Display { .. } | Msg::Title { .. } | Msg::FetchStyle { .. } | Msg::FetchScript { .. } | Msg::Submit { .. } | Msg::UpdateUrl { .. } | Msg::Fetch { .. });
                     if clazel_ipc::message::codec::is_from_renderer(&m) && (committed || !display) {
                         handle_message_exec(urls, fetch, s, i, m)
                     } else {

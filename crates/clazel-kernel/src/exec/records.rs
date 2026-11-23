@@ -448,6 +448,8 @@ pub struct SubFetchRecord {
     pub partition: DomainRecord,
     /// Whether its document has been replaced.
     pub ended: bool,
+    /// The mode of a `Fetch` (item 7.16), or none.
+    pub api: Option<u64>,
 }
 
 impl View for SubFetchRecord {
@@ -466,6 +468,7 @@ impl View for SubFetchRecord {
             started: self.started as int,
             partition: self.partition@,
             ended: self.ended,
+            api: self.api,
         }
     }
 }

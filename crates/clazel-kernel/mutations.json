@@ -629,7 +629,7 @@
     {
       "id": "display-before-commit",
       "file": "src/spec.rs",
-      "find": "Some(m) => if (m is Display || m is Title || m is FetchStyle || m is FetchScript || m is Submit || m is UpdateUrl) && !r.committed { None } else { Some(m) },",
+      "find": "Some(m) => if (m is Display || m is Title || m is FetchStyle || m is FetchScript || m is Submit || m is UpdateUrl || m is Fetch) && !r.committed {\n            None\n        } else {\n            Some(m)\n        },",
       "replace": "Some(m) => Some(m),",
       "expect": "killed",
       "module": "mutation_lemmas",
@@ -856,8 +856,8 @@
     {
       "id": "subfetch-at-once-unlimited",
       "file": "src/spec.rs",
-      "find": "live_subfetches(s.subfetches, r.id, r.lock) >= max_subfetches_at_once() || ",
-      "replace": "",
+      "find": "    let refused = (s, reply_failed(r, script, request));\n    if live_subfetches(s.subfetches, r.id, r.lock) >= max_subfetches_at_once() || in_document >= max_subfetches_per_document() || serial\n        >= max_subfetch_serial() {",
+      "replace": "    let refused = (s, reply_failed(r, script, request));\n    if in_document >= max_subfetches_per_document() || serial\n        >= max_subfetch_serial() {",
       "expect": "killed",
       "module": "mutation_lemmas",
       "reason": "A renderer with max_subfetches_at_once sub-fetches in flight may start another: ml_fetch_style_refused (what theorem_subfetch_limits rests on) is false.",
@@ -870,8 +870,8 @@
     {
       "id": "subfetch-per-document-unlimited",
       "file": "src/spec.rs",
-      "find": "in_document >= max_subfetches_per_document() || ",
-      "replace": "",
+      "find": "    let refused = (s, reply_failed(r, script, request));\n    if live_subfetches(s.subfetches, r.id, r.lock) >= max_subfetches_at_once() || in_document >= max_subfetches_per_document() || serial\n        >= max_subfetch_serial() {",
+      "replace": "    let refused = (s, reply_failed(r, script, request));\n    if live_subfetches(s.subfetches, r.id, r.lock) >= max_subfetches_at_once() || serial\n        >= max_subfetch_serial() {",
       "expect": "killed",
       "module": "mutation_lemmas",
       "reason": "A document that has started max_subfetches_per_document sub-fetches may start another: ml_fetch_style_refused (what theorem_subfetch_limits rests on) is false.",
@@ -884,8 +884,8 @@
     {
       "id": "subfetch-serial-unbounded",
       "file": "src/spec.rs",
-      "find": " || serial\n        >= max_subfetch_serial()",
-      "replace": "",
+      "find": "    let refused = (s, reply_failed(r, script, request));\n    if live_subfetches(s.subfetches, r.id, r.lock) >= max_subfetches_at_once() || in_document >= max_subfetches_per_document() || serial\n        >= max_subfetch_serial() {",
+      "replace": "    let refused = (s, reply_failed(r, script, request));\n    if live_subfetches(s.subfetches, r.id, r.lock) >= max_subfetches_at_once() || in_document >= max_subfetches_per_document() {",
       "expect": "killed",
       "module": "mutation_lemmas",
       "reason": "A renderer whose serial counter is at its bound may start another sub-fetch, whose serial the exec kernel cannot represent: ml_fetch_style_refused is false.",
@@ -1178,8 +1178,8 @@
     {
       "id": "update-url-before-commit",
       "file": "src/spec.rs",
-      "find": "|| m is Submit || m is UpdateUrl) && !r.committed",
-      "replace": "|| m is Submit) && !r.committed",
+      "find": "|| m is Submit || m is UpdateUrl || m is Fetch) && !r.committed",
+      "replace": "|| m is Submit || m is Fetch) && !r.committed",
       "expect": "killed",
       "module": "mutation_lemmas",
       "reason": "A renderer that has committed nothing may send UpdateUrl. ml_uncommitted_update_url, the case theorem_url_update_same_origin's committed sender rests on, is false.",
@@ -1188,6 +1188,124 @@
         "lemma": "ml_uncommitted_update_url(Renderer { committed: false, ..ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)) }, seq![0x00u8, 0x00, 0x00, 0x04, 0x83, 0x11, 0xF4, 0x60])",
         "witness": "decode_renderer_frame(seq![0x00u8, 0x00, 0x00, 0x04, 0x83, 0x11, 0xF4, 0x60]) == Some(clazel_ipc::message::spec::Message::UpdateUrl { replace: false, url: Seq::<u8>::empty() }) && accepted_message(Renderer { committed: false, ..ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)) }, seq![0x00u8, 0x00, 0x00, 0x04, 0x83, 0x11, 0xF4, 0x60]) is Some",
         "reveal": []
+      }
+    },
+    {
+      "id": "cors-check-no-header",
+      "file": "src/spec.rs",
+      "module": "mutation_lemmas",
+      "find": "        // 2.\n        None => false,",
+      "replace": "        // 2.\n        None => true,",
+      "expect": "killed",
+      "reason": "A response without Access-Control-Allow-Origin passes the CORS check: a cross-origin body reaches the renderer. ml_cors_no_header (what theorem_cors_read rests on) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_cors_no_header(seq![0x62u8])",
+        "witness": "cors_check(ml_response(seq![0x62u8]), seq![0x62u8])"
+      }
+    },
+    {
+      "id": "cors-check-any-origin",
+      "file": "src/spec.rs",
+      "module": "mutation_lemmas",
+      "find": "        Some(v) => v == lit_star() || v == origin,",
+      "replace": "        Some(v) => true,",
+      "expect": "killed",
+      "reason": "Any Access-Control-Allow-Origin passes the CORS check, even another origin's. ml_cors_mismatch is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_cors_mismatch()",
+        "witness": "cors_check(ml_acao_response(seq![0x61u8]), seq![0x62u8])"
+      }
+    },
+    {
+      "id": "readable-ignores-mode",
+      "file": "src/spec.rs",
+      "module": "mutation_lemmas",
+      "find": "|| (mode == mode_cors() && cors_check(response, request_origin(lock, tainted)))",
+      "replace": "|| (cors_check(response, request_origin(lock, tainted)))",
+      "expect": "killed",
+      "reason": "A \"no-cors\" request reads a cross-origin body that the server allowed for CORS: no-cors must give an opaque response. ml_no_cors_not_readable is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_no_cors_not_readable(clazel_origin::spec::Origin::Opaque(0nat), clazel_fetch::transducer::examples::url_a(None), ml_acao_response(seq![0x2Au8]))",
+        "witness": "(ml_fetch_cross().urls.origin)(clazel_fetch::transducer::examples::url_a(None)) != clazel_origin::spec::Origin::Opaque(0nat) && api_readable(ml_fetch_cross(), clazel_origin::spec::Origin::Opaque(0nat), mode_no_cors(), false, clazel_fetch::transducer::examples::url_a(None), ml_acao_response(seq![0x2Au8]))"
+      }
+    },
+    {
+      "id": "readable-ignores-taint",
+      "file": "src/spec.rs",
+      "module": "mutation_lemmas",
+      "find": "((fetch.urls.origin)(url) == lock && !tainted)",
+      "replace": "((fetch.urls.origin)(url) == lock)",
+      "expect": "killed",
+      "reason": "A response that came back to the origin through a cross-origin redirect counts as basic (Fetch taints it). ml_tainted_not_basic is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_tainted_not_basic(clazel_fetch::transducer::examples::url_a(None), ml_response(seq![0x62u8]))",
+        "witness": "api_readable(ml_fetch_cross(), clazel_origin::spec::Origin::Opaque(9nat), mode_same_origin(), true, clazel_fetch::transducer::examples::url_a(None), ml_response(seq![0x62u8]))"
+      }
+    },
+    {
+      "id": "no-cors-gives-body",
+      "file": "src/spec.rs",
+      "module": "mutation_lemmas",
+      "find": "        } else if mode == mode_no_cors() {\n            fetch_opaque_frames(request)",
+      "replace": "        } else if mode == mode_no_cors() {\n            fetch_frames(request, response)",
+      "expect": "killed",
+      "reason": "A cross-origin \"no-cors\" response is handed over whole instead of opaque: the renderer reads another site's body. ml_no_cors_opaque is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_no_cors_opaque(clazel_fetch::transducer::examples::url_a(None), ml_response(seq![0x62u8]))",
+        "witness": "api_end(ml_fetch_cross(), clazel_origin::spec::Origin::Opaque(0nat), 1, mode_no_cors(), false, seq![clazel_fetch::transducer::spec::Action::Done { url: clazel_fetch::transducer::examples::url_a(None), response: ml_response(seq![0x62u8]) }]) != fetch_opaque_frames(1)"
+      }
+    },
+    {
+      "id": "fetch-before-commit",
+      "file": "src/spec.rs",
+      "module": "mutation_lemmas",
+      "find": "|| m is UpdateUrl || m is Fetch) && !r.committed",
+      "replace": "|| m is UpdateUrl) && !r.committed",
+      "expect": "killed",
+      "reason": "A renderer that has committed nothing may send Fetch. ml_uncommitted_fetch is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_uncommitted_fetch(Renderer { committed: false, ..ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)) }, seq![0x00u8, 0x00, 0x00, 0x0E, 0x88, 0x14, 0x01, 0x63, 0x47, 0x45, 0x54, 0x62, 0x2F, 0x61, 0x40, 0x40, 0x01, 0x80])",
+        "witness": "decode_renderer_frame(seq![0x00u8, 0x00, 0x00, 0x0E, 0x88, 0x14, 0x01, 0x63, 0x47, 0x45, 0x54, 0x62, 0x2F, 0x61, 0x40, 0x40, 0x01, 0x80]) is Some && decode_renderer_frame(seq![0x00u8, 0x00, 0x00, 0x0E, 0x88, 0x14, 0x01, 0x63, 0x47, 0x45, 0x54, 0x62, 0x2F, 0x61, 0x40, 0x40, 0x01, 0x80])->Some_0 is Fetch && accepted_message(Renderer { committed: false, ..ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)) }, seq![0x00u8, 0x00, 0x00, 0x0E, 0x88, 0x14, 0x01, 0x63, 0x47, 0x45, 0x54, 0x62, 0x2F, 0x61, 0x40, 0x40, 0x01, 0x80]) is Some"
+      }
+    },
+    {
+      "id": "api-keeps-forbidden-headers",
+      "file": "src/spec.rs",
+      "module": "mutation_lemmas",
+      "find": "headers: clazel_fetch::request::spec::filter_author_headers(lines),",
+      "replace": "headers: lines,",
+      "expect": "killed",
+      "reason": "The kernel passes the page's Cookie header on to the request it builds. ml_api_request_drops_cookie is false (and the request would not be built at all).",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_api_request_drops_cookie()",
+        "witness": "api_request(ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), clazel_fetch::request::spec::lit_get(), seq![], seq![], mode_cors(), seq![seq![0x43u8, 0x6F, 0x6F, 0x6B, 0x69, 0x65], seq![0x61u8]]) is Some && api_request(ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), clazel_fetch::request::spec::lit_get(), seq![], seq![], mode_cors(), seq![seq![0x43u8, 0x6F, 0x6F, 0x6B, 0x69, 0x65], seq![0x61u8]])->Some_0.headers.len() == 1",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "same-origin-mode-crosses",
+      "file": "src/spec.rs",
+      "module": "mutation_lemmas",
+      "find": "(mode == mode_same_origin() || !needs_no_preflight(req))",
+      "replace": "(!needs_no_preflight(req))",
+      "expect": "killed",
+      "reason": "A \"same-origin\" Fetch of another origin starts (Fetch §4.1 step 12 makes it a network error). ml_same_origin_refused is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_same_origin_refused()",
+        "witness": "fetch_api(Seq::<clazel_psl::spec::Rule>::empty(), ml_urls_resolving(), crate::counterexamples::ce_fetch(), ml_state_one(), ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), 1, clazel_fetch::request::spec::lit_get(), seq![0x61u8], seq![], seq![], mode_same_origin(), seq![]).0.subfetches.len() == 1",
+        "reveal": [
+          "Seq::filter"
+        ]
       }
     }
   ]

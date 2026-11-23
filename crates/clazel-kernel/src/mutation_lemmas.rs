@@ -617,6 +617,7 @@ pub open spec fn ml_subfetch(renderer: nat, lock: clazel_origin::spec::Origin, e
         started: 0,
         partition: crate::domain::Domain::Opaque(0),
         ended,
+        api: None,
     }
 }
 
@@ -1017,6 +1018,148 @@ pub proof fn ml_commit_forgets_doc_url(urls: UrlFns, s: State, tab: nat, url: Se
     ensures
         navigate_tab(urls, s, tab, url, doc).0.doc_urls == forget_doc_url(s.doc_urls, s.renderers[i].id, lock),
 {
+}
+
+// ---------------------------------------------------------------------
+// Item 7.16: `fetch()` and XHR.
+// ---------------------------------------------------------------------
+
+/// A response whose only field is `Access-Control-Allow-Origin: v`.
+pub open spec fn ml_acao_response(v: Seq<u8>) -> clazel_http::message::spec::Response {
+    clazel_http::message::spec::Response {
+        fields: seq![clazel_http::message::spec::FieldLine { name: lit_acao(), value: v }],
+        ..ml_response(seq![0x62u8])
+    }
+}
+
+/// The CORS check fails without `Access-Control-Allow-Origin` (Fetch §4.9
+/// step 2).
+pub proof fn ml_cors_no_header(origin: Seq<u8>)
+    ensures
+        !cors_check(ml_response(seq![0x62u8]), origin),
+{
+}
+
+/// The CORS check fails when `Access-Control-Allow-Origin` is neither `*`
+/// nor the request's origin (step 4).
+pub proof fn ml_cors_mismatch()
+    ensures
+        !cors_check(ml_acao_response(seq![0x61u8]), seq![0x62u8]),
+{
+    assert(!cors_check(ml_acao_response(seq![0x61u8]), seq![0x62u8])) by (compute_only);
+}
+
+/// A response the CORS check would pass is still not readable in mode
+/// "no-cors" when it is cross-origin: what `theorem_cors_read` rests on.
+pub proof fn ml_no_cors_not_readable(lock: clazel_origin::spec::Origin, url: clazel_url::url::spec::Url, response: clazel_http::message::spec::Response)
+    requires
+        (crate::mutation_lemmas::ml_fetch_cross().urls.origin)(url) != lock,
+    ensures
+        !api_readable(ml_fetch_cross(), lock, mode_no_cors(), false, url, response),
+{
+}
+
+/// A response after a cross-origin redirect is not a basic response, even
+/// at the lock's origin: in mode "same-origin" it is not readable.
+pub proof fn ml_tainted_not_basic(url: clazel_url::url::spec::Url, response: clazel_http::message::spec::Response)
+    ensures
+        !api_readable(ml_fetch_cross(), clazel_origin::spec::Origin::Opaque(9nat), mode_same_origin(), true, url, response),
+{
+}
+
+/// A "no-cors" `Fetch` that ends cross-origin gives an opaque response:
+/// the renderer never gets its body.
+pub proof fn ml_no_cors_opaque(url: clazel_url::url::spec::Url, response: clazel_http::message::spec::Response)
+    ensures
+        api_end(ml_fetch_cross(), clazel_origin::spec::Origin::Opaque(0nat), 1, mode_no_cors(), false, seq![clazel_fetch::transducer::spec::Action::Done { url, response }])
+            == fetch_opaque_frames(1),
+{
+    reveal_with_fuel(end_action, 2);
+}
+
+/// A renderer that is not committed may not send `Fetch`.
+pub proof fn ml_uncommitted_fetch(r: Renderer, bytes: Seq<u8>)
+    requires
+        !r.committed,
+        decode_renderer_frame(bytes) matches Some(m) && m is Fetch,
+    ensures
+        accepted_message(r, bytes) is None,
+{
+}
+
+/// The kernel drops a page's `Cookie` header from the request it builds.
+pub proof fn ml_api_request_drops_cookie()
+    ensures
+        api_request(
+            ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)),
+            clazel_fetch::request::spec::lit_get(),
+            seq![],
+            seq![],
+            mode_cors(),
+            seq![seq![0x43u8, 0x6F, 0x6F, 0x6B, 0x69, 0x65], seq![0x61u8]],
+        ) is Some,
+        api_request(
+            ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)),
+            clazel_fetch::request::spec::lit_get(),
+            seq![],
+            seq![],
+            mode_cors(),
+            seq![seq![0x43u8, 0x6F, 0x6F, 0x6B, 0x69, 0x65], seq![0x61u8]],
+        )->Some_0.headers.len() == 0,
+{
+    reveal(Seq::filter);
+    assert(api_request(
+        ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)),
+        clazel_fetch::request::spec::lit_get(),
+        seq![],
+        seq![],
+        mode_cors(),
+        seq![seq![0x43u8, 0x6F, 0x6F, 0x6B, 0x69, 0x65], seq![0x61u8]],
+    ) is Some) by (compute_only);
+    assert(api_request(
+        ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)),
+        clazel_fetch::request::spec::lit_get(),
+        seq![],
+        seq![],
+        mode_cors(),
+        seq![seq![0x43u8, 0x6F, 0x6F, 0x6B, 0x69, 0x65], seq![0x61u8]],
+    )->Some_0.headers.len() == 0) by (compute_only);
+}
+
+/// A "same-origin" `Fetch` of a URL of another origin is refused: nothing
+/// starts.
+pub proof fn ml_same_origin_refused()
+    ensures
+        fetch_api(
+            Seq::<clazel_psl::spec::Rule>::empty(),
+            ml_urls_resolving(),
+            crate::counterexamples::ce_fetch(),
+            ml_state_one(),
+            ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)),
+            1,
+            clazel_fetch::request::spec::lit_get(),
+            seq![0x61u8],
+            seq![],
+            seq![],
+            mode_same_origin(),
+            seq![],
+        ).0.subfetches.len() == 0,
+{
+    reveal(Seq::filter);
+    assert(fetch_api(
+        Seq::<clazel_psl::spec::Rule>::empty(),
+        ml_urls_resolving(),
+        crate::counterexamples::ce_fetch(),
+        ml_state_one(),
+        ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)),
+        1,
+        clazel_fetch::request::spec::lit_get(),
+        seq![0x61u8],
+        seq![],
+        seq![],
+        mode_same_origin(),
+        seq![],
+    ).0.subfetches.len() == 0) by (compute_only);
 }
 
 } // verus!

@@ -23,6 +23,8 @@
 //!   implementation and `step_real`, the function the host shell calls;
 //!   [`real_theorems`] states the isolation theorems for them.
 
+pub mod api_rel;
+pub mod api_theorems;
 pub mod body_theorems;
 pub mod commit_theorems;
 pub mod contract;

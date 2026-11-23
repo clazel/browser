@@ -69,6 +69,9 @@ pub proof fn lemma_local_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
         if is_sub_request(m) {
             crate::subfetch_rel::lemma_fetch_sub_shape(rules, urls, fetch, s, r, m is FetchScript, sub_request_id(m), sub_request_url(m));
         }
+        if m is Fetch {
+            crate::api_rel::lemma_api_msg_shape(rules, urls, fetch, s, r, m);
+        }
     } else {
         crate::net_theorems::lemma_closes_of_tab(s.conns, r.tab);
         let closes = closes_of_tab(s.conns, r.tab);
@@ -270,6 +273,11 @@ pub proof fn lemma_local_respect_renderer(rules: Seq<clazel_psl::spec::Rule>, ur
             if is_sub_request(m2) {
                 crate::subfetch_rel::lemma_fetch_sub_shape(rules, urls, fetch, s1, r, m2 is FetchScript, sub_request_id(m2), sub_request_url(m2));
                 crate::subfetch_rel::lemma_fetch_sub_other(rules, urls, fetch, d, s1, r, m2 is FetchScript, sub_request_id(m2), sub_request_url(m2));
+            }
+            // Item 7.16: a `Fetch` likewise.
+            if m2 is Fetch {
+                crate::api_rel::lemma_api_msg_shape(rules, urls, fetch, s1, r, m2);
+                crate::api_rel::lemma_api_msg_other(rules, urls, fetch, d, s1, r, m2);
             }
         }
         crate::unwinding_d::lemma_rel_same_table(rules, urls, d, s1, s2, s1b, s2);

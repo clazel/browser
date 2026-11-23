@@ -383,6 +383,46 @@ pub proof fn lemma_d_fetch_sub(
     lemma_rel_same_table(rules, urls, d, s1, s2, s1b, s2b);
 }
 
+/// Item 7.16: a `Fetch` of a renderer of `d`, as [`lemma_d_fetch_sub`].
+#[verifier::spinoff_prover]
+pub proof fn lemma_d_fetch_api(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns,
+    fetch: FetchFns,
+    d: crate::domain::Domain,
+    s1: State,
+    s2: State,
+    id: nat,
+    bytes: Seq<u8>,
+    m: clazel_ipc::message::spec::Message,
+)
+    requires
+        crate::noninterference::rel(rules, urls, d, s1, s2),
+        crate::domain::event_domain(rules, s1, Event::FromRenderer { id, bytes }) == Some(d),
+        accepted_message(s1.renderers[find_by_id(s1.renderers, id, 0)->Some_0], bytes) == Some(m),
+        m is Fetch,
+    ensures
+        crate::noninterference::renderer_outs(step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).1) == crate::noninterference::renderer_outs(step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).1),
+        crate::noninterference::rel(rules, urls, d, step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).0, step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).0),
+{
+    let e = Event::FromRenderer { id, bytes };
+    lemma_d_sender(rules, urls, d, s1, s2, id, bytes);
+    let i1 = find_by_id(s1.renderers, id, 0)->Some_0;
+    let r = s1.renderers[i1];
+    assert(step(rules, urls, fetch, s1, e) == handle_message(rules, urls, fetch, s1, r, m));
+    assert(step(rules, urls, fetch, s2, e) == handle_message(rules, urls, fetch, s2, r, m));
+    crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s1, e);
+    crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s2, e);
+    crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, fetch, s1, e);
+    crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, fetch, s2, e);
+    crate::api_rel::lemma_api_msg_shape(rules, urls, fetch, s1, r, m);
+    crate::api_rel::lemma_api_msg_shape(rules, urls, fetch, s2, r, m);
+    crate::api_rel::lemma_api_msg_domain(rules, urls, fetch, d, s1, s2, r, m);
+    let (s1b, o1) = step(rules, urls, fetch, s1, e);
+    let (s2b, o2) = step(rules, urls, fetch, s2, e);
+    lemma_rel_same_table(rules, urls, d, s1, s2, s1b, s2b);
+}
+
 /// Any other message a renderer may send is not served: nothing changes.
 pub proof fn lemma_d_event(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s1: State, s2: State, id: nat, bytes: Seq<u8>)
     requires
@@ -439,6 +479,8 @@ pub proof fn lemma_d_event(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fet
                     assert(o1 == o2);
                 } else if is_sub_request(m) {
                     lemma_d_fetch_sub(rules, urls, fetch, d, s1, s2, id, bytes, m);
+                } else if m is Fetch {
+                    lemma_d_fetch_api(rules, urls, fetch, d, s1, s2, id, bytes, m);
                 } else {
                     // `Display` (item 4.12) changes nothing and shows the same
                     // on the same tab in both runs: the sender is the same

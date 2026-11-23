@@ -851,6 +851,7 @@ pub fn fetch_sub_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: St
         started: sv.now as int,
         partition: crate::domain::domain_of_renderer(crate::contract::psl(), r@),
         ended: false,
+        api: None,
     };
     match end {
         None => {
@@ -867,6 +868,7 @@ pub fn fetch_sub_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: St
                 started: s.now,
                 partition: domain_of_lock_exec(&r.lock),
                 ended: false,
+                api: None,
             };
             let ghost rv = rec@;
             s.subfetches.push(rec);
@@ -1012,7 +1014,23 @@ pub fn sub_net_exec<F: FetchFnsExec>(fetch: &F, s: StateRecord, renderer: u64, s
     proof {
         lemma_sub_actions_hop(renderer as nat, serial as nat, f.request, f.script, hop as nat, av);
     }
+    // Item 7.16: a `Fetch` ends with its own frames.
+    let api_frames = match f.api {
+        Some(mode) => Some(super::api::api_end_exec(fetch, &f.lock, f.request, mode, fs.req.origin_tainted, actions.as_slice())),
+        None => None,
+    };
     let (h2, out, end) = sub_actions_exec(renderer, serial, f.request, f.script, hop, actions);
+    let end = match (f.api, end) {
+        (Some(_), Some(_)) => api_frames,
+        (_, e) => e,
+    };
+    proof {
+        let e0 = sub_actions(renderer as nat, serial as nat, f.request, f.script, hop as nat, av).2;
+        assert(match end {
+            Some(v) => api_finish(fetch.fetch(), fv, fs@, av, e0) == Some(v@),
+            None => api_finish(fetch.fetch(), fv, fs@, av, e0) is None,
+        });
+    }
     match end {
         None => {
             let rec = SubFetchRecord {
@@ -1027,6 +1045,7 @@ pub fn sub_net_exec<F: FetchFnsExec>(fetch: &F, s: StateRecord, renderer: u64, s
                 started: f.started,
                 partition: f.partition,
                 ended: f.ended,
+                api: f.api,
             };
             let ghost rv = rec@;
             s.subfetches.insert(k, rec);
@@ -1137,7 +1156,7 @@ pub fn sweep_exec<F: FetchFnsExec>(rs: &[RendererRecord], now: u64, fs: Vec<SubF
         if !live {
             outs = append_outputs(close, outs);
         } else if late {
-            let failed = one_output(OutputRecord::ToRenderer { id: f.renderer, bytes: sub_failed_frame_exec(f.script, f.request) });
+            let failed = one_output(OutputRecord::ToRenderer { id: f.renderer, bytes: super::api::failed_frame_of_exec(f.api.is_some(), f.script, f.request) });
             outs = append_outputs(append_outputs(close, failed), outs);
         } else {
             let ghost before = kept@;

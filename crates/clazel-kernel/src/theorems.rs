@@ -147,6 +147,10 @@ pub proof fn theorem_reply_only_to_sender(rules: Seq<clazel_psl::spec::Rule>, ur
                 } else if m is UpdateUrl {
                     // Item 7.16: an `UpdateUrl` has no output.
                     crate::url_rel::lemma_update_url_shape(urls, s, r, m->UpdateUrl_url);
+                } else if m is Fetch {
+                    // Item 7.16: a `Fetch` answers its sender and asks for
+                    // its sender's sub-fetch connections only.
+                    crate::api_rel::lemma_api_msg_shape(rules, urls, fetch, s, r, m);
                 } else if is_sub_request(m) {
                     // Items 5.19 and 7.16: a `FetchStyle` or `FetchScript`
                     // answers its sender and asks for its sender's sub-fetch
