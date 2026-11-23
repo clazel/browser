@@ -15,12 +15,13 @@
 //!
 //! # Re-entrancy
 //!
-//! The closure is taken out of the table for the call and put back after it,
-//! because the table is inside the VM that the closure borrows. A native
-//! function that JavaScript re-enters while it is still running (it called a
-//! script that called it) finds its slot empty and gets [`Error::Busy`]. The
-//! contract promises more ("a native function can be re-entered"); keeping
-//! that promise needs `Sync` closures (an `Arc`), see the PR's proposals.
+//! The table holds each closure in an [`Arc`], and a call clones the `Arc`
+//! out of the table before it runs the closure, because the table is inside
+//! the VM that the closure borrows. A native function that JavaScript
+//! re-enters while it is still running (it called a script that called it)
+//! is cloned out again and runs nested, as the contract promises ("a native
+//! function can be re-entered"). Sharing the closure between the two calls
+//! is why [`NativeFn`] is `Sync` (the README's open question 14).
 //!
 //! # Errors across the VM
 //!
@@ -55,7 +56,7 @@ pub(crate) struct State {
     pub(crate) limits: Limits,
     /// The closures behind native functions, by the function object's bits.
     /// `None` while the closure runs (see the module docs).
-    pub(crate) natives: HashMap<u64, Option<Box<NativeFn>>>,
+    pub(crate) natives: HashMap<u64, Arc<NativeFn>>,
     /// The Rust data of host objects, by the object's bits.
     pub(crate) host_objects: HashMap<u64, Box<dyn HostObject>>,
     pub(crate) realm_host_defined: Option<Box<dyn Any + Send>>,
@@ -157,17 +158,12 @@ pub(crate) fn trampoline(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Val
         if state.native_depth >= state.limits.native_depth {
             None
         } else {
-            match state.natives.get_mut(&key) {
-                Some(slot) => match slot.take() {
-                    Some(f) => {
-                        state.native_depth = state.native_depth.saturating_add(1);
-                        Some(Ok((state.id, f)))
-                    }
-                    None => {
-                        state.pending = Some(Error::Busy);
-                        Some(Err(Abrupt::Internal("a native function re-entered")))
-                    }
-                },
+            match state.natives.get(&key) {
+                Some(f) => {
+                    let f = Arc::clone(f);
+                    state.native_depth = state.native_depth.saturating_add(1);
+                    Some(Ok((state.id, f)))
+                }
                 None => Some(Err(Abrupt::Internal("a native function of no runtime"))),
             }
         }
@@ -184,10 +180,8 @@ pub(crate) fn trampoline(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Val
         f(&mut scope, &arguments).map(|local| (local.value(), local.runtime()))
     };
 
+    drop(f);
     if let Some(state) = vm.embedder_mut::<State>() {
-        if let Some(slot) = state.natives.get_mut(&key) {
-            *slot = Some(f);
-        }
         state.native_depth = state.native_depth.saturating_sub(1);
     }
     match result {

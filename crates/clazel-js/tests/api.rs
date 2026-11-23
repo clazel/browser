@@ -935,11 +935,10 @@ fn native_depth_is_limited() -> Test {
     })
 }
 
-/// A closure that JavaScript re-enters while it runs is `Busy`: the table of
-/// closures is inside the VM the closure borrows, so the running closure is
-/// out of it (see the module docs of `state.rs`, and the PR's proposal).
+/// A closure that JavaScript re-enters while it runs runs again, nested: the
+/// table shares it with the call still running (open question 14).
 #[test]
-fn a_native_function_cannot_be_reentered_yet() -> Test {
+fn a_native_function_can_be_reentered() -> Test {
     let (mut rt, realm) = runtime()?;
     rt.scope(|scope| {
         let global = scope.global(&realm)?;
@@ -952,17 +951,14 @@ fn a_native_function_cannot_be_reentered_yet() -> Test {
         // another native.
         let r = ev(scope, &realm, "relay(function () { return 1; })")?;
         assert_eq!(scope.as_number(r), Some(1.0));
-        // Re-entered: `Busy`, which JavaScript cannot catch.
-        match ev(
+        // Re-entered, three deep: each call runs and returns its value.
+        let r = ev(
             scope,
             &realm,
-            "var c = 0;\ntry { relay(function () { relay(function () {}); }); } catch (e) { c = 1; }\nc",
-        ) {
-            Err(Error::Busy) => {}
-            Err(other) => return Err(other),
-            Ok(_) => return Err(Error::WrongType("Busy for a re-entered native")),
-        }
-        // And the runtime is usable afterwards, with the closure back.
+            "relay(function () { return relay(function () { return relay(function () { return 3; }) + 1; }) + 1; })",
+        )?;
+        assert_eq!(scope.as_number(r), Some(5.0));
+        // And the runtime is usable afterwards.
         let r = ev(scope, &realm, "relay(function () { return 2; })")?;
         assert_eq!(scope.as_number(r), Some(2.0));
         Ok(())
