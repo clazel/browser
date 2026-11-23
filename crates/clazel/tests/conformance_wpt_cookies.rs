@@ -2,9 +2,9 @@
 //! (docs/phases/phase-2.md item 2.16): the converted tables that `clazel-cookie`
 //! vendors, the same cases `clazel-kernel`'s `conformance_wpt_cookies.rs` runs
 //! with fake renderers, here run with the host shell and a real sandboxed
-//! `clazel-renderer` process per case. The renderer's script (`cookie-set`
-//! lines and a `cookie-get`) is the case's `document.cookie` assignments and
-//! read; the answer is read from what the host logged the kernel sending the
+//! `clazel-renderer` process per case. The renderer's script (the case's
+//! `document.cookie` assignments and a read, JavaScript) is the case's own;
+//! the answer is read from what the host logged the kernel sending the
 //! renderer, which is the frame the renderer received.
 //!
 //! - **`domCookieTest` cases** (11): the kernel opens a tab on the page and the
@@ -13,12 +13,11 @@
 //!   `Set-Cookie` header (Phase 3), so, as the kernel's test does, the jar the
 //!   HTTP path of `clazel-cookie` builds is preloaded into the host's kernel
 //!   state, and the renderer, in a tab on the page that reads, runs
-//!   `cookie-get`.
+//!   `document.cookie`.
 //!
 //! Each case has a fresh host (a fresh kernel) and the clock fixed at 23
 //! October 2026, as in the kernel's test. The expected failures are the
-//! kernel test's `XFAIL`. A case whose cookie text cannot be written in the
-//! renderer's one-line-per-operation script is a failure, not a skip. Cases
+//! kernel test's `XFAIL`. Cases
 //! run on 8 threads; each is one process.
 
 use std::sync::Mutex;
@@ -108,15 +107,25 @@ fn base(c: &Case) -> &'static str {
     }
 }
 
-/// The text of a cookie string as one line of a script, or why it cannot be.
-/// (The renderer's decoder trims each line, so trailing white space would be
-/// lost, and a line feed would end the line.)
-fn script_line(cookie: &[u8]) -> Result<String, String> {
+/// The statement of a script that sets `cookie` as `document.cookie`: the
+/// text is a JavaScript string literal (every character outside printable
+/// ASCII, and the quote and the backslash, as `\uXXXX` escapes of UTF-16
+/// code units), so any cookie string can be written, a line feed included.
+fn script_statement(cookie: &[u8]) -> Result<String, String> {
     let text = std::str::from_utf8(cookie).map_err(|_| "not UTF-8".to_owned())?;
-    if text.contains(['\n', '\r']) || text.trim_ascii_end().len() != text.len() {
-        return Err(format!("{text:?} cannot be one script line"));
+    let mut literal = String::from("\"");
+    for c in text.chars() {
+        if c.is_ascii_graphic() && c != '"' && c != '\\' || c == ' ' {
+            literal.push(c);
+        } else {
+            let mut units = [0u16; 2];
+            for unit in c.encode_utf16(&mut units) {
+                literal.push_str(&format!("\\u{unit:04x}"));
+            }
+        }
     }
-    Ok(format!("cookie-set {text}"))
+    literal.push('"');
+    Ok(format!("document.cookie = {literal};"))
 }
 
 /// What the kernel answered the renderer's last `document.cookie` read, as
@@ -157,13 +166,16 @@ fn run(c: &Case) -> Result<String, String> {
         } else {
             c.page
         };
-        (format!("{}{reader}", base(c)), "cookie-get".to_owned())
+        (
+            format!("{}{reader}", base(c)),
+            "document.cookie;".to_owned(),
+        )
     } else {
         let mut lines = Vec::new();
         for cookie in c.cookies {
-            lines.push(script_line(cookie)?);
+            lines.push(script_statement(cookie)?);
         }
-        lines.push("cookie-get".to_owned());
+        lines.push("document.cookie;".to_owned());
         (format!("{}{}", base(c), c.page), lines.join("\n"))
     };
     host.open_tab(&url, &script);

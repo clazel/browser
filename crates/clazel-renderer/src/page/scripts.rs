@@ -47,7 +47,9 @@ use clazel_ipc::message::codec::Msg;
 use clazel_js::Limits;
 use clazel_web::page::{LogLevel, PageHooks};
 use clazel_web::scripting::time::Clock;
-use clazel_web::scripting::{DocumentOptions, NetworkError, Page, Progress, Request, Response};
+use clazel_web::scripting::{
+    DocumentOptions, NetworkError, Page, Progress, Report, Request, Response,
+};
 
 use super::link::{LinkHandle, lock};
 use crate::{MAX_BODY, RunError};
@@ -499,7 +501,14 @@ impl Scripts {
             .take_reports()
             .unwrap_or_default()
             .into_iter()
-            .map(|r| format!("{r:?}"))
+            .map(|r| match r {
+                Report::Exception {
+                    script,
+                    name,
+                    message,
+                } => format!("uncaught {name}: {message} ({script})"),
+                Report::Engine { script, error } => format!("{script}: {error}"),
+            })
             .collect()
     }
 }

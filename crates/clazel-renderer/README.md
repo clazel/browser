@@ -3,12 +3,59 @@
 The renderer process. Its first act is to enter the OS sandbox
 (`sandbox::enter`, Phase 2), before it reads a byte. Then it takes the
 documents the kernel commits to it (`Commit`, `Body` frames, `BodyEnd`;
-phase-4.md item 4.12): a user script (kind 1) runs as in Phase 2, and a
-document (kind 0) goes through the document pipeline of phase-4.md item 4.13
-and is sent back as one `Display`.
+phase-4.md item 4.12): a user script (kind 1) is JavaScript, run in an empty
+document (item 7.17 retired Phase 2's line format), and a document (kind 0)
+goes through the document pipeline of phase-4.md item 4.13 and is sent back as
+one `Display`.
 
 Tier 0: tests only. The pipeline is glue; every step that reads the page's
 bytes is a function of the crate that proves it, at that crate's own tier.
+
+## The page's scripts and event loop (item 7.17)
+
+The graphical renderer (`run_graphics`, `page/`) hands the parsed tree to
+`clazel-web`'s page (`scripting::Page::for_document`: HTML's script processing
+over the generated WebIDL bindings) and keeps it running:
+
+- **Before the first paint** the document's scripts run, in tree order, with
+  the processing model of item 7.15 (`async`, `defer`, `nomodule`,
+  parser-blocking scripts, modules, `document.currentScript`, the load events).
+  An external script is a `FetchScript { request, url }` (the page's own ids
+  from 1, the absolute URL); the kernel's `ScriptResponse`, `ScriptBody`,
+  `ScriptEnd` or `ScriptFailed` give it back. A page waits for no script to be
+  painted: a script that arrives later changes the page and it is painted again.
+- **The event loop** (`Scripts::tick`, run by the renderer's loop between the
+  kernel's messages): timers (`setTimeout`, `setInterval`), tasks, microtasks
+  (`queueMicrotask`, promise jobs) and `requestAnimationFrame` callbacks (run
+  when the page is about to be painted). The clock is the page's
+  (`clazel_web::scripting::time::Clock`; a test moves its own).
+- **After a script changed the document** the style sources and the title are
+  collected again (`Page::settle`), the page is laid out and painted again, and
+  `Title` is sent if it changed. A linked sheet answered earlier is read again
+  from what it answered; a `link` that a script adds is not fetched (it is as a
+  failed one).
+- **The kernel's messages from script**: `location.href = …` is `Navigate`;
+  `history.pushState` and `replaceState` are `UpdateUrl`; `document.cookie` and
+  `localStorage` are Phase 2's messages, each read waiting for its answer in the
+  middle of the script; `console` goes to standard error. A `javascript:` URL
+  (a link that was clicked, or `location` set to one) is run by the page and is
+  never a `Navigate`.
+- **The socket is shared** by the loop and the natives (`page/link.rs`): a
+  message that arrives while a native waits for its answer is kept and read
+  next. The binary sets a 20 ms read timeout on its end of the socket before it
+  enters the sandbox (the renderer can make no thread and no `poll` call after
+  it), so the loop gets a turn between the kernel's messages; where the
+  descriptor is not a socket (Windows), timers run when a message arrives.
+
+What is not done: scripts see the whole document, not the part the parser had
+built when it reached them, and `document.write` in a parser-inserted script is
+reported and does nothing (the incremental driver cannot hand its tree to a
+script to change; `clazel-web/src/scripting/parser.rs` says what it needs); a
+`script` element that a script inserts does not run (item 7.13's insertion
+steps); `fetch()` and `XMLHttpRequest` (item 7.16's `Fetch`); `on*` event
+handler attributes; click events on elements (only a link's click is
+handled, from the hit regions); a pending `requestAnimationFrame` animation is
+not kept going without another event.
 
 ## The GPU process's list socket (item 5.23), for item 5.20
 
