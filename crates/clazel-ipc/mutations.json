@@ -1264,8 +1264,8 @@
     {
       "id": "msg-max-style-chunk",
       "file": "src/message/spec.rs",
-      "find": "(crate::frame::spec::MAX_FRAME - 17) as nat",
-      "replace": "(crate::frame::spec::MAX_FRAME - 16) as nat",
+      "find": "pub open spec fn max_style_chunk() -> nat {\n    (crate::frame::spec::MAX_FRAME - 17) as nat",
+      "replace": "pub open spec fn max_style_chunk() -> nat {\n    (crate::frame::spec::MAX_FRAME - 16) as nat",
       "expect": "killed",
       "reason": "The largest StyleBody (with a 9-octet request id) is one octet too long for a frame. lemma_style_body_fits_frame is false for it, but a certificate on a 1 MiB input is too large to evaluate; the certificate is lemma_max_style_chunk, which ties the codec's MAX_STYLE_CHUNK (1_048_559, the size a_largest_style_body_fits_one_frame checks on the real code) to the spec.",
       "certificate": {
