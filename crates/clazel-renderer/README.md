@@ -52,10 +52,31 @@ built when it reached them, and `document.write` in a parser-inserted script is
 reported and does nothing (the incremental driver cannot hand its tree to a
 script to change; `clazel-web/src/scripting/parser.rs` says what it needs); a
 `script` element that a script inserts does not run (item 7.13's insertion
-steps); `fetch()` and `XMLHttpRequest` (item 7.16's `Fetch`); `on*` event
-handler attributes; click events on elements (only a link's click is
-handled, from the hit regions); a pending `requestAnimationFrame` animation is
-not kept going without another event.
+steps); `fetch()` and `XMLHttpRequest` (item 7.16's `Fetch`); a pending
+`requestAnimationFrame` animation is not kept going without another event.
+
+**Events and input** (item 7.14, `clazel-web`'s `scripting::input`): in a page
+that runs scripts, a click `Input` is hit-tested through layout (`Page::
+hit_test`: the deepest element or text node whose client rectangle holds the
+point, the later of two equally deep ones, else the document element) and
+becomes `mousemove`, `mousedown`, `mouseup` and `click` at it, with the
+default actions a click nobody cancels has: a link is `Navigate` (a
+`javascript:` URL is run by the page), a submit button submits its form
+(`Navigate` for a `GET`, `Submit` for a `POST`), a checkbox toggles, focus
+moves. A scroll `Input` is a cancelable `wheel` event first; if it was not
+canceled the page scrolls and gets a `scroll` event; the page is painted
+again when a listener ran. A key `Input` (`kind` 2; `key` is a Unicode
+scalar, 8, 9, 13, 27 and 127 for Backspace, Tab, Enter, Escape and Delete,
+0xF700 to 0xF703 for the arrows, as `NSEvent.characters` gives them) goes to
+the focused element, or the body, with the default actions of Tab, Enter,
+Backspace and text. The host's window sends no key `Input` yet, and its
+`Input` has no modifier keys, button or pointer position for moves. A page
+without scripts (its engine did not start, or a `text/plain` document) keeps
+the old hit-the-link-regions click. Hit testing ignores `z-index`, clipping,
+`visibility` and `pointer-events`. User activation (HTML §6.4†) is the
+page's (`clazel-web`'s `user_activation`); the kernel's own record for item
+7.16's `theorem_popup_needs_input` is the kernel's, from the `Input` it
+forwards.
 
 ## The GPU process's list socket (item 5.23), for item 5.20
 
@@ -190,8 +211,8 @@ socket:
 12. `Title` when the title changes.
 
 `Viewport` lays out and paints again; `Input` scrolls (clamped to the page)
-and paints again, or hit-tests a click against the links' regions and sends
-`Navigate`; a key does nothing yet. `src/page/mod.rs` lists every modelling
+and paints again, or (item 7.14) hit-tests a click through the layout and
+gives the events to the page (above), or gives a key to the focused element. `src/page/mod.rs` lists every modelling
 choice; `src/page/state.rs` states each state and contract.
 
 ### Decisions taken for 5.20
@@ -211,7 +232,8 @@ choice; `src/page/state.rs` states each state and contract.
   collapsed), at most 1,024 characters, sent when it differs from the last
   one sent.
 - **Scroll** is vertical, clamped to the page's height; a click goes to the
-  topmost link region; a key does nothing.
+  element under it (item 7.14; in a page without scripts, to the topmost
+  link region).
 - **Masks** stay live in the GPU process across lists under ids the
   renderer gives, within 5.17a's limits (65,536 masks, 64 MiB): uploaded
   once, freed only when a frame's new masks would pass a limit; a frame's
@@ -235,8 +257,9 @@ choice; `src/page/state.rs` states each state and contract.
   non-ok responses, for this to be exact.
 - **`<base href>` and sheets**: the kernel resolves a sheet's `href` against
   the document's URL, not its base URL.
-- **Keys**: a key `Input` still does nothing; the host (5.23) sends Space,
-  Page Up/Down and Up/Down as scrolls instead.
+- **Keys**: a key `Input` reaches a page that runs scripts (item 7.14); the
+  host (5.23) still sends Space, Page Up/Down and Up/Down as scrolls instead,
+  and no key `Input`.
 
 ### Memory (item 5.20's terms, added to 4.13's above)
 

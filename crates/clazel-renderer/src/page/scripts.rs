@@ -45,6 +45,7 @@ use clazel_dom::exec::Arena;
 use clazel_encoding::labels::spec::Encoding;
 use clazel_ipc::message::codec::Msg;
 use clazel_js::Limits;
+use clazel_web::page::input::{KeyInput, MouseInput, WheelInput};
 use clazel_web::page::{LogLevel, PageHooks};
 use clazel_web::scripting::time::Clock;
 use clazel_web::scripting::{
@@ -117,6 +118,28 @@ impl PageHooks for Hooks {
         }
         self.send(&Msg::Navigate {
             url: url.as_bytes().to_vec(),
+        });
+    }
+
+    /// A form submitted with a body (item 7.14, HTML §4.10.21.3†): the
+    /// kernel's `Submit`. A message the frame cannot hold is not sent (the
+    /// kernel's limit is `max_submit_body`; a submission over it is dropped
+    /// like a failed request, not a protocol error).
+    fn submit(&mut self, url: &str, method: &str, content_type: &str, body: &[u8]) {
+        if method == "GET" {
+            self.navigate(url, false);
+            return;
+        }
+        let head = url.len() + method.len() + content_type.len();
+        if head > 8192 || body.len() > clazel_ipc::frame::spec::MAX_FRAME - 8192 - 64 {
+            eprintln!("clazel-renderer: a form submission is too large to send");
+            return;
+        }
+        self.send(&Msg::Submit {
+            url: url.as_bytes().to_vec(),
+            method: method.as_bytes().to_vec(),
+            content_type: content_type.as_bytes().to_vec(),
+            body: body.to_vec(),
         });
     }
 
@@ -225,6 +248,8 @@ pub struct Scripts {
     arriving: HashMap<u64, Arriving>,
     /// The page's engine failed: it runs no more scripts.
     dead: bool,
+    /// A `javascript:` URL ran since the flag was last taken.
+    js_ran: bool,
 }
 
 impl Scripts {
@@ -263,6 +288,7 @@ impl Scripts {
             js,
             arriving: HashMap::new(),
             dead: false,
+            js_ran: false,
         })
     }
 
@@ -348,6 +374,7 @@ impl Scripts {
             for url in urls {
                 let r = self.page.evaluate_javascript_url(&url);
                 self.guard(r.map(|_| ()));
+                self.js_ran = true;
             }
         }
         for report in self.reports() {
@@ -402,6 +429,81 @@ impl Scripts {
         self.guard(r.map(|_| ()));
         self.after()?;
         Ok(true)
+    }
+
+    /// The user's click on the element `target` of the document (item 7.14):
+    /// the mouse events and the default actions, through the page's hooks (a
+    /// followed link is a `Navigate`, a `javascript:` URL is run by `after`).
+    /// Returns whether the page's script ran (a listener or handler was
+    /// called, or a `javascript:` URL was run): only then can the page have
+    /// changed.
+    ///
+    /// # Errors
+    /// The socket failed.
+    pub fn click(&mut self, input: MouseInput) -> Result<bool, RunError> {
+        if self.dead {
+            return Ok(false);
+        }
+        let before = self.page.listener_calls().unwrap_or(0);
+        let r = self.page.click(input);
+        self.guard(r);
+        self.after()?;
+        Ok(self.page.listener_calls().unwrap_or(0) != before || core::mem::take(&mut self.js_ran))
+    }
+
+    /// A key typed, with focus where it is (item 7.14). Returns whether the
+    /// page's script ran, as [`Scripts::click`] does.
+    ///
+    /// # Errors
+    /// The socket failed.
+    pub fn key(&mut self, input: KeyInput) -> Result<bool, RunError> {
+        if self.dead {
+            return Ok(false);
+        }
+        let before = self.page.listener_calls().unwrap_or(0);
+        let r = self.page.key(input);
+        self.guard(r);
+        self.after()?;
+        Ok(self.page.listener_calls().unwrap_or(0) != before || core::mem::take(&mut self.js_ran))
+    }
+
+    /// A wheel turn over an element (item 7.14). Returns whether the default
+    /// action, scrolling, is to happen (a listener did not cancel it), and
+    /// whether any listener ran.
+    ///
+    /// # Errors
+    /// The socket failed.
+    pub fn wheel(&mut self, input: WheelInput) -> Result<(bool, bool), RunError> {
+        if self.dead {
+            return Ok((true, false));
+        }
+        let before = self.page.listener_calls().unwrap_or(0);
+        // A page whose engine failed scrolls as a page without scripts does.
+        let scrolls = match self.page.wheel(input) {
+            Ok(scrolls) => scrolls,
+            Err(e) => {
+                self.guard::<()>(Err(e));
+                true
+            }
+        };
+        self.after()?;
+        let ran = self.page.listener_calls().unwrap_or(0) != before;
+        Ok((scrolls, ran))
+    }
+
+    /// The viewport scrolled: the `scroll` event (item 7.14).
+    ///
+    /// # Errors
+    /// The socket failed.
+    pub fn scrolled(&mut self) -> Result<bool, RunError> {
+        if self.dead {
+            return Ok(false);
+        }
+        let before = self.page.listener_calls().unwrap_or(0);
+        let r = self.page.scrolled();
+        self.guard(r);
+        self.after()?;
+        Ok(self.page.listener_calls().unwrap_or(0) != before)
     }
 
     /// The kernel's `ScriptResponse`.

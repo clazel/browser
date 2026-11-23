@@ -143,6 +143,10 @@ pub struct Ui {
     pub(crate) click_in_progress: Vec<usize>,
     /// The element the mouse button went down on.
     pub(crate) pressed: Option<usize>,
+    /// How many listeners (and event handlers) dispatch has called, ever:
+    /// the embedder asks whether an input reached any, to know whether the
+    /// page may have changed.
+    pub(crate) listener_calls: u64,
 }
 
 /// What legacy-pre-activation behavior changed.

@@ -40,6 +40,17 @@ fn task<R>(scope: &mut Scope<'_>, f: impl FnOnce(&mut Scope<'_>) -> Result<R>) -
 }
 
 impl Page {
+    /// How many listeners and event handlers dispatch has called, ever. An
+    /// embedder compares it before and after an input to learn whether the
+    /// page's script ran (and the page may have changed).
+    ///
+    /// # Errors
+    /// What `clazel-js` returns.
+    pub fn listener_calls(&mut self) -> Result<u64> {
+        self.rt
+            .scope(|scope| Ok(crate::page::page(scope)?.ui.listener_calls))
+    }
+
     /// A click of the user on the element `input.target`: `mousemove`,
     /// `mousedown` (which notifies the page's user activation and moves
     /// focus), `mouseup` and `click`, with the default actions.

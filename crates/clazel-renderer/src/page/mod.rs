@@ -711,6 +711,122 @@ impl Page {
         self.laid.as_ref().map(|l| l.height)
     }
 
+    /// The node that the point (`x`, `y`) of the viewport, in device pixels,
+    /// is over (item 7.14's hit test): of the boxes of every element and text
+    /// node that hold it (the client rectangles of the fragment tree, CSS
+    /// pixels, document coordinates), the deepest in the tree, the later of
+    /// two equally deep ones (a later sibling paints over an earlier one);
+    /// the document element if the point is over none (the canvas). `None`
+    /// before the page is laid out. `z-index`, clipping, `visibility` and
+    /// `pointer-events` are not looked at.
+    pub fn hit_test(&mut self, view: View, fonts: &Fonts, x: u64, y: u64) -> Option<usize> {
+        self.laid.as_ref()?;
+        // Device pixels to 1/64 CSS pixel.
+        let scale = i64::from(view.scale.max(1));
+        let px = i64::try_from(x).ok()?.saturating_mul(64).div_euclid(scale);
+        let py = i64::try_from(y)
+            .ok()?
+            .saturating_add(self.scroll)
+            .saturating_mul(64)
+            .div_euclid(scale);
+        let rects = self.client_rects(view, fonts);
+        let mut best: Option<(usize, &str)> = None;
+        for r in &rects {
+            let (rx, ry) = (i64::from(r.rect.x), i64::from(r.rect.y));
+            let inside = rx <= px
+                && px < rx.saturating_add(i64::from(r.rect.width))
+                && ry <= py
+                && py < ry.saturating_add(i64::from(r.rect.height));
+            if !inside {
+                continue;
+            }
+            let depth = r.node.split('/').count();
+            if best.is_none_or(|(d, _)| depth >= d) {
+                best = Some((depth, r.node.as_str()));
+            }
+        }
+        let path = best.map(|(_, p)| p.to_owned());
+        self.with_arena(|arena, _| {
+            let mut node = 0usize;
+            if let Some(path) = path {
+                for step in path.split('/').filter(|s| !s.is_empty()) {
+                    let k: usize = step.parse().ok()?;
+                    node = *arena.children(node).get(k)?;
+                }
+                return Some(node);
+            }
+            // The canvas: the document element.
+            arena.children(0).iter().copied().find(|&c| {
+                matches!(arena.kind(c), clazel_dom::exec::ExecKind::Element { .. })
+            })
+        })
+        .flatten()
+    }
+
+    /// The user's click on `target` (item 7.14); see [`scripts::Scripts::click`].
+    ///
+    /// # Errors
+    /// The socket failed.
+    pub fn dispatch_click(
+        &mut self,
+        input: clazel_web::page::input::MouseInput,
+    ) -> Result<bool, crate::RunError> {
+        let ran = match self.scripts.as_mut() {
+            Some(s) => s.click(input)?,
+            None => false,
+        };
+        self.dirty |= ran;
+        Ok(ran)
+    }
+
+    /// A key typed (item 7.14).
+    ///
+    /// # Errors
+    /// The socket failed.
+    pub fn dispatch_key(
+        &mut self,
+        input: clazel_web::page::input::KeyInput,
+    ) -> Result<bool, crate::RunError> {
+        let ran = match self.scripts.as_mut() {
+            Some(s) => s.key(input)?,
+            None => false,
+        };
+        self.dirty |= ran;
+        Ok(ran)
+    }
+
+    /// A wheel turn (item 7.14): whether the default action, scrolling, is
+    /// to happen, and whether a listener ran (the page may have changed).
+    ///
+    /// # Errors
+    /// The socket failed.
+    pub fn dispatch_wheel(
+        &mut self,
+        input: clazel_web::page::input::WheelInput,
+    ) -> Result<(bool, bool), crate::RunError> {
+        match self.scripts.as_mut() {
+            Some(s) => {
+                let (scrolls, ran) = s.wheel(input)?;
+                self.dirty |= ran;
+                Ok((scrolls, ran))
+            }
+            None => Ok((true, false)),
+        }
+    }
+
+    /// The viewport scrolled (item 7.14): the `scroll` event.
+    ///
+    /// # Errors
+    /// The socket failed.
+    pub fn dispatch_scrolled(&mut self) -> Result<bool, crate::RunError> {
+        let ran = match self.scripts.as_mut() {
+            Some(s) => s.scrolled()?,
+            None => false,
+        };
+        self.dirty |= ran;
+        Ok(ran)
+    }
+
     /// `Input`'s scroll: by `delta` device pixels, up if `negative`,
     /// clamped to the page.
     pub fn scroll_by(&mut self, negative: bool, delta: u64) {

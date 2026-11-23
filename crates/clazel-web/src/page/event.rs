@@ -114,6 +114,7 @@ impl events::Host for JsInvoke<'_, '_> {
         let scope = &mut *self.scope;
         // Put the event and the listener table back for the listener.
         let Ok(p) = page(scope) else { return };
+        p.ui.listener_calls = p.ui.listener_calls.saturating_add(1);
         core::mem::swap(&mut p.listeners, call.listeners);
         if let Some(Object::Event(d)) = p.object_mut(self.event) {
             d.event = call.event.clone();

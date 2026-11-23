@@ -42,6 +42,7 @@ use std::sync::Arc;
 
 use clazel_ipc::frame::codec::payload_length;
 use clazel_ipc::message::codec::{Msg, decode_framed};
+use clazel_web::page::input::{KeyInput, MouseInput, WheelInput};
 use clazel_web::scripting::time::{Clock, SystemClock};
 use page::link::{Link, LinkHandle, lock};
 
@@ -255,6 +256,40 @@ fn send_list<L: Write>(
     Ok(())
 }
 
+/// A key of `Input` (`kind` 2) as the page's key input (item 7.14). The
+/// schema calls the field "the key's code" and leaves its meaning to the
+/// renderer and the host: here it is what a text field's `NSEvent`
+/// `characters` give, a Unicode scalar value for a character, the ASCII
+/// control codes for Backspace (8), Tab (9), Enter (13) and Escape (27),
+/// 127 for Delete, and the private-use values 0xF700 to 0xF703 for the arrow
+/// keys (up, down, left, right). Any other value is no key. (The host's
+/// window sends no key `Input` yet: `clazel-window`'s keys are the browser's
+/// own, phase-5.md item 5.23.)
+fn key_input(key: u64) -> Option<KeyInput> {
+    let name = match key {
+        8 => "Backspace".to_owned(),
+        9 => "Tab".to_owned(),
+        13 => "Enter".to_owned(),
+        27 => "Escape".to_owned(),
+        127 => "Delete".to_owned(),
+        0xF700 => "ArrowUp".to_owned(),
+        0xF701 => "ArrowDown".to_owned(),
+        0xF702 => "ArrowLeft".to_owned(),
+        0xF703 => "ArrowRight".to_owned(),
+        k => {
+            let c = char::from_u32(u32::try_from(k).ok()?)?;
+            if c.is_control() || ('\u{E000}'..='\u{F8FF}').contains(&c) {
+                return None;
+            }
+            c.to_string()
+        }
+    };
+    Some(KeyInput {
+        key: name,
+        ..KeyInput::default()
+    })
+}
+
 /// The graphical renderer's state: the current page, the viewport, what the
 /// GPU process holds, and the style sheet answers being received.
 struct Graphics<'a, L: Write> {
@@ -455,8 +490,8 @@ impl<L: Write> Graphics<'_, L> {
                 y,
                 negative,
                 delta,
-                ..
-            } => self.input(kind, x, y, negative, delta)?,
+                key,
+            } => self.input(kind, x, y, negative, delta, key)?,
             _ => return Err(RunError::Protocol("unexpected message")),
         }
         Ok(None)
@@ -471,15 +506,35 @@ impl<L: Write> Graphics<'_, L> {
         y: u64,
         negative: bool,
         delta: u64,
+        key: u64,
     ) -> Result<(), RunError> {
         let (Some(p), Some(v)) = (self.current.as_mut(), self.view) else {
             return Ok(());
         };
+        let scale = i64::from(v.scale.max(1));
+        let css = |d: u64| i32::try_from(i64::try_from(d).unwrap_or(i64::MAX) / scale).unwrap_or(0);
         match kind {
-            // A click: hit-test, and follow a link. A `javascript:` URL the
-            // page drew is the page's own to run (HTML "navigate": it is
-            // evaluated in the page, phase-7.md item 7.15), never a
-            // navigation for the kernel.
+            // A click, in a page that runs scripts (item 7.14): the element
+            // under the pointer gets the mouse events, and a click nobody
+            // cancels does its default action: a link is followed (a
+            // `javascript:` URL the page drew is the page's own to run, HTML
+            // "navigate": item 7.15, never a navigation for the kernel), a
+            // form is submitted, a checkbox toggled, focus moved.
+            0 if p.has_scripts() => {
+                if let Some(target) = p.hit_test(v, self.fonts, x, y) {
+                    let ran = p.dispatch_click(MouseInput {
+                        target,
+                        client_x: css(x),
+                        client_y: css(y),
+                        screen_x: css(x),
+                        screen_y: css(y),
+                        ..MouseInput::default()
+                    })?;
+                    self.scripts_ran(ran)?;
+                }
+            }
+            // A click in a page without scripts: hit-test, and follow a
+            // link.
             0 => {
                 if let Some(url) = p.click(x, y) {
                     if page::scripts::is_javascript_url(&url) {
@@ -492,15 +547,55 @@ impl<L: Write> Graphics<'_, L> {
                     }
                 }
             }
-            // A scroll: move and paint again.
+            // A scroll: the `wheel` event first (a page can cancel it), then
+            // move, tell the page (`scroll`) and paint again.
             1 => {
-                let before = p.scroll;
-                p.scroll_by(negative, delta);
-                if p.scroll != before {
-                    send_list(self.list, p, v, self.fonts, &mut self.cache)?;
+                let scrolls = if p.has_scripts() {
+                    let target = p.hit_test(v, self.fonts, x, y);
+                    match target {
+                        Some(target) => {
+                            let d = f64::from(css(delta));
+                            let (scrolls, ran) = p.dispatch_wheel(WheelInput {
+                                target,
+                                client_x: css(x),
+                                client_y: css(y),
+                                delta_y: if negative { -d } else { d },
+                                ..WheelInput::default()
+                            })?;
+                            self.scripts_ran(ran)?;
+                            scrolls
+                        }
+                        None => true,
+                    }
+                } else {
+                    true
+                };
+                let Some(p) = self.current.as_mut() else {
+                    return Ok(());
+                };
+                if scrolls {
+                    let before = p.scroll;
+                    p.scroll_by(negative, delta);
+                    if p.scroll != before {
+                        // A `scroll` listener may change the page: then it
+                        // is laid out and painted at the new position,
+                        // once; else the list for the new position is sent.
+                        if p.dispatch_scrolled()? {
+                            self.scripts_ran(true)?;
+                        } else {
+                            send_list(self.list, p, v, self.fonts, &mut self.cache)?;
+                        }
+                    }
                 }
             }
-            // A key: nothing in this phase.
+            // A key (item 7.14): the page's focused element, or the body,
+            // gets the key events and their default actions.
+            2 if p.has_scripts() => {
+                if let Some(input) = key_input(key) {
+                    let ran = p.dispatch_key(input)?;
+                    self.scripts_ran(ran)?;
+                }
+            }
             _ => {}
         }
         Ok(())

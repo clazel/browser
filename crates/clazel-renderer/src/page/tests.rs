@@ -929,3 +929,166 @@ fn a_script_waits_for_the_kernel_without_losing_its_other_messages() -> Result<(
     assert_eq!(s.lists.len(), 1);
     Ok(())
 }
+
+// ---- Events and input (item 7.14) -----------------------------------------------
+
+/// A 100 by 20 blue block that `onclick` turns green, at the top of a page
+/// with a 100 by 50 viewport.
+const CLICKABLE: &str = "<!DOCTYPE html><body style='margin:0'>\
+    <div id=d style='width:100px;height:20px;background:#0000ff' \
+    onclick=\"this.setAttribute('style','width:100px;height:20px;background:#00ff00')\"></div>";
+
+fn click_at(x: u64, y: u64) -> Msg {
+    Msg::Input {
+        kind: 0,
+        x,
+        y,
+        negative: false,
+        delta: 0,
+        key: 0,
+    }
+}
+
+fn key_msg(key: u64) -> Msg {
+    Msg::Input {
+        kind: 2,
+        x: 0,
+        y: 0,
+        negative: false,
+        delta: 0,
+        key,
+    }
+}
+
+/// The element under the pointer gets the click (hit-tested through the
+/// layout), its `onclick` handler changes the document, and the page is
+/// painted again; a click on nothing reaches the document element only.
+#[test]
+fn a_click_runs_the_handler_of_the_element_under_the_pointer() -> Result<(), RunError> {
+    let mut input = commit(CLICKABLE, "text/html");
+    input.push(viewport(100, 50));
+    input.push(click_at(5, 5));
+    let s = run(&input)?;
+    assert_eq!(s.lists.len(), 2);
+    assert_eq!(pixel(&draw_one(&s, 0, 100, 50), 100, 5, 5), BLUE);
+    assert_eq!(pixel(&draw(&s, 100, 50), 100, 5, 5), GREEN);
+
+    // Below the block, on the canvas: not on it.
+    let mut input = commit(CLICKABLE, "text/html");
+    input.push(viewport(100, 50));
+    input.push(click_at(5, 40));
+    let s = run(&input)?;
+    assert_eq!(s.lists.len(), 1, "a click below the block is not on it");
+    Ok(())
+}
+
+/// A handler that returns false cancels the click: the link is not followed.
+#[test]
+fn a_canceled_click_is_not_a_navigation() -> Result<(), RunError> {
+    let html = "<!DOCTYPE html><body style='margin:0'>\
+        <a href='next' onclick='return false' style='display:block;height:20px'>go</a>\
+        <a href='other' style='display:block;height:20px'>go</a>";
+    let mut input = commit(html, "text/html");
+    input.push(viewport(100, 50));
+    input.push(click_at(5, 5));
+    input.push(click_at(5, 25));
+    let s = run(&input)?;
+    let navigations: Vec<&Msg> = s
+        .kernel
+        .iter()
+        .filter(|m| matches!(m, Msg::Navigate { .. }))
+        .collect();
+    assert_eq!(
+        navigations,
+        vec![&Msg::Navigate {
+            url: b"http://a.example/dir/other".to_vec()
+        }]
+    );
+    Ok(())
+}
+
+/// A click on a submit button submits its form: a `GET` is the kernel's
+/// `Navigate` with the entry list in the query, a `POST` its `Submit`.
+#[test]
+fn a_click_on_a_submit_button_submits_the_form() -> Result<(), RunError> {
+    let html = "<!DOCTYPE html><body style='margin:0'>\
+        <form action='s'><input type=hidden name=q value='a b'>\
+        <button name=go value=1 style='display:block;width:80px;height:20px'>Go</button></form>\
+        <form method=post action='p'><input type=hidden name=q value=2>\
+        <button style='display:block;width:80px;height:20px'>Post</button></form>";
+    let mut input = commit(html, "text/html");
+    input.push(viewport(100, 60));
+    input.push(click_at(5, 5));
+    input.push(click_at(5, 25));
+    let s = run(&input)?;
+    assert!(
+        s.kernel.contains(&Msg::Navigate {
+            url: b"http://a.example/dir/s?q=a+b&go=1".to_vec()
+        }),
+        "{:?}",
+        s.kernel
+    );
+    assert!(
+        s.kernel.contains(&Msg::Submit {
+            url: b"http://a.example/dir/p".to_vec(),
+            method: b"POST".to_vec(),
+            content_type: b"application/x-www-form-urlencoded".to_vec(),
+            body: b"q=2".to_vec(),
+        }),
+        "{:?}",
+        s.kernel
+    );
+    Ok(())
+}
+
+/// A page can cancel the wheel: its scroll then does not happen (no new
+/// list); a `scroll` listener runs when it does, and its change is painted.
+#[test]
+fn wheel_can_be_canceled_and_scroll_is_an_event() -> Result<(), RunError> {
+    let scroll = |negative: bool, delta: u64| Msg::Input {
+        kind: 1,
+        x: 5,
+        y: 5,
+        negative,
+        delta,
+        key: 0,
+    };
+    let canceled = "<!DOCTYPE html><body style='margin:0'>\
+        <div onwheel='return false' style='height:500px;background:#0000ff'></div>";
+    let mut input = commit(canceled, "text/html");
+    input.push(viewport(10, 50));
+    input.push(scroll(false, 100));
+    let s = run(&input)?;
+    // The handler ran, so the page was painted again (it could have changed
+    // something), but not scrolled: the same list.
+    assert!(s.lists.len() <= 2);
+    assert_eq!(s.lists.first(), s.lists.last(), "canceled: no scroll");
+
+    let scrolled = "<!DOCTYPE html><body style='margin:0' \
+        onscroll=\"document.getElementById('m').setAttribute('style','height:500px;background:#00ff00')\">\
+        <div id=m style='height:500px;background:#0000ff'></div>";
+    let mut input = commit(scrolled, "text/html");
+    input.push(viewport(10, 50));
+    input.push(scroll(false, 100));
+    let s = run(&input)?;
+    // The first paint, then the scroll (with the handler's change) painted
+    // once.
+    assert_eq!(s.lists.len(), 2, "the scroll painted once");
+    Ok(())
+}
+
+/// Tab focuses the first input and a typed character goes into it: the
+/// page's `oninput` runs and its change is painted.
+#[test]
+fn keys_reach_the_focused_input() -> Result<(), RunError> {
+    let html = "<!DOCTYPE html><body style='margin:0'>\
+        <input id=i oninput=\"document.getElementById('d').setAttribute('style','width:100px;height:20px;background:#00ff00')\">\
+        <div id=d style='width:100px;height:20px;background:#0000ff'></div>";
+    let mut input = commit(html, "text/html");
+    input.push(viewport(100, 50));
+    input.push(key_msg(9));
+    input.push(key_msg(u64::from(b'a')));
+    let s = run(&input)?;
+    assert_eq!(s.lists.len(), 2);
+    Ok(())
+}
