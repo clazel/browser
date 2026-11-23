@@ -27,8 +27,9 @@ pub const FILES: &[&str] = &[
 /// The string literals of the array `var <name> = [ ... ]` in `html`.
 fn list(html: &str, name: &str) -> Result<Vec<String>, String> {
     let head = format!("var {name} = [");
-    let start = html.find(&head).ok_or(format!("no `{head}`"))?;
-    let rest = html.get(start + head.len()..).unwrap_or_default();
+    let (_, rest) = html
+        .split_once(head.as_str())
+        .ok_or(format!("no `{head}`"))?;
     let end = rest.find(']').ok_or(format!("`{head}` is not closed"))?;
     let body = rest.get(..end).unwrap_or_default();
     let mut out = Vec::new();
