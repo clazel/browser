@@ -1348,25 +1348,19 @@ impl Vm {
                 let key = self.coerce_property_key(k)?;
                 self.set_property(base, key, v, None)?;
             }
+            // CreateDataPropertyOrThrow (§7.3.7†): a class field named
+            // `prototype` of a class, or a field of a frozen object, throws.
             Instr::DefineProp { obj, key, val } => {
                 let (o, v) = (self.r(obj)?, self.r(val)?);
                 let key = self.key_const(key)?;
-                if self.heap.is_array_object(o) {
-                    self.create_data_property_or_throw(o, key, v)?;
-                } else {
-                    self.heap.define(o, key, v, Attrs::ALL)?;
-                }
+                self.create_data_property_or_throw(o, key, v)?;
             }
             Instr::DefineElem { obj, idx, val } => {
                 let (o, k, v) = (self.r(obj)?, self.r(idx)?, self.r(val)?);
                 // An elision is the hole: no property.
                 if v != Value::HOLE {
                     let key = self.coerce_property_key(k)?;
-                    if self.heap.is_array_object(o) {
-                        self.create_data_property_or_throw(o, key, v)?;
-                    } else {
-                        self.heap.define(o, key, v, Attrs::ALL)?;
-                    }
+                    self.create_data_property_or_throw(o, key, v)?;
                 }
             }
             // ArrayCreate(0), §10.4.2.2†: `len` is only a capacity hint (the
@@ -1540,6 +1534,23 @@ impl Vm {
             Instr::IterClose { iter } => {
                 let rec = self.r(iter)?;
                 self.iterator_close(rec)?;
+            }
+            Instr::CopyDataProperties {
+                obj,
+                src,
+                excl,
+                nexcl,
+            } => {
+                let (target, source) = (self.r(obj)?, self.r(src)?);
+                let mut excluded = Vec::new();
+                for i in 0..nexcl {
+                    let reg = excl
+                        .checked_add(i)
+                        .ok_or(Abrupt::Internal("excluded key register"))?;
+                    let kv = self.r(reg)?;
+                    excluded.push(self.coerce_property_key(kv)?);
+                }
+                self.copy_data_properties(target, source, &excluded)?;
             }
             Instr::ThrowIfNotObject { src } => {
                 let v = self.r(src)?;

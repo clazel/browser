@@ -234,3 +234,33 @@ fn prototypes() -> Result<(), String> {
         ),
     ])
 }
+
+#[test]
+fn spread_rest_and_assignment_failures() -> Result<(), String> {
+    let readonly = "'use strict'; var r; try { Object.assign(Object.freeze({a: 1}), {a: 2}); } catch (e) { r = e.constructor === TypeError; }";
+    let sealed = "var r; try { Object.assign(Object.seal({}), {a: 2}); } catch (e) { r = e.constructor === TypeError; }";
+    let frozen_field = "class A { x = 1; constructor(o) { return o; } } class B extends A { y = 2; } var r; try { new B(Object.freeze({})); } catch (e) { r = e.constructor === TypeError; }";
+    let static_proto = "var r; try { class A { static ['prototype'] = 1; } } catch (e) { r = e.constructor === TypeError; }";
+    check(&[
+        (
+            "var s = Symbol('s'); var src = {a: 1, [s]: 2}; Object.defineProperty(src, 'h', {value: 3}); var o = {z: 0, ...src, ...null, ...'xy'}; var r = Object.keys(o).join() + o[s];",
+            "z,a2",
+        ),
+        (
+            "var {a, ...rest} = {a: 1, b: 2, c: 3}; var r = a + ',' + Object.keys(rest).join();",
+            "1,b,c",
+        ),
+        (
+            "var k = 'b'; var {[k]: v, ...rest} = {a: 1, b: 2}; var r = v + ',' + Object.keys(rest).join();",
+            "2,a",
+        ),
+        (
+            "var src = {get a() { return 'got'; }}; var o = {...src}; var d = Object.getOwnPropertyDescriptor(o, 'a'); var r = d.value + d.writable + d.enumerable + d.configurable;",
+            "gottruetruetrue",
+        ),
+        (readonly, "true"),
+        (sealed, "true"),
+        (frozen_field, "true"),
+        (static_proto, "true"),
+    ])
+}

@@ -710,6 +710,59 @@ impl Vm {
         Ok(false)
     }
 
+    /// CopyDataProperties ( target, source, excludedItems ), §7.3.25†:
+    /// 1. If source is either undefined or null, return unused.
+    /// 2. Let from be ! ToObject(source).
+    /// 3. Let keys be ? from.[[OwnPropertyKeys]]().
+    /// 4. For each element nextKey of keys, do a. Let excluded be false. b. For
+    ///    each element e of excludedItems, do i. If SameValue(e, nextKey) is
+    ///    true, then 1. Set excluded to true. c. If excluded is false, then i.
+    ///    Let desc be ? from.[[GetOwnProperty]](nextKey). ii. If desc is not
+    ///    undefined and desc.[[Enumerable]] is true, then 1. Let propValue be ?
+    ///    Get(from, nextKey). 2. Perform ! CreateDataPropertyOrThrow(target,
+    ///    nextKey, propValue).
+    /// 5. Return unused.
+    ///
+    /// # Errors
+    /// What a getter throws, a `TypeError` if `target` refuses a property.
+    pub fn copy_data_properties(
+        &mut self,
+        target: Value,
+        source: Value,
+        excluded: &[Key],
+    ) -> Result<(), Abrupt> {
+        if source == Value::UNDEFINED || source == Value::NULL {
+            return Ok(());
+        }
+        let from = self.to_object(source)?;
+        let mut keys: Vec<Key> = self
+            .heap
+            .own_properties(from)
+            .into_iter()
+            .map(|(k, _, _)| k)
+            .collect();
+        keys.extend(
+            self.heap
+                .own_symbol_properties(from)
+                .into_iter()
+                .map(|(k, _, _)| k),
+        );
+        for k in keys {
+            self.charge_step()?;
+            if excluded.contains(&k) {
+                continue;
+            }
+            let enumerable = self
+                .get_own_property(from, k)?
+                .is_some_and(|(a, _)| a.0 & Attrs::ENUMERABLE != 0);
+            if enumerable {
+                let v = self.get_value(from, k)?;
+                self.create_data_property_or_throw(target, k, v)?;
+            }
+        }
+        Ok(())
+    }
+
     /// DeletePropertyOrThrow ( O, P ), §7.3.10†:
     /// 1. Let success be ? O.[[Delete]](P).
     /// 2. If success is false, throw a TypeError exception.

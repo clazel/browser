@@ -727,7 +727,7 @@ impl Vm {
             }
             return Ok(());
         }
-        self.set_property(base, key, v, None)
+        self.set_property_with(base, key, v, None, throw)
     }
 
     /// The heap, mutably: natives define properties and allocate objects
@@ -773,6 +773,21 @@ impl Vm {
         v: Value,
         ic: Option<u32>,
     ) -> Result<(), Abrupt> {
+        let strict = self.strict();
+        self.set_property_with(base, key, v, ic, strict)
+    }
+
+    /// [`Vm::set_property`] failing as `Set ( O, P, V, Throw )` (§7.3.4†)
+    /// does for `throw`: a TypeError when it is true, whatever the strictness
+    /// of the running function.
+    pub(crate) fn set_property_with(
+        &mut self,
+        base: Value,
+        key: Key,
+        v: Value,
+        ic: Option<u32>,
+        strict: bool,
+    ) -> Result<(), Abrupt> {
         if base == Value::UNDEFINED || base == Value::NULL {
             let name = self.key_text(key);
             return Err(self.type_error(&format!(
@@ -787,7 +802,7 @@ impl Vm {
         if !self.heap.is_object(base) {
             // A primitive receiver: OrdinarySet step 2.d.i "If Receiver is
             // not an Object, return false".
-            if self.strict() {
+            if strict {
                 let name = self.key_text(key);
                 return Err(
                     self.type_error(&format!("Cannot create property '{name}' on a primitive"))
@@ -801,7 +816,7 @@ impl Vm {
         if let Some(f) = found
             && let Some(ok) = self.set_through_accessor(f, base, v)?
         {
-            if !ok && self.strict() {
+            if !ok && strict {
                 let name = self.key_text(key);
                 return Err(self.type_error(&format!(
                     "Cannot set property {name} which has only a getter"
@@ -841,7 +856,7 @@ impl Vm {
                 true
             }
         };
-        if !ok && self.strict() {
+        if !ok && strict {
             let name = self.key_text(key);
             return Err(self.type_error(&format!("Cannot assign to read only property '{name}'")));
         }

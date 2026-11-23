@@ -3,9 +3,9 @@
 //! [`install`] adds to a [`Vm`]'s global object, and to its intrinsics table
 //! ([`clazel_js_vm::interp::Intrinsic`]), these built-ins of ECMA-262:
 //!
-//! - [`object`]: `Object` (§20.1†), `Object.prototype.toString` (with
-//!   `@@toStringTag`), `toLocaleString`, `hasOwnProperty`, `valueOf`, and
-//!   `Object.keys`, `defineProperty`, `getPrototypeOf`, `create`;
+//! - [`object`]: `Object` (§20.1†) with every function of §20.1.2† and
+//!   `Object.prototype` (§20.1.3†, with Annex B's `__proto__` and the legacy
+//!   accessor methods);
 //! - [`function`]: `Function` (§20.2†, whose constructor needs the compiler
 //!   and so throws `NotYet`) and `Function.prototype.call`, `apply`, `bind`,
 //!   `@@hasInstance`;
@@ -13,7 +13,7 @@
 //!   `ReferenceError` native errors (§20.5†), which the VM's own throws use;
 //! - [`symbol`]: `Symbol` (§20.4†) with `Symbol.for`, `Symbol.keyFor`, the
 //!   well-known symbols, and `Symbol.prototype.toString`, `valueOf`,
-//!   `@@toPrimitive`, `@@toStringTag`;
+//!   `description`, `@@toPrimitive`, `@@toStringTag`;
 //! - [`iterator`]: `%Iterator.prototype%` (§27.1.2†), and the Array and String
 //!   iterators (§23.1.5†, §22.1.5†) that spread, `for`-`of` and
 //!   destructuring run through the VM's iteration ops;
@@ -34,16 +34,18 @@
 //! - [`regexp`]: `RegExp` (§22.2†) over `clazel-js-regexp`, with the
 //!   `@@match`, `@@matchAll`, `@@replace`, `@@search` and `@@split` methods
 //!   the `String` methods use;
+//! - [`collections`]: `Map`, `Set`, `WeakMap` and `WeakSet` (§24†), the Set
+//!   methods of ES2025 and `Map.groupBy`;
+//! - [`reflect`]: `Reflect` (§28.1†);
 //! - [`global`]: `globalThis`, `isNaN`, `isFinite`, `parseInt`, `parseFloat`
 //!   (§19†).
 //!
 //! # What this slice does not have, all listed
 //!
-//! - **`get Array [ @@species ]`** and every other accessor: the VM has data
-//!   properties only, so a descriptor with `get` or `set` is `NotYet`,
-//!   `Symbol.prototype.description` is absent, and ArraySpeciesCreate uses
-//!   the constructor itself when it has no `@@species` property (see
-//!   [`array`]). Objects are always extensible.
+//! - **No `Proxy`** (§28.2†): every internal method is the ordinary one
+//!   (§10.1†) or the Array exotic one (§10.4.2†).
+//! - **Weak collections do not collect** (see [`collections`]) and `WeakRef` and
+//!   `FinalizationRegistry` are absent until the collector (item 7.6).
 //! - **No `Iterator` constructor or iterator helpers** (§27.1.3†), no
 //!   generators' `%GeneratorPrototype%`, no `Array.fromAsync`.
 //! - **Array elements are ordinary shape properties** (the heap's elements
