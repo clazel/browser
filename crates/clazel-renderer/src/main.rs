@@ -65,8 +65,14 @@ const POLL: std::time::Duration = std::time::Duration::from_millis(20);
 /// The input socket with a read timeout, if standard input is a socket the
 /// process can duplicate: the page's event loop runs between reads. The
 /// descriptor is never closed (see `main`).
+///
+/// It is read as a `File`, not a `UnixStream`: on Linux the standard
+/// library reads a `UnixStream` with `recv` (the `recvfrom` system call),
+/// which the renderer's seccomp allowlist leaves out; a `File` reads with
+/// `read`, which it allows. The timeout is the socket's `SO_RCVTIMEO`, set
+/// before the sandbox, and applies to `read` as well.
 #[cfg(unix)]
-struct Polled(Option<std::os::unix::net::UnixStream>);
+struct Polled(Option<std::fs::File>);
 
 #[cfg(unix)]
 impl io::Read for Polled {
@@ -93,7 +99,8 @@ fn polled_input() -> Option<Polled> {
     let fd = io::stdin().as_fd().try_clone_to_owned().ok()?;
     let socket = std::os::unix::net::UnixStream::from(fd);
     socket.set_read_timeout(Some(POLL)).ok()?;
-    Some(Polled(Some(socket)))
+    let fd: std::os::fd::OwnedFd = socket.into();
+    Some(Polled(Some(std::fs::File::from(fd))))
 }
 
 /// Windows reads from standard input as it is.
