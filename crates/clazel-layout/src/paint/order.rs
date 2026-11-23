@@ -23,23 +23,29 @@
 use std::collections::HashMap;
 
 use clazel_dom::exec::{Arena, ExecKind};
-use clazel_style::cascade::computed::{ComputedStyle, Overflow, Visibility};
+use clazel_style::cascade::computed::{
+    Backgrounds, BgBox, BgImage, ComputedStyle, Overflow, Visibility,
+};
 use clazel_style::cascade::hints::{attribute, is_html};
 use clazel_url::url::parse::basic_url_parser;
 use clazel_url::url::record::ParsedUrl;
 
+use super::background::tiles;
 use super::decor::{line_rect, propagate};
 use super::geometry::{border_rects, clamp_scale, fine, premultiply, snap_rect, transparent};
 use super::state::{
     ClipChange, Clips, Decor, DeviceRect, DisplayList, HitRegion, Item, Line, PlacedGlyph, TextItem,
 };
 use crate::boxes::replaced::string;
-use crate::boxes::{BoxId, BoxKind, BoxTree, Class, StyleFns};
+use crate::boxes::{BoxId, BoxKind, BoxTree, Class, Replaced, StyleFns};
 use crate::controls::{self, ControlView, Draw};
 use crate::flow::TextFns;
 use crate::flow::block::{Mode, mode};
-use crate::flow::fragment::{FragmentTree, GlyphRun, InlinePiece, LineItem, Rect, Sides};
+use crate::flow::fragment::{
+    BoxFragment, FragmentTree, GlyphRun, InlinePiece, LineItem, Rect, Sides,
+};
 use crate::flow::style::box_styles;
+use crate::images::{ImageStatus, Images};
 
 /// The UA's canvas colour (E.2: "given a UA-defined color"): opaque white.
 const CANVAS: [u8; 4] = [255, 255, 255, 255];
@@ -81,10 +87,21 @@ fn walked(c: Class) -> bool {
     !matches!(c, Class::Inline | Class::Text { .. } | Class::Marker)
 }
 
+/// The area of a box that `b` names (CSS Backgrounds 3 §2.7, §2.8): "border-box", "padding-box"
+/// or "content-box" of fragment `f`.
+fn box_area(f: &BoxFragment, b: BgBox) -> Rect {
+    match b {
+        BgBox::Border => f.border_box,
+        BgBox::Padding => f.padding_box(),
+        BgBox::Content => f.padding_box().inset(&f.padding),
+    }
+}
+
 struct Walk<'a, F: TextFns> {
     frags: &'a FragmentTree,
     tree: &'a BoxTree,
     arena: &'a Arena,
+    images: &'a Images,
     fonts: &'a F,
     styles: Vec<ComputedStyle>,
     decor: Vec<Decor>,
@@ -144,11 +161,11 @@ impl<F: TextFns> Walk<'_, F> {
             return;
         };
         let rect = snap_rect(f.padding_box(), self.scale);
-        self.clip_to(rect);
+        self.clip_push(rect);
     }
 
-    /// Clip to `rect` (device pixels), inside the clip in force.
-    fn clip_to(&mut self, rect: DeviceRect) {
+    /// A clip to `rect`, intersected with the one in force (ended by [`Self::clip_leave`]).
+    fn clip_push(&mut self, rect: DeviceRect) {
         self.outer.push(self.clips.current);
         let (next, change) = self.clips.enter(rect);
         self.clips = next;
@@ -215,7 +232,7 @@ impl<F: TextFns> Walk<'_, F> {
                 Draw::Fill(r, c) => self.fill(r, c),
                 Draw::Clip(r) => {
                     let rect = snap_rect(r, self.scale);
-                    self.clip_to(rect);
+                    self.clip_push(rect);
                 }
                 Draw::Unclip => self.clip_leave(),
                 Draw::Text {
@@ -263,6 +280,100 @@ impl<F: TextFns> Walk<'_, F> {
         }
     }
 
+    /// Draws image `id` (of `pixels`) into the rectangle `r` of 1/64 CSS px: nearest when it
+    /// is the image's own size in device pixels, linear otherwise.
+    fn image(&mut self, r: Rect, id: u32, pixels: crate::images::Dims) {
+        let rect = snap_rect(r, self.scale);
+        if rect.is_empty() {
+            return;
+        }
+        let side = |v: u32| u16::try_from(v).unwrap_or(u16::MAX);
+        self.out.items.push(Item::Image {
+            rect,
+            image: id,
+            src: [0, 0, side(pixels.width), side(pixels.height)],
+            linear: rect.width != pixels.width || rect.height != pixels.height,
+        });
+    }
+
+    /// The background image layers of `bgs` of a box with fragment `f`, bottom-most first
+    /// (CSS Backgrounds 3 §2.1: "The first image in the list is the layer closest to the
+    /// user"), each as tiled image items clipped to its painting area (§2.7); with
+    /// `canvas` the painting area is that rectangle and the positioning area is `f`'s, the root
+    /// element's box (§2.11.1: "The background of the root element becomes the canvas
+    /// background and its background painting area extends to cover the entire canvas.
+    /// However, any images are sized and positioned relative to the root element's box").
+    /// A layer whose image is not [`ImageStatus::Ready`] paints nothing (§2.3).
+    fn layers(&mut self, bgs: &Backgrounds, f: &BoxFragment, canvas: Option<Rect>) {
+        if bgs.is_none() {
+            return;
+        }
+        for layer in bgs.layers().iter().rev() {
+            let BgImage::Url(url) = &layer.image else {
+                continue;
+            };
+            let ImageStatus::Ready {
+                id,
+                natural,
+                pixels,
+            } = self.images.url(&string(url))
+            else {
+                continue;
+            };
+            let positioning = box_area(f, layer.origin);
+            let painting = canvas.unwrap_or_else(|| box_area(f, layer.clip));
+            let t = tiles(layer, natural, positioning, painting);
+            if t.rects.is_empty() {
+                continue;
+            }
+            // A clip only when a tile reaches outside the painting area.
+            let inside = |r: &Rect| {
+                r.x >= painting.x
+                    && r.y >= painting.y
+                    && r.right() <= painting.right()
+                    && r.bottom() <= painting.bottom()
+            };
+            let clip = !t.rects.iter().all(inside);
+            if clip {
+                self.clip_push(snap_rect(painting, self.scale));
+            }
+            for r in t.rects {
+                self.image(r, id, pixels);
+            }
+            if clip {
+                self.clip_leave();
+            }
+        }
+    }
+
+    /// E.2 7.1 and 7.2.1.6: the replaced content of an `img` whose pixels are uploaded, over
+    /// its content box (CSS 2.1 §10.3.2: the used size; `object-fit` is not in the subset, so
+    /// it is stretched, as `fill`).
+    fn replaced_image(&mut self, b: BoxId) {
+        if !self.visible(b) {
+            return;
+        }
+        let Some(lb) = self.tree.get(b) else { return };
+        let (
+            BoxKind::Replaced {
+                what: Replaced::Image,
+                ..
+            },
+            Some(node),
+        ) = (&lb.kind, lb.node)
+        else {
+            return;
+        };
+        let ImageStatus::Ready { id, pixels, .. } = self.images.element(node) else {
+            return;
+        };
+        let Some(f) = self.frags.fragment(b) else {
+            return;
+        };
+        let content = box_area(f, BgBox::Content);
+        self.image(content, id, pixels);
+    }
+
     /// A hit region for box `b`'s rectangle `r`, if `b` is in a link.
     fn hit(&mut self, b: BoxId, r: Rect) {
         let Some(node) = self.link.get(b).copied().flatten() else {
@@ -292,11 +403,17 @@ impl<F: TextFns> Walk<'_, F> {
         }
         let Some(s) = self.style(b) else { return };
         let (bg, colours) = (s.background_color, s.border_color);
+        let backgrounds = s.backgrounds.clone();
         // §14.2: the root element's background is the canvas's ("The root
         // element does not paint this background again"), and so is a
         // `body`'s whose background went there.
         if Some(b) != self.root_box && Some(b) != self.canvas_box {
-            self.fill(f.border_box, bg);
+            // CSS Backgrounds 3 §2.2: "The background color is clipped according to the
+            // background-clip value associated with the bottom-most background image
+            // layer"; §2.1: "The background color, if present, is painted below all of the
+            // other layers."
+            self.fill(box_area(&f, backgrounds.bottom_clip()), bg);
+            self.layers(&backgrounds, &f, None);
         }
         let strips = border_rects(f.border_box, f.border);
         for (r, c) in strips
@@ -339,8 +456,9 @@ impl<F: TextFns> Walk<'_, F> {
             && self.visible(t)
             && let Some(s) = self.style(t)
         {
-            let bg = s.background_color;
-            self.fill(f.border_box, bg);
+            let (bg, bgs) = (s.background_color, s.backgrounds.clone());
+            self.fill(box_area(&f, bgs.bottom_clip()), bg);
+            self.layers(&bgs, &f, None);
         }
         let rect_of = |b: BoxId| self.frags.fragment(b).map(|f| f.border_box);
         // The column (group) a cell starts in: the one whose span holds the
@@ -382,8 +500,13 @@ impl<F: TextFns> Walk<'_, F> {
             if let (Some(r), true) = (rect_of(c), self.visible(c))
                 && let Some(s) = self.style(c)
             {
-                let bg = s.background_color;
+                let (bg, bgs) = (s.background_color, s.backgrounds.clone());
                 self.fill(r, bg);
+                // A cell's own image layers (its row's, row group's and columns' are not painted:
+                // `mod.rs`).
+                if let Some(f) = self.frags.fragment(c).cloned() {
+                    self.layers(&bgs, &f, None);
+                }
             }
         }
         // "all table borders (in tree order for separated borders)".
@@ -460,9 +583,10 @@ impl<F: TextFns> Walk<'_, F> {
             return;
         }
         // 7.1: "If the element is a block-level replaced element, then: the
-        // replaced content, atomically": nothing, but a form control's look
-        // (item 6.15, `controls`) when the caller gave one.
+        // replaced content, atomically" (and 7.2.1.6 for an inline one); plus a form
+        // control's look (item 6.15, `controls`) when the caller gave one.
         if matches!(class, Class::Replaced { .. }) {
+            self.replaced_image(b);
             self.control(b);
             return;
         }
@@ -719,41 +843,52 @@ pub fn paint(
     base: Option<&ParsedUrl>,
     scale: u32,
 ) -> DisplayList {
-    paint_with_controls(
+    let images = Images::new();
+    paint_with_images(
         frags,
         tree,
         arena,
         styles,
         fonts,
-        Target { base, scale },
-        &[],
+        Resources {
+            base,
+            images: &images,
+            controls: &[],
+        },
+        scale,
     )
 }
 
-/// Where a list is painted for: the base URL links resolve against and the
-/// device pixels per CSS pixel.
+/// What paint reads besides the fragment tree: the base URL that links resolve against
+/// and the images that are drawn (item 6.11).
 #[derive(Clone, Copy)]
-pub struct Target<'a> {
-    /// The document's base URL.
+pub struct Resources<'a> {
+    /// The base URL of the document (item 5.16).
     pub base: Option<&'a ParsedUrl>,
-    /// Device pixels per CSS pixel.
-    pub scale: u32,
+    /// The state of each image (`images.rs`).
+    pub images: &'a Images,
+    /// Item 6.15: the look of the form controls, each drawn at its place in the paint
+    /// order, and a ring on a focused element that is not a control. A control with no
+    /// view is drawn as nothing.
+    pub controls: &'a [ControlView],
 }
 
-/// [`paint`] with the look of the form controls in `controls` (item 6.15):
-/// each control of a view is drawn at its place in the paint order, and a
-/// focused element that is not a control gets a ring. A control with no
-/// view is drawn as [`paint`] draws it: as nothing.
-pub fn paint_with_controls(
+/// [`paint`], with the images of `resources` drawn: an `img` whose pixels are uploaded
+/// ([`ImageStatus::Ready`]), and the `background-image` layers whose URLs are.
+pub fn paint_with_images(
     frags: &FragmentTree,
     tree: &BoxTree,
     arena: &Arena,
     styles: &impl StyleFns,
     fonts: &impl TextFns,
-    target: Target<'_>,
-    controls: &[ControlView],
+    resources: Resources<'_>,
+    scale: u32,
 ) -> DisplayList {
-    let Target { base, scale } = target;
+    let Resources {
+        base,
+        images,
+        controls,
+    } = resources;
     let n = tree.boxes.len();
     let styles = box_styles(tree, styles);
     let quirks = mode(arena) == Mode::Quirks;
@@ -796,16 +931,26 @@ pub fn paint_with_controls(
             "html",
         )
     });
-    let bg = |b: Option<BoxId>| b.and_then(|b| styles.get(b)).map(|s| s.background_color);
-    // §14.2: the canvas takes the root's background, or for an `html`
-    // root with a transparent one, its `body`'s.
-    let (canvas, canvas_box) = match bg(root_box) {
-        Some(c) if !transparent(c) => (c, None),
-        _ => match bg(body_box) {
-            Some(c) if html.is_some() && !transparent(c) => (c, body_box),
-            _ => (CANVAS, None),
-        },
+    // Whether a box has any background to give the canvas: a colour or an image.
+    let has_bg = |b: Option<BoxId>| {
+        b.and_then(|b| styles.get(b))
+            .is_some_and(|s| !transparent(s.background_color) || !s.backgrounds.is_none())
     };
+    // §14.2, CSS Backgrounds 3 §2.11.2: the canvas takes the root's background, or for
+    // an `html` root whose `background-image` is `none` and whose colour is transparent,
+    // its `body`'s.
+    let (canvas_src, canvas_box) = if has_bg(root_box) {
+        (root_box, None)
+    } else if html.is_some() && has_bg(body_box) {
+        (body_box, body_box)
+    } else {
+        (None, None)
+    };
+    let canvas = canvas_src
+        .and_then(|b| styles.get(b))
+        .map(|s| s.background_color)
+        .filter(|&c| !transparent(c))
+        .unwrap_or(CANVAS);
     // §11.1.1: the root's `overflow`, and the body's when the root's is
     // `visible`, go to the viewport.
     let root_visible = root_box
@@ -825,6 +970,7 @@ pub fn paint_with_controls(
         frags,
         tree,
         arena,
+        images,
         fonts,
         styles,
         decor,
@@ -846,6 +992,16 @@ pub fn paint_with_controls(
     };
     // Step 1: "background color of element over the entire canvas".
     w.fill(frags.extent, canvas);
+    // CSS Backgrounds 3 §2.11.1: its images, over the canvas, positioned in the root
+    // element's box.
+    if let (Some(src), Some(root)) = (canvas_src, root_box)
+        && let Some(rf) = frags.fragment(root).cloned()
+    {
+        let bgs = w.styles.get(src).map(|s| s.backgrounds.clone());
+        if let Some(bgs) = bgs {
+            w.layers(&bgs, &rf, Some(frags.extent));
+        }
+    }
     let mut tasks: Vec<Task> = vec![
         Task::Fore {
             b: BoxTree::ROOT,

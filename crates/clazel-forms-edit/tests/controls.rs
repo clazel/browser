@@ -21,7 +21,7 @@ fn glyph_ids(p: &Page) -> Vec<Vec<u16>> {
         .iter()
         .filter_map(|i| match i {
             Item::Text { run, .. } => Some(run.glyphs.iter().map(|g| g.id).collect()),
-            Item::Fill { .. } | Item::PushClip { .. } | Item::PopClip => None,
+            Item::Fill { .. } | Item::PushClip { .. } | Item::PopClip | Item::Image { .. } => None,
         })
         .collect()
 }

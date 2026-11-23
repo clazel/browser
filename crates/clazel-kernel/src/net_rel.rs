@@ -619,13 +619,13 @@ pub proof fn lemma_carry_out_consistency(
 
 /// `begin_navigation` from related states, for a tab open in the first: the
 /// same renderer-bound outputs, and related states.
-pub proof fn lemma_begin_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s1: State, s2: State, tab: nat, url: Seq<u32>)
+pub proof fn lemma_begin_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s1: State, s2: State, tab: nat, url: Seq<u32>, req: clazel_fetch::request::spec::Req)
     requires
         crate::noninterference::rel(rules, urls, d, s1, s2),
         find_by_tab(s1.renderers, tab, 0) is Some,
     ensures
-        crate::noninterference::renderer_outs(begin_navigation(rules, urls, fetch, s1, tab, url).1) == crate::noninterference::renderer_outs(begin_navigation(rules, urls, fetch, s2, tab, url).1),
-        crate::noninterference::rel(rules, urls, d, begin_navigation(rules, urls, fetch, s1, tab, url).0, begin_navigation(rules, urls, fetch, s2, tab, url).0),
+        crate::noninterference::renderer_outs(begin_navigation(rules, urls, fetch, s1, tab, url, req).1) == crate::noninterference::renderer_outs(begin_navigation(rules, urls, fetch, s2, tab, url, req).1),
+        crate::noninterference::rel(rules, urls, d, begin_navigation(rules, urls, fetch, s1, tab, url, req).0, begin_navigation(rules, urls, fetch, s2, tab, url, req).0),
 {
     lemma_same_renderer_by_tab(rules, urls, d, s1, s2, tab);
     if lock_of_url(urls, url, s1.next_id) is Some {
@@ -651,8 +651,8 @@ pub proof fn lemma_begin_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: U
                 lemma_renderer_outs_concat(c2, o2);
             },
             Some(parsed) => {
-                lemma_begin_started(rules, urls, d, m1, m2, tab, i1, i2, url, parsed);
-                let (fs, actions) = clazel_fetch::transducer::spec::start(parsed);
+                lemma_begin_started(rules, urls, d, m1, m2, tab, i1, i2, url, req, parsed);
+                let (fs, actions) = clazel_fetch::transducer::spec::start_req(parsed, req);
                 let nav = Navigation { url, fetch: fs, partition: crate::domain::domain_of_renderer(rules, old) };
                 let u1 = State { renderers: m1.renderers.update(i1, Renderer { pending: Some(nav), ..old }), ..m1 };
                 let u2 = State { renderers: m2.renderers.update(i2, Renderer { pending: Some(nav), ..old }), ..m2 };
@@ -676,7 +676,7 @@ pub proof fn lemma_begin_started(
     tab: nat,
     i1: int,
     i2: int,
-    url: Seq<u32>,
+    url: Seq<u32>, req: clazel_fetch::request::spec::Req,
     parsed: clazel_url::url::spec::Url,
 )
     requires
@@ -690,7 +690,7 @@ pub proof fn lemma_begin_started(
     ensures
         ({
             let old = m1.renderers[i1];
-            let (fs, actions) = clazel_fetch::transducer::spec::start(parsed);
+            let (fs, actions) = clazel_fetch::transducer::spec::start_req(parsed, req);
             let nav = Navigation { url, fetch: fs, partition: crate::domain::domain_of_renderer(rules, old) };
             let u1 = State { renderers: m1.renderers.update(i1, Renderer { pending: Some(nav), ..old }), ..m1 };
             let u2 = State { renderers: m2.renderers.update(i2, Renderer { pending: Some(nav), ..old }), ..m2 };
@@ -699,8 +699,8 @@ pub proof fn lemma_begin_started(
         }),
 {
     let old = m1.renderers[i1];
-    let (fs, actions) = clazel_fetch::transducer::spec::start(parsed);
-    crate::net_theorems::lemma_start_shape(parsed);
+    let (fs, actions) = clazel_fetch::transducer::spec::start_req(parsed, req);
+    crate::net_theorems::lemma_start_shape(parsed, req);
     let nav = Navigation { url, fetch: fs, partition: crate::domain::domain_of_renderer(rules, old) };
     let r = Renderer { pending: Some(nav), ..old };
     let u1 = State { renderers: m1.renderers.update(i1, r), ..m1 };

@@ -12,6 +12,10 @@ use std::os::fd::{AsRawFd, BorrowedFd};
 
 use crate::{Errno, RandomError};
 
+/// Executable code regions: a sealed `memfd` with a writable and a
+/// read-execute mapping (jit.md item J.7).
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+pub mod code;
 pub mod vulkan;
 
 /// One classic BPF instruction: `struct sock_filter` of `<linux/filter.h>`.

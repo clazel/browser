@@ -1,6 +1,6 @@
 //! The pipeline of the 6.15 tests: HTML through the tree builder, the
 //! cascade, the box tree, layout in `IdFont` (every glyph a 1em square,
-//! ascent 0.8em, descent 0.2em), the editor, and `paint_with_controls`; a
+//! ascent 0.8em, descent 0.2em), the editor, and `paint_with_images`; a
 //! rasteriser that turns a display list into a grid of characters (the
 //! "pixels" the golden files store); and the golden file check.
 //!
@@ -19,8 +19,9 @@ use clazel_layout::boxes::{BoxTree, build};
 use clazel_layout::flow::{
     BoxFont, FontMetrics, FragmentTree, ShapedGlyph, TextFns, Viewport, layout,
 };
+use clazel_layout::images::Images;
 use clazel_layout::paint::dump::dump as dump_list;
-use clazel_layout::paint::{DisplayList, Item, Target, paint_with_controls};
+use clazel_layout::paint::{DisplayList, Item, Resources, paint_with_images};
 use clazel_style::cascade::{cascade_with, ua};
 use clazel_style::sources::{Device, StyleSheet, collect};
 use clazel_treebuilder::exec::driver::parse_real;
@@ -203,17 +204,19 @@ impl Page {
 
     pub fn paint(&self) -> DisplayList {
         let views = self.editor.views(&self.arena);
-        paint_with_controls(
+        let images = Images::new();
+        paint_with_images(
             &self.frags,
             &self.tree,
             &self.arena,
             &self.table,
             &IdFont,
-            Target {
+            Resources {
                 base: None,
-                scale: 1,
+                images: &images,
+                controls: &views,
             },
-            &views,
+            1,
         )
     }
 
@@ -362,6 +365,8 @@ pub fn raster(list: &DisplayList, region: (i32, i32, i32, i32)) -> String {
                 ));
             }
             Item::PopClip => clip = None,
+            // These pages have no images.
+            Item::Image { .. } => {}
         }
     }
     let mut out = String::new();

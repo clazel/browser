@@ -413,6 +413,7 @@ pub proof fn lemma_index(certs: Seq<PathCert>, i: int)
 }
 
 /// `theorems`-style proof of `thm_p15_equivalence`.
+#[verifier::spinoff_prover]
 pub proof fn lemma_p15_equivalence(certs: Seq<PathCert>)
     ensures thm_p15_equivalence(certs),
 {

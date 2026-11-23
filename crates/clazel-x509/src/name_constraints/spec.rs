@@ -7,8 +7,13 @@
 //! - The input is the complete DER value inside the nameConstraints
 //!   extension's OCTET STRING. This module does not inspect outer criticality.
 //! - `GeneralSubtrees` must contain at least one `GeneralSubtree`; permitted
-//!   `[0]` must precede excluded `[1]`, and both optional fields may be absent
-//!   because both are OPTIONAL in the RFC ASN.1 declaration.
+//!   `[0]` must precede excluded `[1]`, and at least one of the two must be
+//!   present. Both are OPTIONAL in the ASN.1, but §4.2.1.10's prose says
+//!   "either the permittedSubtrees field or the excludedSubtrees MUST be
+//!   present", and ITU-T X.509 (10/2019) §9.4.2.2 "at least one of ... shall
+//!   be present". An empty SEQUENCE is refused here, at decode, as
+//!   `policy_constraints/spec.rs` refuses its own empty SEQUENCE. Chrome
+//!   (BoringSSL `NameConstraints::Parse`) refuses it too.
 //! - This profile accepts only the DER DEFAULT form for `minimum` (omitted,
 //!   interpreted as zero) and requires `maximum` absent. Any encoded distance
 //!   field is outside this decoder's profile and is rejected.
@@ -202,12 +207,14 @@ pub open spec fn parse_subtrees_field(input: Seq<u8>, pos: nat, end: nat, number
 }
 
 /// Parse ordered optional fields after the outer NameConstraints SEQUENCE.
+/// RFC 5280 §4.2.1.10: "either the permittedSubtrees field or the
+/// excludedSubtrees MUST be present", so no fields at all is refused.
 pub open spec fn parse_name_constraints_fields(input: Seq<u8>, pos: nat, end: nat)
     -> Option<NameConstraints>
     recommends pos <= end && end <= input.len()
 {
     if pos == end {
-        Some(NameConstraints { permitted_subtrees: None, excluded_subtrees: None })
+        None
     } else {
         match clazel_der::spec::read_tlv(input, pos, end) {
             Some(field) if field.tag == clazel_der::spec::context_specific(0, true) =>

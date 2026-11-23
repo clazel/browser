@@ -300,6 +300,18 @@ precisely. "Audited" means two things, neither of them a human approval:
      cites a man page;
    - no raw pointer arithmetic and no dereference inside a block, and every
      `pub fn` is safe;
+   - the one **code entry** (jit.md J.0(a)): `enter.rs` holds, once per ABI,
+     an `unsafe` block whose whole body is exactly the one expression
+     `(transmute::<usize, unsafe extern "ABI" fn(*mut u8, usize, usize)>(stub))(ctx,
+     entry, len)`, and that block is the whole body of `fn run(stub: usize,
+     ctx: *mut u8, entry: usize, len: usize)` (no `let`, no condition or loop,
+     nothing before or after), so the four names are the function's parameters;
+     `stub` is the base of a code region the crate mapped and checked (the
+     enter stub is the only code that meets the platform ABI), and
+     `transmute` is rejected everywhere else;
+   - only `clazel-codecheck` and `clazel-jit` may name the code-region API
+     (`Validated`, `enter`, the regions and the writer), so only they can build
+     an entry, write code or run it;
    - the README states the measured number of `unsafe` blocks and lines, and
      the generated status table lists them per crate.
 2. **An LLM audit** of every change, by a session other than the one that

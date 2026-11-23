@@ -496,11 +496,11 @@ pub proof fn lemma_carry_out_wf(
 /// navigation (with the partition key of the renderer's domain, the
 /// transducer started with no redirect), and carries out the transducer's
 /// first actions.
-pub proof fn lemma_begin_navigation_wf(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, url: Seq<u32>)
+pub proof fn lemma_begin_navigation_wf(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, url: Seq<u32>, req: clazel_fetch::request::spec::Req)
     requires
         crate::invariant::kernel_wf(rules, urls, s),
     ensures
-        crate::invariant::kernel_wf(rules, urls, begin_navigation(rules, urls, fetch, s, tab, url).0),
+        crate::invariant::kernel_wf(rules, urls, begin_navigation(rules, urls, fetch, s, tab, url, req).0),
 {
     crate::invariant::lemma_find_by_tab(s.renderers, tab, 0);
     if let Some(i) = find_by_tab(s.renderers, tab, 0) {
@@ -514,7 +514,7 @@ pub proof fn lemma_begin_navigation_wf(rules: Seq<clazel_psl::spec::Rule>, urls:
                     crate::invariant::lemma_fail_navigation_wf(rules, urls, s0, i, old, error_bad_url());
                 },
                 Some(parsed) => {
-                    let (fs, actions) = clazel_fetch::transducer::spec::start(parsed);
+                    let (fs, actions) = clazel_fetch::transducer::spec::start_req(parsed, req);
                     let nav = Navigation { url, fetch: fs, partition: crate::domain::domain_of_renderer(rules, old) };
                     assert(fs.redirects == 0);
                     let r = Renderer { pending: Some(nav), ..old };

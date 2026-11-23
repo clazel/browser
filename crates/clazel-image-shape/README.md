@@ -8,7 +8,8 @@ policy, **no dependencies**.
 ## What it holds
 
 - `Decoder` (`src/lib.rs`): `decode_config(prefix)` (format, width, height,
-  frame count if known, or `NeedMore`), `work_len(config)` (the work buffer's
+  frame count if known, the coding where a format has several whose work
+  space differs (progressive JPEG, lossy WebP), or `NeedMore`), `work_len(config)` (the work buffer's
   size, a function of the config the decoder states), `start(config)`,
   `step(state, chunk, buffers)` returning `NeedMore`, `FrameDone` or an
   error, and the invariant `inv(state, buffers)`. Nothing allocates: the

@@ -64,6 +64,7 @@ pub open spec fn message_texts_ok(m: clazel_ipc::message::spec::Message) -> bool
         clazel_ipc::message::spec::Message::StorageGetItem { key } | clazel_ipc::message::spec::Message::StorageRemoveItem { key } => text_ok(key),
         clazel_ipc::message::spec::Message::StorageSetItem { key, value } => text_ok(key) && text_ok(value),
         clazel_ipc::message::spec::Message::Navigate { url } => text_ok(url),
+        clazel_ipc::message::spec::Message::Submit { url, method, content_type, body } => text_ok(url) && text_ok(method) && bytes_ok(content_type) && bytes_ok(body),
         clazel_ipc::message::spec::Message::Display { title, text, links } => text_ok(title) && text_ok(text) && links.len() < 0x1_0000_0000_0000_0000
             && forall|j: int| 0 <= j < links.len() ==> text_ok(#[trigger] links[j]),
         clazel_ipc::message::spec::Message::Commit { url, content_type, .. } => text_ok(url) && bytes_ok(content_type),
@@ -212,6 +213,15 @@ pub proof fn lemma_message_ok(m: clazel_ipc::message::spec::Message)
             );
             lemma_six(clazel_ipc::cbor::spec::Token::Uint(kind), clazel_ipc::cbor::spec::Token::Uint(x), clazel_ipc::cbor::spec::Token::Uint(y), clazel_ipc::cbor::spec::Token::Bool(negative), clazel_ipc::cbor::spec::Token::Uint(delta), clazel_ipc::cbor::spec::Token::Uint(key));
         },
+        clazel_ipc::message::spec::Message::Submit { url, method, content_type, body } => {
+            lemma_msg(
+                m,
+                5,
+                12,
+                seq![clazel_ipc::cbor::spec::Token::Text(url), clazel_ipc::cbor::spec::Token::Text(method), clazel_ipc::cbor::spec::Token::Bytes(content_type), clazel_ipc::cbor::spec::Token::Bytes(body)],
+            );
+            lemma_four(clazel_ipc::cbor::spec::Token::Text(url), clazel_ipc::cbor::spec::Token::Text(method), clazel_ipc::cbor::spec::Token::Bytes(content_type), clazel_ipc::cbor::spec::Token::Bytes(body));
+        },
         clazel_ipc::message::spec::Message::FetchStyle { request, url } => {
             lemma_msg(m, 3, 14, seq![clazel_ipc::cbor::spec::Token::Uint(request), clazel_ipc::cbor::spec::Token::Text(url)]);
             lemma_two(clazel_ipc::cbor::spec::Token::Uint(request), clazel_ipc::cbor::spec::Token::Text(url));
@@ -283,6 +293,22 @@ proof fn lemma_three(a: clazel_ipc::cbor::spec::Token, b: clazel_ipc::cbor::spec
     lemma_items_step(seq![a, b, c], 3);
     assert(seq![a, b, c].drop_first() =~= seq![b, c]);
     lemma_two(b, c);
+}
+
+/// Four non-array tokens owed four times (item 6.16's `Submit`).
+proof fn lemma_four(a: clazel_ipc::cbor::spec::Token, b: clazel_ipc::cbor::spec::Token, c: clazel_ipc::cbor::spec::Token, d: clazel_ipc::cbor::spec::Token)
+    requires
+        !(a is Array),
+        !(b is Array),
+        !(c is Array),
+        !(d is Array),
+    ensures
+        clazel_ipc::cbor::spec::is_items(seq![a, b, c, d], 4) == (clazel_ipc::cbor::spec::token_ok(a) && clazel_ipc::cbor::spec::token_ok(b)
+            && clazel_ipc::cbor::spec::token_ok(c) && clazel_ipc::cbor::spec::token_ok(d)),
+{
+    lemma_items_step(seq![a, b, c, d], 4);
+    assert(seq![a, b, c, d].drop_first() =~= seq![b, c, d]);
+    lemma_three(b, c, d);
 }
 
 /// Two non-array tokens owed twice.
@@ -376,6 +402,7 @@ pub fn message_ok_exec(m: &Msg) -> (r: bool)
         Msg::StorageGetItem { key } | Msg::StorageRemoveItem { key } => text_ok_exec(key.as_slice()),
         Msg::StorageSetItem { key, value } => text_ok_exec(key.as_slice()) && text_ok_exec(value.as_slice()),
         Msg::Navigate { url } => text_ok_exec(url.as_slice()),
+        Msg::Submit { url, method, content_type, body } => text_ok_exec(url.as_slice()) && text_ok_exec(method.as_slice()) && bytes_ok_exec(content_type.as_slice()) && bytes_ok_exec(body.as_slice()),
         Msg::Display { title, text, links } => text_ok_exec(title.as_slice()) && text_ok_exec(text.as_slice()) && texts_ok_exec(links.as_slice()),
         Msg::Commit { url, content_type, .. } => text_ok_exec(url.as_slice()) && bytes_ok_exec(content_type.as_slice()),
         Msg::Body { bytes } => bytes_ok_exec(bytes.as_slice()),

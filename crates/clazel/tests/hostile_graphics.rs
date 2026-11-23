@@ -69,8 +69,19 @@ const BASE: u64 = 16 * MIB;
 const CAP: u64 = 8 * 1024 * MIB;
 
 /// The GPU process's stated limit: Metal and the driver (measured near 100
-/// MiB idle), a frame and its copy at 800 by 600, a list of at most 256 MiB
-/// (`clazel_gpu::channel::LIST_MAX`) and the atlas (at most 128 MiB).
+/// MiB idle), a frame and its copy at 800 by 600, a list of at most 384 MiB
+/// (`clazel_gpu::channel::LIST_MAX`, which item 6.12 made the display list's own
+/// limit; it was 256 MiB) and the atlas (at most 128 MiB).
+///
+/// **Images are not in this figure, and no case here paints one** (6.11 is what
+/// emits image draws): a list of image uploads can hold 256 MiB of live pixels,
+/// which are in memory as the list (384 MiB at most), the decoded items (up to 256
+/// MiB), the store's CPU copy (256 MiB, kept for compaction) and the store
+/// itself (512 MiB once it holds 256 MiB, as it grows to twice what it holds). That
+/// worst case is about 1.4 GiB, **over this limit, and not measured**. Item 6.12
+/// states it and leaves the choice (raise the limit, or shrink the copies, or
+/// the second channel) to the maintainer with the upload timings. A case with
+/// large images is for the item that makes pages paint them.
 const GPU_LIMIT: u64 = 1024 * MIB;
 
 /// The viewport every case is painted at.

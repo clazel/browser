@@ -11,9 +11,18 @@
 //!
 //! Modelling choices:
 //!
-//! - **No replaced element here has a natural aspect ratio** (no image is
-//!   decoded, Phase 6; an `img` of natural size 0 by 0 has none), so the
-//!   rules that read one never apply.
+//! - **An `img` has a natural size and ratio once its config is known** (item 6.11,
+//!   [`Images`]); until then it is 0 by 0 and has no ratio (HTML §15.4.2: "a
+//!   replaced element whose natural dimensions are 0"). Nothing else has a ratio. The
+//!   ratio is the natural width to the natural height, so §10.3.2's rules 2 and 3 and
+//!   §10.6.2's rule 2 read it. Where a ratio exists, a `height` or `width` that is
+//!   `auto` is taken from the other axis's *used* value (after `min-` and `max-`), which
+//!   is what §10.6.2 rule 2 says; rule 1 (both `auto`: the intrinsic height) agrees with it
+//!   until `max-width` or `min-width` bites, where CSS 2.1 points to its §10.4 table of
+//!   constraint violations for elements with a ratio, which keeps the ratio; here the used
+//!   width is constrained alone and the height follows it, the same result for the case
+//!   that matters (`max-width: 100%`), and `min-` and `max-` on both axes of a ratio
+//!   element are not reconciled by the table (listed).
 //! - **Natural sizes** (content box, 1/64 px): an `img`, 0 by 0; an
 //!   `iframe`, none (so §10.3.2's 300px and §10.6.2's 150px apply, CSS's
 //!   default object size); a text `input`, its character width converted as
@@ -39,6 +48,7 @@ use super::heights::line_height;
 use super::length::{max_size_opt, size, size_opt};
 use crate::boxes::replaced::string;
 use crate::boxes::{Input, Replaced};
+use crate::images::{ImageStatus, Images};
 
 /// The natural width and height of a replaced element (content box), if
 /// it has them.
@@ -48,6 +58,8 @@ pub struct Natural {
     pub width: Option<i32>,
     /// The natural height.
     pub height: Option<i32>,
+    /// The natural aspect ratio, width to height (both above 0), if it has one.
+    pub ratio: Option<(i32, i32)>,
 }
 
 /// 4px: the border and padding a `select` list's fixed look adds (item
@@ -75,21 +87,21 @@ pub fn natural(
     fonts: &impl TextFns,
     arena: &Arena,
     node: Option<usize>,
+    images: &Images,
 ) -> Natural {
     let m = fonts.metrics(style);
     let line = line_height(style, &m).max(0);
     let text = |chars: u32| Natural {
         width: Some(chars_to_px(chars, m.average, m.maximum)),
         height: Some(line),
+        ratio: None,
     };
     match what {
-        Replaced::Image => Natural {
-            width: Some(0),
-            height: Some(0),
-        },
+        Replaced::Image => image_natural(node.map(|n| images.element(n)).unwrap_or_default()),
         Replaced::Iframe { .. } => Natural {
             width: None,
             height: None,
+            ratio: None,
         },
         // Item 6.15: a select list, `chars` wide and `rows` lines high, and
         // 4px more in each direction for the list's border and padding.
@@ -100,12 +112,14 @@ pub fn natural(
                     .unwrap_or(i32::MAX)
                     .saturating_add(SELECT_INSET),
             ),
+            ratio: None,
         },
         Replaced::Input(Input::Text { chars }) => text(*chars),
         Replaced::Input(Input::Other) => text(20),
         Replaced::Input(Input::Check) => Natural {
             width: Some(CHECK),
             height: Some(CHECK),
+            ratio: None,
         },
         Replaced::Input(Input::Button) => {
             let attrs = node.and_then(|n| html_element(arena, n)).map(|(_, a)| a);
@@ -125,6 +139,7 @@ pub fn natural(
             Natural {
                 width: Some(width),
                 height: Some(line),
+                ratio: None,
             }
         }
         Replaced::TextArea { cols, rows } => Natural {
@@ -132,49 +147,100 @@ pub fn natural(
             height: Some(
                 i32::try_from(i64::from(*rows).saturating_mul(i64::from(line))).unwrap_or(i32::MAX),
             ),
+            ratio: None,
         },
     }
 }
 
+/// The natural size and ratio of an `img` in state `status` (the module's modelling
+/// choices): its config's size in CSS pixels once known and not empty, else 0 by 0.
+fn image_natural(status: ImageStatus) -> Natural {
+    let px = |v: u32| i32::try_from(v.saturating_mul(64)).unwrap_or(i32::MAX);
+    match status.natural() {
+        Some(d) if d.width > 0 && d.height > 0 => Natural {
+            width: Some(px(d.width)),
+            height: Some(px(d.height)),
+            ratio: i32::try_from(d.width)
+                .ok()
+                .zip(i32::try_from(d.height).ok()),
+        },
+        _ => Natural {
+            width: Some(0),
+            height: Some(0),
+            ratio: None,
+        },
+    }
+}
+
+/// `v * num / den` rounded to nearest, in `i32` (`den` above 0).
+fn scale(v: i32, num: i32, den: i32) -> i32 {
+    let den = i64::from(den.max(1));
+    let n = i64::from(v)
+        .saturating_mul(i64::from(num))
+        .saturating_add(den / 2)
+        .checked_div(den)
+        .unwrap_or(0);
+    i32::try_from(n.clamp(0, i64::from(i32::MAX))).unwrap_or(i32::MAX)
+}
+
 /// CSS 2.1 §10.3.2's used width of a replaced element with natural size
-/// `n` and style `style` in a containing block of width `cb`, with §10.4.
-pub fn used_width(n: Natural, style: &ComputedStyle, cb: i32) -> i32 {
+/// `n` and style `style` in a containing block of width `cb` whose height basis is
+/// `basis` (for a `height` that is a percentage), with §10.4.
+pub fn used_width(n: Natural, style: &ComputedStyle, cb: i32, basis: Option<i32>) -> i32 {
     let tentative = match size(style.width, cb) {
         Some(w) => w,
-        // 1. "If 'height' and 'width' both have computed values of 'auto'
-        // and the element also has an intrinsic width, then that intrinsic
-        // width is the used value of 'width'." 2 and 3 read a ratio (none
-        // here). 4. "Otherwise, if 'width' has a computed value of 'auto',
-        // and the element has an intrinsic width, then that intrinsic width
-        // is the used value of 'width'." 5. "Otherwise, if 'width' has a
-        // computed value of 'auto', but none of the conditions above are
-        // met, then the used value of 'width' becomes 300px."
-        None => n.width.unwrap_or(300 * 64),
+        None => match (n.ratio, size_opt(style.height, basis)) {
+            // 2. "if 'width' has a computed value of 'auto', 'height' has some other
+            // computed value, and the element does have an intrinsic ratio; then the
+            // used value of 'width' is: (used height) * (intrinsic ratio)".
+            (Some((rw, rh)), Some(h)) => scale(clamp_height(h, style, basis), rw, rh),
+            // 1. "If 'height' and 'width' both have computed values of 'auto' and the
+            // element also has an intrinsic width, then that intrinsic width is the used
+            // value of 'width'." 4. "Otherwise, if 'width' has a computed value of
+            // 'auto', and the element has an intrinsic width, then that intrinsic width
+            // is the used value of 'width'." 3 (a ratio and no intrinsic size) never
+            // arises: a ratio comes with both. 5. "Otherwise, if 'width' has a computed
+            // value of 'auto', but none of the conditions above are met, then the used
+            // value of 'width' becomes 300px."
+            _ => n.width.unwrap_or(300 * 64),
+        },
     };
-    let basis = Some(cb).filter(|&c| c >= 0).or(Some(0));
-    let min = size_opt(style.min_width, basis).unwrap_or(0);
-    let max = max_size_opt(style.max_width, basis);
+    let basis_w = Some(cb).filter(|&c| c >= 0).or(Some(0));
+    let min = size_opt(style.min_width, basis_w).unwrap_or(0);
+    let max = max_size_opt(style.max_width, basis_w);
     super::heights::min_max(tentative, min, max)
 }
 
-/// CSS 2.1 §10.6.2's used height of a replaced element with natural size
-/// `n` and style `style`, whose children's percentage basis is `basis`,
-/// with §10.7.
-pub fn used_height(n: Natural, style: &ComputedStyle, basis: Option<i32>) -> i32 {
-    let tentative = match size_opt(style.height, basis) {
-        Some(h) => h,
-        // 1. "If 'height' and 'width' both have computed values of 'auto'
-        // and the element also has an intrinsic height, then that intrinsic
-        // height is the used value of 'height'." 2 reads a ratio. 3.
-        // "Otherwise, if 'height' has a computed value of 'auto', and the
-        // element has an intrinsic height, then that intrinsic height is the
-        // used value of 'height'." 4. "Otherwise … the height of the largest
-        // rectangle that has a 2:1 ratio, has a height not greater than
-        // 150px, and has a width not greater than the device width" (the
-        // device is taken to be at least 300px wide).
-        None => n.height.unwrap_or(150 * 64),
-    };
+/// `h` with `min-height` and `max-height` applied (§10.7).
+fn clamp_height(h: i32, style: &ComputedStyle, basis: Option<i32>) -> i32 {
     let min = size_opt(style.min_height, basis).unwrap_or(0);
     let max = max_size_opt(style.max_height, basis);
-    super::heights::min_max(tentative, min, max)
+    super::heights::min_max(h, min, max)
+}
+
+/// CSS 2.1 §10.6.2's used height of a replaced element with natural size
+/// `n` and style `style`, whose children's percentage basis is `basis`, once its
+/// used width is `width` (content box), with §10.7.
+pub fn used_height(n: Natural, style: &ComputedStyle, basis: Option<i32>, width: i32) -> i32 {
+    let tentative = match size_opt(style.height, basis) {
+        Some(h) => h,
+        None => match n.ratio {
+            // 2. "Otherwise, if 'height' has a computed value of 'auto', and the element
+            // has an intrinsic ratio then the used value of 'height' is: (used width) /
+            // (intrinsic ratio)". (Rule 1, both `auto` with an intrinsic height, is the
+            // same until a `min-` or `max-` width bites; the module's modelling
+            // choices.)
+            Some((rw, rh)) => scale(width, rh, rw),
+            // 1. "If 'height' and 'width' both have computed values of 'auto' and the
+            // element also has an intrinsic height, then that intrinsic height is the
+            // used value of 'height'." 3. "Otherwise, if 'height' has a computed value
+            // of 'auto', and the element has an intrinsic height, then that intrinsic
+            // height is the used value of 'height'." 4. "Otherwise … the height of the
+            // largest rectangle that has a 2:1 ratio, has a height not greater than
+            // 150px, and has a width not greater than the device width" (the device is
+            // taken to be at least 300px wide).
+            None => n.height.unwrap_or(150 * 64),
+        },
+    };
+    clamp_height(tentative, style, basis)
 }

@@ -18,13 +18,22 @@
 //! - **Defensive, not trusting**: a list that passed the validator never makes this
 //!   module return an error (`theorem_validated_bounds`), but every step is checked
 //!   anyway and returns an [`Error`] rather than panicking.
+//! - **An image draw is a quad** (item 6.12, `crate::backend`): cut to the viewport
+//!   and dropped if it misses its clip, as any quad, with its [`ImageDraw`] (the whole
+//!   destination, which the cut does not change, the source and where the image is
+//!   now) in the frame's table. A draw with an empty destination or an empty source
+//!   draws nothing and adds nothing. Image uploads and the image store's replacement
+//!   follow the rules of the atlas's, in the same order with the draws.
+
+use std::sync::Arc;
 
 use clazel_displaylist::exec::ExecItem;
 
 use crate::Error;
 use crate::atlas::{Atlas, Change};
-use crate::backend::{Frame, Op, Quad};
+use crate::backend::{Frame, IMAGE_COLUMNS, ImageDraw, Op, Quad};
 use crate::geom::{Rect, Viewport};
+use crate::images::{Change as ImageChange, Images};
 
 /// The deepest clip stack: `clazel_displaylist::spec::MAX_CLIP_DEPTH`.
 pub const MAX_CLIP_DEPTH: usize = 256;
@@ -63,7 +72,12 @@ impl Builder {
     }
 
     /// Apply one item.
-    pub fn step(&mut self, item: &ExecItem, atlas: &mut Atlas) -> Result<(), Error> {
+    pub fn step(
+        &mut self,
+        item: &ExecItem,
+        atlas: &mut Atlas,
+        images: &mut Images,
+    ) -> Result<(), Error> {
         match item {
             ExecItem::FillRect {
                 x,
@@ -116,7 +130,97 @@ impl Builder {
                 })
             }
             ExecItem::FreeMask { id } => atlas.free(*id),
+            ExecItem::UploadImage {
+                id,
+                image_width,
+                image_height,
+                pixels,
+            } => {
+                let mut changes = Vec::new();
+                let shared: Arc<[u8]> = Arc::from(pixels.as_slice());
+                images.upload(*id, *image_width, *image_height, shared, &mut changes)?;
+                self.apply_images(&changes, images)
+            }
+            ExecItem::DrawImage {
+                id,
+                x,
+                y,
+                width,
+                height,
+                src_x,
+                src_y,
+                src_width,
+                src_height,
+                linear,
+            } => {
+                let entry = images.get(*id).ok_or(Error::Range)?;
+                // The source must be inside the image (the validator's rule).
+                let inside = |at: u16, len: u16, side: u16| {
+                    at.checked_add(len).is_some_and(|end| end <= side)
+                };
+                if !inside(*src_x, *src_width, entry.width)
+                    || !inside(*src_y, *src_height, entry.height)
+                {
+                    return Err(Error::Range);
+                }
+                let rect = Rect::at(*x, *y, *width, *height).ok_or(Error::Range)?;
+                if *width == 0 || *height == 0 || *src_width == 0 || *src_height == 0 {
+                    return Ok(());
+                }
+                // Missing the viewport or the clip adds nothing, not even the table's
+                // row.
+                if visible(rect, self.screen, self.clip()?).is_none() {
+                    return Ok(());
+                }
+                let index =
+                    u32::try_from(self.frame.image_draws.len()).map_err(|_| Error::Range)?;
+                self.frame.image_draws.push(ImageDraw {
+                    x: *x,
+                    y: *y,
+                    width: *width,
+                    height: *height,
+                    src_x: (*src_x).into(),
+                    src_y: (*src_y).into(),
+                    src_width: (*src_width).into(),
+                    src_height: (*src_height).into(),
+                    offset: entry.offset,
+                    image_width: entry.width.into(),
+                    image_height: entry.height.into(),
+                    linear: *linear,
+                });
+                self.draw(Quad {
+                    rect,
+                    origin_x: 0,
+                    origin_y: 0,
+                    offset: index,
+                    columns: IMAGE_COLUMNS,
+                    colour: 0,
+                })
+            }
+            ExecItem::FreeImage { id } => images.free(*id),
         }
+    }
+
+    /// Turn image store changes into operations, in order.
+    fn apply_images(&mut self, changes: &[ImageChange], images: &Images) -> Result<(), Error> {
+        for change in changes {
+            match change {
+                ImageChange::Resize { capacity } => {
+                    self.close()?;
+                    self.frame.ops.push(Op::Images {
+                        capacity: *capacity,
+                    });
+                }
+                ImageChange::Upload { id } => {
+                    let entry = images.get(*id).ok_or(Error::Range)?;
+                    self.frame.ops.push(Op::ImageUpload {
+                        offset: entry.offset,
+                        pixels: Arc::clone(&entry.pixels),
+                    });
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Intersect the clip with `rect`.
@@ -220,13 +324,24 @@ pub fn visible(rect: Rect, screen: Rect, scissor: Rect) -> Option<Rect> {
     (!scissor.is_empty() && !cut.intersect(scissor).is_empty()).then_some(cut)
 }
 
-/// Build the frame for a list that passed the validator, updating the atlas.
-pub fn build(items: &[ExecItem], viewport: Viewport, atlas: &mut Atlas) -> Result<Frame, Error> {
+/// Build the frame for a list that passed the validator, updating the atlas and the
+/// image store.
+pub fn build_with(
+    items: &[ExecItem],
+    viewport: Viewport,
+    atlas: &mut Atlas,
+    images: &mut Images,
+) -> Result<Frame, Error> {
     let mut builder = Builder::new(viewport);
     for item in items {
-        builder.step(item, atlas)?;
+        builder.step(item, atlas, images)?;
     }
     builder.finish()
+}
+
+/// [`build_with`] with no images before the list and none kept after it.
+pub fn build(items: &[ExecItem], viewport: Viewport, atlas: &mut Atlas) -> Result<Frame, Error> {
+    build_with(items, viewport, atlas, &mut Images::new())
 }
 
 #[cfg(test)]
@@ -379,6 +494,8 @@ mod tests {
                 Op::Atlas { capacity } => ("atlas", *capacity),
                 Op::Upload { offset, .. } => ("upload", *offset),
                 Op::Draw { first, .. } => ("draw", *first),
+                Op::Images { capacity } => ("images", *capacity),
+                Op::ImageUpload { offset, .. } => ("image upload", *offset),
             })
             .collect();
         assert_eq!(

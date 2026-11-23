@@ -144,6 +144,7 @@
 //! - **No item cap here**: 5.17a's limit of 1,048,576 items per list applies
 //!   to what 5.20 sends for one viewport, after culling.
 
+pub mod background;
 pub mod decor;
 pub mod dump;
 pub mod geometry;
@@ -155,5 +156,5 @@ mod proofs;
 #[cfg(test)]
 mod tests;
 
-pub use order::{Target, paint, paint_with_controls};
+pub use order::{Resources, paint, paint_with_images};
 pub use state::{DeviceRect, DisplayList, HitRegion, Item, PlacedGlyph, TextItem};

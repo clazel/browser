@@ -32,6 +32,9 @@ pub struct Crate {
     pub deps: Vec<(String, String)>,
     /// The subset of `deps` declared under `[dev-dependencies]`.
     pub dev_deps: Vec<(String, String)>,
+    /// The names this crate gives its dependency on `clazel-sys` when it
+    /// renames it (`foo = { package = "clazel-sys", .. }`), whatever the table.
+    pub sys_renamed_as: Vec<String>,
 }
 
 /// Load every workspace member via `cargo metadata`.
@@ -87,6 +90,7 @@ fn parse_package(p: &Value) -> Result<Crate, String> {
             })
             .unwrap_or_default()
     };
+    let sys_renamed_as = renamed_dependency(p, "clazel-sys");
     let deps = deps_where(false);
     let dev_deps = deps_where(true);
     Ok(Crate {
@@ -117,7 +121,22 @@ fn parse_package(p: &Value) -> Result<Crate, String> {
         manifest,
         deps,
         dev_deps,
+        sys_renamed_as,
     })
+}
+
+/// The names under which `cargo metadata`'s package `p` depends on the package
+/// `target` renamed (`rename` is set only then), in any kind of dependency.
+fn renamed_dependency(p: &Value, target: &str) -> Vec<String> {
+    p.get("dependencies")
+        .and_then(Value::as_array)
+        .map(|ds| {
+            ds.iter()
+                .filter(|d| d.get("name").and_then(Value::as_str) == Some(target))
+                .filter_map(|d| d.get("rename")?.as_str().map(str::to_owned))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// All `.rs` files under a crate, skipping build output and hidden dirs.
@@ -183,6 +202,18 @@ impl Crate {
 /// a `// AXIOM:` justification on one of the three lines above them.
 pub fn scan_crate(c: &Crate) -> Result<CrateScan, String> {
     let mut result = CrateScan::default();
+    if !c.is_sys() && !sys::CODE_USERS.contains(&c.name.as_str()) {
+        // A renamed dependency hides the name the source rules look for.
+        for alias in &c.sys_renamed_as {
+            result.violations.push(format!(
+                "{}: code-region API (xtask/src/sys.rs rule 11): the dependency on \
+                 `clazel-sys` is renamed `{alias}`, which hides it from the source check; \
+                 only {} may use it",
+                relative(&c.manifest),
+                sys::CODE_USERS.join(" and ")
+            ));
+        }
+    }
     for file in rust_files(&c.dir)? {
         let source =
             std::fs::read_to_string(&file).map_err(|e| format!("{}: {e}", file.display()))?;
@@ -205,6 +236,18 @@ pub fn scan_crate(c: &Crate) -> Result<CrateScan, String> {
                 result.violations.push(format!(
                     "{}:{line}: unsafe policy (CLAUDE.md rule 1): {what}",
                     relative(&file)
+                ));
+            }
+        }
+        if !sys_crate && !sys::CODE_USERS.contains(&c.name.as_str()) {
+            let found = sys::code_use_violations(&source)
+                .map_err(|e| format!("{}: {e}", file.display()))?;
+            for (line, what) in found {
+                result.violations.push(format!(
+                    "{}:{line}: code-region API (xtask/src/sys.rs rule 11): {what}; only {} \
+                     may use it",
+                    relative(&file),
+                    sys::CODE_USERS.join(" and ")
                 ));
             }
         }
@@ -409,7 +452,7 @@ pub fn check_theorems(c: &Crate) -> Result<Vec<String>, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{has_axiom_comment, missing_theorems};
+    use super::{Crate, has_axiom_comment, missing_theorems, renamed_dependency, scan_crate};
 
     fn names(v: &[&str]) -> Vec<String> {
         v.iter().map(|s| (*s).to_owned()).collect()
@@ -450,5 +493,61 @@ mod tests {
         assert!(has_axiom_comment(&lines, 4));
         assert!(!has_axiom_comment(&lines, 5));
         assert!(!has_axiom_comment(&lines, 1));
+    }
+
+    #[test]
+    fn a_renamed_dependency_on_clazel_sys_is_seen_in_cargo_metadata() {
+        let pkg: serde_json::Value = serde_json::json!({
+            "dependencies": [
+                {"name": "clazel-sys", "rename": "s", "kind": null},
+                {"name": "clazel-sys", "rename": null, "kind": "dev"},
+                {"name": "libc", "rename": "l"},
+            ]
+        });
+        assert_eq!(renamed_dependency(&pkg, "clazel-sys"), vec!["s".to_owned()]);
+        let plain: serde_json::Value =
+            serde_json::json!({"dependencies": [{"name": "clazel-sys", "rename": null}]});
+        assert!(renamed_dependency(&plain, "clazel-sys").is_empty());
+    }
+
+    /// A crate in a scratch directory, with the given dependency renames.
+    fn scratch_crate(name: &str, renamed: &[&str]) -> Result<Crate, String> {
+        let dir = std::env::temp_dir().join(format!("clazel-xtask-{name}-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("src")).map_err(|e| e.to_string())?;
+        std::fs::write(dir.join("src").join("lib.rs"), "pub fn f() {}\n")
+            .map_err(|e| e.to_string())?;
+        Ok(Crate {
+            name: name.to_owned(),
+            manifest: dir.join("Cargo.toml"),
+            dir,
+            tier: None,
+            target_tier: None,
+            verus: false,
+            tooling: false,
+            theorems: Vec::new(),
+            deps: Vec::new(),
+            dev_deps: Vec::new(),
+            sys_renamed_as: renamed.iter().map(|s| (*s).to_owned()).collect(),
+        })
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore = "writes files")]
+    fn rule_11_rejects_a_renamed_dependency_outside_the_listed_crates() -> Result<(), String> {
+        let bad = scratch_crate("planted-renamer", &["s"])?;
+        let scan = scan_crate(&bad)?;
+        assert!(
+            scan.violations.iter().any(|v| v.contains("renamed `s`")),
+            "{:?}",
+            scan.violations
+        );
+        let plain = scratch_crate("planted-plain", &[])?;
+        assert!(scan_crate(&plain)?.violations.is_empty());
+        let allowed = scratch_crate("clazel-jit", &["s"])?;
+        assert!(scan_crate(&allowed)?.violations.is_empty());
+        for c in [bad, plain, allowed] {
+            let _ = std::fs::remove_dir_all(&c.dir);
+        }
+        Ok(())
     }
 }

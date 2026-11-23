@@ -327,7 +327,7 @@ impl Editor {
         }
     }
 
-    /// The views of the controls, for `paint_with_controls`: every control,
+    /// The views of the controls, for `Resources::controls`: every control,
     /// every `button`, and the focused element.
     pub fn views(&self, arena: &Arena) -> Vec<ControlView> {
         self.order

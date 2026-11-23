@@ -115,6 +115,7 @@ pub use fragment::{
 use clazel_dom::exec::Arena;
 
 use crate::boxes::{BoxTree, StyleFns};
+use crate::images::Images;
 
 /// The viewport: the size of the initial containing block (CSS 2.1 §10.1),
 /// in 1/64 px.
@@ -147,5 +148,21 @@ pub fn layout(
     fonts: &impl TextFns,
     viewport: Viewport,
 ) -> FragmentTree {
-    block::run(tree, arena, styles, fonts, viewport)
+    layout_with_images(tree, arena, &Images::new(), styles, fonts, viewport)
+}
+
+/// [`layout`], with replaced `img` elements sized from the natural sizes in `images` (item
+/// 6.11; CSS 2.1 §10.3.2, §10.6.2). `tree` should be built by
+/// [`crate::boxes::build_with_images`] from the same `images`, which gives a broken image
+/// its `alt` text. Layout is a function of its inputs: when an image's config arrives, the
+/// caller updates `images` and lays out again.
+pub fn layout_with_images(
+    tree: &BoxTree,
+    arena: &Arena,
+    images: &Images,
+    styles: &impl StyleFns,
+    fonts: &impl TextFns,
+    viewport: Viewport,
+) -> FragmentTree {
+    block::run(tree, arena, images, styles, fonts, viewport)
 }

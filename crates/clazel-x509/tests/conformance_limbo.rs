@@ -134,7 +134,7 @@ const DECODE_COUNTS: &[(usize, usize)] = &[
     (30158, 30158),
     (30369, 30368),
     (9818, 9817),
-    (9458, 9453),
+    (9458, 9452),
     (1, 1),
 ];
 
@@ -488,10 +488,10 @@ fn limbo_corpus_decodes_without_panic_and_pins_what_it_decides() {
 
 /// How many corpus certificates `parse_path_cert` accepts, of how many.
 /// Every distinct certificate of the corpus (30,379) is offered to it. The
-/// 566 it refuses are 553 whose subjectAltName does not decode, 5 whose
+/// 567 it refuses are 553 whose subjectAltName does not decode, 6 whose
 /// nameConstraints, 4 whose TBS, and one each whose Extensions, keyUsage,
 /// extKeyUsage or signature-algorithm pairing does not; no new rule refuses any.
-const PATH_CERT_COUNTS: (usize, usize) = (29813, 30379);
+const PATH_CERT_COUNTS: (usize, usize) = (29812, 30379);
 
 /// How many certificates that some testcase lists as a trust anchor
 /// `anchor_from_root` (with no distrust-after) turns into an `Anchor`, of

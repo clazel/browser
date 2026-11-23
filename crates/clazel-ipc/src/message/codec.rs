@@ -49,6 +49,17 @@ pub enum Msg {
         /// The URL to go to (not the sender's).
         url: Vec<u8>,
     },
+    /// Renderer to kernel: navigate with a method and a body (item 6.16).
+    Submit {
+        /// The URL to go to (not the sender's).
+        url: Vec<u8>,
+        /// The method: `GET` or `POST`.
+        method: Vec<u8>,
+        /// The body's `Content-Type` field value (empty for `GET`).
+        content_type: Vec<u8>,
+        /// The body's octets (empty for `GET`).
+        body: Vec<u8>,
+    },
     /// Renderer to kernel: show this text rendering of the committed
     /// document.
     Display {
@@ -198,6 +209,22 @@ pub proof fn lemma_max_body_chunk()
 /// `MAX_FRAME` minus 17 (item 5.19).
 pub const MAX_STYLE_CHUNK: usize = 1_048_559;
 
+/// [`max_submit_body`]: the most octets a `Submit`'s body may have, with a
+/// URL, method and content type of at most `MAX_SUBMIT_HEAD` together, for the
+/// message to fit one frame (item 6.16).
+pub const MAX_SUBMIT_BODY: usize = 1_040_320;
+
+/// [`max_submit_head`].
+pub const MAX_SUBMIT_HEAD: usize = 8192;
+
+/// [`MAX_SUBMIT_BODY`] and [`MAX_SUBMIT_HEAD`] are the spec's.
+pub proof fn lemma_max_submit()
+    ensures
+        MAX_SUBMIT_BODY as nat == max_submit_body(),
+        MAX_SUBMIT_HEAD as nat == max_submit_head(),
+{
+}
+
 /// [`MAX_STYLE_CHUNK`] is the spec's [`max_style_chunk`].
 pub proof fn lemma_max_style_chunk()
     ensures
@@ -232,6 +259,7 @@ impl View for Msg {
             Msg::StorageKey { index } => Message::StorageKey { index: *index },
             Msg::StorageLength => Message::StorageLength,
             Msg::Navigate { url } => Message::Navigate { url: url@ },
+            Msg::Submit { url, method, content_type, body } => Message::Submit { url: url@, method: method@, content_type: content_type@, body: body@ },
             Msg::Display { title, text, links } => Message::Display { title: title@, text: text@, links: strings_view(links@) },
             Msg::Commit { url, content_type, kind } => Message::Commit { url: url@, content_type: content_type@, kind: *kind },
             Msg::CookieValue { cookie_string } => Message::CookieValue { cookie_string: cookie_string@ },
@@ -392,6 +420,13 @@ fn parse_fields(tag: u64, toks: &[Tok]) -> (r: Option<Msg>)
         if k == 1 {
             let s = text_at(toks, 2)?;
             Some(Msg::Navigate { url: s })
+        } else { None }
+    } else if tag == 12 {
+        if k == 4 {
+            match (text_at(toks, 2), text_at(toks, 3), bytes_at(toks, 4), bytes_at(toks, 5)) {
+                (Some(a), Some(b), Some(c), Some(d)) => Some(Msg::Submit { url: a, method: b, content_type: c, body: d }),
+                _ => None,
+            }
         } else { None }
     } else if tag == 11 {
         if k == 1 {
@@ -649,6 +684,7 @@ pub fn is_from_renderer(m: &Msg) -> (r: bool)
             | Msg::StorageKey { .. }
             | Msg::StorageLength
             | Msg::Navigate { .. }
+            | Msg::Submit { .. }
             | Msg::Display { .. }
             | Msg::Title { .. }
             | Msg::FetchStyle { .. }
@@ -716,6 +752,15 @@ fn toks4(a: Tok, b: Tok, c: Tok, d: Tok) -> (t: Vec<Tok>)
 {
     let t = vec![a, b, c, d];
     assert(views(t@) =~= seq![a@, b@, c@, d@]);
+    t
+}
+
+fn toks6(a: Tok, b: Tok, c: Tok, d: Tok, e: Tok, f: Tok) -> (t: Vec<Tok>)
+    ensures
+        views(t@) =~= seq![a@, b@, c@, d@, e@, f@],
+{
+    let t = vec![a, b, c, d, e, f];
+    assert(views(t@) =~= seq![a@, b@, c@, d@, e@, f@]);
     t
 }
 
@@ -818,6 +863,14 @@ fn message_tokens(m: &Msg) -> (t: Vec<Tok>)
         Msg::StorageKey { index } => toks3(Tok::Array(2), Tok::Uint(7), Tok::Uint(*index)),
         Msg::StorageLength => toks2(Tok::Array(1), Tok::Uint(8)),
         Msg::Navigate { url } => toks3(Tok::Array(2), Tok::Uint(9), Tok::Text(copy(url.as_slice()))),
+        Msg::Submit { url, method, content_type, body } => toks6(
+            Tok::Array(5),
+            Tok::Uint(12),
+            Tok::Text(copy(url.as_slice())),
+            Tok::Text(copy(method.as_slice())),
+            Tok::Bytes(copy(content_type.as_slice())),
+            Tok::Bytes(copy(body.as_slice())),
+        ),
         Msg::Display { title, text, links } => display_tokens(title.as_slice(), text.as_slice(), links.as_slice()),
         Msg::Commit { url, content_type, kind } => toks5(
             Tok::Array(4),

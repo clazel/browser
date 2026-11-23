@@ -190,13 +190,35 @@ jobs:
       # tests, with the same script the release installer uses.
       - name: Allow the sandbox's user namespace
         run: sudo packaging/apparmor/allow-userns.sh clazel-test "$GITHUB_WORKSPACE/target/{debug,release}/{clazel-renderer,clazel-gpu,clazel-adversary,deps/sandbox-*}"
+      # The GPU process is sometimes killed by its seccomp filter for an
+      # `openat` (syscall 257) from a thread named `clazel-gpu`, not Mesa's
+      # `disk$0` that MESA_SHADER_CACHE_DISABLE already stopped; the audit line
+      # cannot say which code made the call. A SIGSYS kill dumps core, so keep
+      # the dumps with systemd-coredump (a pipe helper, which works from inside
+      # the sandbox's namespaces) and print their stacks on failure. gdb is
+      # installed now so the failure step needs no network.
+      - name: Keep core dumps
+        run: |
+          sudo apt-get install -y --no-install-recommends systemd-coredump gdb
+          sudo /usr/lib/systemd/systemd-sysctl /usr/lib/sysctl.d/50-coredump.conf
+          cat /proc/sys/kernel/core_pattern
       - name: Verify (base)
-        run: cargo xtask verify --part base
+        run: |
+          ulimit -c unlimited
+          cargo xtask verify --part base
       # A sandboxed process the seccomp filter killed (SIGSYS) is named only in
       # the kernel's audit lines (type=1326: the syscall number and the thread).
       - name: Seccomp kills, on failure
         if: failure()
         run: sudo dmesg | grep 'type=1326' || echo "no seccomp audit line"
+      # Every core the run left, with systemd-coredump's symbolized stack of
+      # each thread; then gdb's full stacks for the newest GPU process core.
+      - name: Core dump stacks, on failure
+        if: failure()
+        run: |
+          sudo coredumpctl list --no-pager || { echo "no core dumps"; exit 0; }
+          sudo coredumpctl info --no-pager || true
+          sudo coredumpctl debug --no-pager --debugger-arguments="-batch -ex 'info sharedlibrary' -ex 'thread apply all bt full'" clazel-gpu || true
 
   base-macos:
     name: Verify (base, macOS)

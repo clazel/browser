@@ -1,0 +1,29 @@
+[package]
+name = "clazel-x64"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "The x86-64 instruction-set subset the JIT emits (docs/phases/jit.md item J.3): semantics, encoder and decoder. The primary spec, the contracts, the encoder and the decoder exist; the independent transcription does not. It also holds the vendored instruction-set sources."
+
+[dependencies]
+vstd = "=0.0.0-2026-10-04-0306"
+
+# Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
+# shipped code today (left at 0 until the independent transcription and the full-verification
+# gates of CLAUDE.md rule 7 exist);
+# `target-tier` is what jit.md's "Crates" table sets. The contracts come first
+# (rule 3).
+[package.metadata.clazel]
+tier = 0
+target-tier = 2
+
+[package.metadata.verus]
+verify = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+yaxpeax-x86 = { version = "=2.2.1", default-features = false }
+yaxpeax-arch = { version = "=0.3.3", default-features = false }

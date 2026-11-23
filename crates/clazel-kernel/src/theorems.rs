@@ -146,11 +146,46 @@ pub proof fn theorem_reply_only_to_sender(rules: Seq<clazel_psl::spec::Rule>, ur
                     // Item 5.19: a `FetchStyle` answers its sender and asks for
                     // its sender's sub-fetch connections only.
                     crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, request, url);
-                } else if let clazel_ipc::message::spec::Message::Navigate { url } = m {
+                } else if let clazel_ipc::message::spec::Message::Submit { url, method, content_type, body } = m {
+        if let Some(req) = submit_request(r, method, content_type, body) {
                     if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
                         if let Some(resolved) = (urls.resolve)(r.url, relative) {
                             if lock_of_url(urls, resolved, s.next_id) is Some {
-                                crate::net_theorems::lemma_begin_outputs(rules, urls, fetch, s, r.tab, resolved);
+                                crate::net_theorems::lemma_begin_outputs(rules, urls, fetch, s, r.tab, resolved, req);
+                                assert forall|k: int| 0 <= k < out.len() implies match #[trigger] out[k] {
+                                    Output::ToRenderer { id: x, .. } => x == id || (x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Renderer })),
+                                    Output::Spawn { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }) && out.contains(Output::Spawn { id: x, policy: Policy::Renderer }),
+                                    Output::Kill { id: x } => x == id,
+                                    Output::Connect { conn: x, .. } => s.next_conn <= x < s1.next_conn,
+                                    Output::Send { .. } => false,
+                                    Output::Show { .. } => false,
+                                    Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
+                                    Output::Paint { .. } => false,
+                                    Output::GpuStopped { .. } | Output::GpuAllSoftware => false,
+                                    Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
+                                    Output::Close { conn: x } => exists|i2: int, j: int|
+                                        0 <= i2 < s.renderers.len() && 0 <= j < s.conns.len() && s.renderers[i2].id == id && s.conns[j].id == x && s.conns[j].tab == s.renderers[i2].tab,
+                                } by {
+                                    match out[k] {
+                                        Output::ToRenderer { id: x, .. } => {
+                                            let i2 = choose|i2: int| 0 <= i2 < s.renderers.len() && s.renderers[i2].tab == r.tab && s.renderers[i2].id == x;
+                                            tab_unique(urls, s, i, i2);
+                                        },
+                                        Output::Close { conn: x } => {
+                                            let j = choose|j: int| 0 <= j < s.conns.len() && s.conns[j].id == x && s.conns[j].tab == r.tab;
+                                        },
+                                        _ => {},
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+    } else if let clazel_ipc::message::spec::Message::Navigate { url } = m {
+                    if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+                        if let Some(resolved) = (urls.resolve)(r.url, relative) {
+                            if lock_of_url(urls, resolved, s.next_id) is Some {
+                                crate::net_theorems::lemma_begin_outputs(rules, urls, fetch, s, r.tab, resolved, clazel_fetch::request::spec::get_req());
                                 assert forall|k: int| 0 <= k < out.len() implies match #[trigger] out[k] {
                                     Output::ToRenderer { id: x, .. } => x == id || (x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Renderer })),
                                     Output::Spawn { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }) && out.contains(Output::Spawn { id: x, policy: Policy::Renderer }),

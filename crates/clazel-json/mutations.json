@@ -1,0 +1,199 @@
+{
+  "mutations": [
+    {
+      "id": "ws-add-form-feed",
+      "file": "src/spec.rs",
+      "find": "c == 0x09 || c == 0x0A || c == 0x0D || c == 0x20",
+      "replace": "c == 0x09 || c == 0x0A || c == 0x0C || c == 0x0D || c == 0x20",
+      "expect": "killed",
+      "reason": "Adds U+000C FF to `ws`, which ECMA-404 does not list: the mutant accepts a text that starts with FF, so lemma_example_whitespace is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_whitespace()",
+        "witness": "json_parse(seq![0x0Cu32, 0x31]) is Some"
+      }
+    },
+    {
+      "id": "ws-drop-tab",
+      "file": "src/spec.rs",
+      "find": "c == 0x09 || c == 0x0A || c == 0x0D || c == 0x20",
+      "replace": "c == 0x0A || c == 0x0D || c == 0x20",
+      "expect": "killed",
+      "reason": "Drops U+0009 from `ws`: a text with a tab around its value is then an error, so lemma_example_whitespace is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_whitespace()",
+        "witness": "json_parse(seq![0x09u32, 0x0D, 0x0A, 0x20, 0x31, 0x09]) is None"
+      }
+    },
+    {
+      "id": "number-leading-zero",
+      "file": "src/spec.rs",
+      "find": "Some(p + 1)",
+      "replace": "Some(skip_digits(s, p + 1))",
+      "expect": "killed",
+      "reason": "Lets a `0` be followed by more digits: the mutant reads `01` as one number, so lemma_example_numbers is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_numbers()",
+        "witness": "json_parse(seq![0x30u32, 0x31]) is Some"
+      }
+    },
+    {
+      "id": "number-zero-integer",
+      "file": "src/spec.rs",
+      "find": "if is_at(s, p, 0x30) {",
+      "replace": "if false {",
+      "expect": "killed",
+      "reason": "Removes the `0` alternative of `integer`: `-0.5e+2` is then an error, so lemma_example_numbers is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_numbers()",
+        "witness": "json_parse(seq![0x2Du32, 0x30, 0x2E, 0x35, 0x65, 0x2B, 0x32]) is None"
+      }
+    },
+    {
+      "id": "fraction-without-digits",
+      "file": "src/spec.rs",
+      "find": "if q > pos + 1 {",
+      "replace": "if true {",
+      "expect": "killed",
+      "reason": "Accepts \".\" without digits in `fraction`: the mutant reads `1.` as a number, so lemma_example_numbers is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_numbers()",
+        "witness": "json_parse(seq![0x31u32, 0x2E]) is Some"
+      }
+    },
+    {
+      "id": "text-ignores-trailing",
+      "file": "src/spec.rs",
+      "find": "if skip_ws(text, p) == text.len() {",
+      "replace": "if true {",
+      "expect": "killed",
+      "reason": "Ignores what follows the value: `1 2` is then the number 1, so lemma_example_errors is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_errors()",
+        "witness": "json_parse(seq![0x31u32, 0x20, 0x32]) is Some"
+      }
+    },
+    {
+      "id": "depth-one-level",
+      "file": "src/spec.rs",
+      "find": "match parse_value(text, skip_ws(text, 0), max_depth()) {",
+      "replace": "match parse_value(text, skip_ws(text, 0), 1) {",
+      "expect": "killed",
+      "reason": "Allows one level of nesting only: `[[1]]` is then an error, so lemma_example_nested_text is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_nested_text()",
+        "witness": "json_parse(seq![0x5Bu32, 0x5B, 0x31, 0x5D, 0x5D]) is None"
+      }
+    },
+    {
+      "id": "escape-backspace-wrong",
+      "file": "src/spec.rs",
+      "find": "Some(0x08u16)  // \\b backspace",
+      "replace": "Some(0x0Bu16)  // \\b backspace",
+      "expect": "killed",
+      "reason": "Gives `\\b` the value U+000B: lemma_example_escapes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_escapes()",
+        "witness": "json_parse(seq![0x22u32, 0x5C, 0x62, 0x5C, 0x66, 0x5C, 0x6E, 0x5C, 0x72, 0x5C, 0x74, 0x5C, 0x2F, 0x5C, 0x5C, 0x5C, 0x22, 0x22]) == Some(JsonValue::String(seq![0x0Bu16, 0x0C, 0x0A, 0x0D, 0x09, 0x2F, 0x5C, 0x22]))"
+      }
+    },
+    {
+      "id": "hex-weight",
+      "file": "src/spec.rs",
+      "find": "a * 4096 + b * 256 + c * 16 + d",
+      "replace": "a * 4096 + b * 256 + c * 17 + d",
+      "expect": "killed",
+      "reason": "Weighs the third hex digit by 17: `\\u00e9` becomes U+00F7, so lemma_example_strings is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_strings()",
+        "witness": "json_parse(seq![0x22u32, 0x5C, 0x75, 0x30, 0x30, 0x65, 0x39, 0x5C, 0x6E, 0x5C, 0x75, 0x64, 0x38, 0x33, 0x64, 0x22]) == Some(JsonValue::String(seq![0xF7u16, 0x0A, 0xD840]))"
+      }
+    },
+    {
+      "id": "string-control-bound",
+      "file": "src/spec.rs",
+      "find": "} else if c < 0x20 {",
+      "replace": "} else if c < 0x0A {",
+      "expect": "killed",
+      "reason": "Lets U+000A (and the control characters from it to U+001F) stand raw in a string: lemma_example_strings is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_strings()",
+        "witness": "json_parse(seq![0x22u32, 0x0A, 0x22]) is Some"
+      }
+    },
+    {
+      "id": "string-pair-high-offset",
+      "file": "src/spec.rs",
+      "find": "/ 0x400 + 0xD800) as u16",
+      "replace": "/ 0x400 + 0xD801) as u16",
+      "expect": "killed",
+      "reason": "Offsets the leading surrogate wrongly: U+1F600 becomes D83E DE00, so lemma_example_strings is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_strings()",
+        "witness": "json_parse(seq![0x22u32, 0x1F600, 0x22]) == Some(JsonValue::String(seq![0xD83Eu16, 0xDE00]))"
+      }
+    },
+    {
+      "id": "quote-hex-uppercase",
+      "file": "src/spec.rs",
+      "find": "(0x61 + (n - 10)) as u16",
+      "replace": "(0x41 + (n - 10)) as u16",
+      "expect": "killed",
+      "reason": "UnicodeEscape writes uppercase hex: U+001F becomes `\\u001F`, so lemma_example_quote is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_quote()",
+        "witness": "quote_json_string(seq![0x0Au16, 0x1F]) == seq![0x22u16, 0x5C, 0x6E, 0x5C, 0x75, 0x30, 0x30, 0x31, 0x46, 0x22]"
+      }
+    },
+    {
+      "id": "quote-lone-surrogate-raw",
+      "file": "src/spec.rs",
+      "find": "|| (0xD800 <= c && c <= 0xDFFF) {",
+      "replace": "|| false {",
+      "expect": "killed",
+      "reason": "Does not escape a lone surrogate: U+D800 stays raw, so lemma_example_quote is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_quote()",
+        "witness": "quote_json_string(seq![0xD800u16]) == seq![0x22u16, 0xD800, 0x22]"
+      }
+    },
+    {
+      "id": "quote-pair-decode-offset",
+      "file": "src/spec.rs",
+      "find": "+ 0x10000) as u32,",
+      "replace": "+ 0x1000) as u32,",
+      "expect": "killed",
+      "reason": "Decodes a surrogate pair to the wrong code point: D83D DE00 comes out as D801 DE00, so lemma_example_quote is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_quote()",
+        "witness": "quote_json_string(seq![0xD83Du16, 0xDE00]) == seq![0x22u16, 0xD801, 0xDE00, 0x22]"
+      }
+    },
+    {
+      "id": "quote-form-feed-wrong",
+      "file": "src/spec.rs",
+      "find": "seq![0x5Cu16, 0x66]",
+      "replace": "seq![0x5Cu16, 0x66, 0x66]",
+      "expect": "killed",
+      "reason": "Writes `\\ff` for form feed: lemma_example_quote_table is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_quote_table()",
+        "witness": "quote_json_string(seq![0x08u16, 0x09, 0x0C, 0x0D]) == seq![0x22u16, 0x5C, 0x62, 0x5C, 0x74, 0x5C, 0x66, 0x66, 0x5C, 0x72, 0x22]"
+      }
+    }
+  ]
+}

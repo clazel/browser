@@ -10,6 +10,9 @@
 use std::ffi::{CString, c_char, c_int, c_void};
 use std::os::fd::{AsRawFd, BorrowedFd};
 
+/// Executable code regions: `MAP_JIT` (jit.md item J.7).
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+pub mod code;
 /// Metal drawing for the GPU process (phase-5.md item 5.17b), on Apple silicon.
 #[cfg(target_arch = "aarch64")]
 pub mod metal;

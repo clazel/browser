@@ -141,6 +141,11 @@ fn every_scene_on_vulkan() -> Result<(), String> {
             }
             let path = stored(scene.name, n);
             let have_stored = path.parent().is_some_and(std::path::Path::is_dir);
+            // Item 6.12's image scenes have no lavapipe pixels stored yet (the session
+            // that wrote them could not run lavapipe): compared with the reference only,
+            // until `CLAZEL_GPU_BLESS=1` writes them.
+            let have_stored =
+                have_stored && (bless || !scene.name.starts_with("image") || path.exists());
             if !software || !(bless || have_stored) {
                 UNSTORED.call_once(|| {
                     log(&format!(
@@ -214,5 +219,74 @@ fn the_warm_up_frame_is_exact_and_the_target_resizes() -> Result<(), String> {
             .map_err(|e| format!("{e:?}"))?;
         assert_eq!(px, vec![0; viewport.bytes()], "{w} by {h}");
     }
+    Ok(())
+}
+
+/// Item 6.12: the filters on lavapipe against values worked out by hand
+/// (`src/tests.rs` has the same through the fake backend), each within one level, and
+/// an upload freed and made again under the same id.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn images_on_vulkan_match_the_hand_worked_values() -> Result<(), String> {
+    use clazel_displaylist::exec::ExecItem;
+
+    let Some(backend) = backend_or_skip()? else {
+        return Ok(());
+    };
+    let (mut gpu, _) = start(backend)?;
+    let grey = |levels: &[u8]| -> Vec<u8> { levels.iter().flat_map(|&v| [v, v, v, 255]).collect() };
+    let put = |id: u32, dest_w: u32, src: (u16, u16, u16, u16), linear: bool| ExecItem::DrawImage {
+        id,
+        x: 0,
+        y: 0,
+        width: dest_w,
+        height: 1,
+        src_x: src.0,
+        src_y: src.1,
+        src_width: src.2,
+        src_height: src.3,
+        linear,
+    };
+    let upload = |id: u32, width: u16, levels: &[u8]| ExecItem::UploadImage {
+        id,
+        image_width: width,
+        image_height: 1,
+        pixels: grey(levels),
+    };
+    let mut reds = |items: &[ExecItem], w: u32| -> Result<Vec<u8>, String> {
+        let viewport = Viewport::new(w, 1).ok_or("viewport")?;
+        let bytes = encode_list(items).ok_or("encode")?;
+        gpu.draw(&bytes, viewport).map_err(|e| e.to_string())?;
+        let mut px = Vec::new();
+        gpu.backend()
+            .read_pixels(&mut px)
+            .map_err(|e| format!("{e:?}"))?;
+        Ok(px.iter().step_by(4).copied().collect())
+    };
+    let near = |got: &[u8], want: &[u8]| {
+        got.len() == want.len() && got.iter().zip(want).all(|(a, b)| a.abs_diff(*b) <= 1)
+    };
+    // Nearest, two pixels to four: no filtering at all, so exact.
+    let got = reds(
+        &[upload(0, 2, &[10, 200]), put(0, 4, (0, 0, 2, 1), false)],
+        4,
+    )?;
+    assert_eq!(got, [10, 10, 200, 200]);
+    // Linear, the ends exact and the middle 255/4 and 3 × 255/4.
+    let got = reds(
+        &[
+            ExecItem::FreeImage { id: 0 },
+            upload(0, 2, &[0, 255]),
+            put(0, 4, (0, 0, 2, 1), true),
+        ],
+        4,
+    )?;
+    assert!(near(&got, &[0, 64, 191, 255]), "{got:?}");
+    // The source rectangle is a fence: the 0 outside it never mixes in.
+    let got = reds(
+        &[upload(1, 3, &[0, 128, 255]), put(1, 4, (1, 0, 2, 1), true)],
+        4,
+    )?;
+    assert!(near(&got, &[128, 160, 223, 255]), "{got:?}");
     Ok(())
 }

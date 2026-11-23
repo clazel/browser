@@ -17,6 +17,7 @@
 
 pub mod contract;
 pub mod examples;
+pub mod examples_body;
 pub mod independent;
 pub mod real;
 pub mod spec;

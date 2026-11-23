@@ -71,6 +71,7 @@ use super::state::{
 use super::style::{box_styles, is_html};
 use super::widths::{align, min_max as width_min_max, shrink_to_fit, solve_block};
 use crate::boxes::{BoxId, BoxKind, BoxTree, Class, StyleFns};
+use crate::images::Images;
 use crate::table::grid::{Grid, form};
 use crate::table::state::{CellAlign, TableWidthInput};
 use crate::table::{distribute, is_fixed, measure, rows};
@@ -219,6 +220,7 @@ fn edges(s: &ComputedStyle, cb: i32) -> (Sides, Sides) {
 struct Walk<'a, F: TextFns> {
     tree: &'a BoxTree,
     arena: &'a Arena,
+    images: &'a Images,
     fonts: &'a F,
     mode: Mode,
     viewport: Viewport,
@@ -413,8 +415,14 @@ impl<F: TextFns> Walk<'_, F> {
                     self.fonts,
                     self.arena,
                     self.tree.get(b).and_then(|x| x.node),
+                    self.images,
                 );
-                Some(used_width(n, s, cb))
+                Some(used_width(
+                    n,
+                    s,
+                    cb,
+                    self.frames.last().and_then(|f| f.basis),
+                ))
             }
             // §17.4: "The width of the table wrapper box is the border-edge
             // width of the table box inside it" (item 5.15).
@@ -509,8 +517,9 @@ impl<F: TextFns> Walk<'_, F> {
                 self.fonts,
                 self.arena,
                 self.tree.get(b).and_then(|x| x.node),
+                self.images,
             );
-            height = used_height(n, &s, parent.basis)
+            height = used_height(n, &s, parent.basis, used.width)
                 .saturating_add(border.vertical())
                 .saturating_add(padding.vertical());
         }
@@ -599,11 +608,13 @@ impl<F: TextFns> Walk<'_, F> {
                 self.fonts,
                 self.arena,
                 self.tree.get(b).and_then(|x| x.node),
+                self.images,
             );
-            height = used_height(n, &s, parent.basis)
+            let w = used_width(n, &s, cb, parent.basis);
+            height = used_height(n, &s, parent.basis, w)
                 .saturating_add(border.vertical())
                 .saturating_add(padding.vertical());
-            used_width(n, &s, cb)
+            w
         } else if matches!(kind, Some(BoxKind::TableWrapper { .. })) {
             // An inline table's wrapper is as wide as its table (§17.4).
             self.wrapper_basis.insert(b, parent.basis);
@@ -1513,6 +1524,7 @@ pub fn mode(arena: &Arena) -> Mode {
 pub fn run(
     tree: &BoxTree,
     arena: &Arena,
+    images: &Images,
     styles: &impl StyleFns,
     fonts: &impl TextFns,
     viewport: Viewport,
@@ -1546,6 +1558,7 @@ pub fn run(
         &Tables {
             grids: &grids,
             quirks: mode == Mode::Quirks,
+            images,
         },
     );
     let (root_node, body_node) = root_and_body(arena);
@@ -1579,6 +1592,7 @@ pub fn run(
     let mut w = Walk {
         tree,
         arena,
+        images,
         fonts,
         mode,
         viewport,
