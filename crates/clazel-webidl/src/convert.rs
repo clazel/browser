@@ -426,6 +426,17 @@ pub fn callback_function<'s>(scope: &mut Scope<'_>, v: Local<'s>) -> Result<Loca
     Ok(v)
 }
 
+/// The conversion of an event handler IDL attribute's value (HTML §8.1.8.1†
+/// `EventHandler`: a nullable `[LegacyTreatNonObjectAsNull]` callback
+/// function, §3.2.21†): "If V is not an Object, return null" (so `undefined`,
+/// numbers and strings clear the handler), and an Object, callable or not, is
+/// the callback; one that is not callable does nothing when it is called
+/// ("invoke": "If IsCallable(F) is false ... return").
+#[must_use]
+pub fn event_handler<'s>(scope: &Scope<'_>, v: Local<'s>) -> Option<Local<'s>> {
+    is_object(scope, v).then_some(v)
+}
+
 /// §3.2.20† `sequence<T>`, for an Array only (see the module's modelling
 /// choices): "If V is not an Object, throw a TypeError." Then the elements
 /// in index order, each converted with `item`.

@@ -189,6 +189,13 @@ impl HTMLCollectionImpl for Mock {}
 impl DOMTokenListImpl for Mock {}
 impl HistoryImpl for Mock {}
 impl NavigatorImpl for Mock {}
+impl UIEventImpl for Mock {}
+impl MouseEventImpl for Mock {}
+impl WheelEventImpl for Mock {}
+impl KeyboardEventImpl for Mock {}
+impl FocusEventImpl for Mock {}
+impl InputEventImpl for Mock {}
+impl UserActivationImpl for Mock {}
 
 type Test = core::result::Result<(), Error>;
 

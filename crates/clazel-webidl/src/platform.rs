@@ -86,6 +86,43 @@ pub trait Platform: Host + Sized + 'static {
         name: &str,
         value: Option<DomString>,
     ) -> Result<()>;
+    /// The getter of an event handler IDL attribute (HTML §8.1.8.1†): "the
+    /// result of getting the current value of the event handler" of `this`
+    /// named `event` (the attribute's name without `on`), a callable or null.
+    /// The default throws a `NotSupportedError`, as a generated trait
+    /// method does.
+    ///
+    /// # Errors
+    /// What the platform throws.
+    fn event_handler_get<'s>(
+        scope: &mut Scope<'s>,
+        this: ObjectKey,
+        event: &str,
+    ) -> Result<Option<Local<'s>>> {
+        let _ = this;
+        Err(not_implemented::<Self>(
+            scope,
+            &format!("the on{event} event handler attribute"),
+        ))
+    }
+    /// The setter of an event handler IDL attribute: `value` is what
+    /// [`crate::convert::event_handler`] made of the argument, `None` for
+    /// null ("deactivate an event handler") and `Some` for an object.
+    ///
+    /// # Errors
+    /// What the platform throws.
+    fn event_handler_set<'s>(
+        scope: &mut Scope<'s>,
+        this: ObjectKey,
+        event: &str,
+        value: Option<Local<'s>>,
+    ) -> Result<()> {
+        let _ = (this, value);
+        Err(not_implemented::<Self>(
+            scope,
+            &format!("the on{event} event handler attribute"),
+        ))
+    }
 }
 
 /// The error of a member the platform does not implement: a

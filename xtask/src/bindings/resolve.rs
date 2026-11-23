@@ -63,14 +63,6 @@ pub const EXTERNAL: &[(&str, &str)] = &[
     ("MathMLElement", "MathML Core"),
     ("MediaSource", "Media Source Extensions"),
     ("MediaStream", "Media Capture and Streams"),
-    (
-        "MouseEvent",
-        "UI Events (not in the vendored `uievents.idl`)",
-    ),
-    (
-        "MouseEventInit",
-        "UI Events (not in the vendored `uievents.idl`)",
-    ),
     ("PerformanceEntry", "Performance Timeline"),
     ("QuotaExceededError", "WebIDL"),
     ("ReadableStream", "Streams"),

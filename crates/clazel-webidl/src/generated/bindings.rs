@@ -25,7 +25,6 @@
 //   below, with no definition.
 //
 // Left out, and why (each member here has no property; see glue.rs):
-// - AbortSignal.onabort: event handler (HTML §8.1.8.1, not implemented)
 // - Document.implementation: interface DOMImplementation is not exposed
 // - Document.createCDATASection: interface CDATASection is not exposed
 // - Document.createProcessingInstruction: interface ProcessingInstruction is not exposed
@@ -36,90 +35,13 @@
 // - Document.createTreeWalker: interface TreeWalker is not exposed
 // - Document (anonymous Getter): indexed and named properties need exotic objects
 // - Document.currentScript: interface HTMLScriptElement is not exposed
-// - Document.onreadystatechange: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onvisibilitychange: event handler (HTML §8.1.8.1, not implemented)
 // - Document.all: interface HTMLAllCollection is not exposed
 // - Document.customElementRegistry: interface CustomElementRegistry is not exposed
 // - Document.styleSheets: interface StyleSheetList is not exposed
 // - Document.adoptedStyleSheets: ObservableArray
 // - Document.createExpression: interface XPathExpression is not exposed
 // - Document.evaluate: interface XPathResult is not exposed
-// - Document.onabort: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onauxclick: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onbeforeinput: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onbeforematch: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onbeforetoggle: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onblur: event handler (HTML §8.1.8.1, not implemented)
-// - Document.oncancel: event handler (HTML §8.1.8.1, not implemented)
-// - Document.oncanplay: event handler (HTML §8.1.8.1, not implemented)
-// - Document.oncanplaythrough: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onchange: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onclick: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onclose: event handler (HTML §8.1.8.1, not implemented)
-// - Document.oncommand: event handler (HTML §8.1.8.1, not implemented)
-// - Document.oncontextlost: event handler (HTML §8.1.8.1, not implemented)
-// - Document.oncontextmenu: event handler (HTML §8.1.8.1, not implemented)
-// - Document.oncontextrestored: event handler (HTML §8.1.8.1, not implemented)
-// - Document.oncopy: event handler (HTML §8.1.8.1, not implemented)
-// - Document.oncuechange: event handler (HTML §8.1.8.1, not implemented)
-// - Document.oncut: event handler (HTML §8.1.8.1, not implemented)
-// - Document.ondblclick: event handler (HTML §8.1.8.1, not implemented)
-// - Document.ondrag: event handler (HTML §8.1.8.1, not implemented)
-// - Document.ondragend: event handler (HTML §8.1.8.1, not implemented)
-// - Document.ondragenter: event handler (HTML §8.1.8.1, not implemented)
-// - Document.ondragleave: event handler (HTML §8.1.8.1, not implemented)
-// - Document.ondragover: event handler (HTML §8.1.8.1, not implemented)
-// - Document.ondragstart: event handler (HTML §8.1.8.1, not implemented)
-// - Document.ondrop: event handler (HTML §8.1.8.1, not implemented)
-// - Document.ondurationchange: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onemptied: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onended: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onerror: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onfocus: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onformdata: event handler (HTML §8.1.8.1, not implemented)
-// - Document.oninput: event handler (HTML §8.1.8.1, not implemented)
-// - Document.oninvalid: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onkeydown: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onkeypress: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onkeyup: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onload: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onloadeddata: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onloadedmetadata: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onloadstart: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onmousedown: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onmouseenter: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onmouseleave: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onmousemove: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onmouseout: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onmouseover: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onmouseup: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onpaste: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onpause: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onplay: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onplaying: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onprogress: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onratechange: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onreset: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onresize: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onscroll: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onscrollend: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onsecuritypolicyviolation: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onseeked: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onseeking: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onselect: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onslotchange: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onstalled: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onsubmit: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onsuspend: event handler (HTML §8.1.8.1, not implemented)
-// - Document.ontimeupdate: event handler (HTML §8.1.8.1, not implemented)
-// - Document.ontoggle: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onvolumechange: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onwaiting: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onwebkitanimationend: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onwebkitanimationiteration: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onwebkitanimationstart: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onwebkittransitionend: event handler (HTML §8.1.8.1, not implemented)
-// - Document.onwheel: event handler (HTML §8.1.8.1, not implemented)
+// - Document.onpointerrawupdate: [SecureContext] (no secure contexts yet)
 // - CharacterData.streamBeforeHTML: WritableStream is not in the vendored IDL
 // - CharacterData.streamAfterHTML: WritableStream is not in the vendored IDL
 // - CharacterData.streamReplaceWithHTML: WritableStream is not in the vendored IDL
@@ -151,101 +73,8 @@
 // - Element.assignedSlot: interface HTMLSlotElement is not exposed
 // - HTMLElement.attachInternals: interface ElementInternals is not exposed
 // - HTMLElement.style: interface CSSStyleProperties is not exposed
-// - HTMLElement.onabort: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onauxclick: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onbeforeinput: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onbeforematch: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onbeforetoggle: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onblur: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.oncancel: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.oncanplay: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.oncanplaythrough: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onchange: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onclick: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onclose: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.oncommand: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.oncontextlost: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.oncontextmenu: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.oncontextrestored: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.oncopy: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.oncuechange: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.oncut: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.ondblclick: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.ondrag: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.ondragend: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.ondragenter: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.ondragleave: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.ondragover: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.ondragstart: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.ondrop: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.ondurationchange: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onemptied: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onended: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onerror: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onfocus: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onformdata: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.oninput: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.oninvalid: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onkeydown: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onkeypress: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onkeyup: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onload: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onloadeddata: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onloadedmetadata: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onloadstart: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onmousedown: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onmouseenter: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onmouseleave: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onmousemove: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onmouseout: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onmouseover: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onmouseup: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onpaste: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onpause: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onplay: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onplaying: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onprogress: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onratechange: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onreset: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onresize: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onscroll: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onscrollend: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onsecuritypolicyviolation: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onseeked: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onseeking: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onselect: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onslotchange: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onstalled: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onsubmit: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onsuspend: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.ontimeupdate: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.ontoggle: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onvolumechange: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onwaiting: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onwebkitanimationend: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onwebkitanimationiteration: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onwebkitanimationstart: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onwebkittransitionend: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLElement.onwheel: event handler (HTML §8.1.8.1, not implemented)
+// - HTMLElement.onpointerrawupdate: [SecureContext] (no secure contexts yet)
 // - HTMLElement.dataset: interface DOMStringMap is not exposed
-// - HTMLBodyElement.onafterprint: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLBodyElement.onbeforeprint: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLBodyElement.onbeforeunload: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLBodyElement.onhashchange: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLBodyElement.onlanguagechange: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLBodyElement.onmessage: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLBodyElement.onmessageerror: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLBodyElement.onoffline: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLBodyElement.ononline: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLBodyElement.onpagehide: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLBodyElement.onpagereveal: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLBodyElement.onpageshow: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLBodyElement.onpageswap: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLBodyElement.onpopstate: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLBodyElement.onrejectionhandled: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLBodyElement.onstorage: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLBodyElement.onunhandledrejection: event handler (HTML §8.1.8.1, not implemented)
-// - HTMLBodyElement.onunload: event handler (HTML §8.1.8.1, not implemented)
 // - NodeList iterable: needs Symbol.iterator
 // - DOMTokenList iterable: needs Symbol.iterator
 // - Window.navigation: interface Navigation is not exposed
@@ -262,107 +91,13 @@
 // - Window.event: a union with undefined
 // - Window.fetchLater: [SecureContext] (no secure contexts yet)
 // - Window.external: interface External is not exposed
-// - Window.onabort: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onauxclick: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onbeforeinput: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onbeforematch: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onbeforetoggle: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onblur: event handler (HTML §8.1.8.1, not implemented)
-// - Window.oncancel: event handler (HTML §8.1.8.1, not implemented)
-// - Window.oncanplay: event handler (HTML §8.1.8.1, not implemented)
-// - Window.oncanplaythrough: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onchange: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onclick: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onclose: event handler (HTML §8.1.8.1, not implemented)
-// - Window.oncommand: event handler (HTML §8.1.8.1, not implemented)
-// - Window.oncontextlost: event handler (HTML §8.1.8.1, not implemented)
-// - Window.oncontextmenu: event handler (HTML §8.1.8.1, not implemented)
-// - Window.oncontextrestored: event handler (HTML §8.1.8.1, not implemented)
-// - Window.oncopy: event handler (HTML §8.1.8.1, not implemented)
-// - Window.oncuechange: event handler (HTML §8.1.8.1, not implemented)
-// - Window.oncut: event handler (HTML §8.1.8.1, not implemented)
-// - Window.ondblclick: event handler (HTML §8.1.8.1, not implemented)
-// - Window.ondrag: event handler (HTML §8.1.8.1, not implemented)
-// - Window.ondragend: event handler (HTML §8.1.8.1, not implemented)
-// - Window.ondragenter: event handler (HTML §8.1.8.1, not implemented)
-// - Window.ondragleave: event handler (HTML §8.1.8.1, not implemented)
-// - Window.ondragover: event handler (HTML §8.1.8.1, not implemented)
-// - Window.ondragstart: event handler (HTML §8.1.8.1, not implemented)
-// - Window.ondrop: event handler (HTML §8.1.8.1, not implemented)
-// - Window.ondurationchange: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onemptied: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onended: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onerror: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onfocus: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onformdata: event handler (HTML §8.1.8.1, not implemented)
-// - Window.oninput: event handler (HTML §8.1.8.1, not implemented)
-// - Window.oninvalid: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onkeydown: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onkeypress: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onkeyup: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onload: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onloadeddata: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onloadedmetadata: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onloadstart: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onmousedown: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onmouseenter: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onmouseleave: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onmousemove: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onmouseout: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onmouseover: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onmouseup: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onpaste: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onpause: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onplay: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onplaying: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onprogress: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onratechange: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onreset: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onresize: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onscroll: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onscrollend: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onsecuritypolicyviolation: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onseeked: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onseeking: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onselect: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onslotchange: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onstalled: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onsubmit: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onsuspend: event handler (HTML §8.1.8.1, not implemented)
-// - Window.ontimeupdate: event handler (HTML §8.1.8.1, not implemented)
-// - Window.ontoggle: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onvolumechange: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onwaiting: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onwebkitanimationend: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onwebkitanimationiteration: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onwebkitanimationstart: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onwebkittransitionend: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onwheel: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onafterprint: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onbeforeprint: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onbeforeunload: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onhashchange: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onlanguagechange: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onmessage: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onmessageerror: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onoffline: event handler (HTML §8.1.8.1, not implemented)
-// - Window.ononline: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onpagehide: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onpagereveal: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onpageshow: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onpageswap: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onpopstate: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onrejectionhandled: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onstorage: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onunhandledrejection: event handler (HTML §8.1.8.1, not implemented)
-// - Window.onunload: event handler (HTML §8.1.8.1, not implemented)
+// - Window.onpointerrawupdate: [SecureContext] (no secure contexts yet)
 // - Window.createImageBitmap: Promise
 // - Window.createImageBitmap: Promise
 // - Window.fetch: Promise
 // - Window.sessionStorage: interface Storage is not exposed
 // - Window.localStorage: interface Storage is not exposed
 // - Location.ancestorOrigins: interface DOMStringList is not exposed
-// - Navigator.userActivation: interface UserActivation is not exposed
 // - Navigator.registerProtocolHandler: [SecureContext] (no secure contexts yet)
 // - Navigator.unregisterProtocolHandler: [SecureContext] (no secure contexts yet)
 // - Navigator.plugins: interface PluginArray is not exposed
@@ -452,6 +187,20 @@ pub enum InterfaceId {
     History,
     /// `Navigator`.
     Navigator,
+    /// `UIEvent`.
+    UIEvent,
+    /// `MouseEvent`.
+    MouseEvent,
+    /// `WheelEvent`.
+    WheelEvent,
+    /// `KeyboardEvent`.
+    KeyboardEvent,
+    /// `FocusEvent`.
+    FocusEvent,
+    /// `InputEvent`.
+    InputEvent,
+    /// `UserActivation`.
+    UserActivation,
 }
 
 impl InterfaceId {
@@ -487,6 +236,13 @@ impl InterfaceId {
         InterfaceId::Location,
         InterfaceId::History,
         InterfaceId::Navigator,
+        InterfaceId::UIEvent,
+        InterfaceId::MouseEvent,
+        InterfaceId::WheelEvent,
+        InterfaceId::KeyboardEvent,
+        InterfaceId::FocusEvent,
+        InterfaceId::InputEvent,
+        InterfaceId::UserActivation,
     ];
 
     /// The interface's identifier.
@@ -523,6 +279,13 @@ impl InterfaceId {
             InterfaceId::Location => "Location",
             InterfaceId::History => "History",
             InterfaceId::Navigator => "Navigator",
+            InterfaceId::UIEvent => "UIEvent",
+            InterfaceId::MouseEvent => "MouseEvent",
+            InterfaceId::WheelEvent => "WheelEvent",
+            InterfaceId::KeyboardEvent => "KeyboardEvent",
+            InterfaceId::FocusEvent => "FocusEvent",
+            InterfaceId::InputEvent => "InputEvent",
+            InterfaceId::UserActivation => "UserActivation",
         }
     }
 
@@ -560,6 +323,13 @@ impl InterfaceId {
             InterfaceId::Location => None,
             InterfaceId::History => None,
             InterfaceId::Navigator => None,
+            InterfaceId::UIEvent => Some(InterfaceId::Event),
+            InterfaceId::MouseEvent => Some(InterfaceId::UIEvent),
+            InterfaceId::WheelEvent => Some(InterfaceId::MouseEvent),
+            InterfaceId::KeyboardEvent => Some(InterfaceId::UIEvent),
+            InterfaceId::FocusEvent => Some(InterfaceId::UIEvent),
+            InterfaceId::InputEvent => Some(InterfaceId::UIEvent),
+            InterfaceId::UserActivation => None,
         }
     }
 
@@ -742,6 +512,55 @@ fn dict_event_listener_options<'s, P: AllInterfaces>(scope: &mut Scope<'s>, v: L
     Ok(EventListenerOptions { capture })
 }
 
+/// `dictionary FocusEventInit` : UIEventInit (WebIDL §3.2.18†), with its ancestors' members.
+#[derive(Clone, Debug)]
+pub struct FocusEventInit {
+    /// `boolean bubbles = ...`.
+    pub bubbles: bool,
+    /// `boolean cancelable = ...`.
+    pub cancelable: bool,
+    /// `boolean composed = ...`.
+    pub composed: bool,
+    /// `long detail = ...`.
+    pub detail: i32,
+    /// `Window? view = ...`.
+    pub view: Option<ObjectKey>,
+    /// `unsigned long which = ...`.
+    pub which: u32,
+    /// `EventTarget? relatedTarget = ...`.
+    pub related_target: Option<ObjectKey>,
+}
+
+/// ES to `FocusEventInit` (WebIDL §3.2.18†):
+/// 1. If Type(V) is not Undefined, Null or Object, then throw a TypeError.
+/// 3. For each dictionary dictionary in dictionaries (least derived first),
+///    each member in lexicographic order: if V is undefined or null, let
+///    esMemberValue be undefined, otherwise ? Get(V, key). If it is not
+///    undefined, convert it; else if the member has a default value, use it;
+///    else if the member is required, throw a TypeError.
+fn dict_focus_event_init<'s, P: AllInterfaces>(scope: &mut Scope<'s>, v: Local<'s>) -> Result<FocusEventInit> {
+    let _: core::marker::PhantomData<P> = core::marker::PhantomData;
+    let nullish = convert::is_nullish(scope, v);
+    if !nullish && !convert::is_object(scope, v) {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Value is not a FocusEventInit dictionary"));
+    }
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("bubbles")) ? };
+    let bubbles = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("cancelable")) ? };
+    let cancelable = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("composed")) ? };
+    let composed = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("detail")) ? };
+    let detail = if scope.kind(m) == ValueKind::Undefined { 0 } else { convert::long(scope, m, IntegerFlags { enforce_range: false, clamp: false })? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("view")) ? };
+    let view = if scope.kind(m) == ValueKind::Undefined { None } else { if convert::is_nullish(scope, m) { None } else { Some(convert::interface::<P>(scope, m, InterfaceId::Window)?) } };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("which")) ? };
+    let which = if scope.kind(m) == ValueKind::Undefined { 0 } else { convert::unsigned_long(scope, m, IntegerFlags { enforce_range: false, clamp: false })? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("relatedTarget")) ? };
+    let related_target = if scope.kind(m) == ValueKind::Undefined { None } else { if convert::is_nullish(scope, m) { None } else { Some(convert::interface::<P>(scope, m, InterfaceId::EventTarget)?) } };
+    Ok(FocusEventInit { bubbles, cancelable, composed, detail, view, which, related_target })
+}
+
 /// `dictionary FocusOptions` (WebIDL §3.2.18†), with its ancestors' members.
 #[derive(Clone, Debug)]
 pub struct FocusOptions {
@@ -844,6 +663,321 @@ fn dict_import_node_options<'s, P: AllInterfaces>(scope: &mut Scope<'s>, v: Loca
     let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("selfOnly")) ? };
     let self_only = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
     Ok(ImportNodeOptions { self_only })
+}
+
+/// `dictionary InputEventInit` : UIEventInit (WebIDL §3.2.18†), with its ancestors' members.
+#[derive(Clone, Debug)]
+pub struct InputEventInit {
+    /// `boolean bubbles = ...`.
+    pub bubbles: bool,
+    /// `boolean cancelable = ...`.
+    pub cancelable: bool,
+    /// `boolean composed = ...`.
+    pub composed: bool,
+    /// `long detail = ...`.
+    pub detail: i32,
+    /// `Window? view = ...`.
+    pub view: Option<ObjectKey>,
+    /// `unsigned long which = ...`.
+    pub which: u32,
+    /// `DOMString? data = ...`.
+    pub data: Option<DomString>,
+    /// `DOMString inputType = ...`.
+    pub input_type: DomString,
+    /// `boolean isComposing = ...`.
+    pub is_composing: bool,
+}
+
+/// ES to `InputEventInit` (WebIDL §3.2.18†):
+/// 1. If Type(V) is not Undefined, Null or Object, then throw a TypeError.
+/// 3. For each dictionary dictionary in dictionaries (least derived first),
+///    each member in lexicographic order: if V is undefined or null, let
+///    esMemberValue be undefined, otherwise ? Get(V, key). If it is not
+///    undefined, convert it; else if the member has a default value, use it;
+///    else if the member is required, throw a TypeError.
+fn dict_input_event_init<'s, P: AllInterfaces>(scope: &mut Scope<'s>, v: Local<'s>) -> Result<InputEventInit> {
+    let _: core::marker::PhantomData<P> = core::marker::PhantomData;
+    let nullish = convert::is_nullish(scope, v);
+    if !nullish && !convert::is_object(scope, v) {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Value is not a InputEventInit dictionary"));
+    }
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("bubbles")) ? };
+    let bubbles = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("cancelable")) ? };
+    let cancelable = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("composed")) ? };
+    let composed = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("detail")) ? };
+    let detail = if scope.kind(m) == ValueKind::Undefined { 0 } else { convert::long(scope, m, IntegerFlags { enforce_range: false, clamp: false })? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("view")) ? };
+    let view = if scope.kind(m) == ValueKind::Undefined { None } else { if convert::is_nullish(scope, m) { None } else { Some(convert::interface::<P>(scope, m, InterfaceId::Window)?) } };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("which")) ? };
+    let which = if scope.kind(m) == ValueKind::Undefined { 0 } else { convert::unsigned_long(scope, m, IntegerFlags { enforce_range: false, clamp: false })? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("data")) ? };
+    let data = if scope.kind(m) == ValueKind::Undefined { None } else { if convert::is_nullish(scope, m) { None } else { Some(convert::dom_string(scope, m, false)?) } };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("inputType")) ? };
+    let input_type = if scope.kind(m) == ValueKind::Undefined { "".encode_utf16().collect::<DomString>() } else { convert::dom_string(scope, m, false)? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("isComposing")) ? };
+    let is_composing = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    Ok(InputEventInit { bubbles, cancelable, composed, detail, view, which, data, input_type, is_composing })
+}
+
+/// `dictionary KeyboardEventInit` : EventModifierInit (WebIDL §3.2.18†), with its ancestors' members.
+#[derive(Clone, Debug)]
+pub struct KeyboardEventInit {
+    /// `boolean bubbles = ...`.
+    pub bubbles: bool,
+    /// `boolean cancelable = ...`.
+    pub cancelable: bool,
+    /// `boolean composed = ...`.
+    pub composed: bool,
+    /// `long detail = ...`.
+    pub detail: i32,
+    /// `Window? view = ...`.
+    pub view: Option<ObjectKey>,
+    /// `unsigned long which = ...`.
+    pub which: u32,
+    /// `boolean altKey = ...`.
+    pub alt_key: bool,
+    /// `boolean ctrlKey = ...`.
+    pub ctrl_key: bool,
+    /// `boolean metaKey = ...`.
+    pub meta_key: bool,
+    /// `boolean modifierAltGraph = ...`.
+    pub modifier_alt_graph: bool,
+    /// `boolean modifierCapsLock = ...`.
+    pub modifier_caps_lock: bool,
+    /// `boolean modifierFn = ...`.
+    pub modifier_fn: bool,
+    /// `boolean modifierFnLock = ...`.
+    pub modifier_fn_lock: bool,
+    /// `boolean modifierHyper = ...`.
+    pub modifier_hyper: bool,
+    /// `boolean modifierNumLock = ...`.
+    pub modifier_num_lock: bool,
+    /// `boolean modifierScrollLock = ...`.
+    pub modifier_scroll_lock: bool,
+    /// `boolean modifierSuper = ...`.
+    pub modifier_super: bool,
+    /// `boolean modifierSymbol = ...`.
+    pub modifier_symbol: bool,
+    /// `boolean modifierSymbolLock = ...`.
+    pub modifier_symbol_lock: bool,
+    /// `boolean shiftKey = ...`.
+    pub shift_key: bool,
+    /// `unsigned long charCode = ...`.
+    pub char_code: u32,
+    /// `DOMString code = ...`.
+    pub code: DomString,
+    /// `boolean isComposing = ...`.
+    pub is_composing: bool,
+    /// `DOMString key = ...`.
+    pub key: DomString,
+    /// `unsigned long keyCode = ...`.
+    pub key_code: u32,
+    /// `unsigned long location = ...`.
+    pub location: u32,
+    /// `boolean repeat = ...`.
+    pub repeat: bool,
+}
+
+/// ES to `KeyboardEventInit` (WebIDL §3.2.18†):
+/// 1. If Type(V) is not Undefined, Null or Object, then throw a TypeError.
+/// 3. For each dictionary dictionary in dictionaries (least derived first),
+///    each member in lexicographic order: if V is undefined or null, let
+///    esMemberValue be undefined, otherwise ? Get(V, key). If it is not
+///    undefined, convert it; else if the member has a default value, use it;
+///    else if the member is required, throw a TypeError.
+fn dict_keyboard_event_init<'s, P: AllInterfaces>(scope: &mut Scope<'s>, v: Local<'s>) -> Result<KeyboardEventInit> {
+    let _: core::marker::PhantomData<P> = core::marker::PhantomData;
+    let nullish = convert::is_nullish(scope, v);
+    if !nullish && !convert::is_object(scope, v) {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Value is not a KeyboardEventInit dictionary"));
+    }
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("bubbles")) ? };
+    let bubbles = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("cancelable")) ? };
+    let cancelable = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("composed")) ? };
+    let composed = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("detail")) ? };
+    let detail = if scope.kind(m) == ValueKind::Undefined { 0 } else { convert::long(scope, m, IntegerFlags { enforce_range: false, clamp: false })? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("view")) ? };
+    let view = if scope.kind(m) == ValueKind::Undefined { None } else { if convert::is_nullish(scope, m) { None } else { Some(convert::interface::<P>(scope, m, InterfaceId::Window)?) } };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("which")) ? };
+    let which = if scope.kind(m) == ValueKind::Undefined { 0 } else { convert::unsigned_long(scope, m, IntegerFlags { enforce_range: false, clamp: false })? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("altKey")) ? };
+    let alt_key = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("ctrlKey")) ? };
+    let ctrl_key = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("metaKey")) ? };
+    let meta_key = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierAltGraph")) ? };
+    let modifier_alt_graph = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierCapsLock")) ? };
+    let modifier_caps_lock = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierFn")) ? };
+    let modifier_fn = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierFnLock")) ? };
+    let modifier_fn_lock = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierHyper")) ? };
+    let modifier_hyper = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierNumLock")) ? };
+    let modifier_num_lock = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierScrollLock")) ? };
+    let modifier_scroll_lock = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierSuper")) ? };
+    let modifier_super = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierSymbol")) ? };
+    let modifier_symbol = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierSymbolLock")) ? };
+    let modifier_symbol_lock = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("shiftKey")) ? };
+    let shift_key = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("charCode")) ? };
+    let char_code = if scope.kind(m) == ValueKind::Undefined { 0 } else { convert::unsigned_long(scope, m, IntegerFlags { enforce_range: false, clamp: false })? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("code")) ? };
+    let code = if scope.kind(m) == ValueKind::Undefined { "".encode_utf16().collect::<DomString>() } else { convert::dom_string(scope, m, false)? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("isComposing")) ? };
+    let is_composing = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("key")) ? };
+    let key = if scope.kind(m) == ValueKind::Undefined { "".encode_utf16().collect::<DomString>() } else { convert::dom_string(scope, m, false)? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("keyCode")) ? };
+    let key_code = if scope.kind(m) == ValueKind::Undefined { 0 } else { convert::unsigned_long(scope, m, IntegerFlags { enforce_range: false, clamp: false })? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("location")) ? };
+    let location = if scope.kind(m) == ValueKind::Undefined { 0 } else { convert::unsigned_long(scope, m, IntegerFlags { enforce_range: false, clamp: false })? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("repeat")) ? };
+    let repeat = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    Ok(KeyboardEventInit { bubbles, cancelable, composed, detail, view, which, alt_key, ctrl_key, meta_key, modifier_alt_graph, modifier_caps_lock, modifier_fn, modifier_fn_lock, modifier_hyper, modifier_num_lock, modifier_scroll_lock, modifier_super, modifier_symbol, modifier_symbol_lock, shift_key, char_code, code, is_composing, key, key_code, location, repeat })
+}
+
+/// `dictionary MouseEventInit` : EventModifierInit (WebIDL §3.2.18†), with its ancestors' members.
+#[derive(Clone, Debug)]
+pub struct MouseEventInit {
+    /// `boolean bubbles = ...`.
+    pub bubbles: bool,
+    /// `boolean cancelable = ...`.
+    pub cancelable: bool,
+    /// `boolean composed = ...`.
+    pub composed: bool,
+    /// `long detail = ...`.
+    pub detail: i32,
+    /// `Window? view = ...`.
+    pub view: Option<ObjectKey>,
+    /// `unsigned long which = ...`.
+    pub which: u32,
+    /// `boolean altKey = ...`.
+    pub alt_key: bool,
+    /// `boolean ctrlKey = ...`.
+    pub ctrl_key: bool,
+    /// `boolean metaKey = ...`.
+    pub meta_key: bool,
+    /// `boolean modifierAltGraph = ...`.
+    pub modifier_alt_graph: bool,
+    /// `boolean modifierCapsLock = ...`.
+    pub modifier_caps_lock: bool,
+    /// `boolean modifierFn = ...`.
+    pub modifier_fn: bool,
+    /// `boolean modifierFnLock = ...`.
+    pub modifier_fn_lock: bool,
+    /// `boolean modifierHyper = ...`.
+    pub modifier_hyper: bool,
+    /// `boolean modifierNumLock = ...`.
+    pub modifier_num_lock: bool,
+    /// `boolean modifierScrollLock = ...`.
+    pub modifier_scroll_lock: bool,
+    /// `boolean modifierSuper = ...`.
+    pub modifier_super: bool,
+    /// `boolean modifierSymbol = ...`.
+    pub modifier_symbol: bool,
+    /// `boolean modifierSymbolLock = ...`.
+    pub modifier_symbol_lock: bool,
+    /// `boolean shiftKey = ...`.
+    pub shift_key: bool,
+    /// `short button = ...`.
+    pub button: i16,
+    /// `unsigned short buttons = ...`.
+    pub buttons: u16,
+    /// `long clientX = ...`.
+    pub client_x: i32,
+    /// `long clientY = ...`.
+    pub client_y: i32,
+    /// `EventTarget? relatedTarget = ...`.
+    pub related_target: Option<ObjectKey>,
+    /// `long screenX = ...`.
+    pub screen_x: i32,
+    /// `long screenY = ...`.
+    pub screen_y: i32,
+}
+
+/// ES to `MouseEventInit` (WebIDL §3.2.18†):
+/// 1. If Type(V) is not Undefined, Null or Object, then throw a TypeError.
+/// 3. For each dictionary dictionary in dictionaries (least derived first),
+///    each member in lexicographic order: if V is undefined or null, let
+///    esMemberValue be undefined, otherwise ? Get(V, key). If it is not
+///    undefined, convert it; else if the member has a default value, use it;
+///    else if the member is required, throw a TypeError.
+fn dict_mouse_event_init<'s, P: AllInterfaces>(scope: &mut Scope<'s>, v: Local<'s>) -> Result<MouseEventInit> {
+    let _: core::marker::PhantomData<P> = core::marker::PhantomData;
+    let nullish = convert::is_nullish(scope, v);
+    if !nullish && !convert::is_object(scope, v) {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Value is not a MouseEventInit dictionary"));
+    }
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("bubbles")) ? };
+    let bubbles = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("cancelable")) ? };
+    let cancelable = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("composed")) ? };
+    let composed = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("detail")) ? };
+    let detail = if scope.kind(m) == ValueKind::Undefined { 0 } else { convert::long(scope, m, IntegerFlags { enforce_range: false, clamp: false })? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("view")) ? };
+    let view = if scope.kind(m) == ValueKind::Undefined { None } else { if convert::is_nullish(scope, m) { None } else { Some(convert::interface::<P>(scope, m, InterfaceId::Window)?) } };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("which")) ? };
+    let which = if scope.kind(m) == ValueKind::Undefined { 0 } else { convert::unsigned_long(scope, m, IntegerFlags { enforce_range: false, clamp: false })? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("altKey")) ? };
+    let alt_key = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("ctrlKey")) ? };
+    let ctrl_key = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("metaKey")) ? };
+    let meta_key = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierAltGraph")) ? };
+    let modifier_alt_graph = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierCapsLock")) ? };
+    let modifier_caps_lock = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierFn")) ? };
+    let modifier_fn = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierFnLock")) ? };
+    let modifier_fn_lock = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierHyper")) ? };
+    let modifier_hyper = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierNumLock")) ? };
+    let modifier_num_lock = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierScrollLock")) ? };
+    let modifier_scroll_lock = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierSuper")) ? };
+    let modifier_super = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierSymbol")) ? };
+    let modifier_symbol = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierSymbolLock")) ? };
+    let modifier_symbol_lock = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("shiftKey")) ? };
+    let shift_key = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("button")) ? };
+    let button = if scope.kind(m) == ValueKind::Undefined { 0 } else { convert::short(scope, m, IntegerFlags { enforce_range: false, clamp: false })? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("buttons")) ? };
+    let buttons = if scope.kind(m) == ValueKind::Undefined { 0 } else { convert::unsigned_short(scope, m, IntegerFlags { enforce_range: false, clamp: false })? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("clientX")) ? };
+    let client_x = if scope.kind(m) == ValueKind::Undefined { 0 } else { convert::long(scope, m, IntegerFlags { enforce_range: false, clamp: false })? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("clientY")) ? };
+    let client_y = if scope.kind(m) == ValueKind::Undefined { 0 } else { convert::long(scope, m, IntegerFlags { enforce_range: false, clamp: false })? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("relatedTarget")) ? };
+    let related_target = if scope.kind(m) == ValueKind::Undefined { None } else { if convert::is_nullish(scope, m) { None } else { Some(convert::interface::<P>(scope, m, InterfaceId::EventTarget)?) } };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("screenX")) ? };
+    let screen_x = if scope.kind(m) == ValueKind::Undefined { 0 } else { convert::long(scope, m, IntegerFlags { enforce_range: false, clamp: false })? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("screenY")) ? };
+    let screen_y = if scope.kind(m) == ValueKind::Undefined { 0 } else { convert::long(scope, m, IntegerFlags { enforce_range: false, clamp: false })? };
+    Ok(MouseEventInit { bubbles, cancelable, composed, detail, view, which, alt_key, ctrl_key, meta_key, modifier_alt_graph, modifier_caps_lock, modifier_fn, modifier_fn_lock, modifier_hyper, modifier_num_lock, modifier_scroll_lock, modifier_super, modifier_symbol, modifier_symbol_lock, shift_key, button, buttons, client_x, client_y, related_target, screen_x, screen_y })
 }
 
 /// `dictionary ParseHTMLUnsafeOptions` (WebIDL §3.2.18†), with its ancestors' members.
@@ -992,6 +1126,200 @@ fn dict_toggle_popover_options<'s, P: AllInterfaces>(scope: &mut Scope<'s>, v: L
     let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("force")) ? };
     let force = if scope.kind(m) == ValueKind::Undefined { None } else { Some(convert::boolean(scope, m)) };
     Ok(TogglePopoverOptions { source, force })
+}
+
+/// `dictionary UIEventInit` : EventInit (WebIDL §3.2.18†), with its ancestors' members.
+#[derive(Clone, Debug)]
+pub struct UIEventInit {
+    /// `boolean bubbles = ...`.
+    pub bubbles: bool,
+    /// `boolean cancelable = ...`.
+    pub cancelable: bool,
+    /// `boolean composed = ...`.
+    pub composed: bool,
+    /// `long detail = ...`.
+    pub detail: i32,
+    /// `Window? view = ...`.
+    pub view: Option<ObjectKey>,
+    /// `unsigned long which = ...`.
+    pub which: u32,
+}
+
+/// ES to `UIEventInit` (WebIDL §3.2.18†):
+/// 1. If Type(V) is not Undefined, Null or Object, then throw a TypeError.
+/// 3. For each dictionary dictionary in dictionaries (least derived first),
+///    each member in lexicographic order: if V is undefined or null, let
+///    esMemberValue be undefined, otherwise ? Get(V, key). If it is not
+///    undefined, convert it; else if the member has a default value, use it;
+///    else if the member is required, throw a TypeError.
+fn dict_ui_event_init<'s, P: AllInterfaces>(scope: &mut Scope<'s>, v: Local<'s>) -> Result<UIEventInit> {
+    let _: core::marker::PhantomData<P> = core::marker::PhantomData;
+    let nullish = convert::is_nullish(scope, v);
+    if !nullish && !convert::is_object(scope, v) {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Value is not a UIEventInit dictionary"));
+    }
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("bubbles")) ? };
+    let bubbles = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("cancelable")) ? };
+    let cancelable = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("composed")) ? };
+    let composed = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("detail")) ? };
+    let detail = if scope.kind(m) == ValueKind::Undefined { 0 } else { convert::long(scope, m, IntegerFlags { enforce_range: false, clamp: false })? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("view")) ? };
+    let view = if scope.kind(m) == ValueKind::Undefined { None } else { if convert::is_nullish(scope, m) { None } else { Some(convert::interface::<P>(scope, m, InterfaceId::Window)?) } };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("which")) ? };
+    let which = if scope.kind(m) == ValueKind::Undefined { 0 } else { convert::unsigned_long(scope, m, IntegerFlags { enforce_range: false, clamp: false })? };
+    Ok(UIEventInit { bubbles, cancelable, composed, detail, view, which })
+}
+
+/// `dictionary WheelEventInit` : MouseEventInit (WebIDL §3.2.18†), with its ancestors' members.
+#[derive(Clone, Debug)]
+pub struct WheelEventInit {
+    /// `boolean bubbles = ...`.
+    pub bubbles: bool,
+    /// `boolean cancelable = ...`.
+    pub cancelable: bool,
+    /// `boolean composed = ...`.
+    pub composed: bool,
+    /// `long detail = ...`.
+    pub detail: i32,
+    /// `Window? view = ...`.
+    pub view: Option<ObjectKey>,
+    /// `unsigned long which = ...`.
+    pub which: u32,
+    /// `boolean altKey = ...`.
+    pub alt_key: bool,
+    /// `boolean ctrlKey = ...`.
+    pub ctrl_key: bool,
+    /// `boolean metaKey = ...`.
+    pub meta_key: bool,
+    /// `boolean modifierAltGraph = ...`.
+    pub modifier_alt_graph: bool,
+    /// `boolean modifierCapsLock = ...`.
+    pub modifier_caps_lock: bool,
+    /// `boolean modifierFn = ...`.
+    pub modifier_fn: bool,
+    /// `boolean modifierFnLock = ...`.
+    pub modifier_fn_lock: bool,
+    /// `boolean modifierHyper = ...`.
+    pub modifier_hyper: bool,
+    /// `boolean modifierNumLock = ...`.
+    pub modifier_num_lock: bool,
+    /// `boolean modifierScrollLock = ...`.
+    pub modifier_scroll_lock: bool,
+    /// `boolean modifierSuper = ...`.
+    pub modifier_super: bool,
+    /// `boolean modifierSymbol = ...`.
+    pub modifier_symbol: bool,
+    /// `boolean modifierSymbolLock = ...`.
+    pub modifier_symbol_lock: bool,
+    /// `boolean shiftKey = ...`.
+    pub shift_key: bool,
+    /// `short button = ...`.
+    pub button: i16,
+    /// `unsigned short buttons = ...`.
+    pub buttons: u16,
+    /// `long clientX = ...`.
+    pub client_x: i32,
+    /// `long clientY = ...`.
+    pub client_y: i32,
+    /// `EventTarget? relatedTarget = ...`.
+    pub related_target: Option<ObjectKey>,
+    /// `long screenX = ...`.
+    pub screen_x: i32,
+    /// `long screenY = ...`.
+    pub screen_y: i32,
+    /// `unsigned long deltaMode = ...`.
+    pub delta_mode: u32,
+    /// `double deltaX = ...`.
+    pub delta_x: f64,
+    /// `double deltaY = ...`.
+    pub delta_y: f64,
+    /// `double deltaZ = ...`.
+    pub delta_z: f64,
+    /// `boolean momentum = ...`.
+    pub momentum: bool,
+}
+
+/// ES to `WheelEventInit` (WebIDL §3.2.18†):
+/// 1. If Type(V) is not Undefined, Null or Object, then throw a TypeError.
+/// 3. For each dictionary dictionary in dictionaries (least derived first),
+///    each member in lexicographic order: if V is undefined or null, let
+///    esMemberValue be undefined, otherwise ? Get(V, key). If it is not
+///    undefined, convert it; else if the member has a default value, use it;
+///    else if the member is required, throw a TypeError.
+fn dict_wheel_event_init<'s, P: AllInterfaces>(scope: &mut Scope<'s>, v: Local<'s>) -> Result<WheelEventInit> {
+    let _: core::marker::PhantomData<P> = core::marker::PhantomData;
+    let nullish = convert::is_nullish(scope, v);
+    if !nullish && !convert::is_object(scope, v) {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Value is not a WheelEventInit dictionary"));
+    }
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("bubbles")) ? };
+    let bubbles = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("cancelable")) ? };
+    let cancelable = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("composed")) ? };
+    let composed = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("detail")) ? };
+    let detail = if scope.kind(m) == ValueKind::Undefined { 0 } else { convert::long(scope, m, IntegerFlags { enforce_range: false, clamp: false })? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("view")) ? };
+    let view = if scope.kind(m) == ValueKind::Undefined { None } else { if convert::is_nullish(scope, m) { None } else { Some(convert::interface::<P>(scope, m, InterfaceId::Window)?) } };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("which")) ? };
+    let which = if scope.kind(m) == ValueKind::Undefined { 0 } else { convert::unsigned_long(scope, m, IntegerFlags { enforce_range: false, clamp: false })? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("altKey")) ? };
+    let alt_key = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("ctrlKey")) ? };
+    let ctrl_key = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("metaKey")) ? };
+    let meta_key = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierAltGraph")) ? };
+    let modifier_alt_graph = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierCapsLock")) ? };
+    let modifier_caps_lock = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierFn")) ? };
+    let modifier_fn = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierFnLock")) ? };
+    let modifier_fn_lock = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierHyper")) ? };
+    let modifier_hyper = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierNumLock")) ? };
+    let modifier_num_lock = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierScrollLock")) ? };
+    let modifier_scroll_lock = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierSuper")) ? };
+    let modifier_super = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierSymbol")) ? };
+    let modifier_symbol = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("modifierSymbolLock")) ? };
+    let modifier_symbol_lock = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("shiftKey")) ? };
+    let shift_key = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("button")) ? };
+    let button = if scope.kind(m) == ValueKind::Undefined { 0 } else { convert::short(scope, m, IntegerFlags { enforce_range: false, clamp: false })? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("buttons")) ? };
+    let buttons = if scope.kind(m) == ValueKind::Undefined { 0 } else { convert::unsigned_short(scope, m, IntegerFlags { enforce_range: false, clamp: false })? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("clientX")) ? };
+    let client_x = if scope.kind(m) == ValueKind::Undefined { 0 } else { convert::long(scope, m, IntegerFlags { enforce_range: false, clamp: false })? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("clientY")) ? };
+    let client_y = if scope.kind(m) == ValueKind::Undefined { 0 } else { convert::long(scope, m, IntegerFlags { enforce_range: false, clamp: false })? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("relatedTarget")) ? };
+    let related_target = if scope.kind(m) == ValueKind::Undefined { None } else { if convert::is_nullish(scope, m) { None } else { Some(convert::interface::<P>(scope, m, InterfaceId::EventTarget)?) } };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("screenX")) ? };
+    let screen_x = if scope.kind(m) == ValueKind::Undefined { 0 } else { convert::long(scope, m, IntegerFlags { enforce_range: false, clamp: false })? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("screenY")) ? };
+    let screen_y = if scope.kind(m) == ValueKind::Undefined { 0 } else { convert::long(scope, m, IntegerFlags { enforce_range: false, clamp: false })? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("deltaMode")) ? };
+    let delta_mode = if scope.kind(m) == ValueKind::Undefined { 0 } else { convert::unsigned_long(scope, m, IntegerFlags { enforce_range: false, clamp: false })? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("deltaX")) ? };
+    let delta_x = if scope.kind(m) == ValueKind::Undefined { 0.0 } else { convert::double(scope, m, false)? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("deltaY")) ? };
+    let delta_y = if scope.kind(m) == ValueKind::Undefined { 0.0 } else { convert::double(scope, m, false)? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("deltaZ")) ? };
+    let delta_z = if scope.kind(m) == ValueKind::Undefined { 0.0 } else { convert::double(scope, m, false)? };
+    let m = if nullish { scope.undefined() } else { scope.get(v, Key::Str("momentum")) ? };
+    let momentum = if scope.kind(m) == ValueKind::Undefined { false } else { convert::boolean(scope, m) };
+    Ok(WheelEventInit { bubbles, cancelable, composed, detail, view, which, alt_key, ctrl_key, meta_key, modifier_alt_graph, modifier_caps_lock, modifier_fn, modifier_fn_lock, modifier_hyper, modifier_num_lock, modifier_scroll_lock, modifier_super, modifier_symbol, modifier_symbol_lock, shift_key, button, buttons, client_x, client_y, related_target, screen_x, screen_y, delta_mode, delta_x, delta_y, delta_z, momentum })
 }
 
 /// `dictionary WindowPostMessageOptions` : StructuredSerializeOptions (WebIDL §3.2.18†), with its ancestors' members.
@@ -2364,6 +2692,18 @@ pub trait ElementImpl: Platform {
     fn insert_adjacent_html<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _position: DomString, _string: DomString) -> Result<()> {
         Err(platform::not_implemented::<Self>(scope, "Element.insertAdjacentHTML"))
     }
+    /// `undefined setPointerCapture(long pointerId)`.
+    fn set_pointer_capture<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _pointer_id: i32) -> Result<()> {
+        Err(platform::not_implemented::<Self>(scope, "Element.setPointerCapture"))
+    }
+    /// `undefined releasePointerCapture(long pointerId)`.
+    fn release_pointer_capture<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _pointer_id: i32) -> Result<()> {
+        Err(platform::not_implemented::<Self>(scope, "Element.releasePointerCapture"))
+    }
+    /// `boolean hasPointerCapture(long pointerId)`.
+    fn has_pointer_capture<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _pointer_id: i32) -> Result<bool> {
+        Err(platform::not_implemented::<Self>(scope, "Element.hasPointerCapture"))
+    }
     /// `undefined prepend((Node or DOMString)... nodes)`.
     fn prepend<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _nodes: Vec<NodeOrDOMString>) -> Result<()> {
         Err(platform::not_implemented::<Self>(scope, "Element.prepend"))
@@ -3165,6 +3505,14 @@ pub trait HistoryImpl: Platform {
 /// What the platform implements for `interface Navigator`. Each method's
 /// default throws a `NotSupportedError`.
 pub trait NavigatorImpl: Platform {
+    /// The getter of `readonly attribute UserActivation userActivation`.
+    fn user_activation<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<ObjectKey> {
+        Err(platform::not_implemented::<Self>(scope, "Navigator.userActivation"))
+    }
+    /// The getter of `readonly attribute long maxTouchPoints`.
+    fn max_touch_points<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<i32> {
+        Err(platform::not_implemented::<Self>(scope, "Navigator.maxTouchPoints"))
+    }
     /// The getter of `readonly attribute DOMString appCodeName`.
     fn app_code_name<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<DomString> {
         Err(platform::not_implemented::<Self>(scope, "Navigator.appCodeName"))
@@ -3239,6 +3587,237 @@ pub trait NavigatorImpl: Platform {
     }
 }
 
+/// What the platform implements for `interface UIEvent : Event`. Each method's
+/// default throws a `NotSupportedError`.
+pub trait UIEventImpl: Platform {
+    /// The getter of `readonly attribute Window? view`.
+    fn view<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<Option<ObjectKey>> {
+        Err(platform::not_implemented::<Self>(scope, "UIEvent.view"))
+    }
+    /// The getter of `readonly attribute long detail`.
+    fn detail<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<i32> {
+        Err(platform::not_implemented::<Self>(scope, "UIEvent.detail"))
+    }
+    /// The getter of `readonly attribute unsigned long which`.
+    fn which<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<u32> {
+        Err(platform::not_implemented::<Self>(scope, "UIEvent.which"))
+    }
+    /// `undefined initUIEvent(DOMString typeArg, optional boolean bubblesArg, optional boolean cancelableArg, optional Window? viewArg, optional long detailArg)`.
+    fn init_ui_event<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _type_arg: DomString, _bubbles_arg: bool, _cancelable_arg: bool, _view_arg: Option<ObjectKey>, _detail_arg: i32) -> Result<()> {
+        Err(platform::not_implemented::<Self>(scope, "UIEvent.initUIEvent"))
+    }
+    /// `constructor(DOMString type, optional UIEventInit eventInitDict)`: the new platform object.
+    fn constructor<'s>(scope: &mut Scope<'s>, _type: DomString, _event_init_dict: UIEventInit) -> Result<ObjectKey> {
+        Err(platform::not_implemented::<Self>(scope, "new UIEvent"))
+    }
+}
+
+/// What the platform implements for `interface MouseEvent : UIEvent`. Each method's
+/// default throws a `NotSupportedError`.
+pub trait MouseEventImpl: Platform {
+    /// The getter of `readonly attribute long screenX`.
+    fn screen_x<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<i32> {
+        Err(platform::not_implemented::<Self>(scope, "MouseEvent.screenX"))
+    }
+    /// The getter of `readonly attribute long screenY`.
+    fn screen_y<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<i32> {
+        Err(platform::not_implemented::<Self>(scope, "MouseEvent.screenY"))
+    }
+    /// The getter of `readonly attribute long clientX`.
+    fn client_x<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<i32> {
+        Err(platform::not_implemented::<Self>(scope, "MouseEvent.clientX"))
+    }
+    /// The getter of `readonly attribute long clientY`.
+    fn client_y<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<i32> {
+        Err(platform::not_implemented::<Self>(scope, "MouseEvent.clientY"))
+    }
+    /// The getter of `readonly attribute long layerX`.
+    fn layer_x<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<i32> {
+        Err(platform::not_implemented::<Self>(scope, "MouseEvent.layerX"))
+    }
+    /// The getter of `readonly attribute long layerY`.
+    fn layer_y<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<i32> {
+        Err(platform::not_implemented::<Self>(scope, "MouseEvent.layerY"))
+    }
+    /// The getter of `readonly attribute boolean ctrlKey`.
+    fn ctrl_key<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<bool> {
+        Err(platform::not_implemented::<Self>(scope, "MouseEvent.ctrlKey"))
+    }
+    /// The getter of `readonly attribute boolean shiftKey`.
+    fn shift_key<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<bool> {
+        Err(platform::not_implemented::<Self>(scope, "MouseEvent.shiftKey"))
+    }
+    /// The getter of `readonly attribute boolean altKey`.
+    fn alt_key<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<bool> {
+        Err(platform::not_implemented::<Self>(scope, "MouseEvent.altKey"))
+    }
+    /// The getter of `readonly attribute boolean metaKey`.
+    fn meta_key<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<bool> {
+        Err(platform::not_implemented::<Self>(scope, "MouseEvent.metaKey"))
+    }
+    /// The getter of `readonly attribute short button`.
+    fn button<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<i16> {
+        Err(platform::not_implemented::<Self>(scope, "MouseEvent.button"))
+    }
+    /// The getter of `readonly attribute unsigned short buttons`.
+    fn buttons<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<u16> {
+        Err(platform::not_implemented::<Self>(scope, "MouseEvent.buttons"))
+    }
+    /// The getter of `readonly attribute EventTarget? relatedTarget`.
+    fn related_target<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<Option<ObjectKey>> {
+        Err(platform::not_implemented::<Self>(scope, "MouseEvent.relatedTarget"))
+    }
+    /// `boolean getModifierState(DOMString keyArg)`.
+    fn get_modifier_state<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _key_arg: DomString) -> Result<bool> {
+        Err(platform::not_implemented::<Self>(scope, "MouseEvent.getModifierState"))
+    }
+    /// `undefined initMouseEvent(DOMString typeArg, optional boolean bubblesArg, optional boolean cancelableArg, optional Window? viewArg, optional long detailArg, optional long screenXArg, optional long screenYArg, optional long clientXArg, optional long clientYArg, optional boolean ctrlKeyArg, optional boolean altKeyArg, optional boolean shiftKeyArg, optional boolean metaKeyArg, optional short buttonArg, optional EventTarget? relatedTargetArg)`.
+    fn init_mouse_event<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _type_arg: DomString, _bubbles_arg: bool, _cancelable_arg: bool, _view_arg: Option<ObjectKey>, _detail_arg: i32, _screen_x_arg: i32, _screen_y_arg: i32, _client_x_arg: i32, _client_y_arg: i32, _ctrl_key_arg: bool, _alt_key_arg: bool, _shift_key_arg: bool, _meta_key_arg: bool, _button_arg: i16, _related_target_arg: Option<ObjectKey>) -> Result<()> {
+        Err(platform::not_implemented::<Self>(scope, "MouseEvent.initMouseEvent"))
+    }
+    /// `constructor(DOMString type, optional MouseEventInit eventInitDict)`: the new platform object.
+    fn constructor<'s>(scope: &mut Scope<'s>, _type: DomString, _event_init_dict: MouseEventInit) -> Result<ObjectKey> {
+        Err(platform::not_implemented::<Self>(scope, "new MouseEvent"))
+    }
+}
+
+/// What the platform implements for `interface WheelEvent : MouseEvent`. Each method's
+/// default throws a `NotSupportedError`.
+pub trait WheelEventImpl: Platform {
+    /// The getter of `readonly attribute double deltaX`.
+    fn delta_x<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<f64> {
+        Err(platform::not_implemented::<Self>(scope, "WheelEvent.deltaX"))
+    }
+    /// The getter of `readonly attribute double deltaY`.
+    fn delta_y<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<f64> {
+        Err(platform::not_implemented::<Self>(scope, "WheelEvent.deltaY"))
+    }
+    /// The getter of `readonly attribute double deltaZ`.
+    fn delta_z<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<f64> {
+        Err(platform::not_implemented::<Self>(scope, "WheelEvent.deltaZ"))
+    }
+    /// The getter of `readonly attribute unsigned long deltaMode`.
+    fn delta_mode<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<u32> {
+        Err(platform::not_implemented::<Self>(scope, "WheelEvent.deltaMode"))
+    }
+    /// The getter of `readonly attribute boolean momentum`.
+    fn momentum<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<bool> {
+        Err(platform::not_implemented::<Self>(scope, "WheelEvent.momentum"))
+    }
+    /// `constructor(DOMString type, optional WheelEventInit eventInitDict)`: the new platform object.
+    fn constructor<'s>(scope: &mut Scope<'s>, _type: DomString, _event_init_dict: WheelEventInit) -> Result<ObjectKey> {
+        Err(platform::not_implemented::<Self>(scope, "new WheelEvent"))
+    }
+}
+
+/// What the platform implements for `interface KeyboardEvent : UIEvent`. Each method's
+/// default throws a `NotSupportedError`.
+pub trait KeyboardEventImpl: Platform {
+    /// The getter of `readonly attribute DOMString key`.
+    fn key<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<DomString> {
+        Err(platform::not_implemented::<Self>(scope, "KeyboardEvent.key"))
+    }
+    /// The getter of `readonly attribute DOMString code`.
+    fn code<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<DomString> {
+        Err(platform::not_implemented::<Self>(scope, "KeyboardEvent.code"))
+    }
+    /// The getter of `readonly attribute unsigned long location`.
+    fn location<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<u32> {
+        Err(platform::not_implemented::<Self>(scope, "KeyboardEvent.location"))
+    }
+    /// The getter of `readonly attribute boolean ctrlKey`.
+    fn ctrl_key<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<bool> {
+        Err(platform::not_implemented::<Self>(scope, "KeyboardEvent.ctrlKey"))
+    }
+    /// The getter of `readonly attribute boolean shiftKey`.
+    fn shift_key<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<bool> {
+        Err(platform::not_implemented::<Self>(scope, "KeyboardEvent.shiftKey"))
+    }
+    /// The getter of `readonly attribute boolean altKey`.
+    fn alt_key<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<bool> {
+        Err(platform::not_implemented::<Self>(scope, "KeyboardEvent.altKey"))
+    }
+    /// The getter of `readonly attribute boolean metaKey`.
+    fn meta_key<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<bool> {
+        Err(platform::not_implemented::<Self>(scope, "KeyboardEvent.metaKey"))
+    }
+    /// The getter of `readonly attribute boolean repeat`.
+    fn repeat<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<bool> {
+        Err(platform::not_implemented::<Self>(scope, "KeyboardEvent.repeat"))
+    }
+    /// The getter of `readonly attribute boolean isComposing`.
+    fn is_composing<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<bool> {
+        Err(platform::not_implemented::<Self>(scope, "KeyboardEvent.isComposing"))
+    }
+    /// The getter of `readonly attribute unsigned long charCode`.
+    fn char_code<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<u32> {
+        Err(platform::not_implemented::<Self>(scope, "KeyboardEvent.charCode"))
+    }
+    /// The getter of `readonly attribute unsigned long keyCode`.
+    fn key_code<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<u32> {
+        Err(platform::not_implemented::<Self>(scope, "KeyboardEvent.keyCode"))
+    }
+    /// `boolean getModifierState(DOMString keyArg)`.
+    fn get_modifier_state<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _key_arg: DomString) -> Result<bool> {
+        Err(platform::not_implemented::<Self>(scope, "KeyboardEvent.getModifierState"))
+    }
+    /// `undefined initKeyboardEvent(DOMString typeArg, optional boolean bubblesArg, optional boolean cancelableArg, optional Window? viewArg, optional DOMString keyArg, optional unsigned long locationArg, optional boolean ctrlKey, optional boolean altKey, optional boolean shiftKey, optional boolean metaKey)`.
+    fn init_keyboard_event<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _type_arg: DomString, _bubbles_arg: bool, _cancelable_arg: bool, _view_arg: Option<ObjectKey>, _key_arg: DomString, _location_arg: u32, _ctrl_key: bool, _alt_key: bool, _shift_key: bool, _meta_key: bool) -> Result<()> {
+        Err(platform::not_implemented::<Self>(scope, "KeyboardEvent.initKeyboardEvent"))
+    }
+    /// `constructor(DOMString type, optional KeyboardEventInit eventInitDict)`: the new platform object.
+    fn constructor<'s>(scope: &mut Scope<'s>, _type: DomString, _event_init_dict: KeyboardEventInit) -> Result<ObjectKey> {
+        Err(platform::not_implemented::<Self>(scope, "new KeyboardEvent"))
+    }
+}
+
+/// What the platform implements for `interface FocusEvent : UIEvent`. Each method's
+/// default throws a `NotSupportedError`.
+pub trait FocusEventImpl: Platform {
+    /// The getter of `readonly attribute EventTarget? relatedTarget`.
+    fn related_target<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<Option<ObjectKey>> {
+        Err(platform::not_implemented::<Self>(scope, "FocusEvent.relatedTarget"))
+    }
+    /// `constructor(DOMString type, optional FocusEventInit eventInitDict)`: the new platform object.
+    fn constructor<'s>(scope: &mut Scope<'s>, _type: DomString, _event_init_dict: FocusEventInit) -> Result<ObjectKey> {
+        Err(platform::not_implemented::<Self>(scope, "new FocusEvent"))
+    }
+}
+
+/// What the platform implements for `interface InputEvent : UIEvent`. Each method's
+/// default throws a `NotSupportedError`.
+pub trait InputEventImpl: Platform {
+    /// The getter of `readonly attribute USVString? data`.
+    fn data<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<Option<String>> {
+        Err(platform::not_implemented::<Self>(scope, "InputEvent.data"))
+    }
+    /// The getter of `readonly attribute boolean isComposing`.
+    fn is_composing<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<bool> {
+        Err(platform::not_implemented::<Self>(scope, "InputEvent.isComposing"))
+    }
+    /// The getter of `readonly attribute DOMString inputType`.
+    fn input_type<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<DomString> {
+        Err(platform::not_implemented::<Self>(scope, "InputEvent.inputType"))
+    }
+    /// `constructor(DOMString type, optional InputEventInit eventInitDict)`: the new platform object.
+    fn constructor<'s>(scope: &mut Scope<'s>, _type: DomString, _event_init_dict: InputEventInit) -> Result<ObjectKey> {
+        Err(platform::not_implemented::<Self>(scope, "new InputEvent"))
+    }
+}
+
+/// What the platform implements for `interface UserActivation`. Each method's
+/// default throws a `NotSupportedError`.
+pub trait UserActivationImpl: Platform {
+    /// The getter of `readonly attribute boolean hasBeenActive`.
+    fn has_been_active<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<bool> {
+        Err(platform::not_implemented::<Self>(scope, "UserActivation.hasBeenActive"))
+    }
+    /// The getter of `readonly attribute boolean isActive`.
+    fn is_active<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<bool> {
+        Err(platform::not_implemented::<Self>(scope, "UserActivation.isActive"))
+    }
+}
+
 /// Every interface's trait: what a platform implements to be given to
 /// [`install`].
 pub trait AllInterfaces: Platform
@@ -3272,6 +3851,13 @@ pub trait AllInterfaces: Platform
     + LocationImpl
     + HistoryImpl
     + NavigatorImpl
+    + UIEventImpl
+    + MouseEventImpl
+    + WheelEventImpl
+    + KeyboardEventImpl
+    + FocusEventImpl
+    + InputEventImpl
+    + UserActivationImpl
 {
 }
 
@@ -3305,7 +3891,14 @@ impl<T: Platform
     + WindowImpl
     + LocationImpl
     + HistoryImpl
-    + NavigatorImpl> AllInterfaces for T {}
+    + NavigatorImpl
+    + UIEventImpl
+    + MouseEventImpl
+    + WheelEventImpl
+    + KeyboardEventImpl
+    + FocusEventImpl
+    + InputEventImpl
+    + UserActivationImpl> AllInterfaces for T {}
 
 /// The interface object of `EventTarget`: [[Call]] and [[Construct]] (WebIDL §3.7.1†).
 fn ctor_event_target<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
@@ -3395,6 +3988,27 @@ fn get_abort_signal_reason<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &A
     let r = <P as AbortSignalImpl>::reason(scope, this)?;
     let v = r;
     Ok(v)
+}
+
+/// The getter of `AbortSignal.onabort` (WebIDL §3.7.5.1†).
+fn get_abort_signal_onabort<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::AbortSignal)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "abort")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `AbortSignal.onabort` (WebIDL §3.7.5.2†).
+fn set_abort_signal_onabort<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::AbortSignal)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "abort", value)?;
+    Ok(scope.undefined())
 }
 
 /// The operation `AbortSignal.abort` (WebIDL §3.7.6†).
@@ -4550,6 +5164,48 @@ fn get_document_visibility_state<'s, P: AllInterfaces>(scope: &mut Scope<'s>, ar
     Ok(v)
 }
 
+/// The getter of `Document.onreadystatechange` (WebIDL §3.7.5.1†).
+fn get_document_onreadystatechange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "readystatechange")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onreadystatechange` (WebIDL §3.7.5.2†).
+fn set_document_onreadystatechange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "readystatechange", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onvisibilitychange` (WebIDL §3.7.5.1†).
+fn get_document_onvisibilitychange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "visibilitychange")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onvisibilitychange` (WebIDL §3.7.5.2†).
+fn set_document_onvisibilitychange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "visibilitychange", value)?;
+    Ok(scope.undefined())
+}
+
 /// The getter of `Document.fgColor` (WebIDL §3.7.5.1†).
 fn get_document_fg_color<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
     let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
@@ -4745,6 +5401,1812 @@ fn get_document_child_element_count<'s, P: AllInterfaces>(scope: &mut Scope<'s>,
     let r = <P as DocumentImpl>::child_element_count(scope, this)?;
     let v = scope.number(f64::from(r));
     Ok(v)
+}
+
+/// The getter of `Document.onabort` (WebIDL §3.7.5.1†).
+fn get_document_onabort<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "abort")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onabort` (WebIDL §3.7.5.2†).
+fn set_document_onabort<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "abort", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onauxclick` (WebIDL §3.7.5.1†).
+fn get_document_onauxclick<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "auxclick")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onauxclick` (WebIDL §3.7.5.2†).
+fn set_document_onauxclick<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "auxclick", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onbeforeinput` (WebIDL §3.7.5.1†).
+fn get_document_onbeforeinput<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "beforeinput")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onbeforeinput` (WebIDL §3.7.5.2†).
+fn set_document_onbeforeinput<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "beforeinput", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onbeforematch` (WebIDL §3.7.5.1†).
+fn get_document_onbeforematch<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "beforematch")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onbeforematch` (WebIDL §3.7.5.2†).
+fn set_document_onbeforematch<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "beforematch", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onbeforetoggle` (WebIDL §3.7.5.1†).
+fn get_document_onbeforetoggle<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "beforetoggle")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onbeforetoggle` (WebIDL §3.7.5.2†).
+fn set_document_onbeforetoggle<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "beforetoggle", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onblur` (WebIDL §3.7.5.1†).
+fn get_document_onblur<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "blur")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onblur` (WebIDL §3.7.5.2†).
+fn set_document_onblur<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "blur", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.oncancel` (WebIDL §3.7.5.1†).
+fn get_document_oncancel<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "cancel")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.oncancel` (WebIDL §3.7.5.2†).
+fn set_document_oncancel<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "cancel", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.oncanplay` (WebIDL §3.7.5.1†).
+fn get_document_oncanplay<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "canplay")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.oncanplay` (WebIDL §3.7.5.2†).
+fn set_document_oncanplay<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "canplay", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.oncanplaythrough` (WebIDL §3.7.5.1†).
+fn get_document_oncanplaythrough<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "canplaythrough")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.oncanplaythrough` (WebIDL §3.7.5.2†).
+fn set_document_oncanplaythrough<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "canplaythrough", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onchange` (WebIDL §3.7.5.1†).
+fn get_document_onchange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "change")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onchange` (WebIDL §3.7.5.2†).
+fn set_document_onchange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "change", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onclick` (WebIDL §3.7.5.1†).
+fn get_document_onclick<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "click")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onclick` (WebIDL §3.7.5.2†).
+fn set_document_onclick<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "click", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onclose` (WebIDL §3.7.5.1†).
+fn get_document_onclose<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "close")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onclose` (WebIDL §3.7.5.2†).
+fn set_document_onclose<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "close", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.oncommand` (WebIDL §3.7.5.1†).
+fn get_document_oncommand<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "command")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.oncommand` (WebIDL §3.7.5.2†).
+fn set_document_oncommand<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "command", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.oncontextlost` (WebIDL §3.7.5.1†).
+fn get_document_oncontextlost<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "contextlost")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.oncontextlost` (WebIDL §3.7.5.2†).
+fn set_document_oncontextlost<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "contextlost", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.oncontextmenu` (WebIDL §3.7.5.1†).
+fn get_document_oncontextmenu<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "contextmenu")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.oncontextmenu` (WebIDL §3.7.5.2†).
+fn set_document_oncontextmenu<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "contextmenu", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.oncontextrestored` (WebIDL §3.7.5.1†).
+fn get_document_oncontextrestored<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "contextrestored")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.oncontextrestored` (WebIDL §3.7.5.2†).
+fn set_document_oncontextrestored<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "contextrestored", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.oncopy` (WebIDL §3.7.5.1†).
+fn get_document_oncopy<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "copy")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.oncopy` (WebIDL §3.7.5.2†).
+fn set_document_oncopy<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "copy", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.oncuechange` (WebIDL §3.7.5.1†).
+fn get_document_oncuechange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "cuechange")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.oncuechange` (WebIDL §3.7.5.2†).
+fn set_document_oncuechange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "cuechange", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.oncut` (WebIDL §3.7.5.1†).
+fn get_document_oncut<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "cut")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.oncut` (WebIDL §3.7.5.2†).
+fn set_document_oncut<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "cut", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.ondblclick` (WebIDL §3.7.5.1†).
+fn get_document_ondblclick<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "dblclick")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.ondblclick` (WebIDL §3.7.5.2†).
+fn set_document_ondblclick<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "dblclick", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.ondrag` (WebIDL §3.7.5.1†).
+fn get_document_ondrag<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "drag")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.ondrag` (WebIDL §3.7.5.2†).
+fn set_document_ondrag<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "drag", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.ondragend` (WebIDL §3.7.5.1†).
+fn get_document_ondragend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "dragend")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.ondragend` (WebIDL §3.7.5.2†).
+fn set_document_ondragend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "dragend", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.ondragenter` (WebIDL §3.7.5.1†).
+fn get_document_ondragenter<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "dragenter")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.ondragenter` (WebIDL §3.7.5.2†).
+fn set_document_ondragenter<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "dragenter", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.ondragleave` (WebIDL §3.7.5.1†).
+fn get_document_ondragleave<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "dragleave")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.ondragleave` (WebIDL §3.7.5.2†).
+fn set_document_ondragleave<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "dragleave", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.ondragover` (WebIDL §3.7.5.1†).
+fn get_document_ondragover<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "dragover")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.ondragover` (WebIDL §3.7.5.2†).
+fn set_document_ondragover<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "dragover", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.ondragstart` (WebIDL §3.7.5.1†).
+fn get_document_ondragstart<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "dragstart")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.ondragstart` (WebIDL §3.7.5.2†).
+fn set_document_ondragstart<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "dragstart", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.ondrop` (WebIDL §3.7.5.1†).
+fn get_document_ondrop<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "drop")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.ondrop` (WebIDL §3.7.5.2†).
+fn set_document_ondrop<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "drop", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.ondurationchange` (WebIDL §3.7.5.1†).
+fn get_document_ondurationchange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "durationchange")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.ondurationchange` (WebIDL §3.7.5.2†).
+fn set_document_ondurationchange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "durationchange", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onemptied` (WebIDL §3.7.5.1†).
+fn get_document_onemptied<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "emptied")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onemptied` (WebIDL §3.7.5.2†).
+fn set_document_onemptied<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "emptied", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onended` (WebIDL §3.7.5.1†).
+fn get_document_onended<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "ended")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onended` (WebIDL §3.7.5.2†).
+fn set_document_onended<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "ended", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onerror` (WebIDL §3.7.5.1†).
+fn get_document_onerror<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "error")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onerror` (WebIDL §3.7.5.2†).
+fn set_document_onerror<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "error", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onfocus` (WebIDL §3.7.5.1†).
+fn get_document_onfocus<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "focus")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onfocus` (WebIDL §3.7.5.2†).
+fn set_document_onfocus<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "focus", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onformdata` (WebIDL §3.7.5.1†).
+fn get_document_onformdata<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "formdata")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onformdata` (WebIDL §3.7.5.2†).
+fn set_document_onformdata<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "formdata", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.oninput` (WebIDL §3.7.5.1†).
+fn get_document_oninput<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "input")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.oninput` (WebIDL §3.7.5.2†).
+fn set_document_oninput<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "input", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.oninvalid` (WebIDL §3.7.5.1†).
+fn get_document_oninvalid<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "invalid")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.oninvalid` (WebIDL §3.7.5.2†).
+fn set_document_oninvalid<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "invalid", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onkeydown` (WebIDL §3.7.5.1†).
+fn get_document_onkeydown<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "keydown")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onkeydown` (WebIDL §3.7.5.2†).
+fn set_document_onkeydown<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "keydown", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onkeypress` (WebIDL §3.7.5.1†).
+fn get_document_onkeypress<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "keypress")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onkeypress` (WebIDL §3.7.5.2†).
+fn set_document_onkeypress<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "keypress", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onkeyup` (WebIDL §3.7.5.1†).
+fn get_document_onkeyup<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "keyup")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onkeyup` (WebIDL §3.7.5.2†).
+fn set_document_onkeyup<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "keyup", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onload` (WebIDL §3.7.5.1†).
+fn get_document_onload<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "load")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onload` (WebIDL §3.7.5.2†).
+fn set_document_onload<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "load", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onloadeddata` (WebIDL §3.7.5.1†).
+fn get_document_onloadeddata<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "loadeddata")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onloadeddata` (WebIDL §3.7.5.2†).
+fn set_document_onloadeddata<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "loadeddata", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onloadedmetadata` (WebIDL §3.7.5.1†).
+fn get_document_onloadedmetadata<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "loadedmetadata")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onloadedmetadata` (WebIDL §3.7.5.2†).
+fn set_document_onloadedmetadata<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "loadedmetadata", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onloadstart` (WebIDL §3.7.5.1†).
+fn get_document_onloadstart<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "loadstart")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onloadstart` (WebIDL §3.7.5.2†).
+fn set_document_onloadstart<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "loadstart", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onmousedown` (WebIDL §3.7.5.1†).
+fn get_document_onmousedown<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "mousedown")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onmousedown` (WebIDL §3.7.5.2†).
+fn set_document_onmousedown<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "mousedown", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onmouseenter` (WebIDL §3.7.5.1†).
+fn get_document_onmouseenter<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "mouseenter")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onmouseenter` (WebIDL §3.7.5.2†).
+fn set_document_onmouseenter<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "mouseenter", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onmouseleave` (WebIDL §3.7.5.1†).
+fn get_document_onmouseleave<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "mouseleave")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onmouseleave` (WebIDL §3.7.5.2†).
+fn set_document_onmouseleave<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "mouseleave", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onmousemove` (WebIDL §3.7.5.1†).
+fn get_document_onmousemove<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "mousemove")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onmousemove` (WebIDL §3.7.5.2†).
+fn set_document_onmousemove<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "mousemove", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onmouseout` (WebIDL §3.7.5.1†).
+fn get_document_onmouseout<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "mouseout")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onmouseout` (WebIDL §3.7.5.2†).
+fn set_document_onmouseout<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "mouseout", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onmouseover` (WebIDL §3.7.5.1†).
+fn get_document_onmouseover<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "mouseover")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onmouseover` (WebIDL §3.7.5.2†).
+fn set_document_onmouseover<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "mouseover", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onmouseup` (WebIDL §3.7.5.1†).
+fn get_document_onmouseup<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "mouseup")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onmouseup` (WebIDL §3.7.5.2†).
+fn set_document_onmouseup<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "mouseup", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onpaste` (WebIDL §3.7.5.1†).
+fn get_document_onpaste<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "paste")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onpaste` (WebIDL §3.7.5.2†).
+fn set_document_onpaste<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "paste", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onpause` (WebIDL §3.7.5.1†).
+fn get_document_onpause<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pause")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onpause` (WebIDL §3.7.5.2†).
+fn set_document_onpause<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pause", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onplay` (WebIDL §3.7.5.1†).
+fn get_document_onplay<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "play")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onplay` (WebIDL §3.7.5.2†).
+fn set_document_onplay<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "play", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onplaying` (WebIDL §3.7.5.1†).
+fn get_document_onplaying<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "playing")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onplaying` (WebIDL §3.7.5.2†).
+fn set_document_onplaying<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "playing", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onprogress` (WebIDL §3.7.5.1†).
+fn get_document_onprogress<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "progress")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onprogress` (WebIDL §3.7.5.2†).
+fn set_document_onprogress<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "progress", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onratechange` (WebIDL §3.7.5.1†).
+fn get_document_onratechange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "ratechange")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onratechange` (WebIDL §3.7.5.2†).
+fn set_document_onratechange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "ratechange", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onreset` (WebIDL §3.7.5.1†).
+fn get_document_onreset<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "reset")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onreset` (WebIDL §3.7.5.2†).
+fn set_document_onreset<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "reset", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onresize` (WebIDL §3.7.5.1†).
+fn get_document_onresize<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "resize")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onresize` (WebIDL §3.7.5.2†).
+fn set_document_onresize<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "resize", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onscroll` (WebIDL §3.7.5.1†).
+fn get_document_onscroll<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "scroll")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onscroll` (WebIDL §3.7.5.2†).
+fn set_document_onscroll<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "scroll", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onscrollend` (WebIDL §3.7.5.1†).
+fn get_document_onscrollend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "scrollend")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onscrollend` (WebIDL §3.7.5.2†).
+fn set_document_onscrollend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "scrollend", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onsecuritypolicyviolation` (WebIDL §3.7.5.1†).
+fn get_document_onsecuritypolicyviolation<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "securitypolicyviolation")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onsecuritypolicyviolation` (WebIDL §3.7.5.2†).
+fn set_document_onsecuritypolicyviolation<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "securitypolicyviolation", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onseeked` (WebIDL §3.7.5.1†).
+fn get_document_onseeked<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "seeked")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onseeked` (WebIDL §3.7.5.2†).
+fn set_document_onseeked<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "seeked", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onseeking` (WebIDL §3.7.5.1†).
+fn get_document_onseeking<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "seeking")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onseeking` (WebIDL §3.7.5.2†).
+fn set_document_onseeking<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "seeking", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onselect` (WebIDL §3.7.5.1†).
+fn get_document_onselect<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "select")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onselect` (WebIDL §3.7.5.2†).
+fn set_document_onselect<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "select", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onslotchange` (WebIDL §3.7.5.1†).
+fn get_document_onslotchange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "slotchange")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onslotchange` (WebIDL §3.7.5.2†).
+fn set_document_onslotchange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "slotchange", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onstalled` (WebIDL §3.7.5.1†).
+fn get_document_onstalled<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "stalled")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onstalled` (WebIDL §3.7.5.2†).
+fn set_document_onstalled<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "stalled", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onsubmit` (WebIDL §3.7.5.1†).
+fn get_document_onsubmit<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "submit")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onsubmit` (WebIDL §3.7.5.2†).
+fn set_document_onsubmit<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "submit", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onsuspend` (WebIDL §3.7.5.1†).
+fn get_document_onsuspend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "suspend")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onsuspend` (WebIDL §3.7.5.2†).
+fn set_document_onsuspend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "suspend", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.ontimeupdate` (WebIDL §3.7.5.1†).
+fn get_document_ontimeupdate<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "timeupdate")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.ontimeupdate` (WebIDL §3.7.5.2†).
+fn set_document_ontimeupdate<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "timeupdate", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.ontoggle` (WebIDL §3.7.5.1†).
+fn get_document_ontoggle<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "toggle")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.ontoggle` (WebIDL §3.7.5.2†).
+fn set_document_ontoggle<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "toggle", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onvolumechange` (WebIDL §3.7.5.1†).
+fn get_document_onvolumechange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "volumechange")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onvolumechange` (WebIDL §3.7.5.2†).
+fn set_document_onvolumechange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "volumechange", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onwaiting` (WebIDL §3.7.5.1†).
+fn get_document_onwaiting<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "waiting")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onwaiting` (WebIDL §3.7.5.2†).
+fn set_document_onwaiting<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "waiting", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onwebkitanimationend` (WebIDL §3.7.5.1†).
+fn get_document_onwebkitanimationend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "webkitanimationend")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onwebkitanimationend` (WebIDL §3.7.5.2†).
+fn set_document_onwebkitanimationend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "webkitanimationend", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onwebkitanimationiteration` (WebIDL §3.7.5.1†).
+fn get_document_onwebkitanimationiteration<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "webkitanimationiteration")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onwebkitanimationiteration` (WebIDL §3.7.5.2†).
+fn set_document_onwebkitanimationiteration<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "webkitanimationiteration", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onwebkitanimationstart` (WebIDL §3.7.5.1†).
+fn get_document_onwebkitanimationstart<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "webkitanimationstart")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onwebkitanimationstart` (WebIDL §3.7.5.2†).
+fn set_document_onwebkitanimationstart<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "webkitanimationstart", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onwebkittransitionend` (WebIDL §3.7.5.1†).
+fn get_document_onwebkittransitionend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "webkittransitionend")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onwebkittransitionend` (WebIDL §3.7.5.2†).
+fn set_document_onwebkittransitionend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "webkittransitionend", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onwheel` (WebIDL §3.7.5.1†).
+fn get_document_onwheel<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "wheel")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onwheel` (WebIDL §3.7.5.2†).
+fn set_document_onwheel<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "wheel", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onpointerover` (WebIDL §3.7.5.1†).
+fn get_document_onpointerover<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pointerover")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onpointerover` (WebIDL §3.7.5.2†).
+fn set_document_onpointerover<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pointerover", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onpointerenter` (WebIDL §3.7.5.1†).
+fn get_document_onpointerenter<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pointerenter")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onpointerenter` (WebIDL §3.7.5.2†).
+fn set_document_onpointerenter<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pointerenter", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onpointerdown` (WebIDL §3.7.5.1†).
+fn get_document_onpointerdown<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pointerdown")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onpointerdown` (WebIDL §3.7.5.2†).
+fn set_document_onpointerdown<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pointerdown", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onpointermove` (WebIDL §3.7.5.1†).
+fn get_document_onpointermove<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pointermove")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onpointermove` (WebIDL §3.7.5.2†).
+fn set_document_onpointermove<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pointermove", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onpointerup` (WebIDL §3.7.5.1†).
+fn get_document_onpointerup<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pointerup")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onpointerup` (WebIDL §3.7.5.2†).
+fn set_document_onpointerup<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pointerup", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onpointercancel` (WebIDL §3.7.5.1†).
+fn get_document_onpointercancel<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pointercancel")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onpointercancel` (WebIDL §3.7.5.2†).
+fn set_document_onpointercancel<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pointercancel", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onpointerout` (WebIDL §3.7.5.1†).
+fn get_document_onpointerout<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pointerout")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onpointerout` (WebIDL §3.7.5.2†).
+fn set_document_onpointerout<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pointerout", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onpointerleave` (WebIDL §3.7.5.1†).
+fn get_document_onpointerleave<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pointerleave")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onpointerleave` (WebIDL §3.7.5.2†).
+fn set_document_onpointerleave<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pointerleave", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.ongotpointercapture` (WebIDL §3.7.5.1†).
+fn get_document_ongotpointercapture<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "gotpointercapture")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.ongotpointercapture` (WebIDL §3.7.5.2†).
+fn set_document_ongotpointercapture<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "gotpointercapture", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Document.onlostpointercapture` (WebIDL §3.7.5.1†).
+fn get_document_onlostpointercapture<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "lostpointercapture")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Document.onlostpointercapture` (WebIDL §3.7.5.2†).
+fn set_document_onlostpointercapture<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "lostpointercapture", value)?;
+    Ok(scope.undefined())
 }
 
 /// The operation `Document.getElementsByTagName` (WebIDL §3.7.6†).
@@ -6413,6 +8875,46 @@ fn op_element_insert_adjacent_html<'s, P: AllInterfaces>(scope: &mut Scope<'s>, 
     Ok(scope.undefined())
 }
 
+/// The operation `Element.setPointerCapture` (WebIDL §3.7.6†).
+fn op_element_set_pointer_capture<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Element)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'setPointerCapture' on 'Element': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::long(scope, v, IntegerFlags { enforce_range: false, clamp: false })?;
+    <P as ElementImpl>::set_pointer_capture(scope, this, a0)?;
+    Ok(scope.undefined())
+}
+
+/// The operation `Element.releasePointerCapture` (WebIDL §3.7.6†).
+fn op_element_release_pointer_capture<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Element)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'releasePointerCapture' on 'Element': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::long(scope, v, IntegerFlags { enforce_range: false, clamp: false })?;
+    <P as ElementImpl>::release_pointer_capture(scope, this, a0)?;
+    Ok(scope.undefined())
+}
+
+/// The operation `Element.hasPointerCapture` (WebIDL §3.7.6†).
+fn op_element_has_pointer_capture<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Element)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'hasPointerCapture' on 'Element': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::long(scope, v, IntegerFlags { enforce_range: false, clamp: false })?;
+    let r = <P as ElementImpl>::has_pointer_capture(scope, this, a0)?;
+    let v = scope.boolean(r);
+    Ok(v)
+}
+
 /// The operation `Element.prepend` (WebIDL §3.7.6†).
 fn op_element_prepend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
     let this = platform::this_object::<P>(scope, args, InterfaceId::Element)?;
@@ -7014,6 +9516,1812 @@ fn set_html_element_heading_reset<'s, P: AllInterfaces>(scope: &mut Scope<'s>, a
     Ok(scope.undefined())
 }
 
+/// The getter of `HTMLElement.onabort` (WebIDL §3.7.5.1†).
+fn get_html_element_onabort<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "abort")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onabort` (WebIDL §3.7.5.2†).
+fn set_html_element_onabort<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "abort", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onauxclick` (WebIDL §3.7.5.1†).
+fn get_html_element_onauxclick<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "auxclick")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onauxclick` (WebIDL §3.7.5.2†).
+fn set_html_element_onauxclick<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "auxclick", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onbeforeinput` (WebIDL §3.7.5.1†).
+fn get_html_element_onbeforeinput<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "beforeinput")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onbeforeinput` (WebIDL §3.7.5.2†).
+fn set_html_element_onbeforeinput<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "beforeinput", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onbeforematch` (WebIDL §3.7.5.1†).
+fn get_html_element_onbeforematch<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "beforematch")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onbeforematch` (WebIDL §3.7.5.2†).
+fn set_html_element_onbeforematch<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "beforematch", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onbeforetoggle` (WebIDL §3.7.5.1†).
+fn get_html_element_onbeforetoggle<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "beforetoggle")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onbeforetoggle` (WebIDL §3.7.5.2†).
+fn set_html_element_onbeforetoggle<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "beforetoggle", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onblur` (WebIDL §3.7.5.1†).
+fn get_html_element_onblur<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "blur")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onblur` (WebIDL §3.7.5.2†).
+fn set_html_element_onblur<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "blur", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.oncancel` (WebIDL §3.7.5.1†).
+fn get_html_element_oncancel<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "cancel")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.oncancel` (WebIDL §3.7.5.2†).
+fn set_html_element_oncancel<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "cancel", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.oncanplay` (WebIDL §3.7.5.1†).
+fn get_html_element_oncanplay<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "canplay")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.oncanplay` (WebIDL §3.7.5.2†).
+fn set_html_element_oncanplay<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "canplay", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.oncanplaythrough` (WebIDL §3.7.5.1†).
+fn get_html_element_oncanplaythrough<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "canplaythrough")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.oncanplaythrough` (WebIDL §3.7.5.2†).
+fn set_html_element_oncanplaythrough<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "canplaythrough", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onchange` (WebIDL §3.7.5.1†).
+fn get_html_element_onchange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "change")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onchange` (WebIDL §3.7.5.2†).
+fn set_html_element_onchange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "change", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onclick` (WebIDL §3.7.5.1†).
+fn get_html_element_onclick<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "click")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onclick` (WebIDL §3.7.5.2†).
+fn set_html_element_onclick<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "click", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onclose` (WebIDL §3.7.5.1†).
+fn get_html_element_onclose<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "close")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onclose` (WebIDL §3.7.5.2†).
+fn set_html_element_onclose<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "close", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.oncommand` (WebIDL §3.7.5.1†).
+fn get_html_element_oncommand<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "command")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.oncommand` (WebIDL §3.7.5.2†).
+fn set_html_element_oncommand<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "command", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.oncontextlost` (WebIDL §3.7.5.1†).
+fn get_html_element_oncontextlost<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "contextlost")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.oncontextlost` (WebIDL §3.7.5.2†).
+fn set_html_element_oncontextlost<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "contextlost", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.oncontextmenu` (WebIDL §3.7.5.1†).
+fn get_html_element_oncontextmenu<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "contextmenu")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.oncontextmenu` (WebIDL §3.7.5.2†).
+fn set_html_element_oncontextmenu<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "contextmenu", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.oncontextrestored` (WebIDL §3.7.5.1†).
+fn get_html_element_oncontextrestored<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "contextrestored")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.oncontextrestored` (WebIDL §3.7.5.2†).
+fn set_html_element_oncontextrestored<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "contextrestored", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.oncopy` (WebIDL §3.7.5.1†).
+fn get_html_element_oncopy<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "copy")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.oncopy` (WebIDL §3.7.5.2†).
+fn set_html_element_oncopy<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "copy", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.oncuechange` (WebIDL §3.7.5.1†).
+fn get_html_element_oncuechange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "cuechange")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.oncuechange` (WebIDL §3.7.5.2†).
+fn set_html_element_oncuechange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "cuechange", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.oncut` (WebIDL §3.7.5.1†).
+fn get_html_element_oncut<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "cut")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.oncut` (WebIDL §3.7.5.2†).
+fn set_html_element_oncut<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "cut", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.ondblclick` (WebIDL §3.7.5.1†).
+fn get_html_element_ondblclick<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "dblclick")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.ondblclick` (WebIDL §3.7.5.2†).
+fn set_html_element_ondblclick<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "dblclick", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.ondrag` (WebIDL §3.7.5.1†).
+fn get_html_element_ondrag<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "drag")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.ondrag` (WebIDL §3.7.5.2†).
+fn set_html_element_ondrag<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "drag", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.ondragend` (WebIDL §3.7.5.1†).
+fn get_html_element_ondragend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "dragend")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.ondragend` (WebIDL §3.7.5.2†).
+fn set_html_element_ondragend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "dragend", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.ondragenter` (WebIDL §3.7.5.1†).
+fn get_html_element_ondragenter<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "dragenter")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.ondragenter` (WebIDL §3.7.5.2†).
+fn set_html_element_ondragenter<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "dragenter", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.ondragleave` (WebIDL §3.7.5.1†).
+fn get_html_element_ondragleave<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "dragleave")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.ondragleave` (WebIDL §3.7.5.2†).
+fn set_html_element_ondragleave<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "dragleave", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.ondragover` (WebIDL §3.7.5.1†).
+fn get_html_element_ondragover<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "dragover")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.ondragover` (WebIDL §3.7.5.2†).
+fn set_html_element_ondragover<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "dragover", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.ondragstart` (WebIDL §3.7.5.1†).
+fn get_html_element_ondragstart<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "dragstart")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.ondragstart` (WebIDL §3.7.5.2†).
+fn set_html_element_ondragstart<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "dragstart", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.ondrop` (WebIDL §3.7.5.1†).
+fn get_html_element_ondrop<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "drop")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.ondrop` (WebIDL §3.7.5.2†).
+fn set_html_element_ondrop<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "drop", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.ondurationchange` (WebIDL §3.7.5.1†).
+fn get_html_element_ondurationchange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "durationchange")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.ondurationchange` (WebIDL §3.7.5.2†).
+fn set_html_element_ondurationchange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "durationchange", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onemptied` (WebIDL §3.7.5.1†).
+fn get_html_element_onemptied<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "emptied")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onemptied` (WebIDL §3.7.5.2†).
+fn set_html_element_onemptied<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "emptied", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onended` (WebIDL §3.7.5.1†).
+fn get_html_element_onended<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "ended")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onended` (WebIDL §3.7.5.2†).
+fn set_html_element_onended<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "ended", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onerror` (WebIDL §3.7.5.1†).
+fn get_html_element_onerror<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "error")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onerror` (WebIDL §3.7.5.2†).
+fn set_html_element_onerror<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "error", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onfocus` (WebIDL §3.7.5.1†).
+fn get_html_element_onfocus<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "focus")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onfocus` (WebIDL §3.7.5.2†).
+fn set_html_element_onfocus<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "focus", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onformdata` (WebIDL §3.7.5.1†).
+fn get_html_element_onformdata<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "formdata")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onformdata` (WebIDL §3.7.5.2†).
+fn set_html_element_onformdata<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "formdata", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.oninput` (WebIDL §3.7.5.1†).
+fn get_html_element_oninput<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "input")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.oninput` (WebIDL §3.7.5.2†).
+fn set_html_element_oninput<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "input", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.oninvalid` (WebIDL §3.7.5.1†).
+fn get_html_element_oninvalid<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "invalid")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.oninvalid` (WebIDL §3.7.5.2†).
+fn set_html_element_oninvalid<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "invalid", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onkeydown` (WebIDL §3.7.5.1†).
+fn get_html_element_onkeydown<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "keydown")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onkeydown` (WebIDL §3.7.5.2†).
+fn set_html_element_onkeydown<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "keydown", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onkeypress` (WebIDL §3.7.5.1†).
+fn get_html_element_onkeypress<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "keypress")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onkeypress` (WebIDL §3.7.5.2†).
+fn set_html_element_onkeypress<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "keypress", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onkeyup` (WebIDL §3.7.5.1†).
+fn get_html_element_onkeyup<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "keyup")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onkeyup` (WebIDL §3.7.5.2†).
+fn set_html_element_onkeyup<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "keyup", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onload` (WebIDL §3.7.5.1†).
+fn get_html_element_onload<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "load")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onload` (WebIDL §3.7.5.2†).
+fn set_html_element_onload<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "load", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onloadeddata` (WebIDL §3.7.5.1†).
+fn get_html_element_onloadeddata<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "loadeddata")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onloadeddata` (WebIDL §3.7.5.2†).
+fn set_html_element_onloadeddata<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "loadeddata", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onloadedmetadata` (WebIDL §3.7.5.1†).
+fn get_html_element_onloadedmetadata<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "loadedmetadata")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onloadedmetadata` (WebIDL §3.7.5.2†).
+fn set_html_element_onloadedmetadata<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "loadedmetadata", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onloadstart` (WebIDL §3.7.5.1†).
+fn get_html_element_onloadstart<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "loadstart")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onloadstart` (WebIDL §3.7.5.2†).
+fn set_html_element_onloadstart<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "loadstart", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onmousedown` (WebIDL §3.7.5.1†).
+fn get_html_element_onmousedown<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "mousedown")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onmousedown` (WebIDL §3.7.5.2†).
+fn set_html_element_onmousedown<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "mousedown", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onmouseenter` (WebIDL §3.7.5.1†).
+fn get_html_element_onmouseenter<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "mouseenter")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onmouseenter` (WebIDL §3.7.5.2†).
+fn set_html_element_onmouseenter<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "mouseenter", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onmouseleave` (WebIDL §3.7.5.1†).
+fn get_html_element_onmouseleave<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "mouseleave")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onmouseleave` (WebIDL §3.7.5.2†).
+fn set_html_element_onmouseleave<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "mouseleave", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onmousemove` (WebIDL §3.7.5.1†).
+fn get_html_element_onmousemove<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "mousemove")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onmousemove` (WebIDL §3.7.5.2†).
+fn set_html_element_onmousemove<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "mousemove", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onmouseout` (WebIDL §3.7.5.1†).
+fn get_html_element_onmouseout<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "mouseout")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onmouseout` (WebIDL §3.7.5.2†).
+fn set_html_element_onmouseout<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "mouseout", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onmouseover` (WebIDL §3.7.5.1†).
+fn get_html_element_onmouseover<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "mouseover")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onmouseover` (WebIDL §3.7.5.2†).
+fn set_html_element_onmouseover<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "mouseover", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onmouseup` (WebIDL §3.7.5.1†).
+fn get_html_element_onmouseup<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "mouseup")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onmouseup` (WebIDL §3.7.5.2†).
+fn set_html_element_onmouseup<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "mouseup", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onpaste` (WebIDL §3.7.5.1†).
+fn get_html_element_onpaste<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "paste")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onpaste` (WebIDL §3.7.5.2†).
+fn set_html_element_onpaste<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "paste", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onpause` (WebIDL §3.7.5.1†).
+fn get_html_element_onpause<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pause")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onpause` (WebIDL §3.7.5.2†).
+fn set_html_element_onpause<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pause", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onplay` (WebIDL §3.7.5.1†).
+fn get_html_element_onplay<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "play")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onplay` (WebIDL §3.7.5.2†).
+fn set_html_element_onplay<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "play", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onplaying` (WebIDL §3.7.5.1†).
+fn get_html_element_onplaying<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "playing")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onplaying` (WebIDL §3.7.5.2†).
+fn set_html_element_onplaying<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "playing", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onprogress` (WebIDL §3.7.5.1†).
+fn get_html_element_onprogress<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "progress")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onprogress` (WebIDL §3.7.5.2†).
+fn set_html_element_onprogress<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "progress", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onratechange` (WebIDL §3.7.5.1†).
+fn get_html_element_onratechange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "ratechange")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onratechange` (WebIDL §3.7.5.2†).
+fn set_html_element_onratechange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "ratechange", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onreset` (WebIDL §3.7.5.1†).
+fn get_html_element_onreset<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "reset")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onreset` (WebIDL §3.7.5.2†).
+fn set_html_element_onreset<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "reset", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onresize` (WebIDL §3.7.5.1†).
+fn get_html_element_onresize<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "resize")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onresize` (WebIDL §3.7.5.2†).
+fn set_html_element_onresize<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "resize", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onscroll` (WebIDL §3.7.5.1†).
+fn get_html_element_onscroll<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "scroll")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onscroll` (WebIDL §3.7.5.2†).
+fn set_html_element_onscroll<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "scroll", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onscrollend` (WebIDL §3.7.5.1†).
+fn get_html_element_onscrollend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "scrollend")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onscrollend` (WebIDL §3.7.5.2†).
+fn set_html_element_onscrollend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "scrollend", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onsecuritypolicyviolation` (WebIDL §3.7.5.1†).
+fn get_html_element_onsecuritypolicyviolation<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "securitypolicyviolation")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onsecuritypolicyviolation` (WebIDL §3.7.5.2†).
+fn set_html_element_onsecuritypolicyviolation<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "securitypolicyviolation", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onseeked` (WebIDL §3.7.5.1†).
+fn get_html_element_onseeked<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "seeked")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onseeked` (WebIDL §3.7.5.2†).
+fn set_html_element_onseeked<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "seeked", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onseeking` (WebIDL §3.7.5.1†).
+fn get_html_element_onseeking<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "seeking")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onseeking` (WebIDL §3.7.5.2†).
+fn set_html_element_onseeking<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "seeking", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onselect` (WebIDL §3.7.5.1†).
+fn get_html_element_onselect<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "select")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onselect` (WebIDL §3.7.5.2†).
+fn set_html_element_onselect<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "select", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onslotchange` (WebIDL §3.7.5.1†).
+fn get_html_element_onslotchange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "slotchange")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onslotchange` (WebIDL §3.7.5.2†).
+fn set_html_element_onslotchange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "slotchange", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onstalled` (WebIDL §3.7.5.1†).
+fn get_html_element_onstalled<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "stalled")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onstalled` (WebIDL §3.7.5.2†).
+fn set_html_element_onstalled<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "stalled", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onsubmit` (WebIDL §3.7.5.1†).
+fn get_html_element_onsubmit<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "submit")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onsubmit` (WebIDL §3.7.5.2†).
+fn set_html_element_onsubmit<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "submit", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onsuspend` (WebIDL §3.7.5.1†).
+fn get_html_element_onsuspend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "suspend")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onsuspend` (WebIDL §3.7.5.2†).
+fn set_html_element_onsuspend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "suspend", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.ontimeupdate` (WebIDL §3.7.5.1†).
+fn get_html_element_ontimeupdate<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "timeupdate")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.ontimeupdate` (WebIDL §3.7.5.2†).
+fn set_html_element_ontimeupdate<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "timeupdate", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.ontoggle` (WebIDL §3.7.5.1†).
+fn get_html_element_ontoggle<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "toggle")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.ontoggle` (WebIDL §3.7.5.2†).
+fn set_html_element_ontoggle<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "toggle", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onvolumechange` (WebIDL §3.7.5.1†).
+fn get_html_element_onvolumechange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "volumechange")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onvolumechange` (WebIDL §3.7.5.2†).
+fn set_html_element_onvolumechange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "volumechange", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onwaiting` (WebIDL §3.7.5.1†).
+fn get_html_element_onwaiting<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "waiting")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onwaiting` (WebIDL §3.7.5.2†).
+fn set_html_element_onwaiting<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "waiting", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onwebkitanimationend` (WebIDL §3.7.5.1†).
+fn get_html_element_onwebkitanimationend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "webkitanimationend")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onwebkitanimationend` (WebIDL §3.7.5.2†).
+fn set_html_element_onwebkitanimationend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "webkitanimationend", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onwebkitanimationiteration` (WebIDL §3.7.5.1†).
+fn get_html_element_onwebkitanimationiteration<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "webkitanimationiteration")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onwebkitanimationiteration` (WebIDL §3.7.5.2†).
+fn set_html_element_onwebkitanimationiteration<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "webkitanimationiteration", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onwebkitanimationstart` (WebIDL §3.7.5.1†).
+fn get_html_element_onwebkitanimationstart<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "webkitanimationstart")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onwebkitanimationstart` (WebIDL §3.7.5.2†).
+fn set_html_element_onwebkitanimationstart<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "webkitanimationstart", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onwebkittransitionend` (WebIDL §3.7.5.1†).
+fn get_html_element_onwebkittransitionend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "webkittransitionend")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onwebkittransitionend` (WebIDL §3.7.5.2†).
+fn set_html_element_onwebkittransitionend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "webkittransitionend", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onwheel` (WebIDL §3.7.5.1†).
+fn get_html_element_onwheel<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "wheel")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onwheel` (WebIDL §3.7.5.2†).
+fn set_html_element_onwheel<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "wheel", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onpointerover` (WebIDL §3.7.5.1†).
+fn get_html_element_onpointerover<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pointerover")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onpointerover` (WebIDL §3.7.5.2†).
+fn set_html_element_onpointerover<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pointerover", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onpointerenter` (WebIDL §3.7.5.1†).
+fn get_html_element_onpointerenter<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pointerenter")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onpointerenter` (WebIDL §3.7.5.2†).
+fn set_html_element_onpointerenter<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pointerenter", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onpointerdown` (WebIDL §3.7.5.1†).
+fn get_html_element_onpointerdown<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pointerdown")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onpointerdown` (WebIDL §3.7.5.2†).
+fn set_html_element_onpointerdown<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pointerdown", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onpointermove` (WebIDL §3.7.5.1†).
+fn get_html_element_onpointermove<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pointermove")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onpointermove` (WebIDL §3.7.5.2†).
+fn set_html_element_onpointermove<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pointermove", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onpointerup` (WebIDL §3.7.5.1†).
+fn get_html_element_onpointerup<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pointerup")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onpointerup` (WebIDL §3.7.5.2†).
+fn set_html_element_onpointerup<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pointerup", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onpointercancel` (WebIDL §3.7.5.1†).
+fn get_html_element_onpointercancel<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pointercancel")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onpointercancel` (WebIDL §3.7.5.2†).
+fn set_html_element_onpointercancel<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pointercancel", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onpointerout` (WebIDL §3.7.5.1†).
+fn get_html_element_onpointerout<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pointerout")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onpointerout` (WebIDL §3.7.5.2†).
+fn set_html_element_onpointerout<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pointerout", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onpointerleave` (WebIDL §3.7.5.1†).
+fn get_html_element_onpointerleave<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pointerleave")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onpointerleave` (WebIDL §3.7.5.2†).
+fn set_html_element_onpointerleave<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pointerleave", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.ongotpointercapture` (WebIDL §3.7.5.1†).
+fn get_html_element_ongotpointercapture<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "gotpointercapture")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.ongotpointercapture` (WebIDL §3.7.5.2†).
+fn set_html_element_ongotpointercapture<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "gotpointercapture", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLElement.onlostpointercapture` (WebIDL §3.7.5.1†).
+fn get_html_element_onlostpointercapture<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "lostpointercapture")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLElement.onlostpointercapture` (WebIDL §3.7.5.2†).
+fn set_html_element_onlostpointercapture<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "lostpointercapture", value)?;
+    Ok(scope.undefined())
+}
+
 /// The getter of `HTMLElement.contentEditable` (WebIDL §3.7.5.1†).
 fn get_html_element_content_editable<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
     let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLElement)?;
@@ -7418,6 +11726,384 @@ fn set_html_body_element_background<'s, P: AllInterfaces>(scope: &mut Scope<'s>,
     }
     let value = convert::dom_string(scope, args.get(0), false)?;
     P::reflect_set(scope, this, "background", Some(value))?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLBodyElement.onafterprint` (WebIDL §3.7.5.1†).
+fn get_html_body_element_onafterprint<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "afterprint")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLBodyElement.onafterprint` (WebIDL §3.7.5.2†).
+fn set_html_body_element_onafterprint<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "afterprint", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLBodyElement.onbeforeprint` (WebIDL §3.7.5.1†).
+fn get_html_body_element_onbeforeprint<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "beforeprint")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLBodyElement.onbeforeprint` (WebIDL §3.7.5.2†).
+fn set_html_body_element_onbeforeprint<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "beforeprint", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLBodyElement.onbeforeunload` (WebIDL §3.7.5.1†).
+fn get_html_body_element_onbeforeunload<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "beforeunload")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLBodyElement.onbeforeunload` (WebIDL §3.7.5.2†).
+fn set_html_body_element_onbeforeunload<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "beforeunload", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLBodyElement.onhashchange` (WebIDL §3.7.5.1†).
+fn get_html_body_element_onhashchange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "hashchange")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLBodyElement.onhashchange` (WebIDL §3.7.5.2†).
+fn set_html_body_element_onhashchange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "hashchange", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLBodyElement.onlanguagechange` (WebIDL §3.7.5.1†).
+fn get_html_body_element_onlanguagechange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "languagechange")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLBodyElement.onlanguagechange` (WebIDL §3.7.5.2†).
+fn set_html_body_element_onlanguagechange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "languagechange", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLBodyElement.onmessage` (WebIDL §3.7.5.1†).
+fn get_html_body_element_onmessage<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "message")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLBodyElement.onmessage` (WebIDL §3.7.5.2†).
+fn set_html_body_element_onmessage<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "message", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLBodyElement.onmessageerror` (WebIDL §3.7.5.1†).
+fn get_html_body_element_onmessageerror<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "messageerror")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLBodyElement.onmessageerror` (WebIDL §3.7.5.2†).
+fn set_html_body_element_onmessageerror<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "messageerror", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLBodyElement.onoffline` (WebIDL §3.7.5.1†).
+fn get_html_body_element_onoffline<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "offline")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLBodyElement.onoffline` (WebIDL §3.7.5.2†).
+fn set_html_body_element_onoffline<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "offline", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLBodyElement.ononline` (WebIDL §3.7.5.1†).
+fn get_html_body_element_ononline<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "online")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLBodyElement.ononline` (WebIDL §3.7.5.2†).
+fn set_html_body_element_ononline<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "online", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLBodyElement.onpagehide` (WebIDL §3.7.5.1†).
+fn get_html_body_element_onpagehide<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pagehide")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLBodyElement.onpagehide` (WebIDL §3.7.5.2†).
+fn set_html_body_element_onpagehide<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pagehide", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLBodyElement.onpagereveal` (WebIDL §3.7.5.1†).
+fn get_html_body_element_onpagereveal<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pagereveal")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLBodyElement.onpagereveal` (WebIDL §3.7.5.2†).
+fn set_html_body_element_onpagereveal<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pagereveal", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLBodyElement.onpageshow` (WebIDL §3.7.5.1†).
+fn get_html_body_element_onpageshow<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pageshow")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLBodyElement.onpageshow` (WebIDL §3.7.5.2†).
+fn set_html_body_element_onpageshow<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pageshow", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLBodyElement.onpageswap` (WebIDL §3.7.5.1†).
+fn get_html_body_element_onpageswap<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pageswap")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLBodyElement.onpageswap` (WebIDL §3.7.5.2†).
+fn set_html_body_element_onpageswap<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pageswap", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLBodyElement.onpopstate` (WebIDL §3.7.5.1†).
+fn get_html_body_element_onpopstate<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "popstate")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLBodyElement.onpopstate` (WebIDL §3.7.5.2†).
+fn set_html_body_element_onpopstate<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "popstate", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLBodyElement.onrejectionhandled` (WebIDL §3.7.5.1†).
+fn get_html_body_element_onrejectionhandled<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "rejectionhandled")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLBodyElement.onrejectionhandled` (WebIDL §3.7.5.2†).
+fn set_html_body_element_onrejectionhandled<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "rejectionhandled", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLBodyElement.onstorage` (WebIDL §3.7.5.1†).
+fn get_html_body_element_onstorage<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "storage")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLBodyElement.onstorage` (WebIDL §3.7.5.2†).
+fn set_html_body_element_onstorage<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "storage", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLBodyElement.onunhandledrejection` (WebIDL §3.7.5.1†).
+fn get_html_body_element_onunhandledrejection<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "unhandledrejection")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLBodyElement.onunhandledrejection` (WebIDL §3.7.5.2†).
+fn set_html_body_element_onunhandledrejection<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "unhandledrejection", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `HTMLBodyElement.onunload` (WebIDL §3.7.5.1†).
+fn get_html_body_element_onunload<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "unload")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `HTMLBodyElement.onunload` (WebIDL §3.7.5.2†).
+fn set_html_body_element_onunload<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::HTMLBodyElement)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "unload", value)?;
     Ok(scope.undefined())
 }
 
@@ -8520,6 +13206,2190 @@ fn get_window_origin_agent_cluster<'s, P: AllInterfaces>(scope: &mut Scope<'s>, 
     Ok(v)
 }
 
+/// The getter of `Window.onabort` (WebIDL §3.7.5.1†).
+fn get_window_onabort<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "abort")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onabort` (WebIDL §3.7.5.2†).
+fn set_window_onabort<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "abort", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onauxclick` (WebIDL §3.7.5.1†).
+fn get_window_onauxclick<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "auxclick")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onauxclick` (WebIDL §3.7.5.2†).
+fn set_window_onauxclick<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "auxclick", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onbeforeinput` (WebIDL §3.7.5.1†).
+fn get_window_onbeforeinput<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "beforeinput")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onbeforeinput` (WebIDL §3.7.5.2†).
+fn set_window_onbeforeinput<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "beforeinput", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onbeforematch` (WebIDL §3.7.5.1†).
+fn get_window_onbeforematch<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "beforematch")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onbeforematch` (WebIDL §3.7.5.2†).
+fn set_window_onbeforematch<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "beforematch", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onbeforetoggle` (WebIDL §3.7.5.1†).
+fn get_window_onbeforetoggle<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "beforetoggle")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onbeforetoggle` (WebIDL §3.7.5.2†).
+fn set_window_onbeforetoggle<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "beforetoggle", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onblur` (WebIDL §3.7.5.1†).
+fn get_window_onblur<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "blur")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onblur` (WebIDL §3.7.5.2†).
+fn set_window_onblur<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "blur", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.oncancel` (WebIDL §3.7.5.1†).
+fn get_window_oncancel<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "cancel")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.oncancel` (WebIDL §3.7.5.2†).
+fn set_window_oncancel<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "cancel", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.oncanplay` (WebIDL §3.7.5.1†).
+fn get_window_oncanplay<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "canplay")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.oncanplay` (WebIDL §3.7.5.2†).
+fn set_window_oncanplay<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "canplay", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.oncanplaythrough` (WebIDL §3.7.5.1†).
+fn get_window_oncanplaythrough<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "canplaythrough")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.oncanplaythrough` (WebIDL §3.7.5.2†).
+fn set_window_oncanplaythrough<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "canplaythrough", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onchange` (WebIDL §3.7.5.1†).
+fn get_window_onchange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "change")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onchange` (WebIDL §3.7.5.2†).
+fn set_window_onchange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "change", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onclick` (WebIDL §3.7.5.1†).
+fn get_window_onclick<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "click")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onclick` (WebIDL §3.7.5.2†).
+fn set_window_onclick<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "click", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onclose` (WebIDL §3.7.5.1†).
+fn get_window_onclose<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "close")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onclose` (WebIDL §3.7.5.2†).
+fn set_window_onclose<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "close", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.oncommand` (WebIDL §3.7.5.1†).
+fn get_window_oncommand<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "command")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.oncommand` (WebIDL §3.7.5.2†).
+fn set_window_oncommand<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "command", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.oncontextlost` (WebIDL §3.7.5.1†).
+fn get_window_oncontextlost<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "contextlost")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.oncontextlost` (WebIDL §3.7.5.2†).
+fn set_window_oncontextlost<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "contextlost", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.oncontextmenu` (WebIDL §3.7.5.1†).
+fn get_window_oncontextmenu<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "contextmenu")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.oncontextmenu` (WebIDL §3.7.5.2†).
+fn set_window_oncontextmenu<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "contextmenu", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.oncontextrestored` (WebIDL §3.7.5.1†).
+fn get_window_oncontextrestored<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "contextrestored")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.oncontextrestored` (WebIDL §3.7.5.2†).
+fn set_window_oncontextrestored<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "contextrestored", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.oncopy` (WebIDL §3.7.5.1†).
+fn get_window_oncopy<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "copy")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.oncopy` (WebIDL §3.7.5.2†).
+fn set_window_oncopy<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "copy", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.oncuechange` (WebIDL §3.7.5.1†).
+fn get_window_oncuechange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "cuechange")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.oncuechange` (WebIDL §3.7.5.2†).
+fn set_window_oncuechange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "cuechange", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.oncut` (WebIDL §3.7.5.1†).
+fn get_window_oncut<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "cut")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.oncut` (WebIDL §3.7.5.2†).
+fn set_window_oncut<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "cut", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.ondblclick` (WebIDL §3.7.5.1†).
+fn get_window_ondblclick<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "dblclick")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.ondblclick` (WebIDL §3.7.5.2†).
+fn set_window_ondblclick<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "dblclick", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.ondrag` (WebIDL §3.7.5.1†).
+fn get_window_ondrag<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "drag")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.ondrag` (WebIDL §3.7.5.2†).
+fn set_window_ondrag<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "drag", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.ondragend` (WebIDL §3.7.5.1†).
+fn get_window_ondragend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "dragend")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.ondragend` (WebIDL §3.7.5.2†).
+fn set_window_ondragend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "dragend", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.ondragenter` (WebIDL §3.7.5.1†).
+fn get_window_ondragenter<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "dragenter")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.ondragenter` (WebIDL §3.7.5.2†).
+fn set_window_ondragenter<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "dragenter", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.ondragleave` (WebIDL §3.7.5.1†).
+fn get_window_ondragleave<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "dragleave")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.ondragleave` (WebIDL §3.7.5.2†).
+fn set_window_ondragleave<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "dragleave", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.ondragover` (WebIDL §3.7.5.1†).
+fn get_window_ondragover<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "dragover")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.ondragover` (WebIDL §3.7.5.2†).
+fn set_window_ondragover<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "dragover", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.ondragstart` (WebIDL §3.7.5.1†).
+fn get_window_ondragstart<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "dragstart")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.ondragstart` (WebIDL §3.7.5.2†).
+fn set_window_ondragstart<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "dragstart", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.ondrop` (WebIDL §3.7.5.1†).
+fn get_window_ondrop<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "drop")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.ondrop` (WebIDL §3.7.5.2†).
+fn set_window_ondrop<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "drop", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.ondurationchange` (WebIDL §3.7.5.1†).
+fn get_window_ondurationchange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "durationchange")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.ondurationchange` (WebIDL §3.7.5.2†).
+fn set_window_ondurationchange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "durationchange", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onemptied` (WebIDL §3.7.5.1†).
+fn get_window_onemptied<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "emptied")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onemptied` (WebIDL §3.7.5.2†).
+fn set_window_onemptied<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "emptied", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onended` (WebIDL §3.7.5.1†).
+fn get_window_onended<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "ended")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onended` (WebIDL §3.7.5.2†).
+fn set_window_onended<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "ended", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onerror` (WebIDL §3.7.5.1†).
+fn get_window_onerror<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "error")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onerror` (WebIDL §3.7.5.2†).
+fn set_window_onerror<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "error", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onfocus` (WebIDL §3.7.5.1†).
+fn get_window_onfocus<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "focus")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onfocus` (WebIDL §3.7.5.2†).
+fn set_window_onfocus<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "focus", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onformdata` (WebIDL §3.7.5.1†).
+fn get_window_onformdata<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "formdata")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onformdata` (WebIDL §3.7.5.2†).
+fn set_window_onformdata<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "formdata", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.oninput` (WebIDL §3.7.5.1†).
+fn get_window_oninput<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "input")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.oninput` (WebIDL §3.7.5.2†).
+fn set_window_oninput<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "input", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.oninvalid` (WebIDL §3.7.5.1†).
+fn get_window_oninvalid<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "invalid")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.oninvalid` (WebIDL §3.7.5.2†).
+fn set_window_oninvalid<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "invalid", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onkeydown` (WebIDL §3.7.5.1†).
+fn get_window_onkeydown<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "keydown")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onkeydown` (WebIDL §3.7.5.2†).
+fn set_window_onkeydown<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "keydown", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onkeypress` (WebIDL §3.7.5.1†).
+fn get_window_onkeypress<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "keypress")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onkeypress` (WebIDL §3.7.5.2†).
+fn set_window_onkeypress<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "keypress", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onkeyup` (WebIDL §3.7.5.1†).
+fn get_window_onkeyup<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "keyup")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onkeyup` (WebIDL §3.7.5.2†).
+fn set_window_onkeyup<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "keyup", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onload` (WebIDL §3.7.5.1†).
+fn get_window_onload<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "load")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onload` (WebIDL §3.7.5.2†).
+fn set_window_onload<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "load", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onloadeddata` (WebIDL §3.7.5.1†).
+fn get_window_onloadeddata<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "loadeddata")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onloadeddata` (WebIDL §3.7.5.2†).
+fn set_window_onloadeddata<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "loadeddata", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onloadedmetadata` (WebIDL §3.7.5.1†).
+fn get_window_onloadedmetadata<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "loadedmetadata")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onloadedmetadata` (WebIDL §3.7.5.2†).
+fn set_window_onloadedmetadata<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "loadedmetadata", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onloadstart` (WebIDL §3.7.5.1†).
+fn get_window_onloadstart<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "loadstart")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onloadstart` (WebIDL §3.7.5.2†).
+fn set_window_onloadstart<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "loadstart", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onmousedown` (WebIDL §3.7.5.1†).
+fn get_window_onmousedown<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "mousedown")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onmousedown` (WebIDL §3.7.5.2†).
+fn set_window_onmousedown<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "mousedown", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onmouseenter` (WebIDL §3.7.5.1†).
+fn get_window_onmouseenter<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "mouseenter")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onmouseenter` (WebIDL §3.7.5.2†).
+fn set_window_onmouseenter<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "mouseenter", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onmouseleave` (WebIDL §3.7.5.1†).
+fn get_window_onmouseleave<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "mouseleave")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onmouseleave` (WebIDL §3.7.5.2†).
+fn set_window_onmouseleave<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "mouseleave", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onmousemove` (WebIDL §3.7.5.1†).
+fn get_window_onmousemove<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "mousemove")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onmousemove` (WebIDL §3.7.5.2†).
+fn set_window_onmousemove<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "mousemove", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onmouseout` (WebIDL §3.7.5.1†).
+fn get_window_onmouseout<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "mouseout")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onmouseout` (WebIDL §3.7.5.2†).
+fn set_window_onmouseout<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "mouseout", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onmouseover` (WebIDL §3.7.5.1†).
+fn get_window_onmouseover<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "mouseover")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onmouseover` (WebIDL §3.7.5.2†).
+fn set_window_onmouseover<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "mouseover", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onmouseup` (WebIDL §3.7.5.1†).
+fn get_window_onmouseup<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "mouseup")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onmouseup` (WebIDL §3.7.5.2†).
+fn set_window_onmouseup<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "mouseup", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onpaste` (WebIDL §3.7.5.1†).
+fn get_window_onpaste<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "paste")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onpaste` (WebIDL §3.7.5.2†).
+fn set_window_onpaste<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "paste", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onpause` (WebIDL §3.7.5.1†).
+fn get_window_onpause<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pause")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onpause` (WebIDL §3.7.5.2†).
+fn set_window_onpause<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pause", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onplay` (WebIDL §3.7.5.1†).
+fn get_window_onplay<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "play")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onplay` (WebIDL §3.7.5.2†).
+fn set_window_onplay<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "play", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onplaying` (WebIDL §3.7.5.1†).
+fn get_window_onplaying<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "playing")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onplaying` (WebIDL §3.7.5.2†).
+fn set_window_onplaying<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "playing", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onprogress` (WebIDL §3.7.5.1†).
+fn get_window_onprogress<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "progress")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onprogress` (WebIDL §3.7.5.2†).
+fn set_window_onprogress<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "progress", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onratechange` (WebIDL §3.7.5.1†).
+fn get_window_onratechange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "ratechange")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onratechange` (WebIDL §3.7.5.2†).
+fn set_window_onratechange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "ratechange", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onreset` (WebIDL §3.7.5.1†).
+fn get_window_onreset<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "reset")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onreset` (WebIDL §3.7.5.2†).
+fn set_window_onreset<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "reset", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onresize` (WebIDL §3.7.5.1†).
+fn get_window_onresize<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "resize")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onresize` (WebIDL §3.7.5.2†).
+fn set_window_onresize<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "resize", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onscroll` (WebIDL §3.7.5.1†).
+fn get_window_onscroll<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "scroll")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onscroll` (WebIDL §3.7.5.2†).
+fn set_window_onscroll<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "scroll", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onscrollend` (WebIDL §3.7.5.1†).
+fn get_window_onscrollend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "scrollend")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onscrollend` (WebIDL §3.7.5.2†).
+fn set_window_onscrollend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "scrollend", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onsecuritypolicyviolation` (WebIDL §3.7.5.1†).
+fn get_window_onsecuritypolicyviolation<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "securitypolicyviolation")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onsecuritypolicyviolation` (WebIDL §3.7.5.2†).
+fn set_window_onsecuritypolicyviolation<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "securitypolicyviolation", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onseeked` (WebIDL §3.7.5.1†).
+fn get_window_onseeked<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "seeked")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onseeked` (WebIDL §3.7.5.2†).
+fn set_window_onseeked<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "seeked", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onseeking` (WebIDL §3.7.5.1†).
+fn get_window_onseeking<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "seeking")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onseeking` (WebIDL §3.7.5.2†).
+fn set_window_onseeking<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "seeking", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onselect` (WebIDL §3.7.5.1†).
+fn get_window_onselect<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "select")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onselect` (WebIDL §3.7.5.2†).
+fn set_window_onselect<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "select", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onslotchange` (WebIDL §3.7.5.1†).
+fn get_window_onslotchange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "slotchange")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onslotchange` (WebIDL §3.7.5.2†).
+fn set_window_onslotchange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "slotchange", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onstalled` (WebIDL §3.7.5.1†).
+fn get_window_onstalled<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "stalled")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onstalled` (WebIDL §3.7.5.2†).
+fn set_window_onstalled<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "stalled", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onsubmit` (WebIDL §3.7.5.1†).
+fn get_window_onsubmit<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "submit")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onsubmit` (WebIDL §3.7.5.2†).
+fn set_window_onsubmit<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "submit", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onsuspend` (WebIDL §3.7.5.1†).
+fn get_window_onsuspend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "suspend")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onsuspend` (WebIDL §3.7.5.2†).
+fn set_window_onsuspend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "suspend", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.ontimeupdate` (WebIDL §3.7.5.1†).
+fn get_window_ontimeupdate<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "timeupdate")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.ontimeupdate` (WebIDL §3.7.5.2†).
+fn set_window_ontimeupdate<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "timeupdate", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.ontoggle` (WebIDL §3.7.5.1†).
+fn get_window_ontoggle<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "toggle")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.ontoggle` (WebIDL §3.7.5.2†).
+fn set_window_ontoggle<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "toggle", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onvolumechange` (WebIDL §3.7.5.1†).
+fn get_window_onvolumechange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "volumechange")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onvolumechange` (WebIDL §3.7.5.2†).
+fn set_window_onvolumechange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "volumechange", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onwaiting` (WebIDL §3.7.5.1†).
+fn get_window_onwaiting<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "waiting")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onwaiting` (WebIDL §3.7.5.2†).
+fn set_window_onwaiting<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "waiting", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onwebkitanimationend` (WebIDL §3.7.5.1†).
+fn get_window_onwebkitanimationend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "webkitanimationend")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onwebkitanimationend` (WebIDL §3.7.5.2†).
+fn set_window_onwebkitanimationend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "webkitanimationend", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onwebkitanimationiteration` (WebIDL §3.7.5.1†).
+fn get_window_onwebkitanimationiteration<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "webkitanimationiteration")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onwebkitanimationiteration` (WebIDL §3.7.5.2†).
+fn set_window_onwebkitanimationiteration<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "webkitanimationiteration", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onwebkitanimationstart` (WebIDL §3.7.5.1†).
+fn get_window_onwebkitanimationstart<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "webkitanimationstart")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onwebkitanimationstart` (WebIDL §3.7.5.2†).
+fn set_window_onwebkitanimationstart<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "webkitanimationstart", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onwebkittransitionend` (WebIDL §3.7.5.1†).
+fn get_window_onwebkittransitionend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "webkittransitionend")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onwebkittransitionend` (WebIDL §3.7.5.2†).
+fn set_window_onwebkittransitionend<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "webkittransitionend", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onwheel` (WebIDL §3.7.5.1†).
+fn get_window_onwheel<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "wheel")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onwheel` (WebIDL §3.7.5.2†).
+fn set_window_onwheel<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "wheel", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onpointerover` (WebIDL §3.7.5.1†).
+fn get_window_onpointerover<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pointerover")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onpointerover` (WebIDL §3.7.5.2†).
+fn set_window_onpointerover<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pointerover", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onpointerenter` (WebIDL §3.7.5.1†).
+fn get_window_onpointerenter<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pointerenter")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onpointerenter` (WebIDL §3.7.5.2†).
+fn set_window_onpointerenter<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pointerenter", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onpointerdown` (WebIDL §3.7.5.1†).
+fn get_window_onpointerdown<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pointerdown")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onpointerdown` (WebIDL §3.7.5.2†).
+fn set_window_onpointerdown<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pointerdown", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onpointermove` (WebIDL §3.7.5.1†).
+fn get_window_onpointermove<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pointermove")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onpointermove` (WebIDL §3.7.5.2†).
+fn set_window_onpointermove<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pointermove", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onpointerup` (WebIDL §3.7.5.1†).
+fn get_window_onpointerup<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pointerup")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onpointerup` (WebIDL §3.7.5.2†).
+fn set_window_onpointerup<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pointerup", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onpointercancel` (WebIDL §3.7.5.1†).
+fn get_window_onpointercancel<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pointercancel")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onpointercancel` (WebIDL §3.7.5.2†).
+fn set_window_onpointercancel<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pointercancel", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onpointerout` (WebIDL §3.7.5.1†).
+fn get_window_onpointerout<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pointerout")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onpointerout` (WebIDL §3.7.5.2†).
+fn set_window_onpointerout<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pointerout", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onpointerleave` (WebIDL §3.7.5.1†).
+fn get_window_onpointerleave<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pointerleave")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onpointerleave` (WebIDL §3.7.5.2†).
+fn set_window_onpointerleave<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pointerleave", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.ongotpointercapture` (WebIDL §3.7.5.1†).
+fn get_window_ongotpointercapture<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "gotpointercapture")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.ongotpointercapture` (WebIDL §3.7.5.2†).
+fn set_window_ongotpointercapture<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "gotpointercapture", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onlostpointercapture` (WebIDL §3.7.5.1†).
+fn get_window_onlostpointercapture<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "lostpointercapture")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onlostpointercapture` (WebIDL §3.7.5.2†).
+fn set_window_onlostpointercapture<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "lostpointercapture", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onafterprint` (WebIDL §3.7.5.1†).
+fn get_window_onafterprint<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "afterprint")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onafterprint` (WebIDL §3.7.5.2†).
+fn set_window_onafterprint<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "afterprint", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onbeforeprint` (WebIDL §3.7.5.1†).
+fn get_window_onbeforeprint<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "beforeprint")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onbeforeprint` (WebIDL §3.7.5.2†).
+fn set_window_onbeforeprint<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "beforeprint", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onbeforeunload` (WebIDL §3.7.5.1†).
+fn get_window_onbeforeunload<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "beforeunload")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onbeforeunload` (WebIDL §3.7.5.2†).
+fn set_window_onbeforeunload<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "beforeunload", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onhashchange` (WebIDL §3.7.5.1†).
+fn get_window_onhashchange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "hashchange")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onhashchange` (WebIDL §3.7.5.2†).
+fn set_window_onhashchange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "hashchange", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onlanguagechange` (WebIDL §3.7.5.1†).
+fn get_window_onlanguagechange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "languagechange")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onlanguagechange` (WebIDL §3.7.5.2†).
+fn set_window_onlanguagechange<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "languagechange", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onmessage` (WebIDL §3.7.5.1†).
+fn get_window_onmessage<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "message")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onmessage` (WebIDL §3.7.5.2†).
+fn set_window_onmessage<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "message", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onmessageerror` (WebIDL §3.7.5.1†).
+fn get_window_onmessageerror<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "messageerror")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onmessageerror` (WebIDL §3.7.5.2†).
+fn set_window_onmessageerror<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "messageerror", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onoffline` (WebIDL §3.7.5.1†).
+fn get_window_onoffline<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "offline")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onoffline` (WebIDL §3.7.5.2†).
+fn set_window_onoffline<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "offline", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.ononline` (WebIDL §3.7.5.1†).
+fn get_window_ononline<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "online")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.ononline` (WebIDL §3.7.5.2†).
+fn set_window_ononline<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "online", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onpagehide` (WebIDL §3.7.5.1†).
+fn get_window_onpagehide<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pagehide")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onpagehide` (WebIDL §3.7.5.2†).
+fn set_window_onpagehide<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pagehide", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onpagereveal` (WebIDL §3.7.5.1†).
+fn get_window_onpagereveal<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pagereveal")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onpagereveal` (WebIDL §3.7.5.2†).
+fn set_window_onpagereveal<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pagereveal", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onpageshow` (WebIDL §3.7.5.1†).
+fn get_window_onpageshow<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pageshow")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onpageshow` (WebIDL §3.7.5.2†).
+fn set_window_onpageshow<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pageshow", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onpageswap` (WebIDL §3.7.5.1†).
+fn get_window_onpageswap<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "pageswap")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onpageswap` (WebIDL §3.7.5.2†).
+fn set_window_onpageswap<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "pageswap", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onpopstate` (WebIDL §3.7.5.1†).
+fn get_window_onpopstate<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "popstate")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onpopstate` (WebIDL §3.7.5.2†).
+fn set_window_onpopstate<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "popstate", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onrejectionhandled` (WebIDL §3.7.5.1†).
+fn get_window_onrejectionhandled<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "rejectionhandled")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onrejectionhandled` (WebIDL §3.7.5.2†).
+fn set_window_onrejectionhandled<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "rejectionhandled", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onstorage` (WebIDL §3.7.5.1†).
+fn get_window_onstorage<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "storage")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onstorage` (WebIDL §3.7.5.2†).
+fn set_window_onstorage<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "storage", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onunhandledrejection` (WebIDL §3.7.5.1†).
+fn get_window_onunhandledrejection<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "unhandledrejection")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onunhandledrejection` (WebIDL §3.7.5.2†).
+fn set_window_onunhandledrejection<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "unhandledrejection", value)?;
+    Ok(scope.undefined())
+}
+
+/// The getter of `Window.onunload` (WebIDL §3.7.5.1†).
+fn get_window_onunload<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+
+    let _ = &this;
+    let r = P::event_handler_get(scope, this, "unload")?;
+    Ok(match r { Some(x) => x, None => scope.null() })
+}
+
+/// The setter of `Window.onunload` (WebIDL §3.7.5.2†).
+fn set_window_onunload<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
+    // "If no arguments were passed, then throw a TypeError."
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "1 argument required"));
+    }
+    let value = convert::event_handler(scope, args.get(0));
+    P::event_handler_set(scope, this, "unload", value)?;
+    Ok(scope.undefined())
+}
+
 /// The getter of `Window.origin` (WebIDL §3.7.5.1†).
 fn get_window_origin<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
     let this = platform::this_object::<P>(scope, args, InterfaceId::Window)?;
@@ -9198,6 +16068,30 @@ fn ctor_navigator<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) 
     Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Illegal constructor"))
 }
 
+/// The getter of `Navigator.userActivation` (WebIDL §3.7.5.1†).
+fn get_navigator_user_activation<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Navigator)?;
+
+    let _ = &this;
+    if let Some(v) = platform::same_object::<P>(scope, this, "Navigator.userActivation")? {
+        return Ok(v);
+    }
+    let r = <P as NavigatorImpl>::user_activation(scope, this)?;
+    let v = convert::from_interface::<P>(scope, r)?;
+    platform::keep_same_object::<P>(scope, this, "Navigator.userActivation", v)?;
+    Ok(v)
+}
+
+/// The getter of `Navigator.maxTouchPoints` (WebIDL §3.7.5.1†).
+fn get_navigator_max_touch_points<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Navigator)?;
+
+    let _ = &this;
+    let r = <P as NavigatorImpl>::max_touch_points(scope, this)?;
+    let v = scope.number(f64::from(r));
+    Ok(v)
+}
+
 /// The getter of `Navigator.appCodeName` (WebIDL §3.7.5.1†).
 fn get_navigator_app_code_name<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
     let this = platform::this_object::<P>(scope, args, InterfaceId::Navigator)?;
@@ -9376,6 +16270,646 @@ fn op_navigator_java_enabled<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: 
     Ok(v)
 }
 
+/// The interface object of `UIEvent`: [[Call]] and [[Construct]] (WebIDL §3.7.1†).
+fn ctor_ui_event<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    // §3.7.1† step 1: "If NewTarget is undefined, then throw a TypeError."
+    let Some(new_target) = args.new_target() else {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Constructor UIEvent requires 'new'"));
+    };
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to construct 'UIEvent': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::dom_string(scope, v, false)?;
+    let v = args.get(1);
+    let a1 = if scope.kind(v) == ValueKind::Undefined { { let u = scope.undefined(); dict_ui_event_init::<P>(scope, u)? } } else { dict_ui_event_init::<P>(scope, v)? };
+    let key = <P as UIEventImpl>::constructor(scope, a0, a1)?;
+    // "internally create a new object implementing the interface" with
+    // the prototype from NewTarget (§3.7.1†, §3.8.1†).
+    let fallback = platform::prototype::<P>(scope, InterfaceId::UIEvent)?;
+    let proto = scope.get_prototype_from_constructor(new_target, fallback)?;
+    let interface = scope.host_mut::<P>()?.interface_of(key).unwrap_or(InterfaceId::UIEvent);
+    platform::wrap_with_prototype::<P>(scope, key, interface, proto)
+}
+
+/// The getter of `UIEvent.view` (WebIDL §3.7.5.1†).
+fn get_ui_event_view<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::UIEvent)?;
+
+    let _ = &this;
+    let r = <P as UIEventImpl>::view(scope, this)?;
+    let v = match r { Some(x) => convert::from_interface::<P>(scope, x)?, None => scope.null() };
+    Ok(v)
+}
+
+/// The getter of `UIEvent.detail` (WebIDL §3.7.5.1†).
+fn get_ui_event_detail<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::UIEvent)?;
+
+    let _ = &this;
+    let r = <P as UIEventImpl>::detail(scope, this)?;
+    let v = scope.number(f64::from(r));
+    Ok(v)
+}
+
+/// The getter of `UIEvent.which` (WebIDL §3.7.5.1†).
+fn get_ui_event_which<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::UIEvent)?;
+
+    let _ = &this;
+    let r = <P as UIEventImpl>::which(scope, this)?;
+    let v = scope.number(f64::from(r));
+    Ok(v)
+}
+
+/// The operation `UIEvent.initUIEvent` (WebIDL §3.7.6†).
+fn op_ui_event_init_ui_event<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::UIEvent)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'initUIEvent' on 'UIEvent': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::dom_string(scope, v, false)?;
+    let v = args.get(1);
+    let a1 = if scope.kind(v) == ValueKind::Undefined { false } else { convert::boolean(scope, v) };
+    let v = args.get(2);
+    let a2 = if scope.kind(v) == ValueKind::Undefined { false } else { convert::boolean(scope, v) };
+    let v = args.get(3);
+    let a3 = if scope.kind(v) == ValueKind::Undefined { None } else { if convert::is_nullish(scope, v) { None } else { Some(convert::interface::<P>(scope, v, InterfaceId::Window)?) } };
+    let v = args.get(4);
+    let a4 = if scope.kind(v) == ValueKind::Undefined { 0 } else { convert::long(scope, v, IntegerFlags { enforce_range: false, clamp: false })? };
+    <P as UIEventImpl>::init_ui_event(scope, this, a0, a1, a2, a3, a4)?;
+    Ok(scope.undefined())
+}
+
+/// The interface object of `MouseEvent`: [[Call]] and [[Construct]] (WebIDL §3.7.1†).
+fn ctor_mouse_event<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    // §3.7.1† step 1: "If NewTarget is undefined, then throw a TypeError."
+    let Some(new_target) = args.new_target() else {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Constructor MouseEvent requires 'new'"));
+    };
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to construct 'MouseEvent': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::dom_string(scope, v, false)?;
+    let v = args.get(1);
+    let a1 = if scope.kind(v) == ValueKind::Undefined { { let u = scope.undefined(); dict_mouse_event_init::<P>(scope, u)? } } else { dict_mouse_event_init::<P>(scope, v)? };
+    let key = <P as MouseEventImpl>::constructor(scope, a0, a1)?;
+    // "internally create a new object implementing the interface" with
+    // the prototype from NewTarget (§3.7.1†, §3.8.1†).
+    let fallback = platform::prototype::<P>(scope, InterfaceId::MouseEvent)?;
+    let proto = scope.get_prototype_from_constructor(new_target, fallback)?;
+    let interface = scope.host_mut::<P>()?.interface_of(key).unwrap_or(InterfaceId::MouseEvent);
+    platform::wrap_with_prototype::<P>(scope, key, interface, proto)
+}
+
+/// The getter of `MouseEvent.screenX` (WebIDL §3.7.5.1†).
+fn get_mouse_event_screen_x<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::MouseEvent)?;
+
+    let _ = &this;
+    let r = <P as MouseEventImpl>::screen_x(scope, this)?;
+    let v = scope.number(f64::from(r));
+    Ok(v)
+}
+
+/// The getter of `MouseEvent.screenY` (WebIDL §3.7.5.1†).
+fn get_mouse_event_screen_y<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::MouseEvent)?;
+
+    let _ = &this;
+    let r = <P as MouseEventImpl>::screen_y(scope, this)?;
+    let v = scope.number(f64::from(r));
+    Ok(v)
+}
+
+/// The getter of `MouseEvent.clientX` (WebIDL §3.7.5.1†).
+fn get_mouse_event_client_x<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::MouseEvent)?;
+
+    let _ = &this;
+    let r = <P as MouseEventImpl>::client_x(scope, this)?;
+    let v = scope.number(f64::from(r));
+    Ok(v)
+}
+
+/// The getter of `MouseEvent.clientY` (WebIDL §3.7.5.1†).
+fn get_mouse_event_client_y<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::MouseEvent)?;
+
+    let _ = &this;
+    let r = <P as MouseEventImpl>::client_y(scope, this)?;
+    let v = scope.number(f64::from(r));
+    Ok(v)
+}
+
+/// The getter of `MouseEvent.layerX` (WebIDL §3.7.5.1†).
+fn get_mouse_event_layer_x<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::MouseEvent)?;
+
+    let _ = &this;
+    let r = <P as MouseEventImpl>::layer_x(scope, this)?;
+    let v = scope.number(f64::from(r));
+    Ok(v)
+}
+
+/// The getter of `MouseEvent.layerY` (WebIDL §3.7.5.1†).
+fn get_mouse_event_layer_y<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::MouseEvent)?;
+
+    let _ = &this;
+    let r = <P as MouseEventImpl>::layer_y(scope, this)?;
+    let v = scope.number(f64::from(r));
+    Ok(v)
+}
+
+/// The getter of `MouseEvent.ctrlKey` (WebIDL §3.7.5.1†).
+fn get_mouse_event_ctrl_key<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::MouseEvent)?;
+
+    let _ = &this;
+    let r = <P as MouseEventImpl>::ctrl_key(scope, this)?;
+    let v = scope.boolean(r);
+    Ok(v)
+}
+
+/// The getter of `MouseEvent.shiftKey` (WebIDL §3.7.5.1†).
+fn get_mouse_event_shift_key<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::MouseEvent)?;
+
+    let _ = &this;
+    let r = <P as MouseEventImpl>::shift_key(scope, this)?;
+    let v = scope.boolean(r);
+    Ok(v)
+}
+
+/// The getter of `MouseEvent.altKey` (WebIDL §3.7.5.1†).
+fn get_mouse_event_alt_key<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::MouseEvent)?;
+
+    let _ = &this;
+    let r = <P as MouseEventImpl>::alt_key(scope, this)?;
+    let v = scope.boolean(r);
+    Ok(v)
+}
+
+/// The getter of `MouseEvent.metaKey` (WebIDL §3.7.5.1†).
+fn get_mouse_event_meta_key<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::MouseEvent)?;
+
+    let _ = &this;
+    let r = <P as MouseEventImpl>::meta_key(scope, this)?;
+    let v = scope.boolean(r);
+    Ok(v)
+}
+
+/// The getter of `MouseEvent.button` (WebIDL §3.7.5.1†).
+fn get_mouse_event_button<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::MouseEvent)?;
+
+    let _ = &this;
+    let r = <P as MouseEventImpl>::button(scope, this)?;
+    let v = scope.number(f64::from(r));
+    Ok(v)
+}
+
+/// The getter of `MouseEvent.buttons` (WebIDL §3.7.5.1†).
+fn get_mouse_event_buttons<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::MouseEvent)?;
+
+    let _ = &this;
+    let r = <P as MouseEventImpl>::buttons(scope, this)?;
+    let v = scope.number(f64::from(r));
+    Ok(v)
+}
+
+/// The getter of `MouseEvent.relatedTarget` (WebIDL §3.7.5.1†).
+fn get_mouse_event_related_target<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::MouseEvent)?;
+
+    let _ = &this;
+    let r = <P as MouseEventImpl>::related_target(scope, this)?;
+    let v = match r { Some(x) => convert::from_interface::<P>(scope, x)?, None => scope.null() };
+    Ok(v)
+}
+
+/// The operation `MouseEvent.getModifierState` (WebIDL §3.7.6†).
+fn op_mouse_event_get_modifier_state<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::MouseEvent)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'getModifierState' on 'MouseEvent': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::dom_string(scope, v, false)?;
+    let r = <P as MouseEventImpl>::get_modifier_state(scope, this, a0)?;
+    let v = scope.boolean(r);
+    Ok(v)
+}
+
+/// The operation `MouseEvent.initMouseEvent` (WebIDL §3.7.6†).
+fn op_mouse_event_init_mouse_event<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::MouseEvent)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'initMouseEvent' on 'MouseEvent': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::dom_string(scope, v, false)?;
+    let v = args.get(1);
+    let a1 = if scope.kind(v) == ValueKind::Undefined { false } else { convert::boolean(scope, v) };
+    let v = args.get(2);
+    let a2 = if scope.kind(v) == ValueKind::Undefined { false } else { convert::boolean(scope, v) };
+    let v = args.get(3);
+    let a3 = if scope.kind(v) == ValueKind::Undefined { None } else { if convert::is_nullish(scope, v) { None } else { Some(convert::interface::<P>(scope, v, InterfaceId::Window)?) } };
+    let v = args.get(4);
+    let a4 = if scope.kind(v) == ValueKind::Undefined { 0 } else { convert::long(scope, v, IntegerFlags { enforce_range: false, clamp: false })? };
+    let v = args.get(5);
+    let a5 = if scope.kind(v) == ValueKind::Undefined { 0 } else { convert::long(scope, v, IntegerFlags { enforce_range: false, clamp: false })? };
+    let v = args.get(6);
+    let a6 = if scope.kind(v) == ValueKind::Undefined { 0 } else { convert::long(scope, v, IntegerFlags { enforce_range: false, clamp: false })? };
+    let v = args.get(7);
+    let a7 = if scope.kind(v) == ValueKind::Undefined { 0 } else { convert::long(scope, v, IntegerFlags { enforce_range: false, clamp: false })? };
+    let v = args.get(8);
+    let a8 = if scope.kind(v) == ValueKind::Undefined { 0 } else { convert::long(scope, v, IntegerFlags { enforce_range: false, clamp: false })? };
+    let v = args.get(9);
+    let a9 = if scope.kind(v) == ValueKind::Undefined { false } else { convert::boolean(scope, v) };
+    let v = args.get(10);
+    let a10 = if scope.kind(v) == ValueKind::Undefined { false } else { convert::boolean(scope, v) };
+    let v = args.get(11);
+    let a11 = if scope.kind(v) == ValueKind::Undefined { false } else { convert::boolean(scope, v) };
+    let v = args.get(12);
+    let a12 = if scope.kind(v) == ValueKind::Undefined { false } else { convert::boolean(scope, v) };
+    let v = args.get(13);
+    let a13 = if scope.kind(v) == ValueKind::Undefined { 0 } else { convert::short(scope, v, IntegerFlags { enforce_range: false, clamp: false })? };
+    let v = args.get(14);
+    let a14 = if scope.kind(v) == ValueKind::Undefined { None } else { if convert::is_nullish(scope, v) { None } else { Some(convert::interface::<P>(scope, v, InterfaceId::EventTarget)?) } };
+    <P as MouseEventImpl>::init_mouse_event(scope, this, a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14)?;
+    Ok(scope.undefined())
+}
+
+/// The interface object of `WheelEvent`: [[Call]] and [[Construct]] (WebIDL §3.7.1†).
+fn ctor_wheel_event<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    // §3.7.1† step 1: "If NewTarget is undefined, then throw a TypeError."
+    let Some(new_target) = args.new_target() else {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Constructor WheelEvent requires 'new'"));
+    };
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to construct 'WheelEvent': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::dom_string(scope, v, false)?;
+    let v = args.get(1);
+    let a1 = if scope.kind(v) == ValueKind::Undefined { { let u = scope.undefined(); dict_wheel_event_init::<P>(scope, u)? } } else { dict_wheel_event_init::<P>(scope, v)? };
+    let key = <P as WheelEventImpl>::constructor(scope, a0, a1)?;
+    // "internally create a new object implementing the interface" with
+    // the prototype from NewTarget (§3.7.1†, §3.8.1†).
+    let fallback = platform::prototype::<P>(scope, InterfaceId::WheelEvent)?;
+    let proto = scope.get_prototype_from_constructor(new_target, fallback)?;
+    let interface = scope.host_mut::<P>()?.interface_of(key).unwrap_or(InterfaceId::WheelEvent);
+    platform::wrap_with_prototype::<P>(scope, key, interface, proto)
+}
+
+/// The getter of `WheelEvent.deltaX` (WebIDL §3.7.5.1†).
+fn get_wheel_event_delta_x<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::WheelEvent)?;
+
+    let _ = &this;
+    let r = <P as WheelEventImpl>::delta_x(scope, this)?;
+    let v = scope.number(r);
+    Ok(v)
+}
+
+/// The getter of `WheelEvent.deltaY` (WebIDL §3.7.5.1†).
+fn get_wheel_event_delta_y<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::WheelEvent)?;
+
+    let _ = &this;
+    let r = <P as WheelEventImpl>::delta_y(scope, this)?;
+    let v = scope.number(r);
+    Ok(v)
+}
+
+/// The getter of `WheelEvent.deltaZ` (WebIDL §3.7.5.1†).
+fn get_wheel_event_delta_z<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::WheelEvent)?;
+
+    let _ = &this;
+    let r = <P as WheelEventImpl>::delta_z(scope, this)?;
+    let v = scope.number(r);
+    Ok(v)
+}
+
+/// The getter of `WheelEvent.deltaMode` (WebIDL §3.7.5.1†).
+fn get_wheel_event_delta_mode<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::WheelEvent)?;
+
+    let _ = &this;
+    let r = <P as WheelEventImpl>::delta_mode(scope, this)?;
+    let v = scope.number(f64::from(r));
+    Ok(v)
+}
+
+/// The getter of `WheelEvent.momentum` (WebIDL §3.7.5.1†).
+fn get_wheel_event_momentum<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::WheelEvent)?;
+
+    let _ = &this;
+    let r = <P as WheelEventImpl>::momentum(scope, this)?;
+    let v = scope.boolean(r);
+    Ok(v)
+}
+
+/// The interface object of `KeyboardEvent`: [[Call]] and [[Construct]] (WebIDL §3.7.1†).
+fn ctor_keyboard_event<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    // §3.7.1† step 1: "If NewTarget is undefined, then throw a TypeError."
+    let Some(new_target) = args.new_target() else {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Constructor KeyboardEvent requires 'new'"));
+    };
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to construct 'KeyboardEvent': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::dom_string(scope, v, false)?;
+    let v = args.get(1);
+    let a1 = if scope.kind(v) == ValueKind::Undefined { { let u = scope.undefined(); dict_keyboard_event_init::<P>(scope, u)? } } else { dict_keyboard_event_init::<P>(scope, v)? };
+    let key = <P as KeyboardEventImpl>::constructor(scope, a0, a1)?;
+    // "internally create a new object implementing the interface" with
+    // the prototype from NewTarget (§3.7.1†, §3.8.1†).
+    let fallback = platform::prototype::<P>(scope, InterfaceId::KeyboardEvent)?;
+    let proto = scope.get_prototype_from_constructor(new_target, fallback)?;
+    let interface = scope.host_mut::<P>()?.interface_of(key).unwrap_or(InterfaceId::KeyboardEvent);
+    platform::wrap_with_prototype::<P>(scope, key, interface, proto)
+}
+
+/// The getter of `KeyboardEvent.key` (WebIDL §3.7.5.1†).
+fn get_keyboard_event_key<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::KeyboardEvent)?;
+
+    let _ = &this;
+    let r = <P as KeyboardEventImpl>::key(scope, this)?;
+    let v = convert::from_dom_string(scope, &r);
+    Ok(v)
+}
+
+/// The getter of `KeyboardEvent.code` (WebIDL §3.7.5.1†).
+fn get_keyboard_event_code<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::KeyboardEvent)?;
+
+    let _ = &this;
+    let r = <P as KeyboardEventImpl>::code(scope, this)?;
+    let v = convert::from_dom_string(scope, &r);
+    Ok(v)
+}
+
+/// The getter of `KeyboardEvent.location` (WebIDL §3.7.5.1†).
+fn get_keyboard_event_location<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::KeyboardEvent)?;
+
+    let _ = &this;
+    let r = <P as KeyboardEventImpl>::location(scope, this)?;
+    let v = scope.number(f64::from(r));
+    Ok(v)
+}
+
+/// The getter of `KeyboardEvent.ctrlKey` (WebIDL §3.7.5.1†).
+fn get_keyboard_event_ctrl_key<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::KeyboardEvent)?;
+
+    let _ = &this;
+    let r = <P as KeyboardEventImpl>::ctrl_key(scope, this)?;
+    let v = scope.boolean(r);
+    Ok(v)
+}
+
+/// The getter of `KeyboardEvent.shiftKey` (WebIDL §3.7.5.1†).
+fn get_keyboard_event_shift_key<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::KeyboardEvent)?;
+
+    let _ = &this;
+    let r = <P as KeyboardEventImpl>::shift_key(scope, this)?;
+    let v = scope.boolean(r);
+    Ok(v)
+}
+
+/// The getter of `KeyboardEvent.altKey` (WebIDL §3.7.5.1†).
+fn get_keyboard_event_alt_key<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::KeyboardEvent)?;
+
+    let _ = &this;
+    let r = <P as KeyboardEventImpl>::alt_key(scope, this)?;
+    let v = scope.boolean(r);
+    Ok(v)
+}
+
+/// The getter of `KeyboardEvent.metaKey` (WebIDL §3.7.5.1†).
+fn get_keyboard_event_meta_key<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::KeyboardEvent)?;
+
+    let _ = &this;
+    let r = <P as KeyboardEventImpl>::meta_key(scope, this)?;
+    let v = scope.boolean(r);
+    Ok(v)
+}
+
+/// The getter of `KeyboardEvent.repeat` (WebIDL §3.7.5.1†).
+fn get_keyboard_event_repeat<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::KeyboardEvent)?;
+
+    let _ = &this;
+    let r = <P as KeyboardEventImpl>::repeat(scope, this)?;
+    let v = scope.boolean(r);
+    Ok(v)
+}
+
+/// The getter of `KeyboardEvent.isComposing` (WebIDL §3.7.5.1†).
+fn get_keyboard_event_is_composing<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::KeyboardEvent)?;
+
+    let _ = &this;
+    let r = <P as KeyboardEventImpl>::is_composing(scope, this)?;
+    let v = scope.boolean(r);
+    Ok(v)
+}
+
+/// The getter of `KeyboardEvent.charCode` (WebIDL §3.7.5.1†).
+fn get_keyboard_event_char_code<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::KeyboardEvent)?;
+
+    let _ = &this;
+    let r = <P as KeyboardEventImpl>::char_code(scope, this)?;
+    let v = scope.number(f64::from(r));
+    Ok(v)
+}
+
+/// The getter of `KeyboardEvent.keyCode` (WebIDL §3.7.5.1†).
+fn get_keyboard_event_key_code<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::KeyboardEvent)?;
+
+    let _ = &this;
+    let r = <P as KeyboardEventImpl>::key_code(scope, this)?;
+    let v = scope.number(f64::from(r));
+    Ok(v)
+}
+
+/// The operation `KeyboardEvent.getModifierState` (WebIDL §3.7.6†).
+fn op_keyboard_event_get_modifier_state<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::KeyboardEvent)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'getModifierState' on 'KeyboardEvent': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::dom_string(scope, v, false)?;
+    let r = <P as KeyboardEventImpl>::get_modifier_state(scope, this, a0)?;
+    let v = scope.boolean(r);
+    Ok(v)
+}
+
+/// The operation `KeyboardEvent.initKeyboardEvent` (WebIDL §3.7.6†).
+fn op_keyboard_event_init_keyboard_event<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::KeyboardEvent)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'initKeyboardEvent' on 'KeyboardEvent': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::dom_string(scope, v, false)?;
+    let v = args.get(1);
+    let a1 = if scope.kind(v) == ValueKind::Undefined { false } else { convert::boolean(scope, v) };
+    let v = args.get(2);
+    let a2 = if scope.kind(v) == ValueKind::Undefined { false } else { convert::boolean(scope, v) };
+    let v = args.get(3);
+    let a3 = if scope.kind(v) == ValueKind::Undefined { None } else { if convert::is_nullish(scope, v) { None } else { Some(convert::interface::<P>(scope, v, InterfaceId::Window)?) } };
+    let v = args.get(4);
+    let a4 = if scope.kind(v) == ValueKind::Undefined { "".encode_utf16().collect::<DomString>() } else { convert::dom_string(scope, v, false)? };
+    let v = args.get(5);
+    let a5 = if scope.kind(v) == ValueKind::Undefined { 0 } else { convert::unsigned_long(scope, v, IntegerFlags { enforce_range: false, clamp: false })? };
+    let v = args.get(6);
+    let a6 = if scope.kind(v) == ValueKind::Undefined { false } else { convert::boolean(scope, v) };
+    let v = args.get(7);
+    let a7 = if scope.kind(v) == ValueKind::Undefined { false } else { convert::boolean(scope, v) };
+    let v = args.get(8);
+    let a8 = if scope.kind(v) == ValueKind::Undefined { false } else { convert::boolean(scope, v) };
+    let v = args.get(9);
+    let a9 = if scope.kind(v) == ValueKind::Undefined { false } else { convert::boolean(scope, v) };
+    <P as KeyboardEventImpl>::init_keyboard_event(scope, this, a0, a1, a2, a3, a4, a5, a6, a7, a8, a9)?;
+    Ok(scope.undefined())
+}
+
+/// The interface object of `FocusEvent`: [[Call]] and [[Construct]] (WebIDL §3.7.1†).
+fn ctor_focus_event<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    // §3.7.1† step 1: "If NewTarget is undefined, then throw a TypeError."
+    let Some(new_target) = args.new_target() else {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Constructor FocusEvent requires 'new'"));
+    };
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to construct 'FocusEvent': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::dom_string(scope, v, false)?;
+    let v = args.get(1);
+    let a1 = if scope.kind(v) == ValueKind::Undefined { { let u = scope.undefined(); dict_focus_event_init::<P>(scope, u)? } } else { dict_focus_event_init::<P>(scope, v)? };
+    let key = <P as FocusEventImpl>::constructor(scope, a0, a1)?;
+    // "internally create a new object implementing the interface" with
+    // the prototype from NewTarget (§3.7.1†, §3.8.1†).
+    let fallback = platform::prototype::<P>(scope, InterfaceId::FocusEvent)?;
+    let proto = scope.get_prototype_from_constructor(new_target, fallback)?;
+    let interface = scope.host_mut::<P>()?.interface_of(key).unwrap_or(InterfaceId::FocusEvent);
+    platform::wrap_with_prototype::<P>(scope, key, interface, proto)
+}
+
+/// The getter of `FocusEvent.relatedTarget` (WebIDL §3.7.5.1†).
+fn get_focus_event_related_target<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::FocusEvent)?;
+
+    let _ = &this;
+    let r = <P as FocusEventImpl>::related_target(scope, this)?;
+    let v = match r { Some(x) => convert::from_interface::<P>(scope, x)?, None => scope.null() };
+    Ok(v)
+}
+
+/// The interface object of `InputEvent`: [[Call]] and [[Construct]] (WebIDL §3.7.1†).
+fn ctor_input_event<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    // §3.7.1† step 1: "If NewTarget is undefined, then throw a TypeError."
+    let Some(new_target) = args.new_target() else {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Constructor InputEvent requires 'new'"));
+    };
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to construct 'InputEvent': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::dom_string(scope, v, false)?;
+    let v = args.get(1);
+    let a1 = if scope.kind(v) == ValueKind::Undefined { { let u = scope.undefined(); dict_input_event_init::<P>(scope, u)? } } else { dict_input_event_init::<P>(scope, v)? };
+    let key = <P as InputEventImpl>::constructor(scope, a0, a1)?;
+    // "internally create a new object implementing the interface" with
+    // the prototype from NewTarget (§3.7.1†, §3.8.1†).
+    let fallback = platform::prototype::<P>(scope, InterfaceId::InputEvent)?;
+    let proto = scope.get_prototype_from_constructor(new_target, fallback)?;
+    let interface = scope.host_mut::<P>()?.interface_of(key).unwrap_or(InterfaceId::InputEvent);
+    platform::wrap_with_prototype::<P>(scope, key, interface, proto)
+}
+
+/// The getter of `InputEvent.data` (WebIDL §3.7.5.1†).
+fn get_input_event_data<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::InputEvent)?;
+
+    let _ = &this;
+    let r = <P as InputEventImpl>::data(scope, this)?;
+    let v = match r { Some(x) => convert::from_usv_string(scope, &x), None => scope.null() };
+    Ok(v)
+}
+
+/// The getter of `InputEvent.isComposing` (WebIDL §3.7.5.1†).
+fn get_input_event_is_composing<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::InputEvent)?;
+
+    let _ = &this;
+    let r = <P as InputEventImpl>::is_composing(scope, this)?;
+    let v = scope.boolean(r);
+    Ok(v)
+}
+
+/// The getter of `InputEvent.inputType` (WebIDL §3.7.5.1†).
+fn get_input_event_input_type<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::InputEvent)?;
+
+    let _ = &this;
+    let r = <P as InputEventImpl>::input_type(scope, this)?;
+    let v = convert::from_dom_string(scope, &r);
+    Ok(v)
+}
+
+/// The interface object of `UserActivation`: [[Call]] and [[Construct]] (WebIDL §3.7.1†).
+fn ctor_user_activation<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let _ = args;
+    let _: core::marker::PhantomData<P> = core::marker::PhantomData;
+    Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Illegal constructor"))
+}
+
+/// The getter of `UserActivation.hasBeenActive` (WebIDL §3.7.5.1†).
+fn get_user_activation_has_been_active<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::UserActivation)?;
+
+    let _ = &this;
+    let r = <P as UserActivationImpl>::has_been_active(scope, this)?;
+    let v = scope.boolean(r);
+    Ok(v)
+}
+
+/// The getter of `UserActivation.isActive` (WebIDL §3.7.5.1†).
+fn get_user_activation_is_active<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::UserActivation)?;
+
+    let _ = &this;
+    let r = <P as UserActivationImpl>::is_active(scope, this)?;
+    let v = scope.boolean(r);
+    Ok(v)
+}
+
 /// Defines the `[LegacyUnforgeable]` attributes and operations of
 /// `interface` and its ancestors on a new wrapper (WebIDL §3.7.? "define the
 /// unforgeable regular operations" and "... attributes", called when the
@@ -9474,6 +17008,7 @@ pub fn install<P: AllInterfaces>(scope: &mut Scope<'_>, realm: &clazel_js::Realm
     let _ = (&ctor, &proto, &global);
         install::attribute(scope, proto, "aborted", get_abort_signal_aborted::<P>, None, false)?;
         install::attribute(scope, proto, "reason", get_abort_signal_reason::<P>, None, false)?;
+        install::attribute(scope, proto, "onabort", get_abort_signal_onabort::<P>, Some(Box::new(set_abort_signal_onabort::<P>)), false)?;
         install::operation(scope, ctor, "abort", 0, op_abort_signal_static_abort::<P>, false)?;
         install::operation(scope, ctor, "timeout", 1, op_abort_signal_static_timeout::<P>, false)?;
         install::operation(scope, ctor, "any", 1, op_abort_signal_static_any::<P>, false)?;
@@ -9693,6 +17228,8 @@ pub fn install<P: AllInterfaces>(scope: &mut Scope<'_>, realm: &clazel_js::Realm
         install::attribute(scope, proto, "designMode", get_document_design_mode::<P>, Some(Box::new(set_document_design_mode::<P>)), false)?;
         install::attribute(scope, proto, "hidden", get_document_hidden::<P>, None, false)?;
         install::attribute(scope, proto, "visibilityState", get_document_visibility_state::<P>, None, false)?;
+        install::attribute(scope, proto, "onreadystatechange", get_document_onreadystatechange::<P>, Some(Box::new(set_document_onreadystatechange::<P>)), false)?;
+        install::attribute(scope, proto, "onvisibilitychange", get_document_onvisibilitychange::<P>, Some(Box::new(set_document_onvisibilitychange::<P>)), false)?;
         install::attribute(scope, proto, "fgColor", get_document_fg_color::<P>, Some(Box::new(set_document_fg_color::<P>)), false)?;
         install::attribute(scope, proto, "linkColor", get_document_link_color::<P>, Some(Box::new(set_document_link_color::<P>)), false)?;
         install::attribute(scope, proto, "vlinkColor", get_document_vlink_color::<P>, Some(Box::new(set_document_vlink_color::<P>)), false)?;
@@ -9705,6 +17242,92 @@ pub fn install<P: AllInterfaces>(scope: &mut Scope<'_>, realm: &clazel_js::Realm
         install::attribute(scope, proto, "firstElementChild", get_document_first_element_child::<P>, None, false)?;
         install::attribute(scope, proto, "lastElementChild", get_document_last_element_child::<P>, None, false)?;
         install::attribute(scope, proto, "childElementCount", get_document_child_element_count::<P>, None, false)?;
+        install::attribute(scope, proto, "onabort", get_document_onabort::<P>, Some(Box::new(set_document_onabort::<P>)), false)?;
+        install::attribute(scope, proto, "onauxclick", get_document_onauxclick::<P>, Some(Box::new(set_document_onauxclick::<P>)), false)?;
+        install::attribute(scope, proto, "onbeforeinput", get_document_onbeforeinput::<P>, Some(Box::new(set_document_onbeforeinput::<P>)), false)?;
+        install::attribute(scope, proto, "onbeforematch", get_document_onbeforematch::<P>, Some(Box::new(set_document_onbeforematch::<P>)), false)?;
+        install::attribute(scope, proto, "onbeforetoggle", get_document_onbeforetoggle::<P>, Some(Box::new(set_document_onbeforetoggle::<P>)), false)?;
+        install::attribute(scope, proto, "onblur", get_document_onblur::<P>, Some(Box::new(set_document_onblur::<P>)), false)?;
+        install::attribute(scope, proto, "oncancel", get_document_oncancel::<P>, Some(Box::new(set_document_oncancel::<P>)), false)?;
+        install::attribute(scope, proto, "oncanplay", get_document_oncanplay::<P>, Some(Box::new(set_document_oncanplay::<P>)), false)?;
+        install::attribute(scope, proto, "oncanplaythrough", get_document_oncanplaythrough::<P>, Some(Box::new(set_document_oncanplaythrough::<P>)), false)?;
+        install::attribute(scope, proto, "onchange", get_document_onchange::<P>, Some(Box::new(set_document_onchange::<P>)), false)?;
+        install::attribute(scope, proto, "onclick", get_document_onclick::<P>, Some(Box::new(set_document_onclick::<P>)), false)?;
+        install::attribute(scope, proto, "onclose", get_document_onclose::<P>, Some(Box::new(set_document_onclose::<P>)), false)?;
+        install::attribute(scope, proto, "oncommand", get_document_oncommand::<P>, Some(Box::new(set_document_oncommand::<P>)), false)?;
+        install::attribute(scope, proto, "oncontextlost", get_document_oncontextlost::<P>, Some(Box::new(set_document_oncontextlost::<P>)), false)?;
+        install::attribute(scope, proto, "oncontextmenu", get_document_oncontextmenu::<P>, Some(Box::new(set_document_oncontextmenu::<P>)), false)?;
+        install::attribute(scope, proto, "oncontextrestored", get_document_oncontextrestored::<P>, Some(Box::new(set_document_oncontextrestored::<P>)), false)?;
+        install::attribute(scope, proto, "oncopy", get_document_oncopy::<P>, Some(Box::new(set_document_oncopy::<P>)), false)?;
+        install::attribute(scope, proto, "oncuechange", get_document_oncuechange::<P>, Some(Box::new(set_document_oncuechange::<P>)), false)?;
+        install::attribute(scope, proto, "oncut", get_document_oncut::<P>, Some(Box::new(set_document_oncut::<P>)), false)?;
+        install::attribute(scope, proto, "ondblclick", get_document_ondblclick::<P>, Some(Box::new(set_document_ondblclick::<P>)), false)?;
+        install::attribute(scope, proto, "ondrag", get_document_ondrag::<P>, Some(Box::new(set_document_ondrag::<P>)), false)?;
+        install::attribute(scope, proto, "ondragend", get_document_ondragend::<P>, Some(Box::new(set_document_ondragend::<P>)), false)?;
+        install::attribute(scope, proto, "ondragenter", get_document_ondragenter::<P>, Some(Box::new(set_document_ondragenter::<P>)), false)?;
+        install::attribute(scope, proto, "ondragleave", get_document_ondragleave::<P>, Some(Box::new(set_document_ondragleave::<P>)), false)?;
+        install::attribute(scope, proto, "ondragover", get_document_ondragover::<P>, Some(Box::new(set_document_ondragover::<P>)), false)?;
+        install::attribute(scope, proto, "ondragstart", get_document_ondragstart::<P>, Some(Box::new(set_document_ondragstart::<P>)), false)?;
+        install::attribute(scope, proto, "ondrop", get_document_ondrop::<P>, Some(Box::new(set_document_ondrop::<P>)), false)?;
+        install::attribute(scope, proto, "ondurationchange", get_document_ondurationchange::<P>, Some(Box::new(set_document_ondurationchange::<P>)), false)?;
+        install::attribute(scope, proto, "onemptied", get_document_onemptied::<P>, Some(Box::new(set_document_onemptied::<P>)), false)?;
+        install::attribute(scope, proto, "onended", get_document_onended::<P>, Some(Box::new(set_document_onended::<P>)), false)?;
+        install::attribute(scope, proto, "onerror", get_document_onerror::<P>, Some(Box::new(set_document_onerror::<P>)), false)?;
+        install::attribute(scope, proto, "onfocus", get_document_onfocus::<P>, Some(Box::new(set_document_onfocus::<P>)), false)?;
+        install::attribute(scope, proto, "onformdata", get_document_onformdata::<P>, Some(Box::new(set_document_onformdata::<P>)), false)?;
+        install::attribute(scope, proto, "oninput", get_document_oninput::<P>, Some(Box::new(set_document_oninput::<P>)), false)?;
+        install::attribute(scope, proto, "oninvalid", get_document_oninvalid::<P>, Some(Box::new(set_document_oninvalid::<P>)), false)?;
+        install::attribute(scope, proto, "onkeydown", get_document_onkeydown::<P>, Some(Box::new(set_document_onkeydown::<P>)), false)?;
+        install::attribute(scope, proto, "onkeypress", get_document_onkeypress::<P>, Some(Box::new(set_document_onkeypress::<P>)), false)?;
+        install::attribute(scope, proto, "onkeyup", get_document_onkeyup::<P>, Some(Box::new(set_document_onkeyup::<P>)), false)?;
+        install::attribute(scope, proto, "onload", get_document_onload::<P>, Some(Box::new(set_document_onload::<P>)), false)?;
+        install::attribute(scope, proto, "onloadeddata", get_document_onloadeddata::<P>, Some(Box::new(set_document_onloadeddata::<P>)), false)?;
+        install::attribute(scope, proto, "onloadedmetadata", get_document_onloadedmetadata::<P>, Some(Box::new(set_document_onloadedmetadata::<P>)), false)?;
+        install::attribute(scope, proto, "onloadstart", get_document_onloadstart::<P>, Some(Box::new(set_document_onloadstart::<P>)), false)?;
+        install::attribute(scope, proto, "onmousedown", get_document_onmousedown::<P>, Some(Box::new(set_document_onmousedown::<P>)), false)?;
+        install::attribute(scope, proto, "onmouseenter", get_document_onmouseenter::<P>, Some(Box::new(set_document_onmouseenter::<P>)), false)?;
+        install::attribute(scope, proto, "onmouseleave", get_document_onmouseleave::<P>, Some(Box::new(set_document_onmouseleave::<P>)), false)?;
+        install::attribute(scope, proto, "onmousemove", get_document_onmousemove::<P>, Some(Box::new(set_document_onmousemove::<P>)), false)?;
+        install::attribute(scope, proto, "onmouseout", get_document_onmouseout::<P>, Some(Box::new(set_document_onmouseout::<P>)), false)?;
+        install::attribute(scope, proto, "onmouseover", get_document_onmouseover::<P>, Some(Box::new(set_document_onmouseover::<P>)), false)?;
+        install::attribute(scope, proto, "onmouseup", get_document_onmouseup::<P>, Some(Box::new(set_document_onmouseup::<P>)), false)?;
+        install::attribute(scope, proto, "onpaste", get_document_onpaste::<P>, Some(Box::new(set_document_onpaste::<P>)), false)?;
+        install::attribute(scope, proto, "onpause", get_document_onpause::<P>, Some(Box::new(set_document_onpause::<P>)), false)?;
+        install::attribute(scope, proto, "onplay", get_document_onplay::<P>, Some(Box::new(set_document_onplay::<P>)), false)?;
+        install::attribute(scope, proto, "onplaying", get_document_onplaying::<P>, Some(Box::new(set_document_onplaying::<P>)), false)?;
+        install::attribute(scope, proto, "onprogress", get_document_onprogress::<P>, Some(Box::new(set_document_onprogress::<P>)), false)?;
+        install::attribute(scope, proto, "onratechange", get_document_onratechange::<P>, Some(Box::new(set_document_onratechange::<P>)), false)?;
+        install::attribute(scope, proto, "onreset", get_document_onreset::<P>, Some(Box::new(set_document_onreset::<P>)), false)?;
+        install::attribute(scope, proto, "onresize", get_document_onresize::<P>, Some(Box::new(set_document_onresize::<P>)), false)?;
+        install::attribute(scope, proto, "onscroll", get_document_onscroll::<P>, Some(Box::new(set_document_onscroll::<P>)), false)?;
+        install::attribute(scope, proto, "onscrollend", get_document_onscrollend::<P>, Some(Box::new(set_document_onscrollend::<P>)), false)?;
+        install::attribute(scope, proto, "onsecuritypolicyviolation", get_document_onsecuritypolicyviolation::<P>, Some(Box::new(set_document_onsecuritypolicyviolation::<P>)), false)?;
+        install::attribute(scope, proto, "onseeked", get_document_onseeked::<P>, Some(Box::new(set_document_onseeked::<P>)), false)?;
+        install::attribute(scope, proto, "onseeking", get_document_onseeking::<P>, Some(Box::new(set_document_onseeking::<P>)), false)?;
+        install::attribute(scope, proto, "onselect", get_document_onselect::<P>, Some(Box::new(set_document_onselect::<P>)), false)?;
+        install::attribute(scope, proto, "onslotchange", get_document_onslotchange::<P>, Some(Box::new(set_document_onslotchange::<P>)), false)?;
+        install::attribute(scope, proto, "onstalled", get_document_onstalled::<P>, Some(Box::new(set_document_onstalled::<P>)), false)?;
+        install::attribute(scope, proto, "onsubmit", get_document_onsubmit::<P>, Some(Box::new(set_document_onsubmit::<P>)), false)?;
+        install::attribute(scope, proto, "onsuspend", get_document_onsuspend::<P>, Some(Box::new(set_document_onsuspend::<P>)), false)?;
+        install::attribute(scope, proto, "ontimeupdate", get_document_ontimeupdate::<P>, Some(Box::new(set_document_ontimeupdate::<P>)), false)?;
+        install::attribute(scope, proto, "ontoggle", get_document_ontoggle::<P>, Some(Box::new(set_document_ontoggle::<P>)), false)?;
+        install::attribute(scope, proto, "onvolumechange", get_document_onvolumechange::<P>, Some(Box::new(set_document_onvolumechange::<P>)), false)?;
+        install::attribute(scope, proto, "onwaiting", get_document_onwaiting::<P>, Some(Box::new(set_document_onwaiting::<P>)), false)?;
+        install::attribute(scope, proto, "onwebkitanimationend", get_document_onwebkitanimationend::<P>, Some(Box::new(set_document_onwebkitanimationend::<P>)), false)?;
+        install::attribute(scope, proto, "onwebkitanimationiteration", get_document_onwebkitanimationiteration::<P>, Some(Box::new(set_document_onwebkitanimationiteration::<P>)), false)?;
+        install::attribute(scope, proto, "onwebkitanimationstart", get_document_onwebkitanimationstart::<P>, Some(Box::new(set_document_onwebkitanimationstart::<P>)), false)?;
+        install::attribute(scope, proto, "onwebkittransitionend", get_document_onwebkittransitionend::<P>, Some(Box::new(set_document_onwebkittransitionend::<P>)), false)?;
+        install::attribute(scope, proto, "onwheel", get_document_onwheel::<P>, Some(Box::new(set_document_onwheel::<P>)), false)?;
+        install::attribute(scope, proto, "onpointerover", get_document_onpointerover::<P>, Some(Box::new(set_document_onpointerover::<P>)), false)?;
+        install::attribute(scope, proto, "onpointerenter", get_document_onpointerenter::<P>, Some(Box::new(set_document_onpointerenter::<P>)), false)?;
+        install::attribute(scope, proto, "onpointerdown", get_document_onpointerdown::<P>, Some(Box::new(set_document_onpointerdown::<P>)), false)?;
+        install::attribute(scope, proto, "onpointermove", get_document_onpointermove::<P>, Some(Box::new(set_document_onpointermove::<P>)), false)?;
+        install::attribute(scope, proto, "onpointerup", get_document_onpointerup::<P>, Some(Box::new(set_document_onpointerup::<P>)), false)?;
+        install::attribute(scope, proto, "onpointercancel", get_document_onpointercancel::<P>, Some(Box::new(set_document_onpointercancel::<P>)), false)?;
+        install::attribute(scope, proto, "onpointerout", get_document_onpointerout::<P>, Some(Box::new(set_document_onpointerout::<P>)), false)?;
+        install::attribute(scope, proto, "onpointerleave", get_document_onpointerleave::<P>, Some(Box::new(set_document_onpointerleave::<P>)), false)?;
+        install::attribute(scope, proto, "ongotpointercapture", get_document_ongotpointercapture::<P>, Some(Box::new(set_document_ongotpointercapture::<P>)), false)?;
+        install::attribute(scope, proto, "onlostpointercapture", get_document_onlostpointercapture::<P>, Some(Box::new(set_document_onlostpointercapture::<P>)), false)?;
         install::operation(scope, proto, "getElementsByTagName", 1, op_document_get_elements_by_tag_name::<P>, false)?;
         install::operation(scope, proto, "getElementsByTagNameNS", 2, op_document_get_elements_by_tag_name_ns::<P>, false)?;
         install::operation(scope, proto, "getElementsByClassName", 1, op_document_get_elements_by_class_name::<P>, false)?;
@@ -9937,6 +17560,9 @@ pub fn install<P: AllInterfaces>(scope: &mut Scope<'_>, realm: &clazel_js::Realm
         install::operation(scope, proto, "prependHTMLUnsafe", 1, op_element_prepend_html_unsafe::<P>, false)?;
         install::operation(scope, proto, "getHTML", 0, op_element_get_html::<P>, false)?;
         install::operation(scope, proto, "insertAdjacentHTML", 2, op_element_insert_adjacent_html::<P>, false)?;
+        install::operation(scope, proto, "setPointerCapture", 1, op_element_set_pointer_capture::<P>, false)?;
+        install::operation(scope, proto, "releasePointerCapture", 1, op_element_release_pointer_capture::<P>, false)?;
+        install::operation(scope, proto, "hasPointerCapture", 1, op_element_has_pointer_capture::<P>, false)?;
         install::operation(scope, proto, "prepend", 0, op_element_prepend::<P>, false)?;
         install::operation(scope, proto, "append", 0, op_element_append::<P>, false)?;
         install::operation(scope, proto, "replaceChildren", 0, op_element_replace_children::<P>, false)?;
@@ -9990,6 +17616,92 @@ pub fn install<P: AllInterfaces>(scope: &mut Scope<'_>, realm: &clazel_js::Realm
         install::attribute(scope, proto, "popover", get_html_element_popover::<P>, Some(Box::new(set_html_element_popover::<P>)), false)?;
         install::attribute(scope, proto, "headingOffset", get_html_element_heading_offset::<P>, Some(Box::new(set_html_element_heading_offset::<P>)), false)?;
         install::attribute(scope, proto, "headingReset", get_html_element_heading_reset::<P>, Some(Box::new(set_html_element_heading_reset::<P>)), false)?;
+        install::attribute(scope, proto, "onabort", get_html_element_onabort::<P>, Some(Box::new(set_html_element_onabort::<P>)), false)?;
+        install::attribute(scope, proto, "onauxclick", get_html_element_onauxclick::<P>, Some(Box::new(set_html_element_onauxclick::<P>)), false)?;
+        install::attribute(scope, proto, "onbeforeinput", get_html_element_onbeforeinput::<P>, Some(Box::new(set_html_element_onbeforeinput::<P>)), false)?;
+        install::attribute(scope, proto, "onbeforematch", get_html_element_onbeforematch::<P>, Some(Box::new(set_html_element_onbeforematch::<P>)), false)?;
+        install::attribute(scope, proto, "onbeforetoggle", get_html_element_onbeforetoggle::<P>, Some(Box::new(set_html_element_onbeforetoggle::<P>)), false)?;
+        install::attribute(scope, proto, "onblur", get_html_element_onblur::<P>, Some(Box::new(set_html_element_onblur::<P>)), false)?;
+        install::attribute(scope, proto, "oncancel", get_html_element_oncancel::<P>, Some(Box::new(set_html_element_oncancel::<P>)), false)?;
+        install::attribute(scope, proto, "oncanplay", get_html_element_oncanplay::<P>, Some(Box::new(set_html_element_oncanplay::<P>)), false)?;
+        install::attribute(scope, proto, "oncanplaythrough", get_html_element_oncanplaythrough::<P>, Some(Box::new(set_html_element_oncanplaythrough::<P>)), false)?;
+        install::attribute(scope, proto, "onchange", get_html_element_onchange::<P>, Some(Box::new(set_html_element_onchange::<P>)), false)?;
+        install::attribute(scope, proto, "onclick", get_html_element_onclick::<P>, Some(Box::new(set_html_element_onclick::<P>)), false)?;
+        install::attribute(scope, proto, "onclose", get_html_element_onclose::<P>, Some(Box::new(set_html_element_onclose::<P>)), false)?;
+        install::attribute(scope, proto, "oncommand", get_html_element_oncommand::<P>, Some(Box::new(set_html_element_oncommand::<P>)), false)?;
+        install::attribute(scope, proto, "oncontextlost", get_html_element_oncontextlost::<P>, Some(Box::new(set_html_element_oncontextlost::<P>)), false)?;
+        install::attribute(scope, proto, "oncontextmenu", get_html_element_oncontextmenu::<P>, Some(Box::new(set_html_element_oncontextmenu::<P>)), false)?;
+        install::attribute(scope, proto, "oncontextrestored", get_html_element_oncontextrestored::<P>, Some(Box::new(set_html_element_oncontextrestored::<P>)), false)?;
+        install::attribute(scope, proto, "oncopy", get_html_element_oncopy::<P>, Some(Box::new(set_html_element_oncopy::<P>)), false)?;
+        install::attribute(scope, proto, "oncuechange", get_html_element_oncuechange::<P>, Some(Box::new(set_html_element_oncuechange::<P>)), false)?;
+        install::attribute(scope, proto, "oncut", get_html_element_oncut::<P>, Some(Box::new(set_html_element_oncut::<P>)), false)?;
+        install::attribute(scope, proto, "ondblclick", get_html_element_ondblclick::<P>, Some(Box::new(set_html_element_ondblclick::<P>)), false)?;
+        install::attribute(scope, proto, "ondrag", get_html_element_ondrag::<P>, Some(Box::new(set_html_element_ondrag::<P>)), false)?;
+        install::attribute(scope, proto, "ondragend", get_html_element_ondragend::<P>, Some(Box::new(set_html_element_ondragend::<P>)), false)?;
+        install::attribute(scope, proto, "ondragenter", get_html_element_ondragenter::<P>, Some(Box::new(set_html_element_ondragenter::<P>)), false)?;
+        install::attribute(scope, proto, "ondragleave", get_html_element_ondragleave::<P>, Some(Box::new(set_html_element_ondragleave::<P>)), false)?;
+        install::attribute(scope, proto, "ondragover", get_html_element_ondragover::<P>, Some(Box::new(set_html_element_ondragover::<P>)), false)?;
+        install::attribute(scope, proto, "ondragstart", get_html_element_ondragstart::<P>, Some(Box::new(set_html_element_ondragstart::<P>)), false)?;
+        install::attribute(scope, proto, "ondrop", get_html_element_ondrop::<P>, Some(Box::new(set_html_element_ondrop::<P>)), false)?;
+        install::attribute(scope, proto, "ondurationchange", get_html_element_ondurationchange::<P>, Some(Box::new(set_html_element_ondurationchange::<P>)), false)?;
+        install::attribute(scope, proto, "onemptied", get_html_element_onemptied::<P>, Some(Box::new(set_html_element_onemptied::<P>)), false)?;
+        install::attribute(scope, proto, "onended", get_html_element_onended::<P>, Some(Box::new(set_html_element_onended::<P>)), false)?;
+        install::attribute(scope, proto, "onerror", get_html_element_onerror::<P>, Some(Box::new(set_html_element_onerror::<P>)), false)?;
+        install::attribute(scope, proto, "onfocus", get_html_element_onfocus::<P>, Some(Box::new(set_html_element_onfocus::<P>)), false)?;
+        install::attribute(scope, proto, "onformdata", get_html_element_onformdata::<P>, Some(Box::new(set_html_element_onformdata::<P>)), false)?;
+        install::attribute(scope, proto, "oninput", get_html_element_oninput::<P>, Some(Box::new(set_html_element_oninput::<P>)), false)?;
+        install::attribute(scope, proto, "oninvalid", get_html_element_oninvalid::<P>, Some(Box::new(set_html_element_oninvalid::<P>)), false)?;
+        install::attribute(scope, proto, "onkeydown", get_html_element_onkeydown::<P>, Some(Box::new(set_html_element_onkeydown::<P>)), false)?;
+        install::attribute(scope, proto, "onkeypress", get_html_element_onkeypress::<P>, Some(Box::new(set_html_element_onkeypress::<P>)), false)?;
+        install::attribute(scope, proto, "onkeyup", get_html_element_onkeyup::<P>, Some(Box::new(set_html_element_onkeyup::<P>)), false)?;
+        install::attribute(scope, proto, "onload", get_html_element_onload::<P>, Some(Box::new(set_html_element_onload::<P>)), false)?;
+        install::attribute(scope, proto, "onloadeddata", get_html_element_onloadeddata::<P>, Some(Box::new(set_html_element_onloadeddata::<P>)), false)?;
+        install::attribute(scope, proto, "onloadedmetadata", get_html_element_onloadedmetadata::<P>, Some(Box::new(set_html_element_onloadedmetadata::<P>)), false)?;
+        install::attribute(scope, proto, "onloadstart", get_html_element_onloadstart::<P>, Some(Box::new(set_html_element_onloadstart::<P>)), false)?;
+        install::attribute(scope, proto, "onmousedown", get_html_element_onmousedown::<P>, Some(Box::new(set_html_element_onmousedown::<P>)), false)?;
+        install::attribute(scope, proto, "onmouseenter", get_html_element_onmouseenter::<P>, Some(Box::new(set_html_element_onmouseenter::<P>)), false)?;
+        install::attribute(scope, proto, "onmouseleave", get_html_element_onmouseleave::<P>, Some(Box::new(set_html_element_onmouseleave::<P>)), false)?;
+        install::attribute(scope, proto, "onmousemove", get_html_element_onmousemove::<P>, Some(Box::new(set_html_element_onmousemove::<P>)), false)?;
+        install::attribute(scope, proto, "onmouseout", get_html_element_onmouseout::<P>, Some(Box::new(set_html_element_onmouseout::<P>)), false)?;
+        install::attribute(scope, proto, "onmouseover", get_html_element_onmouseover::<P>, Some(Box::new(set_html_element_onmouseover::<P>)), false)?;
+        install::attribute(scope, proto, "onmouseup", get_html_element_onmouseup::<P>, Some(Box::new(set_html_element_onmouseup::<P>)), false)?;
+        install::attribute(scope, proto, "onpaste", get_html_element_onpaste::<P>, Some(Box::new(set_html_element_onpaste::<P>)), false)?;
+        install::attribute(scope, proto, "onpause", get_html_element_onpause::<P>, Some(Box::new(set_html_element_onpause::<P>)), false)?;
+        install::attribute(scope, proto, "onplay", get_html_element_onplay::<P>, Some(Box::new(set_html_element_onplay::<P>)), false)?;
+        install::attribute(scope, proto, "onplaying", get_html_element_onplaying::<P>, Some(Box::new(set_html_element_onplaying::<P>)), false)?;
+        install::attribute(scope, proto, "onprogress", get_html_element_onprogress::<P>, Some(Box::new(set_html_element_onprogress::<P>)), false)?;
+        install::attribute(scope, proto, "onratechange", get_html_element_onratechange::<P>, Some(Box::new(set_html_element_onratechange::<P>)), false)?;
+        install::attribute(scope, proto, "onreset", get_html_element_onreset::<P>, Some(Box::new(set_html_element_onreset::<P>)), false)?;
+        install::attribute(scope, proto, "onresize", get_html_element_onresize::<P>, Some(Box::new(set_html_element_onresize::<P>)), false)?;
+        install::attribute(scope, proto, "onscroll", get_html_element_onscroll::<P>, Some(Box::new(set_html_element_onscroll::<P>)), false)?;
+        install::attribute(scope, proto, "onscrollend", get_html_element_onscrollend::<P>, Some(Box::new(set_html_element_onscrollend::<P>)), false)?;
+        install::attribute(scope, proto, "onsecuritypolicyviolation", get_html_element_onsecuritypolicyviolation::<P>, Some(Box::new(set_html_element_onsecuritypolicyviolation::<P>)), false)?;
+        install::attribute(scope, proto, "onseeked", get_html_element_onseeked::<P>, Some(Box::new(set_html_element_onseeked::<P>)), false)?;
+        install::attribute(scope, proto, "onseeking", get_html_element_onseeking::<P>, Some(Box::new(set_html_element_onseeking::<P>)), false)?;
+        install::attribute(scope, proto, "onselect", get_html_element_onselect::<P>, Some(Box::new(set_html_element_onselect::<P>)), false)?;
+        install::attribute(scope, proto, "onslotchange", get_html_element_onslotchange::<P>, Some(Box::new(set_html_element_onslotchange::<P>)), false)?;
+        install::attribute(scope, proto, "onstalled", get_html_element_onstalled::<P>, Some(Box::new(set_html_element_onstalled::<P>)), false)?;
+        install::attribute(scope, proto, "onsubmit", get_html_element_onsubmit::<P>, Some(Box::new(set_html_element_onsubmit::<P>)), false)?;
+        install::attribute(scope, proto, "onsuspend", get_html_element_onsuspend::<P>, Some(Box::new(set_html_element_onsuspend::<P>)), false)?;
+        install::attribute(scope, proto, "ontimeupdate", get_html_element_ontimeupdate::<P>, Some(Box::new(set_html_element_ontimeupdate::<P>)), false)?;
+        install::attribute(scope, proto, "ontoggle", get_html_element_ontoggle::<P>, Some(Box::new(set_html_element_ontoggle::<P>)), false)?;
+        install::attribute(scope, proto, "onvolumechange", get_html_element_onvolumechange::<P>, Some(Box::new(set_html_element_onvolumechange::<P>)), false)?;
+        install::attribute(scope, proto, "onwaiting", get_html_element_onwaiting::<P>, Some(Box::new(set_html_element_onwaiting::<P>)), false)?;
+        install::attribute(scope, proto, "onwebkitanimationend", get_html_element_onwebkitanimationend::<P>, Some(Box::new(set_html_element_onwebkitanimationend::<P>)), false)?;
+        install::attribute(scope, proto, "onwebkitanimationiteration", get_html_element_onwebkitanimationiteration::<P>, Some(Box::new(set_html_element_onwebkitanimationiteration::<P>)), false)?;
+        install::attribute(scope, proto, "onwebkitanimationstart", get_html_element_onwebkitanimationstart::<P>, Some(Box::new(set_html_element_onwebkitanimationstart::<P>)), false)?;
+        install::attribute(scope, proto, "onwebkittransitionend", get_html_element_onwebkittransitionend::<P>, Some(Box::new(set_html_element_onwebkittransitionend::<P>)), false)?;
+        install::attribute(scope, proto, "onwheel", get_html_element_onwheel::<P>, Some(Box::new(set_html_element_onwheel::<P>)), false)?;
+        install::attribute(scope, proto, "onpointerover", get_html_element_onpointerover::<P>, Some(Box::new(set_html_element_onpointerover::<P>)), false)?;
+        install::attribute(scope, proto, "onpointerenter", get_html_element_onpointerenter::<P>, Some(Box::new(set_html_element_onpointerenter::<P>)), false)?;
+        install::attribute(scope, proto, "onpointerdown", get_html_element_onpointerdown::<P>, Some(Box::new(set_html_element_onpointerdown::<P>)), false)?;
+        install::attribute(scope, proto, "onpointermove", get_html_element_onpointermove::<P>, Some(Box::new(set_html_element_onpointermove::<P>)), false)?;
+        install::attribute(scope, proto, "onpointerup", get_html_element_onpointerup::<P>, Some(Box::new(set_html_element_onpointerup::<P>)), false)?;
+        install::attribute(scope, proto, "onpointercancel", get_html_element_onpointercancel::<P>, Some(Box::new(set_html_element_onpointercancel::<P>)), false)?;
+        install::attribute(scope, proto, "onpointerout", get_html_element_onpointerout::<P>, Some(Box::new(set_html_element_onpointerout::<P>)), false)?;
+        install::attribute(scope, proto, "onpointerleave", get_html_element_onpointerleave::<P>, Some(Box::new(set_html_element_onpointerleave::<P>)), false)?;
+        install::attribute(scope, proto, "ongotpointercapture", get_html_element_ongotpointercapture::<P>, Some(Box::new(set_html_element_ongotpointercapture::<P>)), false)?;
+        install::attribute(scope, proto, "onlostpointercapture", get_html_element_onlostpointercapture::<P>, Some(Box::new(set_html_element_onlostpointercapture::<P>)), false)?;
         install::attribute(scope, proto, "contentEditable", get_html_element_content_editable::<P>, Some(Box::new(set_html_element_content_editable::<P>)), false)?;
         install::attribute(scope, proto, "enterKeyHint", get_html_element_enter_key_hint::<P>, Some(Box::new(set_html_element_enter_key_hint::<P>)), false)?;
         install::attribute(scope, proto, "isContentEditable", get_html_element_is_content_editable::<P>, None, false)?;
@@ -10106,6 +17818,24 @@ pub fn install<P: AllInterfaces>(scope: &mut Scope<'_>, realm: &clazel_js::Realm
         install::attribute(scope, proto, "aLink", get_html_body_element_a_link::<P>, Some(Box::new(set_html_body_element_a_link::<P>)), false)?;
         install::attribute(scope, proto, "bgColor", get_html_body_element_bg_color::<P>, Some(Box::new(set_html_body_element_bg_color::<P>)), false)?;
         install::attribute(scope, proto, "background", get_html_body_element_background::<P>, Some(Box::new(set_html_body_element_background::<P>)), false)?;
+        install::attribute(scope, proto, "onafterprint", get_html_body_element_onafterprint::<P>, Some(Box::new(set_html_body_element_onafterprint::<P>)), false)?;
+        install::attribute(scope, proto, "onbeforeprint", get_html_body_element_onbeforeprint::<P>, Some(Box::new(set_html_body_element_onbeforeprint::<P>)), false)?;
+        install::attribute(scope, proto, "onbeforeunload", get_html_body_element_onbeforeunload::<P>, Some(Box::new(set_html_body_element_onbeforeunload::<P>)), false)?;
+        install::attribute(scope, proto, "onhashchange", get_html_body_element_onhashchange::<P>, Some(Box::new(set_html_body_element_onhashchange::<P>)), false)?;
+        install::attribute(scope, proto, "onlanguagechange", get_html_body_element_onlanguagechange::<P>, Some(Box::new(set_html_body_element_onlanguagechange::<P>)), false)?;
+        install::attribute(scope, proto, "onmessage", get_html_body_element_onmessage::<P>, Some(Box::new(set_html_body_element_onmessage::<P>)), false)?;
+        install::attribute(scope, proto, "onmessageerror", get_html_body_element_onmessageerror::<P>, Some(Box::new(set_html_body_element_onmessageerror::<P>)), false)?;
+        install::attribute(scope, proto, "onoffline", get_html_body_element_onoffline::<P>, Some(Box::new(set_html_body_element_onoffline::<P>)), false)?;
+        install::attribute(scope, proto, "ononline", get_html_body_element_ononline::<P>, Some(Box::new(set_html_body_element_ononline::<P>)), false)?;
+        install::attribute(scope, proto, "onpagehide", get_html_body_element_onpagehide::<P>, Some(Box::new(set_html_body_element_onpagehide::<P>)), false)?;
+        install::attribute(scope, proto, "onpagereveal", get_html_body_element_onpagereveal::<P>, Some(Box::new(set_html_body_element_onpagereveal::<P>)), false)?;
+        install::attribute(scope, proto, "onpageshow", get_html_body_element_onpageshow::<P>, Some(Box::new(set_html_body_element_onpageshow::<P>)), false)?;
+        install::attribute(scope, proto, "onpageswap", get_html_body_element_onpageswap::<P>, Some(Box::new(set_html_body_element_onpageswap::<P>)), false)?;
+        install::attribute(scope, proto, "onpopstate", get_html_body_element_onpopstate::<P>, Some(Box::new(set_html_body_element_onpopstate::<P>)), false)?;
+        install::attribute(scope, proto, "onrejectionhandled", get_html_body_element_onrejectionhandled::<P>, Some(Box::new(set_html_body_element_onrejectionhandled::<P>)), false)?;
+        install::attribute(scope, proto, "onstorage", get_html_body_element_onstorage::<P>, Some(Box::new(set_html_body_element_onstorage::<P>)), false)?;
+        install::attribute(scope, proto, "onunhandledrejection", get_html_body_element_onunhandledrejection::<P>, Some(Box::new(set_html_body_element_onunhandledrejection::<P>)), false)?;
+        install::attribute(scope, proto, "onunload", get_html_body_element_onunload::<P>, Some(Box::new(set_html_body_element_onunload::<P>)), false)?;
     install::expose(scope, global, "HTMLBodyElement", ctor)?;
     }
     // `interface HTMLDivElement` (WebIDL §3.7.1† interface object, §3.7.3† interface
@@ -10311,6 +18041,110 @@ pub fn install<P: AllInterfaces>(scope: &mut Scope<'_>, realm: &clazel_js::Realm
         install::attribute(scope, global, "navigator", get_window_navigator::<P>, None, false)?;
         install::attribute(scope, global, "clientInformation", get_window_client_information::<P>, Some(Box::new(set_window_client_information::<P>)), false)?;
         install::attribute(scope, global, "originAgentCluster", get_window_origin_agent_cluster::<P>, None, false)?;
+        install::attribute(scope, global, "onabort", get_window_onabort::<P>, Some(Box::new(set_window_onabort::<P>)), false)?;
+        install::attribute(scope, global, "onauxclick", get_window_onauxclick::<P>, Some(Box::new(set_window_onauxclick::<P>)), false)?;
+        install::attribute(scope, global, "onbeforeinput", get_window_onbeforeinput::<P>, Some(Box::new(set_window_onbeforeinput::<P>)), false)?;
+        install::attribute(scope, global, "onbeforematch", get_window_onbeforematch::<P>, Some(Box::new(set_window_onbeforematch::<P>)), false)?;
+        install::attribute(scope, global, "onbeforetoggle", get_window_onbeforetoggle::<P>, Some(Box::new(set_window_onbeforetoggle::<P>)), false)?;
+        install::attribute(scope, global, "onblur", get_window_onblur::<P>, Some(Box::new(set_window_onblur::<P>)), false)?;
+        install::attribute(scope, global, "oncancel", get_window_oncancel::<P>, Some(Box::new(set_window_oncancel::<P>)), false)?;
+        install::attribute(scope, global, "oncanplay", get_window_oncanplay::<P>, Some(Box::new(set_window_oncanplay::<P>)), false)?;
+        install::attribute(scope, global, "oncanplaythrough", get_window_oncanplaythrough::<P>, Some(Box::new(set_window_oncanplaythrough::<P>)), false)?;
+        install::attribute(scope, global, "onchange", get_window_onchange::<P>, Some(Box::new(set_window_onchange::<P>)), false)?;
+        install::attribute(scope, global, "onclick", get_window_onclick::<P>, Some(Box::new(set_window_onclick::<P>)), false)?;
+        install::attribute(scope, global, "onclose", get_window_onclose::<P>, Some(Box::new(set_window_onclose::<P>)), false)?;
+        install::attribute(scope, global, "oncommand", get_window_oncommand::<P>, Some(Box::new(set_window_oncommand::<P>)), false)?;
+        install::attribute(scope, global, "oncontextlost", get_window_oncontextlost::<P>, Some(Box::new(set_window_oncontextlost::<P>)), false)?;
+        install::attribute(scope, global, "oncontextmenu", get_window_oncontextmenu::<P>, Some(Box::new(set_window_oncontextmenu::<P>)), false)?;
+        install::attribute(scope, global, "oncontextrestored", get_window_oncontextrestored::<P>, Some(Box::new(set_window_oncontextrestored::<P>)), false)?;
+        install::attribute(scope, global, "oncopy", get_window_oncopy::<P>, Some(Box::new(set_window_oncopy::<P>)), false)?;
+        install::attribute(scope, global, "oncuechange", get_window_oncuechange::<P>, Some(Box::new(set_window_oncuechange::<P>)), false)?;
+        install::attribute(scope, global, "oncut", get_window_oncut::<P>, Some(Box::new(set_window_oncut::<P>)), false)?;
+        install::attribute(scope, global, "ondblclick", get_window_ondblclick::<P>, Some(Box::new(set_window_ondblclick::<P>)), false)?;
+        install::attribute(scope, global, "ondrag", get_window_ondrag::<P>, Some(Box::new(set_window_ondrag::<P>)), false)?;
+        install::attribute(scope, global, "ondragend", get_window_ondragend::<P>, Some(Box::new(set_window_ondragend::<P>)), false)?;
+        install::attribute(scope, global, "ondragenter", get_window_ondragenter::<P>, Some(Box::new(set_window_ondragenter::<P>)), false)?;
+        install::attribute(scope, global, "ondragleave", get_window_ondragleave::<P>, Some(Box::new(set_window_ondragleave::<P>)), false)?;
+        install::attribute(scope, global, "ondragover", get_window_ondragover::<P>, Some(Box::new(set_window_ondragover::<P>)), false)?;
+        install::attribute(scope, global, "ondragstart", get_window_ondragstart::<P>, Some(Box::new(set_window_ondragstart::<P>)), false)?;
+        install::attribute(scope, global, "ondrop", get_window_ondrop::<P>, Some(Box::new(set_window_ondrop::<P>)), false)?;
+        install::attribute(scope, global, "ondurationchange", get_window_ondurationchange::<P>, Some(Box::new(set_window_ondurationchange::<P>)), false)?;
+        install::attribute(scope, global, "onemptied", get_window_onemptied::<P>, Some(Box::new(set_window_onemptied::<P>)), false)?;
+        install::attribute(scope, global, "onended", get_window_onended::<P>, Some(Box::new(set_window_onended::<P>)), false)?;
+        install::attribute(scope, global, "onerror", get_window_onerror::<P>, Some(Box::new(set_window_onerror::<P>)), false)?;
+        install::attribute(scope, global, "onfocus", get_window_onfocus::<P>, Some(Box::new(set_window_onfocus::<P>)), false)?;
+        install::attribute(scope, global, "onformdata", get_window_onformdata::<P>, Some(Box::new(set_window_onformdata::<P>)), false)?;
+        install::attribute(scope, global, "oninput", get_window_oninput::<P>, Some(Box::new(set_window_oninput::<P>)), false)?;
+        install::attribute(scope, global, "oninvalid", get_window_oninvalid::<P>, Some(Box::new(set_window_oninvalid::<P>)), false)?;
+        install::attribute(scope, global, "onkeydown", get_window_onkeydown::<P>, Some(Box::new(set_window_onkeydown::<P>)), false)?;
+        install::attribute(scope, global, "onkeypress", get_window_onkeypress::<P>, Some(Box::new(set_window_onkeypress::<P>)), false)?;
+        install::attribute(scope, global, "onkeyup", get_window_onkeyup::<P>, Some(Box::new(set_window_onkeyup::<P>)), false)?;
+        install::attribute(scope, global, "onload", get_window_onload::<P>, Some(Box::new(set_window_onload::<P>)), false)?;
+        install::attribute(scope, global, "onloadeddata", get_window_onloadeddata::<P>, Some(Box::new(set_window_onloadeddata::<P>)), false)?;
+        install::attribute(scope, global, "onloadedmetadata", get_window_onloadedmetadata::<P>, Some(Box::new(set_window_onloadedmetadata::<P>)), false)?;
+        install::attribute(scope, global, "onloadstart", get_window_onloadstart::<P>, Some(Box::new(set_window_onloadstart::<P>)), false)?;
+        install::attribute(scope, global, "onmousedown", get_window_onmousedown::<P>, Some(Box::new(set_window_onmousedown::<P>)), false)?;
+        install::attribute(scope, global, "onmouseenter", get_window_onmouseenter::<P>, Some(Box::new(set_window_onmouseenter::<P>)), false)?;
+        install::attribute(scope, global, "onmouseleave", get_window_onmouseleave::<P>, Some(Box::new(set_window_onmouseleave::<P>)), false)?;
+        install::attribute(scope, global, "onmousemove", get_window_onmousemove::<P>, Some(Box::new(set_window_onmousemove::<P>)), false)?;
+        install::attribute(scope, global, "onmouseout", get_window_onmouseout::<P>, Some(Box::new(set_window_onmouseout::<P>)), false)?;
+        install::attribute(scope, global, "onmouseover", get_window_onmouseover::<P>, Some(Box::new(set_window_onmouseover::<P>)), false)?;
+        install::attribute(scope, global, "onmouseup", get_window_onmouseup::<P>, Some(Box::new(set_window_onmouseup::<P>)), false)?;
+        install::attribute(scope, global, "onpaste", get_window_onpaste::<P>, Some(Box::new(set_window_onpaste::<P>)), false)?;
+        install::attribute(scope, global, "onpause", get_window_onpause::<P>, Some(Box::new(set_window_onpause::<P>)), false)?;
+        install::attribute(scope, global, "onplay", get_window_onplay::<P>, Some(Box::new(set_window_onplay::<P>)), false)?;
+        install::attribute(scope, global, "onplaying", get_window_onplaying::<P>, Some(Box::new(set_window_onplaying::<P>)), false)?;
+        install::attribute(scope, global, "onprogress", get_window_onprogress::<P>, Some(Box::new(set_window_onprogress::<P>)), false)?;
+        install::attribute(scope, global, "onratechange", get_window_onratechange::<P>, Some(Box::new(set_window_onratechange::<P>)), false)?;
+        install::attribute(scope, global, "onreset", get_window_onreset::<P>, Some(Box::new(set_window_onreset::<P>)), false)?;
+        install::attribute(scope, global, "onresize", get_window_onresize::<P>, Some(Box::new(set_window_onresize::<P>)), false)?;
+        install::attribute(scope, global, "onscroll", get_window_onscroll::<P>, Some(Box::new(set_window_onscroll::<P>)), false)?;
+        install::attribute(scope, global, "onscrollend", get_window_onscrollend::<P>, Some(Box::new(set_window_onscrollend::<P>)), false)?;
+        install::attribute(scope, global, "onsecuritypolicyviolation", get_window_onsecuritypolicyviolation::<P>, Some(Box::new(set_window_onsecuritypolicyviolation::<P>)), false)?;
+        install::attribute(scope, global, "onseeked", get_window_onseeked::<P>, Some(Box::new(set_window_onseeked::<P>)), false)?;
+        install::attribute(scope, global, "onseeking", get_window_onseeking::<P>, Some(Box::new(set_window_onseeking::<P>)), false)?;
+        install::attribute(scope, global, "onselect", get_window_onselect::<P>, Some(Box::new(set_window_onselect::<P>)), false)?;
+        install::attribute(scope, global, "onslotchange", get_window_onslotchange::<P>, Some(Box::new(set_window_onslotchange::<P>)), false)?;
+        install::attribute(scope, global, "onstalled", get_window_onstalled::<P>, Some(Box::new(set_window_onstalled::<P>)), false)?;
+        install::attribute(scope, global, "onsubmit", get_window_onsubmit::<P>, Some(Box::new(set_window_onsubmit::<P>)), false)?;
+        install::attribute(scope, global, "onsuspend", get_window_onsuspend::<P>, Some(Box::new(set_window_onsuspend::<P>)), false)?;
+        install::attribute(scope, global, "ontimeupdate", get_window_ontimeupdate::<P>, Some(Box::new(set_window_ontimeupdate::<P>)), false)?;
+        install::attribute(scope, global, "ontoggle", get_window_ontoggle::<P>, Some(Box::new(set_window_ontoggle::<P>)), false)?;
+        install::attribute(scope, global, "onvolumechange", get_window_onvolumechange::<P>, Some(Box::new(set_window_onvolumechange::<P>)), false)?;
+        install::attribute(scope, global, "onwaiting", get_window_onwaiting::<P>, Some(Box::new(set_window_onwaiting::<P>)), false)?;
+        install::attribute(scope, global, "onwebkitanimationend", get_window_onwebkitanimationend::<P>, Some(Box::new(set_window_onwebkitanimationend::<P>)), false)?;
+        install::attribute(scope, global, "onwebkitanimationiteration", get_window_onwebkitanimationiteration::<P>, Some(Box::new(set_window_onwebkitanimationiteration::<P>)), false)?;
+        install::attribute(scope, global, "onwebkitanimationstart", get_window_onwebkitanimationstart::<P>, Some(Box::new(set_window_onwebkitanimationstart::<P>)), false)?;
+        install::attribute(scope, global, "onwebkittransitionend", get_window_onwebkittransitionend::<P>, Some(Box::new(set_window_onwebkittransitionend::<P>)), false)?;
+        install::attribute(scope, global, "onwheel", get_window_onwheel::<P>, Some(Box::new(set_window_onwheel::<P>)), false)?;
+        install::attribute(scope, global, "onpointerover", get_window_onpointerover::<P>, Some(Box::new(set_window_onpointerover::<P>)), false)?;
+        install::attribute(scope, global, "onpointerenter", get_window_onpointerenter::<P>, Some(Box::new(set_window_onpointerenter::<P>)), false)?;
+        install::attribute(scope, global, "onpointerdown", get_window_onpointerdown::<P>, Some(Box::new(set_window_onpointerdown::<P>)), false)?;
+        install::attribute(scope, global, "onpointermove", get_window_onpointermove::<P>, Some(Box::new(set_window_onpointermove::<P>)), false)?;
+        install::attribute(scope, global, "onpointerup", get_window_onpointerup::<P>, Some(Box::new(set_window_onpointerup::<P>)), false)?;
+        install::attribute(scope, global, "onpointercancel", get_window_onpointercancel::<P>, Some(Box::new(set_window_onpointercancel::<P>)), false)?;
+        install::attribute(scope, global, "onpointerout", get_window_onpointerout::<P>, Some(Box::new(set_window_onpointerout::<P>)), false)?;
+        install::attribute(scope, global, "onpointerleave", get_window_onpointerleave::<P>, Some(Box::new(set_window_onpointerleave::<P>)), false)?;
+        install::attribute(scope, global, "ongotpointercapture", get_window_ongotpointercapture::<P>, Some(Box::new(set_window_ongotpointercapture::<P>)), false)?;
+        install::attribute(scope, global, "onlostpointercapture", get_window_onlostpointercapture::<P>, Some(Box::new(set_window_onlostpointercapture::<P>)), false)?;
+        install::attribute(scope, global, "onafterprint", get_window_onafterprint::<P>, Some(Box::new(set_window_onafterprint::<P>)), false)?;
+        install::attribute(scope, global, "onbeforeprint", get_window_onbeforeprint::<P>, Some(Box::new(set_window_onbeforeprint::<P>)), false)?;
+        install::attribute(scope, global, "onbeforeunload", get_window_onbeforeunload::<P>, Some(Box::new(set_window_onbeforeunload::<P>)), false)?;
+        install::attribute(scope, global, "onhashchange", get_window_onhashchange::<P>, Some(Box::new(set_window_onhashchange::<P>)), false)?;
+        install::attribute(scope, global, "onlanguagechange", get_window_onlanguagechange::<P>, Some(Box::new(set_window_onlanguagechange::<P>)), false)?;
+        install::attribute(scope, global, "onmessage", get_window_onmessage::<P>, Some(Box::new(set_window_onmessage::<P>)), false)?;
+        install::attribute(scope, global, "onmessageerror", get_window_onmessageerror::<P>, Some(Box::new(set_window_onmessageerror::<P>)), false)?;
+        install::attribute(scope, global, "onoffline", get_window_onoffline::<P>, Some(Box::new(set_window_onoffline::<P>)), false)?;
+        install::attribute(scope, global, "ononline", get_window_ononline::<P>, Some(Box::new(set_window_ononline::<P>)), false)?;
+        install::attribute(scope, global, "onpagehide", get_window_onpagehide::<P>, Some(Box::new(set_window_onpagehide::<P>)), false)?;
+        install::attribute(scope, global, "onpagereveal", get_window_onpagereveal::<P>, Some(Box::new(set_window_onpagereveal::<P>)), false)?;
+        install::attribute(scope, global, "onpageshow", get_window_onpageshow::<P>, Some(Box::new(set_window_onpageshow::<P>)), false)?;
+        install::attribute(scope, global, "onpageswap", get_window_onpageswap::<P>, Some(Box::new(set_window_onpageswap::<P>)), false)?;
+        install::attribute(scope, global, "onpopstate", get_window_onpopstate::<P>, Some(Box::new(set_window_onpopstate::<P>)), false)?;
+        install::attribute(scope, global, "onrejectionhandled", get_window_onrejectionhandled::<P>, Some(Box::new(set_window_onrejectionhandled::<P>)), false)?;
+        install::attribute(scope, global, "onstorage", get_window_onstorage::<P>, Some(Box::new(set_window_onstorage::<P>)), false)?;
+        install::attribute(scope, global, "onunhandledrejection", get_window_onunhandledrejection::<P>, Some(Box::new(set_window_onunhandledrejection::<P>)), false)?;
+        install::attribute(scope, global, "onunload", get_window_onunload::<P>, Some(Box::new(set_window_onunload::<P>)), false)?;
         install::attribute(scope, global, "origin", get_window_origin::<P>, Some(Box::new(set_window_origin::<P>)), false)?;
         install::attribute(scope, global, "isSecureContext", get_window_is_secure_context::<P>, None, false)?;
         install::attribute(scope, global, "crossOriginIsolated", get_window_cross_origin_isolated::<P>, None, false)?;
@@ -10399,6 +18233,8 @@ pub fn install<P: AllInterfaces>(scope: &mut Scope<'_>, realm: &clazel_js::Realm
     let h = scope.persist(ctor);
     scope.host_mut::<P>()?.bindings().interface_objects.insert(InterfaceId::Navigator, h);
     let _ = (&ctor, &proto, &global);
+        install::attribute(scope, proto, "userActivation", get_navigator_user_activation::<P>, None, false)?;
+        install::attribute(scope, proto, "maxTouchPoints", get_navigator_max_touch_points::<P>, None, false)?;
         install::attribute(scope, proto, "appCodeName", get_navigator_app_code_name::<P>, None, false)?;
         install::attribute(scope, proto, "appName", get_navigator_app_name::<P>, None, false)?;
         install::attribute(scope, proto, "appVersion", get_navigator_app_version::<P>, None, false)?;
@@ -10418,6 +18254,195 @@ pub fn install<P: AllInterfaces>(scope: &mut Scope<'_>, realm: &clazel_js::Realm
         install::operation(scope, proto, "taintEnabled", 0, op_navigator_taint_enabled::<P>, false)?;
         install::operation(scope, proto, "javaEnabled", 0, op_navigator_java_enabled::<P>, false)?;
     install::expose(scope, global, "Navigator", ctor)?;
+    }
+    // `interface UIEvent` (WebIDL §3.7.1† interface object, §3.7.3† interface
+    // prototype object).
+    {
+    let parent_ctor = scope.host_mut::<P>()?.bindings().interface_objects.get(&InterfaceId::Event).cloned();
+    let parent_ctor = match parent_ctor { Some(h) => Some(scope.local(&h)?), None => None };
+    let parent_proto = Some(platform::prototype::<P>(scope, InterfaceId::Event)?);
+    let ctor = install::interface_object(scope, "UIEvent", 1, parent_ctor, ctor_ui_event::<P>)?;
+    let proto = scope.new_object()?;
+    if let Some(pp) = parent_proto {
+        scope.set_prototype_of(proto, pp)?;
+    }
+    install::link(scope, ctor, proto)?;
+    let h = scope.persist(proto);
+    scope.host_mut::<P>()?.bindings().prototypes.insert(InterfaceId::UIEvent, h);
+    let h = scope.persist(ctor);
+    scope.host_mut::<P>()?.bindings().interface_objects.insert(InterfaceId::UIEvent, h);
+    let _ = (&ctor, &proto, &global);
+        install::attribute(scope, proto, "view", get_ui_event_view::<P>, None, false)?;
+        install::attribute(scope, proto, "detail", get_ui_event_detail::<P>, None, false)?;
+        install::attribute(scope, proto, "which", get_ui_event_which::<P>, None, false)?;
+        install::operation(scope, proto, "initUIEvent", 1, op_ui_event_init_ui_event::<P>, false)?;
+    install::expose(scope, global, "UIEvent", ctor)?;
+    }
+    // `interface MouseEvent` (WebIDL §3.7.1† interface object, §3.7.3† interface
+    // prototype object).
+    {
+    let parent_ctor = scope.host_mut::<P>()?.bindings().interface_objects.get(&InterfaceId::UIEvent).cloned();
+    let parent_ctor = match parent_ctor { Some(h) => Some(scope.local(&h)?), None => None };
+    let parent_proto = Some(platform::prototype::<P>(scope, InterfaceId::UIEvent)?);
+    let ctor = install::interface_object(scope, "MouseEvent", 1, parent_ctor, ctor_mouse_event::<P>)?;
+    let proto = scope.new_object()?;
+    if let Some(pp) = parent_proto {
+        scope.set_prototype_of(proto, pp)?;
+    }
+    install::link(scope, ctor, proto)?;
+    let h = scope.persist(proto);
+    scope.host_mut::<P>()?.bindings().prototypes.insert(InterfaceId::MouseEvent, h);
+    let h = scope.persist(ctor);
+    scope.host_mut::<P>()?.bindings().interface_objects.insert(InterfaceId::MouseEvent, h);
+    let _ = (&ctor, &proto, &global);
+        install::attribute(scope, proto, "screenX", get_mouse_event_screen_x::<P>, None, false)?;
+        install::attribute(scope, proto, "screenY", get_mouse_event_screen_y::<P>, None, false)?;
+        install::attribute(scope, proto, "clientX", get_mouse_event_client_x::<P>, None, false)?;
+        install::attribute(scope, proto, "clientY", get_mouse_event_client_y::<P>, None, false)?;
+        install::attribute(scope, proto, "layerX", get_mouse_event_layer_x::<P>, None, false)?;
+        install::attribute(scope, proto, "layerY", get_mouse_event_layer_y::<P>, None, false)?;
+        install::attribute(scope, proto, "ctrlKey", get_mouse_event_ctrl_key::<P>, None, false)?;
+        install::attribute(scope, proto, "shiftKey", get_mouse_event_shift_key::<P>, None, false)?;
+        install::attribute(scope, proto, "altKey", get_mouse_event_alt_key::<P>, None, false)?;
+        install::attribute(scope, proto, "metaKey", get_mouse_event_meta_key::<P>, None, false)?;
+        install::attribute(scope, proto, "button", get_mouse_event_button::<P>, None, false)?;
+        install::attribute(scope, proto, "buttons", get_mouse_event_buttons::<P>, None, false)?;
+        install::attribute(scope, proto, "relatedTarget", get_mouse_event_related_target::<P>, None, false)?;
+        install::operation(scope, proto, "getModifierState", 1, op_mouse_event_get_modifier_state::<P>, false)?;
+        install::operation(scope, proto, "initMouseEvent", 1, op_mouse_event_init_mouse_event::<P>, false)?;
+    install::expose(scope, global, "MouseEvent", ctor)?;
+    }
+    // `interface WheelEvent` (WebIDL §3.7.1† interface object, §3.7.3† interface
+    // prototype object).
+    {
+    let parent_ctor = scope.host_mut::<P>()?.bindings().interface_objects.get(&InterfaceId::MouseEvent).cloned();
+    let parent_ctor = match parent_ctor { Some(h) => Some(scope.local(&h)?), None => None };
+    let parent_proto = Some(platform::prototype::<P>(scope, InterfaceId::MouseEvent)?);
+    let ctor = install::interface_object(scope, "WheelEvent", 1, parent_ctor, ctor_wheel_event::<P>)?;
+    let proto = scope.new_object()?;
+    if let Some(pp) = parent_proto {
+        scope.set_prototype_of(proto, pp)?;
+    }
+    install::link(scope, ctor, proto)?;
+    let h = scope.persist(proto);
+    scope.host_mut::<P>()?.bindings().prototypes.insert(InterfaceId::WheelEvent, h);
+    let h = scope.persist(ctor);
+    scope.host_mut::<P>()?.bindings().interface_objects.insert(InterfaceId::WheelEvent, h);
+    let _ = (&ctor, &proto, &global);
+    let c = scope.number(0.0);
+    install::constant(scope, &[ctor, proto], "DOM_DELTA_PIXEL", c)?;
+    let c = scope.number(1.0);
+    install::constant(scope, &[ctor, proto], "DOM_DELTA_LINE", c)?;
+    let c = scope.number(2.0);
+    install::constant(scope, &[ctor, proto], "DOM_DELTA_PAGE", c)?;
+        install::attribute(scope, proto, "deltaX", get_wheel_event_delta_x::<P>, None, false)?;
+        install::attribute(scope, proto, "deltaY", get_wheel_event_delta_y::<P>, None, false)?;
+        install::attribute(scope, proto, "deltaZ", get_wheel_event_delta_z::<P>, None, false)?;
+        install::attribute(scope, proto, "deltaMode", get_wheel_event_delta_mode::<P>, None, false)?;
+        install::attribute(scope, proto, "momentum", get_wheel_event_momentum::<P>, None, false)?;
+    install::expose(scope, global, "WheelEvent", ctor)?;
+    }
+    // `interface KeyboardEvent` (WebIDL §3.7.1† interface object, §3.7.3† interface
+    // prototype object).
+    {
+    let parent_ctor = scope.host_mut::<P>()?.bindings().interface_objects.get(&InterfaceId::UIEvent).cloned();
+    let parent_ctor = match parent_ctor { Some(h) => Some(scope.local(&h)?), None => None };
+    let parent_proto = Some(platform::prototype::<P>(scope, InterfaceId::UIEvent)?);
+    let ctor = install::interface_object(scope, "KeyboardEvent", 1, parent_ctor, ctor_keyboard_event::<P>)?;
+    let proto = scope.new_object()?;
+    if let Some(pp) = parent_proto {
+        scope.set_prototype_of(proto, pp)?;
+    }
+    install::link(scope, ctor, proto)?;
+    let h = scope.persist(proto);
+    scope.host_mut::<P>()?.bindings().prototypes.insert(InterfaceId::KeyboardEvent, h);
+    let h = scope.persist(ctor);
+    scope.host_mut::<P>()?.bindings().interface_objects.insert(InterfaceId::KeyboardEvent, h);
+    let _ = (&ctor, &proto, &global);
+    let c = scope.number(0.0);
+    install::constant(scope, &[ctor, proto], "DOM_KEY_LOCATION_STANDARD", c)?;
+    let c = scope.number(1.0);
+    install::constant(scope, &[ctor, proto], "DOM_KEY_LOCATION_LEFT", c)?;
+    let c = scope.number(2.0);
+    install::constant(scope, &[ctor, proto], "DOM_KEY_LOCATION_RIGHT", c)?;
+    let c = scope.number(3.0);
+    install::constant(scope, &[ctor, proto], "DOM_KEY_LOCATION_NUMPAD", c)?;
+        install::attribute(scope, proto, "key", get_keyboard_event_key::<P>, None, false)?;
+        install::attribute(scope, proto, "code", get_keyboard_event_code::<P>, None, false)?;
+        install::attribute(scope, proto, "location", get_keyboard_event_location::<P>, None, false)?;
+        install::attribute(scope, proto, "ctrlKey", get_keyboard_event_ctrl_key::<P>, None, false)?;
+        install::attribute(scope, proto, "shiftKey", get_keyboard_event_shift_key::<P>, None, false)?;
+        install::attribute(scope, proto, "altKey", get_keyboard_event_alt_key::<P>, None, false)?;
+        install::attribute(scope, proto, "metaKey", get_keyboard_event_meta_key::<P>, None, false)?;
+        install::attribute(scope, proto, "repeat", get_keyboard_event_repeat::<P>, None, false)?;
+        install::attribute(scope, proto, "isComposing", get_keyboard_event_is_composing::<P>, None, false)?;
+        install::attribute(scope, proto, "charCode", get_keyboard_event_char_code::<P>, None, false)?;
+        install::attribute(scope, proto, "keyCode", get_keyboard_event_key_code::<P>, None, false)?;
+        install::operation(scope, proto, "getModifierState", 1, op_keyboard_event_get_modifier_state::<P>, false)?;
+        install::operation(scope, proto, "initKeyboardEvent", 1, op_keyboard_event_init_keyboard_event::<P>, false)?;
+    install::expose(scope, global, "KeyboardEvent", ctor)?;
+    }
+    // `interface FocusEvent` (WebIDL §3.7.1† interface object, §3.7.3† interface
+    // prototype object).
+    {
+    let parent_ctor = scope.host_mut::<P>()?.bindings().interface_objects.get(&InterfaceId::UIEvent).cloned();
+    let parent_ctor = match parent_ctor { Some(h) => Some(scope.local(&h)?), None => None };
+    let parent_proto = Some(platform::prototype::<P>(scope, InterfaceId::UIEvent)?);
+    let ctor = install::interface_object(scope, "FocusEvent", 1, parent_ctor, ctor_focus_event::<P>)?;
+    let proto = scope.new_object()?;
+    if let Some(pp) = parent_proto {
+        scope.set_prototype_of(proto, pp)?;
+    }
+    install::link(scope, ctor, proto)?;
+    let h = scope.persist(proto);
+    scope.host_mut::<P>()?.bindings().prototypes.insert(InterfaceId::FocusEvent, h);
+    let h = scope.persist(ctor);
+    scope.host_mut::<P>()?.bindings().interface_objects.insert(InterfaceId::FocusEvent, h);
+    let _ = (&ctor, &proto, &global);
+        install::attribute(scope, proto, "relatedTarget", get_focus_event_related_target::<P>, None, false)?;
+    install::expose(scope, global, "FocusEvent", ctor)?;
+    }
+    // `interface InputEvent` (WebIDL §3.7.1† interface object, §3.7.3† interface
+    // prototype object).
+    {
+    let parent_ctor = scope.host_mut::<P>()?.bindings().interface_objects.get(&InterfaceId::UIEvent).cloned();
+    let parent_ctor = match parent_ctor { Some(h) => Some(scope.local(&h)?), None => None };
+    let parent_proto = Some(platform::prototype::<P>(scope, InterfaceId::UIEvent)?);
+    let ctor = install::interface_object(scope, "InputEvent", 1, parent_ctor, ctor_input_event::<P>)?;
+    let proto = scope.new_object()?;
+    if let Some(pp) = parent_proto {
+        scope.set_prototype_of(proto, pp)?;
+    }
+    install::link(scope, ctor, proto)?;
+    let h = scope.persist(proto);
+    scope.host_mut::<P>()?.bindings().prototypes.insert(InterfaceId::InputEvent, h);
+    let h = scope.persist(ctor);
+    scope.host_mut::<P>()?.bindings().interface_objects.insert(InterfaceId::InputEvent, h);
+    let _ = (&ctor, &proto, &global);
+        install::attribute(scope, proto, "data", get_input_event_data::<P>, None, false)?;
+        install::attribute(scope, proto, "isComposing", get_input_event_is_composing::<P>, None, false)?;
+        install::attribute(scope, proto, "inputType", get_input_event_input_type::<P>, None, false)?;
+    install::expose(scope, global, "InputEvent", ctor)?;
+    }
+    // `interface UserActivation` (WebIDL §3.7.1† interface object, §3.7.3† interface
+    // prototype object).
+    {
+    let parent_ctor: Option<Local<'_>> = None;
+    let parent_proto: Option<Local<'_>> = None;
+    let ctor = install::interface_object(scope, "UserActivation", 0, parent_ctor, ctor_user_activation::<P>)?;
+    let proto = scope.new_object()?;
+    if let Some(pp) = parent_proto {
+        scope.set_prototype_of(proto, pp)?;
+    }
+    install::link(scope, ctor, proto)?;
+    let h = scope.persist(proto);
+    scope.host_mut::<P>()?.bindings().prototypes.insert(InterfaceId::UserActivation, h);
+    let h = scope.persist(ctor);
+    scope.host_mut::<P>()?.bindings().interface_objects.insert(InterfaceId::UserActivation, h);
+    let _ = (&ctor, &proto, &global);
+        install::attribute(scope, proto, "hasBeenActive", get_user_activation_has_been_active::<P>, None, false)?;
+        install::attribute(scope, proto, "isActive", get_user_activation_is_active::<P>, None, false)?;
+    install::expose(scope, global, "UserActivation", ctor)?;
     }
     let window = platform::prototype::<P>(scope, InterfaceId::Window)?;
     scope.set_prototype_of(global, window)?;
