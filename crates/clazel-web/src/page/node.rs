@@ -11,15 +11,23 @@
 //! this file checks their preconditions first, so a call that would break
 //! one throws instead.
 //!
+//! The mutations go through [`super::mutation`] (the one place the arena is
+//! changed: records for mutation observers and the live ranges' updates run
+//! around `clazel-dom`'s operations); `innerHTML`, `outerHTML` and
+//! `insertAdjacent*` parse with [`super::fragment`]; `Attr` and
+//! `NamedNodeMap` are [`super::attr`]; `Range` is [`super::range`].
+//!
 //! Not implemented (the generated defaults throw `NotSupportedError`):
-//! `normalize`, `isEqualNode`, `compareDocumentPosition`, the namespace
-//! lookups, `moveBefore`, the `*NS` methods but `createElementNS`'s HTML,
-//! SVG and MathML cases, `importNode`, `adoptNode`, `createEvent`,
-//! `Text.splitText` and `wholeText`, `insertAdjacent*`, the `innerHTML`,
-//! `outerHTML` and `setHTML*` setters (fragment parsing into the arena is
-//! item 7.13's), and the HTML elements' attributes other than `[Reflect]`
-//! ones and `HTMLTitleElement.text`.
+//! `moveBefore`, `createEvent`, `setHTML*`, `getHTML` and the other sanitizer
+//! members, `createElementNS` and `setAttributeNS` for a namespace outside
+//! Infra §8's six (the arena's `Namespace` has no other), the
+//! `ProcessingInstruction` pseudo-attributes of the curated IDL, the
+//! `Document.forms`, `images`, `links` and the like, and the HTML elements'
+//! attributes other than `[Reflect]` ones, `HTMLTitleElement.text` and
+//! `dataset`. `Document.implementation` and `new Document()` need a second
+//! document, which the single arena cannot hold.
 
+use super::NsFilter;
 use super::fragment::parse_fragment;
 use clazel_dom::exec::{Arena, ExecAttr, ExecKind};
 use clazel_dom::spec::{DocumentMode, DomError, Namespace};
@@ -251,9 +259,7 @@ pub(crate) fn interface_of_node(arena: &Arena, n: usize) -> InterfaceId {
         ExecKind::DocumentType { .. } => InterfaceId::DocumentType,
         ExecKind::Text { .. } => InterfaceId::Text,
         ExecKind::Comment { .. } => InterfaceId::Comment,
-        // ProcessingInstruction is not exposed: its nearest exposed
-        // interface.
-        ExecKind::ProcessingInstruction { .. } => InterfaceId::CharacterData,
+        ExecKind::ProcessingInstruction { .. } => InterfaceId::ProcessingInstruction,
         ExecKind::DocumentFragment { .. } => InterfaceId::DocumentFragment,
         ExecKind::Element {
             namespace: Some(Namespace::Html),
@@ -602,6 +608,31 @@ fn matches_tag(arena: &Arena, e: usize, name: &[u32]) -> bool {
     }
 }
 
+/// DOM §4.4† "the list of elements with namespace namespace and local name
+/// localName": "If both namespace and localName are "*", match all
+/// descendant elements. If namespace is "*", match elements whose local
+/// name is localName. If localName is "*", match elements whose namespace is
+/// namespace. Otherwise, match elements whose namespace is namespace and
+/// local name is localName."
+fn matches_tag_ns(arena: &Arena, e: usize, ns: &NsFilter, local: &[u32]) -> bool {
+    let ExecKind::Element {
+        namespace,
+        local_name,
+        ..
+    } = arena.kind(e)
+    else {
+        return false;
+    };
+    let ns_ok = match ns {
+        NsFilter::Any => true,
+        NsFilter::Null => namespace.is_none(),
+        NsFilter::Uri(u) => namespace
+            .as_ref()
+            .is_some_and(|n| namespace_uri_points(n) == *u),
+    };
+    ns_ok && (eq_str(local, "*") || local_name.as_slice() == local)
+}
+
 /// DOM §4.4† "the list of elements with class names": the elements whose
 /// classes include every class of the ordered set (compared exactly: the
 /// document is never in quirks mode for this, a deviation for quirks-mode
@@ -624,6 +655,10 @@ pub(crate) fn collection_items(arena: &Arena, c: &Collection) -> Vec<usize> {
         Collection::ByTagName(root, name) => descendants(arena, *root)
             .into_iter()
             .filter(|&d| is_element(arena, d) && matches_tag(arena, d, name))
+            .collect(),
+        Collection::ByTagNameNs(root, filter, local) => descendants(arena, *root)
+            .into_iter()
+            .filter(|&d| is_element(arena, d) && matches_tag_ns(arena, d, filter, local))
             .collect(),
         Collection::ByClassName(root, classes) => descendants(arena, *root)
             .into_iter()
@@ -660,6 +695,26 @@ fn by_tag(scope: &mut Scope<'_>, this: ObjectKey, name: DomString) -> Result<Obj
         scope,
         true,
         Collection::ByTagName(root, units_to_points(&name)),
+    )
+}
+
+fn by_tag_ns(
+    scope: &mut Scope<'_>,
+    this: ObjectKey,
+    namespace: Option<DomString>,
+    local_name: DomString,
+) -> Result<ObjectKey> {
+    let root = node_of(scope, this)?;
+    let filter = match namespace {
+        None => NsFilter::Null,
+        Some(n) if n.is_empty() => NsFilter::Null,
+        Some(n) if n == [u16::from(b'*')] => NsFilter::Any,
+        Some(n) => NsFilter::Uri(units_to_points(&n)),
+    };
+    new_collection(
+        scope,
+        true,
+        Collection::ByTagNameNs(root, filter, units_to_points(&local_name)),
     )
 }
 
@@ -1837,6 +1892,18 @@ impl DocumentImpl for Page {
         by_tag(scope, this, qualified_name)
     }
 
+    /// DOM §4.4† `getElementsByTagNameNS(namespace, localName)`: "the list
+    /// of elements with namespace namespace and local name localName for
+    /// this".
+    fn get_elements_by_tag_name_ns<'s>(
+        scope: &mut Scope<'s>,
+        this: ObjectKey,
+        namespace: Option<DomString>,
+        local_name: DomString,
+    ) -> Result<ObjectKey> {
+        by_tag_ns(scope, this, namespace, local_name)
+    }
+
     fn get_elements_by_class_name<'s>(
         scope: &mut Scope<'s>,
         this: ObjectKey,
@@ -2002,6 +2069,16 @@ impl DocumentImpl for Page {
         }
         page(scope)?.remove_node(n);
         Ok(node)
+    }
+
+    /// DOM §4.5† `createProcessingInstruction(target, data)`.
+    fn create_processing_instruction<'s>(
+        scope: &mut Scope<'s>,
+        _this: ObjectKey,
+        target: DomString,
+        data: DomString,
+    ) -> Result<ObjectKey> {
+        new_processing_instruction(scope, &target, &data)
     }
 
     /// DOM §4.5† `createAttribute(localName)`: "1. If localName does not
@@ -2542,6 +2619,51 @@ impl TextImpl for Page {
             cur = arena.next_sibling(x);
         }
         Ok(out)
+    }
+}
+
+/// DOM §4.5† "validate" a processing instruction: "1. If target does not
+/// match the Name production, then throw an InvalidCharacterError. 2. If
+/// data contains the string "?>", then throw an InvalidCharacterError."
+fn new_processing_instruction(
+    scope: &mut Scope<'_>,
+    target: &[u16],
+    data: &[u16],
+) -> Result<ObjectKey> {
+    let t = units_to_points(target);
+    let d = units_to_points(data);
+    let bad_data = d.windows(2).any(|w| w == [u32::from('?'), u32::from('>')]);
+    if !valid_element_local_name(&t) || bad_data {
+        return Err(dom_error(
+            scope,
+            DomErrorName::InvalidCharacterError,
+            "not a valid processing instruction",
+        ));
+    }
+    Ok(key(create(
+        scope,
+        ExecKind::ProcessingInstruction { target: t, data: d },
+    )?))
+}
+
+impl ProcessingInstructionImpl for Page {
+    /// DOM §4.13† `new ProcessingInstruction(target, data)` (the curated
+    /// IDL's constructor).
+    fn constructor<'s>(
+        scope: &mut Scope<'s>,
+        target: DomString,
+        data: DomString,
+    ) -> Result<ObjectKey> {
+        new_processing_instruction(scope, &target, &data)
+    }
+
+    /// DOM §4.13† `target`.
+    fn target<'s>(scope: &mut Scope<'s>, this: ObjectKey) -> Result<DomString> {
+        let n = node_of(scope, this)?;
+        match page(scope)?.arena.kind(n) {
+            ExecKind::ProcessingInstruction { target, .. } => Ok(points_to_units(target)),
+            _ => Err(type_error(scope, "not a ProcessingInstruction")),
+        }
     }
 }
 
@@ -3129,6 +3251,18 @@ impl ElementImpl for Page {
         qualified_name: DomString,
     ) -> Result<ObjectKey> {
         by_tag(scope, this, qualified_name)
+    }
+
+    /// DOM §4.4† `getElementsByTagNameNS(namespace, localName)`: "the list
+    /// of elements with namespace namespace and local name localName for
+    /// this".
+    fn get_elements_by_tag_name_ns<'s>(
+        scope: &mut Scope<'s>,
+        this: ObjectKey,
+        namespace: Option<DomString>,
+        local_name: DomString,
+    ) -> Result<ObjectKey> {
+        by_tag_ns(scope, this, namespace, local_name)
     }
 
     fn get_elements_by_class_name<'s>(

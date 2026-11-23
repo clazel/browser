@@ -62,6 +62,53 @@ Tier 0, target tier 0: safe Rust, tested, nothing proven. So far:
   against parsed documents, with checks transcribed from WPT's `dom/` and
   `html/` tests (testharness.js needs more of the engine than it has).
 
+- **The DOM API (item 7.13)**, in `page/` on top of `clazel-dom`'s proven
+  operations (which already hold pre-insertion validity, `insert`, `replace`,
+  `replace all`, deep and shallow `clone`, `adopt` and the attribute
+  changes, each proven to keep `wf`: the theorems are in
+  `clazel-dom/Cargo.toml`; this item adds no operation to that crate):
+  - `mutation.rs`: the one place the arena changes. Each operation runs
+    `clazel-dom`'s and also queues the mutation records (DOM §4.3†), adds the
+    transient registered observers and moves the live ranges' boundary points
+    (DOM §4.2.3† "insert" and "remove", §4.10† "replace data"): the insertion
+    and removing steps hooks, written once. `MutationObserver` and
+    `MutationRecord` are here; the host calls
+    `mutation::notify_mutation_observers` at its microtask checkpoint (no
+    microtask is queued by the page: the event loop is not joined to the
+    engine yet, item 7.15).
+  - `fragment.rs`: HTML §13.4† fragment parsing through
+    `clazel-treebuilder`'s `parse_fragment_real`, copied into the page's
+    arena. `innerHTML` and `outerHTML` (getters over `serialize.rs`, setters
+    over this), `insertAdjacentHTML`, `Range.createContextualFragment`.
+  - `attr.rs`: `Attr`, `NamedNodeMap`, the attribute-node and `*NS` methods,
+    `createAttribute(NS)`, and `dataset` (`DOMStringMap`).
+  - `range.rs`: `Range` (not `StaticRange`): boundary points and their
+    setters, `compareBoundaryPoints`, `comparePoint`, `isPointInRange`,
+    `intersectsNode`, `cloneRange`, `toString`, `deleteContents`,
+    `extractContents`, `cloneContents`, `insertNode`, `surroundContents`.
+  - `node.rs` also gained `normalize`, `isEqualNode`,
+    `compareDocumentPosition`, the namespace lookups, `baseURI`,
+    `splitText`, `wholeText`, `importNode`, `adoptNode`,
+    `getElementsByTagNameNS`, `insertAdjacent*` and `ProcessingInstruction`.
+  - Not done: `getComputedStyle` (the bindings expose no
+    `CSSStyleDeclaration`), a second document (`document.implementation`,
+    `new Document()`, `createHTMLDocument`: the arena is one document, which
+    is most of what the WPT `dom/nodes` tests that fail need), `createElementNS`
+    and `setAttributeNS` outside Infra §8's six namespaces,
+    `dataset.name`, `list[0]` and `map.name` (named and indexed properties
+    need the engine's exotic dispatch, which the VM does not call yet), the
+    HTML element interfaces beyond the eight the bindings expose,
+    `TreeWalker`/`NodeIterator`, `Selection`, shadow trees and custom
+    elements.
+  - `tests/dom_api.rs` tests each of these through script. `tests/wpt_dom.rs`
+    runs the vendored WPT `dom/nodes` and `dom/collections` tests with a
+    stand-in for `testharness.js` (`tests/support/standin-dom-harness.js`;
+    the real file does not load in the engine yet) and compares the result
+    per file with `tests/data/wpt_dom_expected.txt`; a subtest is a pass only
+    if it ran and held, async and promise tests are counted as skipped, and
+    a test that needs a WPT helper that is not vendored is listed as
+    blocked.
+
 Item 7.1 vendored the test
 data later items run: the WPT `testharness.js` tests (`tests/data/wpt-web/`) and
 the TodoMVC vanilla, React and Vue implementations (`tests/data/todomvc/`).

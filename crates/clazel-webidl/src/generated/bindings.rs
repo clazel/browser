@@ -28,7 +28,6 @@
 // - AbortSignal.onabort: event handler (HTML §8.1.8.1, not implemented)
 // - Document.implementation: interface DOMImplementation is not exposed
 // - Document.createCDATASection: interface CDATASection is not exposed
-// - Document.createProcessingInstruction: interface ProcessingInstruction is not exposed
 // - Document.createNodeIterator: interface NodeIterator is not exposed
 // - Document.createTreeWalker: interface TreeWalker is not exposed
 // - Document (anonymous Getter): indexed and named properties need exotic objects
@@ -124,6 +123,7 @@
 // - CharacterData.streamAfterHTMLUnsafe: WritableStream is not in the vendored IDL
 // - CharacterData.streamReplaceWithHTMLUnsafe: WritableStream is not in the vendored IDL
 // - Text.assignedSlot: interface HTMLSlotElement is not exposed
+// - ProcessingInstruction.sheet: interface CSSStyleSheet is not exposed
 // - Element.attachShadow: interface ShadowRoot is not exposed
 // - Element.shadowRoot: interface ShadowRoot is not exposed
 // - Element.customElementRegistry: interface CustomElementRegistry is not exposed
@@ -409,6 +409,8 @@ pub enum InterfaceId {
     Text,
     /// `Comment`.
     Comment,
+    /// `ProcessingInstruction`.
+    ProcessingInstruction,
     /// `Element`.
     Element,
     /// `Attr`.
@@ -478,6 +480,7 @@ impl InterfaceId {
         InterfaceId::CharacterData,
         InterfaceId::Text,
         InterfaceId::Comment,
+        InterfaceId::ProcessingInstruction,
         InterfaceId::Element,
         InterfaceId::Attr,
         InterfaceId::NamedNodeMap,
@@ -522,6 +525,7 @@ impl InterfaceId {
             InterfaceId::CharacterData => "CharacterData",
             InterfaceId::Text => "Text",
             InterfaceId::Comment => "Comment",
+            InterfaceId::ProcessingInstruction => "ProcessingInstruction",
             InterfaceId::Element => "Element",
             InterfaceId::Attr => "Attr",
             InterfaceId::NamedNodeMap => "NamedNodeMap",
@@ -567,6 +571,7 @@ impl InterfaceId {
             InterfaceId::CharacterData => Some(InterfaceId::Node),
             InterfaceId::Text => Some(InterfaceId::CharacterData),
             InterfaceId::Comment => Some(InterfaceId::CharacterData),
+            InterfaceId::ProcessingInstruction => Some(InterfaceId::CharacterData),
             InterfaceId::Element => Some(InterfaceId::Node),
             InterfaceId::Attr => Some(InterfaceId::Node),
             InterfaceId::NamedNodeMap => None,
@@ -1932,6 +1937,10 @@ pub trait DocumentImpl: Platform {
     fn create_comment<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _data: DomString) -> Result<ObjectKey> {
         Err(platform::not_implemented::<Self>(scope, "Document.createComment"))
     }
+    /// `ProcessingInstruction createProcessingInstruction(DOMString target, DOMString data)`.
+    fn create_processing_instruction<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _target: DomString, _data: DomString) -> Result<ObjectKey> {
+        Err(platform::not_implemented::<Self>(scope, "Document.createProcessingInstruction"))
+    }
     /// `Node importNode(Node node, optional (boolean or ImportNodeOptions) options)`.
     fn import_node<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _node: ObjectKey, _options: BooleanOrImportNodeOptions) -> Result<ObjectKey> {
         Err(platform::not_implemented::<Self>(scope, "Document.importNode"))
@@ -2260,6 +2269,47 @@ pub trait CommentImpl: Platform {
     /// `constructor(optional DOMString data)`: the new platform object.
     fn constructor<'s>(scope: &mut Scope<'s>, _data: DomString) -> Result<ObjectKey> {
         Err(platform::not_implemented::<Self>(scope, "new Comment"))
+    }
+}
+
+/// What the platform implements for `interface ProcessingInstruction : CharacterData`. Each method's
+/// default throws a `NotSupportedError`.
+pub trait ProcessingInstructionImpl: Platform {
+    /// The getter of `readonly attribute DOMString target`.
+    fn target<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<DomString> {
+        Err(platform::not_implemented::<Self>(scope, "ProcessingInstruction.target"))
+    }
+    /// `boolean hasAttributes()`.
+    fn has_attributes<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<bool> {
+        Err(platform::not_implemented::<Self>(scope, "ProcessingInstruction.hasAttributes"))
+    }
+    /// `sequence<DOMString> getAttributeNames()`.
+    fn get_attribute_names<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<Vec<DomString>> {
+        Err(platform::not_implemented::<Self>(scope, "ProcessingInstruction.getAttributeNames"))
+    }
+    /// `DOMString? getAttribute(DOMString name)`.
+    fn get_attribute<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _name: DomString) -> Result<Option<DomString>> {
+        Err(platform::not_implemented::<Self>(scope, "ProcessingInstruction.getAttribute"))
+    }
+    /// `undefined setAttribute(DOMString name, DOMString value)`.
+    fn set_attribute<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _name: DomString, _value: DomString) -> Result<()> {
+        Err(platform::not_implemented::<Self>(scope, "ProcessingInstruction.setAttribute"))
+    }
+    /// `undefined removeAttribute(DOMString name)`.
+    fn remove_attribute<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _name: DomString) -> Result<()> {
+        Err(platform::not_implemented::<Self>(scope, "ProcessingInstruction.removeAttribute"))
+    }
+    /// `boolean toggleAttribute(DOMString name, optional boolean force)`.
+    fn toggle_attribute<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _name: DomString, _force: Option<bool>) -> Result<bool> {
+        Err(platform::not_implemented::<Self>(scope, "ProcessingInstruction.toggleAttribute"))
+    }
+    /// `boolean hasAttribute(DOMString name)`.
+    fn has_attribute<'s>(scope: &mut Scope<'s>, _this: ObjectKey, _name: DomString) -> Result<bool> {
+        Err(platform::not_implemented::<Self>(scope, "ProcessingInstruction.hasAttribute"))
+    }
+    /// `constructor(DOMString target, optional DOMString data)`: the new platform object.
+    fn constructor<'s>(scope: &mut Scope<'s>, _target: DomString, _data: DomString) -> Result<ObjectKey> {
+        Err(platform::not_implemented::<Self>(scope, "new ProcessingInstruction"))
     }
 }
 
@@ -3648,6 +3698,7 @@ pub trait AllInterfaces: Platform
     + CharacterDataImpl
     + TextImpl
     + CommentImpl
+    + ProcessingInstructionImpl
     + ElementImpl
     + AttrImpl
     + NamedNodeMapImpl
@@ -3690,6 +3741,7 @@ impl<T: Platform
     + CharacterDataImpl
     + TextImpl
     + CommentImpl
+    + ProcessingInstructionImpl
     + ElementImpl
     + AttrImpl
     + NamedNodeMapImpl
@@ -5272,6 +5324,22 @@ fn op_document_create_comment<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args:
     Ok(v)
 }
 
+/// The operation `Document.createProcessingInstruction` (WebIDL §3.7.6†).
+fn op_document_create_processing_instruction<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
+
+    if args.len() < 2 {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'createProcessingInstruction' on 'Document': 2 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::dom_string(scope, v, false)?;
+    let v = args.get(1);
+    let a1 = convert::dom_string(scope, v, false)?;
+    let r = <P as DocumentImpl>::create_processing_instruction(scope, this, a0, a1)?;
+    let v = convert::from_interface::<P>(scope, r)?;
+    Ok(v)
+}
+
 /// The operation `Document.importNode` (WebIDL §3.7.6†).
 fn op_document_import_node<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
     let this = platform::this_object::<P>(scope, args, InterfaceId::Document)?;
@@ -6223,6 +6291,128 @@ fn ctor_comment<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) ->
     let proto = scope.get_prototype_from_constructor(new_target, fallback)?;
     let interface = scope.host_mut::<P>()?.interface_of(key).unwrap_or(InterfaceId::Comment);
     platform::wrap_with_prototype::<P>(scope, key, interface, proto)
+}
+
+/// The interface object of `ProcessingInstruction`: [[Call]] and [[Construct]] (WebIDL §3.7.1†).
+fn ctor_processing_instruction<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    // §3.7.1† step 1: "If NewTarget is undefined, then throw a TypeError."
+    let Some(new_target) = args.new_target() else {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Constructor ProcessingInstruction requires 'new'"));
+    };
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to construct 'ProcessingInstruction': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::dom_string(scope, v, false)?;
+    let v = args.get(1);
+    let a1 = if scope.kind(v) == ValueKind::Undefined { "".encode_utf16().collect::<DomString>() } else { convert::dom_string(scope, v, false)? };
+    let key = <P as ProcessingInstructionImpl>::constructor(scope, a0, a1)?;
+    // "internally create a new object implementing the interface" with
+    // the prototype from NewTarget (§3.7.1†, §3.8.1†).
+    let fallback = platform::prototype::<P>(scope, InterfaceId::ProcessingInstruction)?;
+    let proto = scope.get_prototype_from_constructor(new_target, fallback)?;
+    let interface = scope.host_mut::<P>()?.interface_of(key).unwrap_or(InterfaceId::ProcessingInstruction);
+    platform::wrap_with_prototype::<P>(scope, key, interface, proto)
+}
+
+/// The getter of `ProcessingInstruction.target` (WebIDL §3.7.5.1†).
+fn get_processing_instruction_target<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::ProcessingInstruction)?;
+
+    let _ = &this;
+    let r = <P as ProcessingInstructionImpl>::target(scope, this)?;
+    let v = convert::from_dom_string(scope, &r);
+    Ok(v)
+}
+
+/// The operation `ProcessingInstruction.hasAttributes` (WebIDL §3.7.6†).
+fn op_processing_instruction_has_attributes<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::ProcessingInstruction)?;
+
+    let r = <P as ProcessingInstructionImpl>::has_attributes(scope, this)?;
+    let v = scope.boolean(r);
+    Ok(v)
+}
+
+/// The operation `ProcessingInstruction.getAttributeNames` (WebIDL §3.7.6†).
+fn op_processing_instruction_get_attribute_names<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::ProcessingInstruction)?;
+
+    let r = <P as ProcessingInstructionImpl>::get_attribute_names(scope, this)?;
+    let v = { let mut items = Vec::new(); for x in r { let v = convert::from_dom_string(scope, &x); items.push(v); } convert::from_sequence(scope, &items)? };
+    Ok(v)
+}
+
+/// The operation `ProcessingInstruction.getAttribute` (WebIDL §3.7.6†).
+fn op_processing_instruction_get_attribute<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::ProcessingInstruction)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'getAttribute' on 'ProcessingInstruction': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::dom_string(scope, v, false)?;
+    let r = <P as ProcessingInstructionImpl>::get_attribute(scope, this, a0)?;
+    let v = match r { Some(x) => convert::from_dom_string(scope, &x), None => scope.null() };
+    Ok(v)
+}
+
+/// The operation `ProcessingInstruction.setAttribute` (WebIDL §3.7.6†).
+fn op_processing_instruction_set_attribute<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::ProcessingInstruction)?;
+
+    if args.len() < 2 {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'setAttribute' on 'ProcessingInstruction': 2 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::dom_string(scope, v, false)?;
+    let v = args.get(1);
+    let a1 = convert::dom_string(scope, v, false)?;
+    <P as ProcessingInstructionImpl>::set_attribute(scope, this, a0, a1)?;
+    Ok(scope.undefined())
+}
+
+/// The operation `ProcessingInstruction.removeAttribute` (WebIDL §3.7.6†).
+fn op_processing_instruction_remove_attribute<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::ProcessingInstruction)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'removeAttribute' on 'ProcessingInstruction': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::dom_string(scope, v, false)?;
+    <P as ProcessingInstructionImpl>::remove_attribute(scope, this, a0)?;
+    Ok(scope.undefined())
+}
+
+/// The operation `ProcessingInstruction.toggleAttribute` (WebIDL §3.7.6†).
+fn op_processing_instruction_toggle_attribute<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::ProcessingInstruction)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'toggleAttribute' on 'ProcessingInstruction': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::dom_string(scope, v, false)?;
+    let v = args.get(1);
+    let a1 = if scope.kind(v) == ValueKind::Undefined { None } else { Some(convert::boolean(scope, v)) };
+    let r = <P as ProcessingInstructionImpl>::toggle_attribute(scope, this, a0, a1)?;
+    let v = scope.boolean(r);
+    Ok(v)
+}
+
+/// The operation `ProcessingInstruction.hasAttribute` (WebIDL §3.7.6†).
+fn op_processing_instruction_has_attribute<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {
+    let this = platform::this_object::<P>(scope, args, InterfaceId::ProcessingInstruction)?;
+
+    if args.is_empty() {
+        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, "Failed to execute 'hasAttribute' on 'ProcessingInstruction': 1 argument(s) required"));
+    }
+    let v = args.get(0);
+    let a0 = convert::dom_string(scope, v, false)?;
+    let r = <P as ProcessingInstructionImpl>::has_attribute(scope, this, a0)?;
+    let v = scope.boolean(r);
+    Ok(v)
 }
 
 /// The interface object of `Element`: [[Call]] and [[Construct]] (WebIDL §3.7.1†).
@@ -10998,6 +11188,7 @@ pub fn install<P: AllInterfaces>(scope: &mut Scope<'_>, realm: &clazel_js::Realm
         install::operation(scope, proto, "createDocumentFragment", 0, op_document_create_document_fragment::<P>, false)?;
         install::operation(scope, proto, "createTextNode", 1, op_document_create_text_node::<P>, false)?;
         install::operation(scope, proto, "createComment", 1, op_document_create_comment::<P>, false)?;
+        install::operation(scope, proto, "createProcessingInstruction", 2, op_document_create_processing_instruction::<P>, false)?;
         install::operation(scope, proto, "importNode", 1, op_document_import_node::<P>, false)?;
         install::operation(scope, proto, "adoptNode", 1, op_document_adopt_node::<P>, false)?;
         install::operation(scope, proto, "createAttribute", 1, op_document_create_attribute::<P>, false)?;
@@ -11164,6 +11355,33 @@ pub fn install<P: AllInterfaces>(scope: &mut Scope<'_>, realm: &clazel_js::Realm
     scope.host_mut::<P>()?.bindings().interface_objects.insert(InterfaceId::Comment, h);
     let _ = (&ctor, &proto, &global);
     install::expose(scope, global, "Comment", ctor)?;
+    }
+    // `interface ProcessingInstruction` (WebIDL §3.7.1† interface object, §3.7.3† interface
+    // prototype object).
+    {
+    let parent_ctor = scope.host_mut::<P>()?.bindings().interface_objects.get(&InterfaceId::CharacterData).cloned();
+    let parent_ctor = match parent_ctor { Some(h) => Some(scope.local(&h)?), None => None };
+    let parent_proto = Some(platform::prototype::<P>(scope, InterfaceId::CharacterData)?);
+    let ctor = install::interface_object(scope, "ProcessingInstruction", 1, parent_ctor, ctor_processing_instruction::<P>)?;
+    let proto = scope.new_object()?;
+    if let Some(pp) = parent_proto {
+        scope.set_prototype_of(proto, pp)?;
+    }
+    install::link(scope, ctor, proto)?;
+    let h = scope.persist(proto);
+    scope.host_mut::<P>()?.bindings().prototypes.insert(InterfaceId::ProcessingInstruction, h);
+    let h = scope.persist(ctor);
+    scope.host_mut::<P>()?.bindings().interface_objects.insert(InterfaceId::ProcessingInstruction, h);
+    let _ = (&ctor, &proto, &global);
+        install::attribute(scope, proto, "target", get_processing_instruction_target::<P>, None, false)?;
+        install::operation(scope, proto, "hasAttributes", 0, op_processing_instruction_has_attributes::<P>, false)?;
+        install::operation(scope, proto, "getAttributeNames", 0, op_processing_instruction_get_attribute_names::<P>, false)?;
+        install::operation(scope, proto, "getAttribute", 1, op_processing_instruction_get_attribute::<P>, false)?;
+        install::operation(scope, proto, "setAttribute", 2, op_processing_instruction_set_attribute::<P>, false)?;
+        install::operation(scope, proto, "removeAttribute", 1, op_processing_instruction_remove_attribute::<P>, false)?;
+        install::operation(scope, proto, "toggleAttribute", 1, op_processing_instruction_toggle_attribute::<P>, false)?;
+        install::operation(scope, proto, "hasAttribute", 1, op_processing_instruction_has_attribute::<P>, false)?;
+    install::expose(scope, global, "ProcessingInstruction", ctor)?;
     }
     // `interface Element` (WebIDL §3.7.1† interface object, §3.7.3† interface
     // prototype object).

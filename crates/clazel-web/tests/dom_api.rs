@@ -504,3 +504,36 @@ fn contextual_fragment() -> Test {
     assert_eq!(r, "2|#text|TD|11");
     Ok(())
 }
+
+#[test]
+fn tag_name_ns_and_processing_instructions() -> Test {
+    // WPT dom/nodes/Document-getElementsByTagNameNS.html and
+    // Document-createProcessingInstruction.js.
+    let (mut rt, realm) =
+        page("<!DOCTYPE html><div id=a><p>1</p><svg><p>2</p><circle></circle></svg></div>")?;
+    let r = run(
+        &mut rt,
+        &realm,
+        "var d = document, a = d.getElementById('a'), r = [];\n\
+         var html = 'http://www.w3.org/1999/xhtml', svg = 'http://www.w3.org/2000/svg';\n\
+         var l = a.getElementsByTagNameNS(html, 'p');\n\
+         r.push(l.length, d.getElementsByTagNameNS('*', 'p').length, d.getElementsByTagNameNS(svg, '*').length,\n\
+                d.getElementsByTagNameNS('*', '*').length > 5, d.getElementsByTagNameNS(null, 'p').length,\n\
+                d.getElementsByTagNameNS('', 'p').length);\n\
+         a.appendChild(d.createElement('p')); r.push(l.length);\n\
+         var pi = d.createProcessingInstruction('xml-stylesheet', 'href=\"x\"');\n\
+         r.push(pi.nodeType, pi.target, pi.data, pi.nodeName, pi instanceof ProcessingInstruction, pi instanceof CharacterData);\n\
+         var e = []; try { d.createProcessingInstruction('a', 'x?>y'); } catch (x) { e.push(x.name); }\n\
+         try { d.createProcessingInstruction('', 'x'); } catch (x) { e.push(x.name); }\n\
+         r.push(e.join(','), new ProcessingInstruction('t', 'd').data);\n\
+         r = r.join('|');",
+    )?;
+    // The `p` start tag inside `svg` breaks out of foreign content (HTML
+    // §13.2.6.5): two `p` are HTML ones and `*` in the SVG namespace is the
+    // `svg` alone.
+    assert_eq!(
+        r,
+        "2|2|1|true|0|0|3|7|xml-stylesheet|href=\"x\"|xml-stylesheet|true|true|InvalidCharacterError,InvalidCharacterError|d"
+    );
+    Ok(())
+}

@@ -20,7 +20,9 @@
 //!   side table by key (phase-7.md 7.12, "Wrappers").
 //! - **One document per page**, the arena's node 0: `ownerDocument` is it,
 //!   and there is no adoption between documents (`clazel-dom`'s arena is one
-//!   document), so `importNode` and `adoptNode` are not implemented.
+//!   document): `importNode` is a clone, and `adoptNode` removes the node
+//!   from its parent. `document.implementation` and `new Document()` do not
+//!   exist.
 //! - **The interface of an element** is its HTML element interface when the
 //!   bindings expose it (`html`, `head`, `title`, `body`, `div`, `span`, `p`,
 //!   `a`), `HTMLElement` for the other HTML elements (the standard's
@@ -139,6 +141,14 @@ pub enum HookCall {
     Log(LogLevel, String),
 }
 
+/// The namespace of `getElementsByTagNameNS`: "*", null, or a namespace.
+#[derive(Clone, Debug)]
+pub(crate) enum NsFilter {
+    Any,
+    Null,
+    Uri(Vec<u32>),
+}
+
 /// What a collection holds (DOM §4.2.10† `NodeList`, §4.2.10.2†
 /// `HTMLCollection`): live ones are computed each time they are read.
 #[derive(Clone, Debug)]
@@ -151,6 +161,9 @@ pub(crate) enum Collection {
     ByTagName(usize, Vec<u32>),
     /// "the list of elements with class names" under a root.
     ByClassName(usize, Vec<Vec<u32>>),
+    /// "the list of elements with namespace namespace and local name
+    /// localName" under a root.
+    ByTagNameNs(usize, NsFilter, Vec<u32>),
     /// A static list (`querySelectorAll`).
     Static(Vec<usize>),
 }

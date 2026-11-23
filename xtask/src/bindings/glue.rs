@@ -53,6 +53,7 @@ pub const EXPOSED: &[&str] = &[
     "CharacterData",
     "Text",
     "Comment",
+    "ProcessingInstruction",
     "Element",
     "Attr",
     "NamedNodeMap",
