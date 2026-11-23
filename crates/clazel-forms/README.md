@@ -119,11 +119,26 @@ does not recheck this crate if those files change (docs/VERIFICATION.md).
 
 ## What is not done
 
-- **The independent transcription** (`independent.rs`, proven equal to the
-  spec) is not written for either item (6.14's would be RFC 7578 and RFC 3986
-  for the encodings), and no mutation of a document-dependent step has a
-  certificate (they need a concrete `Document` for Verus to evaluate). Both
-  are required for tier 2.
+- **The independent transcription is partial.** `src/independent.rs` restates
+  ASCII lowercase, strip newlines, strip leading and trailing ASCII
+  whitespace, normalize newlines (two passes), the rules for parsing
+  non-negative integers (with a position) and the base-ten string of a number
+  (a relation, with a uniqueness lemma) and is proven equal to `spec.rs`'s
+  (27 verified, 0 errors); `src/submit/independent.rs` does the CR LF
+  replacement (normalize, then expand) and the split on ASCII whitespace
+  (11 verified, 0 errors). Both were written beside `spec.rs`, so they are
+  independent in formulation, not in author. **Not covered:** the form owner,
+  "disabled", the entry list's steps, the serializers (6.14's would be RFC
+  7578 and RFC 3986), "picking an encoding" and the submission algorithm.
+- **No mutation of a document-dependent step has a certificate.** A
+  certificate evaluates the spec on a concrete `Document` with Verus's
+  `compute_only`, and that evaluator panics on a byte-string literal
+  (`b"input"@`: "Expected the argument to array_view to already be an
+  Interp(Array(_))"), which every one of those steps reads (`is_html`,
+  `attr`). Verus cannot prove `b"input"@ =~= seq![0x69u8, ...]` either, so
+  the spec would have to name its literals as sequences and the executable
+  code would have to pass arrays of known contents, at about 100 sites.
+  Both are required for tier 2.
 - **Modelling choices that are gaps** (each in `src/spec.rs`'s header): an
   `option`'s value without a `value` attribute is the table's, the "get
   HTML-aware text content" algorithm is not transcribed; the selectedness
@@ -140,7 +155,7 @@ does not recheck this crate if those files change (docs/VERIFICATION.md).
   that carries the answers down the walk, and its proof, is item 6.20's if
   its measurement needs it.
 - `select`'s `selectedcontent` and the form-associated custom elements are out
-  (no script). No Kani harnesses, no Miri run of this crate's tests yet.
+  (no script). No Kani harnesses. Miri (nightly-2026-08-21): all 42 tests of this crate pass (the slowest, `wpt_form_submission_0`, takes 84 s of Miri time).
 
 ## Trust
 

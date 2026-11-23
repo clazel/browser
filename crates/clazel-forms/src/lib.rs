@@ -8,10 +8,13 @@
 //! - [`spec`]: a step-by-step transcription of the standard over a
 //!   `clazel-dom` arena, with the control state in a side table.
 //! - [`contract`]: what the executable functions are proven to satisfy.
+//! - [`independent`]: a second transcription of the string algorithms,
+//!   proven equal to [`spec`]'s.
 
 pub mod contract;
 pub mod examples;
 pub mod exec;
+pub mod independent;
 pub mod lemmas;
 pub mod spec;
 pub mod submit;
