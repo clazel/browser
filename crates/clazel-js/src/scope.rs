@@ -1279,6 +1279,13 @@ impl<'s> Scope<'s> {
                 return Err(self.throw_error(ErrorKind::SyntaxError, message));
             }
         };
+        // `Limits::nesting_depth` (phase-7.md 7.19): the parser's own bound
+        // is fixed (`MAX_DEPTH`), so a smaller limit is checked here, on the
+        // height of the tree it built, with the same error.
+        let limit = usize::try_from(self.state()?.limits.nesting_depth).unwrap_or(usize::MAX);
+        if ast_height(&ast) > limit {
+            return Err(self.throw_error(ErrorKind::SyntaxError, "script nested too deeply"));
+        }
         let program = match compile_script(&ast, &points) {
             Ok(program) => program,
             Err(
@@ -1433,4 +1440,27 @@ impl<'s> Scope<'s> {
         // There are no `WeakRef`s, so no target is kept.
         self.check_deferred()
     }
+}
+
+/// The height of a parsed tree: the most nodes on a path from the root to a
+/// leaf, which is what the parser's `MAX_DEPTH` bounds. The parser puts every
+/// child before its parent, so one pass in order sees each child first; no
+/// recursion, so the host stack does not depend on the source.
+fn ast_height(ast: &clazel_js_syntax::ast::Ast) -> usize {
+    let mut heights: Vec<usize> = Vec::with_capacity(ast.nodes.len());
+    for node in &ast.nodes {
+        let below = node
+            .children
+            .iter()
+            .filter_map(|&c| usize::try_from(c).ok().and_then(|c| heights.get(c)))
+            .copied()
+            .max()
+            .unwrap_or(0);
+        heights.push(below.saturating_add(1));
+    }
+    usize::try_from(ast.root)
+        .ok()
+        .and_then(|r| heights.get(r))
+        .copied()
+        .unwrap_or(0)
 }
