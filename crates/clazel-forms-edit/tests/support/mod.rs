@@ -386,8 +386,13 @@ fn golden_path(name: &str) -> PathBuf {
 
 /// Compares `actual` with the stored file `tests/golden/<name>`; with
 /// `CLAZEL_BLESS=1` it writes the file instead (review the diff before
-/// committing it).
+/// committing it). Under Miri the file is not read (its isolation forbids opening
+/// files, docs/VERIFICATION.md, Miri): the page was still built, laid out, edited and
+/// painted under Miri, which is what Miri checks; the comparison runs natively.
 pub fn golden(name: &str, actual: &str) {
+    if cfg!(miri) {
+        return;
+    }
     let path = golden_path(name);
     if std::env::var_os("CLAZEL_BLESS").is_some() {
         if let Some(dir) = path.parent() {
