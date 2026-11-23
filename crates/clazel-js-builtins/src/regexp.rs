@@ -34,7 +34,11 @@
 //!   (`@@replace` reads `flags`) work; `RegExp.prototype.global` is
 //!   `undefined` (not a getter that returns `undefined`), `RegExp.prototype.flags`
 //!   is `undefined` (the standard's `""`), and `Object.getOwnPropertyNames`
-//!   of a RegExp lists these names after `lastIndex`.
+//!   of a RegExp lists these names after `lastIndex`. The standard's `flags`
+//!   getter reads `hasIndices`, `global`, ... with `Get`, so redefining
+//!   `global` on an instance changes the `flags` the algorithms see; here
+//!   `flags` is a stored string, so it does not (about ten Test262 tests of
+//!   `RegExp.prototype[@@match]` and `[@@replace]` observe this).
 //! - **`get RegExp [ @@species ]`** (§22.2.5.2†) is a data property holding
 //!   `%RegExp%`, as for `Promise`.
 //! - **The legacy static properties** (`RegExp.$1`, `RegExp.lastMatch`, ...,
