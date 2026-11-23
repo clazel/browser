@@ -327,10 +327,13 @@ fn run_one(case: &Case, src: &[u32], goal: SourceGoal) -> Outcome {
             // `assert.throws` reports a missing global the same way, inside
             // its own error: "Expected a different error, got ReferenceError:
             // eval is not defined" (the compiler's third slice, #230, compiles
-            // the RegExp literal tests that reach `eval` this way).
+            // the RegExp literal tests that reach `eval` this way); so do the
+            // tests that catch the error and throw their own Test262Error
+            // with it in the message ("... Actual: ReferenceError: eval is not
+            // defined", reached since `instanceof` runs).
             if name.as_deref() == Some("Test262Error")
                 && let Some(m) = &msg
-                && let Some((_, got)) = m.split_once("got ReferenceError: ")
+                && let Some((_, got)) = m.rsplit_once("ReferenceError: ")
                 && let Some(var) = got.strip_suffix(" is not defined")
             {
                 return Outcome::Xfail(format!("global {var} is missing (a built-in, 7.9)"));
@@ -380,6 +383,10 @@ const KNOWN_GAPS: &[(&str, &str)] = &[
     (
         "language/identifier-resolution/assign-to-global-undefined.js",
         "strict assignment to an unresolvable reference throws before the right-hand side runs (§13.15.2 step 1.a, ResolveBinding first); SetGlobal checks when it runs, after it, and the op list has no resolve-first op",
+    ),
+    (
+        "language/directive-prologue/10.1.1-11-s.js",
+        "calls eval, which is not there yet (a built-in, 7.9); the test catches the ReferenceError and asserts `err instanceof SyntaxError`, so the runner cannot class it by name (reached since `instanceof` runs)",
     ),
     (
         "language/comments/S7.4_A5.js",

@@ -4,15 +4,22 @@
 //! `clazel-js-heap` on `main` has the arena, strings, interned keys and
 //! shapes, but no object type: the elements, symbols and collector slices are
 //! open pull requests. This module is the VM's own cell type over the arena
-//! (`spec::Cell`): a string, an ordinary object (properties by shape, a
-//! prototype, and what kind of object it is) and a declarative environment.
-//! It holds only data properties; accessors, elements and exotic objects come
-//! with the later slices. Nothing here is collected: the collector is item
-//! 7.6.
+//! (`spec::Cell`): a string, a Symbol, an ordinary object (properties by
+//! shape, a prototype, and what kind of object it is), a declarative
+//! environment, and the iterator records of the iteration ops. It holds only
+//! data properties; accessors, elements and exotic objects come with the
+//! later slices. Nothing here is collected: the collector is item 7.6.
+//!
+//! A property key is a [`Key`]: an interned string, or a Symbol encoded by
+//! `clazel-js-heap`'s symbol contract (Y4, [`encode`]), whose top bit is set.
+//! The interner never hands out such a key (it would need 2^31 strings), so
+//! the two never meet.
 
 use clazel_js_heap::arena::{Arena, Error as ArenaError};
 use clazel_js_heap::shape::{Attrs, Error as ShapeError, ROOT, ShapeId, Shapes};
 use clazel_js_heap::string::{Interner, JsString, Key, TooLong};
+use clazel_js_heap::symbol::SymbolId;
+use clazel_js_heap::symbol::contract::{PropertyKey, decode, encode};
 use clazel_js_heap::value::Value;
 
 /// The longest prototype chain a lookup walks before it gives up (a cycle
@@ -52,6 +59,78 @@ pub enum ObjKind {
     /// in the shape, because `clazel-js-heap`'s elements (#211) are not on
     /// this base.
     Array,
+    /// An Array Iterator (§23.1.5†): `[[IteratedArrayLike]]` (`undefined`
+    /// once the iterator is done), `[[ArrayLikeNextIndex]]` and
+    /// `[[ArrayLikeIterationKind]]`. (The standard's iterator is a generator
+    /// closure, CreateArrayIterator §23.1.5.1†; these three slots are its
+    /// state.)
+    ArrayIterator {
+        /// The array-like being iterated, or `undefined` when done.
+        target: Value,
+        /// The next index.
+        next: u64,
+        /// What each step gives.
+        kind: IterKind,
+    },
+    /// A String Iterator (§22.1.5†): the string (`undefined` once done) and
+    /// the code unit index of the next code point.
+    StringIterator {
+        /// The string being iterated, or `undefined` when done.
+        target: Value,
+        /// The index of the next code unit.
+        next: u32,
+    },
+}
+
+/// `[[ArrayLikeIterationKind]]` of an Array Iterator (§23.1.5.1†).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IterKind {
+    /// `key`: the indices.
+    Keys,
+    /// `value`: the elements.
+    Values,
+    /// `key+value`: `[index, element]` pairs.
+    Entries,
+}
+
+/// A Symbol value (§6.1.5†): its id in the VM's symbol table (the
+/// well-known symbols are ids 0 to 12, `clazel-js-heap`'s Y1) and its
+/// `[[Description]]`, a string value or `undefined`. Each Symbol has exactly
+/// one cell, so identity is equality of references.
+#[derive(Clone, Copy, Debug)]
+pub struct Sym {
+    /// The id, which is also the property key's ([`Heap::symbol_key`]).
+    pub id: SymbolId,
+    /// `[[Description]]`: a string value or `undefined`.
+    pub description: Value,
+}
+
+/// An Iterator Record (§7.4.1†) the iteration ops keep in a register:
+/// `[[Iterator]]`, `[[NextMethod]]` and `[[Done]]`; or the state of a
+/// `for`-`in` loop's iterator (EnumerateObjectProperties, §14.7.5.9†).
+#[derive(Clone, Debug)]
+pub enum IterRecord {
+    /// An Iterator Record of the iterator protocol.
+    Protocol {
+        /// `[[Iterator]]`.
+        iterator: Value,
+        /// `[[NextMethod]]`.
+        next: Value,
+        /// `[[Done]]`.
+        done: bool,
+    },
+    /// A `for`-`in` iterator: the object, the keys still to visit, in order,
+    /// and the position.
+    ForIn {
+        /// The object whose keys are enumerated (`undefined` for a loop over
+        /// `undefined` or `null`, which is done at once).
+        object: Value,
+        /// The enumerable string keys of the object and its prototype chain,
+        /// each once, shadowed ones left out.
+        keys: Vec<Key>,
+        /// The index of the next key.
+        pos: usize,
+    },
 }
 
 /// An object: properties by shape, a prototype and a kind.
@@ -85,6 +164,10 @@ pub enum Cell {
     Object(Obj),
     /// An environment.
     Env(Env),
+    /// A Symbol value.
+    Symbol(Sym),
+    /// An iterator record (never reachable from JS: only registers hold it).
+    Iter(IterRecord),
 }
 
 /// Why a heap operation failed.
@@ -263,7 +346,7 @@ impl Heap {
     /// The array index a key names (§6.1.7†), if it names one.
     #[must_use]
     pub fn key_index(&self, k: Key) -> Option<u32> {
-        self.keys.resolve(k).and_then(canonical_index)
+        self.key_string(k).and_then(canonical_index)
     }
 
     /// Removes the own properties `keys` of `obj` (a key it does not have is
@@ -360,6 +443,38 @@ impl Heap {
         }
     }
 
+    /// The Symbol a value refers to, if it refers to one.
+    #[must_use]
+    pub fn symbol(&self, v: Value) -> Option<Sym> {
+        match self.cell(v)? {
+            Cell::Symbol(s) => Some(*s),
+            _ => None,
+        }
+    }
+
+    /// Whether a value is a Symbol.
+    #[must_use]
+    pub fn is_symbol(&self, v: Value) -> bool {
+        self.symbol(v).is_some()
+    }
+
+    /// The iterator record a value refers to, mutably.
+    pub fn iter_record_mut(&mut self, v: Value) -> Option<&mut IterRecord> {
+        match self.cell_mut(v)? {
+            Cell::Iter(r) => Some(r),
+            _ => None,
+        }
+    }
+
+    /// The iterator record a value refers to.
+    #[must_use]
+    pub fn iter_record(&self, v: Value) -> Option<&IterRecord> {
+        match self.cell(v)? {
+            Cell::Iter(r) => Some(r),
+            _ => None,
+        }
+    }
+
     /// Whether a value is a reference to a string.
     #[must_use]
     pub fn is_string(&self, v: Value) -> bool {
@@ -400,10 +515,29 @@ impl Heap {
         self.intern(&js)
     }
 
-    /// The string a key stands for.
+    /// The string a key stands for (`None` for a Symbol's key).
     #[must_use]
     pub fn key_string(&self, k: Key) -> Option<&JsString> {
-        self.keys.resolve(k)
+        match decode(k) {
+            PropertyKey::String(_) => self.keys.resolve(k),
+            PropertyKey::Symbol(_) => None,
+        }
+    }
+
+    /// The property key of Symbol `id` (`clazel-js-heap`'s Y4 encoding), or
+    /// `None` past the encoding's 2^31 symbols.
+    #[must_use]
+    pub fn symbol_key(id: SymbolId) -> Option<Key> {
+        encode(PropertyKey::Symbol(id))
+    }
+
+    /// The Symbol id a key stands for, if it is a Symbol's key.
+    #[must_use]
+    pub fn key_symbol(k: Key) -> Option<SymbolId> {
+        match decode(k) {
+            PropertyKey::Symbol(id) => Some(id),
+            PropertyKey::String(_) => None,
+        }
     }
 
     /// Searches `start` and its prototype chain for the own data property
@@ -490,10 +624,11 @@ impl Heap {
         Ok(())
     }
 
-    /// The own properties of an object in the order `[[OwnPropertyKeys]]`
-    /// gives them (§10.1.11.1†): the array indices in ascending order, then
-    /// the other string keys in the order they were created. (Symbols and
-    /// exotic objects' keys come with the later slices.)
+    /// The own properties of an object whose keys are Strings, in the order
+    /// `[[OwnPropertyKeys]]` gives them (§10.1.11.1† steps 2 and 3): the
+    /// array indices in ascending order, then the other string keys in the
+    /// order they were created. The Symbol-keyed ones (step 4) are
+    /// [`Heap::own_symbol_properties`].
     #[must_use]
     pub fn own_properties(&self, obj: Value) -> Vec<(Key, Attrs, Value)> {
         let Some(o) = self.obj(obj) else {
@@ -509,6 +644,9 @@ impl Heap {
             else {
                 continue;
             };
+            if Self::key_symbol(k).is_some() {
+                continue;
+            }
             match self.keys.resolve(k).and_then(canonical_index) {
                 Some(i) => indices.push((i, k, a, v)),
                 None => names.push((k, a, v)),
@@ -519,6 +657,27 @@ impl Heap {
             indices.into_iter().map(|(_, k, a, v)| (k, a, v)).collect();
         out.extend(names);
         out
+    }
+
+    /// The own Symbol-keyed properties of an object, in the order they were
+    /// created (§10.1.11.1† step 4).
+    #[must_use]
+    pub fn own_symbol_properties(&self, obj: Value) -> Vec<(Key, Attrs, Value)> {
+        let Some(o) = self.obj(obj) else {
+            return Vec::new();
+        };
+        self.shapes
+            .properties(o.shape)
+            .into_iter()
+            .filter(|(k, _, _)| Self::key_symbol(*k).is_some())
+            .filter_map(|(k, slot, a)| {
+                let v = usize::try_from(slot)
+                    .ok()
+                    .and_then(|i| o.slots.get(i))
+                    .copied()?;
+                Some((k, a, v))
+            })
+            .collect()
     }
 
     /// Changes the value and attributes of the own property `key` (adding it

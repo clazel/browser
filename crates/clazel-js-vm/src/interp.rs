@@ -50,6 +50,8 @@ use crate::heap::{Heap, HeapError, ObjKind};
 use crate::numeric::{self, Num, num};
 use clazel_js_heap::shape::Attrs;
 use clazel_js_heap::string::{JsString, Key};
+use clazel_js_heap::symbol::SymbolId;
+use clazel_js_heap::symbol::contract::WELL_KNOWN;
 use clazel_js_heap::value::Value;
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
@@ -154,13 +156,26 @@ pub enum Intrinsic {
     ArrayPrototype,
     /// `%Array%`.
     ArrayConstructor,
+    /// `%Symbol.prototype%`.
+    SymbolPrototype,
+    /// `%Iterator.prototype%` (§27.1.2†).
+    IteratorPrototype,
+    /// `%ArrayIteratorPrototype%` (§23.1.5.2†).
+    ArrayIteratorPrototype,
+    /// `%StringIteratorPrototype%` (§22.1.5.1†).
+    StringIteratorPrototype,
+    /// Not an intrinsic of the standard: the GlobalSymbolRegistry List
+    /// (§20.4.2.2.1†) of `Symbol.for`, kept as an object without a
+    /// prototype that no script can reach (its keys are the registered
+    /// strings, its values the Symbols).
+    SymbolRegistry,
 }
 
 /// The most natives that may run one inside another.
 const MAX_NATIVE_DEPTH: u32 = 150;
 
 /// How many [`Intrinsic`]s there are.
-const INTRINSICS: usize = 12;
+const INTRINSICS: usize = 17;
 
 /// The hint of ToPrimitive (§7.1.1†).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -239,11 +254,16 @@ pub(crate) struct Atoms {
     pub(crate) number: Value,
     pub(crate) string: Value,
     pub(crate) function: Value,
+    pub(crate) symbol: Value,
     pub(crate) k_length: Key,
     pub(crate) k_name: Key,
     pub(crate) k_message: Key,
     pub(crate) k_prototype: Key,
     pub(crate) k_constructor: Key,
+    pub(crate) k_next: Key,
+    pub(crate) k_done: Key,
+    pub(crate) k_value: Key,
+    pub(crate) k_return: Key,
 }
 
 /// Limits of a [`Vm`].
@@ -285,6 +305,9 @@ pub struct Vm {
     /// The native functions, and whether each has `[[Construct]]`.
     pub(crate) natives: Vec<(NativeFn, bool)>,
     pub(crate) bound: Vec<BoundFn>,
+    /// The Symbol values, by id: the cell of each (the well-known symbols
+    /// are ids 0 to 12).
+    pub(crate) symbols: Vec<Value>,
     pub(crate) intrinsics: [Value; INTRINSICS],
     pub(crate) new_target: Value,
     pub(crate) active: Value,
@@ -318,12 +341,28 @@ impl Vm {
             number: heap.new_str("number")?,
             string: heap.new_str("string")?,
             function: heap.new_str("function")?,
+            symbol: heap.new_str("symbol")?,
             k_length: heap.intern_str("length")?,
             k_name: heap.intern_str("name")?,
             k_message: heap.intern_str("message")?,
             k_prototype: heap.intern_str("prototype")?,
             k_constructor: heap.intern_str("constructor")?,
+            k_next: heap.intern_str("next")?,
+            k_done: heap.intern_str("done")?,
+            k_value: heap.intern_str("value")?,
+            k_return: heap.intern_str("return")?,
         };
+        // The well-known symbols (§6.1.5.1†, Table 1), ids 0 to 12 as
+        // `clazel-js-heap`'s symbol contract numbers them (Y1); each
+        // `[[Description]]` is "Symbol." and the name.
+        let mut symbols = Vec::with_capacity(WELL_KNOWN.len());
+        for (id, name) in (0u32..).zip(WELL_KNOWN) {
+            let description = heap.new_str(&format!("Symbol.{name}"))?;
+            symbols.push(heap.alloc(crate::heap::Cell::Symbol(crate::heap::Sym {
+                id: SymbolId(id),
+                description,
+            }))?);
+        }
         // §19.1 Value Properties of the Global Object: `undefined`, `NaN` and
         // `Infinity` are not writable, enumerable or configurable.
         for (name, v) in [
@@ -348,6 +387,7 @@ impl Vm {
             var_names: HashSet::new(),
             natives: Vec::new(),
             bound: Vec::new(),
+            symbols,
             intrinsics: std::array::from_fn(|i| {
                 if i == Intrinsic::ObjectPrototype as usize {
                     object_proto
@@ -796,7 +836,12 @@ impl Vm {
                 let callee = self.region.header(base, HDR_CALLEE)?;
                 let code = self.code_of(callee)?;
                 let dst = match self.func(code)?.code.instrs.get(pc) {
-                    Some(Instr::Call { dst, .. } | Instr::New { dst, .. }) => *dst,
+                    Some(
+                        Instr::Call { dst, .. }
+                        | Instr::New { dst, .. }
+                        | Instr::CallSpread { dst, .. }
+                        | Instr::NewSpread { dst, .. },
+                    ) => *dst,
                     _ => return Err(Abrupt::Internal("return address is not a call op")),
                 };
                 self.region.set_reg(base, dst, v)?;
@@ -844,6 +889,41 @@ impl Vm {
 
     pub(crate) fn strict(&self) -> bool {
         self.codes.get(self.cur).is_some_and(|f| f.code.strict)
+    }
+
+    /// The call of `Call` and `CallSpread`: `f` with `this` `t` and the
+    /// arguments; the result goes to register `dst`. True if a closure's
+    /// frame was entered (its return writes `dst`), false if the call
+    /// finished.
+    fn call_op(&mut self, dst: u32, f: Value, t: Value, vals: Vec<Value>) -> Result<bool, Abrupt> {
+        let (mut f, mut t, mut vals) = (f, t, vals);
+        // §10.4.1.1 [[Call]] of a bound function: the target, with the bound
+        // `this` and the bound arguments first.
+        while let Some(ObjKind::Bound(i)) = self.heap.obj(f).map(|o| o.kind) {
+            let b = self.bound_fn(i)?;
+            f = b.target;
+            t = b.this;
+            let mut all = b.args;
+            all.extend_from_slice(&vals);
+            vals = all;
+        }
+        match self.heap.obj(f).map(|o| o.kind) {
+            Some(ObjKind::Closure { code, .. }) => {
+                self.enter_closure(f, code, t, &vals, Some(self.pc), KIND_PLAIN)?;
+                Ok(true)
+            }
+            Some(ObjKind::Native(i)) => {
+                self.charge()?;
+                let v = self.invoke_native(i, f, t, &vals, Value::UNDEFINED)?;
+                self.w(dst, v)?;
+                Ok(false)
+            }
+            _ => {
+                let t = self.type_of(f);
+                let t = self.string_text(t).unwrap_or_default();
+                Err(self.type_error(&format!("{t} is not a function")))
+            }
+        }
     }
 
     /// Runs one op of the running frame.
@@ -1121,6 +1201,11 @@ impl Vm {
                         .proto = v;
                 }
             }
+            Instr::InstanceOf { dst, a, b } => {
+                let (v, target) = (self.r(a)?, self.r(b)?);
+                let r = self.instance_of(v, target)?;
+                self.w(dst, Value::boolean(r))?;
+            }
             Instr::HasProperty { dst, a, b } => {
                 let (k, o) = (self.r(a)?, self.r(b)?);
                 if !self.heap.is_object(o) {
@@ -1204,8 +1289,8 @@ impl Vm {
                 args,
                 argc,
             } => {
-                let mut f = self.r(callee)?;
-                let mut t = self.r(this)?;
+                let f = self.r(callee)?;
+                let t = self.r(this)?;
                 let mut vals = Vec::with_capacity(usize::try_from(argc).unwrap_or(0));
                 for i in 0..argc {
                     let reg = args
@@ -1213,32 +1298,68 @@ impl Vm {
                         .ok_or(Abrupt::Internal("argument register"))?;
                     vals.push(self.r(reg)?);
                 }
-                // §10.4.1.1 [[Call]] of a bound function: the target, with
-                // the bound `this` and the bound arguments first.
-                while let Some(ObjKind::Bound(i)) = self.heap.obj(f).map(|o| o.kind) {
-                    let b = self.bound_fn(i)?;
-                    f = b.target;
-                    t = b.this;
-                    let mut all = b.args;
-                    all.extend_from_slice(&vals);
-                    vals = all;
+                if self.call_op(dst, f, t, vals)? {
+                    return Ok(Flow::Continue);
                 }
-                match self.heap.obj(f).map(|o| o.kind) {
-                    Some(ObjKind::Closure { code, .. }) => {
-                        self.enter_closure(f, code, t, &vals, Some(self.pc), KIND_PLAIN)?;
-                        return Ok(Flow::Continue);
-                    }
-                    Some(ObjKind::Native(i)) => {
-                        self.charge()?;
-                        let v = self.invoke_native(i, f, t, &vals, Value::UNDEFINED)?;
-                        self.w(dst, v)?;
-                    }
-                    _ => {
-                        let t = self.type_of(f);
-                        let t = self.string_text(t).unwrap_or_default();
-                        return Err(self.type_error(&format!("{t} is not a function")));
-                    }
+            }
+            // `f(...xs)`: the compiler collected the arguments in an array
+            // (§13.3.8.1† ArgumentListEvaluation); then as `Call`.
+            Instr::CallSpread {
+                dst,
+                callee,
+                this,
+                args,
+            } => {
+                let f = self.r(callee)?;
+                let t = self.r(this)?;
+                let arr = self.r(args)?;
+                let vals = self.spread_arguments(arr)?;
+                if self.call_op(dst, f, t, vals)? {
+                    return Ok(Flow::Continue);
                 }
+            }
+            // `new f(...xs)`: EvaluateNew §13.3.5.1.1† steps 5 and 6 with
+            // the arguments of the array.
+            Instr::NewSpread { dst, callee, args } => {
+                let f = self.r(callee)?;
+                let arr = self.r(args)?;
+                let vals = self.spread_arguments(arr)?;
+                match self.construct(f, &vals, Some(self.pc))? {
+                    Some(v) => self.w(dst, v)?,
+                    None => return Ok(Flow::Continue),
+                }
+            }
+            // --- Iteration ---
+            Instr::GetIterator { dst, src } => {
+                let v = self.r(src)?;
+                let rec = self.get_iterator(v)?;
+                self.w(dst, rec)?;
+            }
+            Instr::IterNext { value, done, iter } => {
+                let rec = self.r(iter)?;
+                let step = self.iterator_step_value(rec)?;
+                self.w(done, Value::boolean(step.is_none()))?;
+                self.w(value, step.unwrap_or(Value::UNDEFINED))?;
+            }
+            Instr::IterClose { iter } => {
+                let rec = self.r(iter)?;
+                self.iterator_close(rec)?;
+            }
+            Instr::ThrowIfNotObject { src } => {
+                let v = self.r(src)?;
+                if !self.heap.is_object(v) {
+                    return Err(self.type_error("Iterator result is not an object"));
+                }
+            }
+            Instr::ToObject { dst, src } => {
+                let v = self.r(src)?;
+                let o = self.to_object(v)?;
+                self.w(dst, o)?;
+            }
+            Instr::ForInIterator { dst, src } => {
+                let v = self.r(src)?;
+                let rec = self.for_in_iterator(v)?;
+                self.w(dst, rec)?;
             }
             Instr::New {
                 dst,
@@ -1297,7 +1418,7 @@ impl Vm {
                 enumerable,
             } => {
                 let (o, k, f) = (self.r(obj)?, self.r(key)?, self.r(func)?);
-                let name = self.coerce_string_value(k)?;
+                let name = self.function_name_for_key(k)?;
                 let pk = self.coerce_property_key(k)?;
                 let kn = self.atoms.k_name;
                 // SetFunctionName(func, key), §10.2.9†.
@@ -1328,7 +1449,7 @@ impl Vm {
             }
             Instr::ToPropertyKey { dst, src } => {
                 let v = self.r(src)?;
-                let s = self.coerce_string_value(v)?;
+                let s = self.property_key_value(v)?;
                 self.w(dst, s)?;
             }
             Instr::ToString { dst, src } => {

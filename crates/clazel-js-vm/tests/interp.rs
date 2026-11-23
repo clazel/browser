@@ -384,9 +384,11 @@ fn what_is_not_implemented_is_an_error_not_a_panic() -> Result<(), String> {
             Err(e) => return Err(format!("{src}: {e:?}")),
         }
     }
-    // Spread needs iterators (GetIterator), which are not implemented.
+    // Spread runs the iterator protocol; a bare VM has no
+    // `Array.prototype[@@iterator]` (a built-in), so an array is not
+    // iterable: a TypeError, not a panic.
     let (_, r) = run("var a = [...[1, 2]];")?;
-    assert!(matches!(r, Err(Abrupt::NotYet(_))), "{r:?}");
+    assert!(matches!(r, Err(Abrupt::Throw(_))), "{r:?}");
     Ok(())
 }
 

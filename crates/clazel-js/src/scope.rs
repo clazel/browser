@@ -448,6 +448,7 @@ impl<'s> Scope<'s> {
             Decoded::Bool(_) => ValueKind::Boolean,
             Decoded::Int32(_) | Decoded::Double(_) => ValueKind::Number,
             Decoded::Ref(_) if heap.is_string(v) => ValueKind::String,
+            Decoded::Ref(_) if heap.is_symbol(v) => ValueKind::Symbol,
             Decoded::Ref(_) if heap.is_callable(v) => ValueKind::Function,
             Decoded::Ref(_) if heap.is_object(v) => ValueKind::Object,
             _ => ValueKind::Undefined,
