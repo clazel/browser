@@ -245,18 +245,30 @@ fn an_array_grown_for_ever_is_a_range_error() -> Test {
 }
 
 /// 10^6 nested arrays in source: the parser's depth bound makes it a
-/// `SyntaxError` before anything runs, and with a lower `nesting_depth` the
-/// embedder's limit does the same. Under Miri, 3 000 levels (still past
-/// every bound: the parse tree's height is over 1024).
+/// `SyntaxError` before anything runs.
+///
+/// Ignored under Miri: one parse past the parser's bound of 1 024 nodes takes
+/// Miri two minutes and 2.5 GiB at 1 100 levels, and over ten minutes and
+/// 3 GiB at 3 000, enough to starve a CI runner. The embedder's lower limit,
+/// tested next, does run under Miri.
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "one parse past the depth bound takes minutes and several GiB under Miri"
+)]
 fn deeply_nested_source_is_a_syntax_error() -> Test {
-    let n = if cfg!(miri) { 3_000 } else { 1_000_000 };
+    let n = 1_000_000;
     let (mut rt, realm) = runtime(Limits::recommended())?;
     let page = format!("var a = {}{};", "[".repeat(n), "]".repeat(n));
     let name = rt.scope(|scope| outcome(scope, &realm, &page))?;
     assert_eq!(name.as_deref(), Some("SyntaxError"));
+    Ok(())
+}
 
-    // The embedder's own, lower limit: the height of the parse tree.
+/// With a lower `nesting_depth`, the embedder's limit (the height of the
+/// parse tree) makes nested source a `SyntaxError` too.
+#[test]
+fn the_embedders_nesting_depth_limits_source() -> Test {
     let (mut rt, realm) = runtime(Limits {
         nesting_depth: 64,
         ..Limits::recommended()
