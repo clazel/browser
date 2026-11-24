@@ -1,4 +1,4 @@
-//! The units.extend(key_text.units());nterpreter loop (phase-7.md item 7.8, first slice).
+//! The interpreter loop (phase-7.md item 7.8, first slice).
 //!
 //! [`Vm`] owns the frame region ([`crate::frame`]), the heap
 //! ([`crate::heap`]) and the loaded code. [`Vm::run`] and [`Vm::call`] push a
@@ -205,6 +205,21 @@ pub enum Intrinsic {
     WeakMapPrototype,
     /// `%WeakSet.prototype%` (§24.4.3†).
     WeakSetPrototype,
+    /// `%GeneratorFunction.prototype%` (§27.3.3†): the [[Prototype]] of
+    /// generator functions.
+    GeneratorFunctionPrototype,
+    /// `%GeneratorPrototype%`, `%GeneratorFunction.prototype.prototype%`
+    /// (§27.5.1†): the prototype of a generator object whose function's
+    /// `prototype` is not an Object.
+    GeneratorPrototype,
+    /// `%AsyncFunction.prototype%` (§27.7.3†).
+    AsyncFunctionPrototype,
+    /// `%AsyncGeneratorFunction.prototype%` (§27.4.3†).
+    AsyncGeneratorFunctionPrototype,
+    /// `%AsyncGeneratorPrototype%` (§27.6.1†).
+    AsyncGeneratorPrototype,
+    /// `%AsyncFromSyncIteratorPrototype%` (§27.1.6.2†).
+    AsyncFromSyncIteratorPrototype,
 }
 
 /// The most natives that may run one inside another, until
@@ -230,7 +245,7 @@ pub const DEFAULT_NESTING_DEPTH: u32 = 512;
 pub const DEFAULT_REGEXP_BACKTRACK: u64 = 1 << 20;
 
 /// How many [`Intrinsic`]s there are.
-const INTRINSICS: usize = 31;
+const INTRINSICS: usize = 37;
 
 /// The hint of ToPrimitive (§7.1.1†).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -294,6 +309,17 @@ pub(crate) struct LoadedFn {
 pub struct Script {
     /// The index of the script's own function in the VM's code table.
     pub main: u32,
+}
+
+/// How an exception's unwinding ended (see `Vm::unwind`).
+enum Unwound {
+    /// A handler caught it, or a suspendable frame settled its object with it
+    /// and returned to its caller.
+    Caught,
+    /// It left the entry frame.
+    Escaped,
+    /// A suspendable entry frame settled its object with it and returned.
+    Done(Value),
 }
 
 /// What the loop does after an op.
@@ -833,7 +859,7 @@ impl Vm {
         self.codes.get(code).ok_or(Abrupt::Internal("code index"))
     }
 
-    fn set_frame(&mut self, fp: usize, pc: usize, cur: usize) -> Result<(), Abrupt> {
+    pub(crate) fn set_frame(&mut self, fp: usize, pc: usize, cur: usize) -> Result<(), Abrupt> {
         let f = self.func(cur)?;
         let size =
             frame_size(f.code.nparams, f.code.nregs).ok_or(Abrupt::Internal("frame size"))?;
@@ -879,6 +905,10 @@ impl Vm {
             // Step 6.b: ToObject(thisArgument), the wrapper object.
             self.to_object(this)?
         };
+        // A generator's, async function's or async generator's frame is
+        // suspendable (`crate::suspend`); an async function's starts with its
+        // promise (AsyncFunctionStart §27.7.5.1†).
+        let (frame_kind, suspendable) = self.suspendable_entry(code, frame_kind)?;
         self.charge()?;
         let size = frame_size(nparams, nregs).ok_or(Abrupt::Internal("frame size"))?;
         let ret_value = match ret {
@@ -908,6 +938,7 @@ impl Vm {
             self.region.set_reg(base, r, *a)?;
         }
         self.set_frame(base, 0, code)?;
+        self.suspendable_entered(base, suspendable);
         if let Some(f) = self.codes.get_mut(code) {
             f.entries = f.entries.saturating_add(1);
         }
@@ -960,19 +991,21 @@ impl Vm {
             match self.report_heap_limit(stepped) {
                 Ok(Flow::Continue) => {}
                 Ok(Flow::Done(v)) => return Ok(v),
-                Err(Abrupt::Throw(v)) => {
-                    if !self.unwind(v)? {
-                        return Err(Abrupt::Throw(v));
-                    }
-                }
+                Err(Abrupt::Throw(v)) => match self.unwind(v)? {
+                    Unwound::Caught => {}
+                    Unwound::Escaped => return Err(Abrupt::Throw(v)),
+                    Unwound::Done(r) => return Ok(r),
+                },
                 Err(e) => return Err(e),
             }
         }
     }
 
-    /// Unwinds a thrown value: true if a handler caught it (the running frame
-    /// and `pc` are now the handler's), false if it left the entry frame.
-    fn unwind(&mut self, exc: Value) -> Result<bool, Abrupt> {
+    /// Unwinds a thrown value: caught by a handler (the running frame and `pc`
+    /// are now the handler's), or by an async function's or async generator's
+    /// frame, which settles its promise and returns (`crate::suspend`), or
+    /// left the entry frame.
+    fn unwind(&mut self, exc: Value) -> Result<Unwound, Abrupt> {
         loop {
             let pc = u32::try_from(self.pc).map_err(|_| Abrupt::Internal("pc"))?;
             let target = self
@@ -986,11 +1019,16 @@ impl Vm {
                 self.exception = exc;
                 let target = usize::try_from(t).map_err(|_| Abrupt::Internal("pc"))?;
                 self.pc = target;
-                return Ok(true);
+                return Ok(Unwound::Caught);
+            }
+            match self.suspendable_throw(exc)? {
+                Some(Flow::Continue) => return Ok(Unwound::Caught),
+                Some(Flow::Done(v)) => return Ok(Unwound::Done(v)),
+                None => {}
             }
             match self.pop_frame()? {
                 Some(()) => {}
-                None => return Ok(false),
+                None => return Ok(Unwound::Escaped),
             }
         }
     }
@@ -1020,10 +1058,15 @@ impl Vm {
             KIND_PLAIN => v,
             KIND_CONSTRUCT if self.heap.is_object(v) => v,
             KIND_CONSTRUCT => self.region.header(self.fp, crate::frame::HDR_THIS)?,
-            _ => {
-                return Err(Abrupt::NotYet("return from a suspendable frame".into()));
-            }
+            _ => return self.suspendable_return(v),
         };
+        self.return_to_caller(v)
+    }
+
+    /// Leaves the running frame with `v`: to the caller's call op, whose
+    /// destination register receives `v`, or out of the loop for a frame with
+    /// no caller in the region.
+    pub(crate) fn return_to_caller(&mut self, v: Value) -> Result<Flow, Abrupt> {
         let ret = unpack_ret(self.region.header(self.fp, HDR_RET)?)
             .ok_or(Abrupt::Internal("return address"))?;
         match ret {
@@ -1857,7 +1900,14 @@ impl Vm {
                 let v = self.create_rest_array(from)?;
                 self.w(dst, v)?;
             }
-            other => return Err(Abrupt::NotYet(op_name(&other))),
+            // Generators, async functions and the iteration ops of `yield*`
+            // and `for await` (`crate::suspend`).
+            other => {
+                return match self.step_suspend(&other)? {
+                    Some(flow) => Ok(flow),
+                    None => Err(Abrupt::NotYet(op_name(&other))),
+                };
+            }
         }
         self.pc = next;
         Ok(Flow::Continue)

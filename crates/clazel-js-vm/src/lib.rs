@@ -35,7 +35,10 @@
 //! - [`host`]: objects with internal slots, natives with captured values and
 //!   the job queue, for the built-ins that need them (`Promise`, `RegExp`);
 //! - [`iter`]: Symbols, the iterator protocol behind the iteration ops,
-//!   `for`-`in` and the spread calls.
+//!   `for`-`in` and the spread calls;
+//! - [`suspend`]: generators, async functions and async generators, whose
+//!   frames are copied to a heap object on suspend and back on resume, and
+//!   the iteration ops of `yield*` and `for await`.
 //!
 //! The crate depends on no browser crate, as phase-7.md's "The engine as a
 //! library" requires: `clazel-js-lexer` and `clazel-js-syntax`, and the
@@ -63,6 +66,7 @@ pub mod ops;
 pub mod props;
 pub mod scope;
 pub mod spec;
+pub mod suspend;
 
 #[cfg(kani)]
 mod proofs;
