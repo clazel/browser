@@ -31,6 +31,8 @@
 //! (so an inline cache that cached it cannot hit another shape). [`ROOT`] is
 //! never freed.
 
+pub mod contract;
+
 use crate::gc::contract::ShapeGraph;
 use crate::string::Key;
 use std::collections::HashMap;
