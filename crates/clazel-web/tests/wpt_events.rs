@@ -359,6 +359,10 @@ fn run_page(name: &str, source: &str) -> Result<Verdict> {
 
 /// The vendored pages that run, under the stand-in harness.
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "each page builds every generated WebIDL interface: over 1 000 s of Miri time even at a stride of 32; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn wpt_dom_events() -> Result<()> {
     let mut pass = 0usize;
     let mut subtests = 0usize;

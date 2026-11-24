@@ -217,6 +217,10 @@ fn log_events(target: &str, types: &[&str]) -> String {
 // ---- Dispatch ---------------------------------------------------------------
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn a_click_is_move_down_up_click_and_bubbles() -> Test {
     // UI Events §5.2.4†: the order of a click's events; DOM §2.9† "dispatch":
     // capture, target, bubble.
@@ -233,6 +237,10 @@ fn a_click_is_move_down_up_click_and_bubbles() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn the_click_event_has_its_members() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><p id=a>x</p><script>var r = '';\
@@ -263,6 +271,10 @@ fn the_click_event_has_its_members() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn a_text_node_hit_is_its_element() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><p id=a>text</p><script>var r = '';\
@@ -280,6 +292,10 @@ fn a_text_node_hit_is_its_element() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn capture_stop_propagation_and_stop_immediate_propagation() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><div id=a><p id=b>x</p></div><script>var r = '';\
@@ -297,6 +313,10 @@ fn capture_stop_propagation_and_stop_immediate_propagation() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn stop_propagation_at_the_target_lets_its_other_listeners_run() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><div id=a><p id=b>x</p></div><script>var r = '';\
@@ -311,6 +331,10 @@ fn stop_propagation_at_the_target_lets_its_other_listeners_run() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn a_passive_listener_cannot_cancel_and_a_wheel_listener_on_the_document_is_passive() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><p id=a>x</p><script>var r = '';\
@@ -333,6 +357,10 @@ fn a_passive_listener_cannot_cancel_and_a_wheel_listener_on_the_document_is_pass
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn a_wheel_listener_on_an_element_can_cancel_the_scroll() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><p id=a>x</p><script>var r = '';\
@@ -351,6 +379,10 @@ fn a_wheel_listener_on_an_element_can_cancel_the_scroll() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn a_scroll_is_an_event_at_the_document_that_bubbles_to_the_window() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><script>var r = '';\
@@ -365,6 +397,10 @@ fn a_scroll_is_an_event_at_the_document_that_bubbles_to_the_window() -> Test {
 // ---- Default actions: links ----------------------------------------------------
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn clicking_a_link_navigates_unless_canceled() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><a id=a href='/next?x=1#f'><b id=in>go</b></a>\
@@ -382,6 +418,10 @@ fn clicking_a_link_navigates_unless_canceled() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn a_javascript_link_goes_to_the_hooks_for_the_page_to_run() -> Test {
     let mut h = Harness::new("<!DOCTYPE html><body><a id=a href='javascript:void 0'>x</a>")?;
     h.click_on("a")?;
@@ -390,6 +430,10 @@ fn a_javascript_link_goes_to_the_hooks_for_the_page_to_run() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn a_synthetic_click_event_follows_a_link_too() -> Test {
     // DOM §2.9†: the activation behavior is not for trusted events only.
     let mut h = Harness::new(
@@ -410,6 +454,10 @@ fn a_synthetic_click_event_follows_a_link_too() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn the_click_method_clicks_an_element() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><a id=a href=x>l</a><button id=b disabled>d</button><script>var r = '';\
@@ -426,6 +474,10 @@ fn the_click_method_clicks_an_element() -> Test {
 // ---- Checkboxes and radios -----------------------------------------------------
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn a_checkbox_toggles_and_fires_input_and_change() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><form><input id=c type=checkbox name=c value=on></form><script>var r = '';\
@@ -445,6 +497,10 @@ fn a_checkbox_toggles_and_fires_input_and_change() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn a_canceled_checkbox_click_is_undone() -> Test {
     // HTML §4.10.5.1.15†: legacy-canceled-activation behavior restores the
     // checkedness; no input or change event.
@@ -463,6 +519,10 @@ fn a_canceled_checkbox_click_is_undone() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn a_radio_button_unchecks_the_others_of_its_group() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><form><input id=a type=radio name=g checked>\
@@ -479,6 +539,10 @@ fn a_radio_button_unchecks_the_others_of_its_group() -> Test {
 // ---- Forms --------------------------------------------------------------------
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn a_submit_button_submits_a_get_form_through_the_proven_algorithm() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><form id=f action='/search?old=1#frag'>\
@@ -497,6 +561,10 @@ fn a_submit_button_submits_a_get_form_through_the_proven_algorithm() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn a_canceled_submit_event_stops_the_submission() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><form id=f action=/x><button id=go>Go</button></form><script>\
@@ -508,6 +576,10 @@ fn a_canceled_submit_event_stops_the_submission() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn a_post_form_sends_its_body() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><form id=f method=post action=/p>\
@@ -545,6 +617,10 @@ fn a_post_form_sends_its_body() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn a_disabled_button_gets_no_click_and_submits_nothing() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><form action=/x><button id=go disabled>Go</button></form><script>var r = '';\
@@ -558,6 +634,10 @@ fn a_disabled_button_gets_no_click_and_submits_nothing() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn a_reset_button_resets_the_controls() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><form id=f><input id=t value=start><input id=c type=checkbox>\
@@ -578,6 +658,10 @@ fn a_reset_button_resets_the_controls() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn a_label_clicks_its_control() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><label id=l for=c><span id=s>text</span></label><input id=c type=checkbox>",
@@ -591,6 +675,10 @@ fn a_label_clicks_its_control() -> Test {
 // ---- Focus ----------------------------------------------------------------------
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn a_click_moves_focus_with_blur_and_focus_events_in_order() -> Test {
     let mut h = Harness::new(&format!(
         "<!DOCTYPE html><body><input id=a><input id=b><p id=p>x</p><script>var r = '';{}{}</script>",
@@ -620,6 +708,10 @@ fn a_click_moves_focus_with_blur_and_focus_events_in_order() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn focus_events_are_focus_events_with_a_related_target() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><input id=a><input id=b><script>var r = '';\
@@ -633,6 +725,10 @@ fn focus_events_are_focus_events_with_a_related_target() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn the_focus_and_blur_methods() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><input id=a><div id=d>x</div><div id=t tabindex=-1>y</div><script>var r = '';\
@@ -652,6 +748,10 @@ fn the_focus_and_blur_methods() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn a_canceled_mousedown_does_not_move_focus() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><input id=a><script>\
@@ -665,6 +765,10 @@ fn a_canceled_mousedown_does_not_move_focus() -> Test {
 // ---- Keys -----------------------------------------------------------------------
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn typing_in_a_text_input_fires_the_key_and_input_events_and_changes_the_value() -> Test {
     let mut h = Harness::new(&format!(
         "<!DOCTYPE html><body><input id=a value=ab><script>var r = '';{}\
@@ -701,6 +805,10 @@ fn typing_in_a_text_input_fires_the_key_and_input_events_and_changes_the_value()
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn a_canceled_keydown_types_nothing() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><input id=a><script>var r = '';\
@@ -716,6 +824,10 @@ fn a_canceled_keydown_types_nothing() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn a_canceled_beforeinput_changes_nothing() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><input id=a><script>var r = '';\
@@ -729,6 +841,10 @@ fn a_canceled_beforeinput_changes_nothing() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn keys_go_to_the_body_without_focus() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><script>var r = '';\
@@ -740,6 +856,10 @@ fn keys_go_to_the_body_without_focus() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn tab_moves_focus_in_sequential_navigation_order() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><input id=a><input id=b tabindex=2><input id=c tabindex=1>\
@@ -766,6 +886,10 @@ fn tab_moves_focus_in_sequential_navigation_order() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn enter_on_a_focused_link_follows_it_and_in_a_text_input_submits_the_form() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><a id=l href=/go>l</a>\
@@ -787,6 +911,10 @@ fn enter_on_a_focused_link_follows_it_and_in_a_text_input_submits_the_form() -> 
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn implicit_submission_without_a_button_needs_at_most_one_text_field() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><form action=/one><input id=a name=a></form>\
@@ -802,6 +930,10 @@ fn implicit_submission_without_a_button_needs_at_most_one_text_field() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn space_clicks_a_focused_button_on_keyup() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><button id=b type=button>b</button><script>var r = '';\
@@ -817,6 +949,10 @@ fn space_clicks_a_focused_button_on_keyup() -> Test {
 // ---- Event handlers -------------------------------------------------------------
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn event_handler_content_attributes_run_with_event_and_this() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><p id=a onclick=\"r = this.id + ':' + event.type\">x</p><script>var r = '';</script>",
@@ -827,6 +963,10 @@ fn event_handler_content_attributes_run_with_event_and_this() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn the_idl_attribute_reads_the_compiled_attribute_and_the_setter_replaces_it() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><p id=a onclick=\"r += 'attr '\">x</p><div id=none>y</div><script>var r = '';\
@@ -849,6 +989,10 @@ fn the_idl_attribute_reads_the_compiled_attribute_and_the_setter_replaces_it() -
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn a_handler_has_the_place_it_was_first_set_among_the_listeners() -> Test {
     // HTML §8.1.8.1†: activating adds the listener once; setting again
     // changes the value and not the place.
@@ -867,6 +1011,10 @@ fn a_handler_has_the_place_it_was_first_set_among_the_listeners() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn a_handler_set_by_script_is_placed_where_it_was_set() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><p id=a>x</p><script>var r = '';\
@@ -881,6 +1029,10 @@ fn a_handler_set_by_script_is_placed_where_it_was_set() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn returning_false_cancels_the_event() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><a id=a href=/x onclick=\"return false\">x</a><a id=b href=/y onclick=\"return true\">y</a>",
@@ -893,6 +1045,10 @@ fn returning_false_cancels_the_event() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn a_handler_attribute_changed_by_script_is_seen() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><p id=a onclick=\"r += '1'\">x</p><script>var r = '';\
@@ -909,6 +1065,10 @@ fn a_handler_attribute_changed_by_script_is_seen() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn a_syntax_error_in_a_handler_attribute_is_reported_and_the_handler_is_null() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><p id=a onclick=\"if (\">x</p><p id=b onclick=\"}); r = 'injected'; (function () {\">y</p><script>var r = '';</script>",
@@ -929,6 +1089,10 @@ fn a_syntax_error_in_a_handler_attribute_is_reported_and_the_handler_is_null() -
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn a_handler_that_throws_is_reported_and_dispatch_goes_on() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><p id=a onclick=\"throw new Error('boom')\">x</p><script>var r = '';\
@@ -941,6 +1105,10 @@ fn a_handler_that_throws_is_reported_and_dispatch_goes_on() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn body_event_handler_attributes_are_the_windows() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body onload=\"r += 'load '\" onclick=\"r += 'bodyclick '\" onscroll=\"r += 'scroll '\">\
@@ -957,6 +1125,10 @@ fn body_event_handler_attributes_are_the_windows() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn event_handler_idl_attributes_exist_on_window_document_and_elements() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><p id=a>x</p><script>var r = '';\
@@ -981,6 +1153,10 @@ fn event_handler_idl_attributes_exist_on_window_document_and_elements() -> Test 
 // ---- User activation ------------------------------------------------------------
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn user_activation_follows_html_6_4() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><p id=a>x</p><script>var r = '';\
@@ -1019,6 +1195,10 @@ fn user_activation_follows_html_6_4() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn a_key_is_an_activation_triggering_input_event_except_escape() -> Test {
     let mut h =
         Harness::new("<!DOCTYPE html><body><script>var ua = navigator.userActivation;</script>")?;
@@ -1030,6 +1210,10 @@ fn a_key_is_an_activation_triggering_input_event_except_escape() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn script_made_events_do_not_notify_user_activation() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><p id=a>x</p><script>\
@@ -1043,6 +1227,10 @@ fn script_made_events_do_not_notify_user_activation() -> Test {
 // ---- Event constructors ---------------------------------------------------------
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn the_ui_event_constructors_and_their_dictionaries() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><script>\
@@ -1066,6 +1254,10 @@ fn the_ui_event_constructors_and_their_dictionaries() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn init_methods_set_the_members() -> Test {
     let mut h = Harness::new(
         "<!DOCTYPE html><body><script>\

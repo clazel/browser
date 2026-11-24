@@ -62,7 +62,23 @@ fn calls(rt: &mut Runtime) -> clazel_js::Result<Vec<HookCall>> {
 
 const DOC: &str = "<!DOCTYPE html><html><head><title> A  page </title></head><body><div id=a class='x y'><p>one</p><p>two</p></div><span id=b>t</span><!--c--></body></html>";
 
+/// The one binding-page test that runs under Miri (the others are ignored
+/// there, each costing about 290 s of Miri time for installing the
+/// generated interfaces): a page with every interface installed runs a
+/// one-line script.
 #[test]
+fn a_page_with_the_bindings_runs_a_script() -> Test {
+    let (mut rt, realm) = page(DOC)?;
+    let r = run(&mut rt, &realm, "var r = document.body.firstChild.id;")?;
+    assert_eq!(r, "a");
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn the_document_and_its_tree() -> Test {
     let (mut rt, realm) = page(DOC)?;
     let r = run(
@@ -84,6 +100,10 @@ fn the_document_and_its_tree() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn one_wrapper_per_node() -> Test {
     // A node's wrapper is kept in clazel-dom's wrapper slot: the same node
     // gives the same object, with its expandos, however it is reached.
@@ -101,6 +121,10 @@ fn one_wrapper_per_node() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn tree_mutation() -> Test {
     // WPT dom/nodes/Node-appendChild.html, Node-insertBefore.html,
     // Node-removeChild.html, Node-replaceChild.html, ChildNode-*.html.
@@ -136,6 +160,10 @@ fn tree_mutation() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn text_content_node_value_and_character_data() -> Test {
     // WPT dom/nodes/Node-textContent.html, CharacterData-*.html.
     let (mut rt, realm) = page(DOC)?;
@@ -163,6 +191,10 @@ fn text_content_node_value_and_character_data() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn elements_and_attributes() -> Test {
     // WPT dom/nodes/attributes.html, Element-classlist.html, Element-*.html.
     let (mut rt, realm) = page(DOC)?;
@@ -194,6 +226,10 @@ fn elements_and_attributes() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn queries_and_collections() -> Test {
     // WPT dom/nodes/ParentNode-querySelector-All.html,
     // Element-getElementsByClassName.html, getElementsByClassName-*.html,
@@ -223,6 +259,10 @@ fn queries_and_collections() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn inner_and_outer_html_and_clone() -> Test {
     let (mut rt, realm) = page(DOC)?;
     let r = run(
@@ -242,6 +282,10 @@ fn inner_and_outer_html_and_clone() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn events_dispatch_through_the_tree() -> Test {
     // WPT dom/events/Event-dispatch-bubbles-true.html,
     // Event-dispatch-order.html, EventTarget-dispatchEvent.html,
@@ -291,6 +335,10 @@ fn events_dispatch_through_the_tree() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn abort_signals_remove_listeners() -> Test {
     // WPT dom/events/AddEventListenerOptions-signal.any.js, dom/abort/*.
     let (mut rt, realm) = page(DOC)?;
@@ -314,6 +362,10 @@ fn abort_signals_remove_listeners() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn window_location_history_navigator_console() -> Test {
     let (mut rt, realm) = page(DOC)?;
     let r = run(
@@ -347,6 +399,10 @@ fn window_location_history_navigator_console() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn navigation_goes_to_the_hook() -> Test {
     // HTML §7.2.4 Location setters, assign and replace; §7.4 pushState and
     // replaceState.
@@ -408,6 +464,10 @@ fn navigation_goes_to_the_hook() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn idl_shape_of_the_dom_interfaces() -> Test {
     // What WPT's idlharness.js checks of an interface (dom/idlharness.window.js,
     // html/dom/idlharness.https.html): the interface object, its prototype
@@ -439,6 +499,10 @@ fn idl_shape_of_the_dom_interfaces() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn unimplemented_members_say_so() -> Test {
     let (mut rt, realm) = page(DOC)?;
     let r = run(
