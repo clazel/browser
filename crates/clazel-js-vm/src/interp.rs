@@ -220,6 +220,8 @@ pub enum Intrinsic {
     AsyncGeneratorPrototype,
     /// `%AsyncFromSyncIteratorPrototype%` (§27.1.6.2†).
     AsyncFromSyncIteratorPrototype,
+    /// `%Date.prototype%` (§21.4.4†).
+    DatePrototype,
 }
 
 /// The most natives that may run one inside another, until
@@ -245,7 +247,30 @@ pub const DEFAULT_NESTING_DEPTH: u32 = 512;
 pub const DEFAULT_REGEXP_BACKTRACK: u64 = 1 << 20;
 
 /// How many [`Intrinsic`]s there are.
-const INTRINSICS: usize = 37;
+const INTRINSICS: usize = 38;
+
+/// What a built-in asks the embedder about the world ([`Vm::world`]): the two
+/// host-defined answers `Date` needs, which `clazel-js` forwards to its
+/// `Host` (`now_ms` and `local_tza`). The built-ins never read the clock or
+/// the time zone themselves.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum World {
+    /// The current time in milliseconds since the Unix epoch.
+    NowMs,
+    /// ECMA-262's `LocalTZA ( t, isUTC )` (§21.4.1.26†): the local time zone's
+    /// offset from UTC in milliseconds at `time_ms`, which is a UTC time if
+    /// `is_utc` and a local time otherwise.
+    LocalTza {
+        /// The time to convert.
+        time_ms: f64,
+        /// Whether `time_ms` is a UTC time.
+        is_utc: bool,
+    },
+}
+
+/// The embedder's answer to a [`World`] question, installed with
+/// [`Vm::set_world_hook`].
+pub type WorldHook = fn(&mut Vm, World) -> f64;
 
 /// The hint of ToPrimitive (§7.1.1†).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -412,6 +437,9 @@ pub struct Vm {
     pub(crate) atoms: Atoms,
     /// The embedder's state (`clazel-js`'s runtime), see [`Vm::set_embedder`].
     pub(crate) embedder: Option<Box<dyn Any + Send>>,
+    /// The embedder's answers about the clock and the time zone, see
+    /// [`Vm::set_world_hook`].
+    pub(crate) world_hook: Option<WorldHook>,
     /// Host objects, the slots of native functions and the job queue
     /// ([`crate::host`]).
     pub(crate) host: crate::host::HostState,
@@ -504,6 +532,7 @@ impl Vm {
             regexp_backtrack_limit: DEFAULT_REGEXP_BACKTRACK,
             atoms,
             embedder: None,
+            world_hook: None,
             host: crate::host::HostState::default(),
         })
     }
@@ -523,6 +552,22 @@ impl Vm {
     /// looks at it. Dropping the VM drops it.
     pub fn set_embedder<T: Any + Send>(&mut self, data: T) {
         self.embedder = Some(Box::new(data));
+    }
+
+    /// Installs the embedder's answers to [`World`] questions (the clock and
+    /// the time zone, for `Date`).
+    pub fn set_world_hook(&mut self, hook: WorldHook) {
+        self.world_hook = Some(hook);
+    }
+
+    /// Asks the embedder about the world. A VM without a hook has no clock
+    /// and no time zone: the time is `0` (the epoch) and the offset is `0`
+    /// (UTC), so `Date` still works and is deterministic.
+    pub fn world(&mut self, question: World) -> f64 {
+        match self.world_hook {
+            Some(hook) => hook(self, question),
+            None => 0.0,
+        }
     }
 
     /// The embedder's state, if it is a `T`.
