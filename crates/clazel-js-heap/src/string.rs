@@ -17,7 +17,7 @@
 //! array indices) are a later slice.
 
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::hash::{BuildHasher, RandomState};
 
 /// The longest string, in code units. The standard allows 2^53 - 1; an
 /// engine may refuse longer (and every engine does). 2^30 - 1 units keeps
@@ -55,11 +55,18 @@ impl JsString {
         if units.len() > MAX_LENGTH {
             return Err(TooLong);
         }
-        let narrow: Option<Vec<u8>> = units.iter().map(|&u| u8::try_from(u).ok()).collect();
-        Ok(Self(match narrow {
-            Some(bytes) => Repr::Latin1(bytes.into_boxed_slice()),
-            None => Repr::Utf16(units.into()),
-        }))
+        if units.iter().all(|&u| u < 256) {
+            // Every unit is under 256: its low byte is its value.
+            let bytes: Box<[u8]> = units
+                .iter()
+                .map(|&u| {
+                    let [low, _] = u.to_le_bytes();
+                    low
+                })
+                .collect();
+            return Ok(Self(Repr::Latin1(bytes)));
+        }
+        Ok(Self(Repr::Utf16(units.into())))
     }
 
     /// From Latin-1 bytes: each byte is the code unit of that value.
@@ -78,6 +85,11 @@ impl JsString {
     /// # Errors
     /// [`TooLong`] past [`MAX_LENGTH`] units.
     pub fn from_rust_str(s: &str) -> Result<Self, TooLong> {
+        // ASCII (every name the engine and the bindings intern) is its own
+        // Latin-1 encoding, one byte per unit, with no UTF-16 detour.
+        if s.is_ascii() {
+            return Self::from_latin1(s.as_bytes());
+        }
         let units: Vec<u16> = s.encode_utf16().collect();
         Self::from_units(&units)
     }
@@ -181,13 +193,29 @@ pub struct Key(pub u32);
 /// reused** (GC13): a freed key resolves to nothing from then on, and
 /// interning its string again makes a new key, so a stale key is a defined
 /// miss, not another property. The table keeps a tombstone per freed key.
+///
+/// The strings are stored once, by key, with their hashes. The search
+/// table is open addressing with linear probing over key ids, at most half
+/// full, so a search ends at an empty slot; growing it and a sweep rebuild it
+/// from the stored hashes, never hashing a string twice. The hash is std's
+/// keyed SipHash (`RandomState`), so a page cannot choose names that collide.
 #[derive(Debug, Default)]
 pub struct Interner {
-    keys: HashMap<JsString, Key>,
-    /// Indexed by key; `None` once freed.
-    strings: Vec<Option<JsString>>,
+    /// Indexed by key: the string and its hash; `None` once freed.
+    strings: Vec<Option<(JsString, u64)>>,
+    /// The search table: [`EMPTY`] or a live key's id. Its length is zero or
+    /// a power of two, and at most half of it is in use.
+    table: Vec<u32>,
+    hasher: RandomState,
     live: usize,
 }
+
+/// An unused slot of the interner's search table (never a key id: ids stop
+/// below it).
+const EMPTY: u32 = u32::MAX;
+
+/// The search table's length for the first key.
+const FIRST_TABLE: usize = 64;
 
 impl Interner {
     /// An empty table.
@@ -196,26 +224,96 @@ impl Interner {
         Self::default()
     }
 
+    /// The first slot to probe for `hash` in a table of `len` slots (a power
+    /// of two), and the mask that wraps a probe.
+    fn start(hash: u64, len: usize) -> (usize, usize) {
+        let mask = len.saturating_sub(1);
+        // Only the low bits are used; the truncation is the point.
+        let low = usize::try_from(hash & u64::from(u32::MAX)).unwrap_or(0);
+        (low & mask, mask)
+    }
+
+    /// The search-table slot holding `s` (hash `hash`), or the empty slot
+    /// where it would go. `None` only for an empty table.
+    fn probe(&self, s: &JsString, hash: u64) -> Option<(usize, Option<Key>)> {
+        let (mut at, mask) = Self::start(hash, self.table.len());
+        // The table is at most half full, so an empty slot comes within
+        // `len` steps; the bound only makes that visible.
+        for _ in 0..self.table.len() {
+            let id = *self.table.get(at)?;
+            if id == EMPTY {
+                return Some((at, None));
+            }
+            let hit = usize::try_from(id)
+                .ok()
+                .and_then(|i| self.strings.get(i))
+                .and_then(Option::as_ref)
+                .is_some_and(|(t, h)| *h == hash && t == s);
+            if hit {
+                return Some((at, Some(Key(id))));
+            }
+            at = at.wrapping_add(1) & mask;
+        }
+        None
+    }
+
+    /// Rebuilds the search table at `len` slots (a power of two, more than
+    /// twice the live keys) from the stored hashes.
+    fn rebuild(&mut self, len: usize) {
+        let mut table = vec![EMPTY; len];
+        for (id, entry) in self.strings.iter().enumerate() {
+            let (Some((_, hash)), Ok(id)) = (entry, u32::try_from(id)) else {
+                continue;
+            };
+            let (mut at, mask) = Self::start(*hash, len);
+            while let Some(slot) = table.get_mut(at) {
+                if *slot == EMPTY {
+                    *slot = id;
+                    break;
+                }
+                at = at.wrapping_add(1) & mask;
+            }
+        }
+        self.table = table;
+    }
+
     /// The key for `s`, adding it if it is new. Equal strings, whatever
     /// their origin, get one key (while it is live).
     ///
     /// # Errors
     /// [`TooLong`] if `u32::MAX` keys have been issued.
     pub fn intern(&mut self, s: &JsString) -> Result<Key, TooLong> {
-        if let Some(&k) = self.keys.get(s) {
+        let hash = self.hasher.hash_one(s);
+        if let Some((_, Some(k))) = self.probe(s, hash) {
             return Ok(k);
         }
-        let key = Key(u32::try_from(self.strings.len()).map_err(|_| TooLong)?);
-        self.keys.insert(s.clone(), key);
-        self.strings.push(Some(s.clone()));
+        let id = u32::try_from(self.strings.len()).map_err(|_| TooLong)?;
+        if id == EMPTY {
+            return Err(TooLong);
+        }
+        // Keep the table at most half full after this key.
+        let need = self.live.saturating_add(1).saturating_mul(2);
+        if self.table.len() < need {
+            let len = need.checked_next_power_of_two().ok_or(TooLong)?;
+            self.rebuild(len.max(FIRST_TABLE));
+        }
+        let Some((at, None)) = self.probe(s, hash) else {
+            return Err(TooLong);
+        };
+        let slot = self.table.get_mut(at).ok_or(TooLong)?;
+        *slot = id;
+        self.strings.push(Some((s.clone(), hash)));
         self.live = self.live.saturating_add(1);
-        Ok(key)
+        Ok(Key(id))
     }
 
     /// The key for `s` if it was interned and is live, without adding it.
     #[must_use]
     pub fn find(&self, s: &JsString) -> Option<Key> {
-        self.keys.get(s).copied()
+        if self.table.is_empty() {
+            return None;
+        }
+        self.probe(s, self.hasher.hash_one(s))?.1
     }
 
     /// The string a live key stands for.
@@ -225,6 +323,7 @@ impl Interner {
             .ok()
             .and_then(|i| self.strings.get(i))
             .and_then(Option::as_ref)
+            .map(|(s, _)| s)
     }
 
     /// The number of live keys.
@@ -253,13 +352,15 @@ impl Interner {
         let mut freed = 0usize;
         for (i, slot) in self.strings.iter_mut().enumerate() {
             if slot.is_some() && !keep.get(i).copied().unwrap_or(false) {
-                if let Some(s) = slot.take() {
-                    self.keys.remove(&s);
-                }
+                *slot = None;
                 freed = freed.saturating_add(1);
             }
         }
         self.live = self.live.saturating_sub(freed);
+        if freed > 0 {
+            // Freed ids leave the search table; its length stays.
+            self.rebuild(self.table.len());
+        }
         freed
     }
 }
@@ -384,6 +485,34 @@ mod tests {
         // A wide key and a Latin-1 key with the same low bytes differ.
         let w = t.intern(&s("\u{166}oo")?)?;
         assert_ne!(w, a);
+        Ok(())
+    }
+
+    #[test]
+    fn the_search_table_grows_and_sweeps_keep_every_live_key() -> Result<(), TooLong> {
+        let n: u32 = if cfg!(miri) { 150 } else { 3000 };
+        let mut t = Interner::new();
+        let name = |i: u32| s(&format!("k{i}"));
+        for i in 0..n {
+            assert_eq!(t.intern(&name(i)?)?, Key(i));
+        }
+        for i in 0..n {
+            assert_eq!(t.find(&name(i)?), Some(Key(i)));
+            assert_eq!(t.intern(&name(i)?)?, Key(i));
+            assert_eq!(t.resolve(Key(i)), Some(&name(i)?));
+        }
+        // Free the odd keys: the even ones stay found, the odd ones are
+        // gone, and interning an odd one again makes a new key.
+        let keep: Vec<bool> = (0..n).map(|i| i % 2 == 0).collect();
+        assert_eq!(t.sweep(&keep), usize::try_from(n / 2).unwrap_or(0));
+        for i in 0..n {
+            let found = t.find(&name(i)?);
+            assert_eq!(found, (i % 2 == 0).then_some(Key(i)));
+        }
+        assert_eq!(t.intern(&name(1)?)?, Key(n));
+        assert_eq!(t.find(&name(1)?), Some(Key(n)));
+        assert_eq!(t.find(&s("absent")?), None);
+        assert_eq!(Interner::new().find(&s("absent")?), None);
         Ok(())
     }
 
