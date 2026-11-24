@@ -137,20 +137,24 @@ root (anonymous) 0,0 800x600
 #case 16
 #data "<!doctype html><select><input>X"
 root (anonymous) 0,0 800x600
-  block <html> 0,0 800x38.421875
-    block <body> 8,8 784x22.421875 m=8,8,8,8
-      line 8,8 784x22.421875 base=26.640625
+  block <html> 0,0 800x42.421875
+    block <body> 8,8 784x26.421875 m=8,8,8,8
+      line 8,8 784x26.421875 base=30.640625
+        atomic <select>
         atomic <input>
-        text "X" x=235.796875 base=26.640625 w=11.390625
-      replaced <input> 8,8 227.796875x18.640625
+        text "X" x=274.03125 base=30.640625 w=11.390625
+      replaced <select> 8,8 38.234375x22.640625
+      replaced <input> 46.234375,12 227.796875x18.640625
 
 #case 17
 #data "<!doctype html><select><select>X"
 root (anonymous) 0,0 800x600
-  block <html> 0,0 800x34.640625
-    block <body> 8,8 784x18.640625 m=8,8,8,8
-      line 8,8 784x18.640625 base=22.859375
-        text "X" x=8 base=22.859375 w=11.390625
+  block <html> 0,0 800x42.421875
+    block <body> 8,8 784x26.421875 m=8,8,8,8
+      line 8,8 784x26.421875 base=30.640625
+        atomic <select>
+        text "X" x=46.234375 base=30.640625 w=11.390625
+      replaced <select> 8,8 38.234375x22.640625
 
 #case 18
 #data "<!doctype html><table><input type=hidDEN></table>"
@@ -202,25 +206,25 @@ root (anonymous) 0,0 800x600
 #case 23
 #data "<!doctype html><table><select>X<tr>"
 root (anonymous) 0,0 800x600
-  block <html> 0,0 800x34.640625
-    block <body> 8,8 784x18.640625 m=8,8,8,8
-      block (anonymous) 8,8 784x18.640625
-        line 8,8 784x18.640625 base=22.859375
-          inline <select> 8,8 11.390625x18.640625 start end
-          text "X" x=8 base=22.859375 w=11.390625
-      table-wrapper <table> 8,26.640625 0x0 m=0,784,0,0
-        table <table> 8,26.640625 0x0
-          row-group <tbody> 8,26.640625 0x0
-            row <tr> 8,26.640625 0x0
+  block <html> 0,0 800x42.421875
+    block <body> 8,8 784x26.421875 m=8,8,8,8
+      block (anonymous) 8,8 784x26.421875
+        line 8,8 784x26.421875 base=30.640625
+          atomic <select>
+        replaced <select> 8,8 38.234375x22.640625
+      table-wrapper <table> 8,34.421875 0x0 m=0,784,0,0
+        table <table> 8,34.421875 0x0
+          row-group <tbody> 8,34.421875 0x0
+            row <tr> 8,34.421875 0x0
 
 #case 24
 #data "<!doctype html><select>X</select>"
 root (anonymous) 0,0 800x600
-  block <html> 0,0 800x34.640625
-    block <body> 8,8 784x18.640625 m=8,8,8,8
-      line 8,8 784x18.640625 base=22.859375
-        inline <select> 8,8 11.390625x18.640625 start end
-        text "X" x=8 base=22.859375 w=11.390625
+  block <html> 0,0 800x42.421875
+    block <body> 8,8 784x26.421875 m=8,8,8,8
+      line 8,8 784x26.421875 base=30.640625
+        atomic <select>
+      replaced <select> 8,8 38.234375x22.640625
 
 #case 25
 #data "<!DOCTYPE hTmL><html></html>"
@@ -307,4 +311,7 @@ root (anonymous) 0,0 800x600
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x22.640625 base=30.640625
+        atomic <select>
+      replaced <select> 8,8 38.234375x22.640625
 

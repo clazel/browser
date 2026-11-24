@@ -8,7 +8,7 @@ use clazel_image_shape::Error;
 
 use super::{Blend, Dispose, FrameInfo, Kind, Png, Stage, bad};
 use crate::adam7;
-use crate::engine::{Engine, Outcome};
+use crate::engine::{Engine, Outcome, Progress};
 use crate::filter::unfilter;
 use crate::pixel::{over, rgba};
 use crate::work::Parts;
@@ -23,6 +23,15 @@ fn span(canvas_w: u32, x: u32, row: u32, w: u32) -> Option<Range<usize>> {
         .checked_mul(4)?;
     let end = start.checked_add(usize::try_from(w).ok()?.checked_mul(4)?)?;
     Some(start..end)
+}
+
+/// What one round of [`Png::feed`] leaves to do.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Flow {
+    /// Another round.
+    More,
+    /// The bytes are used, or the zlib stream is done.
+    Stop,
 }
 
 impl<E: Engine> Png<E> {
@@ -165,68 +174,120 @@ impl<E: Engine> Png<E> {
     /// Gives the engine the bytes of a data chunk until they are used or the
     /// zlib stream is done. The engine writes straight into the scanline
     /// buffer; a scanline that is complete is finished before the next one.
+    /// One round of the loop is [`Png::feed_once`], so that a proof of one
+    /// round (`proofs.rs`) is a proof of the loop: every round takes the
+    /// state to a state with the invariant and an active frame, or ends.
     pub(crate) fn feed(&mut self, part: &[u8], parts: &mut Parts<'_>) -> Result<(), Error> {
         let mut src = part;
-        loop {
-            let want = usize::try_from(self.row_len).unwrap_or(0).saturating_add(1);
-            let (r, room) = if self.rows_done {
-                // The image is complete; only the end of the stream (the
-                // Adler-32) may follow, so the engine gets no room.
-                let mut none: [u8; 0] = [];
-                (self.engine.step(src, &mut none, parts.window), 0)
-            } else {
-                let have = usize::try_from(self.row_have).unwrap_or(0);
-                let Some(dst) = parts.cur.get_mut(have..want) else {
-                    return Err(bad("scanline buffer"));
-                };
-                let room = dst.len();
-                (self.engine.step(src, dst, parts.window), room)
+        while let Flow::More = self.feed_once(&mut src, parts)? {}
+        Ok(())
+    }
+
+    /// One round of [`Png::feed`]: one call of the engine on the front of
+    /// `src` (which it shortens by what the engine used), the scanline it
+    /// completed if any, and what the outcome means. In three parts that
+    /// `proofs.rs` has one harness each for ([`Png::engine_round`], the
+    /// scanline's [`Png::finish_row`], [`Png::round_end`]), the second only
+    /// when the first filled the scanline.
+    pub(crate) fn feed_once(
+        &mut self,
+        src: &mut &[u8],
+        parts: &mut Parts<'_>,
+    ) -> Result<Flow, Error> {
+        let r = self.engine_round(src, parts)?;
+        if self.row_is_full() {
+            self.finish_row(parts)?;
+        }
+        self.round_end(r, src)
+    }
+
+    /// The scanline is complete (its filter-type byte and `row_len` bytes
+    /// are in `cur`).
+    pub(crate) fn row_is_full(&self) -> bool {
+        let want = usize::try_from(self.row_len).unwrap_or(0).saturating_add(1);
+        !self.rows_done && usize::try_from(self.row_have).unwrap_or(0) >= want
+    }
+
+    /// The engine's call of a round: it gets the rest of the scanline to
+    /// write into (none once the image is complete) and what it used and
+    /// wrote is counted.
+    pub(crate) fn engine_round(
+        &mut self,
+        src: &mut &[u8],
+        parts: &mut Parts<'_>,
+    ) -> Result<Progress, Error> {
+        let want = usize::try_from(self.row_len).unwrap_or(0).saturating_add(1);
+        let (r, room) = if self.rows_done {
+            // The image is complete; only the end of the stream (the
+            // Adler-32) may follow, so the engine gets no room.
+            let mut none: [u8; 0] = [];
+            (self.engine.step(src, &mut none, parts.window), 0)
+        } else {
+            let have = usize::try_from(self.row_have).unwrap_or(0);
+            let Some(dst) = parts.cur.get_mut(have..want) else {
+                return Err(bad("scanline buffer"));
             };
-            if r.consumed > src.len() || r.produced > room {
-                return Err(bad("the zlib engine broke its contract"));
+            let room = dst.len();
+            (self.engine.step(src, dst, parts.window), room)
+        };
+        if r.consumed > src.len() || r.produced > room {
+            return Err(bad("the zlib engine broke its contract"));
+        }
+        *src = src.get(r.consumed..).unwrap_or(&[]);
+        if !self.rows_done {
+            let got = u32::try_from(r.produced).unwrap_or(0);
+            self.row_have = self.row_have.saturating_add(got);
+        }
+        Ok(r)
+    }
+
+    /// What the engine's outcome of a round means: the end of the round's
+    /// work, whether the loop goes on.
+    pub(crate) fn round_end(&mut self, r: Progress, src: &[u8]) -> Result<Flow, Error> {
+        match r.outcome {
+            Outcome::Failed => return Err(bad("the zlib stream of the image is invalid")),
+            Outcome::Done => {
+                // 10.2: the stream ends exactly when the image does.
+                if !self.rows_done {
+                    return Err(bad("the image data ends before the image"));
+                }
+                self.stage = Stage::Finished;
+                self.report = true;
+                return Ok(Flow::Stop);
             }
-            src = src.get(r.consumed..).unwrap_or(&[]);
-            if !self.rows_done {
-                let got = u32::try_from(r.produced).unwrap_or(0);
-                self.row_have = self.row_have.saturating_add(got);
-                if usize::try_from(self.row_have).unwrap_or(0) >= want {
-                    self.finish_row(parts)?;
-                }
-            }
-            match r.outcome {
-                Outcome::Failed => return Err(bad("the zlib stream of the image is invalid")),
-                Outcome::Done => {
-                    // 10.2: the stream ends exactly when the image does.
-                    if !self.rows_done {
-                        return Err(bad("the image data ends before the image"));
-                    }
-                    self.stage = Stage::Finished;
-                    self.report = true;
-                    return Ok(());
-                }
-                Outcome::NeedInput => {
-                    if src.is_empty() {
-                        return Ok(());
-                    }
-                }
-                Outcome::NeedOutput => {
-                    // With no room (the image is complete) the stream has
-                    // more output than the image holds.
-                    if self.rows_done && r.produced == 0 {
-                        return Err(bad("more image data than the image holds"));
-                    }
+            Outcome::NeedInput => {
+                if src.is_empty() {
+                    return Ok(Flow::Stop);
                 }
             }
-            if r.consumed == 0 && r.produced == 0 {
-                return Err(bad("the zlib engine made no progress"));
+            Outcome::NeedOutput => {
+                // With no room (the image is complete) the stream has
+                // more output than the image holds.
+                if self.rows_done && r.produced == 0 {
+                    return Err(bad("more image data than the image holds"));
+                }
             }
         }
+        if r.consumed == 0 && r.produced == 0 {
+            return Err(bad("the zlib engine made no progress"));
+        }
+        Ok(Flow::More)
     }
 
     /// 7.2, 9, 8: a complete scanline in `cur` (its filter-type byte, then
     /// its bytes) is unfiltered, its pixels placed, and the next scanline or
-    /// pass begun.
+    /// pass begun. Only [`Png::next_row`] changes the state (the other two
+    /// take `&self`), so a proof that it keeps the invariant is a proof of
+    /// this.
     pub(crate) fn finish_row(&mut self, parts: &mut Parts<'_>) -> Result<(), Error> {
+        self.unfilter_row(parts)?;
+        self.place_row(parts)?;
+        self.next_row(parts);
+        Ok(())
+    }
+
+    /// 9.1 to 9.4: the scanline in `cur` unfiltered in place, against `prev`.
+    pub(crate) fn unfilter_row(&self, parts: &mut Parts<'_>) -> Result<(), Error> {
         let len = usize::try_from(self.row_len).unwrap_or(0);
         let Some((filter, data)) = parts.cur.split_first_mut() else {
             return Err(bad("scanline buffer"));
@@ -238,6 +299,16 @@ impl<E: Engine> Png<E> {
         if !unfilter(*filter, self.layout.filter_bpp(), prev, data) {
             return Err(bad("a scanline's filter type is above 4"));
         }
+        Ok(())
+    }
+
+    /// 8.1, 6, 4.9, 11.3.6.3: the pixels of the unfiltered scanline in `cur`
+    /// converted and blended into the canvas.
+    pub(crate) fn place_row(&self, parts: &mut Parts<'_>) -> Result<(), Error> {
+        let len = usize::try_from(self.row_len).unwrap_or(0);
+        let Some(data) = parts.cur.get(1..).and_then(|d| d.get(..len)) else {
+            return Err(bad("scanline buffer"));
+        };
         let Some(pass) = adam7::pass(self.interlaced, self.pass) else {
             return Err(bad("pass out of range"));
         };
@@ -271,8 +342,17 @@ impl<E: Engine> Png<E> {
                 *slot = v;
             }
         }
-        // The next scanline is filtered against this one.
-        if prev.len() == data.len() {
+        Ok(())
+    }
+
+    /// 9.2, 8: the next scanline is filtered against this one; moves to it,
+    /// or to the next pass.
+    pub(crate) fn next_row(&mut self, parts: &mut Parts<'_>) {
+        let len = usize::try_from(self.row_len).unwrap_or(0);
+        let data = parts.cur.get(1..).and_then(|d| d.get(..len));
+        if let (Some(prev), Some(data)) = (parts.prev.get_mut(..len), data)
+            && prev.len() == data.len()
+        {
             prev.copy_from_slice(data);
         }
         self.row = self.row.saturating_add(1);
@@ -280,6 +360,5 @@ impl<E: Engine> Png<E> {
         if self.row >= self.pass_h {
             self.start_pass(self.pass.saturating_add(1), parts);
         }
-        Ok(())
     }
 }

@@ -387,6 +387,31 @@ pub proof fn lemma_example_script()
     assert(decode_renderer_message(seq![0x83u8, 0x18, 0x74, 0x01, 0x41, 0x61]) is None) by (compute_only);
 }
 
+/// `FetchSub(1, 1, "i.gif")` is `[13, 1, 1, "i.gif"]`, from a renderer only;
+/// `SubResponse(1, h'74')` is `[119, 1, h'74']`, `SubBody(1, h'61')`
+/// `[120, 1, h'61']`, `SubEnd(1)` `[121, 1]` and `SubFailed(1)`
+/// `[122, 1]` (item 6.17).
+pub proof fn lemma_example_sub()
+    ensures
+        decode_renderer_message(seq![0x84u8, 0x0D, 0x01, 0x01, 0x65, 0x69, 0x2E, 0x67, 0x69, 0x66]) == Some(Message::FetchSub { request: 1, destination: 1, url: seq![0x69u8, 0x2E, 0x67, 0x69, 0x66] }),
+        encode_message(Message::FetchSub { request: 1, destination: 1, url: seq![0x69u8, 0x2E, 0x67, 0x69, 0x66] }) == seq![0x84u8, 0x0D, 0x01, 0x01, 0x65, 0x69, 0x2E, 0x67, 0x69, 0x66],
+        decode_message(seq![0x83u8, 0x18, 0x77, 0x01, 0x41, 0x74]) == Some(Message::SubResponse { request: 1, content_type: seq![0x74u8] }),
+        decode_message(seq![0x83u8, 0x18, 0x78, 0x01, 0x41, 0x61]) == Some(Message::SubBody { request: 1, bytes: seq![0x61u8] }),
+        decode_message(seq![0x82u8, 0x18, 0x79, 0x01]) == Some(Message::SubEnd { request: 1 }),
+        decode_message(seq![0x82u8, 0x18, 0x7A, 0x01]) == Some(Message::SubFailed { request: 1 }),
+        decode_renderer_message(seq![0x82u8, 0x18, 0x79, 0x01]) is None,
+        decode_renderer_message(seq![0x83u8, 0x0D, 0x01, 0x01]) is None,
+{
+    assert(decode_renderer_message(seq![0x84u8, 0x0D, 0x01, 0x01, 0x65, 0x69, 0x2E, 0x67, 0x69, 0x66]) == Some(Message::FetchSub { request: 1, destination: 1, url: seq![0x69u8, 0x2E, 0x67, 0x69, 0x66] })) by (compute_only);
+    assert(encode_message(Message::FetchSub { request: 1, destination: 1, url: seq![0x69u8, 0x2E, 0x67, 0x69, 0x66] }) == seq![0x84u8, 0x0D, 0x01, 0x01, 0x65, 0x69, 0x2E, 0x67, 0x69, 0x66]) by (compute_only);
+    assert(decode_message(seq![0x83u8, 0x18, 0x77, 0x01, 0x41, 0x74]) == Some(Message::SubResponse { request: 1, content_type: seq![0x74u8] })) by (compute_only);
+    assert(decode_message(seq![0x83u8, 0x18, 0x78, 0x01, 0x41, 0x61]) == Some(Message::SubBody { request: 1, bytes: seq![0x61u8] })) by (compute_only);
+    assert(decode_message(seq![0x82u8, 0x18, 0x79, 0x01]) == Some(Message::SubEnd { request: 1 })) by (compute_only);
+    assert(decode_message(seq![0x82u8, 0x18, 0x7A, 0x01]) == Some(Message::SubFailed { request: 1 })) by (compute_only);
+    assert(decode_renderer_message(seq![0x82u8, 0x18, 0x79, 0x01]) is None) by (compute_only);
+    assert(decode_renderer_message(seq![0x83u8, 0x0D, 0x01, 0x01]) is None) by (compute_only);
+}
+
 /// `Submit("/p", "POST", h'74', h'6162')` is `[12, "/p", "POST", h'74', h'6162']`,
 /// from a renderer only (item 6.16); `Navigate`, tag 9, is unchanged.
 pub proof fn lemma_example_submit()

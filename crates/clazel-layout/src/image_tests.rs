@@ -94,6 +94,7 @@ fn lay(html: &str, images: &Images, scale: u32) -> Laid {
         Resources {
             base: base.as_ref(),
             images,
+            controls: &[],
         },
         scale,
     );

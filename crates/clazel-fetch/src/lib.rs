@@ -7,5 +7,6 @@
 //! redirects. The response is read by `clazel_http::message`. Tier: see
 //! `[package.metadata.clazel]` in `Cargo.toml` and `docs/VERIFICATION.md`.
 
+pub mod orb;
 pub mod request;
 pub mod transducer;

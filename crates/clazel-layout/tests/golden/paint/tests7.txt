@@ -89,13 +89,13 @@ text -8,-1 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1975
 #data "<!doctype html><select><input>X"
 scale 1
 fill 0,0 800x600 #ffffffff
-text 220,-5 43x48 #ff000000 face=0 size=1024 glyphs=1 first=15091,1705
+text 258,-1 43x48 #ff000000 face=0 size=1024 glyphs=1 first=17538,1961
 
 #case 17
 #data "<!doctype html><select><select>X"
 scale 1
 fill 0,0 800x600 #ffffffff
-text -8,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 30,-1 44x48 #ff000000 face=0 size=1024 glyphs=1 first=2959,1961
 
 #case 18
 #data "<!doctype html><table><input type=hidDEN></table>"
@@ -127,13 +127,11 @@ fill 0,0 800x600 #ffffffff
 #data "<!doctype html><table><select>X<tr>"
 scale 1
 fill 0,0 800x600 #ffffffff
-text -8,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
 
 #case 24
 #data "<!doctype html><select>X</select>"
 scale 1
 fill 0,0 800x600 #ffffffff
-text -8,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
 
 #case 25
 #data "<!DOCTYPE hTmL><html></html>"

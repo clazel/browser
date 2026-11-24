@@ -411,6 +411,8 @@ pub struct SubFetchRecord {
     pub serial: u64,
     /// The renderer's own id for it.
     pub request: u64,
+    /// Whether it was asked for by `FetchSub` (the answers are `Sub*`).
+    pub sub: bool,
     /// Whether it is a script fetch (item 7.16).
     pub script: bool,
     /// The renderer's tab.
@@ -436,6 +438,7 @@ impl View for SubFetchRecord {
             lock: self.lock@,
             serial: self.serial as nat,
             request: self.request,
+            sub: self.sub,
             script: self.script,
             tab: self.tab as nat,
             fetch: self.fetch@,

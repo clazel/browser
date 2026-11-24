@@ -629,7 +629,7 @@
     {
       "id": "display-before-commit",
       "file": "src/spec.rs",
-      "find": "Some(m) => if (m is Display || m is Title || m is FetchStyle || m is FetchScript || m is Submit) && !r.committed { None } else { Some(m) },",
+      "find": "Some(m) => if (m is Display || m is Title || m is FetchStyle || m is FetchSub || m is FetchScript || m is Submit) && !r.committed { None } else { Some(m) },",
       "replace": "Some(m) => Some(m),",
       "expect": "killed",
       "module": "mutation_lemmas",
@@ -856,7 +856,7 @@
     {
       "id": "subfetch-at-once-unlimited",
       "file": "src/spec.rs",
-      "find": "live_subfetches(s.subfetches, r.id, r.lock) >= max_subfetches_at_once() || ",
+      "find": "live_subfetches(s.subfetches, r.id, r.lock) >= at_once || ",
       "replace": "",
       "expect": "killed",
       "module": "mutation_lemmas",
@@ -870,7 +870,7 @@
     {
       "id": "subfetch-per-document-unlimited",
       "file": "src/spec.rs",
-      "find": "in_document >= max_subfetches_per_document() || ",
+      "find": "in_document >= per_document || ",
       "replace": "",
       "expect": "killed",
       "module": "mutation_lemmas",

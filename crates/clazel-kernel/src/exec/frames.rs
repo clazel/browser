@@ -81,6 +81,10 @@ pub open spec fn message_texts_ok(m: clazel_ipc::message::spec::Message) -> bool
         clazel_ipc::message::spec::Message::StyleResponse { content_type, .. } => bytes_ok(content_type),
         clazel_ipc::message::spec::Message::StyleBody { bytes, .. } => bytes_ok(bytes),
         clazel_ipc::message::spec::Message::StyleEnd { .. } | clazel_ipc::message::spec::Message::StyleFailed { .. } => true,
+        clazel_ipc::message::spec::Message::FetchSub { url, .. } => text_ok(url),
+        clazel_ipc::message::spec::Message::SubResponse { content_type, .. } => bytes_ok(content_type),
+        clazel_ipc::message::spec::Message::SubBody { bytes, .. } => bytes_ok(bytes),
+        clazel_ipc::message::spec::Message::SubEnd { .. } | clazel_ipc::message::spec::Message::SubFailed { .. } => true,
         clazel_ipc::message::spec::Message::FetchScript { url, .. } | clazel_ipc::message::spec::Message::UpdateUrl { url, .. } => text_ok(url),
         clazel_ipc::message::spec::Message::ScriptResponse { content_type, .. } => bytes_ok(content_type),
         clazel_ipc::message::spec::Message::ScriptBody { bytes, .. } => bytes_ok(bytes),
@@ -244,6 +248,26 @@ pub proof fn lemma_message_ok(m: clazel_ipc::message::spec::Message)
         },
         clazel_ipc::message::spec::Message::StyleFailed { request } => {
             lemma_msg(m, 2, 113, seq![clazel_ipc::cbor::spec::Token::Uint(request)]);
+            lemma_one(clazel_ipc::cbor::spec::Token::Uint(request));
+        },
+        clazel_ipc::message::spec::Message::FetchSub { request, destination, url } => {
+            lemma_msg(m, 4, 13, seq![clazel_ipc::cbor::spec::Token::Uint(request), clazel_ipc::cbor::spec::Token::Uint(destination), clazel_ipc::cbor::spec::Token::Text(url)]);
+            lemma_three(clazel_ipc::cbor::spec::Token::Uint(request), clazel_ipc::cbor::spec::Token::Uint(destination), clazel_ipc::cbor::spec::Token::Text(url));
+        },
+        clazel_ipc::message::spec::Message::SubResponse { request, content_type } => {
+            lemma_msg(m, 3, 119, seq![clazel_ipc::cbor::spec::Token::Uint(request), clazel_ipc::cbor::spec::Token::Bytes(content_type)]);
+            lemma_two(clazel_ipc::cbor::spec::Token::Uint(request), clazel_ipc::cbor::spec::Token::Bytes(content_type));
+        },
+        clazel_ipc::message::spec::Message::SubBody { request, bytes } => {
+            lemma_msg(m, 3, 120, seq![clazel_ipc::cbor::spec::Token::Uint(request), clazel_ipc::cbor::spec::Token::Bytes(bytes)]);
+            lemma_two(clazel_ipc::cbor::spec::Token::Uint(request), clazel_ipc::cbor::spec::Token::Bytes(bytes));
+        },
+        clazel_ipc::message::spec::Message::SubEnd { request } => {
+            lemma_msg(m, 2, 121, seq![clazel_ipc::cbor::spec::Token::Uint(request)]);
+            lemma_one(clazel_ipc::cbor::spec::Token::Uint(request));
+        },
+        clazel_ipc::message::spec::Message::SubFailed { request } => {
+            lemma_msg(m, 2, 122, seq![clazel_ipc::cbor::spec::Token::Uint(request)]);
             lemma_one(clazel_ipc::cbor::spec::Token::Uint(request));
         },
         clazel_ipc::message::spec::Message::FetchScript { request, url } => {
@@ -446,6 +470,10 @@ pub fn message_ok_exec(m: &Msg) -> (r: bool)
         Msg::StyleResponse { content_type, .. } => bytes_ok_exec(content_type.as_slice()),
         Msg::StyleBody { bytes, .. } => bytes_ok_exec(bytes.as_slice()),
         Msg::StyleEnd { .. } | Msg::StyleFailed { .. } => true,
+        Msg::FetchSub { url, .. } => text_ok_exec(url.as_slice()),
+        Msg::SubResponse { content_type, .. } => bytes_ok_exec(content_type.as_slice()),
+        Msg::SubBody { bytes, .. } => bytes_ok_exec(bytes.as_slice()),
+        Msg::SubEnd { .. } | Msg::SubFailed { .. } => true,
         Msg::FetchScript { url, .. } | Msg::UpdateUrl { url, .. } => text_ok_exec(url.as_slice()),
         Msg::ScriptResponse { content_type, .. } => bytes_ok_exec(content_type.as_slice()),
         Msg::ScriptBody { bytes, .. } => bytes_ok_exec(bytes.as_slice()),

@@ -135,11 +135,19 @@ theorems = [
     "theorem_subfetch_ownership",
     "theorem_subfetch_limits",
     "theorem_commit_ends_subfetches",
+    # Phase 6 item 6.17: `FetchSub` (image sub-fetches) and Opaque Response
+    # Blocking. `theorem_subfetch_only_to_requester`,
+    # `theorem_subfetch_credentials` and `theorem_subfetch_limits` above are
+    # restated over the destinations (`FetchStyle` and `FetchSub`); the new
+    # statement is `orb_statement` (`statements.rs`), proved in
+    # `subfetch_theorems.rs`.
+    "theorem_orb",
     # Phase 7 item 7.16: script fetches (`FetchScript`, answered with
     # `Script*` frames), as `FetchStyle` is, by the same function
-    # (`fetch_sub`). The statement is in `statements.rs`; the proof in
+    # (`fetch_start`). The statement is in `statements.rs`; the proof in
     # `subfetch_theorems.rs`; the noninterference over `FetchScript` is
-    # `FetchStyle`'s (`subfetch_rel.rs`), whose lemmas take the `script` flag.
+    # `FetchStyle`'s (`subfetch_rel.rs`), whose lemmas take the `sub` and
+    # `script` flags.
     "theorem_script_fetch_shape",
     # Phase 5 item 5.17c: the GPU crash policy. The statements are in
     # `statements.rs`; the proofs in `gpu_theorems.rs`, the noninterference

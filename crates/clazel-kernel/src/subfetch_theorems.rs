@@ -1,7 +1,9 @@
 //! Item 5.19's theorems: `theorem_subfetch_only_to_requester`,
 //! `theorem_subfetch_credentials`, `theorem_subfetch_ownership` (the second
 //! half of `theorem_connection_ownership`), `theorem_subfetch_limits` and
-//! `theorem_commit_ends_subfetches`, with the statements in `statements.rs`.
+//! `theorem_commit_ends_subfetches`, with the statements in `statements.rs`. Item
+//! 6.17 adds `theorem_orb` and item 7.16 `theorem_script_fetch_shape`; a
+//! `FetchSub` and a `FetchScript` go the way a `FetchStyle` does.
 //!
 //! Every event but a `FetchStyle`, a `SubNet` and a `Tick` leaves the
 //! sub-fetch tables as they were up to ending entries and resetting
@@ -51,9 +53,8 @@ pub open spec fn tables_kept(s: State, s1: State) -> bool {
     table_kept(s.subfetches, s1.subfetches) && counts_kept(s.subcounts, s1.subcounts)
 }
 
-/// The event is a `FetchStyle` or `FetchScript` the kernel accepts from a
-/// live renderer.
-pub open spec fn is_sub_fetch_request(s: State, e: Event) -> bool {
+/// The event is a `FetchStyle` the kernel accepts from a live renderer.
+pub open spec fn is_fetch_style(s: State, e: Event) -> bool {
     e matches Event::FromRenderer { id, bytes } && find_by_id(s.renderers, id, 0) matches Some(i) && accepted_message(s.renderers[i], bytes) matches Some(m)
         && is_sub_request(m)
 }
@@ -213,7 +214,7 @@ pub proof fn lemma_begin_tables(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns
 #[verifier::spinoff_prover]
 pub proof fn lemma_from_renderer_tables(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat, bytes: Seq<u8>)
     requires
-        !is_sub_fetch_request(s, Event::FromRenderer { id, bytes }),
+        !is_fetch_style(s, Event::FromRenderer { id, bytes }),
     ensures
         tables_kept(s, from_renderer(rules, urls, fetch, s, id, bytes).0),
         sub_free(from_renderer(rules, urls, fetch, s, id, bytes).1),
@@ -333,7 +334,7 @@ pub proof fn lemma_net_tables(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, 
 #[verifier::spinoff_prover]
 pub proof fn lemma_step_tables(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
     requires
-        !(e is SubNet || e is Tick || is_sub_fetch_request(s, e)),
+        !(e is SubNet || e is Tick || is_fetch_style(s, e)),
     ensures
         tables_kept(s, step(rules, urls, fetch, s, e).0),
         sub_free(step(rules, urls, fetch, s, e).1),
@@ -816,7 +817,7 @@ pub proof fn lemma_sub_net_tables(rules: Seq<clazel_psl::spec::Rule>, fetch: Fet
     if let Some(f) = subnet_target(s, renderer, serial) {
         if subfetch_live(s, f) && hop != 0 && f.hop == hop {
             let (fsa, actions, ops) = clazel_fetch::transducer::spec::step(fetch.http, fetch.urls, f.fetch, input, subfetch_jar(fetch, s, f), s.now);
-            let (h, out, end) = sub_actions(renderer, serial, f.request, f.script, hop, actions);
+            let (h, out, end) = sub_actions(sub_ctx(fetch, f), renderer, serial, f.request, hop, actions);
             let g = SubFetch { fetch: fsa, hop: h, ..f };
             if end is Some {
                 lemma_drop_table(s.subfetches, g, id, lock);
@@ -873,13 +874,16 @@ pub proof fn lemma_subnet_key_facts(s: State, renderer: nat, serial: nat)
 }
 
 /// What a `FetchStyle` does to the tables.
-pub proof fn lemma_fetch_sub_tables(
+pub proof fn lemma_fetch_style_tables(
     rules: Seq<clazel_psl::spec::Rule>,
     urls: UrlFns,
     fetch: FetchFns,
     s: State,
     r: Renderer,
+    sub: bool,
     script: bool,
+    at_once: nat,
+    per_doc: nat,
     request: u64,
     url: Seq<u8>,
     id: nat,
@@ -887,12 +891,12 @@ pub proof fn lemma_fetch_sub_tables(
 )
     ensures
         ({
-            let s1 = fetch_sub(rules, urls, fetch, s, r, script, request, url).0;
+            let s1 = fetch_start(rules, urls, fetch, s, r, sub, script, at_once, per_doc, request, url).0;
             let (serial, in_document) = subcount_of(s.subcounts, r.id, r.lock);
             &&& s1 == s || {
                 &&& serial < max_subfetch_serial()
-                &&& live_subfetches(s.subfetches, r.id, r.lock) < max_subfetches_at_once()
-                &&& in_document < max_subfetches_per_document()
+                &&& live_subfetches(s.subfetches, r.id, r.lock) < at_once
+                &&& in_document < per_doc
                 &&& s1.subcounts == set_subcount(s.subcounts, r.id, r.lock, serial + 1, in_document + 1)
                 &&& (s1.subfetches == s.subfetches || exists|n: SubFetch|
                     #![trigger s.subfetches.push(n)]
@@ -911,17 +915,14 @@ pub proof fn lemma_step_tables_wf(rules: Seq<clazel_psl::spec::Rule>, urls: UrlF
         subfetch_tables_wf(step(rules, urls, fetch, s, e).0),
 {
     let s1 = step(rules, urls, fetch, s, e).0;
-    if is_sub_fetch_request(s, e) {
+    if is_fetch_style(s, e) {
         let id = e->FromRenderer_id;
         let i = find_by_id(s.renderers, id, 0)->Some_0;
         let r = s.renderers[i];
         let m = accepted_message(r, e->FromRenderer_bytes)->Some_0;
-        let request = sub_request_id(m);
-        let url = sub_request_url(m);
-        let script = m is FetchScript;
-    let script = m is FetchScript;
-        assert(s1 == fetch_sub(rules, urls, fetch, s, r, script, request, url).0);
-        lemma_fetch_sub_tables(rules, urls, fetch, s, r, script, request, url, r.id, r.lock);
+        let (sub, script, at_once, per_doc, request, url) = sub_request_args(m);
+        assert(s1 == fetch_start(rules, urls, fetch, s, r, sub, script, at_once, per_doc, request, url).0);
+        lemma_fetch_style_tables(rules, urls, fetch, s, r, sub, script, at_once, per_doc, request, url, r.id, r.lock);
         if s1 != s {
             let (serial, in_document) = subcount_of(s.subcounts, r.id, r.lock);
             assert forall|j: int| 0 <= j < s1.subfetches.len() implies (#[trigger] s1.subfetches[j]).serial < subcount_of(
@@ -1035,23 +1036,32 @@ pub proof fn lemma_reachable_tables_wf(rules: Seq<clazel_psl::spec::Rule>, urls:
 // A sub-fetch's frames and sends.
 // ---------------------------------------------------------------------
 
-/// The frames a sub-fetch's actions end with are `StyleFailed`, or a sheet's
-/// `StyleResponse`, `StyleBody` and `StyleEnd`.
-pub proof fn lemma_sub_actions_end(id: nat, serial: nat, request: u64, script: bool, hop: nat, actions: Seq<NetAction>)
+/// The frames a sub-fetch's actions end with are the failure frame of its
+/// family, or the answer frames of a response that Opaque Response Blocking
+/// let through (item 6.17: `theorem_orb`'s core), in its family.
+pub proof fn lemma_sub_actions_end(ctx: SubCtx, id: nat, serial: nat, request: u64, hop: nat, actions: Seq<NetAction>)
     ensures
-        sub_actions(id, serial, request, script, hop, actions).2 matches Some(x) ==> (x == sub_failed_frame(script, request) || exists|doc: Document|
-            x == #[trigger] sub_frames(script, request, doc)),
+        sub_actions(ctx, id, serial, request, hop, actions).2 matches Some(x) ==> (x == failed_frame(ctx.sub, ctx.script, request) || exists|
+            url: clazel_url::url::spec::Url,
+            response: clazel_http::message::spec::Response,
+        |
+            x == #[trigger] answer_frames(ctx.sub, ctx.script, request, response_document(response)) && #[trigger] sub_orb_allows(ctx, url, response)),
     decreases actions.len(),
 {
     if actions.len() > 0 {
         let rest = actions.drop_first();
         match actions[0] {
-            clazel_fetch::transducer::spec::Action::Connect { .. } => lemma_sub_actions_end(id, serial, request, script, hop + 1, rest),
-            clazel_fetch::transducer::spec::Action::Send(_) => lemma_sub_actions_end(id, serial, request, script, hop, rest),
-            clazel_fetch::transducer::spec::Action::Close => lemma_sub_actions_end(id, serial, request, script, hop, rest),
+            clazel_fetch::transducer::spec::Action::Connect { .. } => lemma_sub_actions_end(ctx, id, serial, request, hop + 1, rest),
+            clazel_fetch::transducer::spec::Action::Send(_) => lemma_sub_actions_end(ctx, id, serial, request, hop, rest),
+            clazel_fetch::transducer::spec::Action::Close => lemma_sub_actions_end(ctx, id, serial, request, hop, rest),
             clazel_fetch::transducer::spec::Action::Done { url, response } => {
-                let doc = response_document(response);
-                assert(sub_actions(id, serial, request, script, hop, actions).2 == Some(sub_frames(script, request, doc)));
+                if sub_orb_allows(ctx, url, response) {
+                    assert(sub_actions(ctx, id, serial, request, hop, actions).2 == Some(answer_frames(ctx.sub, ctx.script, request, response_document(response))));
+                    let x = answer_frames(ctx.sub, ctx.script, request, response_document(response));
+                    assert(x == answer_frames(ctx.sub, ctx.script, request, response_document(response)) && sub_orb_allows(ctx, url, response));
+                } else {
+                    assert(sub_actions(ctx, id, serial, request, hop, actions).2 == Some(failed_frame(ctx.sub, ctx.script, request)));
+                }
             },
             clazel_fetch::transducer::spec::Action::Fail(_) => {},
         }
@@ -1059,11 +1069,11 @@ pub proof fn lemma_sub_actions_end(id: nat, serial: nat, request: u64, script: b
 }
 
 /// Actions with no `Send` give no `SubSend`.
-pub proof fn lemma_sub_actions_no_send(id: nat, serial: nat, request: u64, script: bool, hop: nat, actions: Seq<NetAction>)
+pub proof fn lemma_sub_actions_no_send(ctx: SubCtx, id: nat, serial: nat, request: u64, hop: nat, actions: Seq<NetAction>)
     requires
         clazel_fetch::transducer::theorems::no_sends(actions),
     ensures
-        forall|k: int| 0 <= k < sub_actions(id, serial, request, script, hop, actions).1.len() ==> !((#[trigger] sub_actions(id, serial, request, script, hop, actions).1[k]) is SubSend),
+        forall|k: int| 0 <= k < sub_actions(ctx, id, serial, request, hop, actions).1.len() ==> !((#[trigger] sub_actions(ctx, id, serial, request, hop, actions).1[k]) is SubSend),
     decreases actions.len(),
 {
     if actions.len() > 0 {
@@ -1075,8 +1085,8 @@ pub proof fn lemma_sub_actions_no_send(id: nat, serial: nat, request: u64, scrip
         }
         assert(!(actions[0] is Send));
         match actions[0] {
-            clazel_fetch::transducer::spec::Action::Connect { .. } => lemma_sub_actions_no_send(id, serial, request, script, hop + 1, rest),
-            clazel_fetch::transducer::spec::Action::Close => lemma_sub_actions_no_send(id, serial, request, script, hop, rest),
+            clazel_fetch::transducer::spec::Action::Connect { .. } => lemma_sub_actions_no_send(ctx, id, serial, request, hop + 1, rest),
+            clazel_fetch::transducer::spec::Action::Close => lemma_sub_actions_no_send(ctx, id, serial, request, hop, rest),
             _ => {},
         }
     }
@@ -1084,14 +1094,14 @@ pub proof fn lemma_sub_actions_no_send(id: nat, serial: nat, request: u64, scrip
 
 /// A `FetchStyle` sends nothing on a sub-fetch connection: the transducer's
 /// `start` only asks for a connection, or fails.
-pub proof fn lemma_fetch_sub_no_send(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, r: Renderer, script: bool, request: u64, url: Seq<u8>)
+pub proof fn lemma_fetch_style_no_send(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, r: Renderer, sub: bool, script: bool, at_once: nat, per_doc: nat, request: u64, url: Seq<u8>)
     ensures
         forall|k: int|
-            0 <= k < fetch_sub(rules, urls, fetch, s, r, script, request, url).1.len() ==> !((#[trigger] fetch_sub(rules, urls, fetch, s, r, script, request, url).1[k]) is SubSend),
+            0 <= k < fetch_start(rules, urls, fetch, s, r, sub, script, at_once, per_doc, request, url).1.len() ==> !((#[trigger] fetch_start(rules, urls, fetch, s, r, sub, script, at_once, per_doc, request, url).1[k]) is SubSend),
 {
-    let out = fetch_sub(rules, urls, fetch, s, r, script, request, url).1;
+    let out = fetch_start(rules, urls, fetch, s, r, sub, script, at_once, per_doc, request, url).1;
     let (serial, in_document) = subcount_of(s.subcounts, r.id, r.lock);
-    if !(live_subfetches(s.subfetches, r.id, r.lock) >= max_subfetches_at_once() || in_document >= max_subfetches_per_document() || serial
+    if !(live_subfetches(s.subfetches, r.id, r.lock) >= at_once || in_document >= per_doc || serial
         >= max_subfetch_serial()) {
         if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
             if let Some(resolved) = (urls.resolve)(r.url, relative) {
@@ -1101,8 +1111,8 @@ pub proof fn lemma_fetch_sub_no_send(rules: Seq<clazel_psl::spec::Rule>, urls: U
                         reveal_with_fuel(clazel_fetch::transducer::spec::begin, 1);
                         assert(actions.len() == 1);
                     }
-                    lemma_sub_actions_no_send(r.id, serial, request, script, 0, actions);
-                    let o = sub_actions(r.id, serial, request, script, 0, actions).1;
+                    lemma_sub_actions_no_send(start_ctx(fetch, sub, script, r.lock), r.id, serial, request, 0, actions);
+                    let o = sub_actions(start_ctx(fetch, sub, script, r.lock), r.id, serial, request, 0, actions).1;
                     assert forall|k: int| 0 <= k < out.len() implies !((#[trigger] out[k]) is SubSend) by {
                         if k < o.len() {
                             assert(out[k] == o[k]);
@@ -1130,14 +1140,14 @@ pub proof fn theorem_subfetch_only_to_requester(rules: Seq<clazel_psl::spec::Rul
             if let Some(f) = subnet_target(s, renderer, serial) {
                 if subfetch_live(s, f) && hop != 0 && f.hop == hop {
                     let (fsa, actions, ops) = clazel_fetch::transducer::spec::step(fetch.http, fetch.urls, f.fetch, input, subfetch_jar(fetch, s, f), s.now);
-                    let (h, o, end) = sub_actions(renderer, serial, f.request, f.script, hop, actions);
-                    crate::subfetch_rel::lemma_sub_actions_outputs(renderer, serial, f.request, f.script, hop, actions);
-                    lemma_sub_actions_end(renderer, serial, f.request, f.script, hop, actions);
+                    let (h, o, end) = sub_actions(sub_ctx(fetch, f), renderer, serial, f.request, hop, actions);
+                    crate::subfetch_rel::lemma_sub_actions_outputs(sub_ctx(fetch, f), renderer, serial, f.request, hop, actions);
+                    lemma_sub_actions_end(sub_ctx(fetch, f), renderer, serial, f.request, hop, actions);
                     assert forall|k: int| 0 <= k < out.len() && (#[trigger] out[k]) is ToRenderer implies {
                         &&& out[k]->ToRenderer_id == renderer
                         &&& subfetch_live(s, f)
-                        &&& (out[k]->ToRenderer_bytes == sub_failed_frame(f.script, f.request) || exists|doc: Document|
-                            out[k]->ToRenderer_bytes == #[trigger] sub_frames(f.script, f.request, doc))
+                        &&& (out[k]->ToRenderer_bytes == failed_frame(f.sub, f.script, f.request) || exists|doc: Document|
+                            out[k]->ToRenderer_bytes == #[trigger] answer_frames(f.sub, f.script, f.request, doc))
                     } by {
                         if k < o.len() {
                             assert(out[k] == o[k]);
@@ -1150,7 +1160,7 @@ pub proof fn theorem_subfetch_only_to_requester(rules: Seq<clazel_psl::spec::Rul
             crate::subfetch_rel::lemma_tick_all_shape(s, time);
             assert forall|k: int| 0 <= k < out.len() && (#[trigger] out[k]) is ToRenderer implies exists|j: int|
                 0 <= j < s.subfetches.len() && s.subfetches[j].renderer == out[k]->ToRenderer_id && subfetch_live(tick(s, time).0, s.subfetches[j])
-                    && out[k]->ToRenderer_bytes == sub_failed_frame(s.subfetches[j].script, s.subfetches[j].request) by {
+                    && out[k]->ToRenderer_bytes == failed_frame(s.subfetches[j].sub, s.subfetches[j].script, s.subfetches[j].request) by {
                 match out[k] {
                     Output::ToRenderer { .. } => {},
                     _ => {},
@@ -1158,6 +1168,35 @@ pub proof fn theorem_subfetch_only_to_requester(rules: Seq<clazel_psl::spec::Rul
             }
         },
         _ => {},
+    }
+}
+
+/// **`theorem_orb`** (kernel; item 6.17, decision 6.0(i) B): see
+/// [`crate::statements::orb_statement`].
+pub proof fn theorem_orb(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+    ensures
+        crate::statements::orb_statement(rules, urls, fetch, s, e),
+{
+    let out = step(rules, urls, fetch, s, e).1;
+    if let Event::SubNet { renderer, serial, hop, input } = e {
+        lemma_subnet_key_facts(s, renderer, serial);
+        if let Some(f) = subnet_target(s, renderer, serial) {
+            if subfetch_live(s, f) && hop != 0 && f.hop == hop {
+                let (fsa, actions, ops) = clazel_fetch::transducer::spec::step(fetch.http, fetch.urls, f.fetch, input, subfetch_jar(fetch, s, f), s.now);
+                let (h, o, end) = sub_actions(sub_ctx(fetch, f), renderer, serial, f.request, hop, actions);
+                crate::subfetch_rel::lemma_sub_actions_outputs(sub_ctx(fetch, f), renderer, serial, f.request, hop, actions);
+                lemma_sub_actions_end(sub_ctx(fetch, f), renderer, serial, f.request, hop, actions);
+                assert forall|k: int| 0 <= k < out.len() && (#[trigger] out[k]) is ToRenderer implies (out[k]->ToRenderer_bytes == failed_frame(f.sub, f.script, f.request) || exists|
+                    url: clazel_url::url::spec::Url,
+                    response: clazel_http::message::spec::Response,
+                |
+                    out[k]->ToRenderer_bytes == #[trigger] answer_frames(f.sub, f.script, f.request, response_document(response)) && #[trigger] sub_orb_allows(sub_ctx(fetch, f), url, response)) by {
+                    if k < o.len() {
+                        assert(out[k] == o[k]);
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1174,11 +1213,11 @@ pub proof fn lemma_credentials_subnet(rules: Seq<clazel_psl::spec::Rule>, urls: 
             if subfetch_live(s, f) && hop != 0 && f.hop == hop {
                 let jar = subfetch_jar(fetch, s, f);
                 let (fsa, actions, ops) = clazel_fetch::transducer::spec::step(fetch.http, fetch.urls, f.fetch, input, jar, s.now);
-                let (h, o, end) = sub_actions(renderer, serial, f.request, f.script, hop, actions);
+                let (h, o, end) = sub_actions(sub_ctx(fetch, f), renderer, serial, f.request, hop, actions);
                 clazel_fetch::transducer::theorems::lemma_sends_only_on_connected(fetch.http, fetch.urls, f.fetch, input, jar, s.now);
                 clazel_fetch::transducer::theorems::theorem_wire_cookies(fetch.http, fetch.urls, f.fetch, input, jar, s.now);
                 if clazel_fetch::transducer::theorems::no_sends(actions) {
-                    lemma_sub_actions_no_send(renderer, serial, f.request, f.script, hop, actions);
+                    lemma_sub_actions_no_send(sub_ctx(fetch, f), renderer, serial, f.request, hop, actions);
                     assert forall|k: int| 0 <= k < out.len() implies !((#[trigger] out[k]) is SubSend) by {
                         if k < o.len() {
                             assert(out[k] == o[k]);
@@ -1188,7 +1227,7 @@ pub proof fn lemma_credentials_subnet(rules: Seq<clazel_psl::spec::Rule>, urls: 
                     let bytes = actions[0]->Send_0;
                     assert(actions == seq![clazel_fetch::transducer::spec::Action::Send(bytes)]);
                     assert(actions.drop_first() =~= Seq::<NetAction>::empty());
-                    assert(sub_actions(renderer, serial, f.request, f.script, hop, Seq::<NetAction>::empty()) == (hop, Seq::<Output>::empty(), None::<Seq<u8>>));
+                    assert(sub_actions(sub_ctx(fetch, f), renderer, serial, f.request, hop, Seq::<NetAction>::empty()) == (hop, Seq::<Output>::empty(), None::<Seq<u8>>));
                     assert(seq![Output::SubSend { renderer, serial, hop, bytes }] + Seq::<Output>::empty() =~= seq![Output::SubSend { renderer, serial, hop, bytes }]);
                     assert(o == seq![Output::SubSend { renderer, serial, hop, bytes }]);
                     assert(end is None);
@@ -1205,12 +1244,13 @@ pub proof fn theorem_subfetch_credentials(rules: Seq<clazel_psl::spec::Rule>, ur
         crate::statements::subfetch_credentials_statement(rules, urls, fetch, s, e),
 {
     let out = step(rules, urls, fetch, s, e).1;
-    if is_sub_fetch_request(s, e) {
+    if is_fetch_style(s, e) {
         let i = find_by_id(s.renderers, e->FromRenderer_id, 0)->Some_0;
         let r = s.renderers[i];
         let m = accepted_message(r, e->FromRenderer_bytes)->Some_0;
-        assert(out == fetch_sub(rules, urls, fetch, s, r, m is FetchScript, sub_request_id(m), sub_request_url(m)).1);
-        lemma_fetch_sub_no_send(rules, urls, fetch, s, r, m is FetchScript, sub_request_id(m), sub_request_url(m));
+        let (sub, script, at_once, per_doc, request, url) = sub_request_args(m);
+        assert(out == fetch_start(rules, urls, fetch, s, r, sub, script, at_once, per_doc, request, url).1);
+        lemma_fetch_style_no_send(rules, urls, fetch, s, r, sub, script, at_once, per_doc, request, url);
     } else {
         match e {
             Event::SubNet { renderer, serial, hop, input } => {
@@ -1241,8 +1281,8 @@ pub proof fn theorem_subfetch_ownership(rules: Seq<clazel_psl::spec::Rule>, urls
         crate::statements::subfetch_ownership_statement(rules, urls, fetch, s, e),
 {
     lemma_reachable_tables_wf(rules, urls, fetch, s);
-    if is_sub_fetch_request(s, e) {
-        lemma_ownership_sub_request(rules, urls, fetch, s, e);
+    if is_fetch_style(s, e) {
+        lemma_ownership_fetch_style(rules, urls, fetch, s, e);
     } else {
         lemma_ownership_other(rules, urls, fetch, s, e);
     }
@@ -1250,10 +1290,10 @@ pub proof fn theorem_subfetch_ownership(rules: Seq<clazel_psl::spec::Rule>, urls
 
 /// [`theorem_subfetch_ownership`] for an accepted `FetchStyle`.
 #[verifier::spinoff_prover]
-pub proof fn lemma_ownership_sub_request(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+pub proof fn lemma_ownership_fetch_style(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
     requires
         subfetch_tables_wf(s),
-        is_sub_fetch_request(s, e),
+        is_fetch_style(s, e),
     ensures
         crate::statements::subfetch_ownership_statement(rules, urls, fetch, s, e),
 {
@@ -1263,12 +1303,10 @@ pub proof fn lemma_ownership_sub_request(rules: Seq<clazel_psl::spec::Rule>, url
     let i = find_by_id(s.renderers, id, 0)->Some_0;
     let r = s.renderers[i];
     let m = accepted_message(r, e->FromRenderer_bytes)->Some_0;
-    let request = sub_request_id(m);
-    let url = sub_request_url(m);
-    let script = m is FetchScript;
-    assert((s1, out) == fetch_sub(rules, urls, fetch, s, r, script, request, url));
-    crate::subfetch_rel::lemma_fetch_sub_shape(rules, urls, fetch, s, r, script, request, url);
-    lemma_fetch_sub_tables(rules, urls, fetch, s, r, script, request, url, r.id, r.lock);
+    let (sub, script, at_once, per_doc, request, url) = sub_request_args(m);
+    assert((s1, out) == fetch_start(rules, urls, fetch, s, r, sub, script, at_once, per_doc, request, url));
+    crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, sub, script, at_once, per_doc, request, url);
+    lemma_fetch_style_tables(rules, urls, fetch, s, r, sub, script, at_once, per_doc, request, url, r.id, r.lock);
     assert forall|k: int| 0 <= k < out.len() && ((#[trigger] out[k]) is SubConnect || out[k] is SubSend || out[k] is SubClose) implies crate::domain::output_id(out[k]) == id by {
         match out[k] {
             Output::SubConnect { .. } => {},
@@ -1311,7 +1349,7 @@ pub proof fn lemma_ownership_sub_request(rules: Seq<clazel_psl::spec::Rule>, url
 pub proof fn lemma_ownership_other(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
     requires
         subfetch_tables_wf(s),
-        !is_sub_fetch_request(s, e),
+        !is_fetch_style(s, e),
     ensures
         crate::statements::subfetch_ownership_statement(rules, urls, fetch, s, e),
 {
@@ -1355,6 +1393,14 @@ pub proof fn lemma_ownership_other(rules: Seq<clazel_psl::spec::Rule>, urls: Url
 
 }
 
+/// The limits of a request are at most the image limits.
+pub proof fn lemma_sub_request_args_bounds(m: clazel_ipc::message::spec::Message)
+    ensures
+        sub_request_args(m).2 <= max_image_subfetches_at_once(),
+        sub_request_args(m).3 <= max_images_per_document(),
+{
+}
+
 /// **`theorem_subfetch_limits`.**
 pub proof fn theorem_subfetch_limits(
     rules: Seq<clazel_psl::spec::Rule>,
@@ -1372,16 +1418,14 @@ pub proof fn theorem_subfetch_limits(
 {
     lemma_reachable_tables_wf(rules, urls, fetch, s);
     let s1 = step(rules, urls, fetch, s, e).0;
-    if is_sub_fetch_request(s, e) {
+    if is_fetch_style(s, e) {
         let i = find_by_id(s.renderers, e->FromRenderer_id, 0)->Some_0;
         let r = s.renderers[i];
         let m = accepted_message(r, e->FromRenderer_bytes)->Some_0;
-        let request = sub_request_id(m);
-        let url = sub_request_url(m);
-        let script = m is FetchScript;
-    let script = m is FetchScript;
-        assert(s1 == fetch_sub(rules, urls, fetch, s, r, script, request, url).0);
-        lemma_fetch_sub_tables(rules, urls, fetch, s, r, script, request, url, id, lock);
+        let (sub, script, at_once, per_doc, request, url) = sub_request_args(m);
+        lemma_sub_request_args_bounds(m);
+        assert(s1 == fetch_start(rules, urls, fetch, s, r, sub, script, at_once, per_doc, request, url).0);
+        lemma_fetch_style_tables(rules, urls, fetch, s, r, sub, script, at_once, per_doc, request, url, id, lock);
         if s1 != s {
             let (serial, in_document) = subcount_of(s.subcounts, r.id, r.lock);
             lemma_subcount_set(s.subcounts, r.id, r.lock, serial + 1, in_document + 1, id, lock);
@@ -1478,13 +1522,14 @@ pub proof fn lemma_script_fetch_shape_of(rules: Seq<clazel_psl::spec::Rule>, url
                 }
         }),
 {
-    crate::subfetch_rel::lemma_fetch_sub_shape(rules, urls, fetch, s, r, true, request, url);
-    lemma_fetch_sub_no_send(rules, urls, fetch, s, r, true, request, url);
-    let (s1, out) = fetch_sub(rules, urls, fetch, s, r, true, request, url);
+    crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, false, true, max_subfetches_at_once(), max_subfetches_per_document(), request, url);
+    lemma_fetch_style_no_send(rules, urls, fetch, s, r, false, true, max_subfetches_at_once(), max_subfetches_per_document(), request, url);
+    let (s1, out) = fetch_start(rules, urls, fetch, s, r, false, true, max_subfetches_at_once(), max_subfetches_per_document(), request, url);
+    let ctx = start_ctx(fetch, false, true, r.lock);
     let (serial, in_document) = subcount_of(s.subcounts, r.id, r.lock);
     assert(fetch_script(rules, urls, fetch, s, r, request, url) == (s1, out));
     if live_subfetches(s.subfetches, r.id, r.lock) >= max_subfetches_at_once() || in_document >= max_subfetches_per_document() || serial >= max_subfetch_serial() {
-        assert(out == reply_failed(r, true, request));
+        assert(out == reply(r, failed_message(false, true, request)));
         assert(out[0] == Output::ToRenderer { id: r.id, bytes: script_failed_frame(request) });
     } else {
         match clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
@@ -1502,16 +1547,16 @@ pub proof fn lemma_script_fetch_shape_of(rules: Seq<clazel_psl::spec::Rule>, url
                     Some(parsed) => {
                         let (fs, actions) = clazel_fetch::transducer::spec::start(parsed);
                         lemma_start_actions(parsed);
-                        let (hop, o, end) = sub_actions(r.id, serial, request, true, 0, actions);
-                        crate::subfetch_rel::lemma_sub_actions_outputs(r.id, serial, request, true, 0, actions);
-                        lemma_sub_actions_no_send(r.id, serial, request, true, 0, actions);
-                        lemma_sub_actions_end(r.id, serial, request, true, 0, actions);
+                        let (hop, o, end) = sub_actions(ctx, r.id, serial, request, 0, actions);
+                        crate::subfetch_rel::lemma_sub_actions_outputs(ctx, r.id, serial, request, 0, actions);
+                        lemma_sub_actions_no_send(ctx, r.id, serial, request, 0, actions);
+                        lemma_sub_actions_end(ctx, r.id, serial, request, 0, actions);
                         // `actions` is a single `Connect` or `Fail`: no `Close`.
                         let rest = actions.drop_first();
                         assert(rest.len() == 0);
                         reveal_with_fuel(sub_actions, 2);
-                        assert(sub_actions(r.id, serial, request, true, 0, rest) == (0nat, Seq::<Output>::empty(), None::<Seq<u8>>));
-                        assert(sub_actions(r.id, serial, request, true, 1, rest) == (1nat, Seq::<Output>::empty(), None::<Seq<u8>>));
+                        assert(sub_actions(ctx, r.id, serial, request, 0, rest) == (0nat, Seq::<Output>::empty(), None::<Seq<u8>>));
+                        assert(sub_actions(ctx, r.id, serial, request, 1, rest) == (1nat, Seq::<Output>::empty(), None::<Seq<u8>>));
                         assert forall|k: int| 0 <= k < o.len() implies (#[trigger] o[k]) is SubConnect by {
                             match actions[0] {
                                 clazel_fetch::transducer::spec::Action::Connect { host, port, tls } => {
@@ -1527,6 +1572,7 @@ pub proof fn lemma_script_fetch_shape_of(rules: Seq<clazel_psl::spec::Rule>, url
                             lock: r.lock,
                             serial,
                             request,
+                            sub: false,
                             script: true,
                             tab: r.tab,
                             fetch: fs,
@@ -1564,7 +1610,14 @@ pub proof fn lemma_script_fetch_shape_of(rules: Seq<clazel_psl::spec::Rule>, url
                                         assert(out[k] == o[k]);
                                     } else {
                                         assert(out[k] == Output::ToRenderer { id: r.id, bytes: frames });
-                                        assert(frames == sub_failed_frame(true, request) || exists|doc: Document| frames == #[trigger] sub_frames(true, request, doc));
+                                        // `lemma_sub_actions_end`, read for a script
+                                        // fetch: its family's frames are `Script*`.
+                                        assert(failed_frame(false, true, request) == script_failed_frame(request));
+                                        if frames != script_failed_frame(request) {
+                                            let (u, response) = choose|u: clazel_url::url::spec::Url, response: clazel_http::message::spec::Response|
+                                                frames == #[trigger] answer_frames(ctx.sub, ctx.script, request, response_document(response)) && #[trigger] sub_orb_allows(ctx, u, response);
+                                            assert(frames == script_frames(request, response_document(response)));
+                                        }
                                     }
                                 }
                             },

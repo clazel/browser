@@ -42,6 +42,7 @@ mod wpt_idna;
 mod wpt_mediaqueries;
 mod wpt_mime_types;
 mod wpt_mimesniff;
+mod wpt_orb;
 mod wpt_quirks;
 mod wpt_url_hosts;
 mod wpt_url_percent;
@@ -158,6 +159,7 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         wpt_form_encodings::convert,
         wpt_form_encodings::FILES,
     ),
+    ("wpt-orb", wpt_orb::convert, wpt_orb::FILES),
     ("wpt-url-idna", wpt_idna::convert, wpt_idna::FILES),
     (
         "wpt-mime-types",
@@ -228,6 +230,7 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         jpeg::FILES_TESTIMAGES,
     ),
     ("jpeg-corpus", jpeg::convert, jpeg::FILES_CORPUS),
+    ("jpeg-progressive", jpeg::convert, jpeg::FILES_PROGRESSIVE),
     ("wuffs-webp", wuffs_webp::convert, wuffs_webp::FILES),
     // Phase 7 item 7.1: files later items read as files; each converts to an
     // inventory of paths, sizes and hashes (see inventory.rs).

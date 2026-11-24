@@ -1,6 +1,6 @@
 //! Kani harnesses (Tier 1). Compiled only under `cargo kani`.
 //!
-//! Sixty-nine harnesses, bounded as the README lists. Under Kani the colour
+//! Seventy-five harnesses (the 69 of item 6.8 and 6 of item 6.9), bounded as the README lists. Under Kani the colour
 //! cache is 8 entries (`MAX_CACHE_BITS` 3 in `work.rs`) so that a green
 //! alphabet is 288 symbols and a prefix code group 2,352 bytes; the code is
 //! the same code with other constants.
@@ -578,6 +578,16 @@ container_harness!(container_vp8x, Vp8x);
 container_harness!(container_anim, Anim);
 container_harness!(container_anmf, Anmf);
 container_harness!(container_skip, Skip);
+
+// NOT a harness: `container_alpha` and `container_vp8`, one byte of the container in the
+// `ALPH` and `VP8 ` phases (`container_harness!(container_alpha, Alpha)` and
+// `container_harness!(container_vp8, Vp8)`). Kani 0.68.0 (CBMC 6.11.0, MiniSat,
+// `unwind(6)`) gave no verdict in 40 minutes for either, run on its own with
+// `--exact` (symbolic execution took about 5 minutes and converting to SAT about 2,
+// then the solver ran to the 40 minute cap with 6 to 7 GB resident), on a machine
+// shared with other jobs. The same macro's other nine harnesses finish in 13 to 600
+// seconds. They are not harnesses here; the two phases are covered by the unit tests,
+// the differential tests and Miri, not machine-checked. See the README, "Kani harnesses".
 container_harness!(container_pad, Pad);
 container_harness!(container_ended, Ended);
 container_harness!(container_spent, Spent);
@@ -589,10 +599,18 @@ fn container_byte(phase: Phase) {
     webp.kani_set_phase(phase);
     let groups = GROUP_BYTES;
     kani::assume(webp.kani_inv(groups));
+    // Not the last byte of a `VP8 ` payload: that decodes a whole frame
+    // (the lossy parts have their own harnesses below).
+    if phase == Phase::Vp8 {
+        kani::assume(webp.kani_chunk_left() > 1);
+    }
     let b: u8 = kani::any();
     let mut pixels: [u8; 16] = kani::any();
     let mut frame_array: [u8; 16] = kani::any();
+    let mut alpha_array = [0u8; 4];
+    let mut lossy_array = [0u8; 1500];
     let frame_len = if webp.kani_animated() { 16 } else { 0 };
+    let lossy_len = crate::vp8::lossy_len(2, 2).unwrap_or(0);
     with_scratch(false, |s, _| {
         let Some(frame) = frame_array.get_mut(..frame_len) else {
             return;
@@ -612,9 +630,152 @@ fn container_byte(phase: Phase) {
                 groups: &mut *s.groups,
             },
             frame,
+            alpha: &mut alpha_array,
+            lossy: lossy_array.get_mut(..lossy_len).unwrap_or(&mut []),
         };
         if webp.byte(b, &mut parts).is_ok() {
             assert!(webp.kani_inv(groups));
         }
     });
+}
+
+// ---------------------------------------------------------------- lossy (6.9)
+//
+// One harness per part, MiniSat, small unwinding, as above. Not run locally.
+
+use crate::vp8::bool_decoder::BoolDecoder;
+use crate::vp8::loop_filter;
+use crate::vp8::plane::Plane;
+use crate::vp8::predict::{self, SubEdge};
+use crate::vp8::transform::{inverse_dct, inverse_wht};
+use crate::vp8::yuv::yuv_to_rgb;
+
+/// The boolean decoder (RFC 6386 section 7.3) over any 4 bytes, any
+/// probabilities, 6 decisions and a literal: no panic, and `inv_any` (the
+/// part of the invariant that holds for every input) kept after each. A
+/// partition whose first byte is 0xFF can break the RFC's `value < range <<
+/// 8` (see `bool_decoder_rfc_invariant`), so `inv` is not claimed here.
+#[kani::proof]
+#[kani::solver(minisat)]
+#[kani::unwind(12)]
+fn bool_decoder_any() {
+    let data: [u8; 4] = kani::any();
+    let mut d = BoolDecoder::new(&data);
+    assert!(d.inv_any());
+    for _ in 0..6 {
+        let p: u8 = kani::any();
+        let _ = d.read_bool(p);
+        assert!(d.inv_any());
+    }
+    let _ = d.read_literal(3);
+    assert!(d.inv_any());
+}
+
+/// The RFC's invariant (`inv`, with `value < range << 8`) holds at the
+/// start of every partition the RFC's encoder can write (its first byte is
+/// below 0xFF, so `value < 255 << 8`) and is kept by 6 decisions and a
+/// literal at any probabilities.
+#[kani::proof]
+#[kani::solver(minisat)]
+#[kani::unwind(12)]
+fn bool_decoder_rfc_invariant() {
+    let data: [u8; 4] = kani::any();
+    kani::assume(data[0] < 0xFF);
+    let mut d = BoolDecoder::new(&data);
+    assert!(d.inv());
+    for _ in 0..6 {
+        let p: u8 = kani::any();
+        let _ = d.read_bool(p);
+        assert!(d.inv());
+    }
+    let _ = d.read_literal(3);
+    assert!(d.inv());
+}
+
+/// Every subblock mode (section 12.3) over any edge pixels: no panic, and
+/// `B_DC_PRED` is within the range of the edge pixels it averages.
+#[kani::proof]
+#[kani::solver(minisat)]
+#[kani::unwind(18)]
+fn subblock_predict_any() {
+    let e = SubEdge {
+        a: kani::any(),
+        l: kani::any(),
+        p: kani::any(),
+    };
+    let mode: u8 = kani::any();
+    kani::assume(mode < 10);
+    let b = predict::predict_subblock(mode, &e);
+    if mode == 0 {
+        let lo =
+            e.a.iter()
+                .take(4)
+                .chain(e.l.iter())
+                .copied()
+                .min()
+                .unwrap_or(0);
+        let hi =
+            e.a.iter()
+                .take(4)
+                .chain(e.l.iter())
+                .copied()
+                .max()
+                .unwrap_or(0);
+        assert!(b.iter().all(|&v| v >= lo && v <= hi));
+    }
+}
+
+/// The whole-block modes (sections 12.2 and 12.3) on an 8 by 8 block at the
+/// top left of a plane of any pixels, with or without a neighbour above and
+/// to the left, every mode: no panic; `DC_PRED` is within the pixels' range.
+#[kani::proof]
+#[kani::solver(minisat)]
+#[kani::unwind(10)]
+fn predict_block_edges_any() {
+    let mut data: [u8; 64] = kani::any();
+    let mut plane = Plane::new(&mut data, 8);
+    let mode: u8 = kani::any();
+    kani::assume(mode < 4);
+    let (top, left): (bool, bool) = (kani::any(), kani::any());
+    predict::predict_block(&mut plane, 0, 0, 8, mode, top, left);
+    if mode == 0 {
+        let v = plane.at(0, 0);
+        assert!((0..8).all(|i| plane.at(i, i) == v));
+    }
+}
+
+/// The three segment filters (section 15) over any 8 pixels and any
+/// controls: no panic, and each changes only the pixels it should.
+#[kani::proof]
+#[kani::solver(minisat)]
+#[kani::unwind(4)]
+fn loop_filter_any() {
+    let s: [u8; 8] = kani::any();
+    let (hev, interior, edge): (i32, i32, i32) = (kani::any(), kani::any(), kani::any());
+    kani::assume((0..=2).contains(&hev) && (1..=63).contains(&interior));
+    kani::assume((0..=400).contains(&edge));
+    let sub = loop_filter::subblock_filter(hev, interior, edge, s);
+    assert!(sub[0] == s[0] && sub[1] == s[1] && sub[6] == s[6] && sub[7] == s[7]);
+    let mb = loop_filter::mb_filter(hev, interior, edge, s);
+    assert!(mb[0] == s[0] && mb[7] == s[7]);
+    let simple = loop_filter::simple_segment(edge, [s[2], s[3], s[4], s[5]]);
+    assert!(simple[0] == s[2] && simple[3] == s[5]);
+}
+
+/// The inverse DCT and WHT (sections 14.3 and 14.4) over any 16
+/// coefficients: no panic, wrapping as the RFC's 16-bit storage does.
+#[kani::proof]
+#[kani::solver(minisat)]
+#[kani::unwind(6)]
+fn inverse_transforms_any() {
+    let c: [i16; 16] = kani::any();
+    let _ = inverse_dct(&c);
+    let _ = inverse_wht(&c);
+}
+
+/// YUV to RGB over any samples: no panic.
+#[kani::proof]
+#[kani::solver(minisat)]
+fn yuv_to_rgb_any() {
+    let _ = yuv_to_rgb(kani::any(), kani::any(), kani::any());
 }

@@ -35,17 +35,14 @@ root
 root
   block <html>
     block <body>
-      inline <select>
-        inline <math>
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 5
 #data "<!DOCTYPE html><body><select><option><math></math></option></select>"
 root
   block <html>
     block <body>
-      inline <select>
-        inline <option>
-          inline <math>
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 6
 #data "<!DOCTYPE html><body><table><math></math></table>"
@@ -231,17 +228,7 @@ root
           table-row-group <tbody>
             table-row <tr>
               table-cell <td>
-                block (anonymous)
-                  inline <select> first
-                    inline <math>
-                      inline <mi>
-                        text "foo"
-                      inline <mi>
-                        text "bar"
-                block <p>
-                  text "baz"
-                block (anonymous)
-                  inline <select> last
+                replaced <select> inline Select { rows: 1, chars: 1 }
       block <p>
         text "quux"
 
@@ -251,16 +238,7 @@ root
   block <html>
     block <body>
       block (anonymous)
-        inline <select> first
-          inline <math>
-            inline <mi>
-              text "foo"
-            inline <mi>
-              text "bar"
-      block <p>
-        text "baz"
-      block (anonymous)
-        inline <select> last
+        replaced <select> inline Select { rows: 1, chars: 1 }
       table-wrapper <table>
         table <table>
       block <p>

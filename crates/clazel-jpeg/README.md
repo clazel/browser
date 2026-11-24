@@ -1,8 +1,8 @@
 # clazel-jpeg
 
-A baseline JPEG decoder for [Clazel](../../README.md), a web browser whose
+A baseline and progressive JPEG decoder for [Clazel](../../README.md), a web browser whose
 parsers of untrusted input carry machine-checked proofs. Phase 6 item 6.5
-(`docs/phases/phase-6.md`). It implements the one interface of every Phase 6
+(`docs/phases/phase-6.md`; progressive is item 6.6). It implements the one interface of every Phase 6
 decoder, `clazel_image_shape::Decoder` (item 6.3): a resumable step function
 over caller-owned buffers, nothing allocated while decoding. Its only
 dependency is `clazel-image-shape`.
@@ -12,9 +12,13 @@ dependency is `clazel-image-shape`.
 ITU-T T.81 sequential DCT with Huffman coding: SOF0 and SOF1 (8-bit), DHT,
 DQT (8 and 16-bit), DRI and restart markers, SOS with interleaved scans or one
 scan per component, APPn and COM skipped, EOI; 1, 3 or 4 components at
-sampling factors 1 to 4 that divide the largest. Progressive (SOF2) is item 6.6
-and is refused with `Error::Unsupported`, as are arithmetic, lossless,
-hierarchical, 12-bit and two-component files. Output is opaque straight RGBA8.
+sampling factors 1 to 4 that divide the largest. **Progressive (SOF2, item
+6.6)** is Annex G: DC and AC first scans and refinements, spectral selection,
+successive approximation, EOB runs, restart intervals, up to 100 scans, the
+whole coefficient plane kept. Arithmetic, lossless, hierarchical, 12-bit and
+two-component files are refused with `Error::Unsupported`, and so is a
+progressive frame of 4 components at full resolution (its coefficients do not
+fit the work buffer). Output is opaque straight RGBA8.
 Listed choices, each with its reason, are in `src/lib.rs`: libjpeg-turbo's
 `jidctint` IDCT and "fancy" upsampling, JFIF colour, Adobe APP14 (inverted
 CMYK and YCCK), EXIF Orientation only.
@@ -29,13 +33,30 @@ CMYK and YCCK), EXIF Orientation only.
 | `src/idct.rs` | dequantization and the integer IDCT |
 | `src/output.rs` | upsampling, YCbCr, CMYK, orientation (pure functions of one position) |
 | `src/exif.rs`, `src/markers.rs`, `src/header.rs` | Orientation, marker classes, `decode_config` |
+| `src/progressive.rs` | Annex G: the four scan kinds one bit at a time, the coefficient plane in the work buffer, the in-place inverse DCT |
 | `src/proofs.rs` | the Kani harnesses (and two in `src/idct.rs`) |
 
-The work buffer is the worst case for the config, four planes of
-`(w + 31) * (h + 31)` bytes, because `work_len` is a function of the config
-alone and the sampling factors are in the frame header. A caller bounding
-memory counts it. Not benchmarked or optimised: entropy decoding is one bit
-per call.
+The work buffer is the worst case for the config, because `work_len` is a
+function of the config alone and the sampling factors are not known from it.
+The config's coding (`Coding`, set by `decode_config` from the frame marker)
+says whether the frame is progressive. A sequential frame gets four planes of
+`(w + 31) * (h + 31)` bytes, as in 6.5. A progressive frame gets
+`6 * (w + 31) * (h + 35)` bytes: it keeps every coefficient as 2 bytes plus
+one block row per component and runs the inverse DCT into the same memory at
+EOI (the argument is on `progressive::finish_plane`, and a unit test checks it
+against a separate plane). A frame whose marker is not the config's coding is
+refused at its header. **A progressive image takes about 387 MiB of work
+space at the largest size (2^13 by 2^13 pixels)** on top of its 256 MiB pixel
+buffer, which is over 6.0(j)'s 512 MiB for that one image while it decodes; a
+caller bounding memory counts it. Not benchmarked or optimised: entropy
+decoding is one bit per call, and a block of a progressive scan is copied out
+of and back into the plane.
+
+Hostile input: a progressive frame of more than 100 scans is refused
+(`Unsupported`; a scan costs the blocks of the image however few bytes it has,
+an EOB run covering up to 32767 blocks per symbol), a frame over 2^26 pixels
+by `decode_config`, and a 4-component frame at full resolution at its frame
+header; every other count is a checked `u16` or `u8`.
 
 ## Tests (`tests/conformance_jpeg.rs`)
 
@@ -62,9 +83,51 @@ added (no row in `docs/DEPENDENCIES.md`): the reference is libjpeg-turbo. CMYK
 is compared after the same `C * K / 255` conversion (libjpeg gives CMYK), so
 that conversion is checked against itself only.
 
+### Progressive tests (item 6.6)
+
+`tests/data/jpeg-progressive/progressive.pack`, made by
+`scripts/jpeg-progressive.py`: `jpegtran -progressive` and four more scan
+scripts applied to every baseline file above that libjpeg-turbo reads (134 of
+them): libjpeg's default progression, the same with a restart interval of 3
+blocks, libjpeg-turbo's own `testimages/test.scan` (vendored beside the pack),
+spectral selection only, and successive approximation of DC and AC with
+refinements. `jpegtran` is lossless, so each progressive file has its
+original's coefficients, and the script asserts for every file that
+libjpeg-turbo decodes it to what it decodes the original to. **654 files:
+650 exactly equal to libjpeg-turbo's output (9,358,872 samples, difference 0),
+4 refused** (the 227 by 149 4:4:4:4 CMYK file in four variants: a progressive
+frame of 4 full components does not fit the work buffer, see above). Also: all
+at chunk sizes 1, 5 and 4096 (a third of them), 1,968 byte mutants never panic,
+hand-made streams for DC and AC first scans and refinements, an EOB run
+covering the next block, successive approximation equal to the direct coding,
+the header errors, 5,000 scans refused at the 101st, and the size limits.
+The reference is libjpeg-turbo **2.1.5** (as above), `jpegtran` from Ubuntu's
+`libjpeg-turbo-progs` 2.1.5-2ubuntu2; no new dependency, and none of the
+"dev-dependencies" of the plan: the reference is the library through the
+script, not a crate. A single scan sequence that libjpeg-turbo itself
+produces is tested; the T.83 conformance streams are not used (the gap 6.1
+recorded).
+
 ## Kani harnesses
 
 Statements are in `src/proofs.rs` and `src/idct.rs`.
+
+**Item 6.6 added five harnesses** (`prog_dc_first_bits`, `prog_dc_refine_bit`,
+`prog_ac_first_code`, `prog_ac_refine_code` and `prog_ac_refine_correction`),
+each taking one bit of the progressive machine in one concrete stage of one
+scan kind, with the counters, band, point transform, run, EOB run and the 64
+coefficients symbolic within the invariant and Huffman tables from `Table::any`;
+each asserts no panic or overflow and the invariant afterwards. The two
+refinement ones walk a band (`unwind(66)`). They were first written without
+being run; on the merge of 6.6 onto `main` all 17 harnesses of the crate were
+run, each on its own, `cargo kani --harness NAME` in `crates/clazel-jpeg` under
+Kani 0.68.0 (CBMC 6.11.0) on a macOS machine shared with other jobs (so times
+are upper bounds): **17 of 17 prove**. The five new ones took 17 s and 207 MB
+(`prog_ac_first_code`), 417 s and 3.3 GB (`prog_ac_refine_code`), 329 s and 5.1
+GB (`prog_ac_refine_correction`), 3 s and 207 MB (`prog_dc_first_bits`) and 2 s
+and 206 MB (`prog_dc_refine_bit`): none over 15 minutes or 8 GB, so all ship. The
+table below and its times are 6.5's, run earlier in WSL; on this machine
+`orient_bijection` took 155 s and 3.2 GB and `sample_constant` 28 s and 3.0 GB.
 
 Run in WSL Ubuntu with Kani 0.68.0 (`cargo kani -p clazel-jpeg --harness NAME`), each harness on its own: **12 harnesses, 12 pass**.
 
@@ -99,6 +162,10 @@ Run in WSL Ubuntu with Kani 0.68.0 (`cargo kani -p clazel-jpeg --harness NAME`),
   not proven. The step function is therefore not machine-checked, and nor is
   the invariant `Jpeg::state_inv` being kept. `block_machine_any` (the block
   decoder) and the leaf functions are.
+- **The progressive glue has no harness either**: `prog_bit`, `prog_begin`, the
+  EOB-run block skipping, the scan-header checks, `zero_coefficients` and
+  `finish_plane` (whose in-place argument is a comment, a unit test and 654
+  files, not a proof).
 - **A single harness over all of `idct`** was tried and not finished; the two
   harnesses above stand in for it.
 - The Kani numbers are for small bounds where stated; the code is the same

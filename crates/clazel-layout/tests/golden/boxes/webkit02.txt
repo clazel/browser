@@ -232,61 +232,35 @@ root
 root
   block <html>
     block <body>
-      block (anonymous)
-        inline <select> first
-      block <hr>
-      block (anonymous)
-        inline <select> last
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 26
 #data "<select><option><hr>"
 root
   block <html>
     block <body>
-      block (anonymous)
-        inline <select> first
-          inline <option>
-      block <hr>
-      block (anonymous)
-        inline <select> last
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 27
 #data "<select><optgroup><option><hr>"
 root
   block <html>
     block <body>
-      block (anonymous)
-        inline <select> first
-          inline <optgroup>
-            inline <option>
-      block <hr>
-      block (anonymous)
-        inline <select> last
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 28
 #data "<select><optgroup><hr>"
 root
   block <html>
     block <body>
-      block (anonymous)
-        inline <select> first
-          inline <optgroup>
-      block <hr>
-      block (anonymous)
-        inline <select> last
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 29
 #data "<select><option><optgroup><hr>"
 root
   block <html>
     block <body>
-      block (anonymous)
-        inline <select> first
-          inline <option>
-          inline <optgroup>
-      block <hr>
-      block (anonymous)
-        inline <select> last
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 30
 #data "<table><tr><td><select><hr>"
@@ -298,11 +272,7 @@ root
           table-row-group <tbody>
             table-row <tr>
               table-cell <td>
-                block (anonymous)
-                  inline <select> first
-                block <hr>
-                block (anonymous)
-                  inline <select> last
+                replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 31
 #data "<table><tr><td><select><option><hr>"
@@ -314,12 +284,7 @@ root
           table-row-group <tbody>
             table-row <tr>
               table-cell <td>
-                block (anonymous)
-                  inline <select> first
-                    inline <option>
-                block <hr>
-                block (anonymous)
-                  inline <select> last
+                replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 32
 #data "<table><tr><td><select><optgroup><option><hr>"
@@ -331,13 +296,7 @@ root
           table-row-group <tbody>
             table-row <tr>
               table-cell <td>
-                block (anonymous)
-                  inline <select> first
-                    inline <optgroup>
-                      inline <option>
-                block <hr>
-                block (anonymous)
-                  inline <select> last
+                replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 33
 #data "<table><tr><td><select><optgroup><hr>"
@@ -349,12 +308,7 @@ root
           table-row-group <tbody>
             table-row <tr>
               table-cell <td>
-                block (anonymous)
-                  inline <select> first
-                    inline <optgroup>
-                block <hr>
-                block (anonymous)
-                  inline <select> last
+                replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 34
 #data "<table><tr><td><select><option><optgroup><hr>"
@@ -366,28 +320,14 @@ root
           table-row-group <tbody>
             table-row <tr>
               table-cell <td>
-                block (anonymous)
-                  inline <select> first
-                    inline <option>
-                    inline <optgroup>
-                block <hr>
-                block (anonymous)
-                  inline <select> last
+                replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 35
 #data "<select><div><i></div><option>option"
 root
   block <html>
     block <body>
-      block (anonymous)
-        inline <select> first
-      block <div>
-        inline <i>
-      block (anonymous)
-        inline <select> last
-          inline <i>
-            inline <option>
-              text "option"
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 36
 #data "<div><i></div><option>option"
@@ -406,74 +346,49 @@ root
 root
   block <html>
     block <body>
-      block (anonymous)
-        inline <select> first
-      block <div>
-        text "div 1"
-      block (anonymous)
-        inline <select> middle
-          inline-block <button>
-            text "button"
-      block <div>
-        text "div 2"
-      block <div>
-        text "div 3"
-      block (anonymous)
-        inline <select> last
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 38
 #data "<select><button>button</select>"
 root
   block <html>
     block <body>
-      inline <select>
-        inline-block <button>
-          text "button"
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 39
 #data "<select><datalist>datalist</select>"
 root
   block <html>
     block <body>
-      inline <select>
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 40
 #data "<select><button><select></select></button></select>"
 root
   block <html>
     block <body>
-      inline <select>
-        inline-block <button>
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 41
 #data "<select><button><div><select></select>"
 root
   block <html>
     block <body>
-      inline <select>
-        inline-block <button>
-          block <div>
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 42
 #data "<select><div><option><img>option</option></div></select>"
 root
   block <html>
     block <body>
-      block (anonymous)
-        inline <select> first
-      block <div>
-        inline <option>
-          replaced <img> inline Image
-          text "option"
-      block (anonymous)
-        inline <select> last
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 43
 #data "<select><input>"
 root
   block <html>
     block <body>
-      inline <select>
+      replaced <select> inline Select { rows: 1, chars: 1 }
       replaced <input> inline Input(Text { chars: 20 })
 
 #case 44
@@ -481,54 +396,28 @@ root
 root
   block <html>
     block <body>
-      inline <select>
-        inline-block <button>
-          inline <selectedcontent>
-        inline <option>
-          text "X"
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 45
 #data "<select><button><selectedcontent></button><option>x<i>i<b>ib</i>b"
 root
   block <html>
     block <body>
-      inline <select>
-        inline-block <button>
-          inline <selectedcontent>
-        inline <option>
-          text "x"
-          inline <i>
-            text "i"
-            inline <b>
-              text "ib"
-          inline <b>
-            text "b"
+      replaced <select> inline Select { rows: 1, chars: 1 }
 
 #case 46
 #data "<select><button><selectedcontent></button><option>X<option>Y"
 root
   block <html>
     block <body>
-      inline <select>
-        inline-block <button>
-          inline <selectedcontent>
-        inline <option>
-          text "X"
-        inline <option>
-          text "Y"
+      replaced <select> inline Select { rows: 2, chars: 1 }
 
 #case 47
 #data "<select><button><selectedcontent></button><option>X<option selected>Y"
 root
   block <html>
     block <body>
-      inline <select>
-        inline-block <button>
-          inline <selectedcontent>
-        inline <option>
-          text "X"
-        inline <option>
-          text "Y"
+      replaced <select> inline Select { rows: 2, chars: 1 }
 
 #case 48
 #data "<font><select><option>a</option></font></select>"
@@ -536,7 +425,5 @@ root
   block <html>
     block <body>
       inline <font>
-        inline <select>
-          inline <option>
-            text "a"
+        replaced <select> inline Select { rows: 1, chars: 1 }
 

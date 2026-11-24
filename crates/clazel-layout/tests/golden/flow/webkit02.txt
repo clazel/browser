@@ -207,129 +207,124 @@ root (anonymous) 0,0 800x600
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      block (anonymous) 8,8 784x0
-      block <hr> 8,8 784x2 m=8,0,8,0 b=1,1,1,1
-      block (anonymous) 8,18 784x0
+      line 8,8 784x22.640625 base=30.640625
+        atomic <select>
+      replaced <select> 8,8 38.234375x22.640625
 
 #case 26
 #data "<select><option><hr>"
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      block (anonymous) 8,8 784x0
-      block <hr> 8,8 784x2 m=8,0,8,0 b=1,1,1,1
-      block (anonymous) 8,18 784x0
+      line 8,8 784x22.640625 base=30.640625
+        atomic <select>
+      replaced <select> 8,8 38.234375x22.640625
 
 #case 27
 #data "<select><optgroup><option><hr>"
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      block (anonymous) 8,8 784x0
-      block <hr> 8,8 784x2 m=8,0,8,0 b=1,1,1,1
-      block (anonymous) 8,18 784x0
+      line 8,8 784x22.640625 base=30.640625
+        atomic <select>
+      replaced <select> 8,8 38.234375x22.640625
 
 #case 28
 #data "<select><optgroup><hr>"
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      block (anonymous) 8,8 784x0
-      block <hr> 8,8 784x2 m=8,0,8,0 b=1,1,1,1
-      block (anonymous) 8,18 784x0
+      line 8,8 784x22.640625 base=30.640625
+        atomic <select>
+      replaced <select> 8,8 38.234375x22.640625
 
 #case 29
 #data "<select><option><optgroup><hr>"
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      block (anonymous) 8,8 784x0
-      block <hr> 8,8 784x2 m=8,0,8,0 b=1,1,1,1
-      block (anonymous) 8,18 784x0
+      line 8,8 784x22.640625 base=30.640625
+        atomic <select>
+      replaced <select> 8,8 38.234375x22.640625
 
 #case 30
 #data "<table><tr><td><select><hr>"
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      table-wrapper <table> 8,8 8x24 m=0,776,0,0
-        table <table> 8,8 8x24
-          row-group <tbody> 10,10 4x20
-            row <tr> 10,10 4x20
-              cell <td> 10,10 4x20 p=1,1,1,1
-                block (anonymous) 11,11 2x0
-                block <hr> 11,19 2x2 m=8,0,8,0 b=1,1,1,1
-                block (anonymous) 11,29 2x0
+      table-wrapper <table> 8,8 44.234375x28.640625 m=0,739.765625,0,0
+        table <table> 8,8 44.234375x28.640625
+          row-group <tbody> 10,10 40.234375x24.640625
+            row <tr> 10,10 40.234375x24.640625
+              cell <td> 10,10 40.234375x24.640625 p=1,1,1,1
+                line 11,11 38.234375x22.640625 base=33.640625
+                  atomic <select>
+                replaced <select> 11,11 38.234375x22.640625
 
 #case 31
 #data "<table><tr><td><select><option><hr>"
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      table-wrapper <table> 8,8 8x24 m=0,776,0,0
-        table <table> 8,8 8x24
-          row-group <tbody> 10,10 4x20
-            row <tr> 10,10 4x20
-              cell <td> 10,10 4x20 p=1,1,1,1
-                block (anonymous) 11,11 2x0
-                block <hr> 11,19 2x2 m=8,0,8,0 b=1,1,1,1
-                block (anonymous) 11,29 2x0
+      table-wrapper <table> 8,8 44.234375x28.640625 m=0,739.765625,0,0
+        table <table> 8,8 44.234375x28.640625
+          row-group <tbody> 10,10 40.234375x24.640625
+            row <tr> 10,10 40.234375x24.640625
+              cell <td> 10,10 40.234375x24.640625 p=1,1,1,1
+                line 11,11 38.234375x22.640625 base=33.640625
+                  atomic <select>
+                replaced <select> 11,11 38.234375x22.640625
 
 #case 32
 #data "<table><tr><td><select><optgroup><option><hr>"
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      table-wrapper <table> 8,8 8x24 m=0,776,0,0
-        table <table> 8,8 8x24
-          row-group <tbody> 10,10 4x20
-            row <tr> 10,10 4x20
-              cell <td> 10,10 4x20 p=1,1,1,1
-                block (anonymous) 11,11 2x0
-                block <hr> 11,19 2x2 m=8,0,8,0 b=1,1,1,1
-                block (anonymous) 11,29 2x0
+      table-wrapper <table> 8,8 44.234375x28.640625 m=0,739.765625,0,0
+        table <table> 8,8 44.234375x28.640625
+          row-group <tbody> 10,10 40.234375x24.640625
+            row <tr> 10,10 40.234375x24.640625
+              cell <td> 10,10 40.234375x24.640625 p=1,1,1,1
+                line 11,11 38.234375x22.640625 base=33.640625
+                  atomic <select>
+                replaced <select> 11,11 38.234375x22.640625
 
 #case 33
 #data "<table><tr><td><select><optgroup><hr>"
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      table-wrapper <table> 8,8 8x24 m=0,776,0,0
-        table <table> 8,8 8x24
-          row-group <tbody> 10,10 4x20
-            row <tr> 10,10 4x20
-              cell <td> 10,10 4x20 p=1,1,1,1
-                block (anonymous) 11,11 2x0
-                block <hr> 11,19 2x2 m=8,0,8,0 b=1,1,1,1
-                block (anonymous) 11,29 2x0
+      table-wrapper <table> 8,8 44.234375x28.640625 m=0,739.765625,0,0
+        table <table> 8,8 44.234375x28.640625
+          row-group <tbody> 10,10 40.234375x24.640625
+            row <tr> 10,10 40.234375x24.640625
+              cell <td> 10,10 40.234375x24.640625 p=1,1,1,1
+                line 11,11 38.234375x22.640625 base=33.640625
+                  atomic <select>
+                replaced <select> 11,11 38.234375x22.640625
 
 #case 34
 #data "<table><tr><td><select><option><optgroup><hr>"
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      table-wrapper <table> 8,8 8x24 m=0,776,0,0
-        table <table> 8,8 8x24
-          row-group <tbody> 10,10 4x20
-            row <tr> 10,10 4x20
-              cell <td> 10,10 4x20 p=1,1,1,1
-                block (anonymous) 11,11 2x0
-                block <hr> 11,19 2x2 m=8,0,8,0 b=1,1,1,1
-                block (anonymous) 11,29 2x0
+      table-wrapper <table> 8,8 44.234375x28.640625 m=0,739.765625,0,0
+        table <table> 8,8 44.234375x28.640625
+          row-group <tbody> 10,10 40.234375x24.640625
+            row <tr> 10,10 40.234375x24.640625
+              cell <td> 10,10 40.234375x24.640625 p=1,1,1,1
+                line 11,11 38.234375x22.640625 base=33.640625
+                  atomic <select>
+                replaced <select> 11,11 38.234375x22.640625
 
 #case 35
 #data "<select><div><i></div><option>option"
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      block (anonymous) 8,8 784x0
-      block <div> 8,8 784x0
-      block (anonymous) 8,8 784x18.640625
-        line 8,8 784x18.640625 base=22.859375
-          inline <select> 8,8 51.359375x18.640625 end
-          inline <i> 8,8 51.359375x18.640625 start end
-          inline <option> 8,8 51.359375x18.640625 start end
-          text "option" x=8 base=22.859375 w=51.359375
+      line 8,8 784x22.640625 base=30.640625
+        atomic <select>
+      replaced <select> 8,8 38.234375x22.640625
 
 #case 36
 #data "<div><i></div><option>option"
@@ -348,153 +343,109 @@ root (anonymous) 0,0 800x600
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      block (anonymous) 8,8 784x0
-      block <div> 8,8 784x18.640625
-        line 8,8 784x18.640625 base=22.859375
-          text "div 1" x=8 base=22.859375 w=39.671875
-      block (anonymous) 8,26.640625 784x18.640625
-        line 8,26.640625 784x18.640625 base=41.5
-          inline <select> 8,26.640625 53.34375x18.640625
-          atomic <button>
-          inline-block <button> 8,26.640625 53.34375x18.640625
-            line 8,26.640625 53.34375x18.640625 base=41.5
-              text "button" x=8 base=41.5 w=53.34375
-      block <div> 8,45.28125 784x18.640625
-        line 8,45.28125 784x18.640625 base=60.140625
-          text "div 2" x=8 base=60.140625 w=39.671875
-      block <div> 8,63.921875 784x18.640625
-        line 8,63.921875 784x18.640625 base=78.78125
-          text "div 3" x=8 base=78.78125 w=39.671875
-      block (anonymous) 8,82.5625 784x0
+      line 8,8 784x22.640625 base=30.640625
+        atomic <select>
+      replaced <select> 8,8 38.234375x22.640625
 
 #case 38
 #data "<select><button>button</select>"
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      line 8,8 784x18.640625 base=22.859375
-        inline <select> 8,8 53.34375x18.640625 start end
-        atomic <button>
-        inline-block <button> 8,8 53.34375x18.640625
-          line 8,8 53.34375x18.640625 base=22.859375
-            text "button" x=8 base=22.859375 w=53.34375
+      line 8,8 784x22.640625 base=30.640625
+        atomic <select>
+      replaced <select> 8,8 38.234375x22.640625
 
 #case 39
 #data "<select><datalist>datalist</select>"
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x22.640625 base=30.640625
+        atomic <select>
+      replaced <select> 8,8 38.234375x22.640625
 
 #case 40
 #data "<select><button><select></select></button></select>"
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      line 8,8 784x0 base=8
-        inline <select> 8,-6.859375 0x18.640625 start end
-        atomic <button>
-        inline-block <button> 8,8 0x0
+      line 8,8 784x22.640625 base=30.640625
+        atomic <select>
+      replaced <select> 8,8 38.234375x22.640625
 
 #case 41
 #data "<select><button><div><select></select>"
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      line 8,8 784x0 base=8
-        inline <select> 8,-6.859375 0x18.640625 start end
-        atomic <button>
-        inline-block <button> 8,8 0x0
-          block <div> 8,8 0x0
+      line 8,8 784x22.640625 base=30.640625
+        atomic <select>
+      replaced <select> 8,8 38.234375x22.640625
 
 #case 42
 #data "<select><div><option><img>option</option></div></select>"
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      block (anonymous) 8,8 784x0
-      block <div> 8,8 784x18.640625
-        line 8,8 784x18.640625 base=22.859375
-          inline <option> 8,8 51.359375x18.640625 start end
-          atomic <img>
-          text "option" x=8 base=22.859375 w=51.359375
-          replaced <img> 8,22.859375 0x0
-      block (anonymous) 8,26.640625 784x0
+      line 8,8 784x22.640625 base=30.640625
+        atomic <select>
+      replaced <select> 8,8 38.234375x22.640625
 
 #case 43
 #data "<select><input>"
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      line 8,8 784x18.640625 base=26.640625
+      line 8,8 784x22.640625 base=30.640625
+        atomic <select>
         atomic <input>
-      replaced <input> 8,8 227.796875x18.640625
+      replaced <select> 8,8 38.234375x22.640625
+      replaced <input> 46.234375,12 227.796875x18.640625
 
 #case 44
 #data "<select><button><selectedcontent></button><option>X"
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      line 8,8 784x18.640625 base=22.859375
-        inline <select> 8,8 11.390625x18.640625 start end
-        inline <option> 8,8 11.390625x18.640625 start end
-        atomic <button>
-        text "X" x=8 base=22.859375 w=11.390625
-        inline-block <button> 8,22.859375 0x0
+      line 8,8 784x22.640625 base=30.640625
+        atomic <select>
+      replaced <select> 8,8 38.234375x22.640625
 
 #case 45
 #data "<select><button><selectedcontent></button><option>x<i>i<b>ib</i>b"
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      line 8,8 784x18.640625 base=22.859375
-        inline <select> 8,8 39.765625x18.640625 start end
-        inline <option> 8,8 39.765625x18.640625 start end
-        inline <i> 17.03125,8 20.484375x18.640625 start end
-        inline <b> 22.15625,8 15.359375x18.640625 start end
-        inline <b> 37.515625,8 10.25x18.640625 start end
-        atomic <button>
-        text "x" x=8 base=22.859375 w=9.03125
-        text "i" x=17.03125 base=22.859375 w=5.125
-        text "ib" x=22.15625 base=22.859375 w=15.359375
-        text "b" x=37.515625 base=22.859375 w=10.25
-        inline-block <button> 8,22.859375 0x0
+      line 8,8 784x22.640625 base=30.640625
+        atomic <select>
+      replaced <select> 8,8 38.234375x22.640625
 
 #case 46
 #data "<select><button><selectedcontent></button><option>X<option>Y"
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      line 8,8 784x18.640625 base=22.859375
-        inline <select> 8,8 21.953125x18.640625 start end
-        inline <option> 8,8 11.390625x18.640625 start end
-        inline <option> 19.390625,8 10.5625x18.640625 start end
-        atomic <button>
-        text "X" x=8 base=22.859375 w=11.390625
-        text "Y" x=19.390625 base=22.859375 w=10.5625
-        inline-block <button> 8,22.859375 0x0
+      line 8,8 784x41.28125 base=49.28125
+        atomic <select>
+      replaced <select> 8,8 38.234375x41.28125
 
 #case 47
 #data "<select><button><selectedcontent></button><option>X<option selected>Y"
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      line 8,8 784x18.640625 base=22.859375
-        inline <select> 8,8 21.953125x18.640625 start end
-        inline <option> 8,8 11.390625x18.640625 start end
-        inline <option> 19.390625,8 10.5625x18.640625 start end
-        atomic <button>
-        text "X" x=8 base=22.859375 w=11.390625
-        text "Y" x=19.390625 base=22.859375 w=10.5625
-        inline-block <button> 8,22.859375 0x0
+      line 8,8 784x41.28125 base=49.28125
+        atomic <select>
+      replaced <select> 8,8 38.234375x41.28125
 
 #case 48
 #data "<font><select><option>a</option></font></select>"
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      line 8,8 784x18.640625 base=22.859375
-        inline <font> 8,8 9.546875x18.640625 start end
-        inline <select> 8,8 9.546875x18.640625 start end
-        inline <option> 8,8 9.546875x18.640625 start end
-        text "a" x=8 base=22.859375 w=9.546875
+      line 8,8 784x22.640625 base=30.640625
+        inline <font> 8,15.78125 38.234375x18.640625 start end
+        atomic <select>
+        replaced <select> 8,8 38.234375x22.640625
 

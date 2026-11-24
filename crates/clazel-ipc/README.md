@@ -49,6 +49,15 @@ parsers of untrusted input carry machine-checked proofs.
   with 5.18's. Every `StyleBody` of at most `MAX_STYLE_CHUNK` octets fits one
   frame (`lemma_style_body_fits_frame`). The request id is the renderer's
   own and identifies nothing to the kernel.
+- **Item 6.17's messages** (decision 6.0(e) B): `FetchSub` (13, renderer to
+  kernel: a request id, a destination, 0 style or 1 image, and the URL as the
+  document wrote it) and `SubResponse` (119), `SubBody` (120, at most
+  `MAX_SUB_CHUNK` octets, `lemma_sub_body_fits_frame`), `SubEnd` (121) and
+  `SubFailed` (122) to a renderer. Tags 114 and below are not reused. `FetchStyle`
+  and the `Style*` messages are not retired yet (the renderer still sends
+  them; item 6.18 moves it to `FetchSub`). Written, **not yet run through
+  Verus**: the codec, the lemma, the example lemma and 5 new mutations are
+  sent to CI. Native tests (round trips of all five, the largest `SubBody`) pass.
 - **Item 6.16's message**: `Submit` (12, renderer to kernel: the URL, the
   method, `GET` or `POST`, the body's content type and the body's octets;
   `Navigate`, tag 9, stays the `GET`-only form). **The body's bound is the

@@ -973,3 +973,35 @@ it evidently means. Each entry records what we specified instead.
   value is an ordinary integer (bits "1110" written most significant first
   are 14), not as an order of transmission.
 - **Reported upstream:** not yet.
+
+## VP8 (RFC 6386) §9.3 has the segment feature mode backwards
+
+- **Spec:** RFC 6386, November 2011 (17,027 lines, SHA-256 `c044997ae5e26f74dc28569f8866937412b2783e887c96e0c09372af78be411c`), <https://www.rfc-editor.org/rfc/rfc6386.txt>
+- **Text:** §9.3, item 4a: "the mode of segment feature data (segment_feature_mode), can be absolute-value mode (0) or delta value mode (1)."
+- **Problem:** §19.2 says "segment_feature_mode indicates the feature data update mode, 0 for delta and 1 for the absolute value", and the reference decoder (§20.4, `decode_segmentation_header`: `hdr->abs = bool_get_bit`, `!seg->abs ? q + quant_idx[i] : quant_idx[i]`) agrees with §19.2.
+- **We specify:** 1 is absolute, 0 is delta. See `FrameHeader` in `crates/clazel-webp/src/vp8/header.rs`.
+- **Reported upstream:** not yet.
+
+## VP8 (RFC 6386) §19.2 writes the token probability update flag as L(1)
+
+- **Spec:** RFC 6386, November 2011 (17,027 lines, SHA-256 `c044997ae5e26f74dc28569f8866937412b2783e887c96e0c09372af78be411c`), <https://www.rfc-editor.org/rfc/rfc6386.txt>
+- **Text:** §19.2, `token_prob_update()`: "coeff_prob_update_flag | L(1)".
+- **Problem:** §13.4 reads each flag with the update probability of `coeff_update_probs` (`read_bool(d, coeff_update_probs[i][j][k][t])`), and so does the reference decoder (§20.4, `decode_entropy_header`). An `L(1)` would be a bool at probability 128.
+- **We specify:** the flag is `B(coeff_update_probs[i][j][k][l])`. See `token_prob_update` in `crates/clazel-webp/src/vp8/header.rs`.
+- **Reported upstream:** not yet.
+
+## VP8 (RFC 6386) §13.3 pseudocode disagrees with the reference decoder on "has coefficients"
+
+- **Spec:** RFC 6386, November 2011 (17,027 lines, SHA-256 `c044997ae5e26f74dc28569f8866937412b2783e887c96e0c09372af78be411c`), <https://www.rfc-editor.org/rfc/rfc6386.txt>
+- **Text:** §13.3 pseudocode: "currentBlockHasCoeffs = true" only for a token that is not `DCT_0`; "prevCoeffWasZero = true" at the end of every iteration; plane numbers "Y2 plane = 0 ... Y after Y2 plane = 1" against the prose's "0 - Y beginning at coefficient 1, 1 - Y2".
+- **Problem:** the pseudocode's planes are the wrong way round against the table index used everywhere else; `prevCoeffWasZero` would forbid `dct_eob` after every token; and the reference decoder (§20.16, `decode_mb_tokens`: `t = (c != !type)`) counts a block as having coefficients whenever its end-of-block position is past its first position, even if every token was `DCT_0` (a block of zero tokens to position 16), which also decides whether §15.1 filters the subblock edges.
+- **We specify:** the reference decoder's behaviour: type 0 is Y after Y2, 1 is Y2; the tree is entered past `dct_eob` only after a `DCT_0`; "has coefficients" is "did not end where it began". See `decode_block` in `crates/clazel-webp/src/vp8/tokens.rs`. (`image-webp` agrees on written frames with zero-token blocks.)
+- **Reported upstream:** not yet.
+
+## VP8 (RFC 6386) §12.3 names `svg2p`
+
+- **Spec:** RFC 6386, November 2011 (17,027 lines, SHA-256 `c044997ae5e26f74dc28569f8866937412b2783e887c96e0c09372af78be411c`), <https://www.rfc-editor.org/rfc/rfc6386.txt>
+- **Text:** the `B_HD_PRED` case of `subblock_intra_predict`: "B[2][0] = B[3][2] = svg2p(E + 1);".
+- **Problem:** there is no such function; the neighbouring lines use `avg2p`.
+- **We specify:** `avg2p(E + 1)`. See `predict_subblock` in `crates/clazel-webp/src/vp8/predict.rs`.
+- **Reported upstream:** not yet.

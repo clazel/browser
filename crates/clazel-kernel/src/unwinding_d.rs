@@ -337,10 +337,10 @@ pub proof fn lemma_d_kill(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetc
     crate::unwinding::lemma_rel_from_sets(rules, urls, d, s1b, s2b);
 }
 
-/// A `FetchStyle` or `FetchScript` of a renderer of `d` (items 5.19 and
-/// 7.16): the same outputs, and related states.
+/// A `FetchStyle` of a renderer of `d` (item 5.19): the same outputs, and
+/// related states.
 #[verifier::spinoff_prover]
-pub proof fn lemma_d_fetch_sub(
+pub proof fn lemma_d_fetch_style(
     rules: Seq<clazel_psl::spec::Rule>,
     urls: UrlFns,
     fetch: FetchFns,
@@ -365,18 +365,16 @@ pub proof fn lemma_d_fetch_sub(
     let i1 = find_by_id(s1.renderers, id, 0)->Some_0;
     let i2 = find_by_id(s2.renderers, id, 0)->Some_0;
     let r = s1.renderers[i1];
-    let script = m is FetchScript;
-    let request = sub_request_id(m);
-    let url = sub_request_url(m);
-    assert(step(rules, urls, fetch, s1, e) == fetch_sub(rules, urls, fetch, s1, r, script, request, url));
-    assert(step(rules, urls, fetch, s2, e) == fetch_sub(rules, urls, fetch, s2, r, script, request, url));
+    let (sub, script, at_once, per_doc, request, url) = sub_request_args(m);
+    assert(step(rules, urls, fetch, s1, e) == fetch_start(rules, urls, fetch, s1, r, sub, script, at_once, per_doc, request, url));
+    assert(step(rules, urls, fetch, s2, e) == fetch_start(rules, urls, fetch, s2, r, sub, script, at_once, per_doc, request, url));
     crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s1, e);
     crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s2, e);
     crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, fetch, s1, e);
     crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, fetch, s2, e);
-    crate::subfetch_rel::lemma_fetch_sub_shape(rules, urls, fetch, s1, r, script, request, url);
-    crate::subfetch_rel::lemma_fetch_sub_shape(rules, urls, fetch, s2, r, script, request, url);
-    crate::subfetch_rel::lemma_fetch_sub_domain(rules, urls, fetch, d, s1, s2, r, script, request, url);
+    crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s1, r, sub, script, at_once, per_doc, request, url);
+    crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s2, r, sub, script, at_once, per_doc, request, url);
+    crate::subfetch_rel::lemma_fetch_style_domain(rules, urls, fetch, d, s1, s2, r, sub, script, at_once, per_doc, request, url);
     let (s1b, o1) = step(rules, urls, fetch, s1, e);
     let (s2b, o2) = step(rules, urls, fetch, s2, e);
     lemma_rel_same_table(rules, urls, d, s1, s2, s1b, s2b);
@@ -417,7 +415,7 @@ pub proof fn lemma_d_event(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fet
                     lemma_rel_same_table(rules, urls, d, s1, s2, s1b, s2b);
                     assert(o1 == o2);
                 } else if is_sub_request(m) {
-                    lemma_d_fetch_sub(rules, urls, fetch, d, s1, s2, id, bytes, m);
+                    lemma_d_fetch_style(rules, urls, fetch, d, s1, s2, id, bytes, m);
                 } else {
                     // `Display` (item 4.12) changes nothing and shows the same
                     // on the same tab in both runs: the sender is the same

@@ -160,6 +160,39 @@ pub enum Msg {
         /// The renderer's id for the fetch.
         request: u64,
     },
+    /// Renderer to kernel: fetch a sub-resource of a destination (item 6.17).
+    FetchSub {
+        /// The renderer's id for this fetch.
+        request: u64,
+        /// The request's destination (0 style, 1 image).
+        destination: u64,
+        /// The resource's URL, as the document wrote it.
+        url: Vec<u8>,
+    },
+    /// Kernel to renderer: the sub-resource's response arrived.
+    SubResponse {
+        /// The renderer's id for the fetch.
+        request: u64,
+        /// The response's combined `Content-Type` field value, or empty.
+        content_type: Vec<u8>,
+    },
+    /// Kernel to renderer: the next part of the sub-resource's body.
+    SubBody {
+        /// The renderer's id for the fetch.
+        request: u64,
+        /// The octets.
+        bytes: Vec<u8>,
+    },
+    /// Kernel to renderer: the sub-resource's body is complete.
+    SubEnd {
+        /// The renderer's id for the fetch.
+        request: u64,
+    },
+    /// Kernel to renderer: the fetch failed, was refused, or was blocked.
+    SubFailed {
+        /// The renderer's id for the fetch.
+        request: u64,
+    },
     /// Kernel to renderer: a document is committed; its body follows in
     /// `Body` frames, then `BodyEnd`.
     Commit {
@@ -263,6 +296,16 @@ pub proof fn lemma_max_submit()
 {
 }
 
+/// [`max_sub_chunk`]: the most octets one `SubBody` carries (item 6.17).
+pub const MAX_SUB_CHUNK: usize = 1_048_559;
+
+/// [`MAX_SUB_CHUNK`] is the spec's [`max_sub_chunk`].
+pub proof fn lemma_max_sub_chunk()
+    ensures
+        MAX_SUB_CHUNK as nat == max_sub_chunk(),
+{
+}
+
 /// [`MAX_STYLE_CHUNK`] is the spec's [`max_style_chunk`].
 pub proof fn lemma_max_style_chunk()
     ensures
@@ -342,6 +385,11 @@ impl View for Msg {
             Msg::ScriptBody { request, bytes } => Message::ScriptBody { request: *request, bytes: bytes@ },
             Msg::ScriptEnd { request } => Message::ScriptEnd { request: *request },
             Msg::ScriptFailed { request } => Message::ScriptFailed { request: *request },
+            Msg::FetchSub { request, destination, url } => Message::FetchSub { request: *request, destination: *destination, url: url@ },
+            Msg::SubResponse { request, content_type } => Message::SubResponse { request: *request, content_type: content_type@ },
+            Msg::SubBody { request, bytes } => Message::SubBody { request: *request, bytes: bytes@ },
+            Msg::SubEnd { request } => Message::SubEnd { request: *request },
+            Msg::SubFailed { request } => Message::SubFailed { request: *request },
         }
     }
 }
@@ -509,6 +557,13 @@ fn parse_fields(tag: u64, toks: &[Tok]) -> (r: Option<Msg>)
                 _ => None,
             }
         } else { None }
+    } else if tag == 13 {
+        if k == 3 {
+            match (uint_at(toks, 2), uint_at(toks, 3), text_at(toks, 4)) {
+                (Some(a), Some(d), Some(b)) => Some(Msg::FetchSub { request: a, destination: d, url: b }),
+                _ => None,
+            }
+        } else { None }
     } else if tag == 15 {
         if k == 3 {
             match (uint_at(toks, 2), uint_at(toks, 3), uint_at(toks, 4)) {
@@ -625,6 +680,30 @@ fn parse_fields(tag: u64, toks: &[Tok]) -> (r: Option<Msg>)
         if k == 1 {
             let a = uint_at(toks, 2)?;
             Some(Msg::ScriptFailed { request: a })
+        } else { None }
+    } else if tag == 119 {
+        if k == 2 {
+            match (uint_at(toks, 2), bytes_at(toks, 3)) {
+                (Some(a), Some(b)) => Some(Msg::SubResponse { request: a, content_type: b }),
+                _ => None,
+            }
+        } else { None }
+    } else if tag == 120 {
+        if k == 2 {
+            match (uint_at(toks, 2), bytes_at(toks, 3)) {
+                (Some(a), Some(b)) => Some(Msg::SubBody { request: a, bytes: b }),
+                _ => None,
+            }
+        } else { None }
+    } else if tag == 121 {
+        if k == 1 {
+            let a = uint_at(toks, 2)?;
+            Some(Msg::SubEnd { request: a })
+        } else { None }
+    } else if tag == 122 {
+        if k == 1 {
+            let a = uint_at(toks, 2)?;
+            Some(Msg::SubFailed { request: a })
         } else { None }
     } else if tag == 114 {
         if k == 3 {
@@ -768,7 +847,8 @@ pub fn is_from_renderer(m: &Msg) -> (r: bool)
 {
     matches!(
         m,
-        Msg::CookieGet
+        Msg::FetchSub { .. }
+            | Msg::CookieGet
             | Msg::CookieSet { .. }
             | Msg::StorageGetItem { .. }
             | Msg::StorageSetItem { .. }
@@ -1001,6 +1081,11 @@ fn message_tokens(m: &Msg) -> (t: Vec<Tok>)
         Msg::ScriptBody { request, bytes } => toks4(Tok::Array(3), Tok::Uint(116), Tok::Uint(*request), Tok::Bytes(copy(bytes.as_slice()))),
         Msg::ScriptEnd { request } => toks3(Tok::Array(2), Tok::Uint(117), Tok::Uint(*request)),
         Msg::ScriptFailed { request } => toks3(Tok::Array(2), Tok::Uint(118), Tok::Uint(*request)),
+        Msg::FetchSub { request, destination, url } => toks5(Tok::Array(4), Tok::Uint(13), Tok::Uint(*request), Tok::Uint(*destination), Tok::Text(copy(url.as_slice()))),
+        Msg::SubResponse { request, content_type } => toks4(Tok::Array(3), Tok::Uint(119), Tok::Uint(*request), Tok::Bytes(copy(content_type.as_slice()))),
+        Msg::SubBody { request, bytes } => toks4(Tok::Array(3), Tok::Uint(120), Tok::Uint(*request), Tok::Bytes(copy(bytes.as_slice()))),
+        Msg::SubEnd { request } => toks3(Tok::Array(2), Tok::Uint(121), Tok::Uint(*request)),
+        Msg::SubFailed { request } => toks3(Tok::Array(2), Tok::Uint(122), Tok::Uint(*request)),
     }
 }
 

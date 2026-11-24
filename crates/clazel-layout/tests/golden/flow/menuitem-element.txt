@@ -121,8 +121,11 @@ root (anonymous) 0,0 800x600
 #case 13
 #data "<!DOCTYPE html><select><menuitem></select>"
 root (anonymous) 0,0 800x600
-  block <html> 0,0 800x8
-    block <body> 8,8 784x0 m=8,8,8,8
+  block <html> 0,0 800x42.421875
+    block <body> 8,8 784x26.421875 m=8,8,8,8
+      line 8,8 784x26.421875 base=30.640625
+        atomic <select>
+      replaced <select> 8,8 38.234375x22.640625
 
 #case 14
 #data "<!DOCTYPE html><option><menuitem>"

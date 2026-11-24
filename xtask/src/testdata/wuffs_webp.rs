@@ -1,6 +1,6 @@
-//! Vendored WebP files for `clazel-webp` (phase-6.md item 6.8): Wuffs'
-//! `test/data/*.webp` (the lossless ones, the animated one, and two small
-//! lossy ones for the refusal test).
+//! Vendored WebP files for `clazel-webp` (phase-6.md items 6.8 and 6.9):
+//! Wuffs' `test/data/*.webp` (the lossless ones, the animated one, and the
+//! lossy ones).
 //!
 //! The files are binary, so there is nothing to translate: like the GIF
 //! converter (`wuffs_gif.rs`), this checks that each file is the one its
@@ -17,20 +17,33 @@ use sha2::{Digest, Sha256};
 use super::fonts::listed_hash;
 use super::hash::to_hex;
 
-/// `tests/data/wuffs-webp/`: Wuffs' `test/data/*.webp` that item 6.8 uses.
+/// `tests/data/wuffs-webp/`: Wuffs' `test/data/*.webp` that items 6.8 and 6.9
+/// use.
 pub const FILES: &[&str] = &[
     "animated-red-blue.webp",
     "bricks-color.lossless.webp",
+    "bricks-color.lossy.webp",
     "bricks-dither.lossless.webp",
     "bricks-gray.lossless.webp",
+    "bricks-gray.lossy.webp",
     "bricks-nodither.lossless.webp",
     "harvesters.lossless.webp",
+    "harvesters.lossy.webp",
     "hat.lossless.webp",
+    "hat.lossy.webp",
     "hibiscus.primitive.lossless.webp",
+    "hibiscus.primitive.lossy.webp",
     "hibiscus.regular.lossless.webp",
+    "hibiscus.regular.lossy.webp",
     "hippopotamus.lossless.webp",
+    "hippopotamus.lossy.webp",
+    "hippopotamus.masked-with-muybridge.lossy.webp",
     "mona-lisa.21x32.lossless.webp",
     "mona-lisa.21x32.q0.lossy.webp",
+    "mona-lisa.21x32.q25.lossy.webp",
+    "mona-lisa.21x32.q50.lossy.webp",
+    "mona-lisa.21x32.q90.lossy.webp",
+    "peacock.24x19.lossy.webp",
     "pjw-thumbnail.lossless.webp",
     "pjw-thumbnail.lossy.webp",
 ];
