@@ -64,6 +64,10 @@ fn read_r(rt: &mut Runtime, realm: &Realm) -> clazel_js::Result<String> {
 const DOC: &str = "<!DOCTYPE html><html><head><title>t</title></head><body><div id=a class='x y'><p>one</p><p>two</p></div><span id=b>t</span><!--c--></body></html>";
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn inner_html_gets_and_sets() -> Test {
     // WPT html/dom/elements/elements-in-the-dom ... innerHTML; the cases
     // are the fragment parser's: context-dependent insertion modes.
@@ -95,6 +99,10 @@ fn inner_html_gets_and_sets() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn outer_html_sets() -> Test {
     // DOM Parsing §outerHTML.
     let (mut rt, realm) = page(DOC)?;
@@ -119,6 +127,10 @@ fn outer_html_sets() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn insert_adjacent() -> Test {
     // WPT dom/nodes/Element-insertAdjacentElement.html,
     // Element-insertAdjacentText.html and html/dom/insertAdjacentHTML.
@@ -150,6 +162,10 @@ fn insert_adjacent() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn character_data_and_text_nodes() -> Test {
     // WPT dom/nodes/Text-splitText.html, Text-wholeText.html,
     // Node-normalize.html.
@@ -179,6 +195,10 @@ fn character_data_and_text_nodes() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn equality_and_position() -> Test {
     // WPT dom/nodes/Node-isEqualNode.html, Node-compareDocumentPosition.html,
     // Node-lookupNamespaceURI.html.
@@ -207,6 +227,10 @@ fn equality_and_position() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn import_and_adopt() -> Test {
     // WPT dom/nodes/Document-importNode.html, Document-adoptNode.html.
     let (mut rt, realm) = page(DOC)?;
@@ -226,6 +250,10 @@ fn import_and_adopt() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn attr_and_named_node_map() -> Test {
     // WPT dom/nodes/Attr-*.html, Element-attributes.html (the
     // `attributes` map), Document-createAttribute.html,
@@ -266,6 +294,10 @@ fn attr_and_named_node_map() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn dataset_conversions() -> Test {
     // HTML §3.2.6.6 "dataset": the names, the setter's errors.
     let (mut rt, realm) =
@@ -323,6 +355,10 @@ fn dataset_conversions() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn mutation_observer_records() -> Test {
     // WPT dom/nodes/MutationObserver-childList.html, -attributes.html,
     // -characterData.html, -disconnect.html, -takeRecords.html: the
@@ -378,6 +414,10 @@ fn mutation_observer_records() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn mutation_observer_options_and_lifecycle() -> Test {
     let (mut rt, realm) = page(DOC)?;
     run(
@@ -418,6 +458,10 @@ fn mutation_observer_options_and_lifecycle() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn live_ranges() -> Test {
     // WPT dom/ranges/Range-set.html, Range-selectNode.html,
     // Range-compareBoundaryPoints.html, Range-deleteContents.html,
@@ -461,6 +505,10 @@ fn live_ranges() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn ranges_follow_mutations() -> Test {
     // DOM §4.2.3 insert/remove and §4.10 replace data, steps for live
     // ranges; WPT dom/ranges/Range-mutations-*.html.
@@ -489,6 +537,10 @@ fn ranges_follow_mutations() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn contextual_fragment() -> Test {
     let (mut rt, realm) = page(DOC)?;
     let r = run(
@@ -506,6 +558,10 @@ fn contextual_fragment() -> Test {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+)]
 fn tag_name_ns_and_processing_instructions() -> Test {
     // WPT dom/nodes/Document-getElementsByTagNameNS.html and
     // Document-createProcessingInstruction.js.
