@@ -21,10 +21,19 @@
 //! from public calls only"): `assert`, `assert.sameValue`,
 //! `assert.notSameValue`, `assert.throws` (which compares `thrown.constructor`
 //! with the expected constructor, as `assert.js` does), and a `$262` object
-//! with `global` and `gc`; its other members report "not yet" when called. A
-//! test that includes any other harness file (`propertyHelper.js`,
-//! `compareArray.js`, ...) is an expected failure: they need `Array`,
-//! `Symbol` or accessor properties, later groups of 7.9.
+//! with `global` and `gc`; its other members report "not yet" when called;
+//! `assert.compareArray`, which tests call without including a file, is a
+//! few lines of JS after `assert.js`'s contract (`ASSERT_EXTRAS`). The real
+//! `sta.js` runs before every test, and so do the harness files of
+//! `RUN_INCLUDES` that a test includes (`propertyHelper.js`,
+//! `compareArray.js`, `asyncHelpers.js`, `isConstructor.js`); a test that
+//! includes any other harness file is an expected failure.
+//!
+//! An `async` test (its `flags` say so) runs with the real
+//! `doneprintHandle.js`: after the script the job queue runs to empty, as a
+//! host's microtask checkpoint does, and the test passes if `$DONE` printed
+//! `Test262:AsyncTestComplete`; a printed `Test262:AsyncTestFailure` is
+//! classed as the error it names, and a test that never calls `$DONE` fails.
 //!
 //! A script that throws an uncaught `ReferenceError` for a name that is not
 //! defined is classed by the name ("global X is missing"): the built-ins
@@ -192,26 +201,110 @@ fn ignore(_vm: &mut Vm, _this: Value, _args: &[Value]) -> Result<Value, Abrupt> 
     Ok(Value::UNDEFINED)
 }
 
-/// `harness/sta.js`, compiled once: it defines `Test262Error`.
-fn sta_program() -> Option<&'static Program> {
-    static STA: OnceLock<Option<Program>> = OnceLock::new();
-    STA.get_or_init(|| {
-        let path = root().join("../harness/sta.js");
-        let text = std::fs::read_to_string(path).ok()?;
-        let src: Vec<u32> = text.chars().map(u32::from).collect();
-        let ast = parse(&src, SourceGoal::Script).ok()?;
-        compile_script(&ast, &src).ok()
-    })
-    .as_ref()
+/// The harness files this runner runs as they are, before a test that
+/// includes them: `sta.js` (always), `doneprintHandle.js` (for an `async`
+/// test) and the includes the tests of generators and async functions use.
+/// Each is compiled once.
+const RUN_INCLUDES: [&str; 6] = [
+    "sta.js",
+    "doneprintHandle.js",
+    "asyncHelpers.js",
+    "compareArray.js",
+    "propertyHelper.js",
+    "isConstructor.js",
+];
+
+/// The harness file `name` of [`RUN_INCLUDES`], compiled once.
+fn harness_program(name: &str) -> Option<&'static Program> {
+    static PROGRAMS: OnceLock<Vec<Option<Program>>> = OnceLock::new();
+    let all = PROGRAMS.get_or_init(|| {
+        RUN_INCLUDES
+            .iter()
+            .map(|n| {
+                let text = std::fs::read_to_string(root().join("../harness").join(n)).ok()?;
+                let src: Vec<u32> = text.chars().map(u32::from).collect();
+                let ast = parse(&src, SourceGoal::Script).ok()?;
+                compile_script(&ast, &src).ok()
+            })
+            .collect()
+    });
+    let i = RUN_INCLUDES.iter().position(|n| *n == name)?;
+    all.get(i)?.as_ref()
 }
 
+/// Runs the harness file `name`.
+fn run_harness_file(vm: &mut Vm, name: &'static str) -> Result<(), Abrupt> {
+    let p = harness_program(name).ok_or(Abrupt::Internal("a harness file does not compile"))?;
+    let script = vm.load(p)?;
+    vm.run(&script)?;
+    Ok(())
+}
+
+/// `print`, as `doneprintHandle.js` calls it: the text is appended to the
+/// global `__clazel_printed`, which the runner reads after an `async` test.
+fn print(vm: &mut Vm, _this: Value, args: &[Value]) -> Result<Value, Abrupt> {
+    let line = match args.first() {
+        Some(v) => vm.to_js_string(*v)?.to_string_lossy(),
+        None => String::new(),
+    };
+    let g = vm.global();
+    let old = vm.get_named(g, PRINTED)?;
+    let old = vm.string_text(old).unwrap_or_default();
+    let all = vm.new_string(&format!("{old}{line}\n"))?;
+    vm.define_property(g, PRINTED, all)?;
+    Ok(Value::UNDEFINED)
+}
+
+/// The members of the real `assert.js` that tests call besides the native
+/// ones: `assert.compareArray` and the `assert._isSameValue` it uses, written
+/// here after `assert.js`'s contract (SameValue of each element, a
+/// Test262Error naming both lists otherwise).
+const ASSERT_EXTRAS: &str = r#"
+assert._isSameValue = function (a, b) {
+  if (a === b) return a !== 0 || 1 / a === 1 / b;
+  return a !== a && b !== b;
+};
+assert.compareArray = function (actual, expected, message) {
+  message = message === undefined ? '' : String(message);
+  var primitive = function (v) { return !v || (typeof v !== 'object' && typeof v !== 'function'); };
+  if (primitive(actual)) throw new Test262Error('Actual argument shouldn\'t be primitive. ' + message);
+  if (primitive(expected)) throw new Test262Error('Expected argument shouldn\'t be primitive. ' + message);
+  if (actual.length === expected.length) {
+    var same = true;
+    for (var i = 0; i < actual.length; i++) {
+      if (!assert._isSameValue(expected[i], actual[i])) { same = false; break; }
+    }
+    if (same) return;
+  }
+  var format = function (a) { return '[' + Array.prototype.map.call(a, String).join(', ') + ']'; };
+  throw new Test262Error('Actual ' + format(actual) + ' and expected ' + format(expected) + ' should have the same contents. ' + message);
+};
+"#;
+
+/// [`ASSERT_EXTRAS`], compiled once.
+fn assert_extras() -> Option<&'static Program> {
+    static EXTRAS: OnceLock<Option<Program>> = OnceLock::new();
+    EXTRAS
+        .get_or_init(|| {
+            let src: Vec<u32> = ASSERT_EXTRAS.chars().map(u32::from).collect();
+            let ast = parse(&src, SourceGoal::Script).ok()?;
+            compile_script(&ast, &src).ok()
+        })
+        .as_ref()
+}
+
+/// The global that collects what `print` printed.
+const PRINTED: &str = "__clazel_printed";
+
 /// Installs `assert` (unless `raw`), `print` and `$262`, and runs the real
-/// `sta.js` (unless `raw`).
-fn install_harness(vm: &mut Vm, raw: bool) -> Result<(), Abrupt> {
+/// `sta.js` (unless `raw`), `doneprintHandle.js` for an `async` test and the
+/// test's includes of [`RUN_INCLUDES`].
+fn install_harness(vm: &mut Vm, case: &Case) -> Result<(), Abrupt> {
+    let raw = case.flags.contains(&"raw");
+    let print = vm.new_native("print", 1, print)?;
+    vm.define_global("print", print)?;
     if !raw {
-        let sta = sta_program().ok_or(Abrupt::Internal("sta.js does not compile"))?;
-        let script = vm.load(sta)?;
-        vm.run(&script)?;
+        run_harness_file(vm, "sta.js")?;
         let assert = vm.new_native("assert", 2, assert_true)?;
         for (name, len, f) in [
             (
@@ -226,9 +319,10 @@ fn install_harness(vm: &mut Vm, raw: bool) -> Result<(), Abrupt> {
             vm.define_property(assert, name, n)?;
         }
         vm.define_global("assert", assert)?;
+        let extras = assert_extras().ok_or(Abrupt::Internal("ASSERT_EXTRAS does not compile"))?;
+        let script = vm.load(extras)?;
+        vm.run(&script)?;
     }
-    let print = vm.new_native("print", 1, ignore)?;
-    vm.define_global("print", print)?;
     let host = vm.new_object()?;
     let g = vm.global();
     vm.define_property(host, "global", g)?;
@@ -236,7 +330,19 @@ fn install_harness(vm: &mut Vm, raw: bool) -> Result<(), Abrupt> {
         let f = vm.new_native(name, 0, if name == "gc" { ignore } else { not_yet })?;
         vm.define_property(host, name, f)?;
     }
-    vm.define_global("$262", host)
+    vm.define_global("$262", host)?;
+    if raw {
+        return Ok(());
+    }
+    if case.flags.contains(&"async") {
+        run_harness_file(vm, "doneprintHandle.js")?;
+    }
+    for name in RUN_INCLUDES {
+        if case.includes.contains(&name) && name != "sta.js" && name != "doneprintHandle.js" {
+            run_harness_file(vm, name)?;
+        }
+    }
+    Ok(())
 }
 
 // -----------------------------------------------------------------------
@@ -290,8 +396,14 @@ fn run_one(case: &Case, src: &[u32], goal: SourceGoal) -> Outcome {
     if let Err(e) = clazel_js_builtins::install(&mut vm) {
         return Outcome::Fail(format!("install: {e:?}"));
     }
-    if let Err(e) = install_harness(&mut vm, case.flags.contains(&"raw")) {
-        return Outcome::Fail(format!("harness: {e:?}"));
+    if let Err(e) = install_harness(&mut vm, case) {
+        return match e {
+            Abrupt::Throw(v) => Outcome::Fail(format!("harness: {}", vm.describe(v))),
+            Abrupt::NotYet(what) => Outcome::Xfail(format!(
+                "the VM does not yet implement {what} (in a harness file)"
+            )),
+            other => Outcome::Fail(format!("harness: {other:?}")),
+        };
     }
     let script = match vm.load(&program) {
         Ok(s) => s,
@@ -301,8 +413,33 @@ fn run_one(case: &Case, src: &[u32], goal: SourceGoal) -> Outcome {
         Err(e) => return Outcome::Fail(format!("load: {e:?}")),
     };
     vm.set_budget(BUDGET);
-    let result = vm.run(&script);
+    let mut result = vm.run(&script);
     let negative = case.negative.filter(|(phase, _)| *phase == "runtime");
+    if result.is_ok() && case.flags.contains(&"async") {
+        // An `async` test reports through `$DONE` (doneprintHandle.js), from
+        // a job: run the job queue to empty, as a host's microtask
+        // checkpoint does, then read what it printed.
+        if let Err(e) = vm.run_jobs() {
+            result = Err(e);
+        } else {
+            let g = vm.global();
+            let printed = vm
+                .get_named(g, PRINTED)
+                .ok()
+                .and_then(|v| vm.string_text(v))
+                .unwrap_or_default();
+            if let Some(rest) = printed
+                .lines()
+                .find_map(|l| l.strip_prefix("Test262:AsyncTestFailure:"))
+            {
+                let (name, msg) = rest.split_once(": ").unwrap_or((rest, ""));
+                return classify(Some(name), Some(msg), negative, rest.to_string());
+            }
+            if !printed.lines().any(|l| l == "Test262:AsyncTestComplete") {
+                return Outcome::Fail("the async test did not call $DONE".into());
+            }
+        }
+    }
     match result {
         Ok(_) => match negative {
             None => Outcome::Pass,
@@ -313,6 +450,26 @@ fn run_one(case: &Case, src: &[u32], goal: SourceGoal) -> Outcome {
         }
         Err(Abrupt::Throw(e)) => {
             let (name, msg) = thrown(&mut vm, e);
+            let d = vm.describe(e);
+            classify(name.as_deref(), msg.as_deref(), negative, d)
+        }
+        Err(Abrupt::Terminated) => Outcome::Fail("step budget exhausted".into()),
+        Err(e) => Outcome::Fail(format!("{e:?}")),
+    }
+}
+
+/// Classifies a thrown error by its `name` and `message` (`described` is
+/// how a failure reports it).
+fn classify(
+    name: Option<&str>,
+    msg: Option<&str>,
+    negative: Option<(&str, &str)>,
+    described: String,
+) -> Outcome {
+    let name = name.map(str::to_string);
+    let msg = msg.map(str::to_string);
+    {
+        {
             if let Some((_, ty)) = negative
                 && name.as_deref() == Some(ty)
             {
@@ -359,12 +516,10 @@ fn run_one(case: &Case, src: &[u32], goal: SourceGoal) -> Outcome {
                 );
             }
             match negative {
-                Some((_, ty)) => Outcome::Fail(format!("expected {ty}, got {}", vm.describe(e))),
-                None => Outcome::Fail(vm.describe(e)),
+                Some((_, ty)) => Outcome::Fail(format!("expected {ty}, got {described}")),
+                None => Outcome::Fail(described),
             }
         }
-        Err(Abrupt::Terminated) => Outcome::Fail("step budget exhausted".into()),
-        Err(e) => Outcome::Fail(format!("{e:?}")),
     }
 }
 
@@ -388,6 +543,21 @@ fn runs(case: &Case) -> Vec<(SourceGoal, bool)> {
 /// The harness files the native harness stands in for.
 const NATIVE_INCLUDES: [&str; 2] = ["assert.js", "sta.js"];
 
+/// The directories of generators and async functions (items 7.7 to 7.9),
+/// whose counts are printed each on its own.
+const SUSPEND_DIRS: [&str; 10] = [
+    "language/statements/generators",
+    "language/statements/async-function",
+    "language/statements/async-generator",
+    "language/expressions/generators",
+    "language/expressions/async-function",
+    "language/expressions/async-arrow-function",
+    "language/expressions/async-generator",
+    "language/expressions/await",
+    "language/expressions/yield",
+    "built-ins/AsyncFromSyncIteratorPrototype",
+];
+
 /// Tests that run and give a different result for a known reason, each with
 /// its reason: expected failures.
 const KNOWN_GAPS: &[(&str, &str)] = &[
@@ -398,6 +568,26 @@ const KNOWN_GAPS: &[(&str, &str)] = &[
     (
         "language/directive-prologue/10.1.1-11-s.js",
         "calls eval, which is not there yet (a built-in, 7.9); the test catches the ReferenceError and asserts `err instanceof SyntaxError`, so the runner cannot class it by name (reached since `instanceof` runs)",
+    ),
+    (
+        "language/expressions/async-function/named-strict-error-reassign-fn-name-in-body-in-eval.js",
+        "calls eval, which is not there yet (a built-in, 7.9); the test catches the ReferenceError and asserts `error instanceof TypeError`, so the runner cannot class it by name",
+    ),
+    (
+        "language/expressions/async-generator/named-strict-error-reassign-fn-name-in-body-in-eval.js",
+        "calls eval, which is not there yet (a built-in, 7.9); the test catches the ReferenceError and asserts `error instanceof TypeError`, so the runner cannot class it by name",
+    ),
+    (
+        "language/expressions/yield/formal-parameters-after-reassignment-non-strict.js",
+        "a sloppy function's arguments object has no parameter map (CreateMappedArgumentsObject §10.4.4.7† is not yet mapped, `clazel_js_vm::host`), so `arguments[0] = v` does not change the parameter",
+    ),
+    (
+        "language/statements/async-function/evaluation-mapped-arguments.js",
+        "a sloppy function's arguments object has no parameter map (CreateMappedArgumentsObject §10.4.4.7† is not yet mapped, `clazel_js_vm::host`), so `arguments[0] = v` does not change the parameter",
+    ),
+    (
+        "language/statements/generators/restricted-properties.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
     ),
     (
         "language/comments/S7.4_A5.js",
@@ -420,15 +610,12 @@ fn not_run(case: &Case) -> Option<String> {
     if case.flags.contains(&"module") {
         return Some("module (the compiler's third slice, an open pull request)".into());
     }
-    if case.flags.contains(&"async") {
-        return Some("async test (Promises and the job queue, 7.9)".into());
-    }
     if case.path.starts_with("harness/") {
         return Some("test of the real harness files (replaced by the native harness)".into());
     }
     case.includes
         .iter()
-        .find(|i| !NATIVE_INCLUDES.contains(i))
+        .find(|i| !NATIVE_INCLUDES.contains(i) && !RUN_INCLUDES.contains(i))
         .map(|i| format!("includes {i} (needs built-ins of later groups of 7.9)"))
 }
 
@@ -447,6 +634,12 @@ fn test262_through_the_interpreter() -> Result<(), String> {
         let mut keys = vec![parts.iter().take(2).copied().collect::<Vec<_>>().join("/")];
         if path.starts_with("language/literals/regexp/") {
             keys.push("language/literals/regexp".to_string());
+        }
+        if let Some(d) = SUSPEND_DIRS
+            .iter()
+            .find(|d| path.starts_with(&format!("{d}/")))
+        {
+            keys.push((*d).to_string());
         }
         for k in keys {
             let e = dirs.entry(k).or_insert([0; 3]);
