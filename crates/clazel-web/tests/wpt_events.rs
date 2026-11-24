@@ -199,10 +199,6 @@ const KNOWN: &[(&str, &str)] = &[
         "needs `promise_test`, which needs `Promise` (the engine's); its 2 synchronous subtests pass",
     ),
     (
-        "EventTarget-this-of-listener.html",
-        "needs `createProcessingInstruction` and `for...of` (item 7.13 and the engine)",
-    ),
-    (
         "event-disabled-dynamic.html",
         "needs HTMLInputElement's `disabled` (item 7.13): `e.disabled = false` is a plain property here, the attribute stays",
     ),

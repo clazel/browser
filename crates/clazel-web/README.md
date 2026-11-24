@@ -228,7 +228,7 @@ Tier 0, target tier 0: safe Rust, tested, nothing proven. So far:
     `dom/events/` pages (the `.html` ones, and the `.any.js` and
     `.window.js` ones inside a page) with a stand-in for `testharness.js`
     (`tests/support/standin-events.js`: the engine cannot run the real one
-    yet): 40 pages pass (226 subtests), 24 are listed with the reason each
+    yet): 41 pages pass (232 subtests), 23 are listed with the reason each
     (`for...of`, `class extends`, `Promise` and `Object.getOwnPropertyDescriptor`
     in the engine; `HTMLInputElement` and the other element interfaces, other
     documents and shadow DOM in item 7.13; `ErrorEvent`; WPT's `/dom/constants.js`,
