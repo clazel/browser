@@ -15,24 +15,30 @@
 //! - `CreateDataProperty` (§7.3.5†), `DefinePropertyOrThrow` (§7.3.8†),
 //!   `[[Delete]]` (§10.1.10.1†) and `DeletePropertyOrThrow` (§7.3.10†).
 //!
-//! Objects are always extensible in this slice (no `Object.preventExtensions`
-//! yet) and have no accessor properties.
+//! An object is extensible until [`Vm::prevent_extensions`] (§10.1.4†): then
+//! no property is added to it (ValidateAndApplyPropertyDescriptor step 2.a,
+//! OrdinarySet step 2.d, CreateDataProperty). Accessor properties are kept as `crate::heap` describes (an
+//! [`ACCESSOR`] bit and a pair cell in the slot).
 
-use crate::heap::length_value;
+use crate::heap::{ACCESSOR, length_value};
 use crate::interp::{Abrupt, Intrinsic, Vm};
 use crate::numeric::to_uint32;
 use clazel_js_heap::shape::Attrs;
 use clazel_js_heap::string::Key;
 use clazel_js_heap::value::Value;
 
-/// A Property Descriptor (§6.2.6†) for a data property: each field is present
-/// (`Some`) or absent (`None`).
+/// A Property Descriptor (§6.2.6†): each field is present (`Some`) or absent
+/// (`None`).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct PropDesc {
     /// `[[Value]]`.
     pub value: Option<Value>,
     /// `[[Writable]]`.
     pub writable: Option<bool>,
+    /// `[[Get]]`: a function object or `undefined`.
+    pub get: Option<Value>,
+    /// `[[Set]]`: a function object or `undefined`.
+    pub set: Option<Value>,
     /// `[[Enumerable]]`.
     pub enumerable: Option<bool>,
     /// `[[Configurable]]`.
@@ -46,9 +52,38 @@ impl PropDesc {
         Self {
             value: Some(value),
             writable: Some(attrs.0 & Attrs::WRITABLE != 0),
+            get: None,
+            set: None,
             enumerable: Some(attrs.0 & Attrs::ENUMERABLE != 0),
             configurable: Some(attrs.0 & Attrs::CONFIGURABLE != 0),
         }
+    }
+
+    /// A complete accessor descriptor: `get` and `set` (each a function or
+    /// `undefined`) with the enumerable and configurable bits of `attrs`.
+    #[must_use]
+    pub fn accessor(get: Value, set: Value, attrs: Attrs) -> Self {
+        Self {
+            value: None,
+            writable: None,
+            get: Some(get),
+            set: Some(set),
+            enumerable: Some(attrs.0 & Attrs::ENUMERABLE != 0),
+            configurable: Some(attrs.0 & Attrs::CONFIGURABLE != 0),
+        }
+    }
+
+    /// IsAccessorDescriptor ( Desc ), §6.2.6.1†: it has `[[Get]]` or `[[Set]]`.
+    #[must_use]
+    pub fn is_accessor(&self) -> bool {
+        self.get.is_some() || self.set.is_some()
+    }
+
+    /// IsDataDescriptor ( Desc ), §6.2.6.2†: it has `[[Value]]` or
+    /// `[[Writable]]`.
+    #[must_use]
+    pub fn is_data(&self) -> bool {
+        self.value.is_some() || self.writable.is_some()
     }
 
     /// `{ [[Value]]: value, [[Writable]]: true, [[Enumerable]]: true,
@@ -121,6 +156,9 @@ impl Vm {
         desc: &PropDesc,
     ) -> Result<bool, Abrupt> {
         let current = self.get_own_property(obj, key)?;
+        if desc.is_accessor() || current.is_some_and(|(a, _)| a.0 & ACCESSOR != 0) {
+            return self.validate_and_apply_accessor(obj, key, desc);
+        }
         let Some((cur_attrs, cur_value)) = current else {
             let mut bits = 0;
             for (flag, bit) in [
@@ -131,6 +169,10 @@ impl Vm {
                 if flag == Some(true) {
                     bits |= bit;
                 }
+            }
+            // Step 2.a: "If extensible is false, return false."
+            if !self.heap.is_extensible(obj) {
+                return Ok(false);
             }
             let v = desc.value.unwrap_or(Value::UNDEFINED);
             self.heap.define(obj, key, v, Attrs(bits))?;
@@ -162,6 +204,203 @@ impl Vm {
         let v = desc.value.unwrap_or(cur_value);
         self.heap.redefine(obj, key, v, Attrs(bits))?;
         Ok(true)
+    }
+
+    /// `OrdinaryGetOwnProperty` (§10.1.5.1†) as a complete descriptor: a data
+    /// descriptor, or for an accessor property its `[[Get]]` and `[[Set]]`.
+    ///
+    /// # Errors
+    /// [`Abrupt::Internal`] if the heap is corrupt.
+    pub fn own_property_descriptor(
+        &self,
+        obj: Value,
+        key: Key,
+    ) -> Result<Option<PropDesc>, Abrupt> {
+        let Some((attrs, v)) = self.get_own_property(obj, key)? else {
+            return Ok(None);
+        };
+        if attrs.0 & ACCESSOR == 0 {
+            return Ok(Some(PropDesc::data(v, attrs)));
+        }
+        let (get, set) = self
+            .heap
+            .accessor(v)
+            .ok_or(Abrupt::Internal("accessor pair"))?;
+        Ok(Some(PropDesc::accessor(get, set, attrs)))
+    }
+
+    /// `ValidateAndApplyPropertyDescriptor` (§10.1.6.3†) when Desc or the
+    /// current property is an accessor (O is never undefined here, and the
+    /// object is extensible):
+    /// 2. If current is undefined, then c. If IsAccessorDescriptor(Desc) is
+    ///    true, create an own accessor property whose [[Get]], [[Set]],
+    ///    [[Enumerable]] and [[Configurable]] are Desc's or their defaults
+    ///    (`undefined`, `false`). e. Return true.
+    /// 4. If every field in Desc is absent, return true.
+    /// 5. If current.[[Configurable]] is false, then a. If Desc has
+    ///    [[Configurable]] and it is true, return false. b. If Desc has
+    ///    [[Enumerable]] and it differs from current's, return false. c. If
+    ///    IsGenericDescriptor(Desc) is false and IsAccessorDescriptor(Desc)
+    ///    differs from IsAccessorDescriptor(current), return false. d. If
+    ///    IsAccessorDescriptor(current) is true, then i. If Desc has [[Get]]
+    ///    and SameValue(Desc.[[Get]], current.[[Get]]) is false, return
+    ///    false. ii. The same for [[Set]]. e. Else if current.[[Writable]] is
+    ///    false, then i. If Desc has [[Writable]] and it is true, return false.
+    ///    ii. If Desc has [[Value]] and SameValue(Desc.[[Value]],
+    ///    current.[[Value]]) is false, return false.
+    /// 6. a. If IsDataDescriptor(current) and IsAccessorDescriptor(Desc), let
+    ///    configurable and enumerable be Desc's if present, else current's,
+    ///    and replace the property by an accessor property with them and
+    ///    Desc's [[Get]] and [[Set]] or their defaults. b. If
+    ///    IsAccessorDescriptor(current) and IsDataDescriptor(Desc), replace it
+    ///    by a data property in the same way, with Desc's [[Value]] and
+    ///    [[Writable]] or their defaults. c. Else, set each field of Desc.
+    /// 7. Return true.
+    fn validate_and_apply_accessor(
+        &mut self,
+        obj: Value,
+        key: Key,
+        desc: &PropDesc,
+    ) -> Result<bool, Abrupt> {
+        let bits = |enumerable: bool, configurable: bool, writable: bool| {
+            let mut b = 0;
+            if enumerable {
+                b |= Attrs::ENUMERABLE;
+            }
+            if configurable {
+                b |= Attrs::CONFIGURABLE;
+            }
+            if writable {
+                b |= Attrs::WRITABLE;
+            }
+            b
+        };
+        let Some(current) = self.own_property_descriptor(obj, key)? else {
+            // Step 2.a: "If extensible is false, return false."
+            if !self.heap.is_extensible(obj) {
+                return Ok(false);
+            }
+            // Step 2.c (Desc is an accessor descriptor here).
+            let pair = self.heap.new_accessor(
+                desc.get.unwrap_or(Value::UNDEFINED),
+                desc.set.unwrap_or(Value::UNDEFINED),
+            )?;
+            let b = bits(
+                desc.enumerable == Some(true),
+                desc.configurable == Some(true),
+                false,
+            );
+            self.heap.define(obj, key, pair, Attrs(b | ACCESSOR))?;
+            return Ok(true);
+        };
+        if *desc == PropDesc::default() {
+            return Ok(true);
+        }
+        let cur_enumerable = current.enumerable == Some(true);
+        let cur_configurable = current.configurable == Some(true);
+        if !cur_configurable {
+            if desc.configurable == Some(true)
+                || desc.enumerable.is_some_and(|e| e != cur_enumerable)
+            {
+                return Ok(false);
+            }
+            let generic = !desc.is_accessor() && !desc.is_data();
+            if !generic && desc.is_accessor() != current.is_accessor() {
+                return Ok(false);
+            }
+            if current.is_accessor() {
+                let differs = |new: Option<Value>, old: Option<Value>| {
+                    new.is_some_and(|n| !self.same_value(n, old.unwrap_or(Value::UNDEFINED)))
+                };
+                if differs(desc.get, current.get) || differs(desc.set, current.set) {
+                    return Ok(false);
+                }
+            } else if current.writable != Some(true)
+                && (desc.writable == Some(true)
+                    || desc.value.is_some_and(|v| {
+                        !self.same_value(v, current.value.unwrap_or(Value::UNDEFINED))
+                    }))
+            {
+                return Ok(false);
+            }
+        }
+        let enumerable = desc.enumerable.unwrap_or(cur_enumerable);
+        let configurable = desc.configurable.unwrap_or(cur_configurable);
+        let to_accessor = if current.is_accessor() {
+            !desc.is_data()
+        } else {
+            desc.is_accessor()
+        };
+        if to_accessor {
+            // Steps 6.a and 6.c: Desc's halves, else current's (`undefined`
+            // when current was a data property).
+            let get = desc.get.or(current.get).unwrap_or(Value::UNDEFINED);
+            let set = desc.set.or(current.set).unwrap_or(Value::UNDEFINED);
+            let pair = self.heap.new_accessor(get, set)?;
+            let b = bits(enumerable, configurable, false);
+            self.heap.redefine(obj, key, pair, Attrs(b | ACCESSOR))?;
+        } else {
+            // Step 6.b: an accessor becomes a data property.
+            let value = desc.value.unwrap_or(Value::UNDEFINED);
+            let b = bits(enumerable, configurable, desc.writable == Some(true));
+            self.heap.redefine(obj, key, value, Attrs(b))?;
+        }
+        Ok(true)
+    }
+
+    /// `[[PreventExtensions]] ( )` of an ordinary object, OrdinaryPreventExtensions
+    /// (§10.1.4.1†): 1. Set O.[[Extensible]] to false. 2. Return true.
+    ///
+    /// # Errors
+    /// [`Abrupt::Internal`] if `obj` is not an object.
+    pub fn prevent_extensions(&mut self, obj: Value) -> Result<bool, Abrupt> {
+        self.heap
+            .obj_mut(obj)
+            .ok_or(Abrupt::Internal("preventExtensions of a non-object"))?
+            .extensible = false;
+        Ok(true)
+    }
+
+    /// `[[SetPrototypeOf]] ( V )`, OrdinarySetPrototypeOf (§10.1.2.1†):
+    /// 1. Let current be O.[[Prototype]]. 2. If SameValue(V, current) is true,
+    ///    return true. 3. Let extensible be O.[[Extensible]]. 4. If extensible
+    ///    is false, return false. 5. Let p be V. 6. Let done be false. 7. Repeat,
+    ///    while done is false, a. If p is null, set done to true. b. Else if
+    ///    SameValue(p, O) is true, return false. c. Else, (a Proxy ends the
+    ///    walk: there is none yet) set p to p.[[Prototype]]. 8. Set
+    ///    O.[[Prototype]] to V. 9. Return true.
+    ///
+    /// # Errors
+    /// [`Abrupt::Internal`] if `obj` is not an object.
+    pub fn set_prototype_of(&mut self, obj: Value, proto: Value) -> Result<bool, Abrupt> {
+        let current = self
+            .heap
+            .proto_of(obj)
+            .ok_or(Abrupt::Internal("setPrototypeOf of a non-object"))?;
+        if current == proto {
+            return Ok(true);
+        }
+        // %Object.prototype% is an immutable prototype exotic object
+        // (§10.4.7.1† SetImmutablePrototype): 3. If SameValue(V, current)
+        // is true, return true. 4. Return false.
+        if obj == self.intrinsic(Intrinsic::ObjectPrototype) {
+            return Ok(false);
+        }
+        if !self.heap.is_extensible(obj) {
+            return Ok(false);
+        }
+        let mut p = proto;
+        for _ in 0..crate::heap::MAX_PROTO_DEPTH {
+            if !self.heap.is_object(p) {
+                self.heap.set_proto(obj, proto)?;
+                return Ok(true);
+            }
+            if p == obj {
+                return Ok(false);
+            }
+            p = self.heap.proto_of(p).unwrap_or(Value::NULL);
+        }
+        Err(Abrupt::Internal("prototype chain too long"))
     }
 
     /// `[[DefineOwnProperty]]` (P, Desc) of an object: for an Array exotic
@@ -475,6 +714,59 @@ impl Vm {
             return Ok(true);
         }
         Ok(false)
+    }
+
+    /// CopyDataProperties ( target, source, excludedItems ), §7.3.25†:
+    /// 1. If source is either undefined or null, return unused.
+    /// 2. Let from be ! ToObject(source).
+    /// 3. Let keys be ? from.[[OwnPropertyKeys]]().
+    /// 4. For each element nextKey of keys, do a. Let excluded be false. b. For
+    ///    each element e of excludedItems, do i. If SameValue(e, nextKey) is
+    ///    true, then 1. Set excluded to true. c. If excluded is false, then i.
+    ///    Let desc be ? from.[[GetOwnProperty]](nextKey). ii. If desc is not
+    ///    undefined and desc.[[Enumerable]] is true, then 1. Let propValue be ?
+    ///    Get(from, nextKey). 2. Perform ! CreateDataPropertyOrThrow(target,
+    ///    nextKey, propValue).
+    /// 5. Return unused.
+    ///
+    /// # Errors
+    /// What a getter throws, a `TypeError` if `target` refuses a property.
+    pub fn copy_data_properties(
+        &mut self,
+        target: Value,
+        source: Value,
+        excluded: &[Key],
+    ) -> Result<(), Abrupt> {
+        if source == Value::UNDEFINED || source == Value::NULL {
+            return Ok(());
+        }
+        let from = self.to_object(source)?;
+        let mut keys: Vec<Key> = self
+            .heap
+            .own_properties(from)
+            .into_iter()
+            .map(|(k, _, _)| k)
+            .collect();
+        keys.extend(
+            self.heap
+                .own_symbol_properties(from)
+                .into_iter()
+                .map(|(k, _, _)| k),
+        );
+        for k in keys {
+            self.charge_step()?;
+            if excluded.contains(&k) {
+                continue;
+            }
+            let enumerable = self
+                .get_own_property(from, k)?
+                .is_some_and(|(a, _)| a.0 & Attrs::ENUMERABLE != 0);
+            if enumerable {
+                let v = self.get_value(from, k)?;
+                self.create_data_property_or_throw(target, k, v)?;
+            }
+        }
+        Ok(())
     }
 
     /// DeletePropertyOrThrow ( O, P ), §7.3.10†:

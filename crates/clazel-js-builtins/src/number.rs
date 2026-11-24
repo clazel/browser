@@ -1,5 +1,8 @@
 //! `Number` (§21.1†): the constructor, its constants and predicates, and
-//! `Number.prototype.toString`, `toFixed`, `valueOf`.
+//! `Number.prototype.toExponential`, `toFixed`, `toLocaleString`,
+//! `toPrecision`, `toString`, `valueOf` (the digits are
+//! `clazel-js-number`'s). `toLocaleString` has no ECMA-402: it is
+//! `toString` (§21.1.3.4† allows that).
 
 use crate::util::{
     CONSTANT, arg, as_number, constructor, define, method, number, string, to_integer_or_infinity,
@@ -38,7 +41,10 @@ pub fn install(vm: &mut Vm) -> Result<(), Abrupt> {
     method(vm, ctor, "isInteger", 1, is_integer)?;
     method(vm, ctor, "isNaN", 1, is_nan)?;
     method(vm, ctor, "isSafeInteger", 1, is_safe_integer)?;
+    method(vm, proto, "toExponential", 1, to_exponential)?;
     method(vm, proto, "toFixed", 1, to_fixed)?;
+    method(vm, proto, "toLocaleString", 0, to_locale_string)?;
+    method(vm, proto, "toPrecision", 1, to_precision)?;
     method(vm, proto, "toString", 1, to_string)?;
     method(vm, proto, "valueOf", 0, value_of)?;
     crate::util::global(vm, "Number", ctor)
@@ -160,6 +166,67 @@ fn to_fixed(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
         Ok(s) => string(vm, &s),
         Err(_) => Err(vm.range_error("toFixed() digits argument must be between 0 and 100")),
     }
+}
+
+/// An integer argument of `toExponential` and `toPrecision` as `i64`: the
+/// infinities and the values out of `i64`'s range become a value outside
+/// every range those accept (they are a RangeError there).
+fn digits_arg(n: f64) -> i64 {
+    if (-1.0e15..=1.0e15).contains(&n) {
+        n as i64
+    } else {
+        i64::MAX
+    }
+}
+
+/// `Number.prototype.toExponential ( fractionDigits )`, §21.1.3.2†:
+/// 1. Let x be ? thisNumberValue(this value).
+/// 2. Let f be ? ToIntegerOrInfinity(fractionDigits).
+/// 3. Assert: If fractionDigits is undefined, then f is 0.
+/// 4. If x is not finite, return Number::toString(x, 10).
+/// 5. If f < 0 or f > 100, throw a RangeError exception.
+/// - Steps 6 to 15, the digits: `clazel-js-number`'s `to_exponential`
+///   (which takes `None` for an undefined fractionDigits, step 10.b's "as
+///   many digits as necessary").
+fn to_exponential(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
+    let x = this_number_value(vm, this)?;
+    let fd = arg(args, 0);
+    let f = to_integer_or_infinity(vm, fd)?;
+    let f = (fd != Value::UNDEFINED).then(|| digits_arg(f));
+    match clazel_js_number::to_exponential(x, f) {
+        Ok(s) => string(vm, &s),
+        Err(_) => Err(vm.range_error("toExponential() argument must be between 0 and 100")),
+    }
+}
+
+/// `Number.prototype.toPrecision ( precision )`, §21.1.3.5†:
+/// 1. Let x be ? thisNumberValue(this value).
+/// 2. If precision is undefined, return ! ToString(x).
+/// 3. Let p be ? ToIntegerOrInfinity(precision).
+/// 4. If x is not finite, return Number::toString(x, 10).
+/// 5. If p < 1 or p > 100, throw a RangeError exception.
+/// - Steps 6 to 13, the digits: `clazel-js-number`'s `to_precision`.
+fn to_precision(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
+    let x = this_number_value(vm, this)?;
+    let pv = arg(args, 0);
+    if pv == Value::UNDEFINED {
+        return string(vm, &clazel_js_number::number_to_string(x));
+    }
+    let p = digits_arg(to_integer_or_infinity(vm, pv)?);
+    match clazel_js_number::to_precision(x, Some(p)) {
+        Ok(s) => string(vm, &s),
+        Err(_) => Err(vm.range_error("toPrecision() argument must be between 1 and 100")),
+    }
+}
+
+/// `Number.prototype.toLocaleString ( [ reserved1 [ , reserved2 ] ] )`,
+/// §21.1.3.4†: "An ECMAScript implementation that does not include the
+/// ECMA-402 API" produces "an implementation-defined String value that
+/// represents this Number value formatted according to the conventions of
+/// the host environment's current locale": here, as `toString()`.
+fn to_locale_string(vm: &mut Vm, this: Value, _args: &[Value]) -> Result<Value, Abrupt> {
+    let x = this_number_value(vm, this)?;
+    string(vm, &clazel_js_number::number_to_string(x))
 }
 
 /// `Number.prototype.toString ( [ radix ] )`, §21.1.3.6†:

@@ -29,18 +29,20 @@ primitives and strings (UTF-16 exact), `kind` and the `as_*`, `to_*` and `is_*`
 conversions, `strict_equals`, `same_value`, `instance_of`; `new_object`, `get`,
 `set`, `has_property`, `define_property` (data properties),
 `get_prototype_of`, `set_prototype_of`, `get_method`, `call`, `construct`;
-`function`, `define_method`, `Args`, `new_host_object` with `host_data`,
+accessor properties (`define_property` with `get`/`set`, `get_own_property`),
+`delete_property`, `new_array`, `new_array_from` and `is_array` (item 7.12
+needed them: WebIDL attributes are accessors);
+`function`, `shared_function` (re-entrant), `define_method`, `Args`,
+`new_host_object` with `host_data`,
 `get_prototype_from_constructor`, `host_mut`, `check_terminated`; errors,
 `new_exception`, `throw_error`, `throw`, `report`, `Error::Thrown`;
 `create_realm` (once), `global`, realm and script host data; `compile_script`,
 `run_script`, `eval_script`; `Handle`, `Weak`, `Member`; `gc` and
 `clear_kept_objects` as no-ops.
 
-Still `NotImplemented`, each because the VM lacks the feature: arrays
-(`new_array*`), promises (`new_promise` and the rest), `iterate` and symbols
-(`new_symbol`, `well_known_symbol`), BigInt, ArrayBuffer, `delete_property`
-(the heap cannot remove a property), accessor descriptors in `define_property`,
-modules and synthetic modules (the compiler's module goal and the runtime's
+Still `NotImplemented`, each because the VM lacks the feature: promises
+(`new_promise` and the rest), `iterate` and symbols (`new_symbol`,
+`well_known_symbol`), BigInt, ArrayBuffer, modules and synthetic modules (the compiler's module goal and the runtime's
 module records), a second realm and `RealmOptions::global`, `construct` with a
 `new_target` other than the constructor, `instance_of` of a bound function,
 `ErrorKind::EvalError` and `UriError`. The infallible constructors for the
@@ -52,9 +54,12 @@ return an error, so they record it and the next fallible call returns it.
 - **No completion value.** `run_script` and `eval_script` return `undefined`
   because the compiler's script has no completion value. Results go out
   through globals or native functions.
-- **Re-entrance.** A native closure that JavaScript re-enters while it runs
-  gets `Error::Busy`, because the closures are stored in the VM they borrow
-  (the table is where a plain function pointer can find it). Open question 14.
+- **Re-entrance.** A closure made by `function` that JavaScript re-enters
+  while it runs gets `Error::Busy`, because the closures are stored in the VM
+  they borrow (the table is where a plain function pointer can find it).
+  `shared_function` takes a `Sync` closure, which the runtime shares with each
+  call, so it can be re-entered: open question 14's proposal, added beside
+  `function` rather than in its place.
 - **Rooting.** There is no collector in this tree (open pull requests), so
   nothing is ever freed: `Local`, `Handle`, `Weak` and `Member` are checked
   (the runtime they belong to, the arena's generation) but root nothing;
@@ -69,10 +74,11 @@ return an error, so they record it and the next fallible call returns it.
   `run_job`, `run_jobs`) but nothing makes a job yet, so `run_jobs` returns 0.
 - **Exotic hooks of `HostObject`** are not called: a host object is an
   ordinary object with its data beside it.
-- **Limits.** `heap_bytes` and `value_stack_bytes` map to the arena's cell
-  limit and the frame region's slots (estimates), the heap limit gives
-  `OutOfMemory` and not a `RangeError`, `native_depth` counts only closures
-  made by `Scope::function`, the rest are not used (see `Runtime::new`).
+- **Limits.** All but `code_bytes` (no JIT) and `regexp_backtrack_entries`
+  (no RegExp built-in; the VM stores it for one) are applied; see "Limits
+  and the `Terminator`". The heap limit's `RangeError` comes without a
+  collection first, because the VM does not use the collector yet and never
+  frees anything.
 - **Stack traces.** `ErrorReport::stack` is empty and `Source::start_line` is
   not used: the VM keeps no source positions.
 
@@ -263,18 +269,48 @@ A native function returns errors of either kind with `?`. To throw:
 
 **Limits are the embedder's.** `Limits` has no `Default`, and a struct literal must
 name every field, so nothing is fixed in the engine and adding a limit makes
-each embedder choose. `Limits::unlimited()` is a named choice for tests.
+each embedder choose. `Limits::unlimited()` is a named choice for tests, and
+`Limits::recommended()` one for untrusted pages on a 2 MiB thread stack
+(phase-7.md 7.19). Neither is a default: nothing in the engine calls them.
 
-| Limit | When passed |
-|---|---|
-| `heap_bytes` | full collection first, then a `RangeError` |
-| `value_stack_bytes` | `RangeError`, "too much recursion" |
-| `native_depth` | `RangeError`; counts built-ins that call back into JS |
-| `code_bytes` | the JIT stops compiling; not an error |
-| `regexp_backtrack_entries` | `RangeError` from the match |
-| `nesting_depth` | `SyntaxError` (parser), `RangeError` (`JSON.parse`) |
+| Limit | `recommended()` | When passed |
+|---|---|---|
+| `heap_bytes` | 512 MiB | `RangeError` ("Out of memory: the heap limit was reached"), catchable; `OutOfMemory` once the 64 KiB reserve the error comes from is spent too |
+| `value_stack_bytes` | 4 MiB | `RangeError` ("Maximum call stack size exceeded") |
+| `native_depth` | 32 | `RangeError` ("Maximum call stack size exceeded", or "too many nested native calls" for the embedder's closures) |
+| `code_bytes` | 64 MiB | the JIT stops compiling; not an error (no JIT yet) |
+| `regexp_backtrack_entries` | 1 Mi entries | `RangeError` from the match (no RegExp built-in yet) |
+| `nesting_depth` | 512 | `SyntaxError` (source, `JSON.parse`), `RangeError` (`JSON.stringify`) |
 
-Timers and fetches in flight are the host's to bound, not the engine's.
+What each counts:
+
+- **`heap_bytes`** is the VM heap's own byte count, an estimate: 64 bytes a
+  cell, a string's code units at one byte (Latin-1) or two, 8 bytes a slot an
+  object is made with, and 32 bytes each property added later.
+  `Runtime::heap_used` reads it. The built-ins count too (about 23 KB), so a
+  limit below them makes `Runtime::new` fail with `OutOfMemory`. Nothing is
+  freed yet, so a page that filled the heap leaves it full: compiling another
+  script in the same runtime is then `OutOfMemory`.
+- **`value_stack_bytes`** is the frame region, at 8 bytes a slot. JavaScript
+  calling JavaScript uses it and not the host stack, so plain recursion is
+  bounded by it alone.
+- **`native_depth`** bounds natives running one inside another (built-ins
+  that call back, such as `forEach`, and the embedder's own), and one more
+  than it bounds runs of the interpreter loop nested inside an operation
+  (the `toString` that `'' + o` calls). Both use the host stack: about 40 KB
+  a level unoptimised and 1.5 KB optimised (measured on aarch64 macOS), so
+  32 fits a 2 MiB thread in either build. The thread must hold the limit the
+  embedder chooses, or a page can overflow the host stack and abort the
+  process; `unlimited()` does not bound it.
+- **`nesting_depth`** is the height of the parse tree for source, and levels
+  of arrays and objects for JSON. Each also has a fixed bound that keeps its
+  own recursion on the host stack, and the smaller applies: 1024 (source),
+  512 (`JSON.parse`), 128 (`JSON.stringify`). JSON past it is a
+  `SyntaxError`, as phase-7.md 7.11 lists.
+
+Pending timers are the event loop's to bound (`clazel-web`'s
+`event_loop::Limits`), and fetches in flight the kernel's; neither is the
+engine's. `tests/hostile.rs` runs the hostile pages of 7.19 through this API.
 
 **`Terminator`** (`Runtime::terminator()`; `Clone`, `Send`, `Sync`) stops a runtime
 from another thread. It sets a flag; the interpreter checks it at loop back-edges
@@ -385,8 +421,10 @@ look at each.
     re-exports it.
 13. **`OutOfMemory` versus `RangeError`.** 7.19 says the heap limit gives a
     `RangeError`. This contract keeps `OutOfMemory` for when even that cannot
-    be allocated. If that case can be avoided by reserving room for one
-    error object, the variant can go.
+    be allocated. The heap now keeps a 64 KiB reserve for the error, so the
+    variant remains only for a page that catches the error and allocates
+    again until the reserve is spent too, and for a limit too small for the
+    built-ins or for compiling a script.
 14. **Native closures and re-entrance.** `Scope::function` takes `Fn + Send`.
     Re-entering a running closure needs it shared with the call that is
     running, which for a `Send` runtime means `Fn + Send + Sync` (an `Arc`),

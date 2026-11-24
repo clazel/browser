@@ -41,6 +41,15 @@ Tier 0, target tier 0: safe Rust, tested, nothing proven. So far:
   unit tests and hand transcriptions of WPT `timers/` and `microtask-queuing/`
   orderings (which need a JS engine to run).
 
+  The caps and their defaults (`Limits::default()`): 65,536 active timers
+  (`LimitError::TooManyTimers`), 65,536 queued tasks (`TooManyTasks`) and
+  1,048,576 queued microtasks (`TooManyMicrotasks`). The host turns a refusal
+  into the script's error; HTML's is a `QuotaExceededError`, which waits for
+  `clazel-webidl`'s `DOMException`. `tests/hostile.rs` runs 7.19's flood of
+  10^6 timers from script, through `clazel-js`'s public API (a dev-dependency
+  only) with a test `setTimeout` over this loop that throws a `RangeError`
+  for now, and a page whose timers multiply for ever.
+
 Item 7.1 vendored the test
 data later items run: the WPT `testharness.js` tests (`tests/data/wpt-web/`) and
 the TodoMVC vanilla, React and Vue implementations (`tests/data/todomvc/`).

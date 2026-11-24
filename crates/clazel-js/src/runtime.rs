@@ -32,25 +32,48 @@ use crate::state::State;
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Limits {
-    /// Heap size in bytes. An allocation that would pass it first runs a full
-    /// collection, then throws a `RangeError` if it still would.
+    /// Heap size in bytes, as the heap counts them (an estimate: 64 bytes a
+    /// cell, a string's code units at one or two bytes each, 32 bytes an
+    /// added property; [`Runtime::heap_used`] reads the count). An allocation
+    /// that would pass it throws a `RangeError`, which JavaScript can catch;
+    /// the error itself comes from a 64 KiB reserve past the limit, and when
+    /// that is spent too the call ends in [`Error::OutOfMemory`]. phase-7.md
+    /// asks for a full collection first; the interpreter does not use the
+    /// collector yet, so nothing is ever freed and the error comes at once.
+    /// The built-ins count against it, so a limit too small for them makes
+    /// [`Runtime::new`] fail with `OutOfMemory`.
     pub heap_bytes: u64,
-    /// Size of the value-stack region in bytes. Passing it throws a
-    /// `RangeError` ("too much recursion").
+    /// Size of the value-stack region in bytes (8 a slot). JavaScript calls
+    /// JavaScript in this region, not on the host stack; passing it throws a
+    /// `RangeError` ("Maximum call stack size exceeded").
     pub value_stack_bytes: u64,
     /// How many native functions may be on the call stack at once, counting
-    /// built-ins that call back into JavaScript such as `Array.prototype.map`.
-    /// Passing it throws a `RangeError`.
+    /// built-ins that call back into JavaScript such as `Array.prototype.map`
+    /// and the embedder's own. Re-entries of the interpreter from inside an
+    /// operation (the `toString` that `'' + o` calls) are bounded by one more
+    /// than this. Passing either throws a `RangeError`.
+    ///
+    /// Each level takes host stack: about 40 KB in an unoptimised build and
+    /// 1.5 KB in an optimised one (measured; see `clazel-js-vm`'s
+    /// `DEFAULT_NATIVE_DEPTH`). The thread the runtime runs on must hold this
+    /// many levels, or a deep enough recursion through natives overflows the
+    /// host stack and aborts the process.
     pub native_depth: u32,
     /// Bytes of generated machine code the JIT may hold. Passing it stops
     /// compiling and leaves functions to the interpreter; it is not an error.
-    /// Ignored when [`JitMode::Off`].
+    /// Ignored when [`JitMode::Off`], which is the only mode so far.
     pub code_bytes: u64,
-    /// Entries in the RegExp matcher's backtrack stack. Passing it throws a
-    /// `RangeError` from the match, rather than hanging on `(a+)+b`.
+    /// Entries in the RegExp matcher's backtrack stack (16 to 24 bytes each).
+    /// Passing it throws a `RangeError` from the match (the VM stores it, and
+    /// `clazel-js-builtins`' `regexp::backtrack_limit` hands it to the matcher).
     pub regexp_backtrack_entries: u64,
-    /// Nesting depth of the parser (source text) and of `JSON.parse`. Passing
-    /// it throws a `SyntaxError` for source and a `RangeError` for JSON.
+    /// Nesting depth of source text (the height of its parse tree) and of
+    /// `JSON.parse` and `JSON.stringify` (levels of arrays and objects).
+    /// Passing it throws a `SyntaxError` for source and for `JSON.parse`
+    /// (phase-7.md 7.11's listed deviation), and a `RangeError` for
+    /// `JSON.stringify`. Each also has a fixed bound of its own that keeps
+    /// its recursion off the end of the host stack, and the smaller applies:
+    /// 1024 for source, 512 for `JSON.parse`, 128 for `JSON.stringify`.
     pub nesting_depth: u32,
 }
 
@@ -67,6 +90,38 @@ impl Limits {
             code_bytes: u64::MAX,
             regexp_backtrack_entries: u64::MAX,
             nesting_depth: u32::MAX,
+        }
+    }
+
+    /// Limits for running untrusted pages on a thread with a 2 MiB stack, in
+    /// an optimised or an unoptimised build (phase-7.md 7.19). A named
+    /// starting point, not a default: nothing in the engine calls it, and the
+    /// browser sets its own.
+    ///
+    /// | Limit | Value | Error past it |
+    /// |---|---|---|
+    /// | `heap_bytes` | 512 MiB | `RangeError` |
+    /// | `value_stack_bytes` | 4 MiB (512 Ki slots) | `RangeError` |
+    /// | `native_depth` | 32 | `RangeError` |
+    /// | `code_bytes` | 64 MiB | none (no JIT) |
+    /// | `regexp_backtrack_entries` | 1 Mi | `RangeError` |
+    /// | `nesting_depth` | 512 | `SyntaxError` (source, `JSON.parse`), `RangeError` (`JSON.stringify`) |
+    ///
+    /// ```
+    /// use clazel_js::Limits;
+    ///
+    /// let page = Limits::recommended();
+    /// assert_eq!(page.heap_bytes, 512 << 20);
+    /// assert_eq!(page.native_depth, 32);
+    /// ```
+    pub const fn recommended() -> Limits {
+        Limits {
+            heap_bytes: 512 << 20,
+            value_stack_bytes: 4 << 20,
+            native_depth: 32,
+            code_bytes: 64 << 20,
+            regexp_backtrack_entries: 1 << 20,
+            nesting_depth: 512,
         }
     }
 }
@@ -257,15 +312,15 @@ impl Runtime {
     /// The VM and the built-ins are made here, so the one realm the VM has
     /// exists at once, and [`Scope::create_realm`] hands it out (the
     /// contract's "no realms" is not what a VM with one global can do). The
-    /// limits that have a counterpart are applied: `heap_bytes` becomes the
-    /// arena's cell count (an estimate of 64 bytes a cell), `value_stack_bytes`
-    /// the frame region's slot count (8 bytes a slot), and `native_depth` is
-    /// checked on every call of a closure made by [`Scope::function`].
-    /// `code_bytes` (no JIT), `regexp_backtrack_entries` (no RegExp) and
-    /// `nesting_depth` (the parser's own fixed bound applies) are accepted
-    /// and not used yet. The heap limit gives [`Error::OutOfMemory`] rather
-    /// than a `RangeError`, since the VM cannot allocate an error object
-    /// when it is full and there is no collector to run first.
+    /// limits are applied as [`Limits`] describes: `heap_bytes` is the VM
+    /// heap's byte limit (and, at 64 bytes a cell, its arena's cell limit),
+    /// `value_stack_bytes` the frame region's slot count (8 bytes a slot),
+    /// `native_depth` the VM's bound on nested natives (and is also checked
+    /// on every call of a closure made by [`Scope::function`]), and
+    /// `nesting_depth` bounds the parse tree here and the JSON built-ins in
+    /// the VM. `code_bytes` (no JIT) is accepted and not used, and
+    /// `regexp_backtrack_entries` is stored in the VM, and the RegExp
+    /// built-in's matcher takes it as its stack bound.
     pub fn new(config: Config, host: impl Host) -> Result<Runtime> {
         let limits = config.limits;
         // Limits the VM has a counterpart for: its arena counts cells (an
@@ -278,6 +333,12 @@ impl Runtime {
             heap_cells,
         })
         .map_err(vm_failure)?;
+        // The limits the VM checks itself (phase-7.md 7.19), set before the
+        // built-ins are installed so that they count against the heap too.
+        vm.set_heap_limit(limits.heap_bytes);
+        vm.set_native_depth_limit(limits.native_depth);
+        vm.set_nesting_depth_limit(limits.nesting_depth);
+        vm.set_regexp_backtrack_limit(limits.regexp_backtrack_entries);
         clazel_js_builtins::install(&mut vm).map_err(vm_failure)?;
         let terminator = Terminator {
             flag: vm.terminator(),
@@ -362,9 +423,10 @@ impl Runtime {
     /// Bytes the heap holds now, live and not yet swept, for the embedder's
     /// own accounting and for tests of [`Limits::heap_bytes`].
     pub fn heap_used(&self) -> Result<u64> {
-        // An estimate: live cells at `CELL_BYTES` each. Nothing is swept yet.
-        let cells = u64::try_from(self.vm.heap().live()).map_err(|_| Error::OutOfMemory)?;
-        cells.checked_mul(CELL_BYTES).ok_or(Error::OutOfMemory)
+        // The VM heap's byte count, the one `Limits::heap_bytes` is checked
+        // against: an estimate (64 bytes a cell, a string's code units, 32
+        // bytes a property). Nothing is swept yet.
+        Ok(self.vm.heap().bytes())
     }
 }
 

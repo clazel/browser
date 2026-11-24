@@ -109,6 +109,12 @@ pub enum Callable {
 /// because the [`Runtime`](crate::Runtime) is.
 pub type NativeFn = dyn for<'s> Fn(&mut Scope<'s>, &Args<'s>) -> Result<Local<'s>> + Send;
 
+/// What [`Scope::shared_function`] takes: a [`NativeFn`] that is also `Sync`,
+/// so the runtime can share it with each call that runs it, and JavaScript
+/// can re-enter it while it runs (README open question 14).
+pub type SharedNativeFn =
+    dyn for<'s> Fn(&mut Scope<'s>, &Args<'s>) -> Result<Local<'s>> + Send + Sync;
+
 /// An answer from an exotic hook: do what an ordinary object does, or here is
 /// the answer.
 #[derive(Clone, Copy, Debug)]
