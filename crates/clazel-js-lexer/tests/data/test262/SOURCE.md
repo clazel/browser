@@ -3,7 +3,7 @@
 Upstream: https://github.com/tc39/test262
 Commit: e91219cb6b87865703ce8619b5bc0f7c2bf608e1
 License: BSD-3-Clause (`LICENSE.md`, the repository's `LICENSE`; each test file also carries its own copyright header, kept as it is)
-Subset: from `test/language/`, every test whose frontmatter has `negative:` with phase `parse`, `early` or `resolution`, and every test under the lexical directories `asi`, `comments`, `directive-prologue`, `future-reserved-words`, `identifier-resolution`, `identifiers`, `keywords`, `line-terminators`, `literals`, `punctuators`, `reserved-words`, `source-text`, `statementList`, `types` and `white-space`; plus every `*_FIXTURE.js` in a directory that holds a vendored test, all of `harness/`, and `features.txt`.
+Subset: from `test/language/`, every test whose frontmatter has `negative:` with phase `parse`, `early` or `resolution`, and every test under the lexical directories `asi`, `comments`, `directive-prologue`, `future-reserved-words`, `identifier-resolution`, `identifiers`, `keywords`, `line-terminators`, `literals`, `punctuators`, `reserved-words`, `source-text`, `statementList`, `types` and `white-space`; plus all of the generator and async function directories (items 7.7 to 7.9): `test/language/statements/` `generators`, `async-function` and `async-generator`, `test/language/expressions/` `generators`, `async-function`, `async-arrow-function`, `async-generator`, `await` and `yield`, and `test/built-ins/` `GeneratorPrototype`, `GeneratorFunction`, `AsyncFunction`, `AsyncGeneratorPrototype`, `AsyncGeneratorFunction`, `AsyncFromSyncIteratorPrototype` and `AsyncIteratorPrototype`; plus every `*_FIXTURE.js` in a directory that holds a vendored test, all of `harness/`, and `features.txt`.
 
 The commit is Test262's last before the pinned ECMA-262 2026 commit (2026-03-30; see
 `SPEC-PIN.md` in the crate's root). Test262 has no edition tags.
@@ -12,11 +12,11 @@ The files are copied byte for byte, under the same paths as upstream (`test/lang
 `harness/...`, `features.txt`). `.gitattributes` stores them without line-ending conversion: some
 tests use CR, CRLF and the Unicode line separators on purpose.
 
-5,422 files, 8,297,553 bytes (LICENSE.md and SOURCE.md not counted): 5,212 tests (and their fixtures), `harness/` and `features.txt`.
+7,149 files, 11,089,573 bytes (LICENSE.md and SOURCE.md not counted): 6,939 tests (and their fixtures), `harness/` and `features.txt`.
 
 What it is for: items 7.2 and 7.3 (the lexer and the parser) run the tests that parse or
 fail to parse; the negative ones carry the early errors. The tests of the rest of
-`test/language/` (positive ones in `expressions/` and `statements/`), `test/built-ins/`
+`test/language/` (positive ones in `expressions/` and `statements/`), the rest of `test/built-ins/`
 and `test/annexB/` are not vendored: they join with the items that record their
 results (phase-7.md 7.7 to 7.11). The Intl, Temporal, Atomics and SharedArrayBuffer
 directories never will, by 7.0(b).
