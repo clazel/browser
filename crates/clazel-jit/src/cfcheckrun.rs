@@ -284,7 +284,8 @@ pub proof fn lemma_chk_tail(
 /// **The bounds check, run.** From a state with the index `ix` in `rcx`: if
 /// `ix + n <= bound` the check falls through to its end (47 bytes on), else it
 /// leaves by the first exit (a carry) or the second (`ix + n > bound`).
-#[verifier::rlimit(2000)]
+#[verifier::spinoff_prover]
+#[verifier::rlimit(1500)]
 pub proof fn lemma_check_run(
     cu: spec_fn(nat) -> nat,
     lay: lir::Layout,
