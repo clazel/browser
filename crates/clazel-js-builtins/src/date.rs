@@ -13,11 +13,14 @@
 //!
 //! # Modelling choices
 //!
-//! - **Section numbers** are those of ES2025's §21.4.1 layout (`Day` is
-//!   §21.4.1.3, `MakeDay` §21.4.1.28, `TimeClip` §21.4.1.31, the Date Time
-//!   String Format §21.4.1.32). The pinned edition's numbering has not been
-//!   checked against it, so they are written without the `†` the other
-//!   built-ins use; the names are what is certain.
+//! - **Section numbers** were checked against the pinned edition's text
+//!   (`spec.html` at ecma262 commit `0248456c`, `SPEC-PIN.md`): clause 21.4
+//!   (`Day` is §21.4.1.3, `MakeDay` §21.4.1.28, `TimeClip` §21.4.1.31, the Date
+//!   Time String Format §21.4.1.32) and Annex B.2.3 (`getYear`, `setYear`,
+//!   `toGMTString`). The step numbers of `MakeDay`, `MakeTime`, `UTC`, `setSeconds`,
+//!   `setFullYear`, `getYear` and `setYear` were read there too; the others
+//!   are from the same edition family and a comment that folds several steps
+//!   into one line says so.
 //! - **Time zone (7.0(b))**: the offset is whatever the host answers, a fixed
 //!   offset for the renderer's life in the browser, so a date on the other
 //!   side of a daylight-saving change is off by an hour. The zone name that
@@ -197,7 +200,11 @@ pub fn local_time(t: f64, tza: Tza<'_>) -> f64 {
 
 /// `UTC ( t )`, §21.4.1.26:
 /// 1. If t is not finite, return NaN.
-/// 2. (The host's) `LocalTZA(t, false)`; 3. return `t - offset`.
+///
+/// The later steps take the system time zone's offset at t and return `t -
+/// offset`. The zone is a fixed offset here (7.0(b)), the host's
+/// `LocalTZA(t, false)`, so the steps for a named zone and its possible
+/// instants are not needed.
 pub fn utc(t: f64, tza: Tza<'_>) -> f64 {
     if !t.is_finite() {
         return f64::NAN;
@@ -868,7 +875,7 @@ pub fn install(vm: &mut Vm) -> Result<(), Abrupt> {
             utc_string = func;
         }
     }
-    // Annex B §B.2.4.3 `Date.prototype.toGMTString`: "The initial value of
+    // Annex B §B.2.3.3 `Date.prototype.toGMTString`: "The initial value of
     // the property is the same function object as ... toUTCString".
     define(vm, proto, "toGMTString", utc_string, crate::util::METHOD)?;
     // §21.4.4.45 `Date.prototype [ @@toPrimitive ] ( hint )`: name
@@ -1078,8 +1085,8 @@ fn get_timezone_offset(vm: &mut Vm, this: Value, _args: &[Value]) -> Result<Valu
     Ok(number((t - l) / MS_PER_MINUTE))
 }
 
-/// `Date.prototype.getYear ( )`, Annex B §B.2.4.1:
-/// 3. If t is NaN, return NaN. 4. Return YearFromTime(LocalTime(t)) - 1900.
+/// `Date.prototype.getYear ( )`, Annex B §B.2.3.1:
+/// 4. If t is NaN, return NaN. 5. Return YearFromTime(LocalTime(t)) - 1900.
 fn get_year(vm: &mut Vm, this: Value, _args: &[Value]) -> Result<Value, Abrupt> {
     let t = this_time_value(vm, this)?;
     if t.is_nan() {
@@ -1100,7 +1107,7 @@ enum Setter {
 }
 
 /// The shape of `setMilliseconds`, `setSeconds`, `setMinutes`, `setHours`
-/// (§21.4.4.23, .28, .24, .22, and the UTC ones), for example `setSeconds (
+/// (§21.4.4.23, .26, .24, .22, and the UTC ones .31, .34, .32, .30), for example `setSeconds (
 /// sec [ , ms ] )`:
 /// 1. Let dateObject be the this value.
 /// 2. Perform ? RequireInternalSlot(dateObject, [[DateValue]]).
@@ -1116,7 +1123,7 @@ enum Setter {
 /// 11. Set dateObject.[[DateValue]] to u.
 /// 12. Return u.
 ///
-/// and of `setDate`, `setMonth`, `setFullYear` (§21.4.4.20, .26, .21), for
+/// and of `setDate`, `setMonth`, `setFullYear` (§21.4.4.20, .25, .21, and the UTC ones .28, .33, .29), for
 /// example `setFullYear ( year [ , month [ , date ] ] )`:
 /// 3. Let t be dateObject.[[DateValue]].
 /// 4. Let y be ? ToNumber(year).
@@ -1239,15 +1246,16 @@ fn set_time(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
     Ok(number(v))
 }
 
-/// `Date.prototype.setYear ( year )`, Annex B §B.2.4.2:
+/// `Date.prototype.setYear ( year )`, Annex B §B.2.3.2:
 /// 3. Let t be dateObject.[[DateValue]].
 /// 4. Let y be ? ToNumber(year).
 /// 5. If t is NaN, set t to +0𝔽; otherwise, set t to LocalTime(t).
 /// 6. Let yyyy be MakeFullYear(y).
 /// 7. Let d be MakeDay(yyyy, 𝔽(MonthFromTime(t)), 𝔽(DateFromTime(t))).
 /// 8. Let date be MakeDate(d, TimeWithinDay(t)).
-/// 9. Set dateObject.[[DateValue]] to TimeClip(UTC(date)).
-/// 10. Return dateObject.[[DateValue]].
+/// 9. Let u be TimeClip(UTC(date)).
+/// 10. Set dateObject.[[DateValue]] to u.
+/// 11. Return u.
 fn set_year(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
     let t = this_time_value(vm, this)?;
     let y = vm.to_number(arg(args, 0))?;
