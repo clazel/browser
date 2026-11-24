@@ -1853,6 +1853,47 @@ impl DocumentImpl for Page {
         Ok(html_child(&page(scope)?.arena, &["body", "frameset"]).map(key))
     }
 
+    /// DOM §4.5† `createEvent(interface)`: "If interface is an ASCII
+    /// case-insensitive match for any of the strings in the first column of
+    /// the table, set constructor to the interface in the second column;
+    /// if constructor is null, throw a NotSupportedError; create an event
+    /// given constructor ... initialize type to the empty string ... unset
+    /// the initialized flag". The interfaces the bindings do not expose
+    /// (`CompositionEvent`, `DragEvent`, `TextEvent`, ...) are the
+    /// `NotSupportedError` a name the table lacks is.
+    fn create_event<'s>(
+        scope: &mut Scope<'s>,
+        _this: ObjectKey,
+        interface: DomString,
+    ) -> Result<ObjectKey> {
+        super::event::create_event(scope, &String::from_utf16_lossy(&interface))
+    }
+
+    /// HTML §6.6.? `activeElement` (DOM's `DocumentOrShadowRoot`): "the
+    /// focused area of the document's DOM anchor, if it is an element; else
+    /// the body element, or the document element if there is none, or null".
+    fn active_element<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<Option<ObjectKey>> {
+        let p = page(scope)?;
+        if let Some(f) = p.ui.focused.filter(|&f| f < p.arena.len()) {
+            return Ok(Some(key(f)));
+        }
+        Ok(html_child(&p.arena, &["body", "frameset"])
+            .or_else(|| {
+                p.arena
+                    .children(0)
+                    .iter()
+                    .copied()
+                    .find(|&c| matches!(p.arena.kind(c), ExecKind::Element { .. }))
+            })
+            .map(key))
+    }
+
+    /// HTML §6.6.? `hasFocus()`: the page has the user's focus (it does, as
+    /// long as it is the page shown).
+    fn has_focus<'s>(_scope: &mut Scope<'s>, _this: ObjectKey) -> Result<bool> {
+        Ok(true)
+    }
+
     /// HTML §3.1.? "the head element": the first `head` child of the `html`
     /// document element.
     fn head<'s>(scope: &mut Scope<'s>, _this: ObjectKey) -> Result<Option<ObjectKey>> {
@@ -3344,13 +3385,7 @@ impl ElementImpl for Page {
 
 // The HTML element interfaces: their `[Reflect]` attributes are the
 // bindings'; the rest keep the generated defaults.
-impl HTMLElementImpl for Page {
-    /// HTML §3.2.6.6† `dataset`: "a DOMStringMap object whose associated
-    /// element is this".
-    fn dataset<'s>(scope: &mut Scope<'s>, this: ObjectKey) -> Result<ObjectKey> {
-        super::attr::dataset_object(scope, this)
-    }
-}
+// `HTMLElementImpl` (`click`, `focus`, `blur`, `tabIndex`) is in `input.rs`.
 impl HTMLUnknownElementImpl for Page {}
 impl HTMLHtmlElementImpl for Page {}
 impl HTMLHeadElementImpl for Page {}

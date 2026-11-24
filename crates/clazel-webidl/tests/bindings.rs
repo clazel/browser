@@ -187,8 +187,24 @@ impl HTMLAnchorElementImpl for Mock {}
 impl NodeListImpl for Mock {}
 impl HTMLCollectionImpl for Mock {}
 impl DOMTokenListImpl for Mock {}
+impl ProcessingInstructionImpl for Mock {}
+impl AttrImpl for Mock {}
+impl NamedNodeMapImpl for Mock {}
+impl DOMStringMapImpl for Mock {}
+impl MutationObserverImpl for Mock {}
+impl MutationRecordImpl for Mock {}
+impl AbstractRangeImpl for Mock {}
+impl NodeRangeImpl for Mock {}
+impl RangeImpl for Mock {}
 impl HistoryImpl for Mock {}
 impl NavigatorImpl for Mock {}
+impl UIEventImpl for Mock {}
+impl MouseEventImpl for Mock {}
+impl WheelEventImpl for Mock {}
+impl KeyboardEventImpl for Mock {}
+impl FocusEventImpl for Mock {}
+impl InputEventImpl for Mock {}
+impl UserActivationImpl for Mock {}
 
 type Test = core::result::Result<(), Error>;
 

@@ -406,7 +406,7 @@ mod wpt {
         let reader_tab = host.state.next_id;
         host.open_tab(
             &format!("http://web-platform.test:8000{reader}"),
-            "cookie-get",
+            "document.cookie;",
         );
         let prefix = format!("renderer {reader_tab} <- result ");
         let mut answer = None;

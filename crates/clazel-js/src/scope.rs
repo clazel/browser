@@ -21,7 +21,7 @@ use crate::code::{
 use crate::error::{Error, ErrorKind, ErrorReport, Exception, Result, not_implemented};
 use crate::host::Host;
 use crate::native::{Args, Callable, HostObject};
-use crate::state::{Native, State, abrupt_to_error, trampoline};
+use crate::state::{State, abrupt_to_error, trampoline};
 use crate::value::{
     Handle, Key, Local, Member, PromiseState, PropertyDescriptor, ValueKind, Weak, WellKnownSymbol,
 };
@@ -897,12 +897,10 @@ impl<'s> Scope<'s> {
     /// are not caught: the lints forbid them in this repository, and an
     /// embedder that panics gets its own panic.
     ///
-    /// **Re-entrance, not yet:** `f` is `Fn` so that JavaScript can call it
-    /// again while it runs, but the closures live inside the VM that `f`
-    /// borrows, so the running closure is out of its table: a call that
-    /// reaches the same function again gets [`Error::Busy`] (which JavaScript
-    /// cannot catch). Different functions nest freely. Supporting the same
-    /// one needs `f: Sync`, see the README's open questions.
+    /// **Re-entrance:** `f` is `Fn` so that JavaScript can call it again
+    /// while it runs (HTML's `document.write` runs the parser, which runs a
+    /// script, which calls `document.write`), and `Sync` because the nested
+    /// call shares it with the running one (the README's open question 14).
     ///
     /// ```
     /// use clazel_js::{Args, Callable, Key, Local, Result, Runtime, Scope, Source};
@@ -935,32 +933,6 @@ impl<'s> Scope<'s> {
         name: &str,
         length: u32,
         callable: Callable,
-        f: impl for<'a> Fn(&mut Scope<'a>, &Args<'a>) -> Result<Local<'a>> + Send + 'static,
-    ) -> Result<Local<'s>> {
-        self.check_deferred()?;
-        let length = i32::try_from(length).unwrap_or(i32::MAX);
-        let made = match callable {
-            Callable::Function => self.vm.new_native(name, length, trampoline),
-            Callable::Constructor => self.vm.new_native_constructor(name, length, trampoline),
-        };
-        let function = self.run(made)?;
-        let boxed: Box<crate::native::NativeFn> = Box::new(f);
-        self.state_mut()?
-            .natives
-            .insert(function.bits(), Native::Owned(Some(boxed)));
-        Ok(self.lv(function))
-    }
-
-    /// As [`Scope::function`], for a closure that is also `Sync`: the runtime
-    /// shares it with each call that runs it, so JavaScript can re-enter it
-    /// while it runs (no [`Error::Busy`]). This is what an embedder whose
-    /// natives call back into script (event dispatch, WebIDL callbacks)
-    /// uses; README open question 14.
-    pub fn shared_function(
-        &mut self,
-        name: &str,
-        length: u32,
-        callable: Callable,
         f: impl for<'a> Fn(&mut Scope<'a>, &Args<'a>) -> Result<Local<'a>> + Send + Sync + 'static,
     ) -> Result<Local<'s>> {
         self.check_deferred()?;
@@ -970,11 +942,23 @@ impl<'s> Scope<'s> {
             Callable::Constructor => self.vm.new_native_constructor(name, length, trampoline),
         };
         let function = self.run(made)?;
-        let shared: std::sync::Arc<crate::native::SharedNativeFn> = std::sync::Arc::new(f);
-        self.state_mut()?
-            .natives
-            .insert(function.bits(), Native::Shared(shared));
+        let shared: Arc<crate::native::NativeFn> = Arc::new(f);
+        self.state_mut()?.natives.insert(function.bits(), shared);
         Ok(self.lv(function))
+    }
+
+    /// As [`Scope::function`]. Every native closure is now `Sync` and
+    /// re-entrant, so the two are the same; this name stays for embedders
+    /// that spell the intent (event dispatch, WebIDL callbacks), README open
+    /// question 14.
+    pub fn shared_function(
+        &mut self,
+        name: &str,
+        length: u32,
+        callable: Callable,
+        f: impl for<'a> Fn(&mut Scope<'a>, &Args<'a>) -> Result<Local<'a>> + Send + Sync + 'static,
+    ) -> Result<Local<'s>> {
+        self.function(name, length, callable, f)
     }
 
     /// Makes a function with [`Scope::function`] and defines it as a method
@@ -985,7 +969,7 @@ impl<'s> Scope<'s> {
         object: Local<'_>,
         name: &str,
         length: u32,
-        f: impl for<'a> Fn(&mut Scope<'a>, &Args<'a>) -> Result<Local<'a>> + Send + 'static,
+        f: impl for<'a> Fn(&mut Scope<'a>, &Args<'a>) -> Result<Local<'a>> + Send + Sync + 'static,
     ) -> Result<()> {
         self.check_deferred()?;
         let o = self.object(object)?;

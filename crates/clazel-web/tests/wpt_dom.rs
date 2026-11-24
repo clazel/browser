@@ -313,8 +313,7 @@ fn wpt_dom_tests_through_the_bindings() {
     eprintln!(
         "wpt-dom: {total_files} files, {blocked} blocked; subtests: {pass} passed, {fail} failed, {skip} skipped"
     );
-    let expected_path =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/wpt_dom_expected.txt");
+    let expected_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/wpt_dom_expected.txt");
     if std::env::var_os("CLAZEL_WPT_DOM_BLESS").is_some() {
         assert!(
             std::fs::write(&expected_path, &table).is_ok(),

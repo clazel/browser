@@ -40,17 +40,22 @@
 pub mod attr;
 pub mod console;
 pub mod event;
+pub mod forms;
 pub mod fragment;
+pub mod handlers;
+pub mod input;
 pub mod mutation;
 pub mod node;
 pub mod range;
+pub mod ui_events;
 pub mod window;
 
 use std::collections::HashMap;
 
 use clazel_dom::exec::Arena;
 use clazel_js::{
-    Config, ErrorKind, Handle, Host, Local, Realm, RealmOptions, Result, Runtime, Scope,
+    Config, ErrorKind, Handle, Host, LoadPayload, Local, ModuleRequest, Realm, RealmOptions,
+    Referrer, RejectionOperation, Result, Runtime, Scope,
 };
 use clazel_url::url::parse::basic_url_parser;
 use clazel_url::url::record::ParsedUrl;
@@ -96,6 +101,16 @@ pub trait PageHooks: Send {
     fn update_url(&mut self, url: &str, replace: bool) {
         let _ = (url, replace);
     }
+    /// HTML §4.10.21.3† "plan to navigate" for a form submitted with a body
+    /// (`POST`): the renderer sends the kernel's `Submit` (item 6.16). A
+    /// `GET` is [`PageHooks::navigate`]; the default does that for a `GET` and
+    /// nothing for a `POST`.
+    fn submit(&mut self, url: &str, method: &str, content_type: &str, body: &[u8]) {
+        let _ = (content_type, body);
+        if method == "GET" {
+            self.navigate(url, false);
+        }
+    }
     /// `history.go(delta)`, `back` and `forward` (HTML §7.4.?
     /// "traverse the history by a delta").
     fn traverse_history(&mut self, delta: i32) {
@@ -109,6 +124,43 @@ pub trait PageHooks: Send {
     /// "current high resolution time"); the default is 0.
     fn now_ms(&mut self) -> f64 {
         0.0
+    }
+    /// `document.cookie`'s getter (HTML §3.1.? "cookie"): the cookie string
+    /// the renderer asks the kernel for. The default is the empty string
+    /// (a page with no cookie jar).
+    fn cookie_get(&mut self) -> String {
+        String::new()
+    }
+    /// `document.cookie`'s setter: the cookie string to store.
+    fn cookie_set(&mut self, cookie: &str) {
+        let _ = cookie;
+    }
+    /// `localStorage.getItem(key)` (HTML §12.2.1†): the kernel's answer, if
+    /// there is a value. The default is a storage with nothing in it.
+    fn storage_get(&mut self, key: &str) -> Option<String> {
+        let _ = key;
+        None
+    }
+    /// `localStorage.setItem(key, value)`: false if the kernel refused it
+    /// (the quota), which script sees as a `QuotaExceededError`.
+    fn storage_set(&mut self, key: &str, value: &str) -> bool {
+        let _ = (key, value);
+        true
+    }
+    /// `localStorage.removeItem(key)`.
+    fn storage_remove(&mut self, key: &str) {
+        let _ = key;
+    }
+    /// `localStorage.clear()`.
+    fn storage_clear(&mut self) {}
+    /// `localStorage.key(index)`.
+    fn storage_key(&mut self, index: u64) -> Option<String> {
+        let _ = index;
+        None
+    }
+    /// `localStorage.length`.
+    fn storage_length(&mut self) -> u64 {
+        0
     }
 }
 
@@ -137,6 +189,17 @@ pub enum HookCall {
     },
     /// [`PageHooks::traverse_history`].
     Traverse(i32),
+    /// [`PageHooks::submit`].
+    Submit {
+        /// The URL, serialized.
+        url: String,
+        /// `POST`.
+        method: String,
+        /// The body's content type.
+        content_type: String,
+        /// The body.
+        body: Vec<u8>,
+    },
     /// [`PageHooks::log`].
     Log(LogLevel, String),
 }
@@ -200,6 +263,7 @@ pub(crate) enum Object {
     MutationObserver(u64),
     MutationRecord(Box<mutation::Record>),
     Range(range::RangeState),
+    UserActivation,
 }
 
 /// A page: the document, its platform objects and their wrappers.
@@ -225,6 +289,12 @@ pub struct Page {
     pub(crate) random: u64,
     pub(crate) mo: mutation::Observers,
     pub(crate) attr_index: HashMap<(usize, u8, Vec<u32>), ObjectKey>,
+    /// What HTML's script processing keeps (item 7.15,
+    /// [`crate::scripting`]), if the page runs scripts through it.
+    pub(crate) script: Option<Box<crate::scripting::state::PageState>>,
+    /// The UI state of item 7.14: form control state, focus, user
+    /// activation, the data of UI events and the event handlers.
+    pub(crate) ui: crate::ui::Ui,
 }
 
 impl core::fmt::Debug for Page {
@@ -278,6 +348,8 @@ impl Page {
             random: 0x9E37_79B9_7F4A_7C15,
             mo: mutation::Observers::default(),
             attr_index: HashMap::new(),
+            script: None,
+            ui: crate::ui::Ui::default(),
         }
     }
 
@@ -345,6 +417,12 @@ impl Page {
             HookCall::Navigate { url, replace } => self.hooks.navigate(url, *replace),
             HookCall::UpdateUrl { url, replace } => self.hooks.update_url(url, *replace),
             HookCall::Traverse(d) => self.hooks.traverse_history(*d),
+            HookCall::Submit {
+                url,
+                method,
+                content_type,
+                body,
+            } => self.hooks.submit(url, method, content_type, body),
             HookCall::Log(level, text) => self.hooks.log(*level, text),
         }
         self.hook_calls.push(call);
@@ -369,6 +447,34 @@ impl Page {
 }
 
 impl Host for Page {
+    /// HTML §8.1.5.? HostLoadImportedModule, for a page with script state.
+    fn load_imported_module(
+        &mut self,
+        scope: &mut Scope<'_>,
+        referrer: Referrer<'_>,
+        request: &ModuleRequest,
+        payload: LoadPayload,
+    ) -> Result<()> {
+        let Page { script, arena, .. } = self;
+        match script.as_deref_mut() {
+            Some(st) => st.load_imported_module(arena, scope, referrer, request, payload),
+            None => Err(clazel_js::Error::NotImplemented("module loading")),
+        }
+    }
+
+    /// HTML §8.1.5.? HostPromiseRejectionTracker, for a page with script
+    /// state.
+    fn promise_rejection_tracker(
+        &mut self,
+        scope: &mut Scope<'_>,
+        promise: Local<'_>,
+        operation: RejectionOperation,
+    ) {
+        if let Some(st) = self.script.as_deref_mut() {
+            st.promise_rejection_tracker(scope, promise, operation);
+        }
+    }
+
     fn random_u64(&mut self) -> u64 {
         // xorshift64*: Math.random needs no more (ECMA-262 asks for no
         // unpredictability), and rule 8 keeps entropy sources out.
@@ -406,6 +512,7 @@ impl Platform for Page {
             Object::MutationObserver(_) => InterfaceId::MutationObserver,
             Object::MutationRecord(_) => InterfaceId::MutationRecord,
             Object::Range(_) => InterfaceId::Range,
+            Object::UserActivation => InterfaceId::UserActivation,
         })
     }
 
@@ -449,6 +556,23 @@ impl Platform for Page {
         let page = page(scope)?;
         let name: Vec<u32> = name.chars().map(u32::from).collect();
         Ok(node::attribute_value(&page.arena, e, &name).map(|v| points_to_units(&v)))
+    }
+
+    fn event_handler_get<'s>(
+        scope: &mut Scope<'s>,
+        this: ObjectKey,
+        event: &str,
+    ) -> Result<Option<Local<'s>>> {
+        handlers::get(scope, this, event)
+    }
+
+    fn event_handler_set<'s>(
+        scope: &mut Scope<'s>,
+        this: ObjectKey,
+        event: &str,
+        value: Option<Local<'s>>,
+    ) -> Result<()> {
+        handlers::set(scope, this, event, value)
     }
 
     fn reflect_set(

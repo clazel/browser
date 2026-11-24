@@ -17,13 +17,19 @@ clazel-dom = { path = "../clazel-dom", version = "=0.0.0" }
 clazel-selectors = { path = "../clazel-selectors", version = "=0.0.0" }
 clazel-css = { path = "../clazel-css", version = "=0.0.0" }
 
-# The page's platform objects exposed to script (`src/page/`, item 7.12):
-# the engine through its embedding API, the generated bindings, the URL
-# parser for `Location` and `History`, and forgiving-base64 for `btoa` and
-# `atob`.
+# Item 7.15, the script half (`src/scripting/`): the engine through its
+# embedding API (`clazel-js`, the one engine crate a browser crate names);
+# the incremental parser (`clazel-treebuilder`'s `exec::incremental`) and
+# the tokenizer's meta charset extraction (`clazel-html`); the script
+# bodies' decoding and the MIME type checks (`clazel-encoding`,
+# `clazel-mime`); script URLs (`clazel-url`) and `javascript:` URLs'
+# percent-decoding (`clazel-percent`).
+#
+# Item 7.12, the page's platform objects exposed to script (`src/page/`):
+# the generated bindings (`clazel-webidl`), the URL parser for `Location` and
+# `History`, and forgiving-base64 for `btoa` and `atob`.
 clazel-js = { path = "../clazel-js", version = "=0.0.0" }
 clazel-webidl = { path = "../clazel-webidl", version = "=0.0.0" }
-clazel-url = { path = "../clazel-url", version = "=0.0.0" }
 clazel-base64 = { path = "../clazel-base64", version = "=0.0.0" }
 
 # The HTML fragment parser behind `innerHTML`, `outerHTML`,
@@ -31,6 +37,18 @@ clazel-base64 = { path = "../clazel-base64", version = "=0.0.0" }
 # (`src/page/fragment.rs`); the serializer's round-trip tests
 # (`tests/conformance_round_trip.rs`) feed it as well.
 clazel-treebuilder = { path = "../clazel-treebuilder", version = "=0.0.0" }
+clazel-html = { path = "../clazel-html", version = "=0.0.0" }
+clazel-encoding = { path = "../clazel-encoding", version = "=0.0.0" }
+clazel-mime = { path = "../clazel-mime", version = "=0.0.0" }
+clazel-url = { path = "../clazel-url", version = "=0.0.0" }
+clazel-percent = { path = "../clazel-percent", version = "=0.0.0" }
+
+# Item 7.14, default actions and activation behavior (`src/activation.rs`,
+# `src/page/forms.rs`): a form control's type and whether it is disabled, its
+# form owner, and the form submission algorithm (HTML §4.10.21.3†) with the
+# entry list it builds, all `clazel-forms`' functions.
+clazel-forms = { path = "../clazel-forms", version = "=0.0.0" }
+
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
 # the shipped code today (the serializer and the selector queries, tested; nothing else yet); `target-tier` is what

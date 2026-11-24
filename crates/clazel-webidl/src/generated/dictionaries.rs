@@ -335,6 +335,20 @@ pub static DICTIONARIES: &[Dictionary] = &[
         ],
     },
     Dictionary {
+        name: "MouseEventInit",
+        parent: Some("EventModifierInit"),
+        ext_attrs: &[],
+        members: &[
+            DictionaryMember { name: "screenX", ty: TypeRef { ty: Type::Simple(Simple::Long), nullable: false, ext_attrs: &[] }, required: false, default: Some(Value::Integer(0)), ext_attrs: &[] },
+            DictionaryMember { name: "screenY", ty: TypeRef { ty: Type::Simple(Simple::Long), nullable: false, ext_attrs: &[] }, required: false, default: Some(Value::Integer(0)), ext_attrs: &[] },
+            DictionaryMember { name: "clientX", ty: TypeRef { ty: Type::Simple(Simple::Long), nullable: false, ext_attrs: &[] }, required: false, default: Some(Value::Integer(0)), ext_attrs: &[] },
+            DictionaryMember { name: "clientY", ty: TypeRef { ty: Type::Simple(Simple::Long), nullable: false, ext_attrs: &[] }, required: false, default: Some(Value::Integer(0)), ext_attrs: &[] },
+            DictionaryMember { name: "button", ty: TypeRef { ty: Type::Simple(Simple::Short), nullable: false, ext_attrs: &[] }, required: false, default: Some(Value::Integer(0)), ext_attrs: &[] },
+            DictionaryMember { name: "buttons", ty: TypeRef { ty: Type::Simple(Simple::UnsignedShort), nullable: false, ext_attrs: &[] }, required: false, default: Some(Value::Integer(0)), ext_attrs: &[] },
+            DictionaryMember { name: "relatedTarget", ty: TypeRef { ty: Type::Named("EventTarget"), nullable: true, ext_attrs: &[] }, required: false, default: Some(Value::Null), ext_attrs: &[] },
+        ],
+    },
+    Dictionary {
         name: "MutationObserverInit",
         parent: None,
         ext_attrs: &[],
@@ -459,6 +473,28 @@ pub static DICTIONARIES: &[Dictionary] = &[
         ext_attrs: &[],
         members: &[
             DictionaryMember { name: "sanitizer", ty: TypeRef { ty: Type::Union(&[TypeRef { ty: Type::Named("Sanitizer"), nullable: false, ext_attrs: &[] }, TypeRef { ty: Type::Named("SanitizerConfig"), nullable: false, ext_attrs: &[] }, TypeRef { ty: Type::Named("SanitizerPresets"), nullable: false, ext_attrs: &[] }]), nullable: false, ext_attrs: &[] }, required: false, default: None, ext_attrs: &[] },
+        ],
+    },
+    Dictionary {
+        name: "PointerEventInit",
+        parent: Some("MouseEventInit"),
+        ext_attrs: &[],
+        members: &[
+            DictionaryMember { name: "pointerId", ty: TypeRef { ty: Type::Simple(Simple::Long), nullable: false, ext_attrs: &[] }, required: false, default: Some(Value::Integer(0)), ext_attrs: &[] },
+            DictionaryMember { name: "width", ty: TypeRef { ty: Type::Simple(Simple::Double), nullable: false, ext_attrs: &[] }, required: false, default: Some(Value::Integer(1)), ext_attrs: &[] },
+            DictionaryMember { name: "height", ty: TypeRef { ty: Type::Simple(Simple::Double), nullable: false, ext_attrs: &[] }, required: false, default: Some(Value::Integer(1)), ext_attrs: &[] },
+            DictionaryMember { name: "pressure", ty: TypeRef { ty: Type::Simple(Simple::Float), nullable: false, ext_attrs: &[] }, required: false, default: Some(Value::Integer(0)), ext_attrs: &[] },
+            DictionaryMember { name: "tangentialPressure", ty: TypeRef { ty: Type::Simple(Simple::Float), nullable: false, ext_attrs: &[] }, required: false, default: Some(Value::Integer(0)), ext_attrs: &[] },
+            DictionaryMember { name: "tiltX", ty: TypeRef { ty: Type::Simple(Simple::Long), nullable: false, ext_attrs: &[] }, required: false, default: None, ext_attrs: &[] },
+            DictionaryMember { name: "tiltY", ty: TypeRef { ty: Type::Simple(Simple::Long), nullable: false, ext_attrs: &[] }, required: false, default: None, ext_attrs: &[] },
+            DictionaryMember { name: "twist", ty: TypeRef { ty: Type::Simple(Simple::Long), nullable: false, ext_attrs: &[] }, required: false, default: Some(Value::Integer(0)), ext_attrs: &[] },
+            DictionaryMember { name: "altitudeAngle", ty: TypeRef { ty: Type::Simple(Simple::Double), nullable: false, ext_attrs: &[] }, required: false, default: None, ext_attrs: &[] },
+            DictionaryMember { name: "azimuthAngle", ty: TypeRef { ty: Type::Simple(Simple::Double), nullable: false, ext_attrs: &[] }, required: false, default: None, ext_attrs: &[] },
+            DictionaryMember { name: "pointerType", ty: TypeRef { ty: Type::Simple(Simple::DomString), nullable: false, ext_attrs: &[] }, required: false, default: Some(Value::Str("")), ext_attrs: &[] },
+            DictionaryMember { name: "isPrimary", ty: TypeRef { ty: Type::Simple(Simple::Boolean), nullable: false, ext_attrs: &[] }, required: false, default: Some(Value::Bool(false)), ext_attrs: &[] },
+            DictionaryMember { name: "persistentDeviceId", ty: TypeRef { ty: Type::Simple(Simple::Long), nullable: false, ext_attrs: &[] }, required: false, default: Some(Value::Integer(0)), ext_attrs: &[] },
+            DictionaryMember { name: "coalescedEvents", ty: TypeRef { ty: Type::Sequence(&TypeRef { ty: Type::Named("PointerEvent"), nullable: false, ext_attrs: &[] }), nullable: false, ext_attrs: &[] }, required: false, default: Some(Value::EmptySequence), ext_attrs: &[] },
+            DictionaryMember { name: "predictedEvents", ty: TypeRef { ty: Type::Sequence(&TypeRef { ty: Type::Named("PointerEvent"), nullable: false, ext_attrs: &[] }), nullable: false, ext_attrs: &[] }, required: false, default: Some(Value::EmptySequence), ext_attrs: &[] },
         ],
     },
     Dictionary {
@@ -718,6 +754,18 @@ pub static DICTIONARIES: &[Dictionary] = &[
             DictionaryMember { name: "stepMismatch", ty: TypeRef { ty: Type::Simple(Simple::Boolean), nullable: false, ext_attrs: &[] }, required: false, default: Some(Value::Bool(false)), ext_attrs: &[] },
             DictionaryMember { name: "badInput", ty: TypeRef { ty: Type::Simple(Simple::Boolean), nullable: false, ext_attrs: &[] }, required: false, default: Some(Value::Bool(false)), ext_attrs: &[] },
             DictionaryMember { name: "customError", ty: TypeRef { ty: Type::Simple(Simple::Boolean), nullable: false, ext_attrs: &[] }, required: false, default: Some(Value::Bool(false)), ext_attrs: &[] },
+        ],
+    },
+    Dictionary {
+        name: "WheelEventInit",
+        parent: Some("MouseEventInit"),
+        ext_attrs: &[],
+        members: &[
+            DictionaryMember { name: "deltaX", ty: TypeRef { ty: Type::Simple(Simple::Double), nullable: false, ext_attrs: &[] }, required: false, default: Some(Value::Decimal("0.0")), ext_attrs: &[] },
+            DictionaryMember { name: "deltaY", ty: TypeRef { ty: Type::Simple(Simple::Double), nullable: false, ext_attrs: &[] }, required: false, default: Some(Value::Decimal("0.0")), ext_attrs: &[] },
+            DictionaryMember { name: "deltaZ", ty: TypeRef { ty: Type::Simple(Simple::Double), nullable: false, ext_attrs: &[] }, required: false, default: Some(Value::Decimal("0.0")), ext_attrs: &[] },
+            DictionaryMember { name: "deltaMode", ty: TypeRef { ty: Type::Simple(Simple::UnsignedLong), nullable: false, ext_attrs: &[] }, required: false, default: Some(Value::Integer(0)), ext_attrs: &[] },
+            DictionaryMember { name: "momentum", ty: TypeRef { ty: Type::Simple(Simple::Boolean), nullable: false, ext_attrs: &[] }, required: false, default: Some(Value::Bool(false)), ext_attrs: &[] },
         ],
     },
     Dictionary {

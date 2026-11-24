@@ -65,8 +65,19 @@ embedding API ("The engine as a library").
 - **Members left out**, with the reason for each, are listed in the header
   of `src/generated/bindings.rs`: types the bindings cannot convert
   (`Promise`, `record`, buffer types, `bigint`, interfaces not exposed),
-  event handler attributes (HTML §8.1.8.1†), `[SecureContext]` members, and
-  special operations without a name. Dictionary members whose types cannot
+  `[SecureContext]` members, and special operations without a name.
+- **Event handler IDL attributes** (`onclick` and the rest, of type
+  `EventHandler`, `OnErrorEventHandler` or `OnBeforeUnloadEventHandler`: HTML
+  §8.1.8.1†) have no trait method: the glue converts the value
+  (`convert::event_handler`: a non-object is null, an object is the callback,
+  callable or not) and calls the platform's `Platform::event_handler_get` and
+  `event_handler_set` with the event type's name. What a handler is, and when
+  its content attribute is compiled, is the platform's (`clazel-web`'s
+  `page::handlers`).
+- **An operation of more than 7 parameters** (`initMouseEvent`,
+  `initKeyboardEvent`) takes its arguments as one struct
+  (`MouseEventInitMouseEventArgs`), so that the trait method does not pass
+  clippy's `too_many_arguments`, which the workspace keeps. Dictionary members whose types cannot
   be converted are not read; the header lists them.
 - **Overload resolution converts after choosing**: the arguments before the
   distinguishing index are converted once the overload is chosen; the

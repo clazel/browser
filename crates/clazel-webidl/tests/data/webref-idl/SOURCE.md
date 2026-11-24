@@ -6,8 +6,9 @@ License: MIT for webref itself (`LICENSE.md`, copied from the root of w3c/webref
 
 The commit is w3c/webref's "Update of ed report from new reffy run" of
 2026-11-16 (07:00 UTC). `ed/idl/` holds the IDL that Reffy extracted from each
-specification's editor's draft that day. Copied byte for byte, the eight files
-of `ed/idl/` named for the standards:
+specification's editor's draft that day. Copied byte for byte, the nine files
+of `ed/idl/` named for the standards (and one more, `pointerevents.idl`,
+below):
 
 - `dom.idl`: DOM Standard (https://dom.spec.whatwg.org/)
 - `html.idl`: HTML Standard (https://html.spec.whatwg.org/multipage/)
@@ -17,6 +18,13 @@ of `ed/idl/` named for the standards:
 - `storage.idl`: Storage Standard (https://storage.spec.whatwg.org/)
 - `uievents.idl`: UI Events (https://w3c.github.io/uievents/)
 - `cssom.idl`: CSS Object Model (https://drafts.csswg.org/cssom-1/)
+- `pointerevents.idl`: Pointer Events (https://w3c.github.io/pointerevents/).
+  Added for item 7.14: at this commit webref extracts the IDL of
+  `MouseEvent`, `MouseEventInit`, `WheelEvent` and `WheelEventInit` into this
+  file and into no other (UI Events' own `uievents.idl` has none of them), and
+  `html.idl`'s `DragEvent` inherits `MouseEvent`. It also holds
+  `PointerEvent`, the `onpointer*` handlers and `Element`'s pointer capture
+  methods, which the bindings do not expose.
 
 Why webref and not each specification's repository: the WHATWG standards
 keep their IDL inside the source of the document (Bikeshed or Wattsi

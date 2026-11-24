@@ -149,6 +149,14 @@ impl EncFnsExec for Encodings {
     }
 }
 
+/// The document of an empty HTML input at `url`: the tree a user script
+/// (kind 1) runs in.
+pub fn parse_empty(url: &[u32]) -> Arena {
+    parse_real(&Encodings, &[], url.to_vec(), true, false)
+        .0
+        .arena
+}
+
 /// The encoding an encoding id of [`Encodings`] stands for.
 fn encoding_of(id: u64) -> Option<Encoding> {
     let n = u8::try_from(id).ok()?;
@@ -176,10 +184,11 @@ fn decode_and_parse(
     encoding: Encoding,
     url: &[u32],
     tentative: bool,
+    scripting: bool,
 ) -> Result<(Arena, Vec<ExecAction>), NotParsed> {
     let input = clazel_encoding::hooks::decode::decode(body, encoding)
         .ok_or(NotParsed::Unsupported(encoding))?;
-    let (parser, actions) = parse_real(&Encodings, &input, url.to_vec(), false, tentative);
+    let (parser, actions) = parse_real(&Encodings, &input, url.to_vec(), scripting, tentative);
     Ok((parser.arena, actions))
 }
 
@@ -193,9 +202,21 @@ pub fn parse_html(
     transport: Option<Encoding>,
     url: &[u32],
 ) -> Result<Parsed, NotParsed> {
+    parse_html_with(body, transport, url, false)
+}
+
+/// [`parse_html`] with the parser's scripting flag as given (HTML §13.2.4†:
+/// on, the content of `noscript` is raw text, as in a browser that runs the
+/// document's scripts).
+pub fn parse_html_with(
+    body: &[u8],
+    transport: Option<Encoding>,
+    url: &[u32],
+    scripting: bool,
+) -> Result<Parsed, NotParsed> {
     let (encoding, confidence) = sniff(body, transport);
     let tentative = confidence == Confidence::Tentative;
-    let (arena, actions) = decode_and_parse(body, encoding, url, tentative)?;
+    let (arena, actions) = decode_and_parse(body, encoding, url, tentative, scripting)?;
     let change = actions.iter().find_map(|a| match a {
         ExecAction::ChangeEncoding(id) => Some(*id),
         _ => None,
@@ -207,7 +228,7 @@ pub fn parse_html(
         Some(new) => {
             // Free the first tree before building the second.
             drop(arena);
-            let (arena, _) = decode_and_parse(body, new, url, false)?;
+            let (arena, _) = decode_and_parse(body, new, url, false, scripting)?;
             Ok(Parsed {
                 arena,
                 encoding: new,

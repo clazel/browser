@@ -10,8 +10,8 @@
 //! Without it the text path (`Display`) runs, as item 5.18 decided for text
 //! mode.
 //! Exit codes: 71 a sandbox layer failed (nothing was read), 70 the socket or
-//! protocol failed, 64 the script is not a script. The messages go to
-//! standard error, which the host reports.
+//! protocol failed. The messages go to standard error, which the host
+//! reports.
 
 use std::io;
 use std::process::ExitCode;
@@ -58,6 +58,57 @@ fn open_list(n: u32) -> io::Result<clazel_sys::windows::Inherited> {
     clazel_sys::windows::Inherited::open(u64::from(n)).map_err(io::Error::other)
 }
 
+/// How long a read waits before the page's timers get a turn.
+#[cfg(unix)]
+const POLL: std::time::Duration = std::time::Duration::from_millis(20);
+
+/// The input socket with a read timeout, if standard input is a socket the
+/// process can duplicate: the page's event loop runs between reads. The
+/// descriptor is never closed (see `main`).
+///
+/// It is read as a `File`, not a `UnixStream`: on Linux the standard
+/// library reads a `UnixStream` with `recv` (the `recvfrom` system call),
+/// which the renderer's seccomp allowlist leaves out; a `File` reads with
+/// `read`, which it allows. The timeout is the socket's `SO_RCVTIMEO`, set
+/// before the sandbox, and applies to `read` as well.
+#[cfg(unix)]
+struct Polled(Option<std::fs::File>);
+
+#[cfg(unix)]
+impl io::Read for Polled {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        match self.0.as_mut() {
+            Some(s) => io::Read::read(s, buf),
+            None => Ok(0),
+        }
+    }
+}
+
+#[cfg(unix)]
+impl Drop for Polled {
+    fn drop(&mut self) {
+        if let Some(s) = self.0.take() {
+            core::mem::forget(s);
+        }
+    }
+}
+
+#[cfg(unix)]
+fn polled_input() -> Option<Polled> {
+    use std::os::fd::AsFd;
+    let fd = io::stdin().as_fd().try_clone_to_owned().ok()?;
+    let socket = std::os::unix::net::UnixStream::from(fd);
+    socket.set_read_timeout(Some(POLL)).ok()?;
+    let fd: std::os::fd::OwnedFd = socket.into();
+    Some(Polled(Some(std::fs::File::from(fd))))
+}
+
+/// Windows reads from standard input as it is.
+#[cfg(windows)]
+fn polled_input() -> Option<io::Stdin> {
+    None
+}
+
 fn main() -> ExitCode {
     let width = width();
     // Fonts and the list socket are opened before the sandbox, which forbids
@@ -75,29 +126,40 @@ fn main() -> ExitCode {
             }
         },
     };
+    let polled_input = polled_input();
+    // The seccomp filter has no `clone`, so the engine must make no helper
+    // thread of its own to parse or compile a large script (the process would
+    // be killed with `SIGSYS`): it works on this thread's stack. A thread made
+    // before the sandbox does not work either: `unshare(USER)` fails in a
+    // multithreaded process, and `clone` with `CLONE_THREAD` fails after
+    // `unshare(PID)` (README: "Threads"). A source nested at the parser's
+    // limit may need more than this stack: that overflow ends this renderer
+    // (a tab), inside the sandbox.
+    clazel_js::set_inline_parsing(true);
     // First act, before a byte is read: fail closed.
     if let Err(failure) = clazel_renderer::sandbox::enter() {
         eprintln!("clazel-renderer: {failure}");
         return ExitCode::from(71);
     }
-    // The host gave this process one socket as both stdin and stdout.
-    let (mut r, mut w) = (io::stdin().lock(), io::stdout().lock());
+    // The host gave this process one socket as both stdin and stdout. The
+    // graphical renderer runs the page's timers, so it reads with a timeout
+    // where the socket allows one (set before the sandbox: it can make no
+    // thread and no `poll` call after it).
     // The list socket lives until the process exits, never dropped: a debug
     // build's std checks a descriptor it drops with `fcntl(F_GETFD)`, which the
     // seccomp filter refuses by killing the process (`SIGSYS`).
     let ran = match list {
         Some(list) => {
             let list = Box::leak(Box::new(list));
-            clazel_renderer::run_graphics(&mut r, &mut w, list, &fonts)
+            match polled_input {
+                Some(input) => clazel_renderer::run_graphics(input, io::stdout(), list, &fonts),
+                None => clazel_renderer::run_graphics(io::stdin(), io::stdout(), list, &fonts),
+            }
         }
-        None => clazel_renderer::run_with_width(&mut r, &mut w, width),
+        None => clazel_renderer::run_with_width(io::stdin(), io::stdout(), width),
     };
     match ran {
         Ok(_) => ExitCode::SUCCESS,
-        Err(e @ clazel_renderer::RunError::Script(_)) => {
-            eprintln!("clazel-renderer: {e}");
-            ExitCode::from(64)
-        }
         Err(e) => {
             eprintln!("clazel-renderer: {e}");
             ExitCode::from(70)

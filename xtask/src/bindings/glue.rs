@@ -17,14 +17,19 @@
 //!   `[LegacyUnforgeable]`, `[Replaceable]`, `[SameObject]`, `[PutForwards]`
 //!   and `[Reflect]`.
 //!
+//! Event handler IDL attributes (`on*`, of type `EventHandler`,
+//! `OnErrorEventHandler` or `OnBeforeUnloadEventHandler`: HTML §8.1.8.1†)
+//! have no trait method: their getter and setter call the platform's
+//! `event_handler_get` and `event_handler_set` with the event type's name (the
+//! attribute's name without `on`), as `[Reflect]` ones call `reflect_get`.
+//!
 //! Dictionaries, enumerations and unions that those members use become Rust
 //! types with their conversion functions (§3.2.18†, §3.2.19†, §3.2.24†).
 //!
 //! What is left out, and why, is listed in the generated file's header: a
 //! member whose types the bindings cannot convert yet (`Promise`, `record`,
-//! buffer types, `bigint`, `symbol`, interfaces not exposed), event handler
-//! attributes (`EventHandler`: HTML §8.1.8.1†'s processing is not
-//! implemented), `[SecureContext]` members (the browser has no secure
+//! buffer types, `bigint`, `symbol`, interfaces not exposed),
+//! `[SecureContext]` members (the browser has no secure
 //! contexts yet), special operations without a name (indexed and named
 //! properties need exotic objects), and `iterable`, `maplike` and `setlike`
 //! (Symbol.iterator).
@@ -80,10 +85,17 @@ pub const EXPOSED: &[&str] = &[
     "Location",
     "History",
     "Navigator",
+    "UIEvent",
+    "MouseEvent",
+    "WheelEvent",
+    "KeyboardEvent",
+    "FocusEvent",
+    "InputEvent",
+    "UserActivation",
 ];
 
 /// The typedefs that are event handlers (HTML §8.1.8.1†), whose attributes
-/// are left out.
+/// go through the platform's `event_handler_get` and `event_handler_set`.
 const EVENT_HANDLERS: &[&str] = &[
     "EventHandler",
     "OnErrorEventHandler",
@@ -338,7 +350,7 @@ impl<'m> Gen<'m> {
             }
             TyKind::Named(n) => {
                 if EVENT_HANDLERS.contains(&n.as_str()) {
-                    return Some("event handler (HTML §8.1.8.1, not implemented)".into());
+                    return None;
                 }
                 match self.named_kind(n) {
                     Some(NamedKind::Interface) if self.exposed.contains(n) => None,
@@ -1034,8 +1046,16 @@ fn members(g: &mut Gen<'_>, i: &Interface) -> Members {
                     .find_map(|t| g.unsupported(t));
                 let ret = g.resolve(&o.ret);
                 let dict_ret = matches!(&ret.kind, TyKind::Named(n) if g.named_kind(n) == Some(NamedKind::Dictionary));
-                if let Some(why) =
-                    bad.or_else(|| dict_ret.then(|| "returns a dictionary".to_owned()))
+                // A long operation's arguments go in a struct (see `is_long`),
+                // which cannot borrow the scope.
+                let borrows = is_long(o, o.kind == OpKind::Static)
+                    && o.args.iter().any(|a| g.needs_lt(&a.ty));
+                let too_long = borrows.then(|| {
+                    "more than 7 parameters, and an argument that borrows the scope".to_owned()
+                });
+                if let Some(why) = bad
+                    .or_else(|| dict_ret.then(|| "returns a dictionary".to_owned()))
+                    .or(too_long)
                 {
                     skip(g, format!("{}.{name}", i.name), why);
                     continue;
@@ -1118,6 +1138,58 @@ fn reflect(g: &Gen<'_>, a: &Attr) -> Option<(String, bool)> {
     };
     let name = ident(&a.ext, "Reflect").unwrap_or_else(|| a.name.to_ascii_lowercase());
     Some((name, boolean))
+}
+
+/// The event type of an event handler IDL attribute (HTML §8.1.8.1†: an
+/// event handler IDL attribute is named for its event handler, `on` and the
+/// event type): the attribute's name without `on`.
+fn event_handler(a: &Attr) -> Option<String> {
+    match &a.ty.kind {
+        TyKind::Named(n) if EVENT_HANDLERS.contains(&n.as_str()) && !a.is_static => {
+            a.name.strip_prefix("on").map(str::to_owned)
+        }
+        _ => None,
+    }
+}
+
+/// Whether the trait method of `o` would have more than 7 parameters
+/// (`scope`, `this` unless static, and the arguments): clippy's
+/// `too_many_arguments`, which the workspace keeps. The arguments of such an
+/// operation go in one struct, [`args_struct`], with a field for each.
+fn is_long(o: &Operation, is_static: bool) -> bool {
+    o.args.len().saturating_add(if is_static { 1 } else { 2 }) > 7
+}
+
+/// The name of the struct holding a long operation's arguments.
+fn args_struct(iface: &str, o: &Operation) -> String {
+    format!("{iface}{}Args", pascal(o.name.as_deref().unwrap_or("")))
+}
+
+/// The Rust type of an argument, for a trait method.
+fn arg_type(g: &mut Gen<'_>, a: &Argument) -> String {
+    let t = g.rty(&a.ty);
+    if a.variadic {
+        format!("Vec<{t}>")
+    } else if a.optional && a.default.is_none() {
+        format!("Option<{t}>")
+    } else {
+        t
+    }
+}
+
+/// The struct of a long operation's arguments, as Rust source.
+fn args_struct_def(g: &mut Gen<'_>, iface: &str, o: &Operation) -> String {
+    let name = args_struct(iface, o);
+    let mut s = format!(
+        "/// The arguments of `{iface}.{}`, more than a method may have.\n#[derive(Debug, Clone)]\npub struct {name} {{\n",
+        o.name.as_deref().unwrap_or("")
+    );
+    for a in &o.args {
+        let t = arg_type(g, a);
+        let _ = writeln!(s, "    /// `{}`\n    pub {}: {t},", a.name, snake(&a.name));
+    }
+    s.push_str("}\n\n");
+    s
 }
 
 /// The Rust parameters of an argument list, for a trait method.
@@ -1340,7 +1412,7 @@ fn emit_interface(g: &mut Gen<'_>, i: &Interface, ms: &Members, o: &mut Out) {
     );
     let unimpl = |what: &str| format!("Err(platform::not_implemented::<Self>(scope, {}))", q(what));
     for a in &ms.attrs {
-        if reflect(g, a).is_some() {
+        if reflect(g, a).is_some() || event_handler(a).is_some() {
             continue;
         }
         let rt = g.rty(&a.ty);
@@ -1373,7 +1445,13 @@ fn emit_interface(g: &mut Gen<'_>, i: &Interface, ms: &Members, o: &mut Out) {
     for op in &ms.ops {
         for (o, _, method) in &op.overloads {
             let rt = g.rty(&o.ret);
-            let ps = params(g, &o.args);
+            let ps = if is_long(o, op.is_static) {
+                let def = args_struct_def(g, name, o);
+                glue.push_str(&def);
+                format!(", _args: {}", args_struct(name, o))
+            } else {
+                params(g, &o.args)
+            };
             let this = if op.is_static {
                 String::new()
             } else {
@@ -1525,7 +1603,16 @@ fn emit_interface(g: &mut Gen<'_>, i: &Interface, ms: &Members, o: &mut Out) {
                 q(&key)
             );
         }
-        if let Some((content, boolean)) = reflect(g, a) {
+        if let Some(event) = event_handler(a) {
+            // HTML §8.1.8.1†: the getter returns "the result of getting the
+            // current value of the event handler" of that name: null if it
+            // has none.
+            let _ = writeln!(
+                glue,
+                "    let r = P::event_handler_get(scope, this, {})?;\n    Ok(match r {{ Some(x) => x, None => scope.null() }})\n}}\n",
+                q(&event)
+            );
+        } else if let Some((content, boolean)) = reflect(g, a) {
             // HTML §2.6.1† "reflect": the getter is the content attribute's
             // value, or the empty string; for a boolean, whether it is there.
             if boolean {
@@ -1567,7 +1654,13 @@ fn emit_interface(g: &mut Gen<'_>, i: &Interface, ms: &Members, o: &mut Out) {
                 "/// The setter of `{name}.{}` (WebIDL §3.7.5.2†).\nfn {sname}<'s, P: AllInterfaces>(scope: &mut Scope<'s>, args: &Args<'s>) -> Result<Local<'s>> {{\n{this}    // \"If no arguments were passed, then throw a TypeError.\"\n    if args.is_empty() {{\n        return Err(scope.throw_error(clazel_js::ErrorKind::TypeError, \"1 argument required\"));\n    }}",
                 a.name
             );
-            if let Some((content, boolean)) = reflect(g, a) {
+            if let Some(event) = event_handler(a) {
+                let _ = writeln!(
+                    glue,
+                    "    let value = convert::event_handler(scope, args.get(0));\n    P::event_handler_set(scope, this, {}, value)?;",
+                    q(&event)
+                );
+            } else if let Some((content, boolean)) = reflect(g, a) {
                 if boolean {
                     let _ = writeln!(
                         glue,
@@ -1700,7 +1793,17 @@ fn emit_interface(g: &mut Gen<'_>, i: &Interface, ms: &Members, o: &mut Out) {
             op.name
         );
         let call_one = |g: &mut Gen<'_>, o: &Operation, method: &str, indent: &str| -> String {
-            let (code, call) = convert_args(g, &o.args);
+            let (code, mut call) = convert_args(g, &o.args);
+            if is_long(o, op.is_static) {
+                let fields = o
+                    .args
+                    .iter()
+                    .enumerate()
+                    .map(|(k, a)| format!("{}: a{k}", snake(&a.name)))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                call = format!(", {} {{ {fields} }}", args_struct(name, o));
+            }
             let this_arg = if op.is_static {
                 String::new()
             } else {

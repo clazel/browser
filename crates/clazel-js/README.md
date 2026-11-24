@@ -36,7 +36,8 @@ needed them: WebIDL attributes are accessors);
 `new_host_object` with `host_data`,
 `get_prototype_from_constructor`, `host_mut`, `check_terminated`; errors,
 `new_exception`, `throw_error`, `throw`, `report`, `Error::Thrown`;
-`create_realm` (once), `global`, realm and script host data; `compile_script`,
+`create_realm` (once), `global`, realm and script host data; `Scope::run_jobs`
+(a microtask checkpoint from inside a scope, item 7.15); `compile_script`,
 `run_script`, `eval_script`; `Handle`, `Weak`, `Member`; `gc` and
 `clear_kept_objects` as no-ops.
 
@@ -54,12 +55,9 @@ return an error, so they record it and the next fallible call returns it.
 - **No completion value.** `run_script` and `eval_script` return `undefined`
   because the compiler's script has no completion value. Results go out
   through globals or native functions.
-- **Re-entrance.** A closure made by `function` that JavaScript re-enters
-  while it runs gets `Error::Busy`, because the closures are stored in the VM
-  they borrow (the table is where a plain function pointer can find it).
-  `shared_function` takes a `Sync` closure, which the runtime shares with each
-  call, so it can be re-entered: open question 14's proposal, added beside
-  `function` rather than in its place.
+- **Re-entrance** works: a native closure that JavaScript re-enters while
+  it runs runs again, nested. That needed `Sync` on the closures (open
+  question 14, answered as its proposal said).
 - **Rooting.** There is no collector in this tree (open pull requests), so
   nothing is ever freed: `Local`, `Handle`, `Weak` and `Member` are checked
   (the runtime they belong to, the arena's generation) but root nothing;
@@ -392,14 +390,11 @@ look at each.
     `RangeError`. This contract keeps `OutOfMemory` for when even that cannot
     be allocated. If that case can be avoided by reserving room for one
     error object, the variant can go.
-14. **Native closures and re-entrance.** `Scope::function` takes `Fn + Send`.
-    Re-entering a running closure needs it shared with the call that is
-    running, which for a `Send` runtime means `Fn + Send + Sync` (an `Arc`),
-    or a runtime that is not `Send`. With `Send` alone the implementation
-    stores each closure in the VM's embedder slot and takes it out while it
-    runs, so a re-entrant call is `Error::Busy`. Proposal: add `Sync` to the
-    bound (the browser's closures hold ids, not `Rc`s, as open question 3
-    already asks of the host).
+14. **Native closures and re-entrance.** Answered: `Scope::function` takes
+    `Fn + Send + Sync`, and the table holds each closure in an `Arc` that a
+    call clones, so a re-entrant call runs (HTML's `document.write`, item
+    7.15, needs it). The browser's closures hold ids, not `Rc`s, as open
+    question 3 already asks of the host.
 15. **Infallible constructors that cannot work yet.** `bigint_from_*`,
     `new_symbol` and `well_known_symbol` return a `Local`, not a `Result`, so
     when the VM lacks the type the error is held for the next fallible call.

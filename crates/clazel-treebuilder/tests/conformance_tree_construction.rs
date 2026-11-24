@@ -16,8 +16,16 @@
 //! them).
 //!
 //! Scripting: `#script-on` and `#script-off` set the flag; a case with
-//! neither runs once, with scripting **off**, the browser's setting (this
-//! browser runs no scripts). Its scripting-on reading is not checked.
+//! neither is counted by its scripting-off reading, and its scripting-on
+//! reading (the browser's setting since item 7.15) must give the same tree
+//! too: the suite's convention is that a case naming no flag holds for
+//! both. (Under Miri only the counted reading runs.)
+//!
+//! The incremental driver (`exec::incremental`, item 7.15), which the
+//! browser parses documents with, is not proven equal to `parse_real`; as
+//! evidence, every document case is parsed through it too, pumped with a
+//! closed input and no insertion point until it stops, and its tree must be
+//! `parse_real`'s.
 //!
 //! A case whose tree differs is a bug in the tree builder's spec, the
 //! tokenizer's spec (each exec is proven equal to its spec), the driver or
@@ -34,6 +42,7 @@ mod dump;
 use clazel_dom::exec::ExecAttr;
 use clazel_dom::spec::{DocumentMode, Namespace};
 use clazel_treebuilder::exec::driver::{parse_fragment_real, parse_real};
+use clazel_treebuilder::exec::incremental::{Incremental, Pause};
 use clazel_treebuilder::exec::step::ExecContext;
 use clazel_treebuilder::exec::types::EncFnsExec;
 
@@ -100,6 +109,29 @@ fn context_of(ctx: &str) -> Option<ExecContext> {
     })
 }
 
+/// A document case through the incremental driver: the whole input,
+/// closed, pumped until the parser stops (actions ignored, as `parse_real`'s
+/// caller here ignores them). `None` for a fragment case.
+fn run_incremental(case: &Case, scripting: bool) -> Option<String> {
+    if case.fragment.is_some() {
+        return None;
+    }
+    let input = u32s(case.data);
+    let mut parser = Incremental::new(Vec::new(), scripting, false, &input, true);
+    // Each pump gives at least one token or returns `Stopped`; the input
+    // bounds the tokens, so this ends. The bound is a guard against a bug.
+    let mut budget = input.len().saturating_mul(4).saturating_add(64);
+    loop {
+        match parser.pump(&NoEnc) {
+            Pause::Stopped => break,
+            Pause::Actions(_) => {}
+            Pause::InsertionPoint => return Some("#paused with no insertion point".to_owned()),
+        }
+        budget = budget.checked_sub(1)?;
+    }
+    Some(dump::dump_children(&parser.parser().arena, 0))
+}
+
 fn run(case: &Case, scripting: bool) -> String {
     let input = u32s(case.data);
     match case.fragment {
@@ -127,6 +159,9 @@ fn wpt_tree_construction() {
     let mut known_hit: Vec<&str> = Vec::new();
     let mut stale: Vec<&str> = Vec::new();
     let mut default_scripting = 0usize;
+    let mut incremental_run = 0usize;
+    let mut incremental_differ: Vec<String> = Vec::new();
+    let mut scripting_on_differ: Vec<String> = Vec::new();
     // Miri runs every 40th case (50 of 1,968; the whole suite took over
     // 300 s there): it looks for undefined behaviour in the paths the cases
     // exercise, and the full suite runs in the normal test job.
@@ -139,8 +174,29 @@ fn wpt_tree_construction() {
             default_scripting += 1;
         }
         let known = KNOWN_MISMATCHES.iter().find(|(k, _)| *k == id);
-        let tree = run(case, case.scripting.unwrap_or(false));
-        let tree = tree.strip_suffix('\n').unwrap_or(&tree);
+        let scripting = case.scripting.unwrap_or(false);
+        let whole = run(case, scripting);
+        // The incremental driver gives `parse_real`'s tree.
+        if let Some(incremental) = run_incremental(case, scripting) {
+            incremental_run += 1;
+            if incremental != whole {
+                incremental_differ.push(format!(
+                    "{id} data={:?}\n--- parse_real\n{whole}\n--- incremental\n{incremental}",
+                    case.data
+                ));
+            }
+        }
+        // A case naming no flag holds with scripting on too.
+        if case.scripting.is_none() && !cfg!(miri) {
+            let on = run(case, true);
+            if on != whole {
+                scripting_on_differ.push(format!(
+                    "{id} data={:?}\n--- scripting off\n{whole}\n--- scripting on\n{on}",
+                    case.data
+                ));
+            }
+        }
+        let tree = whole.strip_suffix('\n').unwrap_or(&whole);
         if tree == case.document {
             pass += 1;
             if let Some((k, _)) = known {
@@ -156,6 +212,22 @@ fn wpt_tree_construction() {
             ));
         }
     }
+    for d in &incremental_differ {
+        println!("INCREMENTAL DIFFERS {d}\n");
+    }
+    for d in &scripting_on_differ {
+        println!("SCRIPTING ON DIFFERS {d}\n");
+    }
+    assert!(
+        incremental_differ.is_empty(),
+        "{} cases where the incremental driver's tree is not parse_real's",
+        incremental_differ.len()
+    );
+    assert!(
+        scripting_on_differ.is_empty(),
+        "{} cases naming no scripting flag whose tree changes with scripting on",
+        scripting_on_differ.len()
+    );
     if cfg!(miri) {
         for f in &failed {
             println!("MISMATCH {f}\n");
@@ -169,8 +241,11 @@ fn wpt_tree_construction() {
         return;
     }
     println!(
-        "tree construction: {} cases run with scripting off (no #script-on/#script-off)",
+        "tree construction: {} cases name no scripting flag; each gives the same tree with scripting off (counted) and on",
         default_scripting
+    );
+    println!(
+        "tree construction: {incremental_run} document cases also run through the incremental driver, each giving parse_real's tree"
     );
     println!(
         "tree construction: {} known mismatches (see KNOWN_MISMATCHES):",
@@ -187,7 +262,7 @@ fn wpt_tree_construction() {
         println!("MISMATCH {f}\n");
     }
     println!(
-        "tree construction: scripted_*.dat cases not run (need a script engine, not in total): {}",
+        "tree construction: scripted_*.dat cases not run here (need a script engine; clazel-web's conformance_scripted runs them; not in total): {}",
         SCRIPTED_NOT_RUN
     );
     println!(

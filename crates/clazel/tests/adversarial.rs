@@ -46,7 +46,8 @@ fn base_seed() -> u64 {
 /// The script of well-behaved tab `k`: a cookie and a storage item of its own.
 fn good_script(k: u64) -> String {
     format!(
-        "cookie-set mark=g{k}; Path=/\ncookie-get\nstorage-set mark g{k}\nstorage-get mark\nstorage-length"
+        "document.cookie = 'mark=g{k}; Path=/'; document.cookie; \
+         localStorage.setItem('mark', 'g{k}'); localStorage.getItem('mark'); localStorage.length;"
     )
 }
 

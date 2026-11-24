@@ -146,7 +146,7 @@ pub fn convert_to_int(
         let x = x.max(lower).min(upper);
         // Round half to even; +0 rather than -0 (an i128 has no -0).
         let r = x.round();
-        let r = if (x - x.trunc()).abs() == 0.5 && r % 2.0 != 0.0 {
+        let r = if (x - x.trunc()).abs() == 0.5 && (r as i128) & 1 != 0 {
             r - x.signum()
         } else {
             r
@@ -158,15 +158,45 @@ pub fn convert_to_int(
     }
     let x = integer_part(x);
     // Step 10: x modulo 2^bitLength, the mathematical modulo (non-negative).
-    // `%` of f64 is exact (fmod), and its result is an integer below 2^64 in
-    // magnitude, which an i128 holds exactly; the rest is integer arithmetic
-    // (bits is 8, 16, 32 or 64, so the bounds fit an i128).
-    let m = 2f64.powi(bits as i32);
+    // Computed exactly on the double's bits, in integers: x is a non-zero
+    // integer, |x| = significand × 2^exponent, and bits is 8, 16, 32 or 64,
+    // so every intermediate fits a u128 (float `%` is not relied on: its
+    // result differed under Miri).
     let full = 1i128.checked_shl(bits).unwrap_or(i128::MAX);
-    let mut r = (x % m) as i128;
-    if r < 0 {
-        r = r.saturating_add(full);
-    }
+    let mask = u128::try_from(full).unwrap_or(u128::MAX).wrapping_sub(1);
+    let raw = x.to_bits();
+    let biased = i32::try_from(raw.wrapping_shr(52) & 0x7FF).unwrap_or(0);
+    let fraction = raw & 0x000F_FFFF_FFFF_FFFF;
+    let (significand, exponent) = if biased == 0 {
+        (fraction, -1074)
+    } else {
+        (
+            fraction | 0x0010_0000_0000_0000,
+            biased.saturating_sub(1075),
+        )
+    };
+    let magnitude: u128 = if exponent >= 0 {
+        match u32::try_from(exponent) {
+            Ok(e) if e < bits => u128::from(significand).wrapping_shl(e) & mask,
+            _ => 0,
+        }
+    } else {
+        let shift = exponent.unsigned_abs();
+        if shift >= 64 {
+            0
+        } else {
+            u128::from(significand.wrapping_shr(shift)) & mask
+        }
+    };
+    let unsigned = if x < 0.0 {
+        u128::try_from(full)
+            .unwrap_or(u128::MAX)
+            .wrapping_sub(magnitude)
+            & mask
+    } else {
+        magnitude
+    };
+    let r = i128::try_from(unsigned).unwrap_or(0);
     let half = 1i128
         .checked_shl(bits.saturating_sub(1))
         .unwrap_or(i128::MAX);
@@ -394,6 +424,17 @@ pub fn callback_function<'s>(scope: &mut Scope<'_>, v: Local<'s>) -> Result<Loca
         return Err(type_error(scope, "Value is not a function"));
     }
     Ok(v)
+}
+
+/// The conversion of an event handler IDL attribute's value (HTML §8.1.8.1†
+/// `EventHandler`: a nullable `[LegacyTreatNonObjectAsNull]` callback
+/// function, §3.2.21†): "If V is not an Object, return null" (so `undefined`,
+/// numbers and strings clear the handler), and an Object, callable or not, is
+/// the callback; one that is not callable does nothing when it is called
+/// ("invoke": "If IsCallable(F) is false ... return").
+#[must_use]
+pub fn event_handler<'s>(scope: &Scope<'_>, v: Local<'s>) -> Option<Local<'s>> {
+    is_object(scope, v).then_some(v)
 }
 
 /// §3.2.20† `sequence<T>`, for an Array only (see the module's modelling

@@ -4,7 +4,7 @@
 // Source, commit and license: tests/data/webref-idl/SOURCE.md.
 //
 // WebIDL extracted from the standards, read by item 7.12's bindings generator.
-// 9 files, 157454 bytes. Nothing here is parsed yet; see the converter's
+// 10 files, 162187 bytes. Nothing here is parsed yet; see the converter's
 // header for why. Paths are relative to tests/data/webref-idl/.
 
 /// One vendored file.
@@ -25,6 +25,7 @@ pub const FILES: &[File] = &[
     File { path: "dom.idl", size: 23609, sha256: "9301a216367ddeb88d8503886a1ab9d6082128c1b24b2f0056bdb7ecc4d15ac2" },
     File { path: "fetch.idl", size: 4542, sha256: "92a1f0f5273cd4244f1f4f25b445bc4dab995d93f00f17d1a6190c2f0f29635e" },
     File { path: "html.idl", size: 111726, sha256: "936de2af54db9e2146fb283b108915e4f57b1eda5b37c9014429c51e70abd133" },
+    File { path: "pointerevents.idl", size: 4733, sha256: "59f92db5165e9e3349c04613edbef7fc952a03d845ea44cef8763d5872e259c8" },
     File { path: "storage.idl", size: 667, sha256: "db07a7088c590587fc0fdf5f551906f25d72380e8fb4ad2a180ae0dd48071551" },
     File { path: "uievents.idl", size: 4731, sha256: "928b9ba3244788b5ba82bdb3a1c429af87b0c712ca8c99bd265fe9f67740645e" },
     File { path: "url.idl", size: 1525, sha256: "6f83df8f28112f0dfbdb52e34aa32bbcc4168b234d228403d732430309201727" },

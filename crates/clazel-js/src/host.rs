@@ -459,6 +459,21 @@ impl Scope<'_> {
         self.push_job(job)
     }
 
+    /// Runs queued jobs until the engine's own queue is empty, as
+    /// [`Runtime::run_jobs`](crate::Runtime::run_jobs) does, and returns how
+    /// many ran: a microtask checkpoint from inside a scope. HTML's "clean up
+    /// after running script" performs one when the last script on the stack
+    /// returns, which a host running scripts from one scope reaches here.
+    pub fn run_jobs(&mut self) -> Result<u64> {
+        self.check_deferred()?;
+        let mut ran: u64 = 0;
+        while let Some(job) = self.pop_job() {
+            self.run_job(job)?;
+            ran = ran.saturating_add(1);
+        }
+        Ok(ran)
+    }
+
     /// Runs a job to completion. A job that throws returns the exception.
     pub fn run_job(&mut self, job: Job) -> Result<()> {
         // A job's root is the function to run: no arguments, `undefined` for

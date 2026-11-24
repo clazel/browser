@@ -9,12 +9,22 @@
 //! implementations that later items run.
 //!
 //! Item 7.14's engine-independent core is [`events`]: DOM event dispatch
-//! (§2.9†) with the listener lists, over the same arena.
+//! (§2.9†) with the listener lists, over the same arena, and its activation
+//! behavior ([`activation`]: what a click on a link, a button or a checkbox
+//! does) and user activation ([`user_activation`], HTML §6.4†). The UI
+//! events themselves, from the renderer's input to the page's listeners and
+//! default actions, are [`scripting::Page`]'s `dispatch_*` methods.
 //!
 //! Items 7.14 and 7.15's event loop is [`event_loop`]: task queues, the
 //! microtask checkpoint and `setTimeout`/`setInterval` (HTML §8.1.7† and
 //! §8.6†), with caps for a hostile page (7.19) and time supplied by the
 //! caller.
+//!
+//! Item 7.15's script half is [`scripting`]: a document parsed with the
+//! scripting flag on, its `script` elements prepared and run as the parser
+//! reaches them, `document.write`, `document.open` and `document.close`,
+//! module scripts as far as the engine goes, `javascript:` URLs and
+//! `performance.now()`, through `clazel-js`'s embedding API.
 //!
 //! Item 7.12's platform is [`page`]: the page's platform objects (the DOM,
 //! events, `Window`, `Location`, `History`, `Navigator`, `console`) exposed
@@ -23,8 +33,12 @@
 //!
 //! Tier 0 (`Cargo.toml`): safe Rust, tested, nothing proven.
 
+pub mod activation;
 pub mod event_loop;
 pub mod events;
 pub mod page;
+pub mod scripting;
 pub mod selectors;
 pub mod serialize;
+pub mod ui;
+pub mod user_activation;

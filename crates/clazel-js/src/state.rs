@@ -15,12 +15,13 @@
 //!
 //! # Re-entrancy
 //!
-//! The closure is taken out of the table for the call and put back after it,
-//! because the table is inside the VM that the closure borrows. A native
-//! function that JavaScript re-enters while it is still running (it called a
-//! script that called it) finds its slot empty and gets [`Error::Busy`]. The
-//! contract promises more ("a native function can be re-entered"); keeping
-//! that promise needs `Sync` closures (an `Arc`), see the PR's proposals.
+//! The table holds each closure in an [`Arc`], and a call clones the `Arc`
+//! out of the table before it runs the closure, because the table is inside
+//! the VM that the closure borrows. A native function that JavaScript
+//! re-enters while it is still running (it called a script that called it)
+//! is cloned out again and runs nested, as the contract promises ("a native
+//! function can be re-entered"). Sharing the closure between the two calls
+//! is why [`NativeFn`] is `Sync` (the README's open question 14).
 //!
 //! # Errors across the VM
 //!
@@ -40,7 +41,7 @@ use clazel_js_vm::interp::{Abrupt, Vm};
 
 use crate::error::{Error, Exception};
 use crate::host::{Host, Job};
-use crate::native::{Args, HostObject, NativeFn, SharedNativeFn};
+use crate::native::{Args, HostObject, NativeFn};
 use crate::runtime::Limits;
 use crate::scope::Scope;
 use crate::value::Handle;
@@ -55,7 +56,7 @@ pub(crate) struct State {
     pub(crate) limits: Limits,
     /// The closures behind native functions, by the function object's bits.
     /// `None` while the closure runs (see the module docs).
-    pub(crate) natives: HashMap<u64, Native>,
+    pub(crate) natives: HashMap<u64, Arc<NativeFn>>,
     /// The Rust data of host objects, by the object's bits.
     pub(crate) host_objects: HashMap<u64, Box<dyn HostObject>>,
     pub(crate) realm_host_defined: Option<Box<dyn Any + Send>>,
@@ -94,23 +95,6 @@ impl State {
             pending: None,
         }
     }
-}
-
-/// The message of the error an operation the interpreter lacks gives.
-/// A closure in the table: one made by [`Scope::function`], taken out while it
-/// runs, or one made by [`Scope::shared_function`], shared with the calls
-/// that run it and so re-entrant.
-pub(crate) enum Native {
-    /// `Scope::function`'s: `None` while it runs.
-    Owned(Option<Box<NativeFn>>),
-    /// `Scope::shared_function`'s.
-    Shared(Arc<SharedNativeFn>),
-}
-
-/// What [`trampoline`] runs: the closure, owned for the call or shared.
-enum Running {
-    Owned(Box<NativeFn>),
-    Shared(Arc<SharedNativeFn>),
 }
 
 pub(crate) const NOT_YET: &str = "an operation the interpreter does not implement yet";
@@ -173,22 +157,12 @@ pub(crate) fn trampoline(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Val
         if state.native_depth >= state.limits.native_depth {
             None
         } else {
-            match state.natives.get_mut(&key) {
-                Some(Native::Shared(f)) => {
+            match state.natives.get(&key) {
+                Some(f) => {
                     let f = Arc::clone(f);
                     state.native_depth = state.native_depth.saturating_add(1);
-                    Some(Ok((state.id, Running::Shared(f))))
+                    Some(Ok((state.id, f)))
                 }
-                Some(Native::Owned(slot)) => match slot.take() {
-                    Some(f) => {
-                        state.native_depth = state.native_depth.saturating_add(1);
-                        Some(Ok((state.id, Running::Owned(f))))
-                    }
-                    None => {
-                        state.pending = Some(Error::Busy);
-                        Some(Err(Abrupt::Internal("a native function re-entered")))
-                    }
-                },
                 None => Some(Err(Abrupt::Internal("a native function of no runtime"))),
             }
         }
@@ -202,19 +176,11 @@ pub(crate) fn trampoline(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Val
     let result = {
         let mut scope = Scope::new(vm, runtime);
         let arguments = Args::new(runtime, this, args, new_target);
-        let r = match &f {
-            Running::Owned(f) => f(&mut scope, &arguments),
-            Running::Shared(f) => f(&mut scope, &arguments),
-        };
-        r.map(|local| (local.value(), local.runtime()))
+        f(&mut scope, &arguments).map(|local| (local.value(), local.runtime()))
     };
 
+    drop(f);
     if let Some(state) = vm.embedder_mut::<State>() {
-        if let Running::Owned(f) = f
-            && let Some(Native::Owned(slot)) = state.natives.get_mut(&key)
-        {
-            *slot = Some(f);
-        }
         state.native_depth = state.native_depth.saturating_sub(1);
     }
     match result {

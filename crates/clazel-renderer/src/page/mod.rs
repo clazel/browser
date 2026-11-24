@@ -76,6 +76,8 @@
 
 pub mod fonts;
 pub mod frame;
+pub mod link;
+pub mod scripts;
 pub mod sheets;
 pub mod state;
 
@@ -98,10 +100,15 @@ use clazel_url::url::record::ParsedUrl;
 
 use crate::pipeline::{
     Encodings, MAX_TITLE, NotParsed, base_url, code_points, computed_type, encoding_name,
-    is_essence, parse_html, string_of,
+    is_essence, parse_html_with, string_of,
 };
+use clazel_web::scripting::time::Clock;
 use fonts::{Fonts, Text};
+use link::LinkHandle;
+use scripts::Scripts;
+use sheets::Cached;
 use state::SheetWait;
+use std::collections::HashMap;
 
 /// The largest viewport side taken, in device pixels: the GPU process's
 /// (`clazel-gpu`'s `MAX_VIEWPORT_SIDE`).
@@ -151,6 +158,13 @@ pub fn clamp_scroll(want: i64, page: i64, viewport: i64) -> i64 {
     want.clamp(0, page.saturating_sub(viewport).max(0))
 }
 
+/// What a document's tree is read with: the page's other state.
+struct Ctx<'a> {
+    wait: &'a SheetWait,
+    base: Option<&'a ParsedUrl>,
+    cache: &'a HashMap<Vec<u32>, Cached>,
+}
+
 /// A page laid out and painted for one viewport.
 struct Laid {
     list: DisplayList,
@@ -158,9 +172,26 @@ struct Laid {
     height: i64,
 }
 
+/// What a page needs to run its scripts: the kernel's link, and a clock.
+pub struct ScriptEnv {
+    /// The socket, shared with the renderer's loop.
+    pub link: LinkHandle,
+    /// The page's monotonic clock (`performance.now()` and the timers).
+    pub clock: Box<dyn Clock>,
+}
+
 /// A committed document, as the graphical pipeline holds it.
 pub struct Page {
-    arena: Arena,
+    /// The tree, while the page runs no scripts; with scripts it is the
+    /// scripts' page's, and `with_arena` reaches it.
+    arena: Option<Arena>,
+    /// The document's scripts (items 7.15 and 7.17).
+    scripts: Option<Scripts>,
+    /// A script ran since the style sources were collected.
+    dirty: bool,
+    /// What the linked sheets answered, by `href`: a restyle after a script
+    /// reads them again from here.
+    cache: HashMap<Vec<u32>, Cached>,
     base: Option<ParsedUrl>,
     wait: SheetWait,
     /// The document's URL, against which the kernel resolves a sheet's
@@ -239,17 +270,77 @@ pub fn title_of(arena: &Arena) -> String {
     collapsed.chars().take(MAX_TITLE).collect()
 }
 
+/// Steps 7 to 10 over `arena`: the cascade, the box tree, layout and paint
+/// for `view`.
+fn lay_out_tree(
+    arena: &Arena,
+    wait: &SheetWait,
+    base: Option<&ParsedUrl>,
+    view: View,
+    fonts: &Fonts,
+) -> Laid {
+    let (cw, ch) = view.css();
+    let device = Device::screen(cw, ch);
+    let sheets = ua::sheets().for_document(arena);
+    let table = cascade_with(&sheets, arena, &wait.sources, device);
+    let tree = build(arena, &table);
+    let text = Text::of(fonts, &table.families);
+    let px64 = |v: u32| i32::try_from(i64::from(v).saturating_mul(64)).unwrap_or(i32::MAX);
+    let frags = layout(
+        &tree,
+        arena,
+        &table,
+        &text,
+        CssViewport {
+            width: px64(cw),
+            height: px64(ch),
+        },
+    );
+    let list = paint(&frags, &tree, arena, &table, &text, base, view.scale);
+    // The page's height: its extent's bottom, in device pixels, rounded up.
+    let bottom = i64::from(frags.extent.bottom()).saturating_mul(i64::from(view.scale));
+    let height = bottom.saturating_add(63).div_euclid(64);
+    Laid { list, height }
+}
+
 impl Page {
     /// Steps 1 to 6 for the document committed at `url` with
     /// `content_type` and `body` (the module's pipeline).
     pub fn load(url: &[u8], content_type: &[u8], body: &[u8], view: Option<View>) -> Page {
+        Page::load_with(url, content_type, body, view, None)
+    }
+
+    /// [`Page::load`] for a document whose scripts run: HTML is parsed with
+    /// the scripting flag on (`noscript` is text) and its tree is handed to
+    /// the page's scripts. They do not run until [`Page::start_scripts`].
+    pub fn load_scripted(
+        url: &[u8],
+        content_type: &[u8],
+        body: &[u8],
+        view: Option<View>,
+        env: ScriptEnv,
+    ) -> Page {
+        Page::load_with(url, content_type, body, view, Some(env))
+    }
+
+    fn load_with(
+        url: &[u8],
+        content_type: &[u8],
+        body: &[u8],
+        view: Option<View>,
+        env: Option<ScriptEnv>,
+    ) -> Page {
         let url_cps = code_points(url);
         let url_text = String::from_utf8_lossy(url).into_owned();
         let (supplied, computed) = computed_type(content_type, body);
         let transport = supplied.as_ref().and_then(transport_encoding);
+        let mut html = false;
         let (arena, encoding) = if is_html_mime_type(&computed) {
-            match parse_html(body, transport, &url_cps) {
-                Ok(p) => (p.arena, p.encoding),
+            match parse_html_with(body, transport, &url_cps, env.is_some()) {
+                Ok(p) => {
+                    html = true;
+                    (p.arena, p.encoding)
+                }
                 Err(NotParsed::Unsupported(e)) => (
                     notice(
                         &format!("encoding {} is not supported", encoding_name(e)),
@@ -294,8 +385,29 @@ impl Page {
         let (cw, ch) = view.map_or((800, 600), View::css);
         let wait = SheetWait::start(collect(&arena), Device::screen(cw, ch), true, encoding);
         let document_url = crate::pipeline::parse_url_pub(&url_cps, None);
+        // The tree goes to the scripts' page, which keeps it for the
+        // document's life.
+        let (arena, scripts) = match env {
+            Some(env) if html => {
+                match Scripts::new(&url_text, encoding, arena, env.link, env.clock) {
+                    Ok(scripts) => (None, Some(scripts)),
+                    Err(e) => {
+                        // The engine did not start: the document, without
+                        // scripts (parsed again, as the tree was given up).
+                        eprintln!("clazel-renderer: scripts did not start: {e}");
+                        let again = parse_html_with(body, transport, &url_cps, false)
+                            .map_or_else(|_| made("", &url_cps), |p| p.arena);
+                        (Some(again), None)
+                    }
+                }
+            }
+            _ => (Some(arena), None),
+        };
         Page {
             arena,
+            scripts,
+            dirty: false,
+            cache: HashMap::new(),
             base,
             wait,
             url: document_url,
@@ -335,6 +447,17 @@ impl Page {
             .and_then(|h| crate::pipeline::parse_url_pub(&h, self.url.as_ref()))
             .zip(self.url.as_ref())
             .is_some_and(|(a, b)| sheets::same_origin(&a, b));
+        if let (Some((content_type, body)), Some(href)) = (response, self.wait.href(index)) {
+            // Kept for a restyle after a script (`settle`).
+            self.cache.insert(
+                href,
+                Cached {
+                    content_type: content_type.to_vec(),
+                    same_origin,
+                    body: body.to_vec(),
+                },
+            );
+        }
         let response = response.map(|(content_type, body)| clazel_style::sources::Response {
             content_type: (!content_type.is_empty()).then_some(content_type),
             same_origin,
@@ -352,71 +475,230 @@ impl Page {
         self.wait.ready()
     }
 
+    /// Calls `f` with the document's tree and the page's sources, whichever
+    /// holds the tree (the page, or its scripts).
+    fn with_arena<R>(&mut self, f: impl FnOnce(&Arena, Ctx<'_>) -> R) -> Option<R> {
+        let Page {
+            arena,
+            scripts,
+            wait,
+            base,
+            cache,
+            ..
+        } = self;
+        let ctx = Ctx {
+            wait,
+            base: base.as_ref(),
+            cache,
+        };
+        match (arena.as_ref(), scripts.as_mut()) {
+            (Some(a), _) => Some(f(a, ctx)),
+            (None, Some(s)) => s.with_document(|a| f(a, ctx)),
+            (None, None) => None,
+        }
+    }
+
     /// Steps 7 to 10 for viewport `view`, in `fonts`.
     pub fn lay_out(&mut self, view: View, fonts: &Fonts) {
         self.view = Some(view);
         if !self.ready() {
             return;
         }
-        let (cw, ch) = view.css();
-        let device = Device::screen(cw, ch);
-        let sheets = ua::sheets().for_document(&self.arena);
-        let table = cascade_with(&sheets, &self.arena, &self.wait.sources, device);
-        let tree = build(&self.arena, &table);
-        let text = Text::of(fonts, &table.families);
-        let px64 = |v: u32| i32::try_from(i64::from(v).saturating_mul(64)).unwrap_or(i32::MAX);
-        let frags = layout(
-            &tree,
-            &self.arena,
-            &table,
-            &text,
-            CssViewport {
-                width: px64(cw),
-                height: px64(ch),
-            },
-        );
-        let list = paint(
-            &frags,
-            &tree,
-            &self.arena,
-            &table,
-            &text,
-            self.base.as_ref(),
-            view.scale,
-        );
-        // The page's height: its extent's bottom, in device pixels, rounded up.
-        let bottom = i64::from(frags.extent.bottom()).saturating_mul(i64::from(view.scale));
-        let height = bottom.saturating_add(63).div_euclid(64);
-        self.laid = Some(Laid { list, height });
-        self.scroll = clamp_scroll(self.scroll, height, i64::from(view.height));
+        let laid =
+            self.with_arena(|arena, ctx| lay_out_tree(arena, ctx.wait, ctx.base, view, fonts));
+        if let Some(laid) = laid {
+            self.scroll = clamp_scroll(self.scroll, laid.height, i64::from(view.height));
+            self.laid = Some(laid);
+        }
     }
 
     /// The client rectangles of every element and text node (item 5.25's
     /// geometry comparison, `clazel_layout::rects`), laid out for `view` in
     /// `fonts` exactly as [`Page::lay_out`] lays out; empty while sheets are
     /// awaited.
-    pub fn client_rects(&self, view: View, fonts: &Fonts) -> Vec<clazel_layout::rects::ClientRect> {
+    pub fn client_rects(
+        &mut self,
+        view: View,
+        fonts: &Fonts,
+    ) -> Vec<clazel_layout::rects::ClientRect> {
         if !self.ready() {
             return Vec::new();
         }
         let (cw, ch) = view.css();
         let device = Device::screen(cw, ch);
-        let sheets = ua::sheets().for_document(&self.arena);
-        let table = cascade_with(&sheets, &self.arena, &self.wait.sources, device);
-        let tree = build(&self.arena, &table);
-        let text = Text::of(fonts, &table.families);
-        let px64 = |v: u32| i32::try_from(i64::from(v).saturating_mul(64)).unwrap_or(i32::MAX);
-        let frags = layout(
-            &tree,
-            &self.arena,
-            &table,
-            &text,
-            CssViewport {
-                width: px64(cw),
-                height: px64(ch),
-            },
-        );
-        clazel_layout::rects::client_rects(&frags, &tree, &self.arena, &table, &text)
+        self.with_arena(|arena, ctx| {
+            let sheets = ua::sheets().for_document(arena);
+            let table = cascade_with(&sheets, arena, &ctx.wait.sources, device);
+            let tree = build(arena, &table);
+            let text = Text::of(fonts, &table.families);
+            let px64 = |v: u32| i32::try_from(i64::from(v).saturating_mul(64)).unwrap_or(i32::MAX);
+            let frags = layout(
+                &tree,
+                arena,
+                &table,
+                &text,
+                CssViewport {
+                    width: px64(cw),
+                    height: px64(ch),
+                },
+            );
+            clazel_layout::rects::client_rects(&frags, &tree, arena, &table, &text)
+        })
+        .unwrap_or_default()
+    }
+
+    // ---- Scripts (items 7.15 and 7.17) --------------------------------------
+
+    /// Whether the document runs scripts.
+    pub fn has_scripts(&self) -> bool {
+        self.scripts.is_some()
+    }
+
+    /// Runs the document's scripts as far as they can go now (the fetches
+    /// they ask for are sent). Returns whether the document may have
+    /// changed.
+    ///
+    /// # Errors
+    /// The socket failed.
+    pub fn start_scripts(&mut self) -> Result<bool, crate::RunError> {
+        let ran = match self.scripts.as_mut() {
+            Some(s) => s.start()?,
+            None => false,
+        };
+        self.dirty |= ran;
+        Ok(ran)
+    }
+
+    /// The scripts' event loop: what is due runs. Returns whether anything
+    /// did.
+    ///
+    /// # Errors
+    /// The socket failed.
+    pub fn tick(&mut self) -> Result<bool, crate::RunError> {
+        let ran = match self.scripts.as_mut() {
+            Some(s) => s.tick()?,
+            None => false,
+        };
+        self.dirty |= ran;
+        Ok(ran)
+    }
+
+    /// Update the rendering: the animation frame callbacks run, before the
+    /// page is painted.
+    ///
+    /// # Errors
+    /// The socket failed.
+    pub fn update_the_rendering(&mut self) -> Result<bool, crate::RunError> {
+        let ran = match self.scripts.as_mut() {
+            Some(s) => s.update_the_rendering()?,
+            None => false,
+        };
+        self.dirty |= ran;
+        Ok(ran)
+    }
+
+    /// A click on a `javascript:` link: the page runs it.
+    ///
+    /// # Errors
+    /// The socket failed.
+    pub fn follow_javascript_url(&mut self, url: &str) -> Result<bool, crate::RunError> {
+        let ran = match self.scripts.as_mut() {
+            Some(s) => s.follow_javascript_url(url)?,
+            None => false,
+        };
+        self.dirty |= ran;
+        Ok(ran)
+    }
+
+    /// The kernel's `ScriptResponse`, `ScriptBody`, `ScriptEnd` and
+    /// `ScriptFailed` for the page's script fetches. Each returns whether
+    /// the document may have changed.
+    ///
+    /// # Errors
+    /// The socket failed.
+    pub fn script_response(
+        &mut self,
+        request: u64,
+        content_type: Vec<u8>,
+    ) -> Result<bool, crate::RunError> {
+        if let Some(s) = self.scripts.as_mut() {
+            s.response(request, content_type);
+        }
+        Ok(false)
+    }
+
+    /// See [`Page::script_response`].
+    ///
+    /// # Errors
+    /// The socket failed.
+    pub fn script_body(&mut self, request: u64, bytes: &[u8]) -> Result<bool, crate::RunError> {
+        let ran = match self.scripts.as_mut() {
+            Some(s) => s.body(request, bytes)?,
+            None => false,
+        };
+        self.dirty |= ran;
+        Ok(ran)
+    }
+
+    /// See [`Page::script_response`].
+    ///
+    /// # Errors
+    /// The socket failed.
+    pub fn script_end(&mut self, request: u64) -> Result<bool, crate::RunError> {
+        let ran = match self.scripts.as_mut() {
+            Some(s) => s.end(request)?,
+            None => false,
+        };
+        self.dirty |= ran;
+        Ok(ran)
+    }
+
+    /// See [`Page::script_response`].
+    ///
+    /// # Errors
+    /// The socket failed.
+    pub fn script_failed(&mut self, request: u64) -> Result<bool, crate::RunError> {
+        let ran = match self.scripts.as_mut() {
+            Some(s) => s.failed(request)?,
+            None => false,
+        };
+        self.dirty |= ran;
+        Ok(ran)
+    }
+
+    /// After scripts ran: collects the style sources and the title of the
+    /// changed document again (the restyle that HTML's "update the
+    /// rendering" does), once no linked sheet is awaited. A sheet answered
+    /// before is read again from what it answered; a link a script added is
+    /// not fetched (it is as a failed one). Returns whether the page must be
+    /// laid out and painted again.
+    pub fn settle(&mut self) -> bool {
+        if !self.dirty || !self.wait.pending.is_empty() {
+            return false;
+        }
+        self.dirty = false;
+        let encoding = self.encoding;
+        let fresh = self.with_arena(|arena, ctx| {
+            (
+                SheetWait::rebuild(collect(arena), ctx.cache, encoding),
+                title_of(arena),
+            )
+        });
+        if let Some((wait, title)) = fresh {
+            self.wait = wait;
+            self.title = title;
+        }
+        true
+    }
+
+    /// The page clock's time at which the scripts' next timer is due.
+    pub fn next_wake_ms(&mut self) -> Option<u64> {
+        self.scripts.as_mut().and_then(Scripts::next_wake_ms)
+    }
+
+    /// The page clock's time, in milliseconds.
+    pub fn now_ms(&mut self) -> u64 {
+        self.scripts.as_mut().map_or(0, Scripts::now_ms)
     }
 
     /// The page's display list, once laid out.
@@ -427,6 +709,124 @@ impl Page {
     /// The page's height in device pixels, once laid out.
     pub fn height(&self) -> Option<i64> {
         self.laid.as_ref().map(|l| l.height)
+    }
+
+    /// The node that the point (`x`, `y`) of the viewport, in device pixels,
+    /// is over (item 7.14's hit test): of the boxes of every element and text
+    /// node that hold it (the client rectangles of the fragment tree, CSS
+    /// pixels, document coordinates), the deepest in the tree, the later of
+    /// two equally deep ones (a later sibling paints over an earlier one);
+    /// the document element if the point is over none (the canvas). `None`
+    /// before the page is laid out. `z-index`, clipping, `visibility` and
+    /// `pointer-events` are not looked at.
+    pub fn hit_test(&mut self, view: View, fonts: &Fonts, x: u64, y: u64) -> Option<usize> {
+        self.laid.as_ref()?;
+        // Device pixels to 1/64 CSS pixel.
+        let scale = i64::from(view.scale.max(1));
+        let px = i64::try_from(x).ok()?.saturating_mul(64).div_euclid(scale);
+        let py = i64::try_from(y)
+            .ok()?
+            .saturating_add(self.scroll)
+            .saturating_mul(64)
+            .div_euclid(scale);
+        let rects = self.client_rects(view, fonts);
+        let mut best: Option<(usize, &str)> = None;
+        for r in &rects {
+            let (rx, ry) = (i64::from(r.rect.x), i64::from(r.rect.y));
+            let inside = rx <= px
+                && px < rx.saturating_add(i64::from(r.rect.width))
+                && ry <= py
+                && py < ry.saturating_add(i64::from(r.rect.height));
+            if !inside {
+                continue;
+            }
+            let depth = r.node.split('/').count();
+            if best.is_none_or(|(d, _)| depth >= d) {
+                best = Some((depth, r.node.as_str()));
+            }
+        }
+        let path = best.map(|(_, p)| p.to_owned());
+        self.with_arena(|arena, _| {
+            let mut node = 0usize;
+            if let Some(path) = path {
+                for step in path.split('/').filter(|s| !s.is_empty()) {
+                    let k: usize = step.parse().ok()?;
+                    node = *arena.children(node).get(k)?;
+                }
+                return Some(node);
+            }
+            // The canvas: the document element.
+            arena
+                .children(0)
+                .iter()
+                .copied()
+                .find(|&c| matches!(arena.kind(c), clazel_dom::exec::ExecKind::Element { .. }))
+        })
+        .flatten()
+    }
+
+    /// The user's click on `target` (item 7.14); see [`scripts::Scripts::click`].
+    ///
+    /// # Errors
+    /// The socket failed.
+    pub fn dispatch_click(
+        &mut self,
+        input: clazel_web::page::input::MouseInput,
+    ) -> Result<bool, crate::RunError> {
+        let ran = match self.scripts.as_mut() {
+            Some(s) => s.click(input)?,
+            None => false,
+        };
+        self.dirty |= ran;
+        Ok(ran)
+    }
+
+    /// A key typed (item 7.14).
+    ///
+    /// # Errors
+    /// The socket failed.
+    pub fn dispatch_key(
+        &mut self,
+        input: clazel_web::page::input::KeyInput,
+    ) -> Result<bool, crate::RunError> {
+        let ran = match self.scripts.as_mut() {
+            Some(s) => s.key(input)?,
+            None => false,
+        };
+        self.dirty |= ran;
+        Ok(ran)
+    }
+
+    /// A wheel turn (item 7.14): whether the default action, scrolling, is
+    /// to happen, and whether a listener ran (the page may have changed).
+    ///
+    /// # Errors
+    /// The socket failed.
+    pub fn dispatch_wheel(
+        &mut self,
+        input: clazel_web::page::input::WheelInput,
+    ) -> Result<(bool, bool), crate::RunError> {
+        match self.scripts.as_mut() {
+            Some(s) => {
+                let (scrolls, ran) = s.wheel(input)?;
+                self.dirty |= ran;
+                Ok((scrolls, ran))
+            }
+            None => Ok((true, false)),
+        }
+    }
+
+    /// The viewport scrolled (item 7.14): the `scroll` event.
+    ///
+    /// # Errors
+    /// The socket failed.
+    pub fn dispatch_scrolled(&mut self) -> Result<bool, crate::RunError> {
+        let ran = match self.scripts.as_mut() {
+            Some(s) => s.scrolled()?,
+            None => false,
+        };
+        self.dirty |= ran;
+        Ok(ran)
     }
 
     /// `Input`'s scroll: by `delta` device pixels, up if `negative`,

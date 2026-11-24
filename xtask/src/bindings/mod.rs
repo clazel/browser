@@ -154,7 +154,7 @@ mod tests {
             );
             count = count.saturating_add(1);
         }
-        assert_eq!(count, 8);
+        assert_eq!(count, 9);
         let model = load(&dir);
         assert!(model.is_ok(), "{:?}", model.err());
     }

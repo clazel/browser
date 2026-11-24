@@ -3,9 +3,15 @@
 //! The policies are data from `clazel-sandbox`; the only code that hands
 //! them to the OS is `clazel-sys`, whose functions are safe. Fail closed:
 //! the first layer that returns an error stops the renderer, and the error
-//! names the layer. The process must stay single-threaded: the seccomp
-//! filter covers only its installing thread and later ones, `unshare(USER)`
-//! fails in a multithreaded process, and the allowlist has no `clone`.
+//! names the layer. The allowlist has no `clone`, so no thread can be made
+//! once the filter is on; and `unshare(USER)` fails in a multithreaded
+//! process. [`enter`] is for a process that stays single-threaded. A process
+//! that wants one big-stack thread (the page's engine parses and compiles on
+//! its caller's stack, `clazel_js::set_inline_parsing`) makes it in between:
+//! [`enter_process`] on the only thread, then the thread is spawned, then
+//! [`enter_thread`] in it, which filters every thread of the process
+//! (`SECCOMP_FILTER_FLAG_TSYNC`, `clazel_sys::linux::
+//! seccomp_set_mode_filter_all_threads`), the waiting one included.
 
 use std::fmt;
 
@@ -32,9 +38,26 @@ fn layer<T, E: fmt::Display>(layer: &'static str, r: Result<T, E>) -> Result<T, 
     })
 }
 
-/// macOS: `sandbox_init` with the renderer's Seatbelt profile.
-#[cfg(target_os = "macos")]
+/// The whole sandbox, for a process that is single-threaded: [`enter_process`]
+/// then [`enter_thread`].
+///
+/// # Errors
+/// The first layer that fails.
 pub fn enter() -> Result<(), Failure> {
+    enter_process()?;
+    enter_thread()
+}
+
+/// What is process-wide and must be done while the process has one thread:
+/// on Linux `no_new_privs` and the namespaces (`unshare(USER)` is an error
+/// once there is a second thread); on macOS Seatbelt, which confines the whole
+/// process, every thread (`sandbox_init`); on Windows the check that the host
+/// started the renderer in its AppContainer and job, which are the process's.
+///
+/// # Errors
+/// The first layer that fails.
+#[cfg(target_os = "macos")]
+pub fn enter_process() -> Result<(), Failure> {
     let profile = clazel_sandbox::seatbelt::renderer_profile();
     layer(
         "seatbelt",
@@ -44,8 +67,22 @@ pub fn enter() -> Result<(), Failure> {
 
 /// Linux: `no_new_privs`, namespaces, Landlock, then seccomp last, since its
 /// allowlist forbids the calls before it.
+/// What the calling thread adds to [`enter_process`]'s: nothing on macOS and
+/// Windows, whose confinement is the process's.
+///
+/// # Errors
+/// Never.
+#[cfg(any(target_os = "macos", windows))]
+pub fn enter_thread() -> Result<(), Failure> {
+    Ok(())
+}
+
+/// Linux: `no_new_privs` and the namespaces; see the module's header.
+///
+/// # Errors
+/// The first layer that fails.
 #[cfg(target_os = "linux")]
-pub fn enter() -> Result<(), Failure> {
+pub fn enter_process() -> Result<(), Failure> {
     use clazel_sandbox::namespaces::Namespace;
     use clazel_sys::linux::{self, Namespaces};
 
@@ -62,7 +99,18 @@ pub fn enter() -> Result<(), Failure> {
                     Namespace::Ipc => Namespaces::IPC,
                 })
             });
-    layer("namespaces", linux::unshare(namespaces))?;
+    layer("namespaces", linux::unshare(namespaces))
+}
+
+/// Linux: Landlock for the calling thread, then the seccomp filter on every
+/// thread of the process at once. The other threads need no Landlock domain
+/// of their own: the filter has no `open`, `openat`, `socket` or `connect`, so
+/// the only thread that can still make an access is this one.
+///
+/// # Errors
+/// The first layer that fails.
+#[cfg(target_os = "linux")]
+pub fn enter_thread() -> Result<(), Failure> {
     layer("landlock", landlock())?;
     layer("seccomp", seccomp())
 }
@@ -115,14 +163,14 @@ fn seccomp() -> Result<(), String> {
             k: i.k,
         })
         .collect();
-    clazel_sys::linux::seccomp_set_mode_filter(&program).map_err(|e| e.to_string())
+    clazel_sys::linux::seccomp_set_mode_filter_all_threads(&program).map_err(|e| e.to_string())
 }
 
 /// Windows cannot confine a running process: the host starts the renderer
 /// inside the AppContainer and job (`launch`), and this only checks that it
 /// did. A renderer started any other way (for example by hand) is refused.
 #[cfg(windows)]
-pub fn enter() -> Result<(), Failure> {
+pub fn enter_process() -> Result<(), Failure> {
     match clazel_sys::windows::is_appcontainer() {
         Ok(true) => Ok(()),
         Ok(false) => layer::<(), &str>(
@@ -135,6 +183,12 @@ pub fn enter() -> Result<(), Failure> {
 
 /// Other targets have no sandbox (`clazel-sys` is empty there): refuse.
 #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
-pub fn enter() -> Result<(), Failure> {
+pub fn enter_process() -> Result<(), Failure> {
     layer::<(), &str>("platform", Err("no sandbox for this operating system"))
+}
+
+/// Other targets: nothing (`enter_process` refused already).
+#[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
+pub fn enter_thread() -> Result<(), Failure> {
+    Ok(())
 }
