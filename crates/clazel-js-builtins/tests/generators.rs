@@ -111,6 +111,11 @@ fn generators_yield_and_finish() -> Result<(), String> {
             "var o = { k: 7, *m() { yield this.k; } }; var r = o.m().next().value;",
             "7",
         ),
+        // Class methods of each kind.
+        (
+            "class C { constructor() { this.k = 1; } *g() { yield this.k; } async a() { return this.k + 1; } static *[Symbol.iterator]() { yield 3; } } var c = new C(); var r = [c.g().next().value, c.a() instanceof Promise, [...C][0], typeof C.prototype.g.prototype].join();",
+            "1,true,3,object",
+        ),
         // Closures over a generator's bindings.
         (
             "function* g() { let k = 1; const f = () => k; yield f; k = 2; yield f; } var it = g(); var f1 = it.next().value; var r = f1() + ',' + it.next().value();",
