@@ -800,6 +800,36 @@ fn the_host_is_reachable_as_its_own_type() -> Test {
     Ok(())
 }
 
+/// A host with a clock and a fixed time zone, which `Date` reads through
+/// `Host::now_ms` and `Host::local_tza` and never from the system.
+struct ClockHost;
+impl Host for ClockHost {
+    fn now_ms(&mut self) -> f64 {
+        1_700_000_000_123.0
+    }
+    fn local_tza(&mut self, _time_ms: f64, _is_utc: bool) -> f64 {
+        -5.0 * 3_600_000.0
+    }
+    fn random_u64(&mut self) -> u64 {
+        4
+    }
+}
+
+#[test]
+fn date_reads_the_hosts_clock_and_time_zone() -> Test {
+    let mut rt = Runtime::new(Config::new(Limits::unlimited()), ClockHost)?;
+    let realm = rt.scope(|scope| scope.create_realm(RealmOptions::default()))?;
+    assert_eq!(
+        eval_string(
+            &mut rt,
+            &realm,
+            "var d = new Date(0);\nDate.now() + ',' + d.getHours() + ',' + d.getTimezoneOffset() + ',' + d.toString()"
+        )?,
+        "1700000000123,19,300,Wed Dec 31 1969 19:00:00 GMT-0500"
+    );
+    Ok(())
+}
+
 #[test]
 fn realm_host_data_and_one_realm() -> Test {
     let (mut rt, realm) = runtime()?;

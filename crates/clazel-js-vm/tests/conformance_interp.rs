@@ -417,6 +417,12 @@ fn not_run(case: &Case) -> Option<String> {
     if case.flags.contains(&"async") {
         return Some("async test (Promises and the job queue, 7.9)".into());
     }
+    if case.path.starts_with("built-ins/") {
+        return Some(
+            "built-ins directory (needs the built-ins; run by clazel-js-builtins' conformance_builtins, 7.9)"
+                .into(),
+        );
+    }
     if case.path.starts_with("harness/") {
         return Some("test of the real harness files (replaced by the native harness)".into());
     }

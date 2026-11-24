@@ -36,6 +36,8 @@
 //!   the `String` methods use;
 //! - [`collections`]: `Map`, `Set`, `WeakMap` and `WeakSet` (§24†), the Set
 //!   methods of ES2025 and `Map.groupBy`;
+//! - [`date`]: `Date` (§21.4†) over the host's clock and time zone
+//!   (`Vm::world`), with the fixed offset and `en-US` fallbacks of 7.0(b);
 //! - [`reflect`]: `Reflect` (§28.1†);
 //! - [`global`]: `globalThis`, `isNaN`, `isFinite`, `parseInt`, `parseFloat`
 //!   (§19†).
@@ -73,6 +75,7 @@
 pub mod array;
 pub mod boolean;
 pub mod collections;
+pub mod date;
 pub mod error;
 pub mod function;
 pub mod global;
@@ -110,6 +113,7 @@ pub fn install(vm: &mut Vm) -> Result<(), Abrupt> {
     promise::install(vm)?;
     regexp::install(vm)?;
     collections::install(vm)?;
+    date::install(vm)?;
     reflect::install(vm)?;
     global::install(vm)
 }

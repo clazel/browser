@@ -164,6 +164,7 @@ fn to_string(vm: &mut Vm, this: Value, _args: &[Value]) -> Result<Value, Abrupt>
                 _ if vm.heap().is_string(p) => "String",
                 _ => "Object",
             },
+            _ if vm.host_tag(o) == Some(crate::date::TAG_DATE) => "Date",
             _ if crate::regexp::has_regexp_matcher(vm, o) => "RegExp",
             _ => "Object",
         }
