@@ -323,6 +323,25 @@ mod imp {
         child: Child,
     }
 
+    /// How a process ended, in the platform's words; and, for a process
+    /// the kernel killed with `SIGSYS` (31 on Linux: a sandboxed process's own
+    /// seccomp filter refused one of its calls), where the call is named. The
+    /// number is in the kernel's audit line (`type=1326`, `syscall=`), not in the
+    /// exit status, so the host log says where to look instead of leaving a bare
+    /// signal.
+    fn how_it_ended(status: &std::process::ExitStatus) -> String {
+        use std::os::unix::process::ExitStatusExt;
+        let text = status.to_string();
+        if cfg!(target_os = "linux") && status.signal() == Some(31) {
+            format!(
+                "{text}; its seccomp filter refused a call, which the kernel's \
+                 audit line names (`dmesg | grep type=1326`, `syscall=`)"
+            )
+        } else {
+            text
+        }
+    }
+
     pub fn spawn(mut command: Command) -> io::Result<(Link, Box<dyn Read + Send>)> {
         let (host_end, child_end) = UnixStream::pair()?;
         host_end.set_write_timeout(Some(Duration::from_secs(5)))?;
@@ -360,12 +379,31 @@ mod imp {
             let status = self
                 .child
                 .wait()
-                .map_or_else(|e| e.to_string(), |s| s.to_string());
+                .map_or_else(|e| e.to_string(), |s| how_it_ended(&s));
             let mut stderr = String::new();
             if let Some(mut e) = self.child.stderr.take() {
                 let _ = e.read_to_string(&mut stderr);
             }
             (status, stderr)
+        }
+    }
+
+    #[cfg(all(test, target_os = "linux"))]
+    mod tests {
+        use super::how_it_ended;
+        use std::os::unix::process::ExitStatusExt;
+        use std::process::ExitStatus;
+
+        /// A raw wait status of a signal's number is a death by that signal.
+        #[test]
+        fn a_sigsys_death_says_where_the_call_is_named() {
+            let sigsys = how_it_ended(&ExitStatus::from_raw(31));
+            assert!(sigsys.contains("SIGSYS"), "{sigsys}");
+            assert!(sigsys.contains("type=1326"), "{sigsys}");
+            let other = how_it_ended(&ExitStatus::from_raw(9));
+            assert!(other.contains("SIGKILL"), "{other}");
+            assert!(!other.contains("type=1326"), "{other}");
+            assert!(!how_it_ended(&ExitStatus::from_raw(0)).contains("type=1326"));
         }
     }
 }

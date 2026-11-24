@@ -392,8 +392,8 @@ pub proof fn quark_cookie_integrity(rules: Seq<clazel_psl::spec::Rule>, urls: Ur
                         },
                         Some(m) => {
                             if is_sub_request(m) && r.committed {
-                                let (sub, at_once, per_doc, request, url) = sub_request_args(m);
-                                crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, sub, at_once, per_doc, request, url);
+                                let (sub, script, at_once, per_doc, request, url) = sub_request_args(m);
+                                crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, sub, script, at_once, per_doc, request, url);
                             }
                         },
                         _ => {},

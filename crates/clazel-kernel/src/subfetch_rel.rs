@@ -607,23 +607,23 @@ pub proof fn lemma_sub_actions_of(ctx: SubCtx, id: nat, serial: nat, request: u6
 
 /// What a `FetchStyle` changes and sends: only the sub-fetch table and
 /// counts, and only to its sender.
-pub proof fn lemma_fetch_style_shape(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, r: Renderer, sub: bool, at_once: nat, per_doc: nat, request: u64, url: Seq<u8>)
+pub proof fn lemma_fetch_style_shape(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, r: Renderer, sub: bool, script: bool, at_once: nat, per_doc: nat, request: u64, url: Seq<u8>)
     ensures
         ({
-            let (s1, out) = fetch_start(rules, urls, fetch, s, r, sub, at_once, per_doc, request, url);
+            let (s1, out) = fetch_start(rules, urls, fetch, s, r, sub, script, at_once, per_doc, request, url);
             &&& s1 == State { subfetches: s1.subfetches, subcounts: s1.subcounts, ..s }
             &&& outputs_of(out, r.id)
         }),
 {
-    let (s1, out) = fetch_start(rules, urls, fetch, s, r, sub, at_once, per_doc, request, url);
-    assert(outputs_of(reply(r, failed_message(sub, request)), r.id));
+    let (s1, out) = fetch_start(rules, urls, fetch, s, r, sub, script, at_once, per_doc, request, url);
+    assert(outputs_of(reply(r, failed_message(sub, script, request)), r.id));
     if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
         if let Some(resolved) = (urls.resolve)(r.url, relative) {
             if let Some(parsed) = (fetch.parse)(resolved) {
                 let (serial, in_document) = subcount_of(s.subcounts, r.id, r.lock);
                 let actions = clazel_fetch::transducer::spec::start(parsed).1;
-                let (hop, o, end) = sub_actions(start_ctx(fetch, sub, r.lock), r.id, serial, request, 0, actions);
-                lemma_sub_actions_of(start_ctx(fetch, sub, r.lock), r.id, serial, request, 0, actions);
+                let (hop, o, end) = sub_actions(start_ctx(fetch, sub, script, r.lock), r.id, serial, request, 0, actions);
+                lemma_sub_actions_of(start_ctx(fetch, sub, script, r.lock), r.id, serial, request, 0, actions);
                 if let Some(frames) = end {
                     lemma_outputs_of_concat(o, seq![Output::ToRenderer { id: r.id, bytes: frames }], r.id);
                 }
@@ -662,7 +662,7 @@ pub open spec fn sweep_outputs_ok(s: State, fs: Seq<SubFetch>, out: Seq<Output>)
         0 <= k < out.len() ==> match #[trigger] out[k] {
             Output::SubClose { renderer, .. } => exists|j: int| 0 <= j < fs.len() && fs[j].renderer == renderer,
             Output::ToRenderer { id, bytes } => exists|j: int|
-                0 <= j < fs.len() && fs[j].renderer == id && subfetch_live(s, fs[j]) && bytes == failed_frame(fs[j].sub, fs[j].request),
+                0 <= j < fs.len() && fs[j].renderer == id && subfetch_live(s, fs[j]) && bytes == failed_frame(fs[j].sub, fs[j].script, fs[j].request),
             _ => false,
         }
 }
@@ -680,11 +680,11 @@ pub proof fn lemma_sweep_shape(s: State, fs: Seq<SubFetch>)
         let (rest, o) = sweep(s, t);
         let out = sweep(s, fs).1;
         let close = if f.hop > 0 { seq![Output::SubClose { renderer: f.renderer, serial: f.serial, hop: f.hop }] } else { Seq::<Output>::empty() };
-        let failed = seq![Output::ToRenderer { id: f.renderer, bytes: failed_frame(f.sub, f.request) }];
+        let failed = seq![Output::ToRenderer { id: f.renderer, bytes: failed_frame(f.sub, f.script, f.request) }];
         assert forall|k: int| 0 <= k < out.len() implies match #[trigger] out[k] {
             Output::SubClose { renderer, .. } => exists|j: int| 0 <= j < fs.len() && fs[j].renderer == renderer,
             Output::ToRenderer { id, bytes } => exists|j: int|
-                0 <= j < fs.len() && fs[j].renderer == id && subfetch_live(s, fs[j]) && bytes == failed_frame(fs[j].sub, fs[j].request),
+                0 <= j < fs.len() && fs[j].renderer == id && subfetch_live(s, fs[j]) && bytes == failed_frame(fs[j].sub, fs[j].script, fs[j].request),
             _ => false,
         } by {
             let pre = if !subfetch_live(s, f) {
@@ -706,7 +706,7 @@ pub proof fn lemma_sweep_shape(s: State, fs: Seq<SubFetch>)
                         assert(fs[j + 1] == t[j]);
                     },
                     Output::ToRenderer { id, bytes } => {
-                        let j = choose|j: int| 0 <= j < t.len() && t[j].renderer == id && subfetch_live(s, t[j]) && bytes == failed_frame(t[j].sub, t[j].request);
+                        let j = choose|j: int| 0 <= j < t.len() && t[j].renderer == id && subfetch_live(s, t[j]) && bytes == failed_frame(t[j].sub, t[j].script, t[j].request);
                         assert(fs[j + 1] == t[j]);
                     },
                     _ => {},
@@ -1015,6 +1015,7 @@ pub proof fn lemma_fetch_style_domain(
     s2: State,
     r: Renderer,
     sub: bool,
+    script: bool,
     at_once: nat,
     per_doc: nat,
     request: u64,
@@ -1026,11 +1027,11 @@ pub proof fn lemma_fetch_style_domain(
         crate::domain::subcounts_of_domain(rules, s1.subcounts, d) == crate::domain::subcounts_of_domain(rules, s2.subcounts, d),
         s1.now == s2.now,
     ensures
-        fetch_start(rules, urls, fetch, s1, r, sub, at_once, per_doc, request, url).1 == fetch_start(rules, urls, fetch, s2, r, sub, at_once, per_doc, request, url).1,
-        crate::domain::subfetches_of_domain(rules, fetch_start(rules, urls, fetch, s1, r, sub, at_once, per_doc, request, url).0.subfetches, d)
-            == crate::domain::subfetches_of_domain(rules, fetch_start(rules, urls, fetch, s2, r, sub, at_once, per_doc, request, url).0.subfetches, d),
-        crate::domain::subcounts_of_domain(rules, fetch_start(rules, urls, fetch, s1, r, sub, at_once, per_doc, request, url).0.subcounts, d)
-            == crate::domain::subcounts_of_domain(rules, fetch_start(rules, urls, fetch, s2, r, sub, at_once, per_doc, request, url).0.subcounts, d),
+        fetch_start(rules, urls, fetch, s1, r, sub, script, at_once, per_doc, request, url).1 == fetch_start(rules, urls, fetch, s2, r, sub, script, at_once, per_doc, request, url).1,
+        crate::domain::subfetches_of_domain(rules, fetch_start(rules, urls, fetch, s1, r, sub, script, at_once, per_doc, request, url).0.subfetches, d)
+            == crate::domain::subfetches_of_domain(rules, fetch_start(rules, urls, fetch, s2, r, sub, script, at_once, per_doc, request, url).0.subfetches, d),
+        crate::domain::subcounts_of_domain(rules, fetch_start(rules, urls, fetch, s1, r, sub, script, at_once, per_doc, request, url).0.subcounts, d)
+            == crate::domain::subcounts_of_domain(rules, fetch_start(rules, urls, fetch, s2, r, sub, script, at_once, per_doc, request, url).0.subcounts, d),
 {
     lemma_live_domain(rules, s1.subfetches, r.id, r.lock, d);
     lemma_live_domain(rules, s2.subfetches, r.id, r.lock, d);
@@ -1042,13 +1043,14 @@ pub proof fn lemma_fetch_style_domain(
         if let Some(resolved) = (urls.resolve)(r.url, relative) {
             if let Some(parsed) = (fetch.parse)(resolved) {
                 let (fs, actions) = clazel_fetch::transducer::spec::start(parsed);
-                let (hop, o, end) = sub_actions(start_ctx(fetch, sub, r.lock), r.id, serial, request, 0, actions);
+                let (hop, o, end) = sub_actions(start_ctx(fetch, sub, script, r.lock), r.id, serial, request, 0, actions);
                 let f = SubFetch {
                     renderer: r.id,
                     lock: r.lock,
                     serial,
                     request,
                     sub,
+                    script,
                     tab: r.tab,
                     fetch: fs,
                     hop,
@@ -1065,13 +1067,13 @@ pub proof fn lemma_fetch_style_domain(
 
 /// A `FetchStyle` of a renderer of another domain leaves `d`'s tables as
 /// they are.
-pub proof fn lemma_fetch_style_other(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s: State, r: Renderer, sub: bool, at_once: nat, per_doc: nat, request: u64, url: Seq<u8>)
+pub proof fn lemma_fetch_style_other(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s: State, r: Renderer, sub: bool, script: bool, at_once: nat, per_doc: nat, request: u64, url: Seq<u8>)
     requires
         crate::domain::domain_of_renderer(rules, r) != d,
     ensures
-        crate::domain::subfetches_of_domain(rules, fetch_start(rules, urls, fetch, s, r, sub, at_once, per_doc, request, url).0.subfetches, d)
+        crate::domain::subfetches_of_domain(rules, fetch_start(rules, urls, fetch, s, r, sub, script, at_once, per_doc, request, url).0.subfetches, d)
             == crate::domain::subfetches_of_domain(rules, s.subfetches, d),
-        crate::domain::subcounts_of_domain(rules, fetch_start(rules, urls, fetch, s, r, sub, at_once, per_doc, request, url).0.subcounts, d)
+        crate::domain::subcounts_of_domain(rules, fetch_start(rules, urls, fetch, s, r, sub, script, at_once, per_doc, request, url).0.subcounts, d)
             == crate::domain::subcounts_of_domain(rules, s.subcounts, d),
 {
     let (serial, in_document) = subcount_of(s.subcounts, r.id, r.lock);
@@ -1080,13 +1082,14 @@ pub proof fn lemma_fetch_style_other(rules: Seq<clazel_psl::spec::Rule>, urls: U
         if let Some(resolved) = (urls.resolve)(r.url, relative) {
             if let Some(parsed) = (fetch.parse)(resolved) {
                 let (fs, actions) = clazel_fetch::transducer::spec::start(parsed);
-                let (hop, o, end) = sub_actions(start_ctx(fetch, sub, r.lock), r.id, serial, request, 0, actions);
+                let (hop, o, end) = sub_actions(start_ctx(fetch, sub, script, r.lock), r.id, serial, request, 0, actions);
                 let f = SubFetch {
                     renderer: r.id,
                     lock: r.lock,
                     serial,
                     request,
                     sub,
+                    script,
                     tab: r.tab,
                     fetch: fs,
                     hop,
@@ -1179,7 +1182,7 @@ pub open spec fn d_failures(rules: Seq<clazel_psl::spec::Rule>, s: State, fs: Se
     } else {
         let f = fs[0];
         (if crate::domain::domain_of_lock(rules, f.lock) == d && subfetch_live(s, f) && s.now >= f.started + subfetch_timeout() {
-            seq![Output::ToRenderer { id: f.renderer, bytes: failed_frame(f.sub, f.request) }]
+            seq![Output::ToRenderer { id: f.renderer, bytes: failed_frame(f.sub, f.script, f.request) }]
         } else {
             seq![]
         }) + d_failures(rules, s, fs.drop_first(), d)
@@ -1247,7 +1250,7 @@ pub proof fn lemma_sweep_outputs_for(rules: Seq<clazel_psl::spec::Rule>, urls: U
         lemma_sweep_outputs_for(rules, urls, d, s, sb, t, rest);
         let o = sweep(t, rest).1;
         let close = if f.hop > 0 { seq![Output::SubClose { renderer: f.renderer, serial: f.serial, hop: f.hop }] } else { Seq::<Output>::empty() };
-        let failed = seq![Output::ToRenderer { id: f.renderer, bytes: failed_frame(f.sub, f.request) }];
+        let failed = seq![Output::ToRenderer { id: f.renderer, bytes: failed_frame(f.sub, f.script, f.request) }];
         let pre = if !subfetch_live(t, f) {
             close
         } else if t.now >= f.started + subfetch_timeout() {

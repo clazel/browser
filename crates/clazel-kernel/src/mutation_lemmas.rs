@@ -608,6 +608,7 @@ pub open spec fn ml_subfetch(renderer: nat, lock: clazel_origin::spec::Origin, e
         serial: 0,
         request: 0,
         sub: false,
+        script: false,
         tab: renderer,
         fetch: ml_nav(0x61).fetch,
         hop: 0,

@@ -1242,6 +1242,7 @@ pub proof fn lemma_insert_attach_requires(doc: Document, paths: Seq<Seq<NodeId>>
 
 /// DOM §4.2.3 "insert" keeps the arena well formed, with [`insert_paths`]
 /// as the witness; paths that do not pass through `node` are unchanged.
+#[verifier::rlimit(50)]
 pub proof fn lemma_insert_wf_with(doc: Document, paths: Seq<Seq<NodeId>>, node: NodeId, parent: NodeId, child: Option<NodeId>)
     requires
         insert_requires(doc, node, parent, child),
@@ -2260,6 +2261,7 @@ pub open spec fn reparent_one(d: Document, from: NodeId, to: NodeId) -> Seq<Node
 }
 
 /// Appending the first child of `from` to `to` gives [`reparent_one`].
+#[verifier::rlimit(50)]
 pub proof fn lemma_reparent_step_records(d: Document, from: NodeId, to: NodeId)
     requires
         reparent_children_requires(d, from, to),

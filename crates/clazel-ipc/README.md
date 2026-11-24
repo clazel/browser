@@ -51,9 +51,9 @@ parsers of untrusted input carry machine-checked proofs.
   own and identifies nothing to the kernel.
 - **Item 6.17's messages** (decision 6.0(e) B): `FetchSub` (13, renderer to
   kernel: a request id, a destination, 0 style or 1 image, and the URL as the
-  document wrote it) and `SubResponse` (115), `SubBody` (116, at most
-  `MAX_SUB_CHUNK` octets, `lemma_sub_body_fits_frame`), `SubEnd` (117) and
-  `SubFailed` (118) to a renderer. Tags 114 and below are not reused. `FetchStyle`
+  document wrote it) and `SubResponse` (119), `SubBody` (120, at most
+  `MAX_SUB_CHUNK` octets, `lemma_sub_body_fits_frame`), `SubEnd` (121) and
+  `SubFailed` (122) to a renderer. Tags 114 and below are not reused. `FetchStyle`
   and the `Style*` messages are not retired yet (the renderer still sends
   them; item 6.18 moves it to `FetchSub`). Written, **not yet run through
   Verus**: the codec, the lemma, the example lemma and 5 new mutations are

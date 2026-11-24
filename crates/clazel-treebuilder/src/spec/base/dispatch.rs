@@ -279,8 +279,10 @@ pub open spec fn parse<S>(env: EncFns, tf: TokFns<S>, s0: S, url: Seq<u32>, scri
 
 /// The fragment parsing algorithm's context element, as a test or Phase 7
 /// gives it: its namespace, local name and attributes, and its node
-/// document's mode. (The context element's ancestors are not modelled: it
-/// is created in the fragment's arena with no parent; see [`super`].)
+/// document's mode, and whether it is, or has an ancestor that is, a form
+/// element. (The context element's ancestors are not modelled: it is
+/// created in the fragment's arena with no parent, so `in_form` carries
+/// what step 19 reads from them; see [`super`].)
 pub struct Context {
     /// The context element's namespace.
     pub ns: Namespace,
@@ -290,6 +292,11 @@ pub struct Context {
     pub attrs: Seq<Attr>,
     /// Its node document's mode.
     pub mode: DocumentMode,
+    /// Step 19: "the nearest node to context that is a form element
+    /// (going straight up the ancestor chain, and including the element
+    /// itself, if it is a form element)" exists. True for a context that
+    /// is a form element, or has one as an ancestor.
+    pub in_form: bool,
 }
 
 /// The fragment parser's state before its first token, with the
@@ -386,9 +393,10 @@ pub open spec fn fragment_parser(ctx: Context, scripting: bool) -> (Parser, Node
     // 18. "Reset the parser's insertion mode appropriately."
     let p2 = reset_insertion_mode(p1);
     // 19. "Set the HTML parser's form element pointer to the nearest node to
-    // context that is a form element (… including the element itself …)":
-    // the context has no ancestors here.
-    let p3 = if is_html(ctx_el, Tag::Form) {
+    // context that is a form element (… including the element itself …),
+    // if any": the context has no ancestors here, so `in_form` says whether
+    // one exists, and the pointer names the context element for it.
+    let p3 = if is_html(ctx_el, Tag::Form) || ctx.in_form {
         Parser { form: Some(ctx_id), ..p2 }
     } else {
         p2

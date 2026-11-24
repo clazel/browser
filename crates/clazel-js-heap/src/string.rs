@@ -175,11 +175,18 @@ impl JsString {
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct Key(pub u32);
 
-/// A table of property-key strings: each distinct string once.
+/// A table of property-key strings: each distinct live string once.
+///
+/// A collection may free keys ([`Interner::sweep`]). **A key id is never
+/// reused** (GC13): a freed key resolves to nothing from then on, and
+/// interning its string again makes a new key, so a stale key is a defined
+/// miss, not another property. The table keeps a tombstone per freed key.
 #[derive(Debug, Default)]
 pub struct Interner {
     keys: HashMap<JsString, Key>,
-    strings: Vec<JsString>,
+    /// Indexed by key; `None` once freed.
+    strings: Vec<Option<JsString>>,
+    live: usize,
 }
 
 impl Interner {
@@ -190,42 +197,70 @@ impl Interner {
     }
 
     /// The key for `s`, adding it if it is new. Equal strings, whatever
-    /// their origin, get one key.
+    /// their origin, get one key (while it is live).
     ///
     /// # Errors
-    /// [`TooLong`] if the table already holds `u32::MAX` strings.
+    /// [`TooLong`] if `u32::MAX` keys have been issued.
     pub fn intern(&mut self, s: &JsString) -> Result<Key, TooLong> {
         if let Some(&k) = self.keys.get(s) {
             return Ok(k);
         }
         let key = Key(u32::try_from(self.strings.len()).map_err(|_| TooLong)?);
         self.keys.insert(s.clone(), key);
-        self.strings.push(s.clone());
+        self.strings.push(Some(s.clone()));
+        self.live = self.live.saturating_add(1);
         Ok(key)
     }
 
-    /// The key for `s` if it was interned, without adding it.
+    /// The key for `s` if it was interned and is live, without adding it.
     #[must_use]
     pub fn find(&self, s: &JsString) -> Option<Key> {
         self.keys.get(s).copied()
     }
 
-    /// The string a key stands for.
+    /// The string a live key stands for.
     #[must_use]
     pub fn resolve(&self, k: Key) -> Option<&JsString> {
-        usize::try_from(k.0).ok().and_then(|i| self.strings.get(i))
+        usize::try_from(k.0)
+            .ok()
+            .and_then(|i| self.strings.get(i))
+            .and_then(Option::as_ref)
     }
 
-    /// The number of distinct keys.
+    /// The number of live keys.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
+        self.live
+    }
+
+    /// Whether no key is live.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.live == 0
+    }
+
+    /// The number of keys ever issued, freed ones included: the size of the
+    /// table `sweep` and the collector index by key.
+    #[must_use]
+    pub fn issued(&self) -> usize {
         self.strings.len()
     }
 
-    /// Whether no key has been interned.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.strings.is_empty()
+    /// Free every live key whose flag in `keep` is false (a key past the end
+    /// of `keep` is freed too); returns how many were freed. Freed keys are
+    /// never issued again (GC13).
+    pub fn sweep(&mut self, keep: &[bool]) -> usize {
+        let mut freed = 0usize;
+        for (i, slot) in self.strings.iter_mut().enumerate() {
+            if slot.is_some() && !keep.get(i).copied().unwrap_or(false) {
+                if let Some(s) = slot.take() {
+                    self.keys.remove(&s);
+                }
+                freed = freed.saturating_add(1);
+            }
+        }
+        self.live = self.live.saturating_sub(freed);
+        freed
     }
 }
 
@@ -349,6 +384,37 @@ mod tests {
         // A wide key and a Latin-1 key with the same low bytes differ.
         let w = t.intern(&s("\u{166}oo")?)?;
         assert_ne!(w, a);
+        Ok(())
+    }
+
+    #[test]
+    fn a_swept_key_is_gone_for_good_and_its_id_is_never_reused() -> Result<(), TooLong> {
+        let mut t = Interner::new();
+        let (a, b, c) = (
+            t.intern(&s("a")?)?,
+            t.intern(&s("b")?)?,
+            t.intern(&s("c")?)?,
+        );
+        assert_eq!(t.sweep(&[true, false, true]), 1);
+        assert_eq!((t.len(), t.issued()), (2, 3));
+        assert_eq!(t.resolve(b), None);
+        assert_eq!(t.find(&s("b")?), None);
+        assert_eq!(t.resolve(a), Some(&s("a")?));
+        assert_eq!(t.find(&s("c")?), Some(c));
+        // The string again is a new key, not the old one.
+        let b2 = t.intern(&s("b")?)?;
+        assert_ne!(b2, b);
+        assert_eq!(b2, Key(3));
+        assert_eq!(t.resolve(b), None);
+        assert_eq!((t.len(), t.issued()), (3, 4));
+        // A flag list that is short frees what it does not name; a second
+        // sweep of the freed key frees nothing.
+        assert_eq!(t.sweep(&[true]), 2);
+        assert_eq!(t.sweep(&[true]), 0);
+        assert_eq!((t.len(), t.issued()), (1, 4));
+        assert!(!t.is_empty());
+        assert_eq!(t.sweep(&[]), 1);
+        assert!(t.is_empty());
         Ok(())
     }
 }

@@ -127,6 +127,28 @@ fn all() -> Vec<Msg> {
         },
         Msg::StyleEnd { request: 7 },
         Msg::StyleFailed { request: 0 },
+        Msg::FetchScript {
+            request: 9,
+            url: t("app.js?v=2"),
+        },
+        Msg::UpdateUrl {
+            replace: false,
+            url: t("/a/b?c#d"),
+        },
+        Msg::UpdateUrl {
+            replace: true,
+            url: t(""),
+        },
+        Msg::ScriptResponse {
+            request: u64::MAX,
+            content_type: t("text/javascript"),
+        },
+        Msg::ScriptBody {
+            request: 9,
+            bytes: vec![0x00, 0xFF],
+        },
+        Msg::ScriptEnd { request: 9 },
+        Msg::ScriptFailed { request: 0 },
         Msg::FetchSub {
             request: 9,
             destination: 1,
@@ -225,6 +247,23 @@ fn a_largest_submit_fits_one_frame() {
 }
 
 #[test]
+fn a_largest_script_body_fits_one_frame() {
+    use clazel_ipc::message::codec::MAX_SCRIPT_CHUNK;
+    let m = Msg::ScriptBody {
+        request: u64::MAX,
+        bytes: vec![0x5A; MAX_SCRIPT_CHUNK],
+    };
+    let frame = encode_framed(&m).unwrap_or_default();
+    assert_eq!(frame.len(), MAX_FRAME + 4);
+    assert_eq!(decode_framed(&frame), Some(m_clone(&m)));
+    let over = Msg::ScriptBody {
+        request: u64::MAX,
+        bytes: vec![0x5A; MAX_SCRIPT_CHUNK + 1],
+    };
+    assert!(encode_framed(&over).is_none());
+}
+
+#[test]
 fn every_message_round_trips_through_a_frame() {
     for m in all() {
         let bytes = encode_message(&m);
@@ -259,6 +298,8 @@ fn the_kernel_decoder_takes_only_renderer_messages() {
                 | Msg::Display { .. }
                 | Msg::Title { .. }
                 | Msg::FetchStyle { .. }
+                | Msg::FetchScript { .. }
+                | Msg::UpdateUrl { .. }
                 | Msg::FetchSub { .. }
         );
         assert_eq!(

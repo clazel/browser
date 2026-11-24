@@ -67,8 +67,8 @@ pub proof fn lemma_local_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
             }
         }
         if is_sub_request(m) {
-            let (sub, at_once, per_doc, request, url) = sub_request_args(m);
-            crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, sub, at_once, per_doc, request, url);
+            let (sub, script, at_once, per_doc, request, url) = sub_request_args(m);
+            crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, sub, script, at_once, per_doc, request, url);
         }
     } else {
         crate::net_theorems::lemma_closes_of_tab(s.conns, r.tab);
@@ -257,9 +257,9 @@ pub proof fn lemma_local_respect_renderer(rules: Seq<clazel_psl::spec::Rule>, ur
         // counts, of another domain.
         if accepted_message(r, bytes) is Some && is_sub_request(accepted_message(r, bytes)->Some_0) {
             let m = accepted_message(r, bytes)->Some_0;
-            let (sub, at_once, per_doc, request, url) = sub_request_args(m);
-            crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s1, r, sub, at_once, per_doc, request, url);
-            crate::subfetch_rel::lemma_fetch_style_other(rules, urls, fetch, d, s1, r, sub, at_once, per_doc, request, url);
+            let (sub, script, at_once, per_doc, request, url) = sub_request_args(m);
+            crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s1, r, sub, script, at_once, per_doc, request, url);
+            crate::subfetch_rel::lemma_fetch_style_other(rules, urls, fetch, d, s1, r, sub, script, at_once, per_doc, request, url);
         }
         crate::unwinding_d::lemma_rel_same_table(rules, urls, d, s1, s2, s1b, s2);
     }

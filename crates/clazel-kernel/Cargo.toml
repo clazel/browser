@@ -142,6 +142,13 @@ theorems = [
     # statement is `orb_statement` (`statements.rs`), proved in
     # `subfetch_theorems.rs`.
     "theorem_orb",
+    # Phase 7 item 7.16: script fetches (`FetchScript`, answered with
+    # `Script*` frames), as `FetchStyle` is, by the same function
+    # (`fetch_start`). The statement is in `statements.rs`; the proof in
+    # `subfetch_theorems.rs`; the noninterference over `FetchScript` is
+    # `FetchStyle`'s (`subfetch_rel.rs`), whose lemmas take the `sub` and
+    # `script` flags.
+    "theorem_script_fetch_shape",
     # Phase 5 item 5.17c: the GPU crash policy. The statements are in
     # `statements.rs`; the proofs in `gpu_theorems.rs`, the noninterference
     # over `GpuExited` and its declassified parts in `gpu_rel.rs`.

@@ -237,8 +237,8 @@
     {
       "id": "root-is-element",
       "file": "src/spec.rs",
-      "find": "            Some(p) => p < doc.nodes.len() && doc.nodes[p as int].kind is Document,",
-      "replace": "            Some(p) => p < doc.nodes.len() && doc.nodes[p as int].kind is Element,",
+      "find": "        Some(p) => p < doc.nodes.len() && doc.nodes[p as int].kind is Document,",
+      "replace": "        Some(p) => p < doc.nodes.len() && doc.nodes[p as int].kind is Element,",
       "expect": "killed",
       "reason": "§15.1: :root is the document element, html.",
       "certificate": {
@@ -341,8 +341,8 @@
     {
       "id": "is-negated",
       "file": "src/spec.rs",
-      "find": "        Simple::Is { arg } => match_list(doc, arg, arg.len() as int, x),",
-      "replace": "        Simple::Is { arg } => !match_list(doc, arg, arg.len() as int, x),",
+      "find": "        Simple::Is { arg } => match_list(doc, scope, arg, arg.len() as int, x),",
+      "replace": "        Simple::Is { arg } => !match_list(doc, scope, arg, arg.len() as int, x),",
       "expect": "killed",
       "reason": "§4.2: :is(p) matches a p.",
       "certificate": {
@@ -354,8 +354,8 @@
     {
       "id": "not-not-negated",
       "file": "src/spec.rs",
-      "find": "        Simple::Not { arg } => !match_list(doc, arg, arg.len() as int, x),",
-      "replace": "        Simple::Not { arg } => match_list(doc, arg, arg.len() as int, x),",
+      "find": "        Simple::Not { arg } => !match_list(doc, scope, arg, arg.len() as int, x),",
+      "replace": "        Simple::Not { arg } => match_list(doc, scope, arg, arg.len() as int, x),",
       "expect": "killed",
       "reason": "§4.3: p:not(#x) matches a p whose ID is not x.",
       "certificate": {
@@ -367,7 +367,7 @@
     {
       "id": "where-always",
       "file": "src/spec.rs",
-      "find": "        Simple::Where { arg } => match_list(doc, arg, arg.len() as int, x),",
+      "find": "        Simple::Where { arg } => match_list(doc, scope, arg, arg.len() as int, x),",
       "replace": "        Simple::Where { arg } => true,",
       "expect": "killed",
       "reason": "§4.4: :where(span) does not match a p.",
@@ -393,7 +393,7 @@
     {
       "id": "child-any-parent",
       "file": "src/spec.rs",
-      "find": "                    Some(p) => is_element(doc, p) && match_complex(doc, c, n - 1, p),",
+      "find": "                    Some(p) => is_element(doc, p) && match_complex(doc, scope, c, n - 1, p),",
       "replace": "                    Some(p) => is_element(doc, p),",
       "expect": "killed",
       "reason": "§16.2: html > p needs p's parent to be html.",
@@ -1036,8 +1036,8 @@
     {
       "id": "compound-matches-or",
       "file": "src/spec.rs",
-      "find": "compound_matches(doc, compound, k - 1, x) && simple_matches(doc, compound[k - 1], x)",
-      "replace": "compound_matches(doc, compound, k - 1, x) || simple_matches(doc, compound[k - 1], x)",
+      "find": "compound_matches(doc, scope, compound, k - 1, x) && simple_matches(doc, scope, compound[k - 1], x)",
+      "replace": "compound_matches(doc, scope, compound, k - 1, x) || simple_matches(doc, scope, compound[k - 1], x)",
       "module": "examples",
       "expect": "killed",
       "reason": "§2.1: every simple selector of a compound must match: p#x does not match a p without that ID.",
@@ -1050,8 +1050,8 @@
     {
       "id": "match-list-and",
       "file": "src/spec.rs",
-      "find": "match_list(doc, list, k - 1, x) || match_complex(",
-      "replace": "match_list(doc, list, k - 1, x) && match_complex(",
+      "find": "match_list(doc, scope, list, k - 1, x) || match_complex(",
+      "replace": "match_list(doc, scope, list, k - 1, x) && match_complex(",
       "module": "examples",
       "expect": "killed",
       "reason": "§21.3: a list matches if any complex selector does: \"p, span\" matches a p.",
@@ -1675,6 +1675,118 @@
         "file": "src/lemmas.rs",
         "lemma": "super::examples::lemma_example_serialize_hover()",
         "witness": "!(super::examples::same_seq(super::examples::serialized(seq![0x61u32, 0x3A, 0x68, 0x6F, 0x76, 0x65, 0x72]), seq![0x61u32, 0x3A, 0x68, 0x6F, 0x76, 0x65, 0x72]))"
+      }
+    },
+    {
+      "id": "scope-given-is-root",
+      "file": "src/spec.rs",
+      "find": "            Some(root) => x == root,",
+      "replace": "            Some(root) => is_document_element(doc, x),",
+      "module": "examples",
+      "expect": "killed",
+      "reason": "§9.4: with a scoping root, :scope is that element, not :root.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_scope_is_the_root()",
+        "witness": "!super::examples::matches_scoped(DocumentMode::NoQuirks, seq![0x3Au32, 0x73, 0x63, 0x6F, 0x70, 0x65], Some(3usize), 3)"
+      }
+    },
+    {
+      "id": "scope-given-never-matches",
+      "file": "src/spec.rs",
+      "find": "            Some(root) => x == root,",
+      "replace": "            Some(root) => false,",
+      "module": "examples",
+      "expect": "killed",
+      "reason": "§9.4: :scope represents the scoping root, so it matches it.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_scope_is_the_root()",
+        "witness": "!super::examples::matches_scoped(DocumentMode::NoQuirks, seq![0x3Au32, 0x73, 0x63, 0x6F, 0x70, 0x65], Some(3usize), 3)"
+      }
+    },
+    {
+      "id": "scope-given-matches-all",
+      "file": "src/spec.rs",
+      "find": "            Some(root) => x == root,",
+      "replace": "            Some(root) => true,",
+      "module": "examples",
+      "expect": "killed",
+      "reason": "§9.4: :scope represents the scoping root and no other element.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_scope_only_the_root()",
+        "witness": "super::examples::matches_scoped(DocumentMode::NoQuirks, seq![0x3Au32, 0x73, 0x63, 0x6F, 0x70, 0x65], Some(3usize), 5)"
+      }
+    },
+    {
+      "id": "scope-none-not-root",
+      "file": "src/spec.rs",
+      "find": "            None => is_document_element(doc, x),",
+      "replace": "            None => false,",
+      "module": "examples",
+      "expect": "killed",
+      "reason": "§9.4: with no scoping root, :scope represents the root of the tree, :root.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_scope_is_root_without_one()",
+        "witness": "!super::examples::matches(DocumentMode::NoQuirks, seq![0x3Au32, 0x73, 0x63, 0x6F, 0x70, 0x65], 1)"
+      }
+    },
+    {
+      "id": "scope-none-matches-all",
+      "file": "src/spec.rs",
+      "find": "            None => is_document_element(doc, x),",
+      "replace": "            None => true,",
+      "module": "examples",
+      "expect": "killed",
+      "reason": "§9.4: with no scoping root, :scope is :root, which only the document element is.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_scope_without_one_only_root()",
+        "witness": "super::examples::matches(DocumentMode::NoQuirks, seq![0x3Au32, 0x73, 0x63, 0x6F, 0x70, 0x65], 3)"
+      }
+    },
+    {
+      "id": "scope-lost-at-child",
+      "file": "src/spec.rs",
+      "find": "                    Some(p) => is_element(doc, p) && match_complex(doc, scope, c, n - 1, p),",
+      "replace": "                    Some(p) => is_element(doc, p) && match_complex(doc, None, c, n - 1, p),",
+      "module": "examples",
+      "expect": "killed",
+      "reason": "§9.4 and §16.2: in :scope > p the scoping root is the parent that :scope stands for.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_scope_in_combinator()",
+        "witness": "!super::examples::matches_scoped(DocumentMode::NoQuirks, seq![0x3Au32, 0x73, 0x63, 0x6F, 0x70, 0x65, 0x20, 0x3E, 0x20, 0x70], Some(2usize), 5)"
+      }
+    },
+    {
+      "id": "scope-lost-in-is",
+      "file": "src/spec.rs",
+      "find": "        Simple::Is { arg } => match_list(doc, scope, arg, arg.len() as int, x),",
+      "replace": "        Simple::Is { arg } => match_list(doc, None, arg, arg.len() as int, x),",
+      "module": "examples",
+      "expect": "killed",
+      "reason": "§4.2 and §9.4: the scoping root applies inside :is() as well.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_scope_in_is()",
+        "witness": "!super::examples::matches_scoped(DocumentMode::NoQuirks, seq![0x3Au32, 0x69, 0x73, 0x28, 0x3A, 0x73, 0x63, 0x6F, 0x70, 0x65, 0x29], Some(3usize), 3)"
+      }
+    },
+    {
+      "id": "scope-name-misspelt",
+      "file": "src/spec.rs",
+      "find": "        PseudoClass::Scope => seq![0x73u32, 0x63, 0x6F, 0x70, 0x65],",
+      "replace": "        PseudoClass::Scope => seq![0x73u32, 0x63, 0x6F, 0x70, 0x66],",
+      "module": "examples",
+      "expect": "killed",
+      "reason": "§9.4: the pseudo-class is named scope, whatever the case it is written in.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_scope_name_parses()",
+        "witness": "!super::examples::parses(seq![0x3Au32, 0x53, 0x43, 0x4F, 0x50, 0x45])"
       }
     }
   ]

@@ -358,28 +358,57 @@ pub proof fn lemma_example_style()
     assert(decode_renderer_message(seq![0x82u8, 0x18, 0x70, 0x01]) is None) by (compute_only);
 }
 
+/// `FetchScript(1, "s.js")` is `[16, 1, "s.js"]` and `UpdateUrl(true, "/a")`
+/// is `[17, true, "/a"]`, both from a renderer only; `ScriptResponse(1,
+/// h'74')` is `[115, 1, h'74']`, `ScriptBody(1, h'61')` `[116, 1, h'61']`,
+/// `ScriptEnd(1)` `[117, 1]` and `ScriptFailed(1)` `[118, 1]` (item 7.16).
+pub proof fn lemma_example_script()
+    ensures
+        decode_renderer_message(seq![0x83u8, 0x10, 0x01, 0x64, 0x73, 0x2E, 0x6A, 0x73]) == Some(Message::FetchScript { request: 1, url: seq![0x73u8, 0x2E, 0x6A, 0x73] }),
+        encode_message(Message::FetchScript { request: 1, url: seq![0x73u8, 0x2E, 0x6A, 0x73] }) == seq![0x83u8, 0x10, 0x01, 0x64, 0x73, 0x2E, 0x6A, 0x73],
+        decode_renderer_message(seq![0x83u8, 0x11, 0xF5, 0x62, 0x2F, 0x61]) == Some(Message::UpdateUrl { replace: true, url: seq![0x2Fu8, 0x61] }),
+        encode_message(Message::UpdateUrl { replace: false, url: seq![0x2Fu8, 0x61] }) == seq![0x83u8, 0x11, 0xF4, 0x62, 0x2F, 0x61],
+        decode_message(seq![0x83u8, 0x18, 0x73, 0x01, 0x41, 0x74]) == Some(Message::ScriptResponse { request: 1, content_type: seq![0x74u8] }),
+        decode_message(seq![0x83u8, 0x18, 0x74, 0x01, 0x41, 0x61]) == Some(Message::ScriptBody { request: 1, bytes: seq![0x61u8] }),
+        decode_message(seq![0x82u8, 0x18, 0x75, 0x01]) == Some(Message::ScriptEnd { request: 1 }),
+        decode_message(seq![0x82u8, 0x18, 0x76, 0x01]) == Some(Message::ScriptFailed { request: 1 }),
+        decode_renderer_message(seq![0x82u8, 0x18, 0x75, 0x01]) is None,
+        decode_renderer_message(seq![0x83u8, 0x18, 0x74, 0x01, 0x41, 0x61]) is None,
+{
+    assert(decode_renderer_message(seq![0x83u8, 0x10, 0x01, 0x64, 0x73, 0x2E, 0x6A, 0x73]) == Some(Message::FetchScript { request: 1, url: seq![0x73u8, 0x2E, 0x6A, 0x73] })) by (compute_only);
+    assert(encode_message(Message::FetchScript { request: 1, url: seq![0x73u8, 0x2E, 0x6A, 0x73] }) == seq![0x83u8, 0x10, 0x01, 0x64, 0x73, 0x2E, 0x6A, 0x73]) by (compute_only);
+    assert(decode_renderer_message(seq![0x83u8, 0x11, 0xF5, 0x62, 0x2F, 0x61]) == Some(Message::UpdateUrl { replace: true, url: seq![0x2Fu8, 0x61] })) by (compute_only);
+    assert(encode_message(Message::UpdateUrl { replace: false, url: seq![0x2Fu8, 0x61] }) == seq![0x83u8, 0x11, 0xF4, 0x62, 0x2F, 0x61]) by (compute_only);
+    assert(decode_message(seq![0x83u8, 0x18, 0x73, 0x01, 0x41, 0x74]) == Some(Message::ScriptResponse { request: 1, content_type: seq![0x74u8] })) by (compute_only);
+    assert(decode_message(seq![0x83u8, 0x18, 0x74, 0x01, 0x41, 0x61]) == Some(Message::ScriptBody { request: 1, bytes: seq![0x61u8] })) by (compute_only);
+    assert(decode_message(seq![0x82u8, 0x18, 0x75, 0x01]) == Some(Message::ScriptEnd { request: 1 })) by (compute_only);
+    assert(decode_message(seq![0x82u8, 0x18, 0x76, 0x01]) == Some(Message::ScriptFailed { request: 1 })) by (compute_only);
+    assert(decode_renderer_message(seq![0x82u8, 0x18, 0x75, 0x01]) is None) by (compute_only);
+    assert(decode_renderer_message(seq![0x83u8, 0x18, 0x74, 0x01, 0x41, 0x61]) is None) by (compute_only);
+}
+
 /// `FetchSub(1, 1, "i.gif")` is `[13, 1, 1, "i.gif"]`, from a renderer only;
-/// `SubResponse(1, h'74')` is `[115, 1, h'74']`, `SubBody(1, h'61')`
-/// `[116, 1, h'61']`, `SubEnd(1)` `[117, 1]` and `SubFailed(1)`
-/// `[118, 1]` (item 6.17).
+/// `SubResponse(1, h'74')` is `[119, 1, h'74']`, `SubBody(1, h'61')`
+/// `[120, 1, h'61']`, `SubEnd(1)` `[121, 1]` and `SubFailed(1)`
+/// `[122, 1]` (item 6.17).
 pub proof fn lemma_example_sub()
     ensures
         decode_renderer_message(seq![0x84u8, 0x0D, 0x01, 0x01, 0x65, 0x69, 0x2E, 0x67, 0x69, 0x66]) == Some(Message::FetchSub { request: 1, destination: 1, url: seq![0x69u8, 0x2E, 0x67, 0x69, 0x66] }),
         encode_message(Message::FetchSub { request: 1, destination: 1, url: seq![0x69u8, 0x2E, 0x67, 0x69, 0x66] }) == seq![0x84u8, 0x0D, 0x01, 0x01, 0x65, 0x69, 0x2E, 0x67, 0x69, 0x66],
-        decode_message(seq![0x83u8, 0x18, 0x73, 0x01, 0x41, 0x74]) == Some(Message::SubResponse { request: 1, content_type: seq![0x74u8] }),
-        decode_message(seq![0x83u8, 0x18, 0x74, 0x01, 0x41, 0x61]) == Some(Message::SubBody { request: 1, bytes: seq![0x61u8] }),
-        decode_message(seq![0x82u8, 0x18, 0x75, 0x01]) == Some(Message::SubEnd { request: 1 }),
-        decode_message(seq![0x82u8, 0x18, 0x76, 0x01]) == Some(Message::SubFailed { request: 1 }),
-        decode_renderer_message(seq![0x82u8, 0x18, 0x75, 0x01]) is None,
+        decode_message(seq![0x83u8, 0x18, 0x77, 0x01, 0x41, 0x74]) == Some(Message::SubResponse { request: 1, content_type: seq![0x74u8] }),
+        decode_message(seq![0x83u8, 0x18, 0x78, 0x01, 0x41, 0x61]) == Some(Message::SubBody { request: 1, bytes: seq![0x61u8] }),
+        decode_message(seq![0x82u8, 0x18, 0x79, 0x01]) == Some(Message::SubEnd { request: 1 }),
+        decode_message(seq![0x82u8, 0x18, 0x7A, 0x01]) == Some(Message::SubFailed { request: 1 }),
+        decode_renderer_message(seq![0x82u8, 0x18, 0x79, 0x01]) is None,
         decode_renderer_message(seq![0x83u8, 0x0D, 0x01, 0x01]) is None,
 {
     assert(decode_renderer_message(seq![0x84u8, 0x0D, 0x01, 0x01, 0x65, 0x69, 0x2E, 0x67, 0x69, 0x66]) == Some(Message::FetchSub { request: 1, destination: 1, url: seq![0x69u8, 0x2E, 0x67, 0x69, 0x66] })) by (compute_only);
     assert(encode_message(Message::FetchSub { request: 1, destination: 1, url: seq![0x69u8, 0x2E, 0x67, 0x69, 0x66] }) == seq![0x84u8, 0x0D, 0x01, 0x01, 0x65, 0x69, 0x2E, 0x67, 0x69, 0x66]) by (compute_only);
-    assert(decode_message(seq![0x83u8, 0x18, 0x73, 0x01, 0x41, 0x74]) == Some(Message::SubResponse { request: 1, content_type: seq![0x74u8] })) by (compute_only);
-    assert(decode_message(seq![0x83u8, 0x18, 0x74, 0x01, 0x41, 0x61]) == Some(Message::SubBody { request: 1, bytes: seq![0x61u8] })) by (compute_only);
-    assert(decode_message(seq![0x82u8, 0x18, 0x75, 0x01]) == Some(Message::SubEnd { request: 1 })) by (compute_only);
-    assert(decode_message(seq![0x82u8, 0x18, 0x76, 0x01]) == Some(Message::SubFailed { request: 1 })) by (compute_only);
-    assert(decode_renderer_message(seq![0x82u8, 0x18, 0x75, 0x01]) is None) by (compute_only);
+    assert(decode_message(seq![0x83u8, 0x18, 0x77, 0x01, 0x41, 0x74]) == Some(Message::SubResponse { request: 1, content_type: seq![0x74u8] })) by (compute_only);
+    assert(decode_message(seq![0x83u8, 0x18, 0x78, 0x01, 0x41, 0x61]) == Some(Message::SubBody { request: 1, bytes: seq![0x61u8] })) by (compute_only);
+    assert(decode_message(seq![0x82u8, 0x18, 0x79, 0x01]) == Some(Message::SubEnd { request: 1 })) by (compute_only);
+    assert(decode_message(seq![0x82u8, 0x18, 0x7A, 0x01]) == Some(Message::SubFailed { request: 1 })) by (compute_only);
+    assert(decode_renderer_message(seq![0x82u8, 0x18, 0x79, 0x01]) is None) by (compute_only);
     assert(decode_renderer_message(seq![0x83u8, 0x0D, 0x01, 0x01]) is None) by (compute_only);
 }
 

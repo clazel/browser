@@ -24,11 +24,15 @@ standard, which sets no bound.
 the certified mutations were committed first; then the executable parser
 (`parse::parse`) and quoter (`quote::quote`), each proven by Verus to equal
 the spec on every input (no precondition), and so free of panics and
-overflow. Still to do before the tier is raised: the independent
-transcription from RFC 8259 proven equal to the spec, conformance tests
-against official suites (JSONTestSuite, Test262's `built-ins/JSON`), and a
-full `cargo xtask verify` in CI. `tests/behaviour.rs` is a hand-written
-check of the spec's reading, not a conformance suite.
+overflow. A second transcription, `src/independent.rs`, was written from
+RFC 8259's ABNF and is proven equal to the spec in `src/equivalence.rs`
+(`theorem_json_text_equivalent`: `json_parse(text)` is `json_text(text)`
+read through `to_prim`, for every text; the only change `to_prim` makes is
+code points to UTF-16 code units in strings). Still to do before the tier
+is raised: conformance tests against official suites (JSONTestSuite,
+Test262's `built-ins/JSON`; neither is vendored yet) and a full
+`cargo xtask verify` in CI. `tests/behaviour.rs` is a hand-written check
+of the spec's reading, not a conformance suite.
 
 Nothing here is verified against the standard's text yet: the spec was
 written without access to ECMA-404 or ECMA-262, and its header says so (the
@@ -38,5 +42,6 @@ written without access to ECMA-404 or ECMA-262, and its header says so (the
 
 `src/spec.rs` (the transcription), `src/tree.rs` (the executable tree and
 its meaning), `src/contract.rs`, `src/parse.rs` and `src/quote.rs` (the
-executable code and its proofs), `src/examples.rs`, `src/lemmas.rs` and
+executable code and its proofs), `src/independent.rs` (RFC 8259) and
+`src/equivalence.rs` (its proof against the spec), `src/examples.rs`, `src/lemmas.rs` and
 `mutations.json`, as in `clazel-base64`.

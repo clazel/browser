@@ -24,6 +24,18 @@
 //!   node between the two parts;
 //! - the new arena is built record by record (`Seq::new`), not by updates.
 //!
+//! **Phase 7 item 7.13's operations are outside this file.** "Pre-insert",
+//! "replace", "replace all" and the insertion of a fragment are
+//! compositions of the three algorithms transcribed here ("remove" and
+//! "insert", through "adopt") with the checks of "ensure pre-insertion
+//! validity" and the reference-child steps; a shallow "clone a node" and
+//! the attribute changes are single record updates. This file does not
+//! transcribe the validity algorithm or those compositions a second time:
+//! the validity checks are covered by `tests/operations.rs`, and the
+//! compositions by the theorems of `ops_lemmas.rs` (each states what the
+//! composed tree is). The "insertion steps" and "removing steps" hooks of
+//! `spec.rs` change nothing and are not transcribed.
+//!
 //! The same restrictions as `spec.rs` apply (the parser's calls): `node`
 //! is not a `DocumentFragment` (insert's step 1 gives « node », steps 3
 //! and 4 do nothing), and steps that only touch live ranges, slots,

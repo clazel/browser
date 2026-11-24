@@ -9,6 +9,10 @@ use super::doc::*;
 use super::spec::*;
 #[cfg(verus_only)]
 use super::walls::*;
+#[cfg(verus_only)]
+use crate::host::hi::*;
+#[cfg(verus_only)]
+use crate::host::hostinv::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
@@ -59,6 +63,13 @@ pub proof fn lemma_prefix_keeps(p: Parser, q: Parser)
         crate::termination::helpers_ranking::lemma_template_count(p);
         crate::termination::helpers_ranking::lemma_template_count(q);
     }
+    if host_inv(p) {
+        if p.stopped {
+            lemma_host_stopped(p, q);
+        } else {
+            lemma_host_prefix(p, q);
+        }
+    }
 }
 
 /// "Pop the current node" when it is not the only one (nor, in the "in
@@ -78,6 +89,8 @@ pub proof fn lemma_pop_keeps(p: Parser)
             lemma_cell_top(p.open);
         }
         lemma_prefix_keeps(p, q);
+    } else if host_inv(p) {
+        lemma_host_stopped(p, pop(p));
     }
 }
 
@@ -283,6 +296,13 @@ pub proof fn lemma_remove_open_keeps(p: Parser, i: int)
         }
         lemma_dinv_sub(p, q.open);
     }
+    if host_inv(p) {
+        if p.stopped {
+            lemma_host_stopped(p, q);
+        } else {
+            lemma_host_remove_open(p, i);
+        }
+    }
 }
 
 /// Removing an entry does not add a `template` element.
@@ -316,7 +336,8 @@ pub proof fn lemma_templates_in_remove(o: Seq<Elem>, i: int, j: int)
 
 /// Push a tagged element that is not a `template` nor `html`, nor a cell
 /// unless the mode is not "in cell" and its id is fresh, nor a `table` in
-/// the "in cell" mode.
+/// the "in cell" mode, and that may go on the stack by the document's
+/// order (`hostinv::entry_ok`).
 pub proof fn lemma_push_keeps(p: Parser, e: Elem)
     requires
         live(p),
@@ -327,8 +348,31 @@ pub proof fn lemma_push_keeps(p: Parser, e: Elem)
         !p.stopped ==> crate::exec::frame::elem_ok(p.doc, e),
         !p.stopped ==> after_ctx(p, e),
         !p.stopped && is_html(e, Tag::Table) ==> p.mode != Mode::InCell,
+        !p.stopped && host_inv(p) ==> entry_ok(p, p.open.len() as int, e),
     ensures
         keeps(p, push(p, e)),
+        !p.stopped ==> push(p, e).open == p.open.push(e),
+{
+    lemma_push_core(p, e);
+    if host_inv(p) {
+        lemma_host_push(p, e);
+    }
+}
+
+/// [`lemma_push_keeps`] without the host invariant: the push keeps
+/// [`keeps_core`], whatever the element's place in the document.
+pub proof fn lemma_push_core(p: Parser, e: Elem)
+    requires
+        live(p),
+        elem_tagged(e),
+        !is_html(e, Tag::Template),
+        !is_html(e, Tag::Html),
+        !p.stopped && cell_pred()(e) ==> p.mode != Mode::InCell && cell_fresh(p, e.id),
+        !p.stopped ==> crate::exec::frame::elem_ok(p.doc, e),
+        !p.stopped ==> after_ctx(p, e),
+        !p.stopped && is_html(e, Tag::Table) ==> p.mode != Mode::InCell,
+    ensures
+        keeps_core(p, push(p, e)),
         !p.stopped ==> push(p, e).open == p.open.push(e),
 {
     if !p.stopped {
@@ -481,6 +525,7 @@ pub proof fn lemma_doc_keeps(p: Parser, q: Parser)
         q.doc.nodes.len() >= p.doc.nodes.len(),
         !p.stopped ==> crate::exec::frame::doc_extends(p.doc, q.doc),
         !p.stopped ==> html_plain(q.doc, p.context),
+        host_step(p, q),
     ensures
         keeps(p, q),
 {
@@ -494,6 +539,9 @@ pub proof fn lemma_stop_keeps(p: Parser)
     ensures
         keeps(p, stop_parsing(p)),
 {
+    if host_inv(p) {
+        lemma_host_stopped(p, stop_parsing(p));
+    }
 }
 
 /// DOM "insert" keeps the arena's size.
@@ -505,13 +553,33 @@ pub proof fn lemma_insert_len(d: Document, node: NodeId, parent: NodeId, child: 
     assert(d1.nodes.len() == d.nodes.len());
 }
 
-/// [`dom_insert`], into a parent that may receive a child.
+/// [`dom_insert`], into a parent that may receive a child, of a node that
+/// meets `host::insert_keeps_host` (when the call is made).
 pub proof fn lemma_dom_insert_keeps(p: Parser, node: NodeId, parent: NodeId, child: Option<NodeId>)
     requires
         live(p),
         !p.stopped ==> pok(p.doc, parent),
+        !p.stopped && host_inv(p) && insert_valid(p.doc, node, parent, child) ==> insert_keeps_host(p, node, parent),
     ensures
         keeps(p, dom_insert(p, node, parent, child)),
+        dom_insert(p, node, parent, child) == (Parser { doc: dom_insert(p, node, parent, child).doc, ..p }),
+        dom_insert(p, node, parent, child).doc.nodes.len() == p.doc.nodes.len(),
+        !p.stopped ==> crate::exec::frame::doc_extends(p.doc, dom_insert(p, node, parent, child).doc),
+{
+    lemma_dom_insert_core(p, node, parent, child);
+    if host_inv(p) && !p.stopped {
+        lemma_dinv_ids(p);
+        lemma_host_dom_insert(p, node, parent, child);
+    }
+}
+
+/// [`lemma_dom_insert_keeps`] without the host invariant.
+pub proof fn lemma_dom_insert_core(p: Parser, node: NodeId, parent: NodeId, child: Option<NodeId>)
+    requires
+        live(p),
+        !p.stopped ==> pok(p.doc, parent),
+    ensures
+        keeps_core(p, dom_insert(p, node, parent, child)),
         dom_insert(p, node, parent, child) == (Parser { doc: dom_insert(p, node, parent, child).doc, ..p }),
         dom_insert(p, node, parent, child).doc.nodes.len() == p.doc.nodes.len(),
         !p.stopped ==> crate::exec::frame::doc_extends(p.doc, dom_insert(p, node, parent, child).doc),
@@ -535,6 +603,23 @@ pub proof fn lemma_dom_remove_keeps(p: Parser, node: NodeId)
         live(p),
     ensures
         keeps(p, dom_remove(p, node)),
+        dom_remove(p, node) == (Parser { doc: dom_remove(p, node).doc, ..p }),
+        dom_remove(p, node).doc.nodes.len() == p.doc.nodes.len(),
+        !p.stopped ==> crate::exec::frame::doc_extends(p.doc, dom_remove(p, node).doc),
+{
+    lemma_dom_remove_core(p, node);
+    if host_inv(p) && !p.stopped {
+        lemma_dinv_ids(p);
+        lemma_host_dom_remove(p, node);
+    }
+}
+
+/// [`lemma_dom_remove_keeps`] without the host invariant.
+pub proof fn lemma_dom_remove_core(p: Parser, node: NodeId)
+    requires
+        live(p),
+    ensures
+        keeps_core(p, dom_remove(p, node)),
         dom_remove(p, node) == (Parser { doc: dom_remove(p, node).doc, ..p }),
         dom_remove(p, node).doc.nodes.len() == p.doc.nodes.len(),
         !p.stopped ==> crate::exec::frame::doc_extends(p.doc, dom_remove(p, node).doc),
@@ -566,6 +651,37 @@ pub proof fn lemma_create_keeps(p: Parser, k: NodeKind)
             &&& create(p, k).0.doc.nodes.len() == p.doc.nodes.len() + 1
             &&& create(p, k).0.doc.nodes[create(p, k).1 as int].kind == k
             &&& crate::exec::frame::doc_extends(p.doc, create(p, k).0.doc)
+            &&& old_same(p.doc, create(p, k).0.doc)
+            &&& up_same(p.doc, create(p, k).0.doc)
+            &&& dom::host_acyclic(create(p, k).0.doc) ==> low(create(p, k).0.doc, create(p, k).1)
+            &&& top(create(p, k).0.doc, create(p, k).1)
+        },
+{
+    lemma_create_core(p, k);
+    if host_inv(p) && !p.stopped {
+        lemma_dinv_ids(p);
+        lemma_host_create(p, k);
+    }
+}
+
+/// [`lemma_create_keeps`] without the host invariant.
+pub proof fn lemma_create_core(p: Parser, k: NodeKind)
+    requires
+        live(p),
+        !p.stopped ==> dom::creatable(p.doc, k),
+        !p.stopped ==> kind_plain(k),
+    ensures
+        keeps_core(p, create(p, k).0),
+        !create(p, k).0.stopped ==> {
+            &&& create(p, k).0 == (Parser { doc: create(p, k).0.doc, ..p })
+            &&& create(p, k).1 as int == p.doc.nodes.len()
+            &&& create(p, k).0.doc.nodes.len() == p.doc.nodes.len() + 1
+            &&& create(p, k).0.doc.nodes[create(p, k).1 as int].kind == k
+            &&& crate::exec::frame::doc_extends(p.doc, create(p, k).0.doc)
+            &&& old_same(p.doc, create(p, k).0.doc)
+            &&& up_same(p.doc, create(p, k).0.doc)
+            &&& dom::host_acyclic(create(p, k).0.doc) ==> low(create(p, k).0.doc, create(p, k).1)
+            &&& top(create(p, k).0.doc, create(p, k).1)
         },
 {
     if !p.stopped && dom::can_create(p.doc, 1) {
@@ -573,6 +689,11 @@ pub proof fn lemma_create_keeps(p: Parser, k: NodeKind)
         crate::exec::frame::lemma_create_extends(p.doc, k);
         lemma_create_plain(p.doc, k, p.context);
         lemma_dinv_doc(p, dom::create_node(p.doc, k).0);
+        let (d2, id) = dom::create_node(p.doc, k);
+        lemma_create_old_same(p.doc, k);
+        lemma_create_top(p.doc, k);
+        lemma_create_up_same(p.doc, k);
+        lemma_new_low(p.doc, d2, id);
     }
 }
 
@@ -593,6 +714,10 @@ pub proof fn lemma_ceft_keeps(p: Parser, t: TagTok, ns: Namespace, ip: NodeId)
             &&& elem_in_doc(q.doc, e)
             &&& (is_html(e, Tag::Template) ==> has_template_contents(q.doc, e.id))
             &&& crate::exec::frame::doc_extends(p.doc, q.doc)
+            &&& old_same(p.doc, q.doc)
+            &&& up_same(p.doc, q.doc)
+            &&& dom::host_acyclic(q.doc) ==> low(q.doc, e.id)
+            &&& top(q.doc, e.id)
         },
         create_element_for_token(p, t, ns, ip).1.ns == ns,
         create_element_for_token(p, t, ns, ip).1.tag == t.tag,
@@ -622,8 +747,13 @@ pub proof fn lemma_ceft_keeps(p: Parser, t: TagTok, ns: Namespace, ip: NodeId)
             crate::exec::frame::lemma_create_template_contents_extends(p1.doc, id);
             lemma_dinv(p1);
             lemma_ctc_plain(p1.doc, id, p1.context);
+            lemma_dinv_ids(p1);
+            lemma_dinv(p);
+            lemma_ctc_step(p.doc, p1, id);
             lemma_doc_keeps(p1, Parser { doc: d, ..p1 });
             crate::exec::frame::lemma_doc_extends_trans(p.doc, p1.doc, d);
+        } else {
+            lemma_stop_keeps(p1);
         }
     }
     let (q, e) = create_element_for_token(p, t, ns, ip);
@@ -644,17 +774,26 @@ pub proof fn lemma_insert_element_at_keeps(p: Parser, el: NodeId, loc: Option<Lo
             Some(l) => pok(p.doc, l.parent),
             None => true,
         },
+        !p.stopped && host_inv(p) ==> low(p.doc, el) && adjusted_location(p, loc).parent < el && ids_below(p, el),
     ensures
         keeps(p, insert_element_at(p, el, loc)),
         insert_element_at(p, el, loc) == (Parser { doc: insert_element_at(p, el, loc).doc, ..p }),
         insert_element_at(p, el, loc).doc.nodes.len() == p.doc.nodes.len(),
         !p.stopped ==> crate::exec::frame::doc_extends(p.doc, insert_element_at(p, el, loc).doc),
+        !p.stopped && host_inv(p) ==> low(insert_element_at(p, el, loc).doc, el),
 {
     let l = adjusted_location(p, loc);
     if !p.stopped {
         lemma_adjusted_pok(p, loc);
         lemma_dinv(p);
         crate::exec::modes::in_body_start_lemmas::lemma_doc_extends_refl(p.doc);
+        if host_inv(p) {
+            lemma_low_keeps(p, el, l.parent);
+            lemma_host_inv(p);
+            if insert_valid(p.doc, el, l.parent, l.child) {
+                lemma_low_insert(p.doc, el, l.parent, l.child);
+            }
+        }
     }
     lemma_dom_insert_keeps(p, el, l.parent, l.child);
 }
@@ -689,6 +828,9 @@ pub proof fn lemma_insert_foreign_keeps(p: Parser, t: TagTok, ns: Namespace)
     let ip = appropriate_place(p, None).parent;
     lemma_ceft_keeps(p, t, ns, ip);
     let (p1, e) = create_element_for_token(p, t, ns, ip);
+    if !p1.stopped {
+        lemma_fresh_place(p, p1, e.id);
+    }
     lemma_insert_element_at_keeps(p1, e.id, None);
     let p2 = insert_element_at(p1, e.id, None);
     lemma_keeps_trans(p, p1, p2);
@@ -706,9 +848,20 @@ pub proof fn lemma_insert_foreign_keeps(p: Parser, t: TagTok, ns: Namespace)
         assert(crate::exec::frame::elem_ok(p1.doc, e));
         crate::exec::frame::lemma_elem_ok_extends(p1.doc, p2.doc, e);
         crate::exec::frame::lemma_doc_extends_trans(p.doc, p1.doc, p2.doc);
+        if host_inv(p1) {
+            lemma_low_entry_ok(p2, e);
+        }
     }
-    lemma_push_keeps(p2, e);
-    lemma_keeps_trans(p, p2, push(p2, e));
+    if p2.stopped || host_inv(p1) {
+        lemma_push_keeps(p2, e);
+        lemma_keeps_trans(p, p2, push(p2, e));
+    } else {
+        // Without the host invariant before the insertion there is nothing
+        // to keep (`host_step` from `p` holds vacuously).
+        lemma_push_core(p2, e);
+        lemma_keeps_core_trans(p, p2, push(p2, e));
+        assert(!host_inv(p));
+    }
     let q = push(p2, e);
     if !q.stopped && !cell_pred()(e) {
         assert forall|j: int| 0 <= j < q.open.len() && cell_pred()(#[trigger] q.open[j]) implies q.open[j].id != e.id by {
@@ -775,6 +928,12 @@ pub proof fn lemma_insert_characters_keeps(p: Parser, data: Seq<u32>)
                 assert(dom::append_data(doc, s, data).nodes.len() == doc.nodes.len());
                 crate::exec::frame::lemma_append_data_extends(doc, s, data);
                 lemma_append_data_plain(doc, s, data, p.context);
+                lemma_dinv_ids(p);
+                lemma_append_data_up_same(doc, s, data);
+                if dom::host_acyclic(doc) {
+                    clazel_dom::host_acyclic_lemmas::theorem_append_data_host_acyclic(doc, s, data);
+                }
+                lemma_host_step_up_same(p, Parser { doc: dom::append_data(doc, s, data), ..p });
                 lemma_doc_keeps(p, Parser { doc: dom::append_data(doc, s, data), ..p });
             },
             _ => {
@@ -782,6 +941,7 @@ pub proof fn lemma_insert_characters_keeps(p: Parser, data: Seq<u32>)
                 let (p1, text) = create(p, NodeKind::Text { data });
                 if !p1.stopped {
                     lemma_pok_extends(p.doc, p1.doc, loc.parent);
+                    lemma_fresh_insert(p, p1, text, loc.parent);
                 }
                 lemma_dom_insert_keeps(p1, text, loc.parent, loc.child);
                 lemma_keeps_trans(p, p1, dom_insert(p1, text, loc.parent, loc.child));
@@ -833,6 +993,7 @@ pub proof fn lemma_insert_comment_keeps(p: Parser, data: Seq<u32>, loc: Option<L
     if !p1.stopped {
         lemma_adjusted_pok(p, loc);
         lemma_pok_extends(p.doc, p1.doc, l.parent);
+        lemma_fresh_insert(p, p1, c, l.parent);
     }
     lemma_dom_insert_keeps(p1, c, l.parent, l.child);
     lemma_keeps_trans(p, p1, dom_insert(p1, c, l.parent, l.child));
@@ -860,6 +1021,7 @@ pub proof fn lemma_insert_pi_keeps(p: Parser, target: Seq<u32>, data: Seq<u32>, 
     if !p1.stopped {
         lemma_adjusted_pok(p, loc);
         lemma_pok_extends(p.doc, p1.doc, l.parent);
+        lemma_fresh_insert(p, p1, n, l.parent);
     }
     lemma_dom_insert_keeps(p1, n, l.parent, l.child);
     lemma_keeps_trans(p, p1, dom_insert(p1, n, l.parent, l.child));

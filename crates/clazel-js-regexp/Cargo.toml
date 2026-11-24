@@ -4,7 +4,7 @@ version = "0.0.0"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "ECMAScript regular expressions: the pattern parser and its early errors (phase-7.md item 7.10, first half). The matcher and the Unicode tables are not written; the crate holds the vendored Unicode Character Database files."
+description = "ECMAScript regular expressions: the pattern parser and early errors, and the backtracking matcher with a bounded stack, case folding and property tables (phase-7.md item 7.10)."
 
 [dependencies]
 # ID_Start and ID_Continue above U+007F, for group names (RegExpIdentifierStart
@@ -14,10 +14,10 @@ clazel-js-lexer = { path = "../clazel-js-lexer" }
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
 # shipped code today; `target-tier` is what phase-7.md's "Crates" table sets.
-# The parser is written and tested (tests/), and src/parser/proofs.rs holds Kani
-# harnesses for it, but `tier` stays 0 until CI's full verification of them is
-# green on a pull request (CLAUDE.md rule 7), and the matcher, which the
-# target tier also covers, does not exist.
+# The parser and the matcher are written and tested (tests/), and
+# src/parser/proofs.rs and src/proofs.rs hold Kani harnesses for pieces of
+# them, but `tier` stays 0 until CI's full verification of them is green on a
+# pull request (CLAUDE.md rule 7) and the gaps the README lists are closed.
 [package.metadata.clazel]
 tier = 0
 target-tier = 1

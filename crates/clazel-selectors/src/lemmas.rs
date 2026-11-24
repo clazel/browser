@@ -102,6 +102,7 @@ proof fn lemma_chain(doc: Document, x: NodeId) -> (paths: Seq<Seq<NodeId>>)
 /// Enough fuel to reach the root is all [`some_ancestor_matches`] needs.
 proof fn lemma_ancestors_fuel(
     doc: Document,
+    scope: Option<NodeId>,
     paths: Seq<Seq<NodeId>>,
     c: Complex,
     n: int,
@@ -115,7 +116,7 @@ proof fn lemma_ancestors_fuel(
         f1 >= paths[y as int].len(),
         f2 >= paths[y as int].len(),
     ensures
-        some_ancestor_matches(doc, c, n, Some(y), f1) == some_ancestor_matches(doc, c, n, Some(y), f2),
+        some_ancestor_matches(doc, scope, c, n, Some(y), f1) == some_ancestor_matches(doc, scope, c, n, Some(y), f2),
     decreases paths[y as int].len(),
 {
     clazel_dom::lemmas::lemma_wf_split(doc, paths);
@@ -124,27 +125,29 @@ proof fn lemma_ancestors_fuel(
     assert(f1 > 0 && f2 > 0);
     match doc.nodes[y as int].parent {
         None => {
-            assert(!some_ancestor_matches(doc, c, n, None, (f1 - 1) as nat));
-            assert(!some_ancestor_matches(doc, c, n, None, (f2 - 1) as nat));
+            assert(!some_ancestor_matches(doc, scope, c, n, None, (f1 - 1) as nat));
+            assert(!some_ancestor_matches(doc, scope, c, n, None, (f2 - 1) as nat));
         },
         Some(p) => {
             clazel_dom::lemmas::lemma_path(doc, paths, p);
             assert(paths[y as int] == paths[p as int].push(y));
-            lemma_ancestors_fuel(doc, paths, c, n, p, (f1 - 1) as nat, (f2 - 1) as nat);
+            lemma_ancestors_fuel(doc, scope, paths, c, n, p, (f1 - 1) as nat, (f2 - 1) as nat);
         },
     }
-    assert(some_ancestor_matches(doc, c, n, Some(y), f1) == ((is_element(doc, y) && match_complex(
+    assert(some_ancestor_matches(doc, scope, c, n, Some(y), f1) == ((is_element(doc, y) && match_complex(
         doc,
+        scope,
         c,
         n,
         y,
-    )) || some_ancestor_matches(doc, c, n, parent_of(doc, y), (f1 - 1) as nat)));
-    assert(some_ancestor_matches(doc, c, n, Some(y), f2) == ((is_element(doc, y) && match_complex(
+    )) || some_ancestor_matches(doc, scope, c, n, parent_of(doc, y), (f1 - 1) as nat)));
+    assert(some_ancestor_matches(doc, scope, c, n, Some(y), f2) == ((is_element(doc, y) && match_complex(
         doc,
+        scope,
         c,
         n,
         y,
-    )) || some_ancestor_matches(doc, c, n, parent_of(doc, y), (f2 - 1) as nat)));
+    )) || some_ancestor_matches(doc, scope, c, n, parent_of(doc, y), (f2 - 1) as nat)));
 }
 
 // ------------------------------------------------------------------------------------
@@ -152,30 +155,31 @@ proof fn lemma_ancestors_fuel(
 // ------------------------------------------------------------------------------------
 
 /// A compound selector that is not empty matches no node that is not an element.
-proof fn lemma_compound_needs_element(doc: Document, compound: Seq<Simple>, x: NodeId)
+proof fn lemma_compound_needs_element(doc: Document, scope: Option<NodeId>, compound: Seq<Simple>, x: NodeId)
     requires
         compound.len() > 0,
         !is_element(doc, x),
     ensures
-        !compound_matches(doc, compound, compound.len() as int, x),
+        !compound_matches(doc, scope, compound, compound.len() as int, x),
 {
     let k = compound.len() as int;
-    assert(!simple_matches(doc, compound[k - 1], x));
-    assert(compound_matches(doc, compound, k, x) == (compound_matches(doc, compound, k - 1, x)
-        && simple_matches(doc, compound[k - 1], x)));
+    assert(!simple_matches(doc, scope, compound[k - 1], x));
+    assert(compound_matches(doc, scope, compound, k, x) == (compound_matches(doc, scope, compound, k - 1, x)
+        && simple_matches(doc, scope, compound[k - 1], x)));
 }
 
 /// The relation the spec checks for the first `i + 1` compound selectors at `s`, `i >= 1`:
 /// the branch of [`match_complex`] for its rightmost combinator.
-pub open spec fn relation_holds(doc: Document, c: Complex, i: int, s: NodeId) -> bool {
+pub open spec fn relation_holds(doc: Document, scope: Option<NodeId>, c: Complex, i: int, s: NodeId) -> bool {
     match c.combinators[i - 1] {
-        Combinator::Descendant => some_ancestor_matches(doc, c, i, parent_of(doc, s), doc.nodes.len()),
+        Combinator::Descendant => some_ancestor_matches(doc, scope, c, i, parent_of(doc, s), doc.nodes.len()),
         Combinator::Child => match parent_of(doc, s) {
-            Some(p) => is_element(doc, p) && match_complex(doc, c, i, p),
+            Some(p) => is_element(doc, p) && match_complex(doc, scope, c, i, p),
             None => false,
         },
         Combinator::NextSibling => previous_element_matches(
             doc,
+            scope,
             c,
             i,
             inclusive_siblings(doc, s),
@@ -183,6 +187,7 @@ pub open spec fn relation_holds(doc: Document, c: Complex, i: int, s: NodeId) ->
         ),
         Combinator::SubsequentSibling => some_earlier_sibling_matches(
             doc,
+            scope,
             c,
             i,
             inclusive_siblings(doc, s),
@@ -194,6 +199,7 @@ pub open spec fn relation_holds(doc: Document, c: Complex, i: int, s: NodeId) ->
 /// A row is right when the relations it reads are.
 proof fn lemma_row(
     doc: Document,
+    scope: Option<NodeId>,
     c: Complex,
     s: NodeId,
     parent: Seq<bool>,
@@ -211,22 +217,22 @@ proof fn lemma_row(
                 descendant,
                 previous,
                 earlier,
-            ) == relation_holds(doc, c, i, s),
+            ) == relation_holds(doc, scope, c, i, s),
     ensures
         forall|i: int|
-            0 <= i < c.compounds.len() ==> #[trigger] row(doc, c, s, parent, descendant, previous, earlier)[i]
-                == match_complex(doc, c, i + 1, s),
+            0 <= i < c.compounds.len() ==> #[trigger] row(doc, scope, c, s, parent, descendant, previous, earlier)[i]
+                == match_complex(doc, scope, c, i + 1, s),
 {
     let n = c.compounds.len();
-    assert forall|i: int| 0 <= i < n implies #[trigger] row(doc, c, s, parent, descendant, previous, earlier)[i]
-        == match_complex(doc, c, i + 1, s) by {
+    assert forall|i: int| 0 <= i < n implies #[trigger] row(doc, scope, c, s, parent, descendant, previous, earlier)[i]
+        == match_complex(doc, scope, c, i + 1, s) by {
         super::exec_match::lemma_compounds_wf_at(c, n as int, i);
         if !is_element(doc, s) {
-            lemma_compound_needs_element(doc, c.compounds[i], s);
+            lemma_compound_needs_element(doc, scope, c.compounds[i], s);
         }
         if i >= 1 {
             assert(related(c.combinators[i - 1], i - 1, parent, descendant, previous, earlier)
-                == relation_holds(doc, c, i, s));
+                == relation_holds(doc, scope, c, i, s));
         }
     }
 }
@@ -254,6 +260,7 @@ proof fn lemma_no_siblings(c: Complex, k: int, i: int)
 /// row and the descendant row are right.
 proof fn lemma_siblings(
     doc: Document,
+    scope: Option<NodeId>,
     paths: Seq<Seq<NodeId>>,
     c: Complex,
     p: NodeId,
@@ -268,10 +275,11 @@ proof fn lemma_siblings(
         0 <= j <= children_of(doc, p).len(),
         parent.len() == c.compounds.len(),
         descendant.len() == c.compounds.len(),
-        forall|i: int| 0 <= i < c.compounds.len() ==> #[trigger] parent[i] == match_complex(doc, c, i + 1, p),
+        forall|i: int| 0 <= i < c.compounds.len() ==> #[trigger] parent[i] == match_complex(doc, scope, c, i + 1, p),
         forall|i: int|
             0 <= i < c.compounds.len() ==> #[trigger] descendant[i] == some_ancestor_matches(
                 doc,
+                scope,
                 c,
                 i + 1,
                 Some(p),
@@ -279,12 +287,13 @@ proof fn lemma_siblings(
             ),
     ensures
         ({
-            let w = siblings_loop(doc, c, children_of(doc, p), j, parent, descendant);
+            let w = siblings_loop(doc, scope, c, children_of(doc, p), j, parent, descendant);
             &&& w.previous.len() == c.compounds.len()
             &&& w.earlier.len() == c.compounds.len()
             &&& forall|i: int|
                 0 <= i < c.compounds.len() ==> #[trigger] w.previous[i] == previous_element_matches(
                     doc,
+                    scope,
                     c,
                     i + 1,
                     children_of(doc, p),
@@ -292,7 +301,7 @@ proof fn lemma_siblings(
                 )
             &&& forall|i: int|
                 0 <= i < c.compounds.len() ==> #[trigger] w.earlier[i]
-                    == some_earlier_sibling_matches(doc, c, i + 1, children_of(doc, p), j - 1)
+                    == some_earlier_sibling_matches(doc, scope, c, i + 1, children_of(doc, p), j - 1)
             &&& w.work <= c.compounds.len() * j
         }),
     decreases j,
@@ -300,8 +309,8 @@ proof fn lemma_siblings(
     let n = c.compounds.len();
     let kids = children_of(doc, p);
     if j > 0 {
-        lemma_siblings(doc, paths, c, p, parent, descendant, j - 1);
-        let before = siblings_loop(doc, c, kids, j - 1, parent, descendant);
+        lemma_siblings(doc, scope, paths, c, p, parent, descendant, j - 1);
+        let before = siblings_loop(doc, scope, c, kids, j - 1, parent, descendant);
         let s = kids[j - 1];
         clazel_dom::lemmas::lemma_wf_split(doc, paths);
         assert(doc.nodes[p as int].children[j - 1] == s);
@@ -317,20 +326,20 @@ proof fn lemma_siblings(
                 descendant,
                 before.previous,
                 before.earlier,
-            ) == relation_holds(doc, c, i, s) by {
+            ) == relation_holds(doc, scope, c, i, s) by {
                 if p < doc.nodes.len() {
-                    assert(parent[i - 1] == match_complex(doc, c, i, p));
+                    assert(parent[i - 1] == match_complex(doc, scope, c, i, p));
                     if !is_element(doc, p) {
                         super::exec_match::lemma_compounds_wf_at(c, n as int, i - 1);
-                        lemma_compound_needs_element(doc, c.compounds[i - 1], p);
+                        lemma_compound_needs_element(doc, scope, c.compounds[i - 1], p);
                     }
                 }
             }
-            lemma_row(doc, c, s, parent, descendant, before.previous, before.earlier);
-            let r = row(doc, c, s, parent, descendant, before.previous, before.earlier);
-            let w = siblings_loop(doc, c, kids, j, parent, descendant);
+            lemma_row(doc, scope, c, s, parent, descendant, before.previous, before.earlier);
+            let r = row(doc, scope, c, s, parent, descendant, before.previous, before.earlier);
+            let w = siblings_loop(doc, scope, c, kids, j, parent, descendant);
             assert forall|i: int| 0 <= i < n implies #[trigger] w.earlier[i]
-                == some_earlier_sibling_matches(doc, c, i + 1, kids, j - 1) by {
+                == some_earlier_sibling_matches(doc, scope, c, i + 1, kids, j - 1) by {
                 assert(w.earlier[i] == (before.earlier[i] || r[i]));
             }
             assert(w.work == before.work + n);
@@ -343,14 +352,15 @@ proof fn lemma_siblings(
 }
 
 /// What a level of the walk holds at chain node `k`.
-pub open spec fn level_right(doc: Document, c: Complex, ch: Seq<NodeId>, k: int, siblings: bool) -> bool {
-    let lv = level(doc, c, ch, k, siblings);
+pub open spec fn level_right(doc: Document, scope: Option<NodeId>, c: Complex, ch: Seq<NodeId>, k: int, siblings: bool) -> bool {
+    let lv = level(doc, scope, c, ch, k, siblings);
     &&& lv.row.len() == c.compounds.len()
     &&& lv.descendant.len() == c.compounds.len()
-    &&& forall|i: int| 0 <= i < c.compounds.len() ==> #[trigger] lv.row[i] == match_complex(doc, c, i + 1, ch[k])
+    &&& forall|i: int| 0 <= i < c.compounds.len() ==> #[trigger] lv.row[i] == match_complex(doc, scope, c, i + 1, ch[k])
     &&& forall|i: int|
         0 <= i < c.compounds.len() ==> #[trigger] lv.descendant[i] == some_ancestor_matches(
             doc,
+            scope,
             c,
             i + 1,
             parent_of(doc, ch[k]),
@@ -365,17 +375,21 @@ pub open spec fn level_right(doc: Document, c: Complex, ch: Seq<NodeId>, k: int,
 
 /// The root of the chain.
 #[verifier::spinoff_prover]
-proof fn lemma_level_root(doc: Document, c: Complex, x: NodeId, siblings: bool)
+proof fn lemma_level_root(doc: Document, scope: Option<NodeId>, c: Complex, x: NodeId, siblings: bool)
     requires
         clazel_dom::spec::wf(doc),
         x < doc.nodes.len(),
         complex_wf(c),
     ensures
-        level_right(doc, c, chain(doc, x), 0, siblings),
+        level_right(doc, scope, c, chain(doc, x), 0, siblings),
 {
     let ch = chain(doc, x);
     let n = c.compounds.len();
-    let paths = lemma_chain(doc, x);
+    // The witness paths stay inside this block: with them in scope, the arena's quantifiers
+    // are instantiated over them without end.
+    assert(ch.len() >= 1 && parent_of(doc, ch[0]) is None) by {
+        let _paths = lemma_chain(doc, x);
+    }
     let none = falses(n);
     let r0 = ch[0];
     // The root of the chain has no parent, so no ancestors and no other siblings.
@@ -383,29 +397,121 @@ proof fn lemma_level_root(doc: Document, c: Complex, x: NodeId, siblings: bool)
     assert(clazel_dom::spec::index_of(seq![r0], r0) == 0);
     assert forall|i: int|
         1 <= i < n implies #[trigger] related(c.combinators[i - 1], i - 1, none, none, none, none)
-        == relation_holds(doc, c, i, r0) by {}
-    lemma_row(doc, c, r0, none, none, none, none);
+        == relation_holds(doc, scope, c, i, r0) by {}
+    lemma_row(doc, scope, c, r0, none, none, none, none);
     assert(n * 1 == n);
 }
 
-/// The descendant row below chain node `k - 1`: that node, or one of its ancestors.
+/// The descendant row below chain node `k - 1`, given the facts about the chain and about the
+/// ancestor walk that [`lemma_level_descendant`] proves from the arena's well-formedness. (The
+/// arena's quantifiers are not in scope here, so that they are not instantiated over the rows.)
 #[verifier::spinoff_prover]
-proof fn lemma_level_descendant(doc: Document, c: Complex, x: NodeId, k: int, siblings: bool)
+proof fn lemma_level_descendant_core(
+    doc: Document,
+    scope: Option<NodeId>,
+    c: Complex,
+    ch: Seq<NodeId>,
+    k: int,
+    siblings: bool,
+)
     requires
-        clazel_dom::spec::wf(doc),
-        x < doc.nodes.len(),
         complex_wf(c),
-        0 < k < chain(doc, x).len(),
-        level_right(doc, c, chain(doc, x), k - 1, siblings),
+        0 < k < ch.len(),
+        level_right(doc, scope, c, ch, k - 1, siblings),
+        parent_of(doc, ch[0]) is None,
+        forall|j: int| 0 <= j < ch.len() ==> #[trigger] ch[j] < doc.nodes.len(),
+        forall|j: int| 0 < j < ch.len() ==> parent_of(doc, #[trigger] ch[j]) == Some(ch[j - 1]),
+        forall|n2: int, q: NodeId|
+            parent_of(doc, ch[k - 1]) == Some(q) ==> some_ancestor_matches(
+                doc,
+                scope,
+                c,
+                n2,
+                Some(q),
+                (doc.nodes.len() - 1) as nat,
+            ) == #[trigger] some_ancestor_matches(doc, scope, c, n2, Some(q), doc.nodes.len()),
     ensures
         ({
-            let ch = chain(doc, x);
-            let up = level(doc, c, ch, k - 1, siblings);
+            let up = level(doc, scope, c, ch, k - 1, siblings);
             let descendant = or_rows(up.row, up.descendant);
             &&& descendant.len() == c.compounds.len()
             &&& forall|i: int|
                 0 <= i < c.compounds.len() ==> #[trigger] descendant[i] == some_ancestor_matches(
                     doc,
+                    scope,
+                    c,
+                    i + 1,
+                    Some(ch[k - 1]),
+                    doc.nodes.len(),
+                )
+        }),
+{
+    let n = c.compounds.len();
+    let up = level(doc, scope, c, ch, k - 1, siblings);
+    let descendant = or_rows(up.row, up.descendant);
+    let p = ch[k - 1];
+    assert(p < doc.nodes.len());
+    assert forall|i: int| 0 <= i < n implies #[trigger] descendant[i] == some_ancestor_matches(
+        doc,
+        scope,
+        c,
+        i + 1,
+        Some(p),
+        doc.nodes.len(),
+    ) by {
+        super::exec_match::lemma_compounds_wf_at(c, n as int, i);
+        if !is_element(doc, p) {
+            lemma_compound_needs_element(doc, scope, c.compounds[i], p);
+        }
+        assert(up.row[i] == match_complex(doc, scope, c, i + 1, p));
+        // One step of the walk from `p`.
+        assert(some_ancestor_matches(doc, scope, c, i + 1, Some(p), doc.nodes.len()) == ((is_element(doc, p)
+            && match_complex(doc, scope, c, i + 1, p)) || some_ancestor_matches(
+            doc,
+            scope,
+            c,
+            i + 1,
+            parent_of(doc, p),
+            (doc.nodes.len() - 1) as nat,
+        )));
+        assert(!is_element(doc, p) ==> !match_complex(doc, scope, c, i + 1, p));
+        match parent_of(doc, p) {
+            None => {},
+            Some(q) => {
+                assert(k - 1 > 0);
+                assert(q == ch[k - 2]);
+                assert(some_ancestor_matches(doc, scope, c, i + 1, Some(q), doc.nodes.len())
+                    == some_ancestor_matches(
+                    doc,
+                    scope,
+                    c,
+                    i + 1,
+                    Some(q),
+                    (doc.nodes.len() - 1) as nat,
+                ));
+            },
+        }
+    }
+}
+
+/// The descendant row below chain node `k - 1`: that node, or one of its ancestors.
+proof fn lemma_level_descendant(doc: Document, scope: Option<NodeId>, c: Complex, x: NodeId, k: int, siblings: bool)
+    requires
+        clazel_dom::spec::wf(doc),
+        x < doc.nodes.len(),
+        complex_wf(c),
+        0 < k < chain(doc, x).len(),
+        level_right(doc, scope, c, chain(doc, x), k - 1, siblings),
+    ensures
+        ({
+            let ch = chain(doc, x);
+            let up = level(doc, scope, c, ch, k - 1, siblings);
+            let descendant = or_rows(up.row, up.descendant);
+            &&& descendant.len() == c.compounds.len()
+            &&& forall|i: int|
+                0 <= i < c.compounds.len() ==> #[trigger] descendant[i] == some_ancestor_matches(
+                    doc,
+                    scope,
                     c,
                     i + 1,
                     Some(ch[k - 1]),
@@ -414,41 +520,48 @@ proof fn lemma_level_descendant(doc: Document, c: Complex, x: NodeId, k: int, si
         }),
 {
     let ch = chain(doc, x);
-    let n = c.compounds.len();
-    let paths = lemma_chain(doc, x);
-    let up = level(doc, c, ch, k - 1, siblings);
-    let descendant = or_rows(up.row, up.descendant);
-    let p = ch[k - 1];
-    assert(p < doc.nodes.len());
-    assert forall|i: int| 0 <= i < n implies #[trigger] descendant[i] == some_ancestor_matches(
-        doc,
-        c,
-        i + 1,
-        Some(p),
-        doc.nodes.len(),
-    ) by {
-        super::exec_match::lemma_compounds_wf_at(c, n as int, i);
-        if !is_element(doc, p) {
-            lemma_compound_needs_element(doc, c.compounds[i], p);
-        }
-        assert(up.row[i] == match_complex(doc, c, i + 1, p));
-        match parent_of(doc, p) {
-            None => {},
-            Some(q) => {
-                assert(k - 1 > 0);
-                assert(q == ch[k - 2]);
-                lemma_ancestors_fuel(
-                    doc,
-                    paths,
-                    c,
-                    i + 1,
-                    q,
-                    (doc.nodes.len() - 1) as nat,
-                    doc.nodes.len(),
-                );
-            },
+    assert(parent_of(doc, ch[0]) is None) by {
+        let _paths = lemma_chain(doc, x);
+    }
+    assert(forall|j: int| 0 <= j < ch.len() ==> #[trigger] ch[j] < doc.nodes.len()) by {
+        let _paths = lemma_chain(doc, x);
+    }
+    assert(forall|j: int| 0 < j < ch.len() ==> parent_of(doc, #[trigger] ch[j]) == Some(ch[j - 1])) by {
+        let _paths = lemma_chain(doc, x);
+    }
+    assert(forall|n2: int, q: NodeId|
+        parent_of(doc, ch[k - 1]) == Some(q) ==> some_ancestor_matches(
+            doc,
+            scope,
+            c,
+            n2,
+            Some(q),
+            (doc.nodes.len() - 1) as nat,
+        ) == #[trigger] some_ancestor_matches(doc, scope, c, n2, Some(q), doc.nodes.len())) by {
+        let paths = lemma_chain(doc, x);
+        assert forall|n2: int, q: NodeId| parent_of(doc, ch[k - 1]) == Some(q) implies some_ancestor_matches(
+            doc,
+            scope,
+            c,
+            n2,
+            Some(q),
+            (doc.nodes.len() - 1) as nat,
+        ) == #[trigger] some_ancestor_matches(doc, scope, c, n2, Some(q), doc.nodes.len()) by {
+            assert(k - 1 > 0);
+            assert(q == ch[k - 2]);
+            lemma_ancestors_fuel(
+                doc,
+                scope,
+                paths,
+                c,
+                n2,
+                q,
+                (doc.nodes.len() - 1) as nat,
+                doc.nodes.len(),
+            );
         }
     }
+    lemma_level_descendant_core(doc, scope, c, ch, k, siblings);
 }
 
 /// Chain node `k` is a child of node `k - 1`, at its index among their children.
@@ -485,6 +598,7 @@ proof fn lemma_chain_child(doc: Document, x: NodeId, k: int)
 #[verifier::spinoff_prover]
 proof fn lemma_relations(
     doc: Document,
+    scope: Option<NodeId>,
     c: Complex,
     p: NodeId,
     y: NodeId,
@@ -501,10 +615,11 @@ proof fn lemma_relations(
         inclusive_siblings(doc, y) == kids,
         clazel_dom::spec::index_of(kids, y) == target,
         parent.len() == c.compounds.len(),
-        forall|i: int| 0 <= i < c.compounds.len() ==> #[trigger] parent[i] == match_complex(doc, c, i + 1, p),
+        forall|i: int| 0 <= i < c.compounds.len() ==> #[trigger] parent[i] == match_complex(doc, scope, c, i + 1, p),
         forall|i: int|
             0 <= i < c.compounds.len() ==> #[trigger] descendant[i] == some_ancestor_matches(
                 doc,
+                scope,
                 c,
                 i + 1,
                 Some(p),
@@ -513,6 +628,7 @@ proof fn lemma_relations(
         forall|i: int|
             0 <= i < c.compounds.len() ==> #[trigger] previous[i] == previous_element_matches(
                 doc,
+                scope,
                 c,
                 i + 1,
                 kids,
@@ -521,6 +637,7 @@ proof fn lemma_relations(
         forall|i: int|
             0 <= i < c.compounds.len() ==> #[trigger] earlier[i] == some_earlier_sibling_matches(
                 doc,
+                scope,
                 c,
                 i + 1,
                 kids,
@@ -535,7 +652,7 @@ proof fn lemma_relations(
                 descendant,
                 previous,
                 earlier,
-            ) == relation_holds(doc, c, i, y),
+            ) == relation_holds(doc, scope, c, i, y),
 {
     let n = c.compounds.len();
     assert(sibling_index(doc, y) == target);
@@ -547,48 +664,48 @@ proof fn lemma_relations(
         descendant,
         previous,
         earlier,
-    ) == relation_holds(doc, c, i, y) by {
+    ) == relation_holds(doc, scope, c, i, y) by {
         super::exec_match::lemma_compounds_wf_at(c, n as int, i - 1);
         if !is_element(doc, p) {
-            lemma_compound_needs_element(doc, c.compounds[i - 1], p);
+            lemma_compound_needs_element(doc, scope, c.compounds[i - 1], p);
         }
-        assert(parent[i - 1] == match_complex(doc, c, i, p));
-        assert(descendant[i - 1] == some_ancestor_matches(doc, c, i, Some(p), doc.nodes.len()));
-        assert(previous[i - 1] == previous_element_matches(doc, c, i, kids, target - 1));
-        assert(earlier[i - 1] == some_earlier_sibling_matches(doc, c, i, kids, target - 1));
+        assert(parent[i - 1] == match_complex(doc, scope, c, i, p));
+        assert(descendant[i - 1] == some_ancestor_matches(doc, scope, c, i, Some(p), doc.nodes.len()));
+        assert(previous[i - 1] == previous_element_matches(doc, scope, c, i, kids, target - 1));
+        assert(earlier[i - 1] == some_earlier_sibling_matches(doc, scope, c, i, kids, target - 1));
     }
 }
 
 /// The relations at chain node `k` with siblings, and the work.
 #[verifier::spinoff_prover]
-proof fn lemma_level_step_siblings(doc: Document, c: Complex, x: NodeId, k: int)
+proof fn lemma_level_step_siblings(doc: Document, scope: Option<NodeId>, c: Complex, x: NodeId, k: int)
     requires
         clazel_dom::spec::wf(doc),
         x < doc.nodes.len(),
         complex_wf(c),
         uses_siblings(c),
         0 < k < chain(doc, x).len(),
-        level_right(doc, c, chain(doc, x), k - 1, true),
+        level_right(doc, scope, c, chain(doc, x), k - 1, true),
     ensures
-        level_right(doc, c, chain(doc, x), k, true),
+        level_right(doc, scope, c, chain(doc, x), k, true),
 {
     let ch = chain(doc, x);
     let n = c.compounds.len();
     let paths = lemma_chain(doc, x);
-    lemma_level_descendant(doc, c, x, k, true);
+    lemma_level_descendant(doc, scope, c, x, k, true);
     lemma_chain_child(doc, x, k);
-    let up = level(doc, c, ch, k - 1, true);
+    let up = level(doc, scope, c, ch, k - 1, true);
     let p = ch[k - 1];
     let y = ch[k];
     let descendant = or_rows(up.row, up.descendant);
     let kids = children_of(doc, p);
     let target = clazel_dom::spec::index_of(kids, y);
-    lemma_siblings(doc, paths, c, p, up.row, descendant, target);
-    let w = siblings_loop(doc, c, kids, target, up.row, descendant);
-    lemma_relations(doc, c, p, y, kids, target, up.row, descendant, w.previous, w.earlier);
-    lemma_row(doc, c, y, up.row, descendant, w.previous, w.earlier);
-    let lv = level(doc, c, ch, k, true);
-    assert(lv.row == row(doc, c, y, up.row, descendant, w.previous, w.earlier));
+    lemma_siblings(doc, scope, paths, c, p, up.row, descendant, target);
+    let w = siblings_loop(doc, scope, c, kids, target, up.row, descendant);
+    lemma_relations(doc, scope, c, p, y, kids, target, up.row, descendant, w.previous, w.earlier);
+    lemma_row(doc, scope, c, y, up.row, descendant, w.previous, w.earlier);
+    let lv = level(doc, scope, c, ch, k, true);
+    assert(lv.row == row(doc, scope, c, y, up.row, descendant, w.previous, w.earlier));
     assert(lv.descendant == descendant);
     assert(lv.work == up.work + w.work + n);
     let ctx = context_from(doc, ch, k - 1);
@@ -600,60 +717,60 @@ proof fn lemma_level_step_siblings(doc: Document, c: Complex, x: NodeId, k: int)
 
 /// The relations at chain node `k` without siblings, and the work.
 #[verifier::spinoff_prover]
-proof fn lemma_level_step_plain(doc: Document, c: Complex, x: NodeId, k: int)
+proof fn lemma_level_step_plain(doc: Document, scope: Option<NodeId>, c: Complex, x: NodeId, k: int)
     requires
         clazel_dom::spec::wf(doc),
         x < doc.nodes.len(),
         complex_wf(c),
         !uses_siblings(c),
         0 < k < chain(doc, x).len(),
-        level_right(doc, c, chain(doc, x), k - 1, false),
+        level_right(doc, scope, c, chain(doc, x), k - 1, false),
     ensures
-        level_right(doc, c, chain(doc, x), k, false),
+        level_right(doc, scope, c, chain(doc, x), k, false),
 {
     let ch = chain(doc, x);
     let n = c.compounds.len();
-    lemma_level_descendant(doc, c, x, k, false);
+    lemma_level_descendant(doc, scope, c, x, k, false);
     lemma_chain_child(doc, x, k);
-    let up = level(doc, c, ch, k - 1, false);
+    let up = level(doc, scope, c, ch, k - 1, false);
     let p = ch[k - 1];
     let y = ch[k];
     let descendant = or_rows(up.row, up.descendant);
     let none = falses(n);
     assert forall|i: int|
         1 <= i < n implies #[trigger] related(c.combinators[i - 1], i - 1, up.row, descendant, none, none)
-        == relation_holds(doc, c, i, y) by {
+        == relation_holds(doc, scope, c, i, y) by {
         lemma_no_siblings(c, c.combinators.len() as int, i - 1);
         super::exec_match::lemma_compounds_wf_at(c, n as int, i - 1);
         if !is_element(doc, p) {
-            lemma_compound_needs_element(doc, c.compounds[i - 1], p);
+            lemma_compound_needs_element(doc, scope, c.compounds[i - 1], p);
         }
     }
-    lemma_row(doc, c, y, up.row, descendant, none, none);
+    lemma_row(doc, scope, c, y, up.row, descendant, none, none);
     assert(n * k + n == n * (k + 1)) by (nonlinear_arith);
 }
 
 /// Chain node `k` from node `k - 1`.
-proof fn lemma_level_step(doc: Document, c: Complex, x: NodeId, k: int, siblings: bool)
+proof fn lemma_level_step(doc: Document, scope: Option<NodeId>, c: Complex, x: NodeId, k: int, siblings: bool)
     requires
         clazel_dom::spec::wf(doc),
         x < doc.nodes.len(),
         complex_wf(c),
         siblings == uses_siblings(c),
         0 < k < chain(doc, x).len(),
-        level_right(doc, c, chain(doc, x), k - 1, siblings),
+        level_right(doc, scope, c, chain(doc, x), k - 1, siblings),
     ensures
-        level_right(doc, c, chain(doc, x), k, siblings),
+        level_right(doc, scope, c, chain(doc, x), k, siblings),
 {
     if siblings {
-        lemma_level_step_siblings(doc, c, x, k);
+        lemma_level_step_siblings(doc, scope, c, x, k);
     } else {
-        lemma_level_step_plain(doc, c, x, k);
+        lemma_level_step_plain(doc, scope, c, x, k);
     }
 }
 
 /// Each level of the walk holds the spec's rows.
-proof fn lemma_levels(doc: Document, c: Complex, x: NodeId, k: int, siblings: bool)
+proof fn lemma_levels(doc: Document, scope: Option<NodeId>, c: Complex, x: NodeId, k: int, siblings: bool)
     requires
         clazel_dom::spec::wf(doc),
         x < doc.nodes.len(),
@@ -661,27 +778,27 @@ proof fn lemma_levels(doc: Document, c: Complex, x: NodeId, k: int, siblings: bo
         siblings == uses_siblings(c),
         0 <= k < chain(doc, x).len(),
     ensures
-        level_right(doc, c, chain(doc, x), k, siblings),
+        level_right(doc, scope, c, chain(doc, x), k, siblings),
     decreases k,
 {
     if k == 0 {
-        lemma_level_root(doc, c, x, siblings);
+        lemma_level_root(doc, scope, c, x, siblings);
     } else {
-        lemma_levels(doc, c, x, k - 1, siblings);
-        lemma_level_step(doc, c, x, k, siblings);
+        lemma_levels(doc, scope, c, x, k - 1, siblings);
+        lemma_level_step(doc, scope, c, x, k, siblings);
     }
 }
 
 /// `theorem_match_total` ([`match_total`]).
-pub proof fn theorem_match_total(doc: Document, c: Complex, x: NodeId)
+pub proof fn theorem_match_total(doc: Document, scope: Option<NodeId>, c: Complex, x: NodeId)
     ensures
-        match_total(doc, c, x),
+        match_total(doc, scope, c, x),
 {
     if match_requires(doc, x) && complex_wf(c) {
         let paths = lemma_chain(doc, x);
         let ch = chain(doc, x);
         let siblings = uses_siblings(c);
-        lemma_levels(doc, c, x, ch.len() - 1, siblings);
+        lemma_levels(doc, scope, c, x, ch.len() - 1, siblings);
         assert(ch[ch.len() - 1] == x);
     }
 }

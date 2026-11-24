@@ -6,10 +6,13 @@ browser whose parsers of untrusted input carry machine-checked proofs.
 
 `src/spec.rs` transcribes Selectors Level 4 (pinned at a csswg-drafts commit) for the
 item's subset: the grammar, type, universal, namespace, attribute, class and ID
-selectors, `:link`/`:visited`/`:any-link`, the tree-structural pseudo-classes,
+selectors, `:link`/`:visited`/`:any-link`, `:scope`, the tree-structural pseudo-classes,
 `:is()`/`:not()`/`:where()`, the four combinators, specificity and "match a selector
 against an element", with HTML's case rules and CSSOM's serialization. Its modelling
-choices are listed at its top.
+choices are listed at its top. Matching takes an optional scoping root, `Option<NodeId>`:
+`matches_scoped` has it, for DOM's `querySelector`, `matches` and `closest`, where `:scope`
+is that element; `matches` has none, which is what a style sheet has, and there `:scope` is
+`:root`.
 
 What is proven, and what is not:
 
@@ -64,12 +67,14 @@ What is proven, and what is not:
   about *which* inputs are accepted: a spec parser that always failed would satisfy it. What
   the spec accepts and builds is checked only by the tests and the mutations below; that the
   parser is the spec is the proof above.
-- `mutations.json`: 123 mutations of the spec, each with a certificate in
+- `mutations.json`: 131 mutations of the spec, each with a certificate in
   `src/examples.rs` (one example per mutation, a theorem about the spec): 45 of the
   original set, one per simple selector, combinator, specificity rule and the quirks rule;
   27 of the grammar (type, attribute, pseudo-element, subclass, compound, complex and list
   productions); 2 of `clamp`; 7 of matching (attribute names, `count_from`, compounds,
-  lists); 6 of specificity (saturation, the sums); and 36 of the serialization spec (CSSOM's
+  lists); 8 of `:scope` and the scoping root (what it matches with and without one, that the
+  root reaches a combinator and an `:is()`, its name); 6 of specificity (saturation, the sums);
+  and 36 of the serialization spec (CSSOM's
   identifier and string escaping, matchers, flags, prefixes, combinators, separators). The
   parser and serializer themselves are not mutated: a mutation of the spec shows that an
   example is false for it, not that the shipped parser agrees; that is what the tests below
@@ -129,7 +134,7 @@ proven equal to the spec in part:
 
 "Support" differs: the spec has `:link`, `:visited`, `:any-link`, the user action
 pseudo-classes and pseudo-elements, which the transcription takes as invalid, so they are
-outside every theorem; the transcription has `:has()`, `:scope`, `:defined` and
+outside every theorem; the transcription has `:has()`, `:defined` and
 `:nth-child(An+B of S)`, which are off (`ICtx::ext`) in each theorem. Both are two AI readings
 of one text, so they can share a misreading: the weight of evidence for the spec is the WPT
 suite above, which the transcription has not been run against.

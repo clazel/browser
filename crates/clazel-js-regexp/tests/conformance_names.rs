@@ -234,6 +234,23 @@ fn script_names() -> Result<(), String> {
             bad.push(format!("{text} is accepted"));
         }
     }
+    // The generated table (what `parse` uses) holds the same names.
+    let ours: BTreeSet<String> = clazel_js_regexp::tables::SCRIPTS
+        .iter()
+        .flat_map(|s| s.names.iter().map(|n| (*n).to_string()))
+        .collect();
+    for n in scripts.difference(&ours) {
+        bad.push(format!("{n}: in the UCD, not in tables::SCRIPTS"));
+    }
+    for n in ours.difference(&scripts) {
+        bad.push(format!("{n}: in tables::SCRIPTS, not in the UCD"));
+    }
+    for s in &scripts {
+        let text = format!("\\p{{sc={s}}}");
+        if parse(&units(&text), u_flags()).is_err() {
+            bad.push(format!("{text} is rejected by parse"));
+        }
+    }
     report("UCD script names", &bad, scripts.len());
     assert!(bad.is_empty(), "{}", bad.join("\n"));
     assert!(scripts.len() > 150);

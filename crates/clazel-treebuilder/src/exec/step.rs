@@ -946,13 +946,15 @@ pub struct ExecContext {
     pub attrs: Vec<ExecAttr>,
     /// Its node document's mode.
     pub mode: DocumentMode,
+    /// It is, or has an ancestor that is, a form element ([`Context::in_form`]).
+    pub in_form: bool,
 }
 
 impl View for ExecContext {
     type V = Context;
 
     open spec fn view(&self) -> Context {
-        Context { ns: self.ns, name: self.name@, attrs: attrs_view(self.attrs@), mode: self.mode }
+        Context { ns: self.ns, name: self.name@, attrs: attrs_view(self.attrs@), mode: self.mode, in_form: self.in_form }
     }
 }
 
@@ -1066,10 +1068,10 @@ pub open spec fn fragment_doc_ok(ctx: Context, d: Document, ctx_id: NodeId, root
 
 /// §13.4 steps 4 to 7, 11, 12 and 14: the fragment parser's arena
 /// ([`fragment_doc`]).
-fn fragment_doc_exec(ns: &Namespace, name: Vec<u32>, attrs: Vec<ExecAttr>, mode: DocumentMode) -> (r: (Arena, usize, usize, usize))
+fn fragment_doc_exec(ns: &Namespace, name: Vec<u32>, attrs: Vec<ExecAttr>, mode: DocumentMode, in_form: bool) -> (r: (Arena, usize, usize, usize))
     ensures
         ({
-            let cv = Context { ns: *ns, name: name@, attrs: attrs_view(attrs@), mode };
+            let cv = Context { ns: *ns, name: name@, attrs: attrs_view(attrs@), mode, in_form };
             &&& (r.0@, r.1, r.2, r.3) == fragment_doc(cv)
             &&& fragment_doc_ok(cv, r.0@, r.1, r.2, r.3)
         }),
@@ -1077,7 +1079,9 @@ fn fragment_doc_exec(ns: &Namespace, name: Vec<u32>, attrs: Vec<ExecAttr>, mode:
     hide(dom::insert);
     hide(dom::wf);
     hide(tag_of);
-    let ghost cv = Context { ns: *ns, name: name@, attrs: attrs_view(attrs@), mode };
+    // `in_form` only shapes the ghost context: the arena does not depend on it.
+    let _ = in_form;
+    let ghost cv = Context { ns: *ns, name: name@, attrs: attrs_view(attrs@), mode, in_form };
     // 4. "Let document be a Document node whose type is "html"." 5. to 7.:
     // its mode is the context document's.
     let mut arena = Arena::new(Vec::new());
@@ -1249,6 +1253,7 @@ pub fn fragment_parser_exec(ctx: ExecContext, scripting: bool) -> (r: (ParserBuf
     let name = ctx.name;
     let attrs = ctx.attrs;
     let mode = ctx.mode;
+    let in_form = ctx.in_form;
     // 17. "Create a start tag token whose name is the local name of context
     // and whose attributes are the attributes of context."
     let tag = tag_of_exec(name.as_slice());
@@ -1260,7 +1265,7 @@ pub fn fragment_parser_exec(ctx: ExecContext, scripting: bool) -> (r: (ParserBuf
     };
     let ann = annotation_html_exec(&ns, &ctx_tok);
     let ctx_name = copy_str(name.as_slice());
-    let (arena, ctx_id, root, fragment) = fragment_doc_exec(&ns, name, attrs, mode);
+    let (arena, ctx_id, root, fragment) = fragment_doc_exec(&ns, name, attrs, mode, in_form);
     let ghost d4 = arena@;
     let is_template = matches!(ns, Namespace::Html) && matches!(tag, Tag::Template);
     let is_form = matches!(ns, Namespace::Html) && matches!(tag, Tag::Form);
@@ -1316,9 +1321,10 @@ pub fn fragment_parser_exec(ctx: ExecContext, scripting: bool) -> (r: (ParserBuf
     }
     // 18. "Reset the parser's insertion mode appropriately."
     reset_insertion_mode_exec(&mut p);
-    // 19. The form element pointer: the context element itself if it is a
-    // form (it has no ancestors here).
-    if is_form {
+    // 19. The form element pointer: the context element, standing for the
+    // nearest form element (itself, or an ancestor the caller reports in
+    // `in_form`; it has no ancestors here).
+    if is_form || in_form {
         let ghost q = p@;
         p.form = Some(ctx_id);
         proof {

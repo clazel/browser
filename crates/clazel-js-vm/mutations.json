@@ -1923,6 +1923,1163 @@
         "lemma": "crate::examples::example_global_lexical_classes()",
         "witness": "op_class(Op::InitGlobalLexical { key: 2, src: 0 }) is Core"
       }
+    },
+    {
+      "id": "new-reg-exp-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::NewRegExp { dst, k, .. } => reg_ok(c, dst) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "replace": "Op::NewRegExp { dst, k, .. } => k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "expect": "killed",
+      "reason": "NewRegExp accepts a register outside the frame (operand `dst`): example_regex_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_regex_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::NewRegExp { dst: 3, k: 0 })"
+      }
+    },
+    {
+      "id": "new-reg-exp-k-wf",
+      "file": "src/spec.rs",
+      "find": "Op::NewRegExp { dst, k, .. } => reg_ok(c, dst) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "replace": "Op::NewRegExp { dst, k, .. } => reg_ok(c, dst) && k < c.consts.len(),",
+      "expect": "killed",
+      "reason": "NewRegExp accepts a record constant that is not a value (operand `k`): example_regex_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_regex_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::NewRegExp { dst: 0, k: 2 })"
+      }
+    },
+    {
+      "id": "new-reg-exp-handler",
+      "file": "src/ops.rs",
+      "find": "Op::NewRegExp { .. } => HandlerId::NewRegExp,",
+      "replace": "Op::NewRegExp { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "NewRegExp calls the throw handler instead of its own: example_regex_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_regex_classes()",
+        "witness": "op_handler(Op::NewRegExp { dst: 0, k: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "new-reg-exp-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::NewRegExp { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "NewRegExp is a core op, which never calls out: example_regex_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_regex_classes()",
+        "witness": "op_class(Op::NewRegExp { dst: 0, k: 0 }) is Core"
+      }
+    },
+    {
+      "id": "yield-delegate-src-wf",
+      "file": "src/spec.rs",
+      "find": "Op::YieldDelegate { src, value, mode, .. } => reg_ok(c, src) && reg_ok(c, value) && reg_ok(c, mode),",
+      "replace": "Op::YieldDelegate { src, value, mode, .. } => reg_ok(c, value) && reg_ok(c, mode),",
+      "expect": "killed",
+      "reason": "YieldDelegate accepts a register outside the frame (operand `src`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::YieldDelegate { src: 3, value: 0, mode: 0 })"
+      }
+    },
+    {
+      "id": "yield-delegate-value-wf",
+      "file": "src/spec.rs",
+      "find": "Op::YieldDelegate { src, value, mode, .. } => reg_ok(c, src) && reg_ok(c, value) && reg_ok(c, mode),",
+      "replace": "Op::YieldDelegate { src, value, mode, .. } => reg_ok(c, src) && reg_ok(c, mode),",
+      "expect": "killed",
+      "reason": "YieldDelegate accepts a register outside the frame (operand `value`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::YieldDelegate { src: 0, value: 3, mode: 0 })"
+      }
+    },
+    {
+      "id": "yield-delegate-mode-wf",
+      "file": "src/spec.rs",
+      "find": "Op::YieldDelegate { src, value, mode, .. } => reg_ok(c, src) && reg_ok(c, value) && reg_ok(c, mode),",
+      "replace": "Op::YieldDelegate { src, value, mode, .. } => reg_ok(c, src) && reg_ok(c, value),",
+      "expect": "killed",
+      "reason": "YieldDelegate accepts a register outside the frame (operand `mode`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::YieldDelegate { src: 0, value: 0, mode: 3 })"
+      }
+    },
+    {
+      "id": "get-async-iterator-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::GetAsyncIterator { dst, src, .. } => reg_ok(c, dst) && reg_ok(c, src),",
+      "replace": "Op::GetAsyncIterator { dst, src, .. } => reg_ok(c, src),",
+      "expect": "killed",
+      "reason": "GetAsyncIterator accepts a register outside the frame (operand `dst`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::GetAsyncIterator { dst: 3, src: 0 })"
+      }
+    },
+    {
+      "id": "get-async-iterator-src-wf",
+      "file": "src/spec.rs",
+      "find": "Op::GetAsyncIterator { dst, src, .. } => reg_ok(c, dst) && reg_ok(c, src),",
+      "replace": "Op::GetAsyncIterator { dst, src, .. } => reg_ok(c, dst),",
+      "expect": "killed",
+      "reason": "GetAsyncIterator accepts a register outside the frame (operand `src`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::GetAsyncIterator { dst: 0, src: 3 })"
+      }
+    },
+    {
+      "id": "iter-call-method-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::IterCallMethod { dst, found, iter, arg, which, .. } => reg_ok(c, dst) && reg_ok(c, found) && reg_ok(c, iter) && reg_ok(c, arg) && which < 5,",
+      "replace": "Op::IterCallMethod { dst, found, iter, arg, which, .. } => reg_ok(c, found) && reg_ok(c, iter) && reg_ok(c, arg) && which < 5,",
+      "expect": "killed",
+      "reason": "IterCallMethod accepts a register outside the frame (operand `dst`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::IterCallMethod { dst: 3, found: 0, iter: 0, arg: 0, which: 0 })"
+      }
+    },
+    {
+      "id": "iter-call-method-found-wf",
+      "file": "src/spec.rs",
+      "find": "Op::IterCallMethod { dst, found, iter, arg, which, .. } => reg_ok(c, dst) && reg_ok(c, found) && reg_ok(c, iter) && reg_ok(c, arg) && which < 5,",
+      "replace": "Op::IterCallMethod { dst, found, iter, arg, which, .. } => reg_ok(c, dst) && reg_ok(c, iter) && reg_ok(c, arg) && which < 5,",
+      "expect": "killed",
+      "reason": "IterCallMethod accepts a register outside the frame (operand `found`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::IterCallMethod { dst: 0, found: 3, iter: 0, arg: 0, which: 0 })"
+      }
+    },
+    {
+      "id": "iter-call-method-iter-wf",
+      "file": "src/spec.rs",
+      "find": "Op::IterCallMethod { dst, found, iter, arg, which, .. } => reg_ok(c, dst) && reg_ok(c, found) && reg_ok(c, iter) && reg_ok(c, arg) && which < 5,",
+      "replace": "Op::IterCallMethod { dst, found, iter, arg, which, .. } => reg_ok(c, dst) && reg_ok(c, found) && reg_ok(c, arg) && which < 5,",
+      "expect": "killed",
+      "reason": "IterCallMethod accepts a register outside the frame (operand `iter`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::IterCallMethod { dst: 0, found: 0, iter: 3, arg: 0, which: 0 })"
+      }
+    },
+    {
+      "id": "iter-call-method-arg-wf",
+      "file": "src/spec.rs",
+      "find": "Op::IterCallMethod { dst, found, iter, arg, which, .. } => reg_ok(c, dst) && reg_ok(c, found) && reg_ok(c, iter) && reg_ok(c, arg) && which < 5,",
+      "replace": "Op::IterCallMethod { dst, found, iter, arg, which, .. } => reg_ok(c, dst) && reg_ok(c, found) && reg_ok(c, iter) && which < 5,",
+      "expect": "killed",
+      "reason": "IterCallMethod accepts a register outside the frame (operand `arg`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::IterCallMethod { dst: 0, found: 0, iter: 0, arg: 3, which: 0 })"
+      }
+    },
+    {
+      "id": "iter-call-method-which-wf",
+      "file": "src/spec.rs",
+      "find": "Op::IterCallMethod { dst, found, iter, arg, which, .. } => reg_ok(c, dst) && reg_ok(c, found) && reg_ok(c, iter) && reg_ok(c, arg) && which < 5,",
+      "replace": "Op::IterCallMethod { dst, found, iter, arg, which, .. } => reg_ok(c, dst) && reg_ok(c, found) && reg_ok(c, iter) && reg_ok(c, arg) && which < 6,",
+      "expect": "killed",
+      "reason": "IterCallMethod accepts an enumerated operand one past its bound (operand `which`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::IterCallMethod { dst: 0, found: 0, iter: 0, arg: 0, which: 5 })"
+      }
+    },
+    {
+      "id": "iter-complete-done-wf",
+      "file": "src/spec.rs",
+      "find": "Op::IterComplete { done, result, .. } => reg_ok(c, done) && reg_ok(c, result),",
+      "replace": "Op::IterComplete { done, result, .. } => reg_ok(c, result),",
+      "expect": "killed",
+      "reason": "IterComplete accepts a register outside the frame (operand `done`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::IterComplete { done: 3, result: 0 })"
+      }
+    },
+    {
+      "id": "iter-complete-result-wf",
+      "file": "src/spec.rs",
+      "find": "Op::IterComplete { done, result, .. } => reg_ok(c, done) && reg_ok(c, result),",
+      "replace": "Op::IterComplete { done, result, .. } => reg_ok(c, done),",
+      "expect": "killed",
+      "reason": "IterComplete accepts a register outside the frame (operand `result`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::IterComplete { done: 0, result: 3 })"
+      }
+    },
+    {
+      "id": "iter-value-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::IterValue { dst, result, .. } => reg_ok(c, dst) && reg_ok(c, result),",
+      "replace": "Op::IterValue { dst, result, .. } => reg_ok(c, result),",
+      "expect": "killed",
+      "reason": "IterValue accepts a register outside the frame (operand `dst`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::IterValue { dst: 3, result: 0 })"
+      }
+    },
+    {
+      "id": "iter-value-result-wf",
+      "file": "src/spec.rs",
+      "find": "Op::IterValue { dst, result, .. } => reg_ok(c, dst) && reg_ok(c, result),",
+      "replace": "Op::IterValue { dst, result, .. } => reg_ok(c, dst),",
+      "expect": "killed",
+      "reason": "IterValue accepts a register outside the frame (operand `result`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::IterValue { dst: 0, result: 3 })"
+      }
+    },
+    {
+      "id": "throw-if-not-object-src-wf",
+      "file": "src/spec.rs",
+      "find": "Op::ThrowIfNotObject { src, .. } => reg_ok(c, src),",
+      "replace": "Op::ThrowIfNotObject { src, .. } => true,",
+      "expect": "killed",
+      "reason": "ThrowIfNotObject accepts a register outside the frame (operand `src`): example_generators_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::ThrowIfNotObject { src: 3 })"
+      }
+    },
+    {
+      "id": "generator-start-handler",
+      "file": "src/ops.rs",
+      "find": "Op::GeneratorStart => HandlerId::GeneratorStart,",
+      "replace": "Op::GeneratorStart => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "GeneratorStart calls the throw handler instead of its own: example_generators_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_classes()",
+        "witness": "op_handler(Op::GeneratorStart) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "generator-start-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::GeneratorStart => OpClass::Core,",
+      "expect": "killed",
+      "reason": "GeneratorStart is a core op, which never calls out: example_generators_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_classes()",
+        "witness": "op_class(Op::GeneratorStart) is Core"
+      }
+    },
+    {
+      "id": "yield-delegate-handler",
+      "file": "src/ops.rs",
+      "find": "Op::YieldDelegate { .. } => HandlerId::YieldDelegate,",
+      "replace": "Op::YieldDelegate { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "YieldDelegate calls the throw handler instead of its own: example_generators_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_classes()",
+        "witness": "op_handler(Op::YieldDelegate { src: 0, value: 0, mode: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "yield-delegate-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::YieldDelegate { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "YieldDelegate is a core op, which never calls out: example_generators_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_classes()",
+        "witness": "op_class(Op::YieldDelegate { src: 0, value: 0, mode: 0 }) is Core"
+      }
+    },
+    {
+      "id": "get-async-iterator-handler",
+      "file": "src/ops.rs",
+      "find": "Op::GetAsyncIterator { .. } => HandlerId::GetAsyncIterator,",
+      "replace": "Op::GetAsyncIterator { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "GetAsyncIterator calls the throw handler instead of its own: example_generators_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_classes()",
+        "witness": "op_handler(Op::GetAsyncIterator { dst: 0, src: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "get-async-iterator-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::GetAsyncIterator { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "GetAsyncIterator is a core op, which never calls out: example_generators_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_classes()",
+        "witness": "op_class(Op::GetAsyncIterator { dst: 0, src: 0 }) is Core"
+      }
+    },
+    {
+      "id": "iter-call-method-handler",
+      "file": "src/ops.rs",
+      "find": "Op::IterCallMethod { .. } => HandlerId::IterCallMethod,",
+      "replace": "Op::IterCallMethod { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "IterCallMethod calls the throw handler instead of its own: example_generators_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_classes()",
+        "witness": "op_handler(Op::IterCallMethod { dst: 0, found: 0, iter: 0, arg: 0, which: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "iter-call-method-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::IterCallMethod { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "IterCallMethod is a core op, which never calls out: example_generators_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_classes()",
+        "witness": "op_class(Op::IterCallMethod { dst: 0, found: 0, iter: 0, arg: 0, which: 0 }) is Core"
+      }
+    },
+    {
+      "id": "iter-complete-handler",
+      "file": "src/ops.rs",
+      "find": "Op::IterComplete { .. } => HandlerId::IterComplete,",
+      "replace": "Op::IterComplete { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "IterComplete calls the throw handler instead of its own: example_generators_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_classes()",
+        "witness": "op_handler(Op::IterComplete { done: 0, result: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "iter-complete-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::IterComplete { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "IterComplete is a core op, which never calls out: example_generators_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_classes()",
+        "witness": "op_class(Op::IterComplete { done: 0, result: 0 }) is Core"
+      }
+    },
+    {
+      "id": "iter-value-handler",
+      "file": "src/ops.rs",
+      "find": "Op::IterValue { .. } => HandlerId::IterValue,",
+      "replace": "Op::IterValue { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "IterValue calls the throw handler instead of its own: example_generators_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_classes()",
+        "witness": "op_handler(Op::IterValue { dst: 0, result: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "iter-value-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::IterValue { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "IterValue is a core op, which never calls out: example_generators_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_classes()",
+        "witness": "op_class(Op::IterValue { dst: 0, result: 0 }) is Core"
+      }
+    },
+    {
+      "id": "throw-if-not-object-handler",
+      "file": "src/ops.rs",
+      "find": "Op::ThrowIfNotObject { .. } => HandlerId::ThrowIfNotObject,",
+      "replace": "Op::ThrowIfNotObject { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "ThrowIfNotObject calls the throw handler instead of its own: example_generators_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_classes()",
+        "witness": "op_handler(Op::ThrowIfNotObject { src: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "throw-if-not-object-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::ThrowIfNotObject { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "ThrowIfNotObject is a core op, which never calls out: example_generators_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_generators_classes()",
+        "witness": "op_class(Op::ThrowIfNotObject { src: 0 }) is Core"
+      }
+    },
+    {
+      "id": "to-object-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::ToObject { dst, src, .. } => reg_ok(c, dst) && reg_ok(c, src),",
+      "replace": "Op::ToObject { dst, src, .. } => reg_ok(c, src),",
+      "expect": "killed",
+      "reason": "ToObject accepts a register outside the frame (operand `dst`): example_withs_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::ToObject { dst: 3, src: 0 })"
+      }
+    },
+    {
+      "id": "to-object-src-wf",
+      "file": "src/spec.rs",
+      "find": "Op::ToObject { dst, src, .. } => reg_ok(c, dst) && reg_ok(c, src),",
+      "replace": "Op::ToObject { dst, src, .. } => reg_ok(c, dst),",
+      "expect": "killed",
+      "reason": "ToObject accepts a register outside the frame (operand `src`): example_withs_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::ToObject { dst: 0, src: 3 })"
+      }
+    },
+    {
+      "id": "with-has-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::WithHas { dst, obj, key, .. } => reg_ok(c, dst) && reg_ok(c, obj) && key < c.consts.len(),",
+      "replace": "Op::WithHas { dst, obj, key, .. } => reg_ok(c, obj) && key < c.consts.len(),",
+      "expect": "killed",
+      "reason": "WithHas accepts a register outside the frame (operand `dst`): example_withs_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::WithHas { dst: 3, obj: 0, key: 0 })"
+      }
+    },
+    {
+      "id": "with-has-obj-wf",
+      "file": "src/spec.rs",
+      "find": "Op::WithHas { dst, obj, key, .. } => reg_ok(c, dst) && reg_ok(c, obj) && key < c.consts.len(),",
+      "replace": "Op::WithHas { dst, obj, key, .. } => reg_ok(c, dst) && key < c.consts.len(),",
+      "expect": "killed",
+      "reason": "WithHas accepts a register outside the frame (operand `obj`): example_withs_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::WithHas { dst: 0, obj: 3, key: 0 })"
+      }
+    },
+    {
+      "id": "with-has-key-wf",
+      "file": "src/spec.rs",
+      "find": "Op::WithHas { dst, obj, key, .. } => reg_ok(c, dst) && reg_ok(c, obj) && key < c.consts.len(),",
+      "replace": "Op::WithHas { dst, obj, key, .. } => reg_ok(c, dst) && reg_ok(c, obj) && key <= c.consts.len(),",
+      "expect": "killed",
+      "reason": "WithHas accepts a constant index one past the pool (operand `key`): example_withs_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::WithHas { dst: 0, obj: 0, key: 3 })"
+      }
+    },
+    {
+      "id": "with-get-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::WithGet { dst, obj, key, .. } => reg_ok(c, dst) && reg_ok(c, obj) && key < c.consts.len(),",
+      "replace": "Op::WithGet { dst, obj, key, .. } => reg_ok(c, obj) && key < c.consts.len(),",
+      "expect": "killed",
+      "reason": "WithGet accepts a register outside the frame (operand `dst`): example_withs_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::WithGet { dst: 3, obj: 0, key: 0, strict: false })"
+      }
+    },
+    {
+      "id": "with-get-obj-wf",
+      "file": "src/spec.rs",
+      "find": "Op::WithGet { dst, obj, key, .. } => reg_ok(c, dst) && reg_ok(c, obj) && key < c.consts.len(),",
+      "replace": "Op::WithGet { dst, obj, key, .. } => reg_ok(c, dst) && key < c.consts.len(),",
+      "expect": "killed",
+      "reason": "WithGet accepts a register outside the frame (operand `obj`): example_withs_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::WithGet { dst: 0, obj: 3, key: 0, strict: false })"
+      }
+    },
+    {
+      "id": "with-get-key-wf",
+      "file": "src/spec.rs",
+      "find": "Op::WithGet { dst, obj, key, .. } => reg_ok(c, dst) && reg_ok(c, obj) && key < c.consts.len(),",
+      "replace": "Op::WithGet { dst, obj, key, .. } => reg_ok(c, dst) && reg_ok(c, obj) && key <= c.consts.len(),",
+      "expect": "killed",
+      "reason": "WithGet accepts a constant index one past the pool (operand `key`): example_withs_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::WithGet { dst: 0, obj: 0, key: 3, strict: false })"
+      }
+    },
+    {
+      "id": "with-set-obj-wf",
+      "file": "src/spec.rs",
+      "find": "Op::WithSet { obj, key, val, .. } => reg_ok(c, obj) && key < c.consts.len() && reg_ok(c, val),",
+      "replace": "Op::WithSet { obj, key, val, .. } => key < c.consts.len() && reg_ok(c, val),",
+      "expect": "killed",
+      "reason": "WithSet accepts a register outside the frame (operand `obj`): example_withs_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::WithSet { obj: 3, key: 0, val: 0, strict: false })"
+      }
+    },
+    {
+      "id": "with-set-key-wf",
+      "file": "src/spec.rs",
+      "find": "Op::WithSet { obj, key, val, .. } => reg_ok(c, obj) && key < c.consts.len() && reg_ok(c, val),",
+      "replace": "Op::WithSet { obj, key, val, .. } => reg_ok(c, obj) && key <= c.consts.len() && reg_ok(c, val),",
+      "expect": "killed",
+      "reason": "WithSet accepts a constant index one past the pool (operand `key`): example_withs_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::WithSet { obj: 0, key: 3, val: 0, strict: false })"
+      }
+    },
+    {
+      "id": "with-set-val-wf",
+      "file": "src/spec.rs",
+      "find": "Op::WithSet { obj, key, val, .. } => reg_ok(c, obj) && key < c.consts.len() && reg_ok(c, val),",
+      "replace": "Op::WithSet { obj, key, val, .. } => reg_ok(c, obj) && key < c.consts.len(),",
+      "expect": "killed",
+      "reason": "WithSet accepts a register outside the frame (operand `val`): example_withs_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::WithSet { obj: 0, key: 0, val: 3, strict: false })"
+      }
+    },
+    {
+      "id": "with-delete-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::WithDelete { dst, obj, key, .. } => reg_ok(c, dst) && reg_ok(c, obj) && key < c.consts.len(),",
+      "replace": "Op::WithDelete { dst, obj, key, .. } => reg_ok(c, obj) && key < c.consts.len(),",
+      "expect": "killed",
+      "reason": "WithDelete accepts a register outside the frame (operand `dst`): example_withs_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::WithDelete { dst: 3, obj: 0, key: 0 })"
+      }
+    },
+    {
+      "id": "with-delete-obj-wf",
+      "file": "src/spec.rs",
+      "find": "Op::WithDelete { dst, obj, key, .. } => reg_ok(c, dst) && reg_ok(c, obj) && key < c.consts.len(),",
+      "replace": "Op::WithDelete { dst, obj, key, .. } => reg_ok(c, dst) && key < c.consts.len(),",
+      "expect": "killed",
+      "reason": "WithDelete accepts a register outside the frame (operand `obj`): example_withs_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::WithDelete { dst: 0, obj: 3, key: 0 })"
+      }
+    },
+    {
+      "id": "with-delete-key-wf",
+      "file": "src/spec.rs",
+      "find": "Op::WithDelete { dst, obj, key, .. } => reg_ok(c, dst) && reg_ok(c, obj) && key < c.consts.len(),",
+      "replace": "Op::WithDelete { dst, obj, key, .. } => reg_ok(c, dst) && reg_ok(c, obj) && key <= c.consts.len(),",
+      "expect": "killed",
+      "reason": "WithDelete accepts a constant index one past the pool (operand `key`): example_withs_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::WithDelete { dst: 0, obj: 0, key: 3 })"
+      }
+    },
+    {
+      "id": "delete-global-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::DeleteGlobal { dst, key, .. } => reg_ok(c, dst) && key < c.consts.len(),",
+      "replace": "Op::DeleteGlobal { dst, key, .. } => key < c.consts.len(),",
+      "expect": "killed",
+      "reason": "DeleteGlobal accepts a register outside the frame (operand `dst`): example_withs_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::DeleteGlobal { dst: 3, key: 0 })"
+      }
+    },
+    {
+      "id": "delete-global-key-wf",
+      "file": "src/spec.rs",
+      "find": "Op::DeleteGlobal { dst, key, .. } => reg_ok(c, dst) && key < c.consts.len(),",
+      "replace": "Op::DeleteGlobal { dst, key, .. } => reg_ok(c, dst) && key <= c.consts.len(),",
+      "expect": "killed",
+      "reason": "DeleteGlobal accepts a constant index one past the pool (operand `key`): example_withs_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::DeleteGlobal { dst: 0, key: 3 })"
+      }
+    },
+    {
+      "id": "direct-eval-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::DirectEval { dst, callee, this, args, argc, env, k, .. } => reg_ok(c, dst) && reg_ok(c, callee) && reg_ok(c, this) && regs_ok(c, args, argc) && reg_ok(c, env) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "replace": "Op::DirectEval { dst, callee, this, args, argc, env, k, .. } => reg_ok(c, callee) && reg_ok(c, this) && regs_ok(c, args, argc) && reg_ok(c, env) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "expect": "killed",
+      "reason": "DirectEval accepts a register outside the frame (operand `dst`): example_withs_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::DirectEval { dst: 3, callee: 0, this: 0, args: 0, argc: 3, env: 0, k: 0 })"
+      }
+    },
+    {
+      "id": "direct-eval-callee-wf",
+      "file": "src/spec.rs",
+      "find": "Op::DirectEval { dst, callee, this, args, argc, env, k, .. } => reg_ok(c, dst) && reg_ok(c, callee) && reg_ok(c, this) && regs_ok(c, args, argc) && reg_ok(c, env) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "replace": "Op::DirectEval { dst, callee, this, args, argc, env, k, .. } => reg_ok(c, dst) && reg_ok(c, this) && regs_ok(c, args, argc) && reg_ok(c, env) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "expect": "killed",
+      "reason": "DirectEval accepts a register outside the frame (operand `callee`): example_withs_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::DirectEval { dst: 0, callee: 3, this: 0, args: 0, argc: 3, env: 0, k: 0 })"
+      }
+    },
+    {
+      "id": "direct-eval-this-wf",
+      "file": "src/spec.rs",
+      "find": "Op::DirectEval { dst, callee, this, args, argc, env, k, .. } => reg_ok(c, dst) && reg_ok(c, callee) && reg_ok(c, this) && regs_ok(c, args, argc) && reg_ok(c, env) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "replace": "Op::DirectEval { dst, callee, this, args, argc, env, k, .. } => reg_ok(c, dst) && reg_ok(c, callee) && regs_ok(c, args, argc) && reg_ok(c, env) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "expect": "killed",
+      "reason": "DirectEval accepts a register outside the frame (operand `this`): example_withs_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::DirectEval { dst: 0, callee: 0, this: 3, args: 0, argc: 3, env: 0, k: 0 })"
+      }
+    },
+    {
+      "id": "direct-eval-args-wf",
+      "file": "src/spec.rs",
+      "find": "Op::DirectEval { dst, callee, this, args, argc, env, k, .. } => reg_ok(c, dst) && reg_ok(c, callee) && reg_ok(c, this) && regs_ok(c, args, argc) && reg_ok(c, env) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "replace": "Op::DirectEval { dst, callee, this, args, argc, env, k, .. } => reg_ok(c, dst) && reg_ok(c, callee) && reg_ok(c, this) && reg_ok(c, env) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "expect": "killed",
+      "reason": "DirectEval accepts a register range that leaves the frame (operand `args`): example_withs_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::DirectEval { dst: 0, callee: 0, this: 0, args: 2, argc: 2, env: 0, k: 0 })"
+      }
+    },
+    {
+      "id": "direct-eval-env-wf",
+      "file": "src/spec.rs",
+      "find": "Op::DirectEval { dst, callee, this, args, argc, env, k, .. } => reg_ok(c, dst) && reg_ok(c, callee) && reg_ok(c, this) && regs_ok(c, args, argc) && reg_ok(c, env) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "replace": "Op::DirectEval { dst, callee, this, args, argc, env, k, .. } => reg_ok(c, dst) && reg_ok(c, callee) && reg_ok(c, this) && regs_ok(c, args, argc) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "expect": "killed",
+      "reason": "DirectEval accepts a register outside the frame (operand `env`): example_withs_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::DirectEval { dst: 0, callee: 0, this: 0, args: 0, argc: 3, env: 3, k: 0 })"
+      }
+    },
+    {
+      "id": "direct-eval-k-wf",
+      "file": "src/spec.rs",
+      "find": "Op::DirectEval { dst, callee, this, args, argc, env, k, .. } => reg_ok(c, dst) && reg_ok(c, callee) && reg_ok(c, this) && regs_ok(c, args, argc) && reg_ok(c, env) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "replace": "Op::DirectEval { dst, callee, this, args, argc, env, k, .. } => reg_ok(c, dst) && reg_ok(c, callee) && reg_ok(c, this) && regs_ok(c, args, argc) && reg_ok(c, env) && k < c.consts.len(),",
+      "expect": "killed",
+      "reason": "DirectEval accepts a record constant that is not a value (operand `k`): example_withs_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::DirectEval { dst: 0, callee: 0, this: 0, args: 0, argc: 3, env: 0, k: 2 })"
+      }
+    },
+    {
+      "id": "to-object-handler",
+      "file": "src/ops.rs",
+      "find": "Op::ToObject { .. } => HandlerId::ToObject,",
+      "replace": "Op::ToObject { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "ToObject calls the throw handler instead of its own: example_withs_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_classes()",
+        "witness": "op_handler(Op::ToObject { dst: 0, src: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "to-object-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::ToObject { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "ToObject is a core op, which never calls out: example_withs_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_classes()",
+        "witness": "op_class(Op::ToObject { dst: 0, src: 0 }) is Core"
+      }
+    },
+    {
+      "id": "with-has-handler",
+      "file": "src/ops.rs",
+      "find": "Op::WithHas { .. } => HandlerId::WithHas,",
+      "replace": "Op::WithHas { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "WithHas calls the throw handler instead of its own: example_withs_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_classes()",
+        "witness": "op_handler(Op::WithHas { dst: 0, obj: 0, key: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "with-has-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::WithHas { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "WithHas is a core op, which never calls out: example_withs_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_classes()",
+        "witness": "op_class(Op::WithHas { dst: 0, obj: 0, key: 0 }) is Core"
+      }
+    },
+    {
+      "id": "with-get-handler",
+      "file": "src/ops.rs",
+      "find": "Op::WithGet { .. } => HandlerId::WithGet,",
+      "replace": "Op::WithGet { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "WithGet calls the throw handler instead of its own: example_withs_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_classes()",
+        "witness": "op_handler(Op::WithGet { dst: 0, obj: 0, key: 0, strict: false }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "with-get-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::WithGet { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "WithGet is a core op, which never calls out: example_withs_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_classes()",
+        "witness": "op_class(Op::WithGet { dst: 0, obj: 0, key: 0, strict: false }) is Core"
+      }
+    },
+    {
+      "id": "with-set-handler",
+      "file": "src/ops.rs",
+      "find": "Op::WithSet { .. } => HandlerId::WithSet,",
+      "replace": "Op::WithSet { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "WithSet calls the throw handler instead of its own: example_withs_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_classes()",
+        "witness": "op_handler(Op::WithSet { obj: 0, key: 0, val: 0, strict: false }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "with-set-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::WithSet { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "WithSet is a core op, which never calls out: example_withs_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_classes()",
+        "witness": "op_class(Op::WithSet { obj: 0, key: 0, val: 0, strict: false }) is Core"
+      }
+    },
+    {
+      "id": "with-delete-handler",
+      "file": "src/ops.rs",
+      "find": "Op::WithDelete { .. } => HandlerId::WithDelete,",
+      "replace": "Op::WithDelete { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "WithDelete calls the throw handler instead of its own: example_withs_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_classes()",
+        "witness": "op_handler(Op::WithDelete { dst: 0, obj: 0, key: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "with-delete-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::WithDelete { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "WithDelete is a core op, which never calls out: example_withs_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_classes()",
+        "witness": "op_class(Op::WithDelete { dst: 0, obj: 0, key: 0 }) is Core"
+      }
+    },
+    {
+      "id": "delete-global-handler",
+      "file": "src/ops.rs",
+      "find": "Op::DeleteGlobal { .. } => HandlerId::DeleteGlobal,",
+      "replace": "Op::DeleteGlobal { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "DeleteGlobal calls the throw handler instead of its own: example_withs_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_classes()",
+        "witness": "op_handler(Op::DeleteGlobal { dst: 0, key: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "delete-global-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::DeleteGlobal { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "DeleteGlobal is a core op, which never calls out: example_withs_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_classes()",
+        "witness": "op_class(Op::DeleteGlobal { dst: 0, key: 0 }) is Core"
+      }
+    },
+    {
+      "id": "direct-eval-handler",
+      "file": "src/ops.rs",
+      "find": "Op::DirectEval { .. } => HandlerId::DirectEval,",
+      "replace": "Op::DirectEval { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "DirectEval calls the throw handler instead of its own: example_withs_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_classes()",
+        "witness": "op_handler(Op::DirectEval { dst: 0, callee: 0, this: 0, args: 0, argc: 3, env: 0, k: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "direct-eval-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::DirectEval { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "DirectEval is a core op, which never calls out: example_withs_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_withs_classes()",
+        "witness": "op_class(Op::DirectEval { dst: 0, callee: 0, this: 0, args: 0, argc: 3, env: 0, k: 0 }) is Core"
+      }
+    },
+    {
+      "id": "get-import-binding-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::GetImportBinding { dst, env, .. } => reg_ok(c, dst) && reg_ok(c, env),",
+      "replace": "Op::GetImportBinding { dst, env, .. } => reg_ok(c, env),",
+      "expect": "killed",
+      "reason": "GetImportBinding accepts a register outside the frame (operand `dst`): example_imports_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_imports_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::GetImportBinding { dst: 3, env: 0, idx: 0 })"
+      }
+    },
+    {
+      "id": "get-import-binding-env-wf",
+      "file": "src/spec.rs",
+      "find": "Op::GetImportBinding { dst, env, .. } => reg_ok(c, dst) && reg_ok(c, env),",
+      "replace": "Op::GetImportBinding { dst, env, .. } => reg_ok(c, dst),",
+      "expect": "killed",
+      "reason": "GetImportBinding accepts a register outside the frame (operand `env`): example_imports_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_imports_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::GetImportBinding { dst: 0, env: 3, idx: 0 })"
+      }
+    },
+    {
+      "id": "import-call-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::ImportCall { dst, specifier, options, .. } => reg_ok(c, dst) && reg_ok(c, specifier) && reg_ok(c, options),",
+      "replace": "Op::ImportCall { dst, specifier, options, .. } => reg_ok(c, specifier) && reg_ok(c, options),",
+      "expect": "killed",
+      "reason": "ImportCall accepts a register outside the frame (operand `dst`): example_imports_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_imports_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::ImportCall { dst: 3, specifier: 0, options: 0 })"
+      }
+    },
+    {
+      "id": "import-call-specifier-wf",
+      "file": "src/spec.rs",
+      "find": "Op::ImportCall { dst, specifier, options, .. } => reg_ok(c, dst) && reg_ok(c, specifier) && reg_ok(c, options),",
+      "replace": "Op::ImportCall { dst, specifier, options, .. } => reg_ok(c, dst) && reg_ok(c, options),",
+      "expect": "killed",
+      "reason": "ImportCall accepts a register outside the frame (operand `specifier`): example_imports_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_imports_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::ImportCall { dst: 0, specifier: 3, options: 0 })"
+      }
+    },
+    {
+      "id": "import-call-options-wf",
+      "file": "src/spec.rs",
+      "find": "Op::ImportCall { dst, specifier, options, .. } => reg_ok(c, dst) && reg_ok(c, specifier) && reg_ok(c, options),",
+      "replace": "Op::ImportCall { dst, specifier, options, .. } => reg_ok(c, dst) && reg_ok(c, specifier),",
+      "expect": "killed",
+      "reason": "ImportCall accepts a register outside the frame (operand `options`): example_imports_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_imports_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::ImportCall { dst: 0, specifier: 0, options: 3 })"
+      }
+    },
+    {
+      "id": "import-meta-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::ImportMeta { dst, .. } => reg_ok(c, dst),",
+      "replace": "Op::ImportMeta { dst, .. } => true,",
+      "expect": "killed",
+      "reason": "ImportMeta accepts a register outside the frame (operand `dst`): example_imports_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_imports_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::ImportMeta { dst: 3 })"
+      }
+    },
+    {
+      "id": "direct-eval-spread-dst-wf",
+      "file": "src/spec.rs",
+      "find": "Op::DirectEvalSpread { dst, callee, this, args, env, k, .. } => reg_ok(c, dst) && reg_ok(c, callee) && reg_ok(c, this) && reg_ok(c, args) && reg_ok(c, env) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "replace": "Op::DirectEvalSpread { dst, callee, this, args, env, k, .. } => reg_ok(c, callee) && reg_ok(c, this) && reg_ok(c, args) && reg_ok(c, env) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "expect": "killed",
+      "reason": "DirectEvalSpread accepts a register outside the frame (operand `dst`): example_imports_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_imports_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::DirectEvalSpread { dst: 3, callee: 0, this: 0, args: 0, env: 0, k: 0 })"
+      }
+    },
+    {
+      "id": "direct-eval-spread-callee-wf",
+      "file": "src/spec.rs",
+      "find": "Op::DirectEvalSpread { dst, callee, this, args, env, k, .. } => reg_ok(c, dst) && reg_ok(c, callee) && reg_ok(c, this) && reg_ok(c, args) && reg_ok(c, env) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "replace": "Op::DirectEvalSpread { dst, callee, this, args, env, k, .. } => reg_ok(c, dst) && reg_ok(c, this) && reg_ok(c, args) && reg_ok(c, env) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "expect": "killed",
+      "reason": "DirectEvalSpread accepts a register outside the frame (operand `callee`): example_imports_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_imports_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::DirectEvalSpread { dst: 0, callee: 3, this: 0, args: 0, env: 0, k: 0 })"
+      }
+    },
+    {
+      "id": "direct-eval-spread-this-wf",
+      "file": "src/spec.rs",
+      "find": "Op::DirectEvalSpread { dst, callee, this, args, env, k, .. } => reg_ok(c, dst) && reg_ok(c, callee) && reg_ok(c, this) && reg_ok(c, args) && reg_ok(c, env) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "replace": "Op::DirectEvalSpread { dst, callee, this, args, env, k, .. } => reg_ok(c, dst) && reg_ok(c, callee) && reg_ok(c, args) && reg_ok(c, env) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "expect": "killed",
+      "reason": "DirectEvalSpread accepts a register outside the frame (operand `this`): example_imports_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_imports_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::DirectEvalSpread { dst: 0, callee: 0, this: 3, args: 0, env: 0, k: 0 })"
+      }
+    },
+    {
+      "id": "direct-eval-spread-args-wf",
+      "file": "src/spec.rs",
+      "find": "Op::DirectEvalSpread { dst, callee, this, args, env, k, .. } => reg_ok(c, dst) && reg_ok(c, callee) && reg_ok(c, this) && reg_ok(c, args) && reg_ok(c, env) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "replace": "Op::DirectEvalSpread { dst, callee, this, args, env, k, .. } => reg_ok(c, dst) && reg_ok(c, callee) && reg_ok(c, this) && reg_ok(c, env) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "expect": "killed",
+      "reason": "DirectEvalSpread accepts a register outside the frame (operand `args`): example_imports_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_imports_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::DirectEvalSpread { dst: 0, callee: 0, this: 0, args: 3, env: 0, k: 0 })"
+      }
+    },
+    {
+      "id": "direct-eval-spread-env-wf",
+      "file": "src/spec.rs",
+      "find": "Op::DirectEvalSpread { dst, callee, this, args, env, k, .. } => reg_ok(c, dst) && reg_ok(c, callee) && reg_ok(c, this) && reg_ok(c, args) && reg_ok(c, env) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "replace": "Op::DirectEvalSpread { dst, callee, this, args, env, k, .. } => reg_ok(c, dst) && reg_ok(c, callee) && reg_ok(c, this) && reg_ok(c, args) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "expect": "killed",
+      "reason": "DirectEvalSpread accepts a register outside the frame (operand `env`): example_imports_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_imports_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::DirectEvalSpread { dst: 0, callee: 0, this: 0, args: 0, env: 3, k: 0 })"
+      }
+    },
+    {
+      "id": "direct-eval-spread-k-wf",
+      "file": "src/spec.rs",
+      "find": "Op::DirectEvalSpread { dst, callee, this, args, env, k, .. } => reg_ok(c, dst) && reg_ok(c, callee) && reg_ok(c, this) && reg_ok(c, args) && reg_ok(c, env) && k < c.consts.len() && value_wf(c.consts[k as int]),",
+      "replace": "Op::DirectEvalSpread { dst, callee, this, args, env, k, .. } => reg_ok(c, dst) && reg_ok(c, callee) && reg_ok(c, this) && reg_ok(c, args) && reg_ok(c, env) && k < c.consts.len(),",
+      "expect": "killed",
+      "reason": "DirectEvalSpread accepts a record constant that is not a value (operand `k`): example_imports_wf is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_imports_wf()",
+        "witness": "op_wf(crate::examples::example_code(), Op::DirectEvalSpread { dst: 0, callee: 0, this: 0, args: 0, env: 0, k: 2 })"
+      }
+    },
+    {
+      "id": "get-import-binding-handler",
+      "file": "src/ops.rs",
+      "find": "Op::GetImportBinding { .. } => HandlerId::GetImportBinding,",
+      "replace": "Op::GetImportBinding { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "GetImportBinding calls the throw handler instead of its own: example_imports_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_imports_classes()",
+        "witness": "op_handler(Op::GetImportBinding { dst: 0, env: 0, idx: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "get-import-binding-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::GetImportBinding { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "GetImportBinding is a core op, which never calls out: example_imports_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_imports_classes()",
+        "witness": "op_class(Op::GetImportBinding { dst: 0, env: 0, idx: 0 }) is Core"
+      }
+    },
+    {
+      "id": "import-call-handler",
+      "file": "src/ops.rs",
+      "find": "Op::ImportCall { .. } => HandlerId::ImportCall,",
+      "replace": "Op::ImportCall { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "ImportCall calls the throw handler instead of its own: example_imports_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_imports_classes()",
+        "witness": "op_handler(Op::ImportCall { dst: 0, specifier: 0, options: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "import-call-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::ImportCall { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "ImportCall is a core op, which never calls out: example_imports_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_imports_classes()",
+        "witness": "op_class(Op::ImportCall { dst: 0, specifier: 0, options: 0 }) is Core"
+      }
+    },
+    {
+      "id": "import-meta-handler",
+      "file": "src/ops.rs",
+      "find": "Op::ImportMeta { .. } => HandlerId::ImportMeta,",
+      "replace": "Op::ImportMeta { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "ImportMeta calls the throw handler instead of its own: example_imports_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_imports_classes()",
+        "witness": "op_handler(Op::ImportMeta { dst: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "import-meta-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::ImportMeta { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "ImportMeta is a core op, which never calls out: example_imports_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_imports_classes()",
+        "witness": "op_class(Op::ImportMeta { dst: 0 }) is Core"
+      }
+    },
+    {
+      "id": "direct-eval-spread-handler",
+      "file": "src/ops.rs",
+      "find": "Op::DirectEvalSpread { .. } => HandlerId::DirectEvalSpread,",
+      "replace": "Op::DirectEvalSpread { .. } => HandlerId::Throw,",
+      "expect": "killed",
+      "reason": "DirectEvalSpread calls the throw handler instead of its own: example_imports_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_imports_classes()",
+        "witness": "op_handler(Op::DirectEvalSpread { dst: 0, callee: 0, this: 0, args: 0, env: 0, k: 0 }) == HandlerId::Throw"
+      }
+    },
+    {
+      "id": "direct-eval-spread-class-core",
+      "file": "src/ops.rs",
+      "find": "| Op::JumpIfNotNullish { .. } => OpClass::Core,",
+      "replace": "| Op::JumpIfNotNullish { .. } | Op::DirectEvalSpread { .. } => OpClass::Core,",
+      "expect": "killed",
+      "reason": "DirectEvalSpread is a core op, which never calls out: example_imports_classes is false.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::example_imports_classes()",
+        "witness": "op_class(Op::DirectEvalSpread { dst: 0, callee: 0, this: 0, args: 0, env: 0, k: 0 }) is Core"
+      }
     }
   ]
 }

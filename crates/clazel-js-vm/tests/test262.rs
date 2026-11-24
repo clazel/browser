@@ -22,7 +22,8 @@ use clazel_js_syntax::ast::{Ast, NodeKind, Op as AOp};
 use clazel_js_syntax::exec::parse;
 use clazel_js_syntax::spec::SourceGoal;
 use clazel_js_vm::bytecode::{Instr, check_program};
-use clazel_js_vm::compile::{CompileError, compile_script};
+use clazel_js_vm::compile::{CompileError, compile_module, compile_script};
+use clazel_js_vm::module::check_module;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
@@ -69,13 +70,15 @@ struct Counts {
     not_yet: usize,
     failed: usize,
     no_parse: usize,
+    /// Of the compiled sources, the modules.
+    modules: usize,
     features: BTreeMap<&'static str, usize>,
     /// For each construct, the number of compiled sources that use it.
     constructs: BTreeMap<&'static str, usize>,
     failures: Vec<String>,
 }
 
-/// The constructs of the compiler's second slice that `ast` uses.
+/// The constructs of the compiler's second and third slices that `ast` uses.
 fn constructs_of(ast: &Ast) -> Vec<&'static str> {
     let mut found = std::collections::BTreeSet::new();
     for (i, n) in ast.nodes.iter().enumerate() {
@@ -106,9 +109,30 @@ fn constructs_of(ast: &Ast) -> Vec<&'static str> {
             NodeKind::PrivateIdentifier => "private names",
             NodeKind::NewTarget => "new.target",
             NodeKind::ForInStatement => "for-in",
+            NodeKind::ForOfStatement if n.flag => "for await",
             NodeKind::ForOfStatement => "for-of",
+            NodeKind::RegularExpressionLiteral => "regex literals",
+            NodeKind::GeneratorDeclaration | NodeKind::GeneratorExpression => "generators",
+            NodeKind::AsyncFunctionDeclaration
+            | NodeKind::AsyncFunctionExpression
+            | NodeKind::AsyncArrowFunction => "async functions",
+            NodeKind::AsyncGeneratorDeclaration | NodeKind::AsyncGeneratorExpression => {
+                "async generators"
+            }
+            NodeKind::YieldExpression if n.op == AOp::YieldDelegate => "yield*",
+            NodeKind::YieldExpression => "yield",
+            NodeKind::AwaitExpression => "await",
+            NodeKind::WithStatement => "with",
             NodeKind::OptionalExpression => "optional chaining",
             NodeKind::MethodDefinition if matches!(n.op, AOp::Getter | AOp::Setter) => "accessors",
+            NodeKind::MethodDefinition
+                if matches!(
+                    n.op,
+                    AOp::GeneratorMethod | AOp::AsyncMethod | AOp::AsyncGeneratorMethod
+                ) =>
+            {
+                "generator and async methods"
+            }
             _ => continue,
         };
         found.insert(name);
@@ -122,7 +146,16 @@ impl Counts {
             self.no_parse = self.no_parse.saturating_add(1);
             return;
         };
-        match compile_script(&ast, src) {
+        let compiled = if goal == SourceGoal::Module {
+            compile_module(&ast, src).and_then(|m| {
+                check_module(&m).map_err(CompileError::Internal)?;
+                self.modules = self.modules.saturating_add(1);
+                Ok(m.program)
+            })
+        } else {
+            compile_script(&ast, src)
+        };
+        match compiled {
             Ok(p) => match check_program(&p) {
                 Ok(()) => {
                     self.compiled = self.compiled.saturating_add(1);
@@ -143,6 +176,22 @@ impl Counts {
                     if args {
                         let n = self.constructs.entry("arguments object").or_insert(0);
                         *n = n.saturating_add(1);
+                    }
+                    // Direct eval and `delete` of a variable are in the bytecode too.
+                    for (name, pred) in [
+                        (
+                            "direct eval",
+                            (|i: &Instr| matches!(i, Instr::DirectEval { .. }))
+                                as fn(&Instr) -> bool,
+                        ),
+                        ("delete of a variable", |i: &Instr| {
+                            matches!(i, Instr::DeleteGlobal { .. } | Instr::WithDelete { .. })
+                        }),
+                    ] {
+                        if p.functions.iter().any(|f| f.instrs.iter().any(pred)) {
+                            let n = self.constructs.entry(name).or_insert(0);
+                            *n = n.saturating_add(1);
+                        }
                     }
                 }
                 Err(e) => {
@@ -239,6 +288,7 @@ fn test262_compiles() -> Result<(), String> {
     for (feature, n) in by_count {
         println!("  not yet: {n:6}  {feature}");
     }
+    println!("  of the compiled sources, {} are modules", counts.modules);
     for (construct, n) in &counts.constructs {
         println!("  compiled with: {n:6}  {construct}");
     }

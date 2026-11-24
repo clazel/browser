@@ -1497,4 +1497,64 @@ pub proof fn ml_w3c_foreign_attribute()
     crate::independent::equivalence_foreign::lemma_foreign_attribute(ml_name_xlink_href());
 }
 
+// ---------------------------------------------------------------------
+// The host invariant (`host::host_inv`)
+
+/// A running parser whose document is a Document and one element (node 1),
+/// the only entry of its stack (`clazel-dom`'s `ds_leaf`).
+pub open spec fn ml_host_parser() -> Parser {
+    Parser {
+        doc: clazel_dom::deep_clone_size_mutation_lemmas::ds_leaf(),
+        ..ml_parser(
+            Mode::InBody,
+            seq![Elem { id: 1, ns: Namespace::Html, tag: Tag::Div, name: seq![], annotation_html: false }],
+            seq![],
+        )
+    }
+}
+
+/// A `template` start tag token without attributes.
+pub open spec fn ml_template_tok() -> TagTok {
+    TagTok { name: seq![], tag: Tag::Template, attrs: seq![], self_closing: false }
+}
+
+/// The "in head" `template` start tag, at [`ml_host_parser`], does not
+/// insert the `template` element (node 2) in its own template contents
+/// (node 3): the document after it is `clazel_dom::spec::host_acyclic`
+/// (`host::rules::lemma_host_template_start`), and a node whose parent is a
+/// fragment it hosts is a cycle through the host.
+pub proof fn ml_template_not_in_contents()
+    ensures
+        ({
+            let q = in_head_template_start(ml_host_parser(), ml_template_tok());
+            !(q.doc.nodes.len() == 4 && q.doc.nodes[2].parent == Some(3usize) && q.doc.nodes[3].kind == (NodeKind::DocumentFragment {
+                host: Some(2usize),
+            }))
+        }),
+{
+    hide(in_head_template_start);
+    let p = ml_host_parser();
+    let q = in_head_template_start(p, ml_template_tok());
+    clazel_dom::deep_clone_size_mutation_lemmas::ds_leaf_facts();
+    assert(crate::host::hostinv::ids_valid(p)) by {
+        reveal(crate::host::hostinv::ids_valid);
+        assert forall|i: int| 0 <= i < p.open.len() implies dom::valid(p.doc, (#[trigger] p.open[i]).id) by {
+            assert(p.open[i].id == 1);
+        }
+    }
+    crate::host::hostinv::lemma_host_inv_intro(p);
+    crate::host::rules::lemma_host_template_start(p, ml_template_tok());
+    crate::host::hostinv::lemma_host_inv(q);
+    if q.doc.nodes.len() == 4 && q.doc.nodes[2].parent == Some(3usize) && q.doc.nodes[3].kind == (NodeKind::DocumentFragment {
+        host: Some(2usize),
+    }) {
+        let rank = clazel_dom::deep_clone_size_lemmas::lemma_rank_witness(q.doc);
+        assert(dom::ranked_at(q.doc, rank, 2));
+        assert(dom::ranked_at(q.doc, rank, 3));
+        clazel_dom::deep_clone_size_lemmas::theorem_ranked_at_facts(q.doc, rank, 2);
+        clazel_dom::deep_clone_size_lemmas::theorem_ranked_at_facts(q.doc, rank, 3);
+        assert(false);
+    }
+}
+
 } // verus!

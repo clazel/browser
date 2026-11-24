@@ -455,10 +455,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "clazel-jit"
+version = "0.0.0"
+dependencies = [
+ "clazel-a64",
+ "clazel-codecheck",
+ "clazel-js-vm",
+ "clazel-lir",
+ "clazel-x64",
+ "vstd",
+]
+
+[[package]]
 name = "clazel-jpeg"
 version = "0.0.0"
 dependencies = [
  "clazel-image-shape",
+]
+
+[[package]]
+name = "clazel-js"
+version = "0.0.0"
+dependencies = [
+ "clazel-js-builtins",
+ "clazel-js-heap",
+ "clazel-js-syntax",
+ "clazel-js-vm",
+]
+
+[[package]]
+name = "clazel-js-builtins"
+version = "0.0.0"
+dependencies = [
+ "clazel-js-heap",
+ "clazel-js-number",
+ "clazel-js-syntax",
+ "clazel-js-vm",
+ "clazel-json",
 ]
 
 [[package]]
@@ -495,7 +528,9 @@ dependencies = [
 name = "clazel-js-vm"
 version = "0.0.0"
 dependencies = [
+ "clazel-js-heap",
  "clazel-js-lexer",
+ "clazel-js-number",
  "clazel-js-syntax",
  "vstd",
 ]
@@ -753,6 +788,12 @@ dependencies = [
 [[package]]
 name = "clazel-web"
 version = "0.0.0"
+dependencies = [
+ "clazel-css",
+ "clazel-dom",
+ "clazel-selectors",
+ "clazel-treebuilder",
+]
 
 [[package]]
 name = "clazel-webidl"

@@ -302,14 +302,14 @@ pub proof fn lemma_style_body_fits_frame(request: u64, bytes: Seq<u8>)
     assert(crate::cbor::spec::encode_head(2, bytes.len()).len() <= 5);
 }
 
-/// A `SubBody` of at most [`max_sub_chunk`] octets can be sent, and its
-/// bytes fit one frame (item 6.17), whatever its request id.
-pub proof fn lemma_sub_body_fits_frame(request: u64, bytes: Seq<u8>)
+/// A `ScriptBody` of at most [`max_script_chunk`] octets can be sent, and its
+/// bytes fit one frame (item 7.16), whatever its request id.
+pub proof fn lemma_script_body_fits_frame(request: u64, bytes: Seq<u8>)
     requires
-        bytes.len() <= max_sub_chunk(),
+        bytes.len() <= max_script_chunk(),
     ensures
-        message_ok(Message::SubBody { request, bytes }),
-        crate::frame::spec::payload_ok(encode_message(Message::SubBody { request, bytes })),
+        message_ok(Message::ScriptBody { request, bytes }),
+        crate::frame::spec::payload_ok(encode_message(Message::ScriptBody { request, bytes })),
 {
     let t = seq![Token::Array(3), Token::Uint(116), Token::Uint(request), Token::Bytes(bytes)];
     let rest = seq![Token::Uint(request), Token::Bytes(bytes)];
@@ -330,6 +330,46 @@ pub proof fn lemma_sub_body_fits_frame(request: u64, bytes: Seq<u8>)
     assert(t.drop_first().drop_first().drop_first() =~= seq![Token::Bytes(bytes)]);
     assert(t.drop_first().drop_first().drop_first().drop_first() =~= Seq::<Token>::empty());
     crate::cbor::lemmas::lemma_be_bytes_len(116, 1);
+    crate::cbor::lemmas::lemma_be_bytes_len(request as nat, 1);
+    crate::cbor::lemmas::lemma_be_bytes_len(request as nat, 2);
+    crate::cbor::lemmas::lemma_be_bytes_len(request as nat, 4);
+    crate::cbor::lemmas::lemma_be_bytes_len(request as nat, 8);
+    crate::cbor::lemmas::lemma_be_bytes_len(bytes.len(), 1);
+    crate::cbor::lemmas::lemma_be_bytes_len(bytes.len(), 2);
+    crate::cbor::lemmas::lemma_be_bytes_len(bytes.len(), 4);
+    assert(crate::cbor::spec::encode(Seq::<Token>::empty()) == Seq::<u8>::empty());
+    assert(crate::cbor::spec::encode_head(0, request as nat).len() <= 9);
+    assert(crate::cbor::spec::encode_head(2, bytes.len()).len() <= 5);
+}
+
+/// A `SubBody` of at most [`max_sub_chunk`] octets can be sent, and its
+/// bytes fit one frame (item 6.17), whatever its request id.
+pub proof fn lemma_sub_body_fits_frame(request: u64, bytes: Seq<u8>)
+    requires
+        bytes.len() <= max_sub_chunk(),
+    ensures
+        message_ok(Message::SubBody { request, bytes }),
+        crate::frame::spec::payload_ok(encode_message(Message::SubBody { request, bytes })),
+{
+    let t = seq![Token::Array(3), Token::Uint(120), Token::Uint(request), Token::Bytes(bytes)];
+    let rest = seq![Token::Uint(request), Token::Bytes(bytes)];
+    assert(t =~= seq![Token::Array(3), Token::Uint(120)] + rest);
+    lemma_items_head(3, 120, rest);
+    lemma_items_step(rest, 2);
+    assert(rest[0] == Token::Uint(request));
+    assert(rest.drop_first() =~= seq![Token::Bytes(bytes)]);
+    lemma_items_step(seq![Token::Bytes(bytes)], 1);
+    assert(seq![Token::Bytes(bytes)][0] == Token::Bytes(bytes));
+    assert(seq![Token::Bytes(bytes)].drop_first() =~= Seq::<Token>::empty());
+    assert(crate::cbor::spec::token_ok(Token::Bytes(bytes)));
+    assert(crate::cbor::spec::token_ok(Token::Uint(request)));
+    assert(crate::cbor::spec::is_items(Seq::<Token>::empty(), 0));
+    reveal_with_fuel(crate::cbor::spec::encode, 5);
+    assert(t.drop_first() =~= seq![Token::Uint(120), Token::Uint(request), Token::Bytes(bytes)]);
+    assert(t.drop_first().drop_first() =~= rest);
+    assert(t.drop_first().drop_first().drop_first() =~= seq![Token::Bytes(bytes)]);
+    assert(t.drop_first().drop_first().drop_first().drop_first() =~= Seq::<Token>::empty());
+    crate::cbor::lemmas::lemma_be_bytes_len(120, 1);
     crate::cbor::lemmas::lemma_be_bytes_len(request as nat, 1);
     crate::cbor::lemmas::lemma_be_bytes_len(request as nat, 2);
     crate::cbor::lemmas::lemma_be_bytes_len(request as nat, 4);
@@ -401,6 +441,12 @@ pub proof fn lemma_parse_message_tokens(m: Message)
         Message::StyleBody { request, bytes } => { assert(t.subrange(2, 4) =~= seq![Token::Uint(request), Token::Bytes(bytes)]); },
         Message::StyleEnd { request } => { assert(t.subrange(2, 3) =~= seq![Token::Uint(request)]); },
         Message::StyleFailed { request } => { assert(t.subrange(2, 3) =~= seq![Token::Uint(request)]); },
+        Message::FetchScript { request, url } => { assert(t.subrange(2, 4) =~= seq![Token::Uint(request), Token::Text(url)]); },
+        Message::UpdateUrl { replace, url } => { assert(t.subrange(2, 4) =~= seq![Token::Bool(replace), Token::Text(url)]); },
+        Message::ScriptResponse { request, content_type } => { assert(t.subrange(2, 4) =~= seq![Token::Uint(request), Token::Bytes(content_type)]); },
+        Message::ScriptBody { request, bytes } => { assert(t.subrange(2, 4) =~= seq![Token::Uint(request), Token::Bytes(bytes)]); },
+        Message::ScriptEnd { request } => { assert(t.subrange(2, 3) =~= seq![Token::Uint(request)]); },
+        Message::ScriptFailed { request } => { assert(t.subrange(2, 3) =~= seq![Token::Uint(request)]); },
         Message::FetchSub { request, destination, url } => { assert(t.subrange(2, 5) =~= seq![Token::Uint(request), Token::Uint(destination), Token::Text(url)]); },
         Message::SubResponse { request, content_type } => { assert(t.subrange(2, 4) =~= seq![Token::Uint(request), Token::Bytes(content_type)]); },
         Message::SubBody { request, bytes } => { assert(t.subrange(2, 4) =~= seq![Token::Uint(request), Token::Bytes(bytes)]); },

@@ -4,14 +4,13 @@ version = "0.0.0"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "WebIDL bindings: generated bindings, WebIDL conversions and DOMException (phase-7.md items 7.12 and 7.13). Empty until then; it holds the vendored IDL."
+description = "WebIDL bindings: generated bindings, WebIDL conversions and DOMException (phase-7.md items 7.12 and 7.13). Today it holds the vendored IDL and the generated interface model (data only)."
 
-# No dependencies yet: phase-7.md item 7.1 only vendors this crate's test
-# data and inputs. The implementation arrives with the items named in
-# src/lib.rs.
+# No dependencies: the generated model is plain data (src/model.rs). The
+# engine glue arrives with the items named in src/lib.rs.
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
-# the shipped code today (nothing: the crate is empty); `target-tier` is what
+# the shipped code today (nothing: it is data and tests); `target-tier` is what
 # phase-7.md's "Crates" table sets.
 [package.metadata.clazel]
 tier = 0

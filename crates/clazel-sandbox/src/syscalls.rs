@@ -258,6 +258,10 @@ pub fn is_allowed(arch: Arch, nr: u32) -> bool {
 /// `openat` and `flock`, writing cache files after the filter. Those are not
 /// added: the GPU process now runs with the cache off
 /// (`clazel_gpu::sandbox::LINUX_ENVIRONMENT`, which says how that was observed).
+/// The same holds for glibc malloc's `openat` of `/sys/devices/system/cpu/online`,
+/// which a thread's first arena makes once the process holds more than eight
+/// (seen killing a GPU process on x86-64, `syscall=257`): `MALLOC_ARENA_MAX` in
+/// that environment stops it, and `openat` is not added.
 ///
 /// Modelling choices:
 /// - **Warm up, then enter.** The GPU process loads the Vulkan loader and driver,

@@ -390,7 +390,12 @@ CI; under Miri it does nothing.
 The order is in `src/sandbox.rs`: a check that the host turned off Mesa's
 on-disk shader cache (`MESA_SHADER_CACHE_DISABLE=true`, `sandbox::LINUX_ENVIRONMENT`;
 with a cold cache its worker thread wrote cache files after the filter and was
-killed for it, in 3 runs of `browse_gpu.rs` in 10); `no_new_privs` and the namespaces (user, mount,
+killed for it, in 3 runs of `browse_gpu.rs` in 10) and fixed glibc's arena limit
+(`MALLOC_ARENA_MAX=64`; without it, the first thread to need a new arena once the
+process held more than eight worked the limit out by opening
+`/sys/devices/system/cpu/online`, which on a CI runner with four processors could
+come after the filter: `SIGSYS`, audit line `syscall=257`, on x86-64);
+`no_new_privs` and the namespaces (user, mount,
 network, IPC; no PID namespace, after which the kernel refuses new threads) while
 there is one thread; the Vulkan backend; a warm-up frame of our own, drawn, read
 back and checked; Landlock with no rule; then the seccomp list on every thread at

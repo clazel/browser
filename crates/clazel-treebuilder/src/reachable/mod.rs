@@ -51,9 +51,22 @@
 //! records are tagged by their names, so a parent that is a `template`
 //! element is one by its record's tag, and the rules insert into its
 //! template contents instead ([`doc::lemma_place_pok`]).
+//!
+//! The host invariant. [`keeps`] also carries `host::host_step`: the steps
+//! keep `host::host_inv` (the document has no cycle through a parent or a
+//! template's host, and the stack is ordered as the document), whether or
+//! not the parser stops, and the per-mode lemmas state it of each rule
+//! application (`host::host_next`). It is not part of [`good`] nor of
+//! [`reach_core`]: with the `head` element pushed back ("after head", case
+//! 8) the stack need not be ordered, and the "in head" rules are still
+//! followed there for everything else. The lemmas that give it are in
+//! `host::hostinv` and `host::rules`; the theorem is
+//! `host::theorems::theorem_reachable_host_acyclic`.
 
 #[allow(unused_imports)]
 use super::spec::*;
+#[cfg(verus_only)]
+use crate::host::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
@@ -81,6 +94,8 @@ pub mod walls;
 mod spec {
     #[cfg(verus_only)]
     pub use super::*;
+    #[cfg(verus_only)]
+    pub use crate::host::*;
     #[cfg(verus_only)]
     pub use crate::spec::*;
     #[cfg(verus_only)]
@@ -129,7 +144,7 @@ pub open spec fn live(p: Parser) -> bool {
 /// document, add no `template` element to the stack and (in the "in cell"
 /// mode) keep the last cell ([`cell_kept`]); or `q` has stopped. A stopped
 /// parser stays stopped.
-pub open spec fn keeps(p: Parser, q: Parser) -> bool {
+pub open spec fn keeps_core(p: Parser, q: Parser) -> bool {
     &&& p.stopped ==> q.stopped
     &&& !q.stopped ==> {
         &&& good(q)
@@ -142,6 +157,13 @@ pub open spec fn keeps(p: Parser, q: Parser) -> bool {
         &&& crate::termination::template_count(q) <= crate::termination::template_count(p)
         &&& cell_kept(p, q)
     }
+}
+
+/// [`keeps_core`], and the steps keep the host invariant
+/// (`host::host_step`: the document has no cycle through a template's host,
+/// and the stack is ordered as the document), stopped or not.
+pub open spec fn keeps(p: Parser, q: Parser) -> bool {
+    keeps_core(p, q) && host_step(p, q)
 }
 
 /// [`keeps`] is reflexive on live parsers.
@@ -169,6 +191,16 @@ pub proof fn lemma_keeps_trans(p: Parser, q: Parser, r: Parser)
         keeps(q, r),
     ensures
         keeps(p, r),
+{
+}
+
+/// [`keeps_core`] is transitive.
+pub proof fn lemma_keeps_core_trans(p: Parser, q: Parser, r: Parser)
+    requires
+        keeps_core(p, q),
+        keeps_core(q, r),
+    ensures
+        keeps_core(p, r),
 {
 }
 
@@ -231,6 +263,7 @@ pub proof fn lemma_finish(p: Parser, q1: Parser, q: Parser)
         q.mode == Mode::InCell && q.mode != q1.mode ==> cell_scoped(q.open),
     ensures
         !q.stopped ==> reach_core(q) && crate::termination::modes_ok(q),
+        host_step(p, q),
 {
     if !q.stopped {
         assert(crate::termination::template_count(q) == crate::termination::template_count(q1));

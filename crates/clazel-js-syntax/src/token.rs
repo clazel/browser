@@ -205,7 +205,7 @@ pub fn lex(src: &[u32], pos: usize, goal: Goal, html: bool) -> Option<Tok> {
 /// The source text of a `StringLiteral` holds a `LegacyOctalEscapeSequence` or
 /// a `NonOctalDecimalEscapeSequence` (§12.9.4.1): `\1` to `\9`, or `\0` followed
 /// by a decimal digit.
-fn has_legacy_escape(text: &[u32]) -> bool {
+pub(crate) fn has_legacy_escape(text: &[u32]) -> bool {
     let digit = |c: Option<&u32>| c.is_some_and(|c| (0x30..=0x39).contains(c));
     let mut i = 0usize;
     while let Some(c) = text.get(i) {
@@ -251,6 +251,9 @@ pub fn dtok_of(t: &Tok) -> crate::arena_d::DTok {
         end: t.end,
         nl: t.nl,
         escaped: t.escaped,
+        legacy: t.legacy,
+        invalid_escape: t.invalid_escape,
+        name: t.name.clone(),
     }
 }
 

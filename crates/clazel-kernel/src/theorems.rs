@@ -143,10 +143,10 @@ pub proof fn theorem_reply_only_to_sender(rules: Seq<clazel_psl::spec::Rule>, ur
                 if let clazel_ipc::message::spec::Message::Display { title, text, links } = m {
                     lemma_reply_display(rules, urls, fetch, s, id, bytes, i);
                 } else if is_sub_request(m) {
-                    // Items 5.19 and 6.17: a `FetchStyle` or `FetchSub` answers its
-                    // sender and asks for its sender's sub-fetch connections only.
-                    let (sub, at_once, per_doc, request, url) = sub_request_args(m);
-                    crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, sub, at_once, per_doc, request, url);
+                    // Items 5.19, 6.17 and 7.16: a `FetchStyle`, `FetchSub` or
+                    // `FetchScript` answers its sender and asks for its
+                    // sender's sub-fetch connections only.
+                    lemma_reply_sub_request(rules, urls, fetch, s, id, bytes, i);
                 } else if let clazel_ipc::message::spec::Message::Submit { url, method, content_type, body } = m {
         if let Some(req) = submit_request(r, method, content_type, body) {
                     if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
@@ -236,6 +236,28 @@ proof fn lemma_reply_display(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
     let m = accepted_message(r, bytes)->Some_0;
     let out = step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1;
     assert(out == seq![Output::Show { tab: r.tab, url: r.url, title: m->Display_title, text: m->Display_text, links: m->Display_links }]);
+}
+
+/// `theorem_reply_only_to_sender` for a `FetchStyle`, `FetchSub` or
+/// `FetchScript` (items 5.19, 6.17 and 7.16): answers to the sender and its
+/// own sub-fetch connections. In its own solver process: with three request
+/// messages the case ran the theorem out of its resource limit.
+#[verifier::spinoff_prover]
+proof fn lemma_reply_sub_request(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat, bytes: Seq<u8>, i: int)
+    requires
+        0 <= i < s.renderers.len(),
+        find_by_id(s.renderers, id, 0) == Some(i),
+        s.renderers[i].id == id,
+        accepted_message(s.renderers[i], bytes) matches Some(m) && is_sub_request(m),
+    ensures
+        crate::statements::reply_only_to_sender_statement(rules, urls, fetch, s, id, bytes),
+{
+    let r = s.renderers[i];
+    let m = accepted_message(r, bytes)->Some_0;
+    let (s1, out) = step(rules, urls, fetch, s, Event::FromRenderer { id, bytes });
+    let (sub, script, at_once, per_doc, request, url) = sub_request_args(m);
+    assert((s1, out) == fetch_start(rules, urls, fetch, s, r, sub, script, at_once, per_doc, request, url));
+    crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, sub, script, at_once, per_doc, request, url);
 }
 
 /// Two renderers of a well-formed table with the same tab are the same.

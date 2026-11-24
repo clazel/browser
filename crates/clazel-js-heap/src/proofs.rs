@@ -178,3 +178,380 @@ fn value_roundtrip_any() {
         None => assert!(p > 0xFFFF_FFFF_FFFF),
     }
 }
+
+// ---- Second slice: elements and symbols -------------------------------
+//
+// Bounds, stated. The dense operations (`elements::dense`) are proven for
+// one operation on a three-slot vector with indices below 5 (`dense_one_op`)
+// and two sets from empty with indices below 6 (`dense_set_pair`). The fallback rule (E3) is
+// proven for every `u32` index as the pure function `choose`. NOT proven:
+// the sparse representation, the switch from dense to sparse, and
+// `Elements` as a whole. Harnesses through `Elements::set` (which reaches
+// `BTreeMap`) ran for over eight minutes without finishing and were
+// dropped; those paths are covered by unit tests, including random
+// sequences against the abstract array (`elements::contract::Spec`), which
+// is a test, not a proof. Symbol harnesses cover the key encoding (Y4) for
+// all `u32`; the table's construction (Y1 to Y3) formats strings and is
+// covered by unit tests only.
+
+use crate::elements::Elements;
+use crate::elements::contract::{HOLE_BITS, MAX_DENSE, MAX_GAP, Mode, choose};
+use crate::elements::dense;
+use crate::string::Key;
+use crate::symbol::contract::{PropertyKey, SYMBOL_BIT, SymbolId, decode, encode};
+
+/// E3's rule is total and keeps dense storage within E4's bound.
+#[kani::proof]
+fn elements_choose_any() {
+    let slots: u32 = kani::any();
+    let index: u32 = kani::any();
+    kani::assume(slots <= MAX_DENSE);
+    let m = choose(Mode::Dense, slots, index);
+    if m == Mode::Dense {
+        // Either in range of the slots, or a write of at most MAX_GAP holes
+        // below MAX_DENSE: the slot count after is at most MAX_DENSE.
+        assert!(index < slots || (index < MAX_DENSE && index.saturating_sub(slots) <= MAX_GAP));
+        assert!(index < MAX_DENSE);
+    } else {
+        assert!(index >= slots);
+    }
+    assert_eq!(choose(Mode::Sparse, slots, index), Mode::Sparse);
+}
+
+/// One operation (set, delete or truncate) on a dense vector of three
+/// slots holding any bit patterns, against a three-cell model: reads, the
+/// slot count's bound by the length (E2) and by `MAX_DENSE` (E4).
+#[kani::proof]
+#[kani::unwind(6)]
+fn dense_one_op() {
+    let a: u64 = kani::any();
+    let b: u64 = kani::any();
+    let c: u64 = kani::any();
+    let mut v: Vec<u64> = vec![a, b, c];
+    let mut cells = [a, b, c];
+    let i: u32 = kani::any();
+    kani::assume(i < 5);
+    let mut length: u32 = 3;
+    match kani::any::<u8>() % 3 {
+        0 => {
+            let x: u64 = kani::any();
+            kani::assume(x != HOLE_BITS);
+            assert!(dense::set(&mut v, i, x).is_ok());
+            if let Some(cell) = usize::try_from(i).ok().and_then(|i| cells.get_mut(i)) {
+                *cell = x;
+            }
+            length = length.max(i.saturating_add(1));
+        }
+        1 => {
+            let idx = usize::try_from(i).ok();
+            let had = idx
+                .and_then(|i| cells.get(i))
+                .is_some_and(|&x| x != HOLE_BITS);
+            assert_eq!(dense::delete(&mut v, i), had);
+            if let Some(cell) = idx.and_then(|i| cells.get_mut(i)) {
+                *cell = HOLE_BITS;
+            }
+        }
+        _ => {
+            dense::truncate(&mut v, i);
+            length = i;
+        }
+    }
+    assert!(u32::try_from(v.len()).is_ok_and(|n| n <= length && n <= MAX_DENSE));
+    // Slots the model has (those below the vector's length) read back.
+    for k in 0..3u32 {
+        let kept = usize::try_from(k).ok().is_some_and(|k| k < v.len());
+        let want = cells.get(usize::try_from(k).unwrap_or(0)).copied();
+        if kept {
+            assert_eq!(dense::get(&v, k), want);
+        } else {
+            assert_eq!(dense::get(&v, k), None);
+        }
+    }
+}
+
+/// `dense::set` at any index of the small range, after one set at 0:
+/// both elements read back, nothing else appears (E1 for the dense case).
+#[kani::proof]
+#[kani::unwind(8)]
+fn dense_set_pair() {
+    let mut v: Vec<u64> = Vec::new();
+    assert!(dense::set(&mut v, 0, 1).is_ok());
+    let index: u32 = kani::any();
+    kani::assume(index < 6);
+    assert!(dense::set(&mut v, index, 2).is_ok());
+    assert_eq!(dense::get(&v, index), Some(2));
+    if index != 0 {
+        assert_eq!(dense::get(&v, 0), Some(1));
+    }
+    let want_len = index.saturating_add(1).max(1);
+    assert_eq!(u32::try_from(v.len()), Ok(want_len));
+    assert_eq!(dense::get(&v, want_len), None);
+}
+
+/// An empty array has no element at any index.
+#[kani::proof]
+fn elements_empty_get_any() {
+    let e = Elements::new();
+    let i: u32 = kani::any();
+    assert_eq!(e.get(i), None);
+    assert_eq!(e.len(), 0);
+}
+
+/// Y4: for every `u32` key, decoding then encoding gives it back, and a
+/// string and a symbol with the same number never share a key.
+#[kani::proof]
+fn symbol_key_encoding_any() {
+    let k: u32 = kani::any();
+    assert_eq!(encode(decode(Key(k))), Some(Key(k)));
+    let n: u32 = kani::any();
+    kani::assume(n < SYMBOL_BIT);
+    let s = encode(PropertyKey::String(Key(n)));
+    let y = encode(PropertyKey::Symbol(SymbolId(n)));
+    assert!(s.is_some() && y.is_some());
+    assert_ne!(s, y);
+    assert_eq!(s.map(decode), Some(PropertyKey::String(Key(n))));
+    assert_eq!(y.map(decode), Some(PropertyKey::Symbol(SymbolId(n))));
+    // Numbers at or above 2^31 are refused, never wrapped (Y5).
+    let big: u32 = kani::any();
+    kani::assume(big >= SYMBOL_BIT);
+    assert_eq!(encode(PropertyKey::String(Key(big))), None);
+    assert_eq!(encode(PropertyKey::Symbol(SymbolId(big))), None);
+}
+
+// ---- Third slice: the collector -----------------------------------------
+//
+// Bounds, stated. `gc_mark_closed_over_roots` proves the real marker
+// (`gc::mark_into`, which `gc::mark` and so `Heap::collect` call) for every
+// graph of `GRAPH` (3) nodes where each node has one strong edge and the
+// first `EPH` (2) nodes have one ephemeron each, each edge naming any node
+// or no node (a stale reference, or no edge), with any `GRAPH` roots: the
+// marked set contains the roots and is closed under the rules that define
+// reachability (a strong edge of a marked node; an ephemeron value whose
+// map and key are marked). `gc::contract::reachable` is the least set with
+// those two properties, so it is inside the marked set: every reachable
+// node survives (GC1). That is the kernel of "a slot reachable from the
+// roots is never freed". It takes about 5 minutes.
+//
+// This is a smaller bound than the quadratic marker's (4 nodes, an
+// ephemeron on each, about 2 minutes): the marker now indexes pending
+// ephemerons by key, in linked lists CBMC handles badly. These did not
+// finish: 4 nodes with 4 ephemerons (over 13 CPU minutes), 4 nodes with 2
+// ephemerons (over 10), 3 nodes with 3 ephemerons and the work counter
+// (over 9), so none was kept. Two ephemerons cover a chain of two entries,
+// the key marked before and after its entry is examined.
+//
+// GC5's work bound (`gc::contract::work_bound`) is NOT proven: the
+// harness with the counter did not finish (above). It is tested:
+// `gc::tests` counts the work on chains of thousands of entries in either
+// order and on random graphs, and the bound is read off the loops (no node or
+// entry is handled twice), which is not a proof.
+//
+// NOT proven by Kani:
+// - GC2 (nothing unreachable is kept), by tests only.
+// - `Heap::collect` as a whole: graph extraction, weak clearing, the sweep
+//   (GC3, GC4, GC6) and the safe-point guard. A harness over a heap of two
+//   objects (one slot value each, a `WeakRef`, any roots) was written and
+//   ran past a 10-minute limit without finishing, as the elements harnesses
+//   through `Vec`s and `BTreeMap` did, and was dropped. A first version of
+//   the marker harness over `Vec`s ran out of memory; `mark_into` takes
+//   slices so that arrays stand in for the vectors. Freeing goes through
+//   `Arena::free`, whose invariants the arena harnesses prove.
+// - Graphs past `GRAPH` nodes, and arbitrary operation sequences. The
+//   property test in `gc::tests` checks GC1 to GC6 on random heaps of up
+//   to 3,000 objects against an independent oracle, which is a test, not a
+//   proof.
+
+use crate::gc::contract::Graph;
+use crate::gc::mark_into;
+
+/// Nodes in the graphs of `gc_mark_closed_over_roots`.
+const GRAPH: usize = 3;
+
+/// How many of them (the first ones) have an ephemeron (see the header).
+const EPH: usize = 2;
+
+/// A node name, or one that names no node.
+fn any_name(n: usize) -> usize {
+    let i: usize = kani::any();
+    kani::assume(i <= n);
+    i
+}
+
+/// A graph of `GRAPH` nodes as fixed arrays (vectors of vectors made CBMC
+/// run for over ten minutes): each node has one strong edge, the first
+/// `EPH` have an ephemeron, and a name past the last node (`GRAPH`) is "no node", which
+/// reaches nothing, so it stands for the absence of the edge as well as for
+/// a stale reference.
+struct Fixed {
+    strong: [usize; GRAPH],
+    eph: [(usize, usize); EPH],
+}
+
+impl Graph for Fixed {
+    fn len(&self) -> usize {
+        GRAPH
+    }
+    fn strong(&self, i: usize) -> &[usize] {
+        self.strong.get(i..=i).unwrap_or(&[])
+    }
+    fn ephemerons(&self, i: usize) -> &[(usize, usize)] {
+        self.eph.get(i..=i).unwrap_or(&[])
+    }
+}
+
+#[kani::proof]
+#[kani::solver(cadical)]
+#[kani::unwind(5)]
+fn gc_mark_closed_over_roots() {
+    let mut g = Fixed {
+        strong: [0; GRAPH],
+        eph: [(0, 0); EPH],
+    };
+    for s in &mut g.strong {
+        *s = any_name(GRAPH);
+    }
+    for e in &mut g.eph {
+        *e = (any_name(GRAPH), any_name(GRAPH));
+    }
+    // Any `GRAPH` roots, each a node or none: any subset of the nodes.
+    let mut roots = [0usize; GRAPH];
+    for r in &mut roots {
+        *r = any_name(GRAPH);
+    }
+    let mut marked = [false; GRAPH];
+    let mut work = [0usize; GRAPH];
+    let mut head = [usize::MAX; GRAPH];
+    let mut link = [(0usize, usize::MAX); EPH];
+    let _ = mark_into(&g, &roots, &mut marked, &mut work, &mut head, &mut link);
+    // GC1. `marked` contains the roots, and is closed under the rules that
+    // define reachability (a strong edge of a marked node, an ephemeron
+    // value whose key and map are marked). `contract::reachable` is the
+    // least set with those two properties, so it is inside `marked`: every
+    // reachable node survives. (Equality, GC2, is checked by the unit test
+    // `mark_equals_the_specification_on_random_graphs`, and on heaps by the
+    // property test.)
+    let is = |i: usize| marked.get(i).copied().unwrap_or(false);
+    for &r in &roots {
+        assert!(r >= GRAPH || is(r));
+    }
+    for i in 0..GRAPH {
+        if is(i) {
+            let e = g.strong.get(i).copied().unwrap_or(GRAPH);
+            assert!(e >= GRAPH || is(e));
+            let (k, v) = g.eph.get(i).copied().unwrap_or((GRAPH, GRAPH));
+            assert!(k >= GRAPH || v >= GRAPH || !is(k) || is(v));
+        }
+    }
+}
+
+// ---- Fourth slice: strings and shapes --------------------------------------
+//
+// `gc_mark_shapes_is_the_least_closed_set` proves the real marker
+// (`gc::mark_shapes`, which `Heap::collect` calls) on every table of `TABLE`
+// shape entries and `TABLE` keys: each entry may exist or not, have any
+// parent (an entry, or none, cycles included) and name any key or none, with
+// any `TABLE` root shapes and `TABLE` root keys (an entry or key, or none).
+// It proves both halves of `gc::contract::live_shapes`:
+// - safety (GC10, GC11): every root shape that exists, every parent of a
+//   marked shape that exists, every key of a marked shape and every root key
+//   is marked;
+// - precision (GC12): a marked shape is a root or the parent of a marked
+//   shape, and a marked key is a root key or the key of a marked shape.
+// A closed set that is also supported by the roots is the least one, so the
+// marked sets are exactly `live_shapes`.
+//
+// NOT proven by Kani, for want of a harness that finishes: `Shapes::sweep`
+// and `Interner::sweep` and the transition clean-up (they walk `HashMap`s,
+// which CBMC models as paths, as the elements harnesses' `BTreeMap`s did);
+// `Heap::collect_with` as a whole; and a table past `TABLE` entries. Those
+// are tested (`gc::tests`, `shape::tests`, `string::tests`), against an
+// independent oracle in the property test.
+
+use crate::gc::contract::ShapeGraph;
+use crate::gc::mark_shapes;
+
+/// Entries and keys in the tables of `gc_mark_shapes_is_the_least_closed_set`.
+const TABLE: usize = 4;
+
+/// A shape table as arrays: each entry has at most one parent and one key,
+/// and a name past `TABLE` is none.
+struct FixedShapes {
+    exists: [bool; TABLE],
+    parent: [usize; TABLE],
+    key: [usize; TABLE],
+}
+
+impl ShapeGraph for FixedShapes {
+    fn len(&self) -> usize {
+        TABLE
+    }
+    fn exists(&self, i: usize) -> bool {
+        self.exists.get(i).copied().unwrap_or(false)
+    }
+    fn parent(&self, i: usize) -> Option<usize> {
+        self.parent.get(i).copied().filter(|&p| p < TABLE)
+    }
+    fn each_key(&self, i: usize, f: &mut dyn FnMut(usize)) {
+        if let Some(k) = self.key.get(i).copied().filter(|&k| k < TABLE) {
+            f(k);
+        }
+    }
+}
+
+#[kani::proof]
+#[kani::solver(cadical)]
+#[kani::unwind(8)]
+fn gc_mark_shapes_is_the_least_closed_set() {
+    let mut g = FixedShapes {
+        exists: [false; TABLE],
+        parent: [0; TABLE],
+        key: [0; TABLE],
+    };
+    for i in 0..TABLE {
+        g.exists[i] = kani::any();
+        g.parent[i] = any_name(TABLE);
+        g.key[i] = any_name(TABLE);
+    }
+    let mut roots = [0usize; TABLE];
+    let mut root_keys = [0usize; TABLE];
+    for i in 0..TABLE {
+        roots[i] = any_name(TABLE);
+        root_keys[i] = any_name(TABLE);
+    }
+    let mut shapes = [false; TABLE];
+    let mut keys = [false; TABLE];
+    mark_shapes(&g, &roots, &root_keys, &mut shapes, &mut keys);
+    let sh = |i: usize| shapes.get(i).copied().unwrap_or(false);
+    let ky = |i: usize| keys.get(i).copied().unwrap_or(false);
+    // Safety.
+    for &r in &roots {
+        assert!(!g.exists(r) || sh(r));
+    }
+    for &k in &root_keys {
+        assert!(k >= TABLE || ky(k));
+    }
+    for i in 0..TABLE {
+        if sh(i) {
+            assert!(g.exists(i));
+            if let Some(p) = g.parent(i) {
+                assert!(!g.exists(p) || sh(p));
+            }
+            g.each_key(i, &mut |k| assert!(ky(k)));
+        }
+    }
+    // Precision: every marked shape is a root, or the parent of a marked
+    // shape; every marked key is a root key, or a marked shape's.
+    for i in 0..TABLE {
+        if sh(i) {
+            let supported =
+                roots.contains(&i) || (0..TABLE).any(|j| sh(j) && g.parent(j) == Some(i));
+            assert!(supported);
+        }
+        if ky(i) {
+            let supported = root_keys.contains(&i)
+                || (0..TABLE).any(|j| sh(j) && g.key.get(j).copied() == Some(i));
+            assert!(supported);
+        }
+    }
+}
