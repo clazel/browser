@@ -294,6 +294,10 @@ pub struct ReqBuf {
     pub initiator: Option<ParsedOrigin>,
     /// the redirect-taint is not "same-origin"
     pub origin_tainted: bool,
+    /// the author's header lines (item 7.16)
+    pub headers: Vec<FieldLineBuf>,
+    /// mode "cors" (item 7.16)
+    pub cors: bool,
 }
 
 impl View for ReqBuf {
@@ -311,6 +315,8 @@ impl View for ReqBuf {
                 None => None,
             },
             origin_tainted: self.origin_tainted,
+            headers: clazel_http::field::types::lines_view(self.headers@),
+            cors: self.cors,
         }
     }
 }
@@ -320,8 +326,9 @@ pub fn get_req_buf() -> (out: ReqBuf)
     ensures
         out@ == get_req(),
 {
-    let out = ReqBuf { method: vec![0x47, 0x45, 0x54], body: None, initiator: None, origin_tainted: false };
+    let out = ReqBuf { method: vec![0x47, 0x45, 0x54], body: None, initiator: None, origin_tainted: false, headers: Vec::new(), cors: false };
     assert(out@.method =~= lit_get());
+    assert(out@.headers =~= Seq::<clazel_http::field::spec::FieldLine>::empty());
     out
 }
 
@@ -453,15 +460,14 @@ pub fn req_ok_exec(req: &ReqBuf) -> (r: bool)
     if !(g || p) {
         return false;
     }
-    match &req.body {
-        Some(b) => {
-            if g {
-                return false;
-            }
-            b.bytes.len() <= 0x100_0000
-        },
-        None => true,
+    let body_bad = match &req.body {
+        Some(b) => g || b.bytes.len() > 0x100_0000,
+        None => false,
+    };
+    if body_bad {
+        return false;
     }
+    author_headers_ok_exec(req.headers.as_slice())
 }
 
 /// `s` as octets, narrowing each code point.
@@ -528,7 +534,7 @@ fn origin_value_exec(url: &ParsedUrl, req: &ReqBuf) -> (out: Option<Vec<u8>>)
                     proof {
                         assert(clazel_url::url::spec::https_str() =~= seq![0x68u32, 0x74, 0x74, 0x70, 0x73]);
                     }
-                    if eq32(scheme.as_slice(), &[0x68, 0x74, 0x74, 0x70, 0x73]) && !eq32(url.scheme.as_slice(), &[0x68, 0x74, 0x74, 0x70, 0x73]) {
+                    if !req.cors && eq32(scheme.as_slice(), &[0x68, 0x74, 0x74, 0x70, 0x73]) && !eq32(url.scheme.as_slice(), &[0x68, 0x74, 0x74, 0x70, 0x73]) {
                         Some(null_value())
                     } else {
                         ascii_octets_exec(clazel_origin::exec::serialization_of_origin_exec(o).as_slice())
@@ -594,13 +600,36 @@ pub fn request_bytes_req_cookie(url: &ParsedUrl, req: &ReqBuf, cookie: &[u8]) ->
     }
     let ghost with_body = clazel_http::field::types::lines_view(fields@);
     assert(with_body =~= base + body_field_lines(req@));
-    // Origin (Fetch §4.6 step 13).
-    if !(is_get(req.method.as_slice()) || is_head(req.method.as_slice())) {
+    // The author's headers (item 7.16).
+    let mut k: usize = 0;
+    while k < req.headers.len()
+        invariant
+            k <= req.headers.len(),
+            clazel_http::field::types::lines_view(fields@) =~= with_body + clazel_http::field::types::lines_view(req.headers@).take(k as int),
+        decreases req.headers.len() - k,
+    {
+        if let Some(h) = req.headers.get(k) {
+            let ghost before = fields@;
+            fields.push(FieldLineBuf { name: copy(h.name.as_slice()), value: copy(h.value.as_slice()) });
+            proof {
+                assert(clazel_http::field::types::lines_view(req.headers@).take(k as int + 1) =~= clazel_http::field::types::lines_view(req.headers@).take(
+                    k as int,
+                ).push(h@));
+                assert(clazel_http::field::types::lines_view(fields@) =~= clazel_http::field::types::lines_view(before).push(h@));
+            }
+        }
+        // Never saturates: k < req.headers.len().
+        k = k.saturating_add(1);
+    }
+    assert(clazel_http::field::types::lines_view(req.headers@).take(req.headers.len() as int) =~= req@.headers);
+    let ghost with_headers = clazel_http::field::types::lines_view(fields@);
+    // Origin (Fetch §4.6 step 13; item 7.16: every request in mode "cors").
+    if req.cors || !(is_get(req.method.as_slice()) || is_head(req.method.as_slice())) {
         let v = origin_value_exec(url, req)?;
         fields.push(FieldLineBuf { name: copy(&[0x4F, 0x72, 0x69, 0x67, 0x69, 0x6E]), value: v });
     }
     let ghost with_origin = clazel_http::field::types::lines_view(fields@);
-    assert(with_origin =~= with_body + origin_field_lines(url@, req@)->Some_0);
+    assert(with_origin =~= with_headers + origin_field_lines(url@, req@)->Some_0);
     // Cookie (step 22.1).
     if !cookie.is_empty() {
         fields.push(line(&[0x43, 0x6F, 0x6F, 0x6B, 0x69, 0x65], cookie));
@@ -640,13 +669,256 @@ pub fn rewrite_for_redirect(status: u16, req: ReqBuf) -> (out: ReqBuf)
     let get = is_get(req.method.as_slice());
     let head = is_head(req.method.as_slice());
     if ((status == 301 || status == 302) && post) || (status == 303 && !get && !head) {
-        let out = ReqBuf { method: vec![0x47, 0x45, 0x54], body: None, initiator: req.initiator, origin_tainted: req.origin_tainted };
+        let out = ReqBuf {
+            method: vec![0x47, 0x45, 0x54],
+            body: None,
+            initiator: req.initiator,
+            origin_tainted: req.origin_tainted,
+            headers: req.headers,
+            cors: req.cors,
+        };
         assert(out@.method =~= lit_get());
         assert(out@ == super::spec::rewrite_for_redirect(status as nat, req@));
         out
     } else {
         req
     }
+}
+
+
+// ---------------------------------------------------------------------------
+// Item 7.16: author headers.
+// ---------------------------------------------------------------------------
+
+/// The view of a list of names.
+pub open spec fn names_view(v: Seq<Vec<u8>>) -> Seq<Seq<u8>> {
+    v.map_values(|x: Vec<u8>| x@)
+}
+
+/// [`byte_lowercase`].
+pub fn byte_lowercase_exec(s: &[u8]) -> (out: Vec<u8>)
+    ensures
+        out@ == byte_lowercase(s@),
+{
+    let mut out: Vec<u8> = Vec::new();
+    let mut i: usize = 0;
+    while i < s.len()
+        invariant
+            i <= s.len(),
+            out@ =~= byte_lowercase(s@.take(i as int)),
+        decreases s.len() - i,
+    {
+        if let Some(b) = s.get(i) {
+            let c = if 0x41 <= *b && *b <= 0x5A { b.checked_add(0x20).unwrap_or(*b) } else { *b };
+            let ghost before = out@;
+            out.push(c);
+            proof {
+                assert(s@.take(i as int + 1) =~= s@.take(i as int).push(*b));
+                assert(byte_lowercase(s@.take(i as int + 1)) =~= byte_lowercase(s@.take(i as int)).push(c));
+            }
+        }
+        // Never saturates: i < s.len().
+        i = i.saturating_add(1);
+    }
+    assert(s@.take(s.len() as int) =~= s@);
+    out
+}
+
+/// [`starts_with`].
+pub fn starts_with_exec(s: &[u8], p: &[u8]) -> (r: bool)
+    ensures
+        r == starts_with(s@, p@),
+{
+    if p.len() > s.len() {
+        return false;
+    }
+    let mut i: usize = 0;
+    while i < p.len()
+        invariant
+            i <= p.len(),
+            p.len() <= s.len(),
+            forall|k: int| 0 <= k < i ==> s@[k] == p@[k],
+        decreases p.len() - i,
+    {
+        if s.get(i) != p.get(i) {
+            assert(s@.take(p.len() as int)[i as int] != p@[i as int]);
+            return false;
+        }
+        // Never saturates: i < p.len().
+        i = i.saturating_add(1);
+    }
+    assert(s@.take(p.len() as int) =~= p@);
+    true
+}
+
+/// [`in_names`] is `contains`.
+proof fn lemma_in_names(ns: Seq<Seq<u8>>, x: Seq<u8>)
+    ensures
+        in_names(ns, x) == ns.contains(x),
+    decreases ns.len(),
+{
+    if ns.len() > 0 {
+        lemma_in_names(ns.drop_first(), x);
+        if ns.drop_first().contains(x) {
+            let j = choose|j: int| 0 <= j < ns.drop_first().len() && ns.drop_first()[j] == x;
+            assert(ns[j + 1] == x);
+        }
+        if ns.contains(x) && ns[0] != x {
+            let j = choose|j: int| 0 <= j < ns.len() && ns[j] == x;
+            assert(ns.drop_first()[j - 1] == x);
+        }
+    }
+}
+
+/// `names` holds `l`.
+fn contains_name(names: &[Vec<u8>], l: &[u8]) -> (r: bool)
+    ensures
+        r == in_names(names_view(names@), l@),
+{
+    proof {
+        lemma_in_names(names_view(names@), l@);
+    }
+    let mut k: usize = 0;
+    while k < names.len()
+        invariant
+            k <= names.len(),
+            forall|j: int| 0 <= j < k ==> names@[j]@ != l@,
+            in_names(names_view(names@), l@) == names_view(names@).contains(l@),
+        decreases names.len() - k,
+    {
+        let hit = match names.get(k) {
+            Some(n) => eq8(n.as_slice(), l),
+            None => false,
+        };
+        if hit {
+            proof {
+                assert(names_view(names@)[k as int] == l@);
+                assert(names_view(names@).contains(l@));
+            }
+            return true;
+        }
+        // Never saturates: k < names.len().
+        k = k.saturating_add(1);
+    }
+    proof {
+        if names_view(names@).contains(l@) {
+            let j = choose|j: int| 0 <= j < names_view(names@).len() && names_view(names@)[j] == l@;
+            assert(names@[j]@ == l@);
+        }
+    }
+    false
+}
+
+/// [`forbidden_names`].
+fn forbidden_names_exec() -> (out: Vec<Vec<u8>>)
+    ensures
+        names_view(out@) == forbidden_names(),
+{
+    let out = vec![
+        vec![0x61u8, 0x63, 0x63, 0x65, 0x70, 0x74, 0x2D, 0x63, 0x68, 0x61, 0x72, 0x73, 0x65, 0x74],
+        vec![0x61u8, 0x63, 0x63, 0x65, 0x70, 0x74, 0x2D, 0x65, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67],
+        vec![0x61u8, 0x63, 0x63, 0x65, 0x73, 0x73, 0x2D, 0x63, 0x6F, 0x6E, 0x74, 0x72, 0x6F, 0x6C, 0x2D, 0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x2D, 0x68, 0x65, 0x61, 0x64, 0x65, 0x72, 0x73],
+        vec![0x61u8, 0x63, 0x63, 0x65, 0x73, 0x73, 0x2D, 0x63, 0x6F, 0x6E, 0x74, 0x72, 0x6F, 0x6C, 0x2D, 0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x2D, 0x6D, 0x65, 0x74, 0x68, 0x6F, 0x64],
+        vec![0x63u8, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E],
+        vec![0x63u8, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x6C, 0x65, 0x6E, 0x67, 0x74, 0x68],
+        vec![0x63u8, 0x6F, 0x6F, 0x6B, 0x69, 0x65],
+        vec![0x63u8, 0x6F, 0x6F, 0x6B, 0x69, 0x65, 0x32],
+        vec![0x64u8, 0x61, 0x74, 0x65],
+        vec![0x64u8, 0x6E, 0x74],
+        vec![0x65u8, 0x78, 0x70, 0x65, 0x63, 0x74],
+        vec![0x68u8, 0x6F, 0x73, 0x74],
+        vec![0x6Bu8, 0x65, 0x65, 0x70, 0x2D, 0x61, 0x6C, 0x69, 0x76, 0x65],
+        vec![0x6Fu8, 0x72, 0x69, 0x67, 0x69, 0x6E],
+        vec![0x72u8, 0x65, 0x66, 0x65, 0x72, 0x65, 0x72],
+        vec![0x73u8, 0x65, 0x74, 0x2D, 0x63, 0x6F, 0x6F, 0x6B, 0x69, 0x65],
+        vec![0x74u8, 0x65],
+        vec![0x74u8, 0x72, 0x61, 0x69, 0x6C, 0x65, 0x72],
+        vec![0x74u8, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x65, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67],
+        vec![0x75u8, 0x70, 0x67, 0x72, 0x61, 0x64, 0x65],
+        vec![0x76u8, 0x69, 0x61],
+    ];
+    assert(names_view(out@) =~~= forbidden_names());
+    out
+}
+
+/// [`method_override_names`].
+fn method_override_names_exec() -> (out: Vec<Vec<u8>>)
+    ensures
+        names_view(out@) == method_override_names(),
+{
+    let out = vec![
+        vec![0x78u8, 0x2D, 0x68, 0x74, 0x74, 0x70, 0x2D, 0x6D, 0x65, 0x74, 0x68, 0x6F, 0x64],
+        vec![0x78u8, 0x2D, 0x68, 0x74, 0x74, 0x70, 0x2D, 0x6D, 0x65, 0x74, 0x68, 0x6F, 0x64, 0x2D, 0x6F, 0x76, 0x65, 0x72, 0x72, 0x69, 0x64, 0x65],
+        vec![0x78u8, 0x2D, 0x6D, 0x65, 0x74, 0x68, 0x6F, 0x64, 0x2D, 0x6F, 0x76, 0x65, 0x72, 0x72, 0x69, 0x64, 0x65],
+    ];
+    assert(names_view(out@) =~~= method_override_names());
+    out
+}
+
+/// [`managed_names`].
+fn managed_names_exec() -> (out: Vec<Vec<u8>>)
+    ensures
+        names_view(out@) == managed_names(),
+{
+    let out = vec![
+        vec![0x61u8, 0x63, 0x63, 0x65, 0x70, 0x74],
+        vec![0x75u8, 0x73, 0x65, 0x72, 0x2D, 0x61, 0x67, 0x65, 0x6E, 0x74],
+        vec![0x63u8, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x74, 0x79, 0x70, 0x65],
+    ];
+    assert(names_view(out@) =~~= managed_names());
+    out
+}
+
+/// [`author_header_dropped`].
+pub fn author_header_dropped_exec(name: &[u8]) -> (r: bool)
+    ensures
+        r == author_header_dropped(name@),
+{
+    let l = byte_lowercase_exec(name);
+    proof {
+        assert(lit_proxy_prefix() =~= seq![0x70u8, 0x72, 0x6F, 0x78, 0x79, 0x2D]);
+        assert(lit_sec_prefix() =~= seq![0x73u8, 0x65, 0x63, 0x2D]);
+    }
+    contains_name(forbidden_names_exec().as_slice(), l.as_slice()) || starts_with_exec(l.as_slice(), &[0x70, 0x72, 0x6F, 0x78, 0x79, 0x2D]) || starts_with_exec(
+        l.as_slice(),
+        &[0x73, 0x65, 0x63, 0x2D],
+    ) || contains_name(method_override_names_exec().as_slice(), l.as_slice()) || contains_name(managed_names_exec().as_slice(), l.as_slice())
+}
+
+/// [`author_headers_ok`].
+pub fn author_headers_ok_exec(headers: &[FieldLineBuf]) -> (r: bool)
+    ensures
+        r == author_headers_ok(clazel_http::field::types::lines_view(headers@)),
+{
+    let ghost hv = clazel_http::field::types::lines_view(headers@);
+    let mut k: usize = 0;
+    proof {
+        assert(hv.skip(0) =~= hv);
+    }
+    while k < headers.len()
+        invariant
+            k <= headers.len(),
+            hv == clazel_http::field::types::lines_view(headers@),
+            author_headers_ok(hv) == author_headers_ok(hv.skip(k as int)),
+        decreases headers.len() - k,
+    {
+        if let Some(h) = headers.get(k) {
+            proof {
+                assert(hv[k as int] == h@);
+                assert(hv.skip(k as int)[0] == h@);
+                assert(hv.skip(k as int).drop_first() =~= hv.skip(k as int + 1));
+            }
+            if author_header_dropped_exec(h.name.as_slice()) {
+                return false;
+            }
+        }
+        // Never saturates: k < headers.len().
+        k = k.saturating_add(1);
+    }
+    proof {
+        assert(hv.skip(headers.len() as int) =~= Seq::<clazel_http::field::spec::FieldLine>::empty());
+    }
+    true
 }
 
 } // verus!

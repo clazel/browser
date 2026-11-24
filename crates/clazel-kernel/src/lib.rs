@@ -23,6 +23,8 @@
 //!   implementation and `step_real`, the function the host shell calls;
 //!   [`real_theorems`] states the isolation theorems for them.
 
+pub mod api_rel;
+pub mod api_theorems;
 pub mod body_theorems;
 pub mod commit_theorems;
 pub mod contract;
@@ -44,6 +46,10 @@ pub mod net_theorems;
 pub mod net_wf;
 pub mod ni_theorem;
 pub mod noninterference;
+pub mod popup_frame;
+pub mod popup_mutation_lemmas;
+pub mod popup_rel;
+pub mod popup_theorems;
 pub mod projection;
 pub mod quark;
 pub mod real_theorems;
@@ -61,4 +67,5 @@ pub mod unwinding;
 pub mod unwinding_b;
 pub mod unwinding_d;
 pub mod url_mutation_lemmas;
+pub mod url_rel;
 pub mod urls;

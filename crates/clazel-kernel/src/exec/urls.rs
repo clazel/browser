@@ -25,7 +25,7 @@ pub open spec fn code_points_opt_view(o: Option<Vec<u32>>) -> Option<Seq<u32>> {
     }
 }
 
-/// The URL functions of the kernel: three exec functions whose results are
+/// The URL functions of the kernel: four exec functions whose results are
 /// those of the spec functions of [`UrlFnsExec::urls`].
 pub trait UrlFnsExec {
     /// The spec the methods implement.
@@ -35,6 +35,12 @@ pub trait UrlFnsExec {
     fn origin_of(&self, url: &[u32]) -> (r: Option<ParsedOrigin>)
         ensures
             origin_opt_view(r) == (self.urls().origin_of)(url@),
+    ;
+
+    /// [`crate::spec::UrlFns::is_javascript`] (item 7.16).
+    fn is_javascript(&self, url: &[u32]) -> (r: bool)
+        ensures
+            r == (self.urls().is_javascript)(url@),
     ;
 
     /// [`crate::spec::UrlFns::path_of`].

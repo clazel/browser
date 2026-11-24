@@ -174,6 +174,186 @@ the new event, outputs and message. The ownership and limits proofs rest on
 an invariant of reachable states (`subfetch_tables_wf`: each key once, each
 serial below its renderer's counter).
 
+## URL updates (phase-7.md item 7.16)
+
+A committed renderer's `UpdateUrl { replace, url }` (`history.pushState`
+and `history.replaceState`, tag 17) changes what the address bar shows for
+its tab, and nothing else. The renderer runs HTML's "shared history
+push/replace state steps" and throws its own `SecurityError`; the kernel
+only decides whether the address bar follows. There is no reply.
+
+### Decisions (taken here, from the plan's goals; each is also in `src/spec.rs`)
+
+1. **The document URL is a lock-tagged table** (`State::doc_urls`, entries
+   `DocUrl { id, lock, url }`), as 5.18's titles are, not the renderer's
+   `url`, which stays the URL last committed. So a renderer's record never
+   changes on an `UpdateUrl`, every theorem about renderer records
+   (`theorem_lock_set_only_by_navigation`,
+   `theorem_committed_only_after_commit`) is unchanged, and
+   noninterference compares only the observer's entries. A same-origin
+   commit forgets the renderer's entry.
+2. **Accepted only when the URL's lock is the renderer's tuple lock.** The
+   URL is decoded and resolved against the committed URL (as `Navigate`'s
+   is); an empty URL, a URL that does not resolve, one of another origin,
+   or any URL from an opaque-origin renderer changes nothing.
+3. **What reads it:** the `url` of `Show` and `Paint`. Not the base of the
+   URLs the kernel resolves, and not `document.cookie`'s path, which stay
+   the committed URL (listed below).
+
+### Theorems
+
+`theorem_url_update_same_origin`: an accepted `UpdateUrl` has no output and
+changes only the sender's entry, to a URL whose origin is the sender's tuple
+lock; and in every reachable state every renderer's document URL has the
+renderer's lock (`doc_urls_wf`, part of `kernel_wf`, with
+`theorem_lock_is_committed_origin`). `theorem_address_bar_integrity` is
+restated: a `Show` or `Paint` names the document URL. The noninterference
+theorem is re-proven with the new table in its relation.
+
+### Not done
+
+- HTML lets a document change its URL's username or password and forbids
+  it; the kernel checks only the origin (the renderer refuses the rest).
+- An opaque-origin document (`data:`, `file:`, `about:blank`) cannot update
+  the address bar, though HTML lets it change the fragment.
+- The kernel resolves a renderer's relative URLs, and `document.cookie`
+  matches paths, against the committed URL, not the document's URL after a
+  `pushState`.
+- The table keeps the entry of a renderer that was replaced, killed or
+  exited (never read again: ids are not reused).
+
+## `fetch()` and XHR (phase-7.md item 7.16)
+
+A committed renderer's `Fetch { request, method, url, content_type, body,
+mode, headers }` (tag 20) runs as a sub-fetch with `api` set to its mode:
+the same limits, tables, `Sub*` connections, timeout and credentials rule
+as a style sheet (cookies only on hops of the lock's origin: credentials
+mode "same-origin"). It is answered with `FetchResponse { status, content
+type }`, `FetchBody` frames and `FetchEnd`, or `FetchFailed`.
+
+### Decisions (taken here, from the plan's goals; each is also in `src/spec.rs`)
+
+1. **The request** is `GET` without a body or `POST` with one; the page's
+   headers in pairs, without those Fetch §2.2.2 forbids or the client sets
+   itself (`Accept`, `User-Agent`, `Content-Type`); the lock as its origin;
+   `Origin` on every request in mode "cors". `clazel-fetch`'s `req_ok`
+   refuses any request that still carries such a header, so the rule holds
+   of every request on the wire, not only of the kernel's filter.
+2. **No CORS preflight.** A request to another origin is refused in mode
+   "same-origin", and in the other modes when it would need a preflight (a
+   page header, or a body type that is not safelisted). A redirect away
+   from the origin drops the page's headers.
+3. **The answer**: a basic response (final URL of the lock's origin, no
+   cross-origin hop) or, in mode "cors", one that passed the CORS check
+   (`*` or the byte-serialized request origin, `null` after a cross-origin
+   hop) is read; in mode "no-cors" anything else is an opaque response
+   (status 0, no body); otherwise `FetchFailed`.
+
+### Theorems
+
+`theorem_cors_read`: every frame a `SubNet` of a `Fetch` gives its renderer
+is `FetchFailed`, an opaque response, or the frames of the response the
+fetch ended with, which is basic or passed the CORS check in mode "cors".
+`theorem_forbidden_headers`: every `SubSend` (and every `Send` of a `Net`
+event) is the wire form of a request whose page headers name nothing Fetch
+forbids or the client sets. `theorem_subfetch_only_to_requester` is restated
+over the `Fetch*` frames; the noninterference and every other theorem are
+re-proven with `Fetch` in the renderer's messages.
+
+### Not done
+
+- Methods other than `GET` and `POST`, and every request that needs a CORS
+  preflight, are refused (no preflight is sent).
+- Credentials mode "include" is not offered.
+- The renderer learns a readable response's status, `Content-Type` and
+  body only: not its other headers, final URL or type.
+- A same-origin `POST` with a non-safelisted type that its server
+  redirects (307, 308) to another origin keeps its body and type there.
+- Fetch's method-override rule (§2.2.2 step 3) is over-approximated: the
+  three names are dropped whatever their value.
+- `FetchScript`'s cross-origin responses are still handed over whole
+  (opaque-response blocking is not built).
+
+## Popups and `javascript:` URLs (phase-7.md item 7.16)
+
+A committed renderer's `OpenTab { url }` (`window.open` and `target=_blank`,
+tag 21) opens a new tab at `url`, resolved against its committed URL, but only
+if the kernel itself recorded a user input to that renderer a short while
+before. There is no reply: a refused popup changes nothing. The tab is the
+host's own `OpenTab` without a script (a new renderer locked to the URL's
+origin that starts the fetch).
+
+### Decisions (taken here, from the plan's goals; each is also in `src/spec.rs`)
+
+1. **The activation is the kernel's own record**, a lock-tagged table
+   (`State::acts`, entries `Activation { id, lock, left }`), set only by the
+   host's `Input` event for a click or a key to a committed renderer (not a
+   scroll), and read only by the pair (id, lock). The message carries
+   nothing about it. A popup spends it (HTML's "consume user activation"); a
+   same-origin commit forgets it.
+2. **Time is a count of kernel steps, not wall time.** The window is
+   `activation_window()` = 1000 `Tick` events: every `Tick` takes one off
+   every entry, and an entry with none left is expired. The host sends a
+   `Tick` before every other event it gives the kernel and whenever it is
+   idle, so a window is at most 1000 host events or idle polls. Only ticks
+   count: a page cannot send one, and another domain's events do not change
+   the count (a `Tick` is public, as the time is).
+3. **A refused popup is silent**, and a popup to a URL that decodes and
+   resolves but has no lock (an invalid origin, a `javascript:` URL) opens no
+   tab and still spends the activation.
+4. **Noninterference.** The activation is in the sender's domain. For every
+   other observer a popup that opens a tab is replaced by the host's `OpenTab`
+   of the resolved URL (`declassified`), as a `Navigate` is by a `NavigateTab`.
+
+`javascript:` URLs: `UrlFns::is_javascript` (the shipped one reads the
+scheme the basic URL parser gives) and `lock_of_url`, through which every URL
+a renderer is locked to passes, refuses it. So the user's typed URL
+(`OpenTab`, `NavigateTab`), a renderer's `Navigate`, `Submit`, `OpenTab` and
+`UpdateUrl`, and the final URL of a fetch never commit one. The renderer
+runs the `javascript:` URLs of links the page drew itself. A renderer's
+`Navigate` or `Submit` to one is answered `Error { code: 5 }` (not fetched), as
+it was before the lock refused it, so WPT's `url/` rows for `javascript:` URLs
+still see the same reply.
+
+### Theorems
+
+`theorem_popup_needs_input` (`popup_theorems.rs`; statement in
+`statements.rs`): over every run from the first state, a frame of renderer
+`id` that opens a tab follows an `Input` event of the run, a click or a key,
+that the kernel delivered to `id` (its step sent `id` the `Input` frame), with
+fewer than `activation_window()` `Tick` events after it.
+`theorem_popup_needs_activation` is its step: the frame is a committed
+renderer's `OpenTab`, the kernel held a live activation for the sender before
+the step, and the step spent it. The proof is the frame lemmas of
+`popup_frame.rs` (no function of the step but the popup adds a tab, and none
+but an `Input` adds or raises an activation) and `lemma_run_acts` (where an
+entry with ticks left over a run comes from).
+
+`theorem_no_javascript_url`: in every reachable state no renderer, committed
+or not, and no document URL holds a URL whose scheme is `javascript`, and
+`open_tab` and `navigate_tab` at one change nothing. The corollary for the
+shipped kernel is the same theorem at `urls::real_urls()`.
+
+`theorem_input_only_to_own_tab` is restated (the activation is the one thing
+an `Input` changes), `event_tab` of `theorem_connection_ownership` names a
+popup's new tab, and the noninterference theorem is re-proven with the
+activations in its relation.
+
+### Not done
+
+- The window is ticks, not seconds: how long it is on the wall is the host's
+  tick rate. HTML's transient activation duration is wall time.
+- The Escape key is not excluded from the keys that activate (the schema
+  fixes no key code).
+- The renderer is not told that a popup was refused (`window.open` would
+  return `null`).
+- Opaque-response blocking for `FetchScript` (and for `Fetch`'s no-cors
+  responses) is not built: it needs Phase 6's ORB (6.17), which is not in
+  this line.
+- No CORS preflight and no credentials mode "include" (see `fetch()` above).
+- The table keeps the entry of a renderer that was replaced, killed or
+  exited (never read again: ids are not reused).
+
 ## The GPU crash policy (phase-5.md item 5.17c)
 
 What `GpuReady { software }`, `GpuRefused` and a GPU process's exit mean, as

@@ -675,11 +675,16 @@ pub open spec fn location_url(urls: UrlFns, response: Response, request_url: Url
 /// The request after a redirect to `location` with status `status`:
 /// [`crate::request::spec::rewrite_for_redirect`] (HTTP-redirect fetch step
 /// 12), and the origin redirect-taint set if the location's origin is not
-/// the current URL's (Fetch "serializing a request origin" step 2).
+/// the current URL's (Fetch "serializing a request origin" step 2), and
+/// the author's headers dropped once it is set (item 7.16).
 pub open spec fn next_req(urls: UrlFns, s: State, status: nat, location: Url) -> crate::request::spec::Req {
     let rewritten = crate::request::spec::rewrite_for_redirect(status, s.req);
+    let tainted = rewritten.origin_tainted || !clazel_origin::spec::same_origin((urls.origin)(s.url), (urls.origin)(location));
     crate::request::spec::Req {
-        origin_tainted: rewritten.origin_tainted || !clazel_origin::spec::same_origin((urls.origin)(s.url), (urls.origin)(location)),
+        origin_tainted: tainted,
+        // Item 7.16: from the first cross-origin hop on, no author's header
+        // (see `crate::request::spec`'s modelling choices of 7.16).
+        headers: if tainted { seq![] } else { rewritten.headers },
         ..rewritten
     }
 }

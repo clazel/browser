@@ -96,8 +96,10 @@
 //! - **What the user sees (phase-4.md item 4.12).** A committed renderer's
 //!   `Display { title, text, links }` becomes the output `Show { tab, url,
 //!   title, text, links }`, where `tab` is the sender's tab and `url` the
-//!   sender's committed URL, both from the kernel's state, never from the
-//!   message: the address line is the kernel's. It has no other effect. A
+//!   sender's committed URL (item 7.16: its document's URL, which an
+//!   accepted `UpdateUrl` may have set to a URL of the same origin), both
+//!   from the kernel's state, never from the `Display` message: the address
+//!   line is the kernel's. It has no other effect. A
 //!   `Display` from a renderer that is not committed is a message the
 //!   renderer may not send, and is treated as every such frame is (below):
 //!   the sender is killed. A `Display` over `MAX_FRAME` never reaches `step`
@@ -348,7 +350,7 @@
 //! - **`Paint`.** A `FrameReady { buffer, width, height }` from the GPU
 //!   process of renderer `id` ([`from_gpu`]) gives `Paint { tab, url, title,
 //!   buffer, width, height }`, with `tab`, `url` and `title` the renderer's
-//!   from the kernel's state, never from the message, when the renderer is
+//!   (the URL its document's, item 7.16) from the kernel's state, never from the message, when the renderer is
 //!   committed, `buffer` is an id of the ring ([`ring_size`]) and the frame
 //!   fits the tab's viewport. A frame before the renderer's first commit, a
 //!   buffer outside the ring, a frame that does not decode, or a renderer's
@@ -460,6 +462,170 @@
 //!   the kernel a `Tick` before every event, so that is at once.
 //! - **A `Tick` fails a sub-fetch** that started [`subfetch_timeout`] (60)
 //!   seconds ago or more: `StyleFailed`, its connection closed.
+//!
+//! # `fetch()` and XHR (phase-7.md item 7.16)
+//!
+//! Sources: the Fetch Standard at the commit `clazel_fetch::transducer::spec`
+//! pins (`59afe349913d56898c947576216f1c2579308be7`): §2.2.2 (CORS-safelisted
+//! request-headers, CORS-unsafe request-header bytes, forbidden
+//! request-headers), §2.2.6 (opaque filtered responses), §4.1 main fetch
+//! (steps 12 and 14), §4.3 HTTP fetch step 4.4 and §4.9 CORS check.
+//!
+//! - **`Fetch` is a sub-fetch** ([`fetch_api`]): a committed renderer's
+//!   request runs as a [`SubFetch`] with `api` set to its mode, so it shares
+//!   the sub-fetch limits, tables, connections (`Sub*` outputs and
+//!   `SubNet`), timeout and credentials rule (5.0(h): cookies only on hops
+//!   whose URL is the lock's origin, which is credentials mode
+//!   "same-origin"; "include" is not offered, listed). A `Fetch` before the
+//!   renderer's first commit is a disallowed frame (killed).
+//! - **The request** ([`api_request`]) is `GET` without a body or `POST`
+//!   with one (other methods are refused: they need a preflight in mode
+//!   "cors" and are not built by `clazel-fetch`; listed), the page's headers
+//!   without those Fetch forbids and those the client sets itself
+//!   (`clazel_fetch::request::spec::filter_author_headers`), the
+//!   renderer's lock as its origin, and `Origin` on every request in mode
+//!   "cors".
+//! - **No preflight.** A request whose URL is not the lock's origin is
+//!   refused in mode "same-origin", and in modes "cors" and "no-cors" when
+//!   it would need a CORS preflight (a page header, or a body type that is
+//!   not safelisted: [`needs_no_preflight`]). A redirect away from the
+//!   origin drops the page's headers (`clazel_fetch`'s `next_req`). The one
+//!   gap: a same-origin `POST` with a non-safelisted type that its own
+//!   origin's server redirects (307 or 308) to another origin keeps its
+//!   body and type there without a preflight (listed).
+//! - **The answer** ([`api_end`]): a basic response (final URL of the lock's
+//!   origin, no cross-origin hop) or, in mode "cors", one that passed the
+//!   CORS check ([`cors_check`], against `*` or the byte-serialized request
+//!   origin, `null` after a cross-origin hop) is `FetchResponse { status,
+//!   content type }`, `FetchBody` frames and `FetchEnd`; in mode "no-cors"
+//!   anything else is an opaque filtered response (status 0, no body); in
+//!   the other modes anything else, and every `Fail`, is `FetchFailed`.
+//!   Opaque-response blocking is not needed here: a "no-cors" `Fetch` never
+//!   gives the renderer a cross-origin body. (`FetchScript`'s responses are
+//!   still handed over whole, as in the first slice; listed.)
+//! - **What the renderer learns of a readable response** is its status, its
+//!   combined `Content-Type` and its body; not its other headers, its final
+//!   URL or its type (listed).
+//!
+//! # URL updates (phase-7.md item 7.16)
+//!
+//! - **`UpdateUrl { replace, url }`** is `history.pushState` and
+//!   `history.replaceState` ([`update_url`]). The renderer runs HTML's
+//!   steps itself (it holds the document and throws the "SecurityError");
+//!   the kernel decides only what the address bar shows. It accepts the URL
+//!   when it decodes, resolves against the committed URL (as `Navigate`'s
+//!   does) and has the renderer's lock as its origin, and the lock is a tuple
+//!   origin; then the document's URL is the resolved one. Anything else
+//!   changes nothing. An `UpdateUrl` before the renderer's first commit is a
+//!   disallowed frame (killed), as `Display` is. It has no reply.
+//! - **The document's URL is a lock-tagged table** ([`DocUrl`],
+//!   [`State::doc_urls`]), as 5.18's titles are, not the renderer's `url`,
+//!   which stays the URL last committed. An entry carries the renderer's id
+//!   and lock and is read only by that pair ([`doc_url_of`]), so another
+//!   domain's `UpdateUrl` changes only an entry under its own lock and the
+//!   noninterference relation compares only the observer's entries. A commit
+//!   to the same renderer forgets its entry (the new document's URL is the
+//!   committed one); a renderer replaced, killed or exited leaves its entry,
+//!   never read again because ids are not reused (the table grows by at
+//!   most one entry per renderer that ever had an update, as the GPU
+//!   records do).
+//! - **What reads it**: the URL of a `Show` and of a `Paint`, the address
+//!   bar. Not the base the kernel resolves a renderer's URLs against
+//!   (`Navigate`, `Submit`, `FetchStyle`, `FetchScript`, `UpdateUrl`), and not
+//!   the path of `document.cookie`'s request URL ([`request_url_of`]): both
+//!   stay the committed URL (a deviation; the renderer resolves the URLs a
+//!   page writes against its document's URL and sends them absolute, so the
+//!   base matters only for a renderer that sends relative ones, and a
+//!   `document.cookie` after a `pushState` to another path matches cookies
+//!   by the committed path, listed).
+//! - **HTML's rewrite rule is wider than the kernel's check** ("can have its
+//!   URL rewritten", HTML §7.2.5: the same scheme, username, password, host
+//!   and port; for `file:` the same path; for any other non-HTTP(S) scheme
+//!   only the fragment may differ). The kernel cannot compare URL components
+//!   (the URL functions are parameters) and checks the origin, which is
+//!   what the address bar's integrity needs. Two deviations follow: a
+//!   renderer may change a URL's username or password, which HTML forbids
+//!   (the renderer refuses it; a compromised renderer gains nothing an origin
+//!   could not already show); and a document with an opaque origin (`file:`,
+//!   `data:`, `about:blank`) cannot update the address bar at all, though HTML
+//!   lets it change the fragment (listed).
+//! - **`replace` is not read.** The kernel keeps no session history, so
+//!   `pushState` and `replaceState` do the same thing to it.
+//!
+//! # Popups (phase-7.md item 7.16)
+//!
+//! - **`OpenTab { url }`** is `window.open` and `target=_blank`
+//!   ([`open_tab_from`]). A committed renderer asks the kernel to open a new
+//!   tab at `url`, resolved against its committed URL as `Navigate`'s is. The
+//!   kernel does it only if it holds **transient user activation** for the
+//!   sender, which it recorded itself from a real [`Event::Input`] the host
+//!   delivered to the sender's tab (a click or a key; not a scroll): the
+//!   renderer's word is never read, and no field of the message says so. The
+//!   tab is the host's own `OpenTab` without a script
+//!   ([`open_tab`]): a new renderer locked to the URL's origin that starts the
+//!   fetch. An `OpenTab` before the renderer's first commit is a disallowed
+//!   frame (killed), as `UpdateUrl` is. There is no reply: a refused popup
+//!   changes nothing and the renderer is not told (a deviation: `window.open`
+//!   would return `null`; the renderer cannot tell a refusal from a tab that
+//!   failed to load).
+//! - **Activation is a lock-tagged table** ([`Activation`], [`State::acts`]),
+//!   as 5.18's titles and 7.16's document URLs are: an entry carries the
+//!   renderer's id and lock and is read only by that pair
+//!   ([`activation_left`]). An activating input to a committed renderer
+//!   (re)sets its entry to [`activation_window`] (HTML §6.4.3 "activation
+//!   notification"); a popup that passes consumes it (HTML "consume user
+//!   activation"); a same-origin commit forgets it (the new document has
+//!   none); a renderer replaced, killed or exited leaves its entry, never
+//!   read again because ids are not reused (the table grows by at most one
+//!   entry per renderer that was ever given an input, as the GPU records
+//!   do).
+//! - **Time is a count of the kernel's own steps, not wall time.** The
+//!   window is [`activation_window`] (1000) **clock ticks**: every `Tick`
+//!   event lowers every entry by one ([`age_activations`], saturating at 0),
+//!   and an entry with 0 left is expired. A tick is the only step that
+//!   measures time, and the host sends one before every other event it gives
+//!   the kernel and whenever it is idle (`clazel::Browser::event` and its
+//!   pump), so a window of N ticks is at most N host events or idle polls
+//!   after the input. What the kernel can check, it checks: the theorem
+//!   [`crate::statements::popup_needs_input_statement`] counts `Tick` events
+//!   between the `Input` and the popup. How long that is on the wall depends
+//!   on the host's tick rate, not on the page (a page cannot send the kernel
+//!   a `Tick`); that is the deviation from HTML's wall-time "transient
+//!   activation duration" (listed). Only ticks are counted, not the
+//!   renderer's own frames, so a page that sends many frames does not shorten
+//!   its window, and one other domain's events never change it (a `Tick` is
+//!   public: `crate::domain::obs` holds the time).
+//! - **Which inputs activate**: kind 0 (a click) and kind 2 (a key), as
+//!   HTML's activation-triggering input events (`mousedown`, `pointerup`,
+//!   `keydown`) are; not kind 1 (a scroll). The schema fixes no key code, so
+//!   HTML's exclusion of the Escape key is not made (listed).
+//! - **A popup's URL** that decodes and resolves but has no lock (an invalid
+//!   origin, a `javascript:` URL: below) opens no tab and still consumes the
+//!   activation, as a blocked `window.open` does in browsers that consume
+//!   before navigating; one that does not decode or resolve changes nothing.
+//! - **Noninterference.** A popup from a renderer of another domain is
+//!   replaced in a purge by the host's `OpenTab` without a script at the
+//!   resolved URL ([`crate::domain::declassified`]): what crosses domains is
+//!   that a tab opened at that URL, as for a `Navigate`. Its decision to open
+//!   (the activation) stays in its own domain.
+//!
+//! # `javascript:` URLs (phase-7.md item 7.16)
+//!
+//! - **The kernel refuses scheme `javascript`** in [`lock_of_url`], which
+//!   every URL a renderer is locked to passes through: a URL the user types
+//!   (`OpenTab`, `NavigateTab`, from the host), a renderer's `Navigate`,
+//!   `Submit`, `OpenTab` and `UpdateUrl`, and the final URL of a fetch (a
+//!   redirect to a `javascript:` URL ends the navigation as one with no
+//!   lock does). The renderer runs the `javascript:` URLs of links the page
+//!   drew itself (HTML §7.4.2.2 of "navigate", step 12's script-URL case,
+//!   which the document's own scripts handle); the kernel never commits one.
+//!   Whether a string is one is a parameter ([`UrlFns::is_javascript`]), as
+//!   its origin is; the shipped instantiation reads the scheme the basic
+//!   URL parser gives ([`crate::urls`]). `theorem_no_javascript_url`: no
+//!   renderer, committed or not, ever holds a `javascript:` URL. A
+//!   renderer's `Navigate` or `Submit` to one is answered with
+//!   [`error_fetch`] (the kernel does not fetch it, as before the lock
+//!   refused it: [`error_unlocked`]), not [`error_bad_url`].
 //!
 //! # The GPU crash policy (phase-5.md item 5.17c)
 //!
@@ -573,6 +739,10 @@ pub struct UrlFns {
     /// serialization of the result of parsing `input` against the absolute
     /// URL `base`, or `None` for failure.
     pub resolve: Resolver,
+    /// Whether the absolute URL string parses to a URL whose scheme is
+    /// `javascript` (item 7.16). The kernel never locks a renderer to one
+    /// ([`lock_of_url`]).
+    pub is_javascript: spec_fn(Seq<u32>) -> bool,
 }
 
 // ---------------------------------------------------------------------
@@ -681,6 +851,30 @@ pub struct Titled {
     pub title: Seq<u8>,
 }
 
+/// A document's URL after a `pushState` or `replaceState` (item 7.16): the
+/// URL renderer `id`, locked to `lock`, last set with an accepted
+/// `UpdateUrl`, since its last commit. See the modelling choices.
+pub struct DocUrl {
+    /// The renderer's id.
+    pub id: nat,
+    /// The renderer's lock.
+    pub lock: clazel_origin::spec::Origin,
+    /// The document's URL, absolute.
+    pub url: Seq<u32>,
+}
+
+/// A renderer's transient user activation (item 7.16): the clock ticks it has
+/// left, since the kernel last delivered it an activating input. See the
+/// modelling choices.
+pub struct Activation {
+    /// The renderer's id.
+    pub id: nat,
+    /// The renderer's lock.
+    pub lock: clazel_origin::spec::Origin,
+    /// The ticks left; 0 is expired.
+    pub left: nat,
+}
+
 /// One event of the user's on a tab's content area (item 5.18): the fields
 /// of the `Input` message (`clazel_ipc::message::spec`).
 pub struct UserInput {
@@ -724,6 +918,10 @@ pub struct SubFetch {
     pub partition: crate::domain::Domain,
     /// Whether the renderer's document has since been replaced by a commit.
     pub ended: bool,
+    /// For a `fetch()` or XHR request (`Fetch`, item 7.16), its mode (0
+    /// "same-origin", 1 "cors", 2 "no-cors"), answered with `Fetch*` frames
+    /// ([`api_end`]); `None` for a style sheet or script fetch.
+    pub api: Option<u64>,
 }
 
 /// A renderer's count of sub-fetches (item 5.19).
@@ -807,6 +1005,12 @@ pub struct State {
     pub subcounts: Seq<SubCount>,
     /// The GPU crash policy's state (item 5.17c).
     pub gpu: GpuState,
+    /// The documents' URLs set by `pushState` and `replaceState` (item
+    /// 7.16), at most one per renderer.
+    pub doc_urls: Seq<DocUrl>,
+    /// The renderers' transient user activations (item 7.16), at most one
+    /// per renderer.
+    pub acts: Seq<Activation>,
 }
 
 /// What can happen to the kernel.
@@ -1102,7 +1306,7 @@ pub struct Document {
 
 /// The kernel before anything happens.
 pub open spec fn init_state() -> State {
-    State { renderers: seq![], jar: seq![], storage: Map::empty(), next_id: 0, conns: seq![], next_conn: 0, now: 0, viewports: seq![], titles: seq![], subfetches: seq![], subcounts: seq![], gpu: init_gpu() }
+    State { renderers: seq![], jar: seq![], storage: Map::empty(), next_id: 0, conns: seq![], next_conn: 0, now: 0, viewports: seq![], titles: seq![], subfetches: seq![], subcounts: seq![], gpu: init_gpu(), doc_urls: seq![], acts: seq![] }
 }
 
 // ---------------------------------------------------------------------
@@ -1132,6 +1336,19 @@ pub open spec fn error_encode() -> u64 {
 /// `Error` code: the fetch of a navigation failed (item 3.7).
 pub open spec fn error_fetch() -> u64 {
     5
+}
+
+/// The code a `Navigate` or `Submit` to the resolved URL `url` is answered
+/// with when the kernel can give it no lock (item 7.16): a `javascript:` URL
+/// is one the kernel never fetches, as before it was refused by the lock
+/// ([`error_fetch`], which a navigation the transducer does not take also
+/// gets), and every other URL without a lock is a bad URL ([`error_bad_url`]).
+pub open spec fn error_unlocked(urls: UrlFns, url: Seq<u32>) -> u64 {
+    if (urls.is_javascript)(url) {
+        error_fetch()
+    } else {
+        error_bad_url()
+    }
 }
 
 /// The frame holding `m`, if it can be sent: its tokens are one data item of
@@ -1250,10 +1467,16 @@ pub open spec fn lock_of_origin(o: clazel_origin::spec::Origin, id: nat) -> Opti
 
 /// The lock of renderer `id` committed to `url`, if the kernel accepts the
 /// URL.
+///
+/// Item 7.16: never one whose scheme is `javascript` ([`UrlFns::is_javascript`]).
 pub open spec fn lock_of_url(urls: UrlFns, url: Seq<u32>, id: nat) -> Option<clazel_origin::spec::Origin> {
-    match (urls.origin_of)(url) {
-        Some(o) => lock_of_origin(o, id),
-        None => None,
+    if (urls.is_javascript)(url) {
+        None
+    } else {
+        match (urls.origin_of)(url) {
+            Some(o) => lock_of_origin(o, id),
+            None => None,
+        }
     }
 }
 
@@ -1500,6 +1723,11 @@ pub open spec fn navigate_tab(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, d
                         renderers: s.renderers.update(i, r),
                         subfetches: end_subfetches(s.subfetches, old.id, old.lock),
                         subcounts: new_document_counts(s.subcounts, old.id, old.lock),
+                        // Item 7.16: the new document's URL is the one
+                        // committed, not the old one's `pushState` URL.
+                        doc_urls: forget_doc_url(s.doc_urls, old.id, old.lock),
+                        // The new document has no user activation.
+                        acts: forget_activation(s.acts, old.id, old.lock),
                         ..s
                     }, seq![
                         Output::ToRenderer { id: old.id, bytes: commit_frames(url, doc) },
@@ -1577,7 +1805,7 @@ pub open spec fn begin_navigation(
 pub open spec fn submit_request(r: Renderer, method: Seq<u8>, content_type: Seq<u8>, body: Seq<u8>) -> Option<clazel_fetch::request::spec::Req> {
     if method == clazel_fetch::request::spec::lit_get() {
         if content_type.len() == 0 && body.len() == 0 {
-            Some(clazel_fetch::request::spec::Req { method: method, body: None, initiator: Some(r.lock), origin_tainted: false })
+            Some(clazel_fetch::request::spec::Req { method: method, body: None, initiator: Some(r.lock), origin_tainted: false, headers: seq![], cors: false })
         } else {
             None
         }
@@ -1589,6 +1817,8 @@ pub open spec fn submit_request(r: Renderer, method: Seq<u8>, content_type: Seq<
                     body: Some(clazel_fetch::request::spec::Payload { content_type: content_type, bytes: body }),
                     initiator: Some(r.lock),
                     origin_tainted: false,
+                    headers: seq![],
+                    cors: false,
                 },
             )
         } else {
@@ -1624,7 +1854,7 @@ pub open spec fn submit(
             Some(relative) => match (urls.resolve)(r.url, relative) {
                 None => (s, reply(r, clazel_ipc::message::spec::Message::Error { code: error_bad_url() })),
                 Some(resolved) => if lock_of_url(urls, resolved, s.next_id) is None {
-                    (s, reply(r, clazel_ipc::message::spec::Message::Error { code: error_bad_url() }))
+                    (s, reply(r, clazel_ipc::message::spec::Message::Error { code: error_unlocked(urls, resolved) }))
                 } else {
                     begin_navigation(rules, urls, fetch, s, r.tab, resolved, req)
                 },
@@ -1953,7 +2183,8 @@ pub open spec fn net(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: Fe
 /// `Tick(time)`.
 pub open spec fn tick(s: State, time: int) -> (State, Seq<Output>) {
     let now = if time > s.now { time } else { s.now };
-    (State { jar: clazel_cookie::storage::spec::evict_expired(s.jar, now), now, ..s }, seq![])
+    // Item 7.16: every activation has one tick fewer left.
+    (State { jar: clazel_cookie::storage::spec::evict_expired(s.jar, now), now, acts: age_activations(s.acts), ..s }, seq![])
 }
 
 /// `RendererExited(id)`: the renderer and its tab are gone, and the
@@ -2036,6 +2267,74 @@ pub open spec fn set_title(ts: Seq<Titled>, id: nat, lock: clazel_origin::spec::
     forget_title(ts, id, lock).push(Titled { id, lock, title })
 }
 
+/// The URL of renderer `r`'s document (item 7.16): the URL of the first
+/// entry with its id and its lock, or, if none, its committed URL.
+pub open spec fn doc_url_of(ds: Seq<DocUrl>, r: Renderer) -> Seq<u32>
+    decreases ds.len(),
+{
+    if ds.len() == 0 {
+        r.url
+    } else if ds[0].id == r.id && ds[0].lock == r.lock {
+        ds[0].url
+    } else {
+        doc_url_of(ds.drop_first(), r)
+    }
+}
+
+/// `ds` without the document URL of renderer `id` locked to `lock`.
+pub open spec fn forget_doc_url(ds: Seq<DocUrl>, id: nat, lock: clazel_origin::spec::Origin) -> Seq<DocUrl> {
+    ds.filter(|x: DocUrl| !(x.id == id && x.lock == lock))
+}
+
+/// `ds` with the document URL of renderer `id` locked to `lock` set to
+/// `url`: any earlier one is removed and the new one goes last.
+pub open spec fn set_doc_url(ds: Seq<DocUrl>, id: nat, lock: clazel_origin::spec::Origin, url: Seq<u32>) -> Seq<DocUrl> {
+    forget_doc_url(ds, id, lock).push(DocUrl { id, lock, url })
+}
+
+/// The transient activation window (item 7.16), in clock ticks: see the
+/// modelling choices.
+pub open spec fn activation_window() -> nat {
+    1000
+}
+
+/// An input that is a user activation (HTML §6.4.3, "activation triggering
+/// input event"): a click (kind 0) or a key (kind 2), not a scroll (kind 1).
+pub open spec fn is_activating_input(input: UserInput) -> bool {
+    input.kind == 0 || input.kind == 2
+}
+
+/// The ticks left of renderer `r`'s activation: those of the first entry
+/// with its id and its lock, or 0 if it has none.
+pub open spec fn activation_left(acts: Seq<Activation>, r: Renderer) -> nat
+    decreases acts.len(),
+{
+    if acts.len() == 0 {
+        0
+    } else if acts[0].id == r.id && acts[0].lock == r.lock {
+        acts[0].left
+    } else {
+        activation_left(acts.drop_first(), r)
+    }
+}
+
+/// `acts` without the activation of renderer `id` locked to `lock`.
+pub open spec fn forget_activation(acts: Seq<Activation>, id: nat, lock: clazel_origin::spec::Origin) -> Seq<Activation> {
+    acts.filter(|x: Activation| !(x.id == id && x.lock == lock))
+}
+
+/// `acts` with the activation of renderer `id` locked to `lock` set to
+/// `left` ticks: any earlier one is removed and the new one goes last.
+pub open spec fn set_activation(acts: Seq<Activation>, id: nat, lock: clazel_origin::spec::Origin, left: nat) -> Seq<Activation> {
+    forget_activation(acts, id, lock).push(Activation { id, lock, left })
+}
+
+/// One tick of the clock: every activation has one fewer left (none goes
+/// below 0).
+pub open spec fn age_activations(acts: Seq<Activation>) -> Seq<Activation> {
+    acts.map_values(|x: Activation| Activation { left: if x.left > 0 { (x.left - 1) as nat } else { 0 }, ..x })
+}
+
 /// The frame of `Viewport` for `v`.
 pub open spec fn viewport_frame(v: Viewport) -> Seq<u8> {
     reply_frame(clazel_ipc::message::spec::Message::Viewport { width: v.width, height: v.height, scale: v.scale })
@@ -2102,10 +2401,21 @@ pub open spec fn resize(s: State, tab: nat, v: Viewport) -> (State, Seq<Output>)
 
 /// The user's input on the content area of `tab` (item 5.18): one `Input`
 /// to the tab's renderer, and no state change.
+///
+/// Item 7.16: a click or a key to a committed renderer is a user activation
+/// of it ([`set_activation`]), recorded here and nowhere else.
 pub open spec fn user_input(s: State, tab: nat, input: UserInput) -> (State, Seq<Output>) {
     match find_by_tab(s.renderers, tab, 0) {
         None => (s, seq![]),
-        Some(i) => (s, seq![Output::ToRenderer { id: s.renderers[i].id, bytes: input_frame(input) }]),
+        Some(i) => {
+            let r = s.renderers[i];
+            let acts = if r.committed && is_activating_input(input) {
+                set_activation(s.acts, r.id, r.lock, activation_window())
+            } else {
+                s.acts
+            };
+            (State { acts, ..s }, seq![Output::ToRenderer { id: r.id, bytes: input_frame(input) }])
+        },
     }
 }
 
@@ -2154,7 +2464,7 @@ pub open spec fn from_gpu(s: State, id: nat, bytes: Seq<u8>) -> (State, Seq<Outp
                     // (or out of order): dropped.
                     (s, seq![])
                 } else if fits(viewport_of(s, r.tab), width, height) {
-                    (s, seq![Output::Paint { tab: r.tab, url: r.url, title: title_of(s.titles, r), buffer, width, height }])
+                    (s, seq![Output::Paint { tab: r.tab, url: doc_url_of(s.doc_urls, r), title: title_of(s.titles, r), buffer, width, height }])
                 } else {
                     // Drawn for a larger viewport than the tab now has.
                     (s, seq![])
@@ -2721,6 +3031,7 @@ pub open spec fn fetch_sub(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fet
                             started: s.now,
                             partition: crate::domain::domain_of_renderer(rules, r),
                             ended: false,
+                            api: None,
                         };
                         let (hop, out, end) = sub_actions(r.id, serial, request, script, 0, actions);
                         let counts = set_subcount(s.subcounts, r.id, r.lock, serial + 1, in_document + 1);
@@ -2754,6 +3065,438 @@ pub open spec fn fetch_style(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
 /// `FetchScript` (item 7.16): [`fetch_sub`] for a script.
 pub open spec fn fetch_script(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, r: Renderer, request: u64, url: Seq<u8>) -> (State, Seq<Output>) {
     fetch_sub(rules, urls, fetch, s, r, true, request, url)
+}
+
+/// `UpdateUrl { replace, url }` (item 7.16) of the committed renderer `r`:
+/// the kernel's part of HTML §7.2.5's "shared history push/replace state
+/// steps"
+/// (<https://html.spec.whatwg.org/multipage/nav-history-apis.html#shared-history-push/replace-state-steps>),
+/// which the renderer runs first:
+///
+/// - step 4, "Let newURL be document's URL", and step 5, "If url is not
+///   null or the empty string": an empty `url` changes nothing;
+/// - step 5.1, "Set newURL to the result of encoding-parsing a URL given
+///   url, relative to the relevant settings object": the text decoded as
+///   UTF-8 and resolved against the committed URL, as `Navigate`'s is;
+/// - steps 5.2 and 5.3, "If newURL is failure" or "If document cannot have
+///   its URL rewritten to newURL, then throw a "SecurityError"": a URL that
+///   does not decode or resolve, or whose origin is not the renderer's lock,
+///   or a renderer whose lock is opaque, changes nothing (the renderer has
+///   already thrown; see the modelling choices);
+/// - step 10, "Run the URL and history update steps given document and
+///   newURL": the document's URL becomes newURL ([`set_doc_url`]), which is
+///   what the address bar shows from then on.
+///
+/// `replace` is not read: the kernel keeps no session history. There is no
+/// reply.
+pub open spec fn update_url(urls: UrlFns, s: State, r: Renderer, url: Seq<u8>) -> (State, Seq<Output>) {
+    if url.len() == 0 {
+        (s, seq![])
+    } else {
+        match clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+            None => (s, seq![]),
+            Some(relative) => match (urls.resolve)(r.url, relative) {
+                None => (s, seq![]),
+                Some(resolved) => if r.lock is Tuple && lock_of_url(urls, resolved, r.id) == Some(r.lock) {
+                    (State { doc_urls: set_doc_url(s.doc_urls, r.id, r.lock, resolved), ..s }, seq![])
+                } else {
+                    (s, seq![])
+                },
+            },
+        }
+    }
+}
+
+/// `OpenTab { url }` (item 7.16) of the committed renderer `r`: HTML's
+/// "window open steps" (§7.2.2.1,
+/// <https://html.spec.whatwg.org/multipage/nav-history-apis.html#window-open-steps>)
+/// as the kernel decides them:
+///
+/// - step 5, "If the user agent has been configured to block popups ... or
+///   `sourceDocument` does not have transient activation": a renderer with
+///   no live activation ([`activation_left`] 0, which the kernel recorded
+///   from a real input) opens nothing and changes nothing;
+/// - "consume user activation" (HTML §6.4.3): the activation is spent
+///   ([`forget_activation`]) whether or not the URL then opens a tab;
+/// - step 6.4, "parse the URL" relative to the sender's document: the text
+///   decoded as UTF-8 and resolved against the committed URL, as `Navigate`'s
+///   is; a URL that does not decode or resolve changes nothing;
+/// - the new tab is the host's own `OpenTab` without a script ([`open_tab`]):
+///   a URL with no lock (including scheme `javascript`) opens none.
+///
+/// There is no reply.
+pub open spec fn open_tab_from(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, r: Renderer, url: Seq<u8>) -> (State, Seq<Output>) {
+    if activation_left(s.acts, r) == 0 {
+        (s, seq![])
+    } else {
+        match clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+            None => (s, seq![]),
+            Some(relative) => match (urls.resolve)(r.url, relative) {
+                None => (s, seq![]),
+                Some(resolved) => popup_result(rules, urls, fetch, s, r, resolved),
+            },
+        }
+    }
+}
+
+/// The popup of the committed renderer `r` to the resolved URL `resolved`:
+/// the host's `OpenTab` of it without a script ([`open_tab`]), then the
+/// activation spent ([`forget_activation`]; `open_tab` leaves it alone).
+pub open spec fn popup_result(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, r: Renderer, resolved: Seq<u32>) -> (State, Seq<Output>) {
+    let (s1, out) = open_tab(rules, urls, fetch, s, resolved, None);
+    (State { acts: forget_activation(s1.acts, r.id, r.lock), ..s1 }, out)
+}
+
+// ---------------------------------------------------------------------
+// `fetch()` and XHR (phase-7.md item 7.16).
+// ---------------------------------------------------------------------
+
+/// Mode "same-origin".
+pub open spec fn mode_same_origin() -> u64 {
+    0
+}
+
+/// Mode "cors".
+pub open spec fn mode_cors() -> u64 {
+    1
+}
+
+/// Mode "no-cors".
+pub open spec fn mode_no_cors() -> u64 {
+    2
+}
+
+/// The page's header texts `ts` (name, value, name, value, ...) as field
+/// lines, in order; `None` if their number is odd.
+pub open spec fn header_pairs(ts: Seq<Seq<u8>>) -> Option<Seq<clazel_http::field::spec::FieldLine>>
+    decreases ts.len(),
+{
+    if ts.len() == 0 {
+        Some(seq![])
+    } else if ts.len() == 1 {
+        None
+    } else {
+        match header_pairs(ts.subrange(2, ts.len() as int)) {
+            Some(rest) => Some(seq![clazel_http::field::spec::FieldLine { name: ts[0], value: ts[1] }] + rest),
+            None => None,
+        }
+    }
+}
+
+/// Fetch §2.2.2: "A CORS-unsafe request-header byte is a byte byte for
+/// which one of the following is true: byte is less than 0x20 and is not
+/// 0x09 HT; byte is 0x22 ("), 0x28 (left parenthesis), 0x29 (right
+/// parenthesis), 0x3A (:), 0x3C (<), 0x3E (>), 0x3F (?), 0x40 (@), 0x5B
+/// ([), 0x5C (\), 0x5D (]), 0x7B ({), 0x7D (}), or 0x7F DEL."
+pub open spec fn cors_unsafe_byte(b: u8) -> bool {
+    (b < 0x20 && b != 0x09) || b == 0x22 || b == 0x28 || b == 0x29 || b == 0x3A || b == 0x3C || b == 0x3E || b == 0x3F || b == 0x40 || b == 0x5B
+        || b == 0x5C || b == 0x5D || b == 0x7B || b == 0x7D || b == 0x7F
+}
+
+/// `application/x-www-form-urlencoded`, `multipart/form-data` and
+/// `text/plain`: the essences a CORS-safelisted `Content-Type` may have.
+pub open spec fn safelisted_essences() -> Seq<Seq<u8>> {
+    seq![
+        seq![0x61u8, 0x70, 0x70, 0x6C, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x2F, 0x78, 0x2D, 0x77, 0x77, 0x77, 0x2D, 0x66, 0x6F, 0x72, 0x6D, 0x2D, 0x75, 0x72, 0x6C, 0x65, 0x6E, 0x63, 0x6F, 0x64, 0x65, 0x64],
+        seq![0x6Du8, 0x75, 0x6C, 0x74, 0x69, 0x70, 0x61, 0x72, 0x74, 0x2F, 0x66, 0x6F, 0x72, 0x6D, 0x2D, 0x64, 0x61, 0x74, 0x61],
+        seq![0x74u8, 0x65, 0x78, 0x74, 0x2F, 0x70, 0x6C, 0x61, 0x69, 0x6E],
+    ]
+}
+
+/// `v`, byte-lowercased, is `e` or starts with `e;`.
+pub open spec fn has_essence(v: Seq<u8>, e: Seq<u8>) -> bool {
+    let l = clazel_fetch::request::spec::byte_lowercase(v);
+    l == e || clazel_fetch::request::spec::starts_with(l, e + seq![0x3Bu8])
+}
+
+/// A body `Content-Type` that needs no CORS preflight (Fetch §2.2.2
+/// "CORS-safelisted request-header", the `content-type` case: at most 128
+/// octets, no CORS-unsafe request-header byte, and a MIME type whose essence
+/// is one of [`safelisted_essences`]), or the empty value of a body with no
+/// type. The MIME type is not parsed: the value must be the essence itself,
+/// in any case, or start with it and `;` (a subset of what parsing accepts;
+/// listed).
+pub open spec fn content_type_safelisted(v: Seq<u8>) -> bool {
+    v.len() == 0 || (v.len() <= 128 && (forall|i: int| 0 <= i < v.len() ==> !cors_unsafe_byte(#[trigger] v[i])) && (exists|k: int|
+        0 <= k < safelisted_essences().len() && has_essence(v, #[trigger] safelisted_essences()[k])))
+}
+
+/// The request a `Fetch` of renderer `r` makes, before its URL is known to
+/// be same-origin or not: `GET` with no body, or `POST` with a body of at
+/// most [`clazel_fetch::request::spec::max_request_body`] octets; the page's
+/// headers in pairs, those Fetch forbids and those the client sets itself
+/// dropped ([`clazel_fetch::request::spec::filter_author_headers`]); the
+/// renderer's lock as the request's origin; `cors` set in mode "cors".
+/// `None` for any other method, an odd number of header texts or a mode
+/// above 2.
+pub open spec fn api_request(r: Renderer, method: Seq<u8>, content_type: Seq<u8>, body: Seq<u8>, mode: u64, headers: Seq<Seq<u8>>) -> Option<
+    clazel_fetch::request::spec::Req,
+> {
+    match (submit_request(r, method, content_type, body), header_pairs(headers)) {
+        (Some(req), Some(lines)) => if mode > mode_no_cors() {
+            None
+        } else {
+            Some(
+                clazel_fetch::request::spec::Req {
+                    headers: clazel_fetch::request::spec::filter_author_headers(lines),
+                    cors: mode == mode_cors(),
+                    ..req
+                },
+            )
+        },
+        _ => None,
+    }
+}
+
+/// A request that leaves the document's origin from its first URL needs no
+/// CORS preflight, which this kernel does not send: no header of the page's
+/// and a safelisted body type (`GET` and `POST` are CORS-safelisted
+/// methods). Fetch §4.1 main fetch step 12 would preflight anything else in
+/// mode "cors", and the `request-no-cors` guard refuses it in mode
+/// "no-cors"; here it is refused in both.
+pub open spec fn needs_no_preflight(req: clazel_fetch::request::spec::Req) -> bool {
+    req.headers.len() == 0 && match req.body {
+        Some(p) => content_type_safelisted(p.content_type),
+        None => true,
+    }
+}
+
+/// "Access-Control-Allow-Origin", byte-lowercased (field names compare
+/// case-insensitively, RFC 9110 §5.1).
+pub open spec fn lit_acao() -> Seq<u8> {
+    seq![
+        0x61u8, 0x63, 0x63, 0x65, 0x73, 0x73, 0x2D, 0x63, 0x6F, 0x6E, 0x74, 0x72, 0x6F, 0x6C, 0x2D, 0x61, 0x6C, 0x6C, 0x6F, 0x77, 0x2D, 0x6F, 0x72, 0x69, 0x67,
+        0x69, 0x6E,
+    ]
+}
+
+/// "*".
+pub open spec fn lit_star() -> Seq<u8> {
+    seq![0x2Au8]
+}
+
+/// "null".
+pub open spec fn lit_null_origin() -> Seq<u8> {
+    seq![0x6Eu8, 0x75, 0x6C, 0x6C]
+}
+
+/// Fetch "byte-serializing a request origin" for a request whose origin is
+/// `lock`: step 2, "If request's redirect-taint is not "same-origin", then
+/// return "null""; step 3, the origin serialized (an opaque one is
+/// "null"), as octets.
+pub open spec fn request_origin(lock: clazel_origin::spec::Origin, tainted: bool) -> Seq<u8> {
+    if tainted {
+        lit_null_origin()
+    } else {
+        clazel_origin::spec::serialization_of_origin(lock).map_values(|c: u32| c as u8)
+    }
+}
+
+/// Fetch §4.9 "CORS check", with credentials mode "same-origin" (the only
+/// one this kernel uses): "1. Let origin be the result of getting
+/// `Access-Control-Allow-Origin` from response's header list. 2. If origin
+/// is null, then return failure. 3. If request's credentials mode is not
+/// "include" and origin is `*`, then return success. 4. If the result of
+/// byte-serializing a request origin with request is not origin, then
+/// return failure. 5. If request's credentials mode is not "include", then
+/// return success." "Getting" is the combined field value (RFC 9110 §5.2).
+pub open spec fn cors_check(response: clazel_http::message::spec::Response, origin: Seq<u8>) -> bool {
+    match clazel_http::field::spec::combined_field_value(response.fields, lit_acao()) {
+        // 2.
+        None => false,
+        // 3., 4. and 5.
+        Some(v) => v == lit_star() || v == origin,
+    }
+}
+
+/// The renderer may read the response a `Fetch` in mode `mode` ended with at
+/// `url`: a basic response (the final URL's origin is the lock and no
+/// redirect left the origin: Fetch's response tainting "basic"), or, in
+/// mode "cors", one that passed [`cors_check`].
+pub open spec fn api_readable(
+    fetch: FetchFns,
+    lock: clazel_origin::spec::Origin,
+    mode: u64,
+    tainted: bool,
+    url: clazel_url::url::spec::Url,
+    response: clazel_http::message::spec::Response,
+) -> bool {
+    ((fetch.urls.origin)(url) == lock && !tainted) || (mode == mode_cors() && cors_check(response, request_origin(lock, tainted)))
+}
+
+/// The `FetchBody` frames of `body`, in order: consecutive pieces of at most
+/// `max_fetch_chunk` octets, none for an empty body.
+pub open spec fn fetch_body_frames(request: u64, body: Seq<u8>) -> Seq<u8>
+    decreases body.len(),
+{
+    if body.len() == 0 {
+        seq![]
+    } else if body.len() <= clazel_ipc::message::spec::max_fetch_chunk() {
+        reply_frame(clazel_ipc::message::spec::Message::FetchBody { request, bytes: body })
+    } else {
+        reply_frame(clazel_ipc::message::spec::Message::FetchBody { request, bytes: body.take(clazel_ipc::message::spec::max_fetch_chunk() as int) })
+            + fetch_body_frames(request, body.skip(clazel_ipc::message::spec::max_fetch_chunk() as int))
+    }
+}
+
+/// The frames of a response the renderer may read: `FetchResponse` with
+/// its status and combined `Content-Type`, the `FetchBody` frames and
+/// `FetchEnd`, as one write.
+pub open spec fn fetch_frames(request: u64, response: clazel_http::message::spec::Response) -> Seq<u8> {
+    reply_frame(
+        clazel_ipc::message::spec::Message::FetchResponse {
+            request,
+            status: response.status_line.status as u64,
+            content_type: response_document(response).content_type,
+        },
+    ) + fetch_body_frames(request, response.body) + reply_frame(clazel_ipc::message::spec::Message::FetchEnd { request })
+}
+
+/// The frames of an opaque filtered response (Fetch §2.2.6: "status is
+/// 0, status message is the empty byte sequence, header list is empty, body
+/// is null"): `FetchResponse` with status 0 and no content type, then
+/// `FetchEnd`.
+pub open spec fn fetch_opaque_frames(request: u64) -> Seq<u8> {
+    reply_frame(clazel_ipc::message::spec::Message::FetchResponse { request, status: 0, content_type: seq![] }) + reply_frame(
+        clazel_ipc::message::spec::Message::FetchEnd { request },
+    )
+}
+
+/// The frame of `FetchFailed`.
+pub open spec fn fetch_failed_frame(request: u64) -> Seq<u8> {
+    reply_frame(clazel_ipc::message::spec::Message::FetchFailed { request })
+}
+
+/// The first action of `actions` that ends a fetch (`Done` or `Fail`).
+pub open spec fn end_action(actions: Seq<NetAction>) -> Option<NetAction>
+    decreases actions.len(),
+{
+    if actions.len() == 0 {
+        None
+    } else if actions[0] is Done || actions[0] is Fail {
+        Some(actions[0])
+    } else {
+        end_action(actions.drop_first())
+    }
+}
+
+/// The answer to a `Fetch` whose transducer ended with `actions`, with
+/// redirect-taint `tainted` (Fetch §4.1 main fetch steps 12 and 14, and
+/// §4.3 HTTP fetch step 4.4's CORS check): a readable response
+/// ([`api_readable`]) is [`fetch_frames`]; otherwise mode "same-origin"
+/// and mode "cors" give a network error (`FetchFailed`) and mode "no-cors"
+/// an opaque filtered response ([`fetch_opaque_frames`]). A `Fail` is a
+/// network error.
+pub open spec fn api_end(fetch: FetchFns, lock: clazel_origin::spec::Origin, request: u64, mode: u64, tainted: bool, actions: Seq<NetAction>) -> Seq<u8> {
+    match end_action(actions) {
+        Some(clazel_fetch::transducer::spec::Action::Done { url, response }) => if api_readable(fetch, lock, mode, tainted, url, response) {
+            fetch_frames(request, response)
+        } else if mode == mode_no_cors() {
+            fetch_opaque_frames(request)
+        } else {
+            fetch_failed_frame(request)
+        },
+        _ => fetch_failed_frame(request),
+    }
+}
+
+/// The frames a sub-fetch ends with: `end`, the `Style*` or `Script*`
+/// frames [`sub_actions`] gave, for a style sheet or script fetch, and
+/// [`api_end`] in its place for a `Fetch`. The transducer's state after the
+/// step is `fs`.
+pub open spec fn api_finish(fetch: FetchFns, f: SubFetch, fs: FetchState, actions: Seq<NetAction>, end: Option<Seq<u8>>) -> Option<Seq<u8>> {
+    match (f.api, end) {
+        (Some(mode), Some(_)) => Some(api_end(fetch, f.lock, f.request, mode, fs.req.origin_tainted, actions)),
+        _ => end,
+    }
+}
+
+/// The frame a sub-fetch fails with: `FetchFailed` for a `Fetch`, else
+/// [`sub_failed_frame`].
+pub open spec fn failed_frame_of(f: SubFetch) -> Seq<u8> {
+    if f.api is Some {
+        fetch_failed_frame(f.request)
+    } else {
+        sub_failed_frame(f.script, f.request)
+    }
+}
+
+/// A committed renderer's `Fetch { request, method, url, content_type,
+/// body, mode, headers }` (item 7.16): refused with `FetchFailed` past the
+/// sub-fetch limits (it counts as a sub-fetch), for a request
+/// [`api_request`] does not build, for a URL that does not decode, resolve
+/// or parse, in mode "same-origin" for a URL of another origin (Fetch §4.1
+/// main fetch step 12, "request's mode is "same-origin"": a network error),
+/// and for a URL of another origin when the request would need a CORS
+/// preflight ([`needs_no_preflight`]). Otherwise a sub-fetch is started
+/// with the request ([`clazel_fetch::transducer::spec::start_req`]), with
+/// `api` set to the mode, by the transducer navigations use; its jar is
+/// the sub-fetches' (cookies on same-origin hops only: credentials mode
+/// "same-origin").
+pub open spec fn fetch_api(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns,
+    fetch: FetchFns,
+    s: State,
+    r: Renderer,
+    request: u64,
+    method: Seq<u8>,
+    url: Seq<u8>,
+    content_type: Seq<u8>,
+    body: Seq<u8>,
+    mode: u64,
+    headers: Seq<Seq<u8>>,
+) -> (State, Seq<Output>) {
+    let (serial, in_document) = subcount_of(s.subcounts, r.id, r.lock);
+    let refused = (s, seq![Output::ToRenderer { id: r.id, bytes: fetch_failed_frame(request) }]);
+    if live_subfetches(s.subfetches, r.id, r.lock) >= max_subfetches_at_once() || in_document >= max_subfetches_per_document() || serial
+        >= max_subfetch_serial() {
+        refused
+    } else {
+        match api_request(r, method, content_type, body, mode, headers) {
+            None => refused,
+            Some(req) => match clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+                None => refused,
+                Some(relative) => match (urls.resolve)(r.url, relative) {
+                    None => refused,
+                    Some(resolved) => match (fetch.parse)(resolved) {
+                        None => refused,
+                        Some(parsed) => if (fetch.urls.origin)(parsed) != r.lock && (mode == mode_same_origin() || !needs_no_preflight(req)) {
+                            refused
+                        } else {
+                            let (fs, actions) = clazel_fetch::transducer::spec::start_req(parsed, req);
+                            let f = SubFetch {
+                                renderer: r.id,
+                                lock: r.lock,
+                                serial,
+                                request,
+                                script: false,
+                                tab: r.tab,
+                                fetch: fs,
+                                hop: 0,
+                                started: s.now,
+                                partition: crate::domain::domain_of_renderer(rules, r),
+                                ended: false,
+                                api: Some(mode),
+                            };
+                            let (hop, out, end) = sub_actions(r.id, serial, request, false, 0, actions);
+                            let end = api_finish(fetch, f, fs, actions, end);
+                            let counts = set_subcount(s.subcounts, r.id, r.lock, serial + 1, in_document + 1);
+                            let table = match end {
+                                None => s.subfetches.push(SubFetch { hop, ..f }),
+                                Some(_) => s.subfetches,
+                            };
+                            let outs = match end {
+                                None => out,
+                                Some(frames) => out + seq![Output::ToRenderer { id: r.id, bytes: frames }],
+                            };
+                            (State { subfetches: table, subcounts: counts, ..s }, outs)
+                        },
+                    },
+                },
+            },
+        }
+    }
 }
 
 /// The message asks for a sub-fetch: a `FetchStyle` or a `FetchScript`.
@@ -2804,6 +3547,8 @@ pub open spec fn sub_net(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns, s:
             let (fs, actions, ops) = clazel_fetch::transducer::spec::step(fetch.http, fetch.urls, f.fetch, input, subfetch_jar(fetch, s, f), s.now);
             let jar = if cred { apply_net_ops(rules, s.jar, ops) } else { s.jar };
             let (h, out, end) = sub_actions(renderer, serial, f.request, f.script, hop, actions);
+            // Item 7.16: a `Fetch` ends with its own frames.
+            let end = api_finish(fetch, f, fs, actions, end);
             let (table, outs) = sub_finish(s.subfetches, SubFetch { fetch: fs, hop: h, ..f }, out, end);
             (State { subfetches: table, jar, ..s }, outs)
         },
@@ -2835,7 +3580,7 @@ pub open spec fn sweep(s: State, fs: Seq<SubFetch>) -> (Seq<SubFetch>, Seq<Outpu
         if !subfetch_live(s, f) {
             (rest, close + out)
         } else if s.now >= f.started + subfetch_timeout() {
-            (rest, close + seq![Output::ToRenderer { id: f.renderer, bytes: sub_failed_frame(f.script, f.request) }] + out)
+            (rest, close + seq![Output::ToRenderer { id: f.renderer, bytes: failed_frame_of(f) }] + out)
         } else {
             (seq![f] + rest, out)
         }
@@ -2863,7 +3608,11 @@ pub open spec fn decode_renderer_frame(bytes: Seq<u8>) -> Option<clazel_ipc::mes
 /// is committed.
 pub open spec fn accepted_message(r: Renderer, bytes: Seq<u8>) -> Option<clazel_ipc::message::spec::Message> {
     match decode_renderer_frame(bytes) {
-        Some(m) => if (m is Display || m is Title || m is FetchStyle || m is FetchScript || m is Submit) && !r.committed { None } else { Some(m) },
+        Some(m) => if (m is Display || m is Title || m is FetchStyle || m is FetchScript || m is Submit || m is UpdateUrl || m is OpenTab || m is Fetch) && !r.committed {
+            None
+        } else {
+            Some(m)
+        },
         None => None,
     }
 }
@@ -2922,7 +3671,7 @@ pub open spec fn handle_message(
             Some(relative) => match (urls.resolve)(r.url, relative) {
                 None => (s, reply(r, clazel_ipc::message::spec::Message::Error { code: error_bad_url() })),
                 Some(resolved) => if lock_of_url(urls, resolved, s.next_id) is None {
-                    (s, reply(r, clazel_ipc::message::spec::Message::Error { code: error_bad_url() }))
+                    (s, reply(r, clazel_ipc::message::spec::Message::Error { code: error_unlocked(urls, resolved) }))
                 } else {
                     begin_navigation(rules, urls, fetch, s, r.tab, resolved, clazel_fetch::request::spec::get_req())
                 },
@@ -2932,13 +3681,35 @@ pub open spec fn handle_message(
         clazel_ipc::message::spec::Message::Submit { url, method, content_type, body } => submit(rules, urls, fetch, s, r, url, method, content_type, body),
         // `Display` (phase-4.md item 4.12): shown for the sender's tab, under
         // its committed URL; neither comes from the message.
-        clazel_ipc::message::spec::Message::Display { title, text, links } => (s, seq![Output::Show { tab: r.tab, url: r.url, title, text, links }]),
+        // Item 7.16: the URL is the document's, which an accepted
+        // `UpdateUrl` may have set ([`doc_url_of`]).
+        clazel_ipc::message::spec::Message::Display { title, text, links } => (s, seq![Output::Show { tab: r.tab, url: doc_url_of(s.doc_urls, r), title, text, links }]),
         // Item 5.18: the renderer's title, kept for its `Paint`s.
         clazel_ipc::message::spec::Message::Title { title } => (State { titles: set_title(s.titles, r.id, r.lock, title), ..s }, seq![]),
         // Item 5.19.
         clazel_ipc::message::spec::Message::FetchStyle { request, url } => fetch_style(rules, urls, fetch, s, r, request, url),
         // Item 7.16.
         clazel_ipc::message::spec::Message::FetchScript { request, url } => fetch_script(rules, urls, fetch, s, r, request, url),
+        // Item 7.16: `pushState` and `replaceState`.
+        clazel_ipc::message::spec::Message::UpdateUrl { replace, url } => update_url(urls, s, r, url),
+        // Item 7.16: `window.open`, only with the kernel's own record of a
+        // user input.
+        clazel_ipc::message::spec::Message::OpenTab { url } => open_tab_from(rules, urls, fetch, s, r, url),
+        // Item 7.16: `fetch()` and XHR.
+        clazel_ipc::message::spec::Message::Fetch { request, method, url, content_type, body, mode, headers } => fetch_api(
+            rules,
+            urls,
+            fetch,
+            s,
+            r,
+            request,
+            method,
+            url,
+            content_type,
+            body,
+            mode,
+            headers,
+        ),
         // A message a renderer may not send: unreachable, see
         // `decode_renderer_frame`.
         _ => (s, seq![]),

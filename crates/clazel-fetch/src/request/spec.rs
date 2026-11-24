@@ -403,17 +403,25 @@ pub struct Req {
     /// Fetch's redirect-taint is not "same-origin": some redirect led to a
     /// URL whose origin is not that of the URL before it
     pub origin_tainted: bool,
+    /// the author's header lines (item 7.16: `fetch()` and XHR), sent after
+    /// the body's fields and before `Origin`; [`req_ok`] admits none that
+    /// [`author_header_dropped`] names
+    pub headers: Seq<clazel_http::field::spec::FieldLine>,
+    /// the request's mode is "cors" (item 7.16): `Origin` is sent whatever
+    /// the method (Fetch "append a request `Origin` header" step 3, with the
+    /// response tainting "cors")
+    pub cors: bool,
 }
 
 /// The request every fetch before 6.16 is: `GET`, no body, no client.
 pub open spec fn get_req() -> Req {
-    Req { method: lit_get(), body: None, initiator: None, origin_tainted: false }
+    Req { method: lit_get(), body: None, initiator: None, origin_tainted: false, headers: seq![], cors: false }
 }
 
 /// A navigation with `GET`, no body and no client (the class before 6.16;
 /// `origin_tainted` is not looked at: no `Origin` is sent on `GET`).
 pub open spec fn is_plain_get(req: Req) -> bool {
-    req.method == lit_get() && req.body is None && req.initiator is None
+    req.method == lit_get() && req.body is None && req.initiator is None && req.headers.len() == 0 && !req.cors
 }
 
 /// The methods a navigation uses here: `GET` and `POST`.
@@ -445,7 +453,7 @@ pub open spec fn req_ok(req: Req) -> bool {
         && (match req.body {
         Some(p) => body_len_ok(p.bytes.len()),
         None => true,
-    })
+    }) && author_headers_ok(req.headers)
 }
 
 /// The decimal digits of `n`, as octets (Fetch: "serialized and isomorphic
@@ -480,7 +488,8 @@ pub open spec fn body_field_lines(req: Req) -> Seq<clazel_http::field::spec::Fie
     }
 }
 
-/// "append a request `Origin` header" step 4.1 and "serializing a request
+/// "append a request `Origin` header" steps 3 and 4.1 (the referrer-policy
+/// rule of step 4.1 does not apply in mode "cors", item 7.16) and "serializing a request
 /// origin" (see the modelling choices): the value `Origin` would have for a
 /// request for `url`, or `None` if it is not ASCII.
 pub open spec fn origin_value(url: clazel_url::url::spec::Url, req: Req) -> Option<Seq<u8>> {
@@ -490,7 +499,7 @@ pub open spec fn origin_value(url: clazel_url::url::spec::Url, req: Req) -> Opti
             Some(lit_null())
         } else {
             match o {
-                clazel_origin::spec::Origin::Tuple { scheme, .. } => if scheme == clazel_url::url::spec::https_str() && url.scheme != clazel_url::url::spec::https_str() {
+                clazel_origin::spec::Origin::Tuple { scheme, .. } => if !req.cors && scheme == clazel_url::url::spec::https_str() && url.scheme != clazel_url::url::spec::https_str() {
                     Some(lit_null())
                 } else {
                     ascii_octets(clazel_origin::spec::serialization_of_origin(o))
@@ -501,11 +510,12 @@ pub open spec fn origin_value(url: clazel_url::url::spec::Url, req: Req) -> Opti
     }
 }
 
-/// "append a request `Origin` header" for a request for `url`: none for
-/// `GET` or `HEAD` (step 4), else one `Origin` field line (step 4.2), or
-/// `None` if the value is not ASCII.
+/// "append a request `Origin` header" for a request for `url`: one `Origin`
+/// field line in mode "cors" (step 3, item 7.16; see the modelling choices
+/// of 7.16), none for `GET` or `HEAD` otherwise (step 4), else one (step
+/// 4.2); `None` if the value is not ASCII.
 pub open spec fn origin_field_lines(url: clazel_url::url::spec::Url, req: Req) -> Option<Seq<clazel_http::field::spec::FieldLine>> {
-    if req.method == lit_get() || req.method == lit_head() {
+    if (req.method == lit_get() || req.method == lit_head()) && !req.cors {
         Some(seq![])
     } else {
         match origin_value(url, req) {
@@ -515,13 +525,14 @@ pub open spec fn origin_field_lines(url: clazel_url::url::spec::Url, req: Req) -
     }
 }
 
-/// The request for `url` with the method, body and `Origin` of `req`:
-/// [`request_for`]'s fields, then [`body_field_lines`] and
-/// [`origin_field_lines`]; `None` if this client does not fetch it.
+/// The request for `url` with the method, body, author headers and `Origin`
+/// of `req`: [`request_for`]'s fields, then [`body_field_lines`], the
+/// author's lines (item 7.16) and [`origin_field_lines`]; `None` if this
+/// client does not fetch it or `req` is not [`req_ok`].
 pub open spec fn request_for_req(url: clazel_url::url::spec::Url, req: Req) -> Option<clazel_http::message::spec::Request> {
     match (request_for(url), origin_field_lines(url, req)) {
         (Some(r), Some(of)) => if req_ok(req) {
-            Some(clazel_http::message::spec::Request { method: req.method, target: r.target, fields: r.fields + body_field_lines(req) + of })
+            Some(clazel_http::message::spec::Request { method: req.method, target: r.target, fields: r.fields + body_field_lines(req) + req.headers + of })
         } else {
             None
         },
@@ -579,6 +590,162 @@ pub open spec fn rewrite_for_redirect(status: nat, req: Req) -> Req {
 /// §5.2's "method is safe", RFC 9110 §9.2.1).
 pub open spec fn method_is_safe(req: Req) -> bool {
     is_safe_method(req.method)
+}
+
+// ===========================================================================
+// Item 7.16: author headers (`fetch()` and XHR).
+// ===========================================================================
+//
+// Sources: the Fetch Standard at the commit `transducer::spec` pins,
+// `59afe349913d56898c947576216f1c2579308be7`:
+// - §2.2.2 "forbidden request-header": "1. If name is a byte-case-insensitive
+//   match for one of: `Accept-Charset`, `Accept-Encoding`,
+//   `Access-Control-Request-Headers`, `Access-Control-Request-Method`,
+//   `Connection`, `Content-Length`, `Cookie`, `Cookie2`, `Date`, `DNT`,
+//   `Expect`, `Host`, `Keep-Alive`, `Origin`, `Referer`, `Set-Cookie`, `TE`,
+//   `Trailer`, `Transfer-Encoding`, `Upgrade`, `Via` then return true.
+//   2. If name when byte-lowercased starts with `proxy-` or `sec-`, then
+//   return true. 3. If name is a byte-case-insensitive match for one of:
+//   `X-HTTP-Method`, `X-HTTP-Method-Override`, `X-Method-Override` then: [for
+//   each method of the value's parsed values] if the isomorphic encoding of
+//   method is a forbidden method, then return true. 4. Return false.";
+// - "append a request `Origin` header" step 3: "If request's response
+//   tainting is "cors" or request's mode is "websocket" or "webtransport",
+//   then append (`Origin`, serializedOrigin) to request's header list."
+//
+// Modelling choices of this part (7.16):
+// - **The author's headers** ([`Req::headers`]) are field lines the page
+//   gave (`fetch()`'s `headers`, XHR's `setRequestHeader`), sent in order
+//   after the body's fields. A request carries none that
+//   [`author_header_dropped`] names ([`req_ok`]): Fetch's forbidden
+//   request-header names (steps 1 and 2, [`forbidden_header_name`]), the
+//   three method-override names whatever their value (step 3 over-
+//   approximated: the value is not parsed, so such a header is never sent;
+//   listed), and the names this client sets itself, `Accept`, `User-Agent`
+//   and `Content-Type` ([`managed_header_name`]; `Content-Type` comes with
+//   the body). The caller drops them ([`filter_author_headers`]); a request
+//   with one is not built.
+// - **Mode "cors"** ([`Req::cors`]) sends `Origin` on every request,
+//   `GET` included. Fetch sends it only when the response tainting is
+//   "cors", which a request whose URLs all stayed same-origin does not have;
+//   the extra header on such a request is the only difference (listed).
+// - **A redirect that leaves the origin drops the author's headers**
+//   (`crate::transducer::spec::next_req`): from the first cross-origin hop
+//   on, the request carries none. Fetch keeps them (and asks for a CORS
+//   preflight when they are not safelisted); this client sends no
+//   preflight, so it never sends an author's header to an origin the
+//   request did not reach by same-origin hops (listed).
+
+/// `s`, byte-lowercased (Infra: each byte in 0x41 to 0x5A plus 0x20).
+pub open spec fn byte_lowercase(s: Seq<u8>) -> Seq<u8> {
+    s.map_values(|b: u8| if 0x41 <= b && b <= 0x5A { (b + 0x20) as u8 } else { b })
+}
+
+/// `s` starts with `p`.
+pub open spec fn starts_with(s: Seq<u8>, p: Seq<u8>) -> bool {
+    p.len() <= s.len() && s.take(p.len() as int) == p
+}
+
+/// The names of §2.2.2 step 1, byte-lowercased.
+pub open spec fn forbidden_names() -> Seq<Seq<u8>> {
+    seq![
+        seq![0x61u8, 0x63, 0x63, 0x65, 0x70, 0x74, 0x2D, 0x63, 0x68, 0x61, 0x72, 0x73, 0x65, 0x74],
+        seq![0x61u8, 0x63, 0x63, 0x65, 0x70, 0x74, 0x2D, 0x65, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67],
+        seq![0x61u8, 0x63, 0x63, 0x65, 0x73, 0x73, 0x2D, 0x63, 0x6F, 0x6E, 0x74, 0x72, 0x6F, 0x6C, 0x2D, 0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x2D, 0x68, 0x65, 0x61, 0x64, 0x65, 0x72, 0x73],
+        seq![0x61u8, 0x63, 0x63, 0x65, 0x73, 0x73, 0x2D, 0x63, 0x6F, 0x6E, 0x74, 0x72, 0x6F, 0x6C, 0x2D, 0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x2D, 0x6D, 0x65, 0x74, 0x68, 0x6F, 0x64],
+        seq![0x63u8, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E],
+        seq![0x63u8, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x6C, 0x65, 0x6E, 0x67, 0x74, 0x68],
+        seq![0x63u8, 0x6F, 0x6F, 0x6B, 0x69, 0x65],
+        seq![0x63u8, 0x6F, 0x6F, 0x6B, 0x69, 0x65, 0x32],
+        seq![0x64u8, 0x61, 0x74, 0x65],
+        seq![0x64u8, 0x6E, 0x74],
+        seq![0x65u8, 0x78, 0x70, 0x65, 0x63, 0x74],
+        seq![0x68u8, 0x6F, 0x73, 0x74],
+        seq![0x6Bu8, 0x65, 0x65, 0x70, 0x2D, 0x61, 0x6C, 0x69, 0x76, 0x65],
+        seq![0x6Fu8, 0x72, 0x69, 0x67, 0x69, 0x6E],
+        seq![0x72u8, 0x65, 0x66, 0x65, 0x72, 0x65, 0x72],
+        seq![0x73u8, 0x65, 0x74, 0x2D, 0x63, 0x6F, 0x6F, 0x6B, 0x69, 0x65],
+        seq![0x74u8, 0x65],
+        seq![0x74u8, 0x72, 0x61, 0x69, 0x6C, 0x65, 0x72],
+        seq![0x74u8, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x65, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67],
+        seq![0x75u8, 0x70, 0x67, 0x72, 0x61, 0x64, 0x65],
+        seq![0x76u8, 0x69, 0x61],
+    ]
+}
+
+/// The names of §2.2.2 step 3, byte-lowercased.
+pub open spec fn method_override_names() -> Seq<Seq<u8>> {
+    seq![
+        seq![0x78u8, 0x2D, 0x68, 0x74, 0x74, 0x70, 0x2D, 0x6D, 0x65, 0x74, 0x68, 0x6F, 0x64],
+        seq![0x78u8, 0x2D, 0x68, 0x74, 0x74, 0x70, 0x2D, 0x6D, 0x65, 0x74, 0x68, 0x6F, 0x64, 0x2D, 0x6F, 0x76, 0x65, 0x72, 0x72, 0x69, 0x64, 0x65],
+        seq![0x78u8, 0x2D, 0x6D, 0x65, 0x74, 0x68, 0x6F, 0x64, 0x2D, 0x6F, 0x76, 0x65, 0x72, 0x72, 0x69, 0x64, 0x65],
+    ]
+}
+
+/// The names this client sets itself, byte-lowercased: `accept`,
+/// `user-agent`, `content-type`.
+pub open spec fn managed_names() -> Seq<Seq<u8>> {
+    seq![
+        seq![0x61u8, 0x63, 0x63, 0x65, 0x70, 0x74],
+        seq![0x75u8, 0x73, 0x65, 0x72, 0x2D, 0x61, 0x67, 0x65, 0x6E, 0x74],
+        seq![0x63u8, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x74, 0x79, 0x70, 0x65],
+    ]
+}
+
+/// `proxy-`.
+pub open spec fn lit_proxy_prefix() -> Seq<u8> {
+    seq![0x70u8, 0x72, 0x6F, 0x78, 0x79, 0x2D]
+}
+
+/// `sec-`.
+pub open spec fn lit_sec_prefix() -> Seq<u8> {
+    seq![0x73u8, 0x65, 0x63, 0x2D]
+}
+
+/// `x` is one of `ns` (a recursive `contains`, so that a concrete instance
+/// evaluates).
+pub open spec fn in_names(ns: Seq<Seq<u8>>, x: Seq<u8>) -> bool
+    decreases ns.len(),
+{
+    ns.len() > 0 && (ns[0] == x || in_names(ns.drop_first(), x))
+}
+
+/// §2.2.2 steps 1 and 2: `name` is a forbidden request-header name whatever
+/// its value.
+pub open spec fn forbidden_header_name(name: Seq<u8>) -> bool {
+    in_names(forbidden_names(), byte_lowercase(name)) || starts_with(byte_lowercase(name), lit_proxy_prefix()) || starts_with(
+        byte_lowercase(name),
+        lit_sec_prefix(),
+    )
+}
+
+/// §2.2.2 step 3's names.
+pub open spec fn method_override_name(name: Seq<u8>) -> bool {
+    in_names(method_override_names(), byte_lowercase(name))
+}
+
+/// A name this client sets itself.
+pub open spec fn managed_header_name(name: Seq<u8>) -> bool {
+    in_names(managed_names(), byte_lowercase(name))
+}
+
+/// An author's header with this name is never sent: Fetch forbids it (for
+/// step 3, for some value), or this client sets it.
+pub open spec fn author_header_dropped(name: Seq<u8>) -> bool {
+    forbidden_header_name(name) || method_override_name(name) || managed_header_name(name)
+}
+
+/// No author's header line names a dropped name.
+pub open spec fn author_headers_ok(headers: Seq<clazel_http::field::spec::FieldLine>) -> bool
+    decreases headers.len(),
+{
+    headers.len() == 0 || (!author_header_dropped(headers[0].name) && author_headers_ok(headers.drop_first()))
+}
+
+/// The author's lines `headers` without the dropped ones, in order: what
+/// a caller passes on.
+pub open spec fn filter_author_headers(headers: Seq<clazel_http::field::spec::FieldLine>) -> Seq<clazel_http::field::spec::FieldLine> {
+    headers.filter(|h: clazel_http::field::spec::FieldLine| !author_header_dropped(h.name))
 }
 
 } // verus!

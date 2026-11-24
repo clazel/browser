@@ -25,6 +25,7 @@ pub open spec fn ml_urls_a() -> UrlFns {
     UrlFns {
         origin_of: |u: Seq<u32>| Some(ml_tuple(seq![0x61u32])),
         path_of: |u: Seq<u32>| Seq::<u8>::empty(),
+        is_javascript: |u: Seq<u32>| false,
         resolve: |b: Seq<u32>, i: Seq<u32>| None::<Seq<u32>>,
     }
 }
@@ -44,6 +45,8 @@ pub open spec fn ml_state_one() -> State {
         subfetches: Seq::empty(),
         subcounts: Seq::empty(),
         gpu: init_gpu(),
+        doc_urls: Seq::empty(),
+        acts: Seq::empty(),
     }
 }
 
@@ -442,7 +445,7 @@ pub proof fn ml_display_shows(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, 
     ensures
         handle_message(rules, urls, fetch, s, r, clazel_ipc::message::spec::Message::Display { title, text, links }) == (
             s,
-            seq![Output::Show { tab: r.tab, url: r.url, title, text, links }],
+            seq![Output::Show { tab: r.tab, url: doc_url_of(s.doc_urls, r), title, text, links }],
         ),
 {
 }
@@ -542,6 +545,8 @@ pub open spec fn ml_gpu_state(committed: bool, sized: bool) -> State {
             demoted: false,
             sites: seq![],
         },
+        doc_urls: Seq::empty(),
+        acts: Seq::empty(),
     }
 }
 
@@ -568,6 +573,7 @@ pub proof fn ml_gpu_paint(s: State, id: nat, bytes: Seq<u8>)
             &&& s.renderers[0].committed
             &&& p->Paint_buffer < ring_size()
             &&& fits(viewport_of(s, s.renderers[0].tab), p->Paint_width, p->Paint_height)
+            &&& p->Paint_url == doc_url_of(s.doc_urls, s.renderers[0])
         },
 {
     crate::surface_rel::lemma_from_gpu_shape(s, id, bytes);
@@ -614,6 +620,7 @@ pub open spec fn ml_subfetch(renderer: nat, lock: clazel_origin::spec::Origin, e
         started: 0,
         partition: crate::domain::Domain::Opaque(0),
         ended,
+        api: None,
     }
 }
 
@@ -884,6 +891,261 @@ pub proof fn ml_gpu_ready_paints()
     crate::gpu_theorems::lemma_gpu_of_with(ml_gpu_cold(), GpuRec { running: true, ..gpu_of(ml_gpu_cold(), ml_gpu_renderer(true)) }, ml_gpu_renderer(true));
     assert(gpu_of(s, ml_gpu_renderer(true)).running);
     assert(decode_gpu_frame(ml_frame_ready(0)) == Some(clazel_ipc::message::spec::Message::FrameReady { buffer: 0, width: 1, height: 1 })) by (compute_only);
+}
+
+// ---------------------------------------------------------------------
+// Item 7.16: URL updates.
+// ---------------------------------------------------------------------
+
+/// URL functions under which a URL resolves to itself and has no origin.
+pub open spec fn ml_urls_no_origin() -> UrlFns {
+    UrlFns {
+        origin_of: |u: Seq<u32>| None::<clazel_origin::spec::Origin>,
+        path_of: |u: Seq<u32>| Seq::<u8>::empty(),
+        is_javascript: |u: Seq<u32>| false,
+        resolve: |b: Seq<u32>, i: Seq<u32>| Some(i),
+    }
+}
+
+/// URL functions under which a URL resolves to itself and has an opaque
+/// origin.
+pub open spec fn ml_urls_opaque() -> UrlFns {
+    UrlFns {
+        origin_of: |u: Seq<u32>| Some(clazel_origin::spec::Origin::Opaque(7nat)),
+        path_of: |u: Seq<u32>| Seq::<u8>::empty(),
+        is_javascript: |u: Seq<u32>| false,
+        resolve: |b: Seq<u32>, i: Seq<u32>| Some(i),
+    }
+}
+
+/// A state with no renderer whose only document URL is `url`, of renderer 0
+/// locked to `lock`.
+pub open spec fn ml_doc_state(lock: clazel_origin::spec::Origin, url: Seq<u32>) -> State {
+    State { doc_urls: seq![DocUrl { id: 0, lock, url }], ..init_state() }
+}
+
+/// What an `UpdateUrl` does to the document URLs: nothing, or one entry,
+/// last, under the sender's id and lock, which is a tuple lock and the
+/// entry's URL's lock: the core of `theorem_url_update_same_origin`.
+pub proof fn ml_update_url_checked(urls: UrlFns, s: State, r: Renderer, url: Seq<u8>)
+    ensures
+        update_url(urls, s, r, url).0.doc_urls == s.doc_urls || ({
+            let ds = update_url(urls, s, r, url).0.doc_urls;
+            &&& ds.len() > 0
+            &&& r.lock is Tuple
+            &&& ds.last().id == r.id
+            &&& ds.last().lock == r.lock
+            &&& lock_of_url(urls, ds.last().url, r.id) == Some(r.lock)
+        }),
+{
+}
+
+/// [`doc_url_of`] after [`set_doc_url`] for the same renderer is the URL
+/// set.
+pub proof fn ml_doc_url_set(ds: Seq<DocUrl>, r: Renderer, url: Seq<u32>)
+    ensures
+        doc_url_of(set_doc_url(ds, r.id, r.lock, url), r) == url,
+{
+    let f = forget_doc_url(ds, r.id, r.lock);
+    assert forall|k: int| 0 <= k < f.len() implies !((#[trigger] f[k]).id == r.id && f[k].lock == r.lock) by {
+        assert(f.contains(f[k]));
+        clazel_cookie::storage::isolation::lemma_filter_elem(ds, |x: DocUrl| !(x.id == r.id && x.lock == r.lock), f[k]);
+    }
+    ml_doc_url_push(f, r, DocUrl { id: r.id, lock: r.lock, url });
+}
+
+/// [`doc_url_of`] of entries none of which is `r`'s, then one that is.
+pub proof fn ml_doc_url_push(f: Seq<DocUrl>, r: Renderer, x: DocUrl)
+    requires
+        forall|k: int| 0 <= k < f.len() ==> !((#[trigger] f[k]).id == r.id && f[k].lock == r.lock),
+        x.id == r.id,
+        x.lock == r.lock,
+    ensures
+        doc_url_of(f.push(x), r) == x.url,
+    decreases f.len(),
+{
+    if f.len() == 0 {
+        assert(f.push(x)[0] == x);
+    } else {
+        let g = f.drop_first();
+        assert(f.push(x)[0] == f[0]);
+        assert(f.push(x).drop_first() =~= g.push(x));
+        assert forall|k: int| 0 <= k < g.len() implies !((#[trigger] g[k]).id == r.id && g[k].lock == r.lock) by {
+            assert(g[k] == f[k + 1]);
+        }
+        ml_doc_url_push(g, r, x);
+    }
+}
+
+/// A renderer that is not committed may not send `UpdateUrl`: the case
+/// `theorem_url_update_same_origin` excludes (its URL is not one it
+/// committed).
+pub proof fn ml_uncommitted_update_url(r: Renderer, bytes: Seq<u8>)
+    requires
+        !r.committed,
+        decode_renderer_frame(bytes) matches Some(m) && m is UpdateUrl,
+    ensures
+        accepted_message(r, bytes) is None,
+{
+}
+
+/// URL functions under which a URL resolves to itself and has the tuple
+/// origin `http://a`.
+pub open spec fn ml_urls_tuple() -> UrlFns {
+    UrlFns {
+        origin_of: |u: Seq<u32>| Some(ml_tuple(seq![0x68u32, 0x74, 0x74, 0x70])),
+        path_of: |u: Seq<u32>| Seq::<u8>::empty(),
+        is_javascript: |u: Seq<u32>| false,
+        resolve: |b: Seq<u32>, i: Seq<u32>| Some(i),
+    }
+}
+
+/// A state with one committed renderer (id 0, tab 0) locked to `http://a`,
+/// whose document URL is `b`.
+pub open spec fn ml_commit_state() -> State {
+    let lock = ml_tuple(seq![0x68u32, 0x74, 0x74, 0x70]);
+    State {
+        renderers: seq![ml_renderer(0, lock)],
+        next_id: 1,
+        doc_urls: seq![DocUrl { id: 0, lock, url: seq![0x62u32] }],
+        ..init_state()
+    }
+}
+
+/// A commit to the same renderer forgets its document URL: the new
+/// document's URL is the committed one, not the old one's `pushState` URL.
+pub proof fn ml_commit_forgets_doc_url(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, doc: Document, i: int, lock: clazel_origin::spec::Origin)
+    requires
+        0 <= i < s.renderers.len(),
+        find_by_tab(s.renderers, tab, 0) == Some(i),
+        lock_of_url(urls, url, s.next_id) == Some(lock),
+        lock is Tuple,
+        lock == s.renderers[i].lock,
+    ensures
+        navigate_tab(urls, s, tab, url, doc).0.doc_urls == forget_doc_url(s.doc_urls, s.renderers[i].id, lock),
+{
+}
+
+// ---------------------------------------------------------------------
+// Item 7.16: `fetch()` and XHR.
+// ---------------------------------------------------------------------
+
+/// A response whose only field is `Access-Control-Allow-Origin: v`.
+pub open spec fn ml_acao_response(v: Seq<u8>) -> clazel_http::message::spec::Response {
+    clazel_http::message::spec::Response {
+        fields: seq![clazel_http::message::spec::FieldLine { name: lit_acao(), value: v }],
+        ..ml_response(seq![0x62u8])
+    }
+}
+
+/// The CORS check fails without `Access-Control-Allow-Origin` (Fetch §4.9
+/// step 2).
+pub proof fn ml_cors_no_header(origin: Seq<u8>)
+    ensures
+        !cors_check(ml_response(seq![0x62u8]), origin),
+{
+}
+
+/// The CORS check fails when `Access-Control-Allow-Origin` is neither `*`
+/// nor the request's origin (step 4).
+pub proof fn ml_cors_mismatch()
+    ensures
+        !cors_check(ml_acao_response(seq![0x61u8]), seq![0x62u8]),
+{
+    let r = ml_acao_response(seq![0x61u8]);
+    assert(r.fields.drop_first() =~= Seq::<clazel_http::field::spec::FieldLine>::empty());
+    assert(clazel_http::field::spec::field_name_eq(r.fields[0].name, lit_acao()));
+    reveal_with_fuel(clazel_http::field::spec::field_values_named, 2);
+    assert(clazel_http::field::spec::field_values_named(r.fields, lit_acao()) =~= seq![seq![0x61u8]]);
+    assert(seq![0x61u8][0] != lit_star()[0]);
+    assert(seq![0x61u8][0] != seq![0x62u8][0]);
+}
+
+/// A response the CORS check would pass is still not readable in mode
+/// "no-cors" when it is cross-origin: what `theorem_cors_read` rests on.
+pub proof fn ml_no_cors_not_readable(lock: clazel_origin::spec::Origin, url: clazel_url::url::spec::Url, response: clazel_http::message::spec::Response)
+    requires
+        (crate::mutation_lemmas::ml_fetch_cross().urls.origin)(url) != lock,
+    ensures
+        !api_readable(ml_fetch_cross(), lock, mode_no_cors(), false, url, response),
+{
+}
+
+/// A response after a cross-origin redirect is not a basic response, even
+/// at the lock's origin: in mode "same-origin" it is not readable.
+pub proof fn ml_tainted_not_basic(url: clazel_url::url::spec::Url, response: clazel_http::message::spec::Response)
+    ensures
+        !api_readable(ml_fetch_cross(), clazel_origin::spec::Origin::Opaque(9nat), mode_same_origin(), true, url, response),
+{
+}
+
+/// A "no-cors" `Fetch` that ends cross-origin gives an opaque response:
+/// the renderer never gets its body.
+pub proof fn ml_no_cors_opaque(url: clazel_url::url::spec::Url, response: clazel_http::message::spec::Response)
+    ensures
+        api_end(ml_fetch_cross(), clazel_origin::spec::Origin::Opaque(0nat), 1, mode_no_cors(), false, seq![clazel_fetch::transducer::spec::Action::Done { url, response }])
+            == fetch_opaque_frames(1),
+{
+    reveal_with_fuel(end_action, 2);
+}
+
+/// A renderer that is not committed may not send `Fetch`.
+pub proof fn ml_uncommitted_fetch(r: Renderer, bytes: Seq<u8>)
+    requires
+        !r.committed,
+        decode_renderer_frame(bytes) matches Some(m) && m is Fetch,
+    ensures
+        accepted_message(r, bytes) is None,
+{
+}
+
+/// The kernel drops a page header Fetch forbids from the request it builds.
+pub proof fn ml_api_request_drops(r: Renderer, method: Seq<u8>, content_type: Seq<u8>, body: Seq<u8>, mode: u64, name: Seq<u8>, value: Seq<u8>)
+    requires
+        submit_request(r, method, content_type, body) is Some,
+        mode <= mode_no_cors(),
+        clazel_fetch::request::spec::author_header_dropped(name),
+    ensures
+        api_request(r, method, content_type, body, mode, seq![name, value]) is Some,
+        api_request(r, method, content_type, body, mode, seq![name, value])->Some_0.headers.len() == 0,
+{
+    let ts = seq![name, value];
+    assert(ts.subrange(2, 2) =~= Seq::<Seq<u8>>::empty());
+    reveal_with_fuel(header_pairs, 2);
+    let line = clazel_http::field::spec::FieldLine { name, value };
+    assert(header_pairs(ts) == Some(seq![line] + Seq::<clazel_http::field::spec::FieldLine>::empty()));
+    assert(seq![line] + Seq::<clazel_http::field::spec::FieldLine>::empty() =~= seq![line]);
+    reveal(Seq::filter);
+    assert(seq![line].drop_last() =~= Seq::<clazel_http::field::spec::FieldLine>::empty());
+    assert(clazel_fetch::request::spec::filter_author_headers(seq![line]) =~= Seq::<clazel_http::field::spec::FieldLine>::empty());
+}
+
+/// A "same-origin" `Fetch` of a URL of another origin is refused: the state
+/// does not change.
+pub proof fn ml_same_origin_refused(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns,
+    fetch: FetchFns,
+    s: State,
+    r: Renderer,
+    request: u64,
+    method: Seq<u8>,
+    url: Seq<u8>,
+    content_type: Seq<u8>,
+    body: Seq<u8>,
+    headers: Seq<Seq<u8>>,
+    relative: Seq<u32>,
+    resolved: Seq<u32>,
+    parsed: clazel_url::url::spec::Url,
+)
+    requires
+        clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) == Some(relative),
+        (urls.resolve)(r.url, relative) == Some(resolved),
+        (fetch.parse)(resolved) == Some(parsed),
+        (fetch.urls.origin)(parsed) != r.lock,
+    ensures
+        fetch_api(rules, urls, fetch, s, r, request, method, url, content_type, body, mode_same_origin(), headers).0 == s,
+{
 }
 
 } // verus!

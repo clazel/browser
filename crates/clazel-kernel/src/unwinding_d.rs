@@ -53,6 +53,8 @@ pub proof fn lemma_rel_same_table(rules: Seq<clazel_psl::spec::Rule>, urls: UrlF
         crate::invariant::jar_no_public_suffix(rules, s2b.jar),
         s1b.viewports == s2b.viewports,
         crate::domain::titles_of_domain(rules, s1b.titles, d) == crate::domain::titles_of_domain(rules, s2b.titles, d),
+        crate::domain::doc_urls_of_domain(rules, s1b.doc_urls, d) == crate::domain::doc_urls_of_domain(rules, s2b.doc_urls, d),
+        crate::domain::acts_of_domain(rules, s1b.acts, d) == crate::domain::acts_of_domain(rules, s2b.acts, d),
         crate::domain::subfetches_of_domain(rules, s1b.subfetches, d) == crate::domain::subfetches_of_domain(rules, s2b.subfetches, d),
         crate::domain::subcounts_of_domain(rules, s1b.subcounts, d) == crate::domain::subcounts_of_domain(rules, s2b.subcounts, d),
         s1b.gpu == s1.gpu,
@@ -290,6 +292,64 @@ pub proof fn lemma_d_submit(
     }
 }
 
+/// Item 7.16: a renderer's `OpenTab` of `d`: the same outputs, and related
+/// states. The activation is `d`'s own, so both runs decide alike, and the new
+/// tab is the host's `OpenTab` in both.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(200)]
+pub proof fn lemma_d_open_tab(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns,
+    fetch: FetchFns,
+    d: crate::domain::Domain,
+    s1: State,
+    s2: State,
+    id: nat,
+    bytes: Seq<u8>,
+    url: Seq<u8>,
+)
+    requires
+        crate::noninterference::rel(rules, urls, d, s1, s2),
+        crate::domain::event_domain(rules, s1, Event::FromRenderer { id, bytes }) == Some(d),
+        accepted_message(s1.renderers[find_by_id(s1.renderers, id, 0)->Some_0], bytes) == Some(clazel_ipc::message::spec::Message::OpenTab { url }),
+    ensures
+        crate::noninterference::renderer_outs(step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).1) == crate::noninterference::renderer_outs(step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).1),
+        crate::noninterference::rel(rules, urls, d, step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).0, step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).0),
+{
+    let e = Event::FromRenderer { id, bytes };
+    lemma_d_sender(rules, urls, d, s1, s2, id, bytes);
+    let i1 = find_by_id(s1.renderers, id, 0)->Some_0;
+    let i2 = find_by_id(s2.renderers, id, 0)->Some_0;
+    let r = s1.renderers[i1];
+    assert(s2.renderers[i2] == r);
+    crate::popup_rel::lemma_popup_resolved(rules, urls, fetch, s1, r, url);
+    crate::popup_rel::lemma_popup_resolved(rules, urls, fetch, s2, r, url);
+    crate::popup_rel::lemma_activation_left_rel(rules, urls, d, s1, s2, r);
+    assert(step(rules, urls, fetch, s1, e) == handle_message(rules, urls, fetch, s1, r, clazel_ipc::message::spec::Message::OpenTab { url }));
+    assert(step(rules, urls, fetch, s2, e) == handle_message(rules, urls, fetch, s2, r, clazel_ipc::message::spec::Message::OpenTab { url }));
+    match crate::popup_rel::popup_resolved(urls, s1, r, url) {
+        None => {
+            assert(step(rules, urls, fetch, s1, e) == (s1, Seq::<Output>::empty()));
+            assert(step(rules, urls, fetch, s2, e) == (s2, Seq::<Output>::empty()));
+        },
+        Some(resolved) => {
+            crate::unwinding::lemma_open_tab_consistency(rules, urls, fetch, d, s1, s2, resolved, None);
+            let (o1s, o1) = open_tab(rules, urls, fetch, s1, resolved, None);
+            let (o2s, o2) = open_tab(rules, urls, fetch, s2, resolved, None);
+            crate::popup_rel::lemma_acts_forget_same(rules, o1s.acts, o2s.acts, r.id, r.lock, d);
+            crate::popup_rel::lemma_rel_acts_update(
+                rules,
+                urls,
+                d,
+                o1s,
+                o2s,
+                forget_activation(o1s.acts, r.id, r.lock),
+                forget_activation(o2s.acts, r.id, r.lock),
+            );
+        },
+    }
+}
+
 /// A frame that does not decode kills the sender: for a renderer of `d`.
 #[verifier::spinoff_prover]
 #[verifier::rlimit(60)]
@@ -382,6 +442,46 @@ pub proof fn lemma_d_fetch_sub(
     lemma_rel_same_table(rules, urls, d, s1, s2, s1b, s2b);
 }
 
+/// Item 7.16: a `Fetch` of a renderer of `d`, as [`lemma_d_fetch_sub`].
+#[verifier::spinoff_prover]
+pub proof fn lemma_d_fetch_api(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns,
+    fetch: FetchFns,
+    d: crate::domain::Domain,
+    s1: State,
+    s2: State,
+    id: nat,
+    bytes: Seq<u8>,
+    m: clazel_ipc::message::spec::Message,
+)
+    requires
+        crate::noninterference::rel(rules, urls, d, s1, s2),
+        crate::domain::event_domain(rules, s1, Event::FromRenderer { id, bytes }) == Some(d),
+        accepted_message(s1.renderers[find_by_id(s1.renderers, id, 0)->Some_0], bytes) == Some(m),
+        m is Fetch,
+    ensures
+        crate::noninterference::renderer_outs(step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).1) == crate::noninterference::renderer_outs(step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).1),
+        crate::noninterference::rel(rules, urls, d, step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).0, step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).0),
+{
+    let e = Event::FromRenderer { id, bytes };
+    lemma_d_sender(rules, urls, d, s1, s2, id, bytes);
+    let i1 = find_by_id(s1.renderers, id, 0)->Some_0;
+    let r = s1.renderers[i1];
+    assert(step(rules, urls, fetch, s1, e) == handle_message(rules, urls, fetch, s1, r, m));
+    assert(step(rules, urls, fetch, s2, e) == handle_message(rules, urls, fetch, s2, r, m));
+    crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s1, e);
+    crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s2, e);
+    crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, fetch, s1, e);
+    crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, fetch, s2, e);
+    crate::api_rel::lemma_api_msg_shape(rules, urls, fetch, s1, r, m);
+    crate::api_rel::lemma_api_msg_shape(rules, urls, fetch, s2, r, m);
+    crate::api_rel::lemma_api_msg_domain(rules, urls, fetch, d, s1, s2, r, m);
+    let (s1b, o1) = step(rules, urls, fetch, s1, e);
+    let (s2b, o2) = step(rules, urls, fetch, s2, e);
+    lemma_rel_same_table(rules, urls, d, s1, s2, s1b, s2b);
+}
+
 /// Any other message a renderer may send is not served: nothing changes.
 pub proof fn lemma_d_event(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s1: State, s2: State, id: nat, bytes: Seq<u8>)
     requires
@@ -401,6 +501,8 @@ pub proof fn lemma_d_event(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fet
             clazel_ipc::message::spec::Message::CookieSet { cookie_string } => lemma_d_cookie_set(rules, urls, fetch, d, s1, s2, id, bytes, cookie_string),
             clazel_ipc::message::spec::Message::Navigate { url } => lemma_d_navigate(rules, urls, fetch, d, s1, s2, id, bytes, url),
             clazel_ipc::message::spec::Message::Submit { url, method, content_type, body } => lemma_d_submit(rules, urls, fetch, d, s1, s2, id, bytes, url, method, content_type, body),
+            // Item 7.16.
+            clazel_ipc::message::spec::Message::OpenTab { url } => lemma_d_open_tab(rules, urls, fetch, d, s1, s2, id, bytes, url),
             _ => {
                 if crate::statements::is_storage_message(m) {
                     lemma_d_storage(rules, urls, fetch, d, s1, s2, id, bytes, m);
@@ -416,8 +518,30 @@ pub proof fn lemma_d_event(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fet
                     crate::surface_rel::lemma_titles_set_same(rules, s1.titles, s2.titles, r.id, r.lock, title, d);
                     lemma_rel_same_table(rules, urls, d, s1, s2, s1b, s2b);
                     assert(o1 == o2);
+                } else if let clazel_ipc::message::spec::Message::UpdateUrl { replace, url } = m {
+                    // Item 7.16: the same document URL set (or none) under
+                    // the same lock in both runs, and nothing sent.
+                    let (s1b, o1) = step(rules, urls, fetch, s1, e);
+                    let (s2b, o2) = step(rules, urls, fetch, s2, e);
+                    crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s1, e);
+                    crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s2, e);
+                    crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, fetch, s1, e);
+                    crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, fetch, s2, e);
+                    crate::url_rel::lemma_update_url_shape(urls, s1, r, url);
+                    crate::url_rel::lemma_update_url_shape(urls, s2, r, url);
+                    if url.len() > 0 {
+                        if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+                            if let Some(resolved) = (urls.resolve)(r.url, relative) {
+                                crate::url_rel::lemma_doc_urls_set_same(rules, s1.doc_urls, s2.doc_urls, r.id, r.lock, resolved, d);
+                            }
+                        }
+                    }
+                    lemma_rel_same_table(rules, urls, d, s1, s2, s1b, s2b);
+                    assert(o1 == o2);
                 } else if is_sub_request(m) {
                     lemma_d_fetch_sub(rules, urls, fetch, d, s1, s2, id, bytes, m);
+                } else if m is Fetch {
+                    lemma_d_fetch_api(rules, urls, fetch, d, s1, s2, id, bytes, m);
                 } else {
                     // `Display` (item 4.12) changes nothing and shows the same
                     // on the same tab in both runs: the sender is the same
@@ -427,6 +551,8 @@ pub proof fn lemma_d_event(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fet
                     crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s1, e);
                     crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s2, e);
                     assert(s1b == s1 && s2b == s2);
+                    // Item 7.16: the document URL a `Show` names is `d`'s.
+                    crate::url_rel::lemma_doc_url_of_rel(rules, urls, d, s1, s2, r);
                     assert(o1 == o2);
                 }
             },

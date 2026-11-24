@@ -80,6 +80,12 @@ pub open spec fn conns_wf(rs: Seq<Renderer>, cs: Seq<Connection>, next_conn: nat
     &&& forall|i: int| 0 <= i < cs.len() ==> conn_backed(rs, #[trigger] cs[i])
 }
 
+/// Item 7.16: every document URL an `UpdateUrl` set is under a tuple lock
+/// that is the URL's own lock.
+pub open spec fn doc_urls_wf(urls: UrlFns, ds: Seq<DocUrl>) -> bool {
+    forall|k: int| 0 <= k < ds.len() ==> (#[trigger] ds[k]).lock is Tuple && lock_of_url(urls, ds[k].url, ds[k].id) == Some(ds[k].lock)
+}
+
 /// The invariant of every reachable state.
 ///
 /// - the jar: `jar_domains_nonempty` (the hypothesis of `clazel-cookie`'s
@@ -88,7 +94,8 @@ pub open spec fn conns_wf(rs: Seq<Renderer>, cs: Seq<Connection>, next_conn: nat
 ///   per root, and unique keys (§5.7 step 23's invariant);
 /// - the renderers: [`renderers_wf`];
 /// - Web Storage: [`storage_wf`];
-/// - navigations and connections (item 3.7): [`navigations_wf`], [`conns_wf`].
+/// - navigations and connections (item 3.7): [`navigations_wf`], [`conns_wf`];
+/// - document URLs (item 7.16): [`doc_urls_wf`].
 pub open spec fn kernel_wf(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s: State) -> bool {
     &&& clazel_cookie::storage::isolation::jar_domains_nonempty(s.jar)
     &&& clazel_cookie::storage::spec::jar_within_root_limit(rules, s.jar)
@@ -98,6 +105,7 @@ pub open spec fn kernel_wf(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s: 
     &&& storage_wf(s.storage)
     &&& navigations_wf(rules, s.renderers)
     &&& conns_wf(s.renderers, s.conns, s.next_conn)
+    &&& doc_urls_wf(urls, s.doc_urls)
 }
 
 /// The initial state satisfies the invariant.
@@ -590,6 +598,7 @@ pub proof fn lemma_navigate_tab_wf(
                 lemma_renderers_wf_update(urls, s.renderers, s.next_id, i, r, s.next_id);
                 crate::net_wf::lemma_navigations_wf_update(rules, s.renderers, i, r);
                 crate::net_wf::lemma_conns_wf_update(s.renderers, s.conns, s.next_conn, i, r);
+                crate::url_rel::lemma_doc_urls_wf_forget(urls, s.doc_urls, old.id, old.lock);
             } else {
                 let id = s.next_id;
                 let r = Renderer { committed: true, id, tab, url, lock, pending: None };
@@ -803,6 +812,27 @@ pub proof fn lemma_step_preserves_wf(rules: Seq<clazel_psl::spec::Rule>, urls: U
                             if r.lock is Tuple {
                                 lemma_lock_valid(urls, r.url, r.id, r.lock);
                                 lemma_storage_call_wf(s, r, m);
+                            }
+                        },
+                        // Item 7.16.
+                        clazel_ipc::message::spec::Message::UpdateUrl { replace, url } => {
+                            crate::url_rel::lemma_update_url_wf(rules, urls, s, r, url);
+                        },
+                        // Item 7.16: a popup spends the activation, then is the
+                        // host's `OpenTab` without a script.
+                        clazel_ipc::message::spec::Message::OpenTab { url } => {
+                            if activation_left(s.acts, r) > 0 {
+                                if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+                                    if let Some(resolved) = (urls.resolve)(r.url, relative) {
+                                        let id = s.next_id;
+                                        if let Some(lock) = lock_of_url(urls, resolved, id) {
+                                            lemma_open_tab_push_wf(rules, urls, s, resolved, lock, false);
+                                            let rn = Renderer { committed: false, id, tab: id, url: resolved, lock, pending: None };
+                                            let s1 = State { renderers: s.renderers.push(rn), next_id: id + 1, ..s };
+                                            crate::net_wf::lemma_begin_navigation_wf(rules, urls, fetch, s1, id, resolved, clazel_fetch::request::spec::get_req());
+                                        }
+                                    }
+                                }
                             }
                         },
                         clazel_ipc::message::spec::Message::Submit { url, method, content_type, body } => {

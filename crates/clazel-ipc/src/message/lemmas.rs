@@ -153,6 +153,57 @@ pub proof fn lemma_display_ok(title: Seq<u8>, text: Seq<u8>, links: Seq<Seq<u8>>
     }
 }
 
+/// `Fetch` can be sent exactly when its method, URL and each header text is
+/// valid UTF-8 and there are fewer than 2^64 header texts (item 7.16).
+pub proof fn lemma_fetch_ok(request: u64, method: Seq<u8>, url: Seq<u8>, content_type: Seq<u8>, body: Seq<u8>, mode: u64, headers: Seq<Seq<u8>>)
+    ensures
+        message_ok(Message::Fetch { request, method, url, content_type, body, mode, headers }) == (crate::cbor::spec::token_ok(Token::Text(method))
+            && crate::cbor::spec::token_ok(Token::Text(url)) && crate::cbor::spec::token_ok(Token::Bytes(content_type)) && crate::cbor::spec::token_ok(
+            Token::Bytes(body),
+        ) && headers.len() < 0x1_0000_0000_0000_0000 && forall|j: int|
+            0 <= j < headers.len() ==> crate::cbor::spec::token_ok(Token::Text(#[trigger] headers[j]))),
+{
+    let k = headers.len() as u64;
+    let tl = text_tokens(headers);
+    let r0 = seq![Token::Uint(request), Token::Text(method), Token::Text(url), Token::Bytes(content_type), Token::Bytes(body), Token::Uint(mode), Token::Array(k)] + tl;
+    let r1 = seq![Token::Text(method), Token::Text(url), Token::Bytes(content_type), Token::Bytes(body), Token::Uint(mode), Token::Array(k)] + tl;
+    let r2 = seq![Token::Text(url), Token::Bytes(content_type), Token::Bytes(body), Token::Uint(mode), Token::Array(k)] + tl;
+    let r3 = seq![Token::Bytes(content_type), Token::Bytes(body), Token::Uint(mode), Token::Array(k)] + tl;
+    let r4 = seq![Token::Bytes(body), Token::Uint(mode), Token::Array(k)] + tl;
+    let r5 = seq![Token::Uint(mode), Token::Array(k)] + tl;
+    let r6 = seq![Token::Array(k)] + tl;
+    assert(r0.drop_first() =~= r1);
+    assert(r1.drop_first() =~= r2);
+    assert(r2.drop_first() =~= r3);
+    assert(r3.drop_first() =~= r4);
+    assert(r4.drop_first() =~= r5);
+    assert(r5.drop_first() =~= r6);
+    assert(fetch_tokens(request, method, url, content_type, body, mode, headers) =~= seq![Token::Array(8), Token::Uint(20)] + r0);
+    lemma_items_head(8, 20, r0);
+    lemma_items_step(r0, 7);
+    assert(r0[0] == Token::Uint(request));
+    lemma_items_step(r1, 6);
+    assert(r1[0] == Token::Text(method));
+    lemma_items_step(r2, 5);
+    assert(r2[0] == Token::Text(url));
+    lemma_items_step(r3, 4);
+    assert(r3[0] == Token::Bytes(content_type));
+    lemma_items_step(r4, 3);
+    assert(r4[0] == Token::Bytes(body));
+    lemma_items_step(r5, 2);
+    assert(r5[0] == Token::Uint(mode));
+    lemma_items_step(r6, 1);
+    assert(r6[0] == Token::Array(k));
+    assert(r6.drop_first() =~= tl);
+    assert(crate::cbor::spec::pending_after(1, Token::Array(k)) == k as nat);
+    lemma_items_texts(headers, k as nat);
+    if headers.len() < 0x1_0000_0000_0000_0000 {
+        assert(k as nat == headers.len());
+    } else {
+        assert(k as nat != headers.len());
+    }
+}
+
 /// A sendable message has fewer than 2^64 nested tokens.
 pub proof fn lemma_nested_len_ok(m: Message)
     requires
@@ -162,6 +213,9 @@ pub proof fn lemma_nested_len_ok(m: Message)
 {
     if let Message::Display { title, text, links } = m {
         lemma_display_ok(title, text, links);
+    }
+    if let Message::Fetch { request, method, url, content_type, body, mode, headers } = m {
+        lemma_fetch_ok(request, method, url, content_type, body, mode, headers);
     }
 }
 
@@ -342,7 +396,34 @@ pub proof fn lemma_script_body_fits_frame(request: u64, bytes: Seq<u8>)
     assert(crate::cbor::spec::encode_head(2, bytes.len()).len() <= 5);
 }
 
+/// The tokens of a sendable `Fetch` parse back to it (item 7.16).
+pub proof fn lemma_parse_fetch_tokens(m: Message)
+    requires
+        m is Fetch,
+        nested_len(m) < 0x1_0000_0000_0000_0000,
+    ensures
+        parse_message(message_tokens(m)) == Some(m),
+{
+    if let Message::Fetch { request, method, url, content_type, body, mode, headers } = m {
+        let t = message_tokens(m);
+        let f = t.subrange(2, t.len() as int);
+        assert(f =~= seq![
+            Token::Uint(request),
+            Token::Text(method),
+            Token::Text(url),
+            Token::Bytes(content_type),
+            Token::Bytes(body),
+            Token::Uint(mode),
+            Token::Array(headers.len() as u64),
+        ] + text_tokens(headers));
+        assert(f.subrange(7, f.len() as int) =~= text_tokens(headers));
+        lemma_text_tokens(headers);
+        assert(parse_fetch(8, f) == Some(m));
+    }
+}
+
 /// The tokens of a sendable message parse back to it.
+#[verifier::spinoff_prover]
 pub proof fn lemma_parse_message_tokens(m: Message)
     requires
         nested_len(m) < 0x1_0000_0000_0000_0000,
@@ -403,10 +484,20 @@ pub proof fn lemma_parse_message_tokens(m: Message)
         Message::StyleFailed { request } => { assert(t.subrange(2, 3) =~= seq![Token::Uint(request)]); },
         Message::FetchScript { request, url } => { assert(t.subrange(2, 4) =~= seq![Token::Uint(request), Token::Text(url)]); },
         Message::UpdateUrl { replace, url } => { assert(t.subrange(2, 4) =~= seq![Token::Bool(replace), Token::Text(url)]); },
+        Message::OpenTab { url } => { assert(t.subrange(2, 3) =~= seq![Token::Text(url)]); },
         Message::ScriptResponse { request, content_type } => { assert(t.subrange(2, 4) =~= seq![Token::Uint(request), Token::Bytes(content_type)]); },
         Message::ScriptBody { request, bytes } => { assert(t.subrange(2, 4) =~= seq![Token::Uint(request), Token::Bytes(bytes)]); },
         Message::ScriptEnd { request } => { assert(t.subrange(2, 3) =~= seq![Token::Uint(request)]); },
         Message::ScriptFailed { request } => { assert(t.subrange(2, 3) =~= seq![Token::Uint(request)]); },
+        Message::Fetch { .. } => {
+            lemma_parse_fetch_tokens(m);
+        },
+        Message::FetchResponse { request, status, content_type } => {
+            assert(t.subrange(2, 5) =~= seq![Token::Uint(request), Token::Uint(status), Token::Bytes(content_type)]);
+        },
+        Message::FetchBody { request, bytes } => { assert(t.subrange(2, 4) =~= seq![Token::Uint(request), Token::Bytes(bytes)]); },
+        Message::FetchEnd { request } => { assert(t.subrange(2, 3) =~= seq![Token::Uint(request)]); },
+        Message::FetchFailed { request } => { assert(t.subrange(2, 3) =~= seq![Token::Uint(request)]); },
     }
 }
 
@@ -427,6 +518,16 @@ pub proof fn lemma_message_tokens_parse(t: Seq<Token>)
             lemma_texts_of(rest);
             assert(t =~= seq![t[0], t[1]] + f);
             assert(f =~= seq![f[0], f[1], f[2]] + rest);
+            assert(message_tokens(m) =~= t);
+            return;
+        }
+        if let Message::Fetch { request, method, url, content_type, body, mode, headers } = m {
+            let n = t[0]->Array_0;
+            assert(parse_fetch(n, f) == Some(m));
+            let rest = f.subrange(7, f.len() as int);
+            lemma_texts_of(rest);
+            assert(t =~= seq![t[0], t[1]] + f);
+            assert(f =~= seq![f[0], f[1], f[2], f[3], f[4], f[5], f[6]] + rest);
             assert(message_tokens(m) =~= t);
             return;
         }

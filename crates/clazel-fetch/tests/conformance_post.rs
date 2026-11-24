@@ -229,6 +229,8 @@ fn ours(c: &Case, now: u64) -> Option<Run> {
             None
         },
         origin_tainted: false,
+        headers: Vec::new(),
+        cors: false,
     };
     let mut jar: Vec<CookieRecord> = Vec::new();
     let (mut state, mut actions) = start_req(&parsed, req);
@@ -377,6 +379,8 @@ fn refused_requests() {
             },
             initiator: None,
             origin_tainted: false,
+            headers: Vec::new(),
+            cors: false,
         };
         let (_, actions) = start_req(&parsed, req);
         assert!(matches!(
