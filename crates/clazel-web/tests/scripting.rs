@@ -145,7 +145,7 @@ fn errors_are_reported_and_parsing_goes_on() -> Result<()> {
 /// on.
 #[test]
 fn what_the_engine_lacks_is_reported() -> Result<()> {
-    let mut h = Harness::new("<script>class A {}</script><script>log('after')</script>")?;
+    let mut h = Harness::new("<script>1n</script><script>log('after')</script>")?;
     h.load()?;
     assert_eq!(h.logged(), ["after"]);
     assert_eq!(engine(&h.reports).len(), 1, "{:?}", h.reports);

@@ -4,11 +4,12 @@ version = "0.0.0"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "The global object's built-ins (ECMA-262 clauses 19 to 28) for Clazel's JavaScript engine (phase-7.md item 7.9): the first group, Object, Function, the Error constructors, Boolean, Number, String, Math and the global functions; the second group, Array and JSON."
+description = "The global object's built-ins (ECMA-262 clauses 19 to 28) for Clazel's JavaScript engine (phase-7.md item 7.9): Object, Function, the Error constructors, Symbol, iteration, Boolean, Number, String, Math, the global functions, Array, JSON, Promise and RegExp."
 
 [dependencies]
 clazel-js-heap = { path = "../clazel-js-heap" }
 clazel-js-number = { path = "../clazel-js-number" }
+clazel-js-regexp = { path = "../clazel-js-regexp" }
 clazel-js-vm = { path = "../clazel-js-vm" }
 clazel-json = { path = "../clazel-json" }
 

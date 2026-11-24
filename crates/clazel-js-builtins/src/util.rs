@@ -211,3 +211,127 @@ pub fn has_own_property(vm: &Vm, obj: Value, k: Key) -> Result<bool, Abrupt> {
 pub fn intrinsic(vm: &Vm, which: Intrinsic) -> Value {
     vm.intrinsic(which)
 }
+
+/// `Get ( O, name )`, §7.3.2†, for a string key.
+///
+/// # Errors
+/// As [`Vm::get_value`].
+pub fn get(vm: &mut Vm, o: Value, name: &str) -> Result<Value, Abrupt> {
+    let k = key(vm, name)?;
+    vm.get_value(o, k)
+}
+
+/// `Set ( O, name, V, true )`, §7.3.4†, for a string key.
+///
+/// # Errors
+/// A `TypeError` if the property is read-only.
+pub fn set(vm: &mut Vm, o: Value, name: &str, v: Value) -> Result<(), Abrupt> {
+    let k = key(vm, name)?;
+    vm.put_value(o, k, v, true)
+}
+
+/// `Invoke ( V, P, argumentsList )`, §7.3.20†: `V[P]` called with `V` as
+/// `this`.
+///
+/// # Errors
+/// What the lookup or the call throws, or a `TypeError` if `V[P]` is not
+/// callable.
+pub fn invoke(vm: &mut Vm, v: Value, name: &str, args: &[Value]) -> Result<Value, Abrupt> {
+    let f = get(vm, v, name)?;
+    if !vm.heap().is_callable(f) {
+        return Err(vm.type_error(&format!("{name} is not a function")));
+    }
+    vm.call(f, v, args)
+}
+
+/// The value of a JS exception: `Ok(v)` for `Abrupt::Throw(v)`, and any
+/// other abrupt completion (which JS cannot catch) as the error. A native
+/// uses it where the standard says "Completion(...)" and then tests for an
+/// abrupt completion.
+///
+/// # Errors
+/// `e` itself, unless it is a thrown value.
+pub fn caught(e: Abrupt) -> Result<Value, Abrupt> {
+    match e {
+        Abrupt::Throw(v) => Ok(v),
+        other => Err(other),
+    }
+}
+
+/// SpeciesConstructor ( O, defaultConstructor ), §7.3.22†:
+/// 1. Let C be ? Get(O, "constructor").
+/// 2. If C is undefined, return defaultConstructor.
+/// 3. If C is not an Object, throw a TypeError exception.
+/// 4. Let S be ? Get(C, @@species).
+/// 5. If S is either undefined or null, return defaultConstructor.
+/// 6. If IsConstructor(S) is true, return S.
+/// 7. Throw a TypeError exception.
+///
+/// # Errors
+/// As the steps say.
+pub fn species_constructor(vm: &mut Vm, o: Value, default: Value) -> Result<Value, Abrupt> {
+    let c = get(vm, o, "constructor")?;
+    if c == Value::UNDEFINED {
+        return Ok(default);
+    }
+    if !vm.heap().is_object(c) {
+        return Err(vm.type_error("object.constructor is not an object"));
+    }
+    let ks = vm.well_known_key(clazel_js_heap::symbol::SPECIES)?;
+    let s = vm.get_value(c, ks)?;
+    if s == Value::UNDEFINED || s == Value::NULL {
+        return Ok(default);
+    }
+    if vm.is_constructor(s) {
+        return Ok(s);
+    }
+    Err(vm.type_error("object.constructor[Symbol.species] is not a constructor"))
+}
+
+/// The own property keys of an object in `[[OwnPropertyKeys]]` order
+/// (OrdinaryOwnPropertyKeys, §10.1.11.1†): the array indices in ascending
+/// order, then the other String keys in creation order, then the Symbol keys
+/// in creation order.
+#[must_use]
+pub fn own_property_keys(vm: &Vm, obj: Value) -> Vec<Key> {
+    let mut keys: Vec<Key> = vm
+        .heap()
+        .own_properties(obj)
+        .into_iter()
+        .map(|(k, _, _)| k)
+        .collect();
+    keys.extend(
+        vm.heap()
+            .own_symbol_properties(obj)
+            .into_iter()
+            .map(|(k, _, _)| k),
+    );
+    keys
+}
+
+/// Defines an accessor property of `obj` that is not enumerable and is
+/// configurable (the attributes of the standard's accessor properties, §17†):
+/// its getter and setter are native functions named `get name` and `set name`
+/// (`name` is the key's text, or `[description]` for a Symbol).
+///
+/// # Errors
+/// As [`define`].
+pub fn accessor(
+    vm: &mut Vm,
+    obj: Value,
+    k: Key,
+    name: &str,
+    getter: Option<NativeFn>,
+    setter: Option<NativeFn>,
+) -> Result<(), Abrupt> {
+    let get = match getter {
+        Some(f) => vm.new_native(&format!("get {name}"), 0, f)?,
+        None => Value::UNDEFINED,
+    };
+    let set = match setter {
+        Some(f) => vm.new_native(&format!("set {name}"), 1, f)?,
+        None => Value::UNDEFINED,
+    };
+    let d = clazel_js_vm::props::PropDesc::accessor(get, set, Attrs(Attrs::CONFIGURABLE));
+    vm.define_property_or_throw(obj, k, &d)
+}

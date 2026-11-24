@@ -30,6 +30,12 @@
 //! - **A step budget.** [`Vm::set_budget`] bounds the back-edges and calls a
 //!   run may make, and ends the run as [`Abrupt::Terminated`] when it is
 //!   spent: a host's deterministic form of the `Terminator`.
+//! - **Limits (phase-7.md 7.19).** The heap's byte limit
+//!   ([`Vm::set_heap_limit`]) and the region's slot limit make an op throw a
+//!   `RangeError` where the spec has no limit, and so does one native call
+//!   more than [`Vm::set_native_depth_limit`] allows. The heap-limit error
+//!   comes without a collection first: the VM does not use the collector of
+//!   item 7.6 yet.
 //! - **No inline-cache entries for globals or prototype hits**, only own data
 //!   properties of non-dictionary shapes, as `spec::IcEntry` models.
 //!
@@ -50,6 +56,8 @@ use crate::heap::{Heap, HeapError, ObjKind};
 use crate::numeric::{self, Num, num};
 use clazel_js_heap::shape::Attrs;
 use clazel_js_heap::string::{JsString, Key};
+use clazel_js_heap::symbol::SymbolId;
+use clazel_js_heap::symbol::contract::WELL_KNOWN;
 use clazel_js_heap::value::Value;
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
@@ -154,13 +162,75 @@ pub enum Intrinsic {
     ArrayPrototype,
     /// `%Array%`.
     ArrayConstructor,
+    /// `%Symbol.prototype%`.
+    SymbolPrototype,
+    /// `%Iterator.prototype%` (§27.1.2†).
+    IteratorPrototype,
+    /// `%ArrayIteratorPrototype%` (§23.1.5.2†).
+    ArrayIteratorPrototype,
+    /// `%StringIteratorPrototype%` (§22.1.5.1†).
+    StringIteratorPrototype,
+    /// Not an intrinsic of the standard: the GlobalSymbolRegistry List
+    /// (§20.4.2.2.1†) of `Symbol.for`, kept as an object without a
+    /// prototype that no script can reach (its keys are the registered
+    /// strings, its values the Symbols).
+    SymbolRegistry,
+    /// `%Promise.prototype%` (§27.2.5†).
+    PromisePrototype,
+    /// `%Promise%` (§27.2.3†).
+    PromiseConstructor,
+    /// The built-in function of PromiseReactionJob (§27.2.2.1†): the callee
+    /// of the job HostEnqueuePromiseJob queues for a reaction.
+    PromiseReactionJob,
+    /// The built-in function of PromiseResolveThenableJob (§27.2.2.2†).
+    PromiseResolveThenableJob,
+    /// `%RegExp.prototype%` (§22.2.6†).
+    RegExpPrototype,
+    /// `%RegExp%` (§22.2.4†): the constructor a regular expression literal
+    /// runs (`NewRegExp`, RegExpCreate §22.2.3.1†).
+    RegExpConstructor,
+    /// `%RegExpStringIteratorPrototype%` (§22.2.9.1†).
+    RegExpStringIteratorPrototype,
+    /// `%AggregateError.prototype%` (§20.5.7†).
+    AggregateErrorPrototype,
+    /// `%Map.prototype%` (§24.1.3†).
+    MapPrototype,
+    /// `%MapIteratorPrototype%` (§24.1.5.2†).
+    MapIteratorPrototype,
+    /// `%Set.prototype%` (§24.2.4†).
+    SetPrototype,
+    /// `%SetIteratorPrototype%` (§24.2.6.2†).
+    SetIteratorPrototype,
+    /// `%WeakMap.prototype%` (§24.3.3†).
+    WeakMapPrototype,
+    /// `%WeakSet.prototype%` (§24.4.3†).
+    WeakSetPrototype,
 }
 
-/// The most natives that may run one inside another.
-const MAX_NATIVE_DEPTH: u32 = 150;
+/// The most natives that may run one inside another, until
+/// [`Vm::set_native_depth_limit`] says otherwise (and one more nested run of
+/// the interpreter loop, see [`Vm::execute`]).
+///
+/// Both live on the host stack. Measured on aarch64 macOS (2026-11), one
+/// level of JS calling a native that calls JS back (`forEach`, `map`,
+/// `call`) takes about 40 KB of it in an unoptimised build and about 1.5 KB
+/// in an optimised one. 32 levels is about 1.3 MB unoptimised, which a
+/// 2 MiB thread (Rust's default, and what tests run on) holds with room for
+/// its caller. An embedder on a larger stack may raise it.
+pub const DEFAULT_NATIVE_DEPTH: u32 = 32;
+
+/// The deepest nesting the VM's own recursive algorithms (`JSON.parse`,
+/// `JSON.stringify`) take, until [`Vm::set_nesting_depth_limit`] says
+/// otherwise: `clazel-json`'s own bound, so the default changes nothing.
+pub const DEFAULT_NESTING_DEPTH: u32 = 512;
+
+/// The RegExp backtrack stack's size in entries, until
+/// [`Vm::set_regexp_backtrack_limit`] says otherwise (`clazel-js-regexp`'s own
+/// default).
+pub const DEFAULT_REGEXP_BACKTRACK: u64 = 1 << 20;
 
 /// How many [`Intrinsic`]s there are.
-const INTRINSICS: usize = 12;
+const INTRINSICS: usize = 31;
 
 /// The hint of ToPrimitive (§7.1.1†).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -213,6 +283,10 @@ pub(crate) struct LoadedFn {
     pub(crate) entries: u64,
     pub(crate) back_edges: u64,
     pub(crate) name_value: Option<Value>,
+    /// Whether the function reads the arguments past its parameters
+    /// (`arguments` or a rest parameter): a call then keeps its argument list
+    /// for the op that makes the object (`crate::host`, "Arguments").
+    pub(crate) needs_args: bool,
 }
 
 /// A script loaded into a VM.
@@ -239,11 +313,16 @@ pub(crate) struct Atoms {
     pub(crate) number: Value,
     pub(crate) string: Value,
     pub(crate) function: Value,
+    pub(crate) symbol: Value,
     pub(crate) k_length: Key,
     pub(crate) k_name: Key,
     pub(crate) k_message: Key,
     pub(crate) k_prototype: Key,
     pub(crate) k_constructor: Key,
+    pub(crate) k_next: Key,
+    pub(crate) k_done: Key,
+    pub(crate) k_value: Key,
+    pub(crate) k_return: Key,
 }
 
 /// Limits of a [`Vm`].
@@ -285,17 +364,31 @@ pub struct Vm {
     /// The native functions, and whether each has `[[Construct]]`.
     pub(crate) natives: Vec<(NativeFn, bool)>,
     pub(crate) bound: Vec<BoundFn>,
+    /// The Symbol values, by id: the cell of each (the well-known symbols
+    /// are ids 0 to 12).
+    pub(crate) symbols: Vec<Value>,
     pub(crate) intrinsics: [Value; INTRINSICS],
     pub(crate) new_target: Value,
     pub(crate) active: Value,
     /// How many natives are running, one inside another (each re-enters the
     /// interpreter or another native on the host stack).
     pub(crate) native_depth: u32,
+    /// How many runs of the interpreter loop are on the host stack (see
+    /// [`Vm::execute`]).
+    pub(crate) reentry_depth: u32,
     pub(crate) terminator: Terminator,
     pub(crate) budget: u64,
+    /// The limits of phase-7.md 7.19 that the VM checks itself (see the
+    /// setters).
+    pub(crate) native_limit: u32,
+    pub(crate) nesting_limit: u32,
+    pub(crate) regexp_backtrack_limit: u64,
     pub(crate) atoms: Atoms,
     /// The embedder's state (`clazel-js`'s runtime), see [`Vm::set_embedder`].
     pub(crate) embedder: Option<Box<dyn Any + Send>>,
+    /// Host objects, the slots of native functions and the job queue
+    /// ([`crate::host`]).
+    pub(crate) host: crate::host::HostState,
 }
 
 impl Vm {
@@ -318,12 +411,28 @@ impl Vm {
             number: heap.new_str("number")?,
             string: heap.new_str("string")?,
             function: heap.new_str("function")?,
+            symbol: heap.new_str("symbol")?,
             k_length: heap.intern_str("length")?,
             k_name: heap.intern_str("name")?,
             k_message: heap.intern_str("message")?,
             k_prototype: heap.intern_str("prototype")?,
             k_constructor: heap.intern_str("constructor")?,
+            k_next: heap.intern_str("next")?,
+            k_done: heap.intern_str("done")?,
+            k_value: heap.intern_str("value")?,
+            k_return: heap.intern_str("return")?,
         };
+        // The well-known symbols (§6.1.5.1†, Table 1), ids 0 to 12 as
+        // `clazel-js-heap`'s symbol contract numbers them (Y1); each
+        // `[[Description]]` is "Symbol." and the name.
+        let mut symbols = Vec::with_capacity(WELL_KNOWN.len());
+        for (id, name) in (0u32..).zip(WELL_KNOWN) {
+            let description = heap.new_str(&format!("Symbol.{name}"))?;
+            symbols.push(heap.alloc(crate::heap::Cell::Symbol(crate::heap::Sym {
+                id: SymbolId(id),
+                description,
+            }))?);
+        }
         // §19.1 Value Properties of the Global Object: `undefined`, `NaN` and
         // `Infinity` are not writable, enumerable or configurable.
         for (name, v) in [
@@ -348,6 +457,7 @@ impl Vm {
             var_names: HashSet::new(),
             natives: Vec::new(),
             bound: Vec::new(),
+            symbols,
             intrinsics: std::array::from_fn(|i| {
                 if i == Intrinsic::ObjectPrototype as usize {
                     object_proto
@@ -360,10 +470,15 @@ impl Vm {
             new_target: Value::UNDEFINED,
             active: Value::UNDEFINED,
             native_depth: 0,
+            reentry_depth: 0,
             terminator: Terminator::new(),
             budget: u64::MAX,
+            native_limit: DEFAULT_NATIVE_DEPTH,
+            nesting_limit: DEFAULT_NESTING_DEPTH,
+            regexp_backtrack_limit: DEFAULT_REGEXP_BACKTRACK,
             atoms,
             embedder: None,
+            host: crate::host::HostState::default(),
         })
     }
 
@@ -401,6 +516,88 @@ impl Vm {
     /// run ends as [`Abrupt::Terminated`].
     pub fn set_budget(&mut self, steps: u64) {
         self.budget = steps;
+    }
+
+    // -----------------------------------------------------------------
+    // Limits (phase-7.md 7.19). Each is the embedder's; the defaults are
+    // the constants above.
+    // -----------------------------------------------------------------
+
+    /// Sets the heap's byte limit ([`crate::heap::Heap`]'s byte count). An
+    /// allocation past it is a `RangeError`, made from a small reserve past
+    /// the limit (see [`Vm::execute`]); bytes already counted stay counted.
+    pub fn set_heap_limit(&mut self, bytes: u64) {
+        self.heap.set_byte_limit(bytes);
+    }
+
+    /// Sets how many natives may run one inside another; one more is a
+    /// `RangeError`. The host stack must hold that many re-entries of the
+    /// interpreter: see [`DEFAULT_NATIVE_DEPTH`].
+    pub fn set_native_depth_limit(&mut self, depth: u32) {
+        self.native_limit = depth;
+    }
+
+    /// The nesting limit of the VM's recursive built-ins.
+    #[must_use]
+    pub fn nesting_depth_limit(&self) -> u32 {
+        self.nesting_limit
+    }
+
+    /// Sets the nesting limit of the VM's recursive built-ins (`JSON.parse`,
+    /// `JSON.stringify`); each also has a fixed bound of its own, and the
+    /// smaller applies.
+    pub fn set_nesting_depth_limit(&mut self, depth: u32) {
+        self.nesting_limit = depth;
+    }
+
+    /// The RegExp backtrack stack's size in entries, for the RegExp
+    /// built-ins.
+    #[must_use]
+    pub fn regexp_backtrack_limit(&self) -> u64 {
+        self.regexp_backtrack_limit
+    }
+
+    /// Sets the RegExp backtrack stack's size in entries.
+    pub fn set_regexp_backtrack_limit(&mut self, entries: u64) {
+        self.regexp_backtrack_limit = entries;
+    }
+
+    /// The termination check for a native in a long loop of its own (one
+    /// that calls no function, so the interpreter's checks at calls and
+    /// back-edges do not see it).
+    ///
+    /// # Errors
+    /// [`Abrupt::Terminated`] once the [`Terminator`] is set.
+    pub fn check_terminated(&self) -> Result<(), Abrupt> {
+        if self.terminator.is_set() {
+            return Err(Abrupt::Terminated);
+        }
+        Ok(())
+    }
+
+    /// The `RangeError` that reports the heap limit, made from the reserve
+    /// past it; [`Abrupt::OutOfMemory`] when even the reserve is spent.
+    ///
+    /// phase-7.md 7.19 asks for a full collection before the error. The VM
+    /// does not use the collector of item 7.6 yet, so there is nothing to
+    /// collect: the error comes at once.
+    pub(crate) fn heap_limit_error(&mut self) -> Abrupt {
+        let was = self.heap.set_reserve_open(true);
+        let e = self.range_error("Out of memory: the heap limit was reached");
+        self.heap.set_reserve_open(was);
+        match e {
+            Abrupt::Throw(v) => Abrupt::Throw(v),
+            _ => Abrupt::OutOfMemory,
+        }
+    }
+
+    /// `r`, with [`Abrupt::OutOfMemory`] turned into the `RangeError` that
+    /// reports the heap limit ([`Vm::heap_limit_error`]).
+    pub(crate) fn report_heap_limit<T>(&mut self, r: Result<T, Abrupt>) -> Result<T, Abrupt> {
+        match r {
+            Err(Abrupt::OutOfMemory) => Err(self.heap_limit_error()),
+            other => other,
+        }
     }
 
     /// The global object.
@@ -471,8 +668,8 @@ impl Vm {
                     (ConstVal::Value(self.heap.new_string(s)?), Some(key))
                 }
                 Const::BigInt(_) => (ConstVal::Unsupported("BigInt literals"), None),
-                Const::RegExp(_) => (ConstVal::Unsupported("RegExp literals"), None),
                 Const::GlobalDeclarations(_)
+                | Const::RegExp(_)
                 | Const::Template(_)
                 | Const::ArgumentsMap(_)
                 | Const::EvalScope(_) => (ConstVal::Record, None),
@@ -490,6 +687,14 @@ impl Vm {
             entries: 0,
             back_edges: 0,
             name_value: None,
+            needs_args: f.instrs.iter().any(|i| {
+                matches!(
+                    i,
+                    Instr::CreateUnmappedArguments { .. }
+                        | Instr::CreateMappedArguments { .. }
+                        | Instr::CreateRestArray { .. }
+                )
+            }),
         })
     }
 
@@ -519,7 +724,10 @@ impl Vm {
     pub fn call(&mut self, callee: Value, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
         let kind = self.heap.obj(callee).map(|o| o.kind);
         match kind {
-            Some(ObjKind::Native(i)) => self.invoke_native(i, callee, this, args, Value::UNDEFINED),
+            Some(ObjKind::Native(i)) => {
+                let r = self.invoke_native(i, callee, this, args, Value::UNDEFINED);
+                self.report_heap_limit(r)
+            }
             Some(ObjKind::Bound(i)) => {
                 let b = self.bound_fn(i)?;
                 let mut all = b.args;
@@ -562,7 +770,7 @@ impl Vm {
         let (f, _) = self.native(i)?;
         // Natives nest on the host stack (`join` of an array that holds
         // itself): a bound keeps that from overflowing it.
-        if self.native_depth >= MAX_NATIVE_DEPTH {
+        if self.native_depth >= self.native_limit {
             return Err(self.range_error("Maximum call stack size exceeded"));
         }
         let saved = (self.active, self.new_target);
@@ -611,63 +819,6 @@ impl Vm {
             }
             _ => Err(Abrupt::Internal("frame callee is not a closure")),
         }
-    }
-
-    /// InstanceofOperator ( V, target ), §13.10.2†:
-    /// 1. If target is not an Object, throw a TypeError exception.
-    /// 2. Let instOfHandler be ? GetMethod(target, %Symbol.hasInstance%).
-    /// 3. (If it is not undefined, call it.) The VM has no Symbols yet, so no
-    ///    object has an @@hasInstance method of its own, and
-    ///    %Function.prototype%'s is OrdinaryHasInstance itself: steps 2 and 3
-    ///    are step 5 here.
-    /// 4. If IsCallable(target) is false, throw a TypeError exception.
-    /// 5. Return ? OrdinaryHasInstance(target, V).
-    ///
-    /// OrdinaryHasInstance ( C, O ), §7.3.21†:
-    /// 1. If IsCallable(C) is false, return false.
-    /// 2. If C has a [[BoundTargetFunction]] internal slot, then a. Let BC be
-    ///    C.[[BoundTargetFunction]]. b. Return ? InstanceofOperator(O, BC).
-    /// 3. If O is not an Object, return false.
-    /// 4. Let P be ? Get(C, "prototype").
-    /// 5. If P is not an Object, throw a TypeError exception.
-    /// 6. Repeat, a. Set O to ? O.[[GetPrototypeOf]](). b. If O is null,
-    ///    return false. c. If SameValue(P, O) is true, return true.
-    ///
-    /// # Errors
-    /// The TypeErrors above, and what a `prototype` getter throws.
-    pub fn instance_of(&mut self, v: Value, target: Value) -> Result<bool, Abrupt> {
-        let mut c = target;
-        for _ in 0..crate::heap::MAX_PROTO_DEPTH {
-            if !self.heap.is_object(c) {
-                return Err(self.type_error("Right-hand side of 'instanceof' is not an object"));
-            }
-            if !self.heap.is_callable(c) {
-                return Err(self.type_error("Right-hand side of 'instanceof' is not callable"));
-            }
-            match self.heap.obj(c).map(|o| o.kind) {
-                Some(ObjKind::Bound(i)) => c = self.bound_fn(i)?.target,
-                _ => break,
-            }
-        }
-        if !self.heap.is_object(v) {
-            return Ok(false);
-        }
-        let kp = self.atoms.k_prototype;
-        let p = self.get_value(c, kp)?;
-        if !self.heap.is_object(p) {
-            return Err(self.type_error("Function has non-object prototype in instanceof check"));
-        }
-        let mut o = v;
-        for _ in 0..crate::heap::MAX_PROTO_DEPTH {
-            o = self.heap.proto_of(o).unwrap_or(Value::NULL);
-            if !self.heap.is_object(o) {
-                return Ok(false);
-            }
-            if o == p {
-                return Ok(true);
-            }
-        }
-        Err(Abrupt::Internal("prototype chain too long"))
     }
 
     pub(crate) fn bound_fn(&self, i: u32) -> Result<BoundFn, Abrupt> {
@@ -741,6 +892,9 @@ impl Vm {
         let argc_slot = enc_argc(argc.min(0x0FFF_FFFF), frame_kind)
             .ok_or(Abrupt::Internal("argument count"))?;
         let base = self.top;
+        if self.codes.get(code).is_some_and(|f| f.needs_args) {
+            self.host.entry_args.insert(base, args.to_vec());
+        }
         let header = [callee, this, argc_slot, ret_value];
         if self.region.push_frame(base, size, header) == Err(FrameError::Overflow) {
             return Err(self.range_error("Maximum call stack size exceeded"));
@@ -776,9 +930,34 @@ impl Vm {
 
     /// Runs the running frame (which has no caller in the region) until it
     /// returns, unwinding exceptions through the frames above it.
+    ///
+    /// An op that runs out of heap ([`Abrupt::OutOfMemory`]: the byte or cell
+    /// limit, or a string past its length limit) throws a `RangeError`
+    /// instead, which a `catch` can see (phase-7.md 7.19); see
+    /// [`Vm::heap_limit_error`].
+    ///
+    /// Every entry but the outermost is a re-entry from inside an op or a
+    /// native (a callback of `forEach`, the `toString` that ToPrimitive
+    /// calls), which takes host stack as a native does. The entries are
+    /// counted, and one more than [`Vm::set_native_depth_limit`] allows is a
+    /// `RangeError` (phase-7.md 7.19): so a native that calls back into JS
+    /// can run at the limit, and a chain of calls through ops alone (`'' +
+    /// o` in `o.toString`) is bounded too.
     pub(crate) fn execute(&mut self) -> Result<Value, Abrupt> {
+        if self.reentry_depth > self.native_limit {
+            return Err(self.range_error("Maximum call stack size exceeded"));
+        }
+        self.reentry_depth = self.reentry_depth.saturating_add(1);
+        let r = self.execute_loop();
+        self.reentry_depth = self.reentry_depth.saturating_sub(1);
+        r
+    }
+
+    /// The loop of [`Vm::execute`].
+    fn execute_loop(&mut self) -> Result<Value, Abrupt> {
         loop {
-            match self.step() {
+            let stepped = self.step();
+            match self.report_heap_limit(stepped) {
                 Ok(Flow::Continue) => {}
                 Ok(Flow::Done(v)) => return Ok(v),
                 Err(Abrupt::Throw(v)) => {
@@ -853,7 +1032,12 @@ impl Vm {
                 let callee = self.region.header(base, HDR_CALLEE)?;
                 let code = self.code_of(callee)?;
                 let dst = match self.func(code)?.code.instrs.get(pc) {
-                    Some(Instr::Call { dst, .. } | Instr::New { dst, .. }) => *dst,
+                    Some(
+                        Instr::Call { dst, .. }
+                        | Instr::New { dst, .. }
+                        | Instr::CallSpread { dst, .. }
+                        | Instr::NewSpread { dst, .. },
+                    ) => *dst,
                     _ => return Err(Abrupt::Internal("return address is not a call op")),
                 };
                 self.region.set_reg(base, dst, v)?;
@@ -901,6 +1085,41 @@ impl Vm {
 
     pub(crate) fn strict(&self) -> bool {
         self.codes.get(self.cur).is_some_and(|f| f.code.strict)
+    }
+
+    /// The call of `Call` and `CallSpread`: `f` with `this` `t` and the
+    /// arguments; the result goes to register `dst`. True if a closure's
+    /// frame was entered (its return writes `dst`), false if the call
+    /// finished.
+    fn call_op(&mut self, dst: u32, f: Value, t: Value, vals: Vec<Value>) -> Result<bool, Abrupt> {
+        let (mut f, mut t, mut vals) = (f, t, vals);
+        // §10.4.1.1 [[Call]] of a bound function: the target, with the bound
+        // `this` and the bound arguments first.
+        while let Some(ObjKind::Bound(i)) = self.heap.obj(f).map(|o| o.kind) {
+            let b = self.bound_fn(i)?;
+            f = b.target;
+            t = b.this;
+            let mut all = b.args;
+            all.extend_from_slice(&vals);
+            vals = all;
+        }
+        match self.heap.obj(f).map(|o| o.kind) {
+            Some(ObjKind::Closure { code, .. }) => {
+                self.enter_closure(f, code, t, &vals, Some(self.pc), KIND_PLAIN)?;
+                Ok(true)
+            }
+            Some(ObjKind::Native(i)) => {
+                self.charge()?;
+                let v = self.invoke_native(i, f, t, &vals, Value::UNDEFINED)?;
+                self.w(dst, v)?;
+                Ok(false)
+            }
+            _ => {
+                let t = self.type_of(f);
+                let t = self.string_text(t).unwrap_or_default();
+                Err(self.type_error(&format!("{t} is not a function")))
+            }
+        }
     }
 
     /// Runs one op of the running frame.
@@ -1129,25 +1348,19 @@ impl Vm {
                 let key = self.coerce_property_key(k)?;
                 self.set_property(base, key, v, None)?;
             }
+            // CreateDataPropertyOrThrow (§7.3.7†): a class field named
+            // `prototype` of a class, or a field of a frozen object, throws.
             Instr::DefineProp { obj, key, val } => {
                 let (o, v) = (self.r(obj)?, self.r(val)?);
                 let key = self.key_const(key)?;
-                if self.heap.is_array_object(o) {
-                    self.create_data_property_or_throw(o, key, v)?;
-                } else {
-                    self.heap.define(o, key, v, Attrs::ALL)?;
-                }
+                self.create_data_property_or_throw(o, key, v)?;
             }
             Instr::DefineElem { obj, idx, val } => {
                 let (o, k, v) = (self.r(obj)?, self.r(idx)?, self.r(val)?);
                 // An elision is the hole: no property.
                 if v != Value::HOLE {
                     let key = self.coerce_property_key(k)?;
-                    if self.heap.is_array_object(o) {
-                        self.create_data_property_or_throw(o, key, v)?;
-                    } else {
-                        self.heap.define(o, key, v, Attrs::ALL)?;
-                    }
+                    self.create_data_property_or_throw(o, key, v)?;
                 }
             }
             // ArrayCreate(0), §10.4.2.2†: `len` is only a capacity hint (the
@@ -1178,6 +1391,11 @@ impl Vm {
                         .proto = v;
                 }
             }
+            Instr::InstanceOf { dst, a, b } => {
+                let (v, target) = (self.r(a)?, self.r(b)?);
+                let r = self.instance_of(v, target)?;
+                self.w(dst, Value::boolean(r))?;
+            }
             Instr::HasProperty { dst, a, b } => {
                 let (k, o) = (self.r(a)?, self.r(b)?);
                 if !self.heap.is_object(o) {
@@ -1188,11 +1406,6 @@ impl Vm {
                 let key = self.coerce_property_key(k)?;
                 let found = self.heap.find(o, key)?.is_some();
                 self.w(dst, Value::boolean(found))?;
-            }
-            Instr::InstanceOf { dst, a, b } => {
-                let (v, target) = (self.r(a)?, self.r(b)?);
-                let r = self.instance_of(v, target)?;
-                self.w(dst, Value::boolean(r))?;
             }
             Instr::NewObject { dst } => {
                 let proto = self.atoms.object_proto;
@@ -1266,8 +1479,8 @@ impl Vm {
                 args,
                 argc,
             } => {
-                let mut f = self.r(callee)?;
-                let mut t = self.r(this)?;
+                let f = self.r(callee)?;
+                let t = self.r(this)?;
                 let mut vals = Vec::with_capacity(usize::try_from(argc).unwrap_or(0));
                 for i in 0..argc {
                     let reg = args
@@ -1275,32 +1488,85 @@ impl Vm {
                         .ok_or(Abrupt::Internal("argument register"))?;
                     vals.push(self.r(reg)?);
                 }
-                // §10.4.1.1 [[Call]] of a bound function: the target, with
-                // the bound `this` and the bound arguments first.
-                while let Some(ObjKind::Bound(i)) = self.heap.obj(f).map(|o| o.kind) {
-                    let b = self.bound_fn(i)?;
-                    f = b.target;
-                    t = b.this;
-                    let mut all = b.args;
-                    all.extend_from_slice(&vals);
-                    vals = all;
+                if self.call_op(dst, f, t, vals)? {
+                    return Ok(Flow::Continue);
                 }
-                match self.heap.obj(f).map(|o| o.kind) {
-                    Some(ObjKind::Closure { code, .. }) => {
-                        self.enter_closure(f, code, t, &vals, Some(self.pc), KIND_PLAIN)?;
-                        return Ok(Flow::Continue);
-                    }
-                    Some(ObjKind::Native(i)) => {
-                        self.charge()?;
-                        let v = self.invoke_native(i, f, t, &vals, Value::UNDEFINED)?;
-                        self.w(dst, v)?;
-                    }
-                    _ => {
-                        let t = self.type_of(f);
-                        let t = self.string_text(t).unwrap_or_default();
-                        return Err(self.type_error(&format!("{t} is not a function")));
-                    }
+            }
+            // `f(...xs)`: the compiler collected the arguments in an array
+            // (§13.3.8.1† ArgumentListEvaluation); then as `Call`.
+            Instr::CallSpread {
+                dst,
+                callee,
+                this,
+                args,
+            } => {
+                let f = self.r(callee)?;
+                let t = self.r(this)?;
+                let arr = self.r(args)?;
+                let vals = self.spread_arguments(arr)?;
+                if self.call_op(dst, f, t, vals)? {
+                    return Ok(Flow::Continue);
                 }
+            }
+            // `new f(...xs)`: EvaluateNew §13.3.5.1.1† steps 5 and 6 with
+            // the arguments of the array.
+            Instr::NewSpread { dst, callee, args } => {
+                let f = self.r(callee)?;
+                let arr = self.r(args)?;
+                let vals = self.spread_arguments(arr)?;
+                match self.construct(f, &vals, Some(self.pc))? {
+                    Some(v) => self.w(dst, v)?,
+                    None => return Ok(Flow::Continue),
+                }
+            }
+            // --- Iteration ---
+            Instr::GetIterator { dst, src } => {
+                let v = self.r(src)?;
+                let rec = self.get_iterator(v)?;
+                self.w(dst, rec)?;
+            }
+            Instr::IterNext { value, done, iter } => {
+                let rec = self.r(iter)?;
+                let step = self.iterator_step_value(rec)?;
+                self.w(done, Value::boolean(step.is_none()))?;
+                self.w(value, step.unwrap_or(Value::UNDEFINED))?;
+            }
+            Instr::IterClose { iter } => {
+                let rec = self.r(iter)?;
+                self.iterator_close(rec)?;
+            }
+            Instr::CopyDataProperties {
+                obj,
+                src,
+                excl,
+                nexcl,
+            } => {
+                let (target, source) = (self.r(obj)?, self.r(src)?);
+                let mut excluded = Vec::new();
+                for i in 0..nexcl {
+                    let reg = excl
+                        .checked_add(i)
+                        .ok_or(Abrupt::Internal("excluded key register"))?;
+                    let kv = self.r(reg)?;
+                    excluded.push(self.coerce_property_key(kv)?);
+                }
+                self.copy_data_properties(target, source, &excluded)?;
+            }
+            Instr::ThrowIfNotObject { src } => {
+                let v = self.r(src)?;
+                if !self.heap.is_object(v) {
+                    return Err(self.type_error("Iterator result is not an object"));
+                }
+            }
+            Instr::ToObject { dst, src } => {
+                let v = self.r(src)?;
+                let o = self.to_object(v)?;
+                self.w(dst, o)?;
+            }
+            Instr::ForInIterator { dst, src } => {
+                let v = self.r(src)?;
+                let rec = self.for_in_iterator(v)?;
+                self.w(dst, rec)?;
             }
             Instr::New {
                 dst,
@@ -1345,11 +1611,135 @@ impl Vm {
                 self.set_global(key, v)?;
             }
             Instr::DeclareGlobals { k } => self.declare_globals(k)?,
-            // MakeMethod (§10.2.7†) records [[HomeObject]], which only `super`
-            // property access reads (`GetSuperBase`, not yet implemented), so
-            // it is accepted and not stored.
-            Instr::SetHomeObject { .. } => {}
-            // DefineMethodProperty (§15.4.5†) for a method (form 0).
+            // MakeMethod (§10.2.7†) records [[HomeObject]], which `super`
+            // property access reads (`GetSuperBase`).
+            Instr::SetHomeObject { func, obj } => {
+                let (f, o) = (self.r(func)?, self.r(obj)?);
+                self.host.class.home_objects.insert(f, o);
+            }
+            Instr::ClassSetup {
+                ctor,
+                proto,
+                heritage,
+                derived,
+            } => {
+                let (c, h) = (self.r(ctor)?, self.r(heritage)?);
+                let p = self.class_setup(c, h, derived)?;
+                self.w(proto, p)?;
+            }
+            Instr::SetInstanceInit { ctor, init } => {
+                let (c, i) = (self.r(ctor)?, self.r(init)?);
+                self.host.class.instance_inits.insert(c, i);
+            }
+            Instr::InitInstance { obj, func } => {
+                let (o, f) = (self.r(obj)?, self.r(func)?);
+                self.initialize_instance(o, f)?;
+            }
+            Instr::SuperCall {
+                dst,
+                func,
+                newtarget,
+                this,
+                args,
+                argc,
+            } => {
+                let mut vals = Vec::with_capacity(usize::try_from(argc).unwrap_or(0));
+                for i in 0..argc {
+                    let reg = args
+                        .checked_add(i)
+                        .ok_or(Abrupt::Internal("argument register"))?;
+                    vals.push(self.r(reg)?);
+                }
+                let (f, nt, t) = (self.r(func)?, self.r(newtarget)?, self.r(this)?);
+                let v = self.super_call(f, nt, t, &vals)?;
+                self.w(dst, v)?;
+            }
+            Instr::SuperCallSpread {
+                dst,
+                func,
+                newtarget,
+                this,
+                args,
+            } => {
+                let arr = self.r(args)?;
+                let vals = self.spread_arguments(arr)?;
+                let (f, nt, t) = (self.r(func)?, self.r(newtarget)?, self.r(this)?);
+                let v = self.super_call(f, nt, t, &vals)?;
+                self.w(dst, v)?;
+            }
+            Instr::GetSuperBase { dst, func } => {
+                let f = self.r(func)?;
+                let v = self.super_base(f)?;
+                self.w(dst, v)?;
+            }
+            Instr::GetSuper {
+                dst,
+                base,
+                key,
+                this,
+            } => {
+                let (b, k, t) = (self.r(base)?, self.r(key)?, self.r(this)?);
+                let v = self.get_super(b, k, t)?;
+                self.w(dst, v)?;
+            }
+            Instr::SetSuper {
+                base,
+                key,
+                val,
+                this,
+            } => {
+                let (b, k, v, t) = (self.r(base)?, self.r(key)?, self.r(val)?, self.r(this)?);
+                self.set_super(b, k, v, t)?;
+            }
+            Instr::GetNewTarget { dst } => {
+                let v = self.current_new_target()?;
+                self.w(dst, v)?;
+            }
+            Instr::ConstructResult { dst, val, this } => {
+                let (v, t) = (self.r(val)?, self.r(this)?);
+                let r = self.construct_result(v, t)?;
+                self.w(dst, r)?;
+            }
+            Instr::NewPrivateName { dst, k } => {
+                let desc = match self.konst(k)? {
+                    ConstVal::Value(v) => v,
+                    _ => {
+                        return Err(Abrupt::Internal(
+                            "NewPrivateName of a constant that is no string",
+                        ));
+                    }
+                };
+                let n = self.new_private_name(desc)?;
+                self.w(dst, n)?;
+            }
+            Instr::GetPrivate { dst, obj, name } => {
+                let (o, n) = (self.r(obj)?, self.r(name)?);
+                let v = self.private_get(o, n)?;
+                self.w(dst, v)?;
+            }
+            Instr::SetPrivate { obj, name, val } => {
+                let (o, n, v) = (self.r(obj)?, self.r(name)?, self.r(val)?);
+                self.private_set(o, n, v)?;
+            }
+            Instr::DefinePrivate {
+                obj,
+                name,
+                val,
+                form,
+            } => {
+                let (o, n, v) = (self.r(obj)?, self.r(name)?, self.r(val)?);
+                self.define_private(o, n, v, form)?;
+            }
+            Instr::HasPrivate { dst, name, obj } => {
+                let (n, o) = (self.r(name)?, self.r(obj)?);
+                let r = self.has_private(n, o)?;
+                self.w(dst, Value::boolean(r))?;
+            }
+            // DefineMethodProperty (§15.4.5†) for a method (form 0):
+            // SetFunctionName(closure, key), §10.2.9†, then
+            // DefinePropertyOrThrow(homeObject, key, PropertyDescriptor {
+            // [[Value]]: closure, [[Writable]]: true, [[Enumerable]]:
+            // enumerable, [[Configurable]]: true }).
             Instr::DefineMethod {
                 obj,
                 key,
@@ -1358,17 +1748,18 @@ impl Vm {
                 enumerable,
             } => {
                 let (o, k, f) = (self.r(obj)?, self.r(key)?, self.r(func)?);
-                let name = self.coerce_string_value(k)?;
+                let name = self.function_name_for_key(k)?;
                 let pk = self.coerce_property_key(k)?;
                 let kn = self.atoms.k_name;
-                // SetFunctionName(func, key), §10.2.9†.
                 self.heap.define(f, kn, name, Attrs(Attrs::CONFIGURABLE))?;
-                let attrs = Attrs(
-                    Attrs::WRITABLE
-                        | Attrs::CONFIGURABLE
-                        | if enumerable { Attrs::ENUMERABLE } else { 0 },
-                );
-                self.heap.define(o, pk, f, attrs)?;
+                let desc = crate::props::PropDesc {
+                    value: Some(f),
+                    writable: Some(true),
+                    enumerable: Some(enumerable),
+                    configurable: Some(true),
+                    ..crate::props::PropDesc::default()
+                };
+                self.define_property_or_throw(o, pk, &desc)?;
             }
             // The getter (form 1) and setter (form 2) of MethodDefinition
             // evaluation (§15.4.5†): SetFunctionName(closure, propKey, "get" or
@@ -1383,12 +1774,16 @@ impl Vm {
                 enumerable,
             } => {
                 let (o, k, f) = (self.r(obj)?, self.r(key)?, self.r(func)?);
-                let key_text = self.coerce_js_string(k)?;
-                let pk = self.heap.intern(&key_text)?;
+                let base_name = self.function_name_for_key(k)?;
+                let pk = self.coerce_property_key(k)?;
+                let base_units: Vec<u16> = match self.heap.string(base_name) {
+                    Some(s) => s.units().collect(),
+                    None => Vec::new(),
+                };
                 let mut units: Vec<u16> = if form == 1 { "get " } else { "set " }
                     .encode_utf16()
                     .collect();
-                units.extend((0..key_text.len()).filter_map(|i| key_text.unit(i)));
+                units.extend(base_units);
                 let name = JsString::from_units(&units).map_err(|_| Abrupt::OutOfMemory)?;
                 let name = self.heap.new_string(name)?;
                 let kn = self.atoms.k_name;
@@ -1421,7 +1816,7 @@ impl Vm {
             }
             Instr::ToPropertyKey { dst, src } => {
                 let v = self.r(src)?;
-                let s = self.coerce_string_value(v)?;
+                let s = self.property_key_value(v)?;
                 self.w(dst, s)?;
             }
             Instr::ToString { dst, src } => {
@@ -1440,6 +1835,27 @@ impl Vm {
                 }
                 .unwrap_or_default();
                 return Err(self.throw_kind(kind, &text));
+            }
+            // RegExpCreate (§22.2.3.1†) for a regular expression literal
+            // (§13.2.7.3† step 3): `%RegExp%` makes the object.
+            Instr::NewRegExp { dst, k } => {
+                let v = self.new_regexp(k)?;
+                self.w(dst, v)?;
+            }
+            // CreateUnmappedArgumentsObject §10.4.4.6† and
+            // CreateMappedArgumentsObject §10.4.4.7† (see `crate::host`),
+            // and the rest parameter's array (§15.1.3† step 4.b).
+            Instr::CreateUnmappedArguments { dst } => {
+                let v = self.create_arguments_object(true)?;
+                self.w(dst, v)?;
+            }
+            Instr::CreateMappedArguments { dst, .. } => {
+                let v = self.create_arguments_object(false)?;
+                self.w(dst, v)?;
+            }
+            Instr::CreateRestArray { dst, from } => {
+                let v = self.create_rest_array(from)?;
+                self.w(dst, v)?;
             }
             other => return Err(Abrupt::NotYet(op_name(&other))),
         }
