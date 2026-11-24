@@ -205,7 +205,12 @@ generator), and the string properties against the emoji files.
   `(.*?)a(?!(a+)b\2c)\2(.*)`, `(?<=(\d+)(\d+))$`), start indexes and `y`,
   long inputs (100 000 characters, counts of 100 000 and 4 000 000 000).
 - `tests/limits.rs`: catastrophic patterns end in `StepLimit` or
-  `StackOverflow`; the stack bound is exact; the hook is asked and stops.
+  `StackOverflow`; the stack bound is exact; the hook is asked and stops;
+  and 7.19's hostile `(a+)+b` on 100 000 `a`s with no step budget, which
+  only the hook (set from another thread, as `clazel-js`'s `Terminator` is)
+  ends. The engine's limit is `clazel-js`'s
+  `Limits::regexp_backtrack_entries` (`Limits::recommended()`: a million,
+  this crate's default too), for the RegExp built-in that does not exist yet.
 - `tests/differential.rs`: a reference matcher (a recursive, exponential,
   spec-literal transcription of §22.2.2† over characters, with closures for
   continuations, sharing only the parser, the case-folding function and the

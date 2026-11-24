@@ -1,5 +1,5 @@
 //! `Function` (§20.2†): the constructor and `Function.prototype.call`,
-//! `apply`, `bind`.
+//! `apply`, `bind` and `@@hasInstance`.
 
 use crate::util::{
     CONFIGURABLE_ONLY, arg, constructor, define, has_own_property, key, method, number, string,
@@ -23,6 +23,13 @@ pub fn install(vm: &mut Vm) -> Result<(), Abrupt> {
     method(vm, proto, "apply", 2, apply)?;
     method(vm, proto, "bind", 1, bind)?;
     method(vm, proto, "call", 1, call)?;
+    // §20.2.3.6† `Function.prototype [ @@hasInstance ] ( V )`: its `name` is
+    // "[Symbol.hasInstance]"; { [[Writable]]: false, [[Enumerable]]: false,
+    // [[Configurable]]: false }.
+    let hi = vm.new_native("[Symbol.hasInstance]", 1, has_instance)?;
+    let k = vm.well_known_key(clazel_js_heap::symbol::HAS_INSTANCE)?;
+    vm.heap_mut()
+        .define(proto, k, hi, clazel_js_heap::shape::Attrs(0))?;
     crate::util::global(vm, "Function", ctor)
 }
 
@@ -31,6 +38,15 @@ pub fn install(vm: &mut Vm) -> Result<(), Abrupt> {
 fn function(_vm: &mut Vm, _this: Value, _args: &[Value]) -> Result<Value, Abrupt> {
     Err(Abrupt::NotYet(
         "the Function constructor (CreateDynamicFunction needs the compiler)".into(),
+    ))
+}
+
+/// `Function.prototype [ @@hasInstance ] ( V )`, §20.2.3.6†:
+/// 1. Let F be the this value.
+/// 2. Return ? OrdinaryHasInstance(F, V).
+fn has_instance(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
+    Ok(Value::boolean(
+        vm.ordinary_has_instance(this, arg(args, 0))?,
     ))
 }
 

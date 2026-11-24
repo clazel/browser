@@ -1,5 +1,6 @@
 //! `Error` and the native errors (§20.5†): `TypeError`, `RangeError`,
-//! `SyntaxError`, `ReferenceError`. The VM's own throws
+//! `SyntaxError`, `ReferenceError`, and `AggregateError` (§20.5.7†). The
+//! VM's own throws
 //! (`Vm::type_error`, ...) build the same objects, from the prototypes
 //! installed here.
 
@@ -38,7 +39,14 @@ pub fn install(vm: &mut Vm) -> Result<(), Abrupt> {
         vm.set_intrinsic(which, proto);
         crate::util::global(vm, name, ctor)?;
     }
-    Ok(())
+    // §20.5.7†: AggregateError ( errors, message [ , options ] ); its
+    // [[Prototype]] is %Error% and its prototype's is %Error.prototype%.
+    let proto = new_object_with(vm, error_proto, ObjKind::Plain)?;
+    let ctor = constructor(vm, "AggregateError", 2, aggregate_error_constructor, proto)?;
+    vm.heap_mut().set_proto(ctor, error)?;
+    describe(vm, proto, "AggregateError")?;
+    vm.set_intrinsic(Intrinsic::AggregateErrorPrototype, proto);
+    crate::util::global(vm, "AggregateError", ctor)
 }
 
 /// The `name` and `message` properties of a prototype (§20.5.3.3†,
@@ -63,6 +71,35 @@ fn describe(vm: &mut Vm, proto: Value, name: &str) -> Result<(), Abrupt> {
 /// 4. Perform ? InstallErrorCause(O, options).
 /// 5. Return O.
 fn error_constructor(vm: &mut Vm, _this: Value, args: &[Value]) -> Result<Value, Abrupt> {
+    make_error(vm, args, 0)
+}
+
+/// `AggregateError ( errors, message [ , options ] )`, §20.5.7.1.1†:
+/// 1. If NewTarget is undefined, let newTarget be the active function
+///    object; else let newTarget be NewTarget.
+/// 2. Let O be ? OrdinaryCreateFromConstructor(newTarget,
+///    "%AggregateError.prototype%", « [[ErrorData]] »).
+/// 3. If message is not undefined, then
+///    a. Let msg be ? ToString(message).
+///    b. Perform CreateNonEnumerableDataPropertyOrThrow(O, "message", msg).
+/// 4. Perform ? InstallErrorCause(O, options).
+/// 5. Let errorsList be ? IteratorToList(? GetIterator(errors, sync)).
+/// 6. Perform ! DefinePropertyOrThrow(O, "errors", PropertyDescriptor {
+///    [[Configurable]]: true, [[Enumerable]]: false, [[Writable]]: true,
+///    [[Value]]: CreateArrayFromList(errorsList) }).
+/// 7. Return O.
+fn aggregate_error_constructor(vm: &mut Vm, _this: Value, args: &[Value]) -> Result<Value, Abrupt> {
+    let o = make_error(vm, args, 1)?;
+    let it = vm.get_iterator(arg(args, 0))?;
+    let list = vm.iterator_to_list(it)?;
+    let errors = vm.create_array_from_list(&list)?;
+    define(vm, o, "errors", errors, METHOD)?;
+    Ok(o)
+}
+
+/// Steps 1 to 4 of the error constructors; `message` is argument `at` and
+/// `options` the next.
+fn make_error(vm: &mut Vm, args: &[Value], at: usize) -> Result<Value, Abrupt> {
     let active = vm.active_function();
     let nt = if vm.new_target() == Value::UNDEFINED {
         active
@@ -84,7 +121,7 @@ fn error_constructor(vm: &mut Vm, _this: Value, args: &[Value]) -> Result<Value,
         fallback
     };
     let o = new_object_with(vm, proto, ObjKind::Error)?;
-    let message = arg(args, 0);
+    let message = arg(args, at);
     if message != Value::UNDEFINED {
         let msg = vm.to_js_string(message)?;
         let msg = crate::util::js_string(vm, msg)?;
@@ -94,7 +131,7 @@ fn error_constructor(vm: &mut Vm, _this: Value, args: &[Value]) -> Result<Value,
     // 1. If options is an Object and ? HasProperty(options, "cause") is
     //    true, then a. Let cause be ? Get(options, "cause").
     //    b. Perform CreateNonEnumerableDataPropertyOrThrow(O, "cause", cause).
-    let options = arg(args, 1);
+    let options = arg(args, at.saturating_add(1));
     if vm.heap().is_object(options) {
         let kc = key(vm, "cause")?;
         if has_property(vm, options, kc)? {

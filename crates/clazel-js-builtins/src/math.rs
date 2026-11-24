@@ -43,6 +43,8 @@ pub fn install(vm: &mut Vm) -> Result<(), Abrupt> {
     method(vm, math, "sign", 1, sign)?;
     method(vm, math, "sqrt", 1, sqrt)?;
     method(vm, math, "trunc", 1, trunc)?;
+    // §21.3.1.9† `Math [ @@toStringTag ]`: "Math".
+    crate::symbol::to_string_tag(vm, math, "Math")?;
     crate::util::global(vm, "Math", math)
 }
 

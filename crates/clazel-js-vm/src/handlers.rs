@@ -120,17 +120,46 @@ impl Vm {
         }
     }
 
-    /// ToPrimitive, §7.1.1†, and OrdinaryToPrimitive, §7.1.1.1†. A primitive
-    /// is its own result (step 2). For an object, `@@toPrimitive` is not
-    /// consulted (Symbols are a later slice); the hint `string` tries
-    /// `toString` then `valueOf`, any other hint the reverse; the first
-    /// callable that returns a non-object wins, and none is a TypeError.
+    /// ToPrimitive, §7.1.1†, and OrdinaryToPrimitive, §7.1.1.1†:
+    /// 1. If input is an Object, then
+    ///    a. Let exoticToPrim be ? GetMethod(input, @@toPrimitive).
+    ///    b. If exoticToPrim is not undefined, then
+    ///    i to iii. Let hint be "default", "string" or "number".
+    ///    iv. Let result be ? Call(exoticToPrim, input, « hint »).
+    ///    v. If result is not an Object, return result.
+    ///    vi. Throw a TypeError exception.
+    ///    c. If preferredType is not present, let preferredType be number.
+    ///    d. Return ? OrdinaryToPrimitive(input, preferredType).
+    /// 2. Return input.
+    ///
+    /// OrdinaryToPrimitive: the hint `string` tries `toString` then
+    /// `valueOf`, any other hint the reverse; the first callable that returns
+    /// a non-object wins, and none is a TypeError.
     ///
     /// # Errors
     /// The exceptions of the methods it calls, or a `TypeError`.
     pub fn to_primitive(&mut self, v: Value, hint: Hint) -> Result<Value, Abrupt> {
         if !self.heap.is_object(v) {
             return Ok(v);
+        }
+        let key = self.well_known_key(clazel_js_heap::symbol::TO_PRIMITIVE)?;
+        let exotic = self.get_property(v, key, None)?;
+        if exotic != Value::UNDEFINED && exotic != Value::NULL {
+            // GetMethod, §7.3.10† step 3: not callable is a TypeError.
+            if !self.heap.is_callable(exotic) {
+                return Err(self.type_error("Symbol.toPrimitive is not a function"));
+            }
+            let h = match hint {
+                Hint::Default => "default",
+                Hint::Number => "number",
+                Hint::String => "string",
+            };
+            let h = self.heap.new_str(h)?;
+            let result = self.call(exotic, v, &[h])?;
+            if !self.heap.is_object(result) {
+                return Ok(result);
+            }
+            return Err(self.type_error("Cannot convert object to primitive value"));
         }
         let names = if hint == Hint::String {
             ["toString", "valueOf"]
@@ -165,6 +194,7 @@ impl Vm {
             Decoded::Bool(_) => Intrinsic::BooleanPrototype,
             Decoded::Int32(_) | Decoded::Double(_) => Intrinsic::NumberPrototype,
             Decoded::Ref(_) if self.heap.is_string(v) => Intrinsic::StringPrototype,
+            Decoded::Ref(_) if self.heap.is_symbol(v) => Intrinsic::SymbolPrototype,
             Decoded::Ref(_) => return Ok(v),
             Decoded::Hole | Decoded::Raw(_) => {
                 return Err(Abrupt::Internal("an internal value reached ToObject"));
@@ -224,6 +254,11 @@ impl Vm {
                 Some(s) => Ok(numeric::narrow(clazel_js_number::string_to_number(
                     &s.to_string_lossy(),
                 ))),
+                // §7.1.4† step 2: "If argument is either a Symbol or a
+                // BigInt, throw a TypeError exception."
+                None if self.heap.is_symbol(v) => {
+                    Err(self.type_error("Cannot convert a Symbol value to a number"))
+                }
                 None => {
                     let p = self.to_primitive(v, Hint::Number)?;
                     self.coerce_number(p)
@@ -255,6 +290,11 @@ impl Vm {
             Decoded::Ref(_) => {
                 return match self.heap.string(v) {
                     Some(s) => Ok(s.clone()),
+                    // §7.1.17† step 2: "If argument is a Symbol, throw a
+                    // TypeError exception."
+                    None if self.heap.is_symbol(v) => {
+                        Err(self.type_error("Cannot convert a Symbol value to a string"))
+                    }
                     None => {
                         let p = self.to_primitive(v, Hint::String)?;
                         self.coerce_js_string(p)
@@ -277,11 +317,26 @@ impl Vm {
         Ok(self.heap.new_string(s)?)
     }
 
-    /// ToPropertyKey, §7.1.19†: ToPrimitive with the hint `string`, then
-    /// ToString (no Symbols yet).
+    /// ToPropertyKey, §7.1.19†:
+    /// 1. Let key be ? ToPrimitive(argument, string).
+    /// 2. If key is a Symbol, return key.
+    /// 3. Return ! ToString(key).
     pub fn coerce_property_key(&mut self, v: Value) -> Result<Key, Abrupt> {
-        let s = self.coerce_js_string(v)?;
+        let p = self.to_primitive(v, Hint::String)?;
+        if let Some(k) = self.symbol_property_key(p) {
+            return Ok(k);
+        }
+        let s = self.coerce_js_string(p)?;
         Ok(self.heap.intern(&s)?)
+    }
+
+    /// ToPropertyKey as a value, §7.1.19†: the Symbol itself, or the String.
+    pub(crate) fn property_key_value(&mut self, v: Value) -> Result<Value, Abrupt> {
+        let p = self.to_primitive(v, Hint::String)?;
+        if self.heap.is_symbol(p) {
+            return Ok(p);
+        }
+        self.coerce_string_value(p)
     }
 
     // -----------------------------------------------------------------
@@ -367,6 +422,12 @@ impl Vm {
         if nullish(x) || nullish(y) {
             return Ok(nullish(x) && nullish(y)); // Steps 2 to 4.
         }
+        let (yx, yy) = (self.heap.is_symbol(x), self.heap.is_symbol(y));
+        if (yx || yy) && !(ox || oy) {
+            // Step 1 (both Symbols: IsStrictlyEqual) and step 14 (a Symbol
+            // against a String, Number or Boolean: false).
+            return Ok(yx && yy && x == y);
+        }
         if ox || oy {
             // Steps 12 and 13: an Object against a String, Number or Boolean
             // compares its ToPrimitive (hint `default`).
@@ -397,6 +458,8 @@ impl Vm {
             Decoded::Ref(_) => {
                 if self.heap.is_string(v) {
                     self.atoms.string
+                } else if self.heap.is_symbol(v) {
+                    self.atoms.symbol
                 } else if self.heap.is_callable(v) {
                     self.atoms.function
                 } else {
@@ -577,6 +640,9 @@ impl Vm {
                         }
                     }
                 }
+                Some(Cell::Symbol(_)) => {
+                    self.get_from_primitive_proto(Intrinsic::SymbolPrototype, key, base)
+                }
                 _ => Err(Abrupt::Internal("property get on an internal cell")),
             },
             Decoded::Bool(_) => {
@@ -661,7 +727,7 @@ impl Vm {
             }
             return Ok(());
         }
-        self.set_property(base, key, v, None)
+        self.set_property_with(base, key, v, None, throw)
     }
 
     /// The heap, mutably: natives define properties and allocate objects
@@ -707,6 +773,21 @@ impl Vm {
         v: Value,
         ic: Option<u32>,
     ) -> Result<(), Abrupt> {
+        let strict = self.strict();
+        self.set_property_with(base, key, v, ic, strict)
+    }
+
+    /// [`Vm::set_property`] failing as `Set ( O, P, V, Throw )` (§7.3.4†)
+    /// does for `throw`: a TypeError when it is true, whatever the strictness
+    /// of the running function.
+    pub(crate) fn set_property_with(
+        &mut self,
+        base: Value,
+        key: Key,
+        v: Value,
+        ic: Option<u32>,
+        strict: bool,
+    ) -> Result<(), Abrupt> {
         if base == Value::UNDEFINED || base == Value::NULL {
             let name = self.key_text(key);
             return Err(self.type_error(&format!(
@@ -721,7 +802,7 @@ impl Vm {
         if !self.heap.is_object(base) {
             // A primitive receiver: OrdinarySet step 2.d.i "If Receiver is
             // not an Object, return false".
-            if self.strict() {
+            if strict {
                 let name = self.key_text(key);
                 return Err(
                     self.type_error(&format!("Cannot create property '{name}' on a primitive"))
@@ -735,7 +816,7 @@ impl Vm {
         if let Some(f) = found
             && let Some(ok) = self.set_through_accessor(f, base, v)?
         {
-            if !ok && self.strict() {
+            if !ok && strict {
                 let name = self.key_text(key);
                 return Err(self.type_error(&format!(
                     "Cannot set property {name} which has only a getter"
@@ -767,20 +848,30 @@ impl Vm {
                 }
                 true
             }
+            // Step 2.d.vi: CreateDataProperty(Receiver, P, V), which fails on an
+            // object that is not extensible.
+            _ if !self.heap.is_extensible(base) => false,
             _ => {
                 self.heap.define(base, key, v, Attrs::ALL)?;
                 true
             }
         };
-        if !ok && self.strict() {
+        if !ok && strict {
             let name = self.key_text(key);
             return Err(self.type_error(&format!("Cannot assign to read only property '{name}'")));
         }
         Ok(())
     }
 
-    /// The text of a key, for messages.
+    /// The text of a key, for messages: a Symbol's is its descriptive
+    /// string.
     pub(crate) fn key_text(&self, key: Key) -> String {
+        if let Some(sym) = crate::heap::Heap::key_symbol(key)
+            .and_then(|id| self.symbols.get(usize::try_from(id.0).ok()?))
+            .copied()
+        {
+            return self.symbol_descriptive_string(sym).to_string_lossy();
+        }
         self.heap
             .key_string(key)
             .map(JsString::to_string_lossy)
@@ -863,7 +954,21 @@ impl Vm {
         args: &[Value],
         ret: Option<usize>,
     ) -> Result<Option<Value>, Abrupt> {
+        self.construct_nt(f, args, ret, f)
+    }
+
+    /// [[Construct]] ( argumentsList, newTarget ) of `f` with `new_target`
+    /// (`f` itself for `new f`; `super(...)` and `Reflect.construct` pass
+    /// another): [`Vm::construct`] for any NewTarget.
+    pub(crate) fn construct_nt(
+        &mut self,
+        f: Value,
+        args: &[Value],
+        ret: Option<usize>,
+        new_target: Value,
+    ) -> Result<Option<Value>, Abrupt> {
         let mut f = f;
+        let mut new_target = new_target;
         let mut all_args: Option<Vec<Value>> = None;
         // §10.4.1.2 [[Construct]] of a bound function: the target, with the
         // bound arguments first; step 5, NewTarget is the target when it was
@@ -873,6 +978,9 @@ impl Vm {
             let mut all = b.args;
             all.extend_from_slice(all_args.as_deref().unwrap_or(args));
             all_args = Some(all);
+            if new_target == f {
+                new_target = b.target;
+            }
             f = b.target;
         }
         let args = all_args.as_deref().unwrap_or(args);
@@ -883,7 +991,7 @@ impl Vm {
                     return Err(self.type_error("value is not a constructor"));
                 }
                 self.charge()?;
-                let v = self.invoke_native(i, f, Value::UNDEFINED, args, f)?;
+                let v = self.invoke_native(i, f, Value::UNDEFINED, args, new_target)?;
                 return Ok(Some(v));
             }
             _ => return Err(self.type_error("value is not a constructor")),
@@ -894,24 +1002,38 @@ impl Vm {
             .map(|c| c.code.kind)
             .ok_or(Abrupt::Internal("code index"))?;
         match kind {
-            FunctionKind::Normal => {}
-            FunctionKind::Class | FunctionKind::Derived => {
-                return Err(Abrupt::NotYet("class constructors".into()));
+            FunctionKind::Normal | FunctionKind::Class => {
+                self.construct_closure(f, code, args, ret, new_target, false)?;
+            }
+            FunctionKind::Derived => {
+                self.construct_closure(f, code, args, ret, new_target, true)?;
             }
             _ => return Err(self.type_error("value is not a constructor")),
         }
-        let kp = self.atoms.k_prototype;
-        let proto = match self.heap.find(f, kp)? {
-            Some(found) => Some(self.found_value(found, f)?),
-            None => None,
-        };
-        let proto = match proto {
-            Some(p) if self.heap.is_object(p) => p,
-            _ => self.atoms.object_proto,
-        };
-        let this = self.heap.new_object(proto, ObjKind::Plain)?;
-        self.enter_closure(f, code, this, args, ret, crate::frame::KIND_CONSTRUCT)?;
         Ok(None)
+    }
+
+    /// `Construct ( F, argumentsList, newTarget )`, §7.3.14†, to completion:
+    /// [[Construct]] with the given NewTarget, running the constructor's body
+    /// (a native's, or a closure's frame, re-entering the interpreter as
+    /// [`Vm::construct_value`] does).
+    ///
+    /// # Errors
+    /// A `TypeError` if `f` is not a constructor, or what it throws.
+    pub fn construct_with_target(
+        &mut self,
+        f: Value,
+        args: &[Value],
+        new_target: Value,
+    ) -> Result<Value, Abrupt> {
+        let saved = (self.fp, self.pc, self.cur, self.top);
+        let result = match self.construct_nt(f, args, None, new_target) {
+            Ok(Some(v)) => Ok(v),
+            Ok(None) => self.execute(),
+            Err(e) => Err(e),
+        };
+        (self.fp, self.pc, self.cur, self.top) = saved;
+        result
     }
 
     /// `new f(...args)` for a native: [[Construct]] to completion.
@@ -981,6 +1103,31 @@ impl Vm {
             }
         };
         Ok(self.heap.new_object(proto, kind)?)
+    }
+
+    /// `NewRegExp`: the literal of constant `k` (§13.2.7.3† "Runtime
+    /// Semantics: Evaluation" of RegularExpressionLiteral, steps 1 to 4: the
+    /// BodyText and FlagText, then RegExpCreate(pattern, flags), §22.2.3.1†).
+    /// The object is made by `%RegExp%`, which `clazel-js-builtins` installs;
+    /// a VM without it has no RegExp literals (`NotYet`).
+    pub(crate) fn new_regexp(&mut self, k: u32) -> Result<Value, Abrupt> {
+        let ctor = self.intrinsic(Intrinsic::RegExpConstructor);
+        if !self.heap.is_object(ctor) {
+            return Err(Abrupt::NotYet("RegExp literals".into()));
+        }
+        let i = usize::try_from(k).map_err(|_| Abrupt::Internal("constant index"))?;
+        let (pattern, flags) = match self.codes.get(self.cur).and_then(|f| f.code.consts.get(i)) {
+            Some(Const::RegExp(site)) => (site.pattern.clone(), site.flags.clone()),
+            _ => {
+                return Err(Abrupt::Internal(
+                    "NewRegExp of a constant that is no literal",
+                ));
+            }
+        };
+        let p = JsString::from_units(&pattern).map_err(|_| Abrupt::OutOfMemory)?;
+        let f = JsString::from_units(&flags).map_err(|_| Abrupt::OutOfMemory)?;
+        let (p, f) = (self.heap.new_string(p)?, self.heap.new_string(f)?);
+        self.construct_value(ctor, &[p, f])
     }
 
     // -----------------------------------------------------------------
@@ -1297,6 +1444,9 @@ impl Vm {
             Decoded::Ref(_) => {
                 if let Some(s) = self.string_text(v) {
                     return format!("{s:?}");
+                }
+                if self.heap.is_symbol(v) {
+                    return self.symbol_descriptive_string(v).to_string_lossy();
                 }
                 let name = self
                     .get_named(v, "name")

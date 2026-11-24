@@ -866,15 +866,20 @@ fn the_heap_limit_stops_a_script_that_allocates_for_ever() -> Test {
     let mut rt = Runtime::new(Config::new(room), DefaultHost::new())?;
     assert_eq!(rt.limits(), room);
     let realm = rt.scope(|scope| scope.create_realm(RealmOptions::default()))?;
-    let result = rt.scope(|scope| {
-        scope
-            .eval_script(
-                &realm,
-                Source::new("a.js", "var s = ''; for (;;) { s = s + 'x'; }"),
-            )
-            .map(|_| ())
-    });
-    assert!(matches!(result, Err(Error::OutOfMemory)), "{result:?}");
+    // The limit is a RangeError (phase-7.md 7.19), made from the reserve past
+    // the limit; it was `OutOfMemory` before the heap counted bytes.
+    let name = rt.scope(|scope| {
+        match scope.eval_script(
+            &realm,
+            Source::new("a.js", "var s = ''; for (;;) { s = s + 'x'; }"),
+        ) {
+            Err(Error::Thrown(exception)) => scope.report(&exception).map(|r| Some(r.name)),
+            Err(other) => Err(other),
+            Ok(_) => Ok(None),
+        }
+    })?;
+    assert_eq!(name.as_deref(), Some("RangeError"));
+    assert!(rt.heap_used()? <= room.heap_bytes + 64 * 1024);
     Ok(())
 }
 

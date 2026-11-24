@@ -1,8 +1,11 @@
-//! `Array` (§23.1†): the constructor, `Array.isArray`, `Array.of`, and the
-//! core of `Array.prototype`: `push`, `pop`, `shift`, `unshift`, `slice`,
-//! `splice`, `concat`, `join`, `toString`, `indexOf`, `lastIndexOf`,
-//! `includes`, `reverse`, `fill`, `forEach`, `map`, `filter`, `some`, `every`,
-//! `reduce`, `reduceRight`, `find`, `findIndex` and `sort`.
+//! `Array` (§23.1†): the constructor, `Array.isArray`, `Array.of`,
+//! `Array.from`, and `Array.prototype`: `at`, `concat`, `copyWithin`,
+//! `entries`, `every`, `fill`, `filter`, `find`, `findIndex`, `findLast`,
+//! `findLastIndex`, `flat`, `flatMap`, `forEach`, `includes`, `indexOf`,
+//! `join`, `keys`, `lastIndexOf`, `map`, `pop`, `push`, `reduce`,
+//! `reduceRight`, `reverse`, `shift`, `slice`, `some`, `sort`, `splice`,
+//! `toLocaleString`, `toReversed`, `toSorted`, `toSpliced`, `toString`,
+//! `unshift`, `values`, `with`, `@@iterator` and `@@unscopables`.
 //!
 //! The methods are generic, as the standard writes them: each reads and
 //! writes through `Get`, `Set`, `HasProperty` and `DeletePropertyOrThrow` on
@@ -10,14 +13,19 @@
 //! "mathematical values" of the algorithms (indices up to 2^53 - 1) are `f64`,
 //! which holds them exactly.
 //!
-//! Left for when Symbols and iterators exist: `Array.from`, `entries`,
-//! `keys`, `values` and `@@iterator`, `@@species`, `@@isConcatSpreadable`,
-//! `@@unscopables`. `ArraySpeciesCreate` therefore uses the receiver's
-//! `constructor` itself where the standard reads its `@@species`.
+//! **`get Array [ @@species ]`** (§23.1.2.5†) is the standard's accessor
+//! property of `Array` (it returns the this value), and ArraySpeciesCreate
+//! reads `C[@@species]` with `Get`.
+//!
+//! Not here: `Array.fromAsync` (Promises).
 
+use crate::iterator::create_array_iterator;
 use crate::util::{arg, constructor, js_string, method, number, to_integer_or_infinity};
+use clazel_js_heap::shape::Attrs;
 use clazel_js_heap::string::{JsString, Key};
+use clazel_js_heap::symbol as wk;
 use clazel_js_heap::value::Value;
+use clazel_js_vm::heap::{IterKind, ObjKind};
 use clazel_js_vm::interp::{Abrupt, Intrinsic, Vm};
 
 /// 2^53 - 1: the largest integer index and length (§6.1.6.1†, §7.1.20†).
@@ -37,17 +45,28 @@ pub fn install(vm: &mut Vm) -> Result<(), Abrupt> {
     vm.set_intrinsic(Intrinsic::ArrayConstructor, ctor);
     method(vm, ctor, "isArray", 1, is_array)?;
     method(vm, ctor, "of", 0, array_of)?;
-    let methods: [(&str, i32, clazel_js_vm::interp::NativeFn); 24] = [
+    method(vm, ctor, "from", 1, array_from)?;
+    let ks = vm.well_known_key(wk::SPECIES)?;
+    crate::util::accessor(vm, ctor, ks, "[Symbol.species]", Some(get_species), None)?;
+    let methods: [(&str, i32, clazel_js_vm::interp::NativeFn); 37] = [
+        ("at", 1, at),
         ("concat", 1, concat),
+        ("copyWithin", 2, copy_within),
+        ("entries", 0, entries),
         ("every", 1, every),
         ("fill", 1, fill),
         ("filter", 1, filter),
         ("find", 1, find),
         ("findIndex", 1, find_index),
+        ("findLast", 1, find_last),
+        ("findLastIndex", 1, find_last_index),
+        ("flat", 0, flat),
+        ("flatMap", 1, flat_map),
         ("forEach", 1, for_each),
         ("includes", 1, includes),
         ("indexOf", 1, index_of),
         ("join", 1, join),
+        ("keys", 0, keys),
         ("lastIndexOf", 1, last_index_of),
         ("map", 1, map),
         ("pop", 0, pop),
@@ -60,12 +79,24 @@ pub fn install(vm: &mut Vm) -> Result<(), Abrupt> {
         ("some", 1, some),
         ("sort", 1, sort),
         ("splice", 2, splice),
+        ("toLocaleString", 0, to_locale_string),
+        ("toReversed", 0, to_reversed),
+        ("toSorted", 1, to_sorted),
+        ("toSpliced", 2, to_spliced),
         ("toString", 0, to_string),
         ("unshift", 1, unshift),
+        ("with", 2, with),
     ];
     for (name, len, f) in methods {
         method(vm, proto, name, len, f)?;
     }
+    // §23.1.3.40† `Array.prototype [ @@iterator ] ( )`: "The initial value
+    // of the @@iterator property is %Array.prototype.values%".
+    let values_fn = method(vm, proto, "values", 0, values)?;
+    let ki = vm.well_known_key(wk::ITERATOR)?;
+    vm.heap_mut()
+        .define(proto, ki, values_fn, crate::util::METHOD)?;
+    install_unscopables(vm, proto)?;
     crate::util::global(vm, "Array", ctor)
 }
 
@@ -165,12 +196,18 @@ fn same_value_zero(vm: &Vm, a: Value, b: Value) -> bool {
     vm.same_value(a, b)
 }
 
+/// `get Array [ @@species ]`, §23.1.2.5†: 1. Return the this value.
+fn get_species(_vm: &mut Vm, this: Value, _args: &[Value]) -> Result<Value, Abrupt> {
+    Ok(this)
+}
+
 /// ArraySpeciesCreate ( originalArray, length ), §10.4.2.3†:
 /// 1. If IsArray(originalArray) is false, return ? ArrayCreate(length).
 /// 2. Let C be ? Get(originalArray, "constructor").
 /// 3. If IsConstructor(C) is true, then (the cross-realm check: one realm).
-/// 4. If C is an Object, then a. Set C to ? Get(C, @@species). (Not
-///    consulted: no Symbols; C stays the constructor.)
+/// 4. If C is an Object, then
+///    a. Set C to ? Get(C, @@species).
+///    b. If C is null, set C to undefined.
 /// 5. If C is undefined, return ? ArrayCreate(length).
 /// 6. If IsConstructor(C) is false, throw a TypeError exception.
 /// 7. Return ? Construct(C, « 𝔽(length) »).
@@ -178,7 +215,15 @@ fn species_create(vm: &mut Vm, original: Value, length: f64) -> Result<Value, Ab
     if !vm.is_array(original) {
         return vm.array_create(length, None);
     }
-    let c = vm.get_named(original, "constructor")?;
+    let kc = crate::util::key(vm, "constructor")?;
+    let mut c = vm.get_value(original, kc)?;
+    if vm.heap().is_object(c) {
+        let ks = vm.well_known_key(wk::SPECIES)?;
+        c = vm.get_value(c, ks)?;
+        if c == Value::NULL {
+            c = Value::UNDEFINED;
+        }
+    }
     if c == Value::UNDEFINED || c == vm.intrinsic(Intrinsic::ArrayConstructor) {
         return vm.array_create(length, None);
     }
@@ -642,9 +687,10 @@ fn slice(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
 /// 3. Let n be 0.
 /// 4. Prepend O to items.
 /// 5. For each element E of items, do a. Let spreadable be ?
-///    IsConcatSpreadable(E) (§23.1.3.2.1†: if E is not an Object, false; (the
-///    `@@isConcatSpreadable` lookup is not consulted: no Symbols;) else
-///    IsArray(E)). b. If spreadable is true, then i. Let k be 0. ii. Let len
+///    IsConcatSpreadable(E) (§23.1.3.2.1†: 1. If O is not an Object, return
+///    false. 2. Let spreadable be ? Get(O, @@isConcatSpreadable). 3. If
+///    spreadable is not undefined, return ToBoolean(spreadable). 4. Return ?
+///    IsArray(O)). b. If spreadable is true, then i. Let k be 0. ii. Let len
 ///    be ? LengthOfArrayLike(E). iii. If n + len > 2^53 - 1, throw a
 ///    TypeError exception. iv. Repeat, while k < len, 1. Let P be !
 ///    ToString(𝔽(k)). 2. Let exists be ? HasProperty(E, P). 3. If exists is
@@ -663,7 +709,7 @@ fn concat(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
     let mut items = vec![o];
     items.extend_from_slice(args);
     for e in items {
-        if vm.is_array(e) {
+        if is_concat_spreadable(vm, e)? {
             let len = length_of(vm, e)?;
             if n + len > MAX_SAFE {
                 return Err(vm.type_error("Invalid array length"));
@@ -688,6 +734,19 @@ fn concat(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
     }
     set_length(vm, a, n)?;
     Ok(a)
+}
+
+/// IsConcatSpreadable ( O ), §23.1.3.2.1† (see `concat`).
+fn is_concat_spreadable(vm: &mut Vm, o: Value) -> Result<bool, Abrupt> {
+    if !vm.heap().is_object(o) {
+        return Ok(false);
+    }
+    let k = vm.well_known_key(wk::IS_CONCAT_SPREADABLE)?;
+    let spreadable = vm.get_value(o, k)?;
+    if spreadable != Value::UNDEFINED {
+        return Ok(vm.to_boolean(spreadable));
+    }
+    Ok(vm.is_array(o))
 }
 
 /// `Array.prototype.join ( separator )`, §23.1.3.18†:
@@ -1280,4 +1339,619 @@ fn sort(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
         j += 1.0;
     }
     Ok(obj)
+}
+
+// ---------------------------------------------------------------------
+// Iteration
+// ---------------------------------------------------------------------
+
+/// `Array.prototype.values ( )`, §23.1.3.38†, `keys ( )`, §23.1.3.19†, and
+/// `entries ( )`, §23.1.3.5†:
+/// 1. Let O be ? ToObject(this value).
+/// 2. Return CreateArrayIterator(O, value) (`key`, `key+value`).
+fn iterator_of(vm: &mut Vm, this: Value, kind: IterKind) -> Result<Value, Abrupt> {
+    let o = vm.to_object(this)?;
+    create_array_iterator(vm, o, kind)
+}
+
+fn values(vm: &mut Vm, this: Value, _args: &[Value]) -> Result<Value, Abrupt> {
+    iterator_of(vm, this, IterKind::Values)
+}
+
+fn keys(vm: &mut Vm, this: Value, _args: &[Value]) -> Result<Value, Abrupt> {
+    iterator_of(vm, this, IterKind::Keys)
+}
+
+fn entries(vm: &mut Vm, this: Value, _args: &[Value]) -> Result<Value, Abrupt> {
+    iterator_of(vm, this, IterKind::Entries)
+}
+
+/// `Array.from ( items [ , mapper [ , thisArg ] ] )`, §23.1.2.1†:
+/// 1. Let C be the this value.
+/// 2. If mapper is undefined, then a. Let mapping be false.
+/// 3. Else, a. If IsCallable(mapper) is false, throw a TypeError exception.
+///    b. Let mapping be true.
+/// 4. Let usingIterator be ? GetMethod(items, @@iterator).
+/// 5. If usingIterator is not undefined, then
+///    a. If IsConstructor(C) is true, then i. Let A be ? Construct(C).
+///    b. Else, i. Let A be ! ArrayCreate(0).
+///    c. Let iteratorRecord be ? GetIteratorFromMethod(items, usingIterator).
+///    d. Let k be 0.
+///    e. Repeat,
+///    i. If k ≥ 2^53 - 1, then 1. Let error be ThrowCompletion(a newly
+///    created TypeError object). 2. Return ? IteratorClose(iteratorRecord,
+///    error).
+///    ii. Let Pk be ! ToString(𝔽(k)).
+///    iii. Let next be ? IteratorStepValue(iteratorRecord).
+///    iv. If next is done, then 1. Perform ? Set(A, "length", 𝔽(k), true).
+///    2. Return A.
+///    v. If mapping is true, then 1. Let mappedValue be Completion(Call(mapper,
+///    thisArg, « next, 𝔽(k) »)). 2. IfAbruptCloseIterator(mappedValue,
+///    iteratorRecord).
+///    vi. Else, 1. Let mappedValue be next.
+///    vii. Let defineStatus be Completion(CreateDataPropertyOrThrow(A, Pk,
+///    mappedValue)).
+///    viii. IfAbruptCloseIterator(defineStatus, iteratorRecord).
+///    ix. Set k to k + 1.
+/// 6. NOTE: items is not an Iterable so assume it is an array-like object.
+/// 7. Let arrayLike be ! ToObject(items).
+/// 8. Let len be ? LengthOfArrayLike(arrayLike).
+/// 9. If IsConstructor(C) is true, then a. Let A be ? Construct(C, « 𝔽(len) »).
+/// 10. Else, a. Let A be ? ArrayCreate(len).
+/// 11. Let k be 0.
+/// 12. Repeat, while k < len,
+///     a. Let Pk be ! ToString(𝔽(k)).
+///     b. Let kValue be ? Get(arrayLike, Pk).
+///     c. If mapping is true, then i. Let mappedValue be ? Call(mapper,
+///     thisArg, « kValue, 𝔽(k) »).
+///     d. Else, i. Let mappedValue be kValue.
+///     e. Perform ? CreateDataPropertyOrThrow(A, Pk, mappedValue).
+///     f. Set k to k + 1.
+/// 13. Perform ? Set(A, "length", 𝔽(len), true).
+/// 14. Return A.
+fn array_from(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
+    let (items, mapper, this_arg) = (arg(args, 0), arg(args, 1), arg(args, 2));
+    let mapping = mapper != Value::UNDEFINED;
+    if mapping {
+        callable(vm, mapper)?;
+    }
+    let using_iterator = if items == Value::UNDEFINED || items == Value::NULL {
+        Value::UNDEFINED
+    } else {
+        let ki = vm.well_known_key(wk::ITERATOR)?;
+        vm.get_value(items, ki)?
+    };
+    if using_iterator != Value::UNDEFINED && using_iterator != Value::NULL {
+        if !vm.heap().is_callable(using_iterator) {
+            return Err(vm.type_error("Symbol.iterator is not a function"));
+        }
+        let a = if vm.is_constructor(this) {
+            vm.construct_value(this, &[])?
+        } else {
+            vm.array_create(0.0, None)?
+        };
+        let rec = vm.get_iterator_from_method(items, using_iterator)?;
+        let mut k = 0.0;
+        loop {
+            vm.charge_step()?;
+            if k >= MAX_SAFE {
+                let e = vm.type_error("Array.from: too many elements");
+                return Err(vm.iterator_close_on_throw(rec, e));
+            }
+            let Some(next) = vm.iterator_step_value(rec)? else {
+                set_length(vm, a, k)?;
+                return Ok(a);
+            };
+            let mapped = if mapping {
+                match vm.call(mapper, this_arg, &[next, number(k)]) {
+                    Ok(v) => v,
+                    Err(e) => return Err(vm.iterator_close_on_throw(rec, e)),
+                }
+            } else {
+                next
+            };
+            if let Err(e) = create_at(vm, a, k, mapped) {
+                return Err(vm.iterator_close_on_throw(rec, e));
+            }
+            k += 1.0;
+        }
+    }
+    let array_like = vm.to_object(items)?;
+    let len = length_of(vm, array_like)?;
+    let a = if vm.is_constructor(this) {
+        vm.construct_value(this, &[number(len)])?
+    } else {
+        vm.array_create(len, None)?
+    };
+    let mut k = 0.0;
+    while k < len {
+        vm.charge_step()?;
+        let v = get_at(vm, array_like, k)?;
+        let mapped = if mapping {
+            vm.call(mapper, this_arg, &[v, number(k)])?
+        } else {
+            v
+        };
+        create_at(vm, a, k, mapped)?;
+        k += 1.0;
+    }
+    set_length(vm, a, len)?;
+    Ok(a)
+}
+
+// ---------------------------------------------------------------------
+// The rest of Array.prototype
+// ---------------------------------------------------------------------
+
+/// `Array.prototype.at ( index )`, §23.1.3.1†:
+/// 1. Let O be ? ToObject(this value).
+/// 2. Let len be ? LengthOfArrayLike(O).
+/// 3. Let relativeIndex be ? ToIntegerOrInfinity(index).
+/// 4. If relativeIndex ≥ 0, then a. Let k be relativeIndex.
+/// 5. Else, a. Let k be len + relativeIndex.
+/// 6. If k < 0 or k ≥ len, return undefined.
+/// 7. Return ? Get(O, ! ToString(𝔽(k))).
+fn at(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
+    let o = vm.to_object(this)?;
+    let len = length_of(vm, o)?;
+    let rel = to_integer_or_infinity(vm, arg(args, 0))?;
+    let k = if rel >= 0.0 { rel } else { len + rel };
+    if k < 0.0 || k >= len {
+        return Ok(Value::UNDEFINED);
+    }
+    get_at(vm, o, k)
+}
+
+/// `Array.prototype.copyWithin ( target, start [ , end ] )`, §23.1.3.4†:
+/// 1. Let O be ? ToObject(this value).
+/// 2. Let len be ? LengthOfArrayLike(O).
+/// 3. to 5. Let to be the relative index of target (as `slice`'s start).
+/// 6. to 8. Let from be the relative index of start.
+/// 9. to 11. If end is undefined, let final be len; else the relative index
+///    of end.
+/// 12. Let count be min(final - from, len - to).
+/// 13. If from < to and to < from + count, then a. Let direction be -1.
+///     b. Set from to from + count - 1. c. Set to to to + count - 1.
+/// 14. Else, a. Let direction be 1.
+/// 15. Repeat, while count > 0,
+///     a. Let fromKey be ! ToString(𝔽(from)).
+///     b. Let toKey be ! ToString(𝔽(to)).
+///     c. Let fromPresent be ? HasProperty(O, fromKey).
+///     d. If fromPresent is true, then i. Let fromValue be ? Get(O, fromKey).
+///     ii. Perform ? Set(O, toKey, fromValue, true).
+///     e. Else, i. Assert: fromPresent is false. ii. Perform ?
+///     DeletePropertyOrThrow(O, toKey).
+///     f. Set from to from + direction.
+///     g. Set to to to + direction.
+///     h. Set count to count - 1.
+/// 16. Return O.
+fn copy_within(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
+    let o = vm.to_object(this)?;
+    let len = length_of(vm, o)?;
+    let mut to = relative(vm, arg(args, 0), len)?;
+    let mut from = relative(vm, arg(args, 1), len)?;
+    let fin = relative_end(vm, arg(args, 2), len)?;
+    let mut count = (fin - from).min(len - to);
+    let direction = if from < to && to < from + count {
+        from = from + count - 1.0;
+        to = to + count - 1.0;
+        -1.0
+    } else {
+        1.0
+    };
+    while count > 0.0 {
+        vm.charge_step()?;
+        if has_at(vm, o, from)? {
+            let v = get_at(vm, o, from)?;
+            set_at(vm, o, to, v)?;
+        } else {
+            delete_at(vm, o, to)?;
+        }
+        from += direction;
+        to += direction;
+        count -= 1.0;
+    }
+    Ok(o)
+}
+
+/// The deepest FlattenIntoArray recursion: past it, a RangeError, as an
+/// engine whose stack overflows reports (an array that holds itself,
+/// flattened with depth Infinity).
+const MAX_FLATTEN_DEPTH: u32 = 10_000;
+
+/// FlattenIntoArray ( target, source, sourceLen, start, depth [ , mapperFunction
+/// [ , thisArg ] ] ), §23.1.3.13.1†:
+/// 1. Assert: If mapperFunction is present, then IsCallable(mapperFunction)
+///    is true, thisArg is present, and depth is 1.
+/// 2. Let targetIndex be start.
+/// 3. Let sourceIndex be +0𝔽.
+/// 4. Repeat, while ℝ(sourceIndex) < sourceLen,
+///    a. Let P be ! ToString(sourceIndex).
+///    b. Let exists be ? HasProperty(source, P).
+///    c. If exists is true, then
+///    i. Let element be ? Get(source, P).
+///    ii. If mapperFunction is present, then 1. Set element to ?
+///    Call(mapperFunction, thisArg, « element, sourceIndex, source »).
+///    iii. Let shouldFlatten be false.
+///    iv. If depth > 0, then 1. Set shouldFlatten to ? IsArray(element).
+///    v. If shouldFlatten is true, then 1. If depth = +∞, let newDepth be
+///    +∞. 2. Else, let newDepth be depth - 1. 3. Let elementLen be ?
+///    LengthOfArrayLike(element). 4. Set targetIndex to ?
+///    FlattenIntoArray(target, element, elementLen, targetIndex, newDepth).
+///    vi. Else, 1. If targetIndex ≥ 2^53 - 1, throw a TypeError exception.
+///    2. Perform ? CreateDataPropertyOrThrow(target, !
+///    ToString(𝔽(targetIndex)), element). 3. Set targetIndex to
+///    targetIndex + 1.
+///    d. Set sourceIndex to sourceIndex + 1𝔽.
+/// 5. Return targetIndex.
+///
+/// `at` is `(sourceLen, start, depth)`; `level` counts the recursion
+/// against [`MAX_FLATTEN_DEPTH`].
+fn flatten_into_array(
+    vm: &mut Vm,
+    (target, source): (Value, Value),
+    (source_len, start, depth): (f64, f64, f64),
+    mapper: Option<(Value, Value)>,
+    level: u32,
+) -> Result<f64, Abrupt> {
+    if level > MAX_FLATTEN_DEPTH {
+        return Err(vm.range_error("Maximum call stack size exceeded"));
+    }
+    let mut target_index = start;
+    let mut source_index = 0.0;
+    while source_index < source_len {
+        vm.charge_step()?;
+        if has_at(vm, source, source_index)? {
+            let mut element = get_at(vm, source, source_index)?;
+            if let Some((f, this_arg)) = mapper {
+                element = call3(vm, f, this_arg, element, source_index, source)?;
+            }
+            if depth > 0.0 && vm.is_array(element) {
+                let new_depth = if depth == f64::INFINITY {
+                    f64::INFINITY
+                } else {
+                    depth - 1.0
+                };
+                let element_len = length_of(vm, element)?;
+                target_index = flatten_into_array(
+                    vm,
+                    (target, element),
+                    (element_len, target_index, new_depth),
+                    None,
+                    level.saturating_add(1),
+                )?;
+            } else {
+                if target_index >= MAX_SAFE {
+                    return Err(vm.type_error("Invalid array length"));
+                }
+                create_at(vm, target, target_index, element)?;
+                target_index += 1.0;
+            }
+        }
+        source_index += 1.0;
+    }
+    Ok(target_index)
+}
+
+/// `Array.prototype.flat ( [ depth ] )`, §23.1.3.13†:
+/// 1. Let O be ? ToObject(this value).
+/// 2. Let sourceLen be ? LengthOfArrayLike(O).
+/// 3. Let depthNum be 1.
+/// 4. If depth is not undefined, then a. Set depthNum to ?
+///    ToIntegerOrInfinity(depth). b. If depthNum < 0, set depthNum to 0.
+/// 5. Let A be ? ArraySpeciesCreate(O, 0).
+/// 6. Perform ? FlattenIntoArray(A, O, sourceLen, 0, depthNum).
+/// 7. Return A.
+fn flat(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
+    let o = vm.to_object(this)?;
+    let source_len = length_of(vm, o)?;
+    let depth = if arg(args, 0) == Value::UNDEFINED {
+        1.0
+    } else {
+        to_integer_or_infinity(vm, arg(args, 0))?.max(0.0)
+    };
+    let a = species_create(vm, o, 0.0)?;
+    flatten_into_array(vm, (a, o), (source_len, 0.0, depth), None, 0)?;
+    Ok(a)
+}
+
+/// `Array.prototype.flatMap ( mapperFunction [ , thisArg ] )`, §23.1.3.14†:
+/// 1. Let O be ? ToObject(this value).
+/// 2. Let sourceLen be ? LengthOfArrayLike(O).
+/// 3. If IsCallable(mapperFunction) is false, throw a TypeError exception.
+/// 4. Let A be ? ArraySpeciesCreate(O, 0).
+/// 5. Perform ? FlattenIntoArray(A, O, sourceLen, 0, 1, mapperFunction,
+///    thisArg).
+/// 6. Return A.
+fn flat_map(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
+    let o = vm.to_object(this)?;
+    let source_len = length_of(vm, o)?;
+    let f = callable(vm, arg(args, 0))?;
+    let a = species_create(vm, o, 0.0)?;
+    flatten_into_array(
+        vm,
+        (a, o),
+        (source_len, 0.0, 1.0),
+        Some((f, arg(args, 1))),
+        0,
+    )?;
+    Ok(a)
+}
+
+/// `Array.prototype.findLast ( predicate [ , thisArg ] )`, §23.1.3.11†, and
+/// `findLastIndex`, §23.1.3.12†: FindViaPredicate (§23.1.3.9.1†) with
+/// direction descending (step 3: "let indices be a List of the integers in
+/// the interval from 0 to len, exclusive, in descending order"), the rest as
+/// [`find_via_predicate`].
+fn find_last_via_predicate(
+    vm: &mut Vm,
+    this: Value,
+    args: &[Value],
+) -> Result<(f64, Value), Abrupt> {
+    let o = vm.to_object(this)?;
+    let len = length_of(vm, o)?;
+    let f = callable(vm, arg(args, 0))?;
+    let mut k = len - 1.0;
+    while k >= 0.0 {
+        vm.charge_step()?;
+        let v = get_at(vm, o, k)?;
+        let r = call3(vm, f, arg(args, 1), v, k, o)?;
+        if vm.to_boolean(r) {
+            return Ok((k, v));
+        }
+        k -= 1.0;
+    }
+    Ok((-1.0, Value::UNDEFINED))
+}
+
+fn find_last(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
+    Ok(find_last_via_predicate(vm, this, args)?.1)
+}
+
+fn find_last_index(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
+    Ok(number(find_last_via_predicate(vm, this, args)?.0))
+}
+
+/// `Array.prototype.toReversed ( )`, §23.1.3.33†:
+/// 1. Let O be ? ToObject(this value).
+/// 2. Let len be ? LengthOfArrayLike(O).
+/// 3. Let A be ? ArrayCreate(len).
+/// 4. Let k be 0.
+/// 5. Repeat, while k < len,
+///    a. Let from be ! ToString(𝔽(len - k - 1)).
+///    b. Let Pk be ! ToString(𝔽(k)).
+///    c. Let fromValue be ? Get(O, from).
+///    d. Perform ! CreateDataPropertyOrThrow(A, Pk, fromValue).
+///    e. Set k to k + 1.
+/// 6. Return A.
+fn to_reversed(vm: &mut Vm, this: Value, _args: &[Value]) -> Result<Value, Abrupt> {
+    let o = vm.to_object(this)?;
+    let len = length_of(vm, o)?;
+    let a = vm.array_create(len, None)?;
+    let mut k = 0.0;
+    while k < len {
+        vm.charge_step()?;
+        let v = get_at(vm, o, len - k - 1.0)?;
+        create_at(vm, a, k, v)?;
+        k += 1.0;
+    }
+    Ok(a)
+}
+
+/// `Array.prototype.toSorted ( comparator )`, §23.1.3.34†:
+/// 1. If comparator is not undefined and IsCallable(comparator) is false,
+///    throw a TypeError exception.
+/// 2. Let O be ? ToObject(this value).
+/// 3. Let len be ? LengthOfArrayLike(O).
+/// 4. Let A be ? ArrayCreate(len).
+/// 5. Let SortCompare be a new Abstract Closure ... that performs
+///    SortCompare(x, y) with comparator.
+/// 6. Let sortedList be ? SortIndexedProperties(O, len, SortCompare,
+///    read-through-holes).
+/// 7. Let j be 0.
+/// 8. Repeat, while j < len,
+///    a. Perform ! CreateDataPropertyOrThrow(A, ! ToString(𝔽(j)),
+///    sortedList[j]).
+///    b. Set j to j + 1.
+/// 9. Return A.
+fn to_sorted(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
+    let cmp = arg(args, 0);
+    if cmp != Value::UNDEFINED && !vm.heap().is_callable(cmp) {
+        return Err(vm.type_error("The comparison function must be either a function or undefined"));
+    }
+    let o = vm.to_object(this)?;
+    let len = length_of(vm, o)?;
+    let a = vm.array_create(len, None)?;
+    // SortIndexedProperties with read-through-holes: every index is read.
+    let mut items = Vec::new();
+    let mut k = 0.0;
+    while k < len {
+        vm.charge_step()?;
+        items.push(get_at(vm, o, k)?);
+        k += 1.0;
+    }
+    let sorted = merge_sort(vm, cmp, items)?;
+    let mut j = 0.0;
+    for v in sorted {
+        create_at(vm, a, j, v)?;
+        j += 1.0;
+    }
+    Ok(a)
+}
+
+/// `Array.prototype.toSpliced ( start, skipCount, ...items )`, §23.1.3.35†:
+/// 1. Let O be ? ToObject(this value).
+/// 2. Let len be ? LengthOfArrayLike(O).
+/// 3. to 6. Let actualStart be the relative index of start.
+/// 7. Let insertCount be the number of elements in items.
+/// 8. If start is not present, then a. Let actualSkipCount be 0.
+/// 9. Else if skipCount is not present, then a. Let actualSkipCount be len -
+///    actualStart.
+/// 10. Else, a. Let sc be ? ToIntegerOrInfinity(skipCount). b. Let
+///     actualSkipCount be the result of clamping sc between 0 and len -
+///     actualStart.
+/// 11. Let newLen be len + insertCount - actualSkipCount.
+/// 12. If newLen > 2^53 - 1, throw a TypeError exception.
+/// 13. Let A be ? ArrayCreate(newLen).
+/// 14. Let i be 0.
+/// 15. Let r be actualStart + actualSkipCount.
+/// 16. Repeat, while i < actualStart, a. Let Pi be ! ToString(𝔽(i)). b. Let
+///     iValue be ? Get(O, Pi). c. Perform ! CreateDataPropertyOrThrow(A, Pi,
+///     iValue). d. Set i to i + 1.
+/// 17. For each element E of items, do a. Let Pi be ! ToString(𝔽(i)).
+///     b. Perform ! CreateDataPropertyOrThrow(A, Pi, E). c. Set i to i + 1.
+/// 18. Repeat, while i < newLen, a. Let Pi be ! ToString(𝔽(i)). b. Let from
+///     be ! ToString(𝔽(r)). c. Let fromValue be ? Get(O, from). d. Perform !
+///     CreateDataPropertyOrThrow(A, Pi, fromValue). e. Set i to i + 1. f. Set
+///     r to r + 1.
+/// 19. Return A.
+fn to_spliced(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
+    let o = vm.to_object(this)?;
+    let len = length_of(vm, o)?;
+    let actual_start = relative(vm, arg(args, 0), len)?;
+    let items = args.get(2..).unwrap_or(&[]);
+    let insert_count = items.len() as f64;
+    let actual_skip = match args.len() {
+        0 => 0.0,
+        1 => len - actual_start,
+        _ => to_integer_or_infinity(vm, arg(args, 1))?.clamp(0.0, len - actual_start),
+    };
+    let new_len = len + insert_count - actual_skip;
+    if new_len > MAX_SAFE {
+        return Err(vm.type_error("Invalid array length"));
+    }
+    let a = vm.array_create(new_len, None)?;
+    let mut i = 0.0;
+    let mut r = actual_start + actual_skip;
+    while i < actual_start {
+        vm.charge_step()?;
+        let v = get_at(vm, o, i)?;
+        create_at(vm, a, i, v)?;
+        i += 1.0;
+    }
+    for e in items {
+        create_at(vm, a, i, *e)?;
+        i += 1.0;
+    }
+    while i < new_len {
+        vm.charge_step()?;
+        let v = get_at(vm, o, r)?;
+        create_at(vm, a, i, v)?;
+        i += 1.0;
+        r += 1.0;
+    }
+    Ok(a)
+}
+
+/// `Array.prototype.with ( index, value )`, §23.1.3.39†:
+/// 1. Let O be ? ToObject(this value).
+/// 2. Let len be ? LengthOfArrayLike(O).
+/// 3. Let relativeIndex be ? ToIntegerOrInfinity(index).
+/// 4. If relativeIndex ≥ 0, let actualIndex be relativeIndex.
+/// 5. Else, let actualIndex be len + relativeIndex.
+/// 6. If actualIndex ≥ len or actualIndex < 0, throw a RangeError exception.
+/// 7. Let A be ? ArrayCreate(len).
+/// 8. Let k be 0.
+/// 9. Repeat, while k < len,
+///    a. Let Pk be ! ToString(𝔽(k)).
+///    b. If k = actualIndex, let fromValue be value.
+///    c. Else, let fromValue be ? Get(O, Pk).
+///    d. Perform ! CreateDataPropertyOrThrow(A, Pk, fromValue).
+///    e. Set k to k + 1.
+/// 10. Return A.
+fn with(vm: &mut Vm, this: Value, args: &[Value]) -> Result<Value, Abrupt> {
+    let o = vm.to_object(this)?;
+    let len = length_of(vm, o)?;
+    let rel = to_integer_or_infinity(vm, arg(args, 0))?;
+    let actual = if rel >= 0.0 { rel } else { len + rel };
+    if actual >= len || actual < 0.0 {
+        return Err(vm.range_error("Invalid index"));
+    }
+    let a = vm.array_create(len, None)?;
+    let mut k = 0.0;
+    while k < len {
+        vm.charge_step()?;
+        let v = if k == actual {
+            arg(args, 1)
+        } else {
+            get_at(vm, o, k)?
+        };
+        create_at(vm, a, k, v)?;
+        k += 1.0;
+    }
+    Ok(a)
+}
+
+/// `Array.prototype.toLocaleString ( [ reserved1 [ , reserved2 ] ] )`,
+/// §23.1.3.32† (without ECMA-402, so the separator is ","):
+/// 1. Let array be ? ToObject(this value).
+/// 2. Let len be ? LengthOfArrayLike(array).
+/// 3. Let separator be the implementation-defined list-separator String
+///    appropriate for the host environment's current locale (",").
+/// 4. Let R be the empty String.
+/// 5. Let k be 0.
+/// 6. Repeat, while k < len,
+///    a. If k > 0, set R to the string-concatenation of R and separator.
+///    b. Let element be ? Get(array, ! ToString(𝔽(k))).
+///    c. If element is neither undefined nor null, then
+///    i. Let S be ? ToString(? Invoke(element, "toLocaleString")).
+///    ii. Set R to the string-concatenation of R and S.
+///    d. Set k to k + 1.
+/// 7. Return R.
+fn to_locale_string(vm: &mut Vm, this: Value, _args: &[Value]) -> Result<Value, Abrupt> {
+    let array = vm.to_object(this)?;
+    let len = length_of(vm, array)?;
+    let mut r: Vec<u16> = Vec::new();
+    let mut k = 0.0;
+    while k < len {
+        vm.charge_step()?;
+        if k > 0.0 {
+            r.push(u16::from(b','));
+        }
+        let element = get_at(vm, array, k)?;
+        if element != Value::UNDEFINED && element != Value::NULL {
+            // Invoke ( V, P, argumentsList ), §7.3.20†: GetV then Call.
+            let kt = crate::util::key(vm, "toLocaleString")?;
+            let f = vm.get_value(element, kt)?;
+            let s = vm.call(f, element, &[])?;
+            r.extend(vm.to_js_string(s)?.units());
+        }
+        k += 1.0;
+    }
+    let s = JsString::from_units(&r).map_err(|_| Abrupt::OutOfMemory)?;
+    js_string(vm, s)
+}
+
+/// `Array.prototype [ @@unscopables ]`, §23.1.3.41†: an object with a null
+/// prototype whose own properties `at`, `copyWithin`, `entries`, `fill`,
+/// `find`, `findIndex`, `findLast`, `findLastIndex`, `flat`, `flatMap`,
+/// `includes`, `keys`, `toReversed`, `toSorted`, `toSpliced` and `values`
+/// are true; { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]:
+/// true }.
+fn install_unscopables(vm: &mut Vm, proto: Value) -> Result<(), Abrupt> {
+    let list = vm.heap_mut().new_object(Value::NULL, ObjKind::Plain)?;
+    for name in [
+        "at",
+        "copyWithin",
+        "entries",
+        "fill",
+        "find",
+        "findIndex",
+        "findLast",
+        "findLastIndex",
+        "flat",
+        "flatMap",
+        "includes",
+        "keys",
+        "toReversed",
+        "toSorted",
+        "toSpliced",
+        "values",
+    ] {
+        vm.define_property(list, name, Value::TRUE)?;
+    }
+    let k = vm.well_known_key(wk::UNSCOPABLES)?;
+    Ok(vm
+        .heap_mut()
+        .define(proto, k, list, Attrs(Attrs::CONFIGURABLE))?)
 }

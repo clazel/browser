@@ -327,10 +327,13 @@ fn run_one(case: &Case, src: &[u32], goal: SourceGoal) -> Outcome {
             // `assert.throws` reports a missing global the same way, inside
             // its own error: "Expected a different error, got ReferenceError:
             // eval is not defined" (the compiler's third slice, #230, compiles
-            // the RegExp literal tests that reach `eval` this way).
+            // the RegExp literal tests that reach `eval` this way); so do the
+            // tests that catch the error and throw their own Test262Error
+            // with it in the message ("... Actual: ReferenceError: eval is not
+            // defined", reached since `instanceof` runs).
             if name.as_deref() == Some("Test262Error")
                 && let Some(m) = &msg
-                && let Some((_, got)) = m.split_once("got ReferenceError: ")
+                && let Some((_, got)) = m.rsplit_once("ReferenceError: ")
                 && let Some(var) = got.strip_suffix(" is not defined")
             {
                 return Outcome::Xfail(format!("global {var} is missing (a built-in, 7.9)"));
@@ -394,7 +397,7 @@ const KNOWN_GAPS: &[(&str, &str)] = &[
     ),
     (
         "language/directive-prologue/10.1.1-11-s.js",
-        "calls eval, which is not there yet (a built-in, 7.9); the test catches the ReferenceError and asserts it is a SyntaxError (reached since `instanceof` runs, item 7.12)",
+        "calls eval, which is not there yet (a built-in, 7.9); the test catches the ReferenceError and asserts `err instanceof SyntaxError`, so the runner cannot class it by name (reached since `instanceof` runs)",
     ),
     (
         "language/comments/S7.4_A5.js",
@@ -436,9 +439,26 @@ fn test262_through_the_interpreter() -> Result<(), String> {
     let (mut pass, mut xfail, mut fail) = (0usize, 0usize, 0usize);
     let mut categories: BTreeMap<String, usize> = BTreeMap::new();
     let mut failures: Vec<String> = Vec::new();
+    // Pass, expected failure and failure per directory (two path components,
+    // and `language/literals/regexp`, which RegExp (7.10) unlocked).
+    let mut dirs: BTreeMap<String, [usize; 3]> = BTreeMap::new();
+    let mut tally = |path: &str, which: usize| {
+        let parts: Vec<&str> = path.split('/').collect();
+        let mut keys = vec![parts.iter().take(2).copied().collect::<Vec<_>>().join("/")];
+        if path.starts_with("language/literals/regexp/") {
+            keys.push("language/literals/regexp".to_string());
+        }
+        for k in keys {
+            let e = dirs.entry(k).or_insert([0; 3]);
+            if let Some(n) = e.get_mut(which) {
+                *n = n.saturating_add(1);
+            }
+        }
+    };
     for case in TEST262 {
         if let Some(reason) = not_run(case) {
             xfail = xfail.saturating_add(1);
+            tally(case.path, 1);
             bump(&mut categories, reason);
             continue;
         }
@@ -463,13 +483,18 @@ fn test262_through_the_interpreter() -> Result<(), String> {
             };
         }
         match worst {
-            Outcome::Pass => pass = pass.saturating_add(1),
+            Outcome::Pass => {
+                pass = pass.saturating_add(1);
+                tally(case.path, 0);
+            }
             Outcome::Xfail(reason) => {
                 xfail = xfail.saturating_add(1);
+                tally(case.path, 1);
                 bump(&mut categories, reason);
             }
             Outcome::Fail(m) => {
                 fail = fail.saturating_add(1);
+                tally(case.path, 2);
                 failures.push(format!("{} {:?}: {m}", case.path, case.features));
             }
         }
@@ -478,6 +503,9 @@ fn test262_through_the_interpreter() -> Result<(), String> {
     println!(
         "clazel-conformance: suite=\"Test262 through the interpreter with the first built-ins\" pass={pass} xfail={xfail} fail={fail} total={total}"
     );
+    for (dir, [p, x, f]) in &dirs {
+        println!("  directory {dir}: pass={p} xfail={x} fail={f}");
+    }
     // Group the categories by their stem, so the print stays readable.
     let mut stems: BTreeMap<String, usize> = BTreeMap::new();
     for (reason, n) in &categories {

@@ -15,8 +15,9 @@
 //! - `CreateDataProperty` (§7.3.5†), `DefinePropertyOrThrow` (§7.3.8†),
 //!   `[[Delete]]` (§10.1.10.1†) and `DeletePropertyOrThrow` (§7.3.10†).
 //!
-//! Objects are always extensible in this slice (no `Object.preventExtensions`
-//! yet). Accessor properties are kept as `crate::heap` describes (an
+//! An object is extensible until [`Vm::prevent_extensions`] (§10.1.4†): then
+//! no property is added to it (ValidateAndApplyPropertyDescriptor step 2.a,
+//! OrdinarySet step 2.d, CreateDataProperty). Accessor properties are kept as `crate::heap` describes (an
 //! [`ACCESSOR`] bit and a pair cell in the slot).
 
 use crate::heap::{ACCESSOR, length_value};
@@ -169,6 +170,10 @@ impl Vm {
                     bits |= bit;
                 }
             }
+            // Step 2.a: "If extensible is false, return false."
+            if !self.heap.is_extensible(obj) {
+                return Ok(false);
+            }
             let v = desc.value.unwrap_or(Value::UNDEFINED);
             self.heap.define(obj, key, v, Attrs(bits))?;
             return Ok(true);
@@ -271,6 +276,10 @@ impl Vm {
             b
         };
         let Some(current) = self.own_property_descriptor(obj, key)? else {
+            // Step 2.a: "If extensible is false, return false."
+            if !self.heap.is_extensible(obj) {
+                return Ok(false);
+            }
             // Step 2.c (Desc is an accessor descriptor here).
             let pair = self.heap.new_accessor(
                 desc.get.unwrap_or(Value::UNDEFINED),
@@ -337,6 +346,61 @@ impl Vm {
             self.heap.redefine(obj, key, value, Attrs(b))?;
         }
         Ok(true)
+    }
+
+    /// `[[PreventExtensions]] ( )` of an ordinary object, OrdinaryPreventExtensions
+    /// (§10.1.4.1†): 1. Set O.[[Extensible]] to false. 2. Return true.
+    ///
+    /// # Errors
+    /// [`Abrupt::Internal`] if `obj` is not an object.
+    pub fn prevent_extensions(&mut self, obj: Value) -> Result<bool, Abrupt> {
+        self.heap
+            .obj_mut(obj)
+            .ok_or(Abrupt::Internal("preventExtensions of a non-object"))?
+            .extensible = false;
+        Ok(true)
+    }
+
+    /// `[[SetPrototypeOf]] ( V )`, OrdinarySetPrototypeOf (§10.1.2.1†):
+    /// 1. Let current be O.[[Prototype]]. 2. If SameValue(V, current) is true,
+    ///    return true. 3. Let extensible be O.[[Extensible]]. 4. If extensible
+    ///    is false, return false. 5. Let p be V. 6. Let done be false. 7. Repeat,
+    ///    while done is false, a. If p is null, set done to true. b. Else if
+    ///    SameValue(p, O) is true, return false. c. Else, (a Proxy ends the
+    ///    walk: there is none yet) set p to p.[[Prototype]]. 8. Set
+    ///    O.[[Prototype]] to V. 9. Return true.
+    ///
+    /// # Errors
+    /// [`Abrupt::Internal`] if `obj` is not an object.
+    pub fn set_prototype_of(&mut self, obj: Value, proto: Value) -> Result<bool, Abrupt> {
+        let current = self
+            .heap
+            .proto_of(obj)
+            .ok_or(Abrupt::Internal("setPrototypeOf of a non-object"))?;
+        if current == proto {
+            return Ok(true);
+        }
+        // %Object.prototype% is an immutable prototype exotic object
+        // (§10.4.7.1† SetImmutablePrototype): 3. If SameValue(V, current)
+        // is true, return true. 4. Return false.
+        if obj == self.intrinsic(Intrinsic::ObjectPrototype) {
+            return Ok(false);
+        }
+        if !self.heap.is_extensible(obj) {
+            return Ok(false);
+        }
+        let mut p = proto;
+        for _ in 0..crate::heap::MAX_PROTO_DEPTH {
+            if !self.heap.is_object(p) {
+                self.heap.set_proto(obj, proto)?;
+                return Ok(true);
+            }
+            if p == obj {
+                return Ok(false);
+            }
+            p = self.heap.proto_of(p).unwrap_or(Value::NULL);
+        }
+        Err(Abrupt::Internal("prototype chain too long"))
     }
 
     /// `[[DefineOwnProperty]]` (P, Desc) of an object: for an Array exotic
@@ -650,6 +714,59 @@ impl Vm {
             return Ok(true);
         }
         Ok(false)
+    }
+
+    /// CopyDataProperties ( target, source, excludedItems ), §7.3.25†:
+    /// 1. If source is either undefined or null, return unused.
+    /// 2. Let from be ! ToObject(source).
+    /// 3. Let keys be ? from.[[OwnPropertyKeys]]().
+    /// 4. For each element nextKey of keys, do a. Let excluded be false. b. For
+    ///    each element e of excludedItems, do i. If SameValue(e, nextKey) is
+    ///    true, then 1. Set excluded to true. c. If excluded is false, then i.
+    ///    Let desc be ? from.[[GetOwnProperty]](nextKey). ii. If desc is not
+    ///    undefined and desc.[[Enumerable]] is true, then 1. Let propValue be ?
+    ///    Get(from, nextKey). 2. Perform ! CreateDataPropertyOrThrow(target,
+    ///    nextKey, propValue).
+    /// 5. Return unused.
+    ///
+    /// # Errors
+    /// What a getter throws, a `TypeError` if `target` refuses a property.
+    pub fn copy_data_properties(
+        &mut self,
+        target: Value,
+        source: Value,
+        excluded: &[Key],
+    ) -> Result<(), Abrupt> {
+        if source == Value::UNDEFINED || source == Value::NULL {
+            return Ok(());
+        }
+        let from = self.to_object(source)?;
+        let mut keys: Vec<Key> = self
+            .heap
+            .own_properties(from)
+            .into_iter()
+            .map(|(k, _, _)| k)
+            .collect();
+        keys.extend(
+            self.heap
+                .own_symbol_properties(from)
+                .into_iter()
+                .map(|(k, _, _)| k),
+        );
+        for k in keys {
+            self.charge_step()?;
+            if excluded.contains(&k) {
+                continue;
+            }
+            let enumerable = self
+                .get_own_property(from, k)?
+                .is_some_and(|(a, _)| a.0 & Attrs::ENUMERABLE != 0);
+            if enumerable {
+                let v = self.get_value(from, k)?;
+                self.create_data_property_or_throw(target, k, v)?;
+            }
+        }
+        Ok(())
     }
 
     /// DeletePropertyOrThrow ( O, P ), §7.3.10†:

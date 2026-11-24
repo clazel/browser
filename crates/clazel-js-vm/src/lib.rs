@@ -31,7 +31,11 @@
 //! - [`interp`]: [`interp::Vm`], the loop, calls, unwinding, the termination
 //!   check and the tiering counters;
 //! - [`handlers`]: the handlers (conversions, operators, properties, globals,
-//!   closures), plain methods over the region and the heap.
+//!   closures), plain methods over the region and the heap;
+//! - [`host`]: objects with internal slots, natives with captured values and
+//!   the job queue, for the built-ins that need them (`Promise`, `RegExp`);
+//! - [`iter`]: Symbols, the iterator protocol behind the iteration ops,
+//!   `for`-`in` and the spread calls.
 //!
 //! The crate depends on no browser crate, as phase-7.md's "The engine as a
 //! library" requires: `clazel-js-lexer` and `clazel-js-syntax`, and the
@@ -41,12 +45,16 @@
 //! `docs/VERIFICATION.md`.
 
 pub mod bytecode;
+pub(crate) mod class;
+pub mod collections;
 pub mod compile;
 pub mod examples;
 pub mod frame;
 pub mod handlers;
 pub mod heap;
+pub mod host;
 pub mod interp;
+pub mod iter;
 pub mod lemmas;
 pub mod literal;
 pub mod module;

@@ -201,3 +201,46 @@ fn error_messages_name_the_limit() {
     assert!(MatchError::StepLimit.to_string().contains("step"));
     assert!(MatchError::Interrupted.to_string().contains("interrupted"));
 }
+
+/// phase-7.md 7.19's hostile page: `(a+)+b` on a long input with no `b`, and
+/// no step budget, as an embedder that relies on its `Terminator` would run
+/// it. Exponentially many ways to split the run keep the stack shallow, so
+/// the bound alone would not end it; another thread sets a flag the
+/// interrupt hook reads (as `clazel-js`'s `Terminator` is read), and the
+/// match ends with `Interrupted` (or `StackOverflow`, if the first descent
+/// fills the stack first). Either way it ends, and in an error value.
+#[test]
+fn a_catastrophic_pattern_on_a_long_input_is_interrupted() -> Result<(), String> {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    let input = units(&"a".repeat(scale(100_000, 200)));
+    let prog = build("(a+)+b", "")?;
+    let stop = Arc::new(AtomicBool::new(false));
+    let watchdog = {
+        let stop = stop.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(if cfg!(miri) {
+                1
+            } else {
+                50
+            }));
+            stop.store(true, Ordering::Relaxed);
+        })
+    };
+    let mut hook = || stop.load(Ordering::Relaxed);
+    let limits = Limits {
+        max_stack: scale(1 << 20, 1 << 10),
+        max_steps: None,
+    };
+    let r = prog.exec(&input, 0, false, &limits, Some(&mut hook));
+    let _ = watchdog.join();
+    assert!(
+        matches!(
+            r,
+            Err(MatchError::Interrupted) | Err(MatchError::StackOverflow)
+        ),
+        "{r:?}"
+    );
+    Ok(())
+}

@@ -179,10 +179,6 @@ const KNOWN: &[(&str, &str)] = &[
         "needs `class ... extends` (the engine does not run it)",
     ),
     (
-        "EventTarget-constructible.any.js",
-        "needs `class ... extends` (the engine does not run it)",
-    ),
-    (
         "EventListener-handleEvent.html",
         "needs `promise_test`, which needs `Promise` (the engine's); its 3 synchronous subtests pass",
     ),
@@ -217,10 +213,6 @@ const KNOWN: &[(&str, &str)] = &[
     (
         "label-default-action.html",
         "needs HTMLInputElement's `type` and `checked` (item 7.13)",
-    ),
-    (
-        "passive-by-default.html",
-        "needs `for...of` (the engine does not run it)",
     ),
     (
         "Body-FrameSet-Event-Handlers.html",

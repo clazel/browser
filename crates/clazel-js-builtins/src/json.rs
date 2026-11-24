@@ -13,9 +13,13 @@
 //!   `JSON.stringify` stops at 128 levels with a `RangeError`, where the
 //!   standard has no bound (it recurses on the host stack, which must not
 //!   overflow; an unoptimised frame is several KB, and tests run on 2 MB).
-//! - No `BigInt` (`toJSON` is looked up on Objects only) and no Symbols (a
-//!   Symbol is never a value here), so those steps of the algorithms do not
-//!   exist yet.
+//!   The embedder's nesting limit (`Vm::nesting_depth_limit`, phase-7.md
+//!   7.19) lowers both: a parsed text deeper than it is the same
+//!   `SyntaxError`, and `JSON.stringify` stops at the smaller of the two.
+//! - No `BigInt` (`toJSON` is looked up on Objects only), so those steps of
+//!   the algorithms do not exist yet. A Symbol value serializes as
+//!   `undefined` (SerializeJSONProperty, §25.5.2.2† step 11) and Symbol keys
+//!   are never listed (EnumerableOwnProperties lists String keys only).
 //! - The reviver's third argument (the source text context of the JSON
 //!   parse-with-source proposal) is not passed.
 
@@ -38,7 +42,8 @@ pub fn install(vm: &mut Vm) -> Result<(), Abrupt> {
     let json = vm.new_object()?;
     method(vm, json, "parse", 2, parse)?;
     method(vm, json, "stringify", 3, stringify)?;
-    // §25.5.3†: `JSON[@@toStringTag]` is "JSON" (no Symbols yet, so absent).
+    // §25.5.3† `JSON [ @@toStringTag ]`: "JSON".
+    crate::symbol::to_string_tag(vm, json, "JSON")?;
     crate::util::global(vm, "JSON", json)
 }
 
@@ -84,6 +89,13 @@ fn parse(vm: &mut Vm, _this: Value, args: &[Value]) -> Result<Value, Abrupt> {
     let Some(tree) = clazel_json::parse::parse(&cps) else {
         return Err(vm.syntax_error("Unexpected token in JSON, or nesting too deep"));
     };
+    // The embedder's nesting limit (phase-7.md 7.19), below `clazel-json`'s
+    // own fixed bound: past it, the same SyntaxError as past that bound
+    // (phase-7.md 7.11's listed deviation).
+    let limit = usize::try_from(vm.nesting_depth_limit()).unwrap_or(usize::MAX);
+    if tree_depth(&tree) > limit {
+        return Err(vm.syntax_error("JSON.parse: nesting too deep"));
+    }
     let unfiltered = build(vm, &tree)?;
     let reviver = arg(args, 1);
     if vm.heap().is_callable(reviver) {
@@ -93,6 +105,29 @@ fn parse(vm: &mut Vm, _this: Value, args: &[Value]) -> Result<Value, Abrupt> {
         return internalize(vm, root, name, reviver);
     }
     Ok(unfiltered)
+}
+
+/// How many arrays and objects deep a parsed text nests (a scalar is 0), with
+/// an explicit stack rather than recursion.
+fn tree_depth(root: &Json) -> usize {
+    let mut deepest = 0usize;
+    let mut stack: Vec<(&Json, usize)> = vec![(root, 0)];
+    while let Some((j, above)) = stack.pop() {
+        match j {
+            Json::Array(items) => {
+                let here = above.saturating_add(1);
+                deepest = deepest.max(here);
+                stack.extend(items.iter().map(|item| (item, here)));
+            }
+            Json::Object(members) => {
+                let here = above.saturating_add(1);
+                deepest = deepest.max(here);
+                stack.extend(members.iter().map(|m| (&m.value, here)));
+            }
+            Json::Null | Json::Bool(_) | Json::Number(_) | Json::String(_) => {}
+        }
+    }
+    deepest
 }
 
 /// StringToCodePoints (§6.1.4†): surrogate pairs join; a lone surrogate is
@@ -232,10 +267,13 @@ struct State {
     stack: Vec<Value>,
 }
 
-/// The primitive inside a Boolean, Number or String wrapper object.
+/// The primitive inside a Boolean, Number or String wrapper object (a
+/// Symbol object is not one: SerializeJSONProperty, §25.5.2.2† step 4,
+/// unwraps only [[NumberData]], [[StringData]], [[BooleanData]] and
+/// [[BigIntData]], so it serializes as an object).
 fn wrapped(vm: &Vm, v: Value) -> Option<Value> {
     match vm.heap().obj(v).map(|o| o.kind) {
-        Some(ObjKind::Primitive(p)) => Some(p),
+        Some(ObjKind::Primitive(p)) if !vm.heap().is_symbol(p) => Some(p),
         _ => None,
     }
 }
@@ -431,12 +469,16 @@ fn serialize_property(
 }
 
 /// Pushes `value` on the stack, TypeError for a cycle (§25.5.2.4† step 1,
-/// §25.5.2.5† step 1), RangeError past [`MAX_DEPTH`] (listed deviation).
+/// §25.5.2.5† step 1), RangeError past [`MAX_DEPTH`] or the embedder's
+/// nesting limit, whichever is smaller (listed deviation; phase-7.md 7.19).
 fn enter(vm: &mut Vm, state: &mut State, value: Value) -> Result<(), Abrupt> {
     if state.stack.contains(&value) {
         return Err(vm.type_error("Converting circular structure to JSON"));
     }
-    if state.stack.len() >= MAX_DEPTH {
+    let limit = usize::try_from(vm.nesting_depth_limit())
+        .unwrap_or(usize::MAX)
+        .min(MAX_DEPTH);
+    if state.stack.len() >= limit {
         return Err(vm.range_error("JSON.stringify: nesting too deep"));
     }
     state.stack.push(value);

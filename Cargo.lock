@@ -475,6 +475,7 @@ version = "0.0.0"
 dependencies = [
  "clazel-js-heap",
  "clazel-js-number",
+ "clazel-js-regexp",
  "clazel-js-syntax",
  "clazel-js-vm",
  "clazel-json",
