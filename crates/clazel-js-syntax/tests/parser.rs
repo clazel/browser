@@ -109,3 +109,45 @@ fn depth_limit() {
     let ok_deep = format!("{}1{}", "(".repeat(500), ")".repeat(500));
     assert!(script(&ok_deep).is_ok());
 }
+
+/// Eval code (PerformEval §19.2.1.1 steps 11.e to 11.h and 12): what its
+/// caller allows.
+#[test]
+fn eval_code_and_its_caller() {
+    use clazel_js_syntax::early::private_name_at;
+    use clazel_js_syntax::exec::{EvalContext, parse_eval};
+    let none = EvalContext::default();
+    let all = EvalContext {
+        in_function: true,
+        in_method: true,
+        in_derived_constructor: true,
+        ..EvalContext::default()
+    };
+    for s in ["new.target", "super.x", "super()"] {
+        assert!(parse_eval(&cps(s), &none).is_err(), "{s} needs a caller");
+        assert!(parse_eval(&cps(s), &all).is_ok(), "{s} with its caller");
+    }
+    // Not `arguments` in a class field initializer, even in an arrow.
+    let field = EvalContext {
+        in_class_field_initializer: true,
+        ..all.clone()
+    };
+    assert!(parse_eval(&cps("() => arguments"), &field).is_err());
+    assert!(parse_eval(&cps("function f() { arguments }"), &field).is_ok());
+    // A strict caller makes the code strict.
+    let strict = EvalContext {
+        strict: true,
+        ..EvalContext::default()
+    };
+    assert!(parse_eval(&cps("var eval;"), &none).is_ok());
+    assert!(parse_eval(&cps("var eval;"), &strict).is_err());
+    // A private name of a class around the call.
+    let src = cps("class C { #p; m() { this.#p } }");
+    let at = src.iter().position(|&c| c == u32::from(b'#')).unwrap_or(0);
+    let named = EvalContext {
+        private_names: vec![private_name_at(&src, at)],
+        ..EvalContext::default()
+    };
+    assert!(parse_eval(&cps("o.#p"), &none).is_err());
+    assert!(parse_eval(&cps("o.#p"), &named).is_ok());
+}

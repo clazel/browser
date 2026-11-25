@@ -72,14 +72,47 @@ struct Chk<'a> {
 
 /// Rejects `ast` if it has an early error (the rules of `spec::early_local`).
 pub fn check(src: &[u32], ast: &Ast, module: bool) -> Result<(), ParseError> {
+    check_in(src, ast, module, &EvalContext::default())
+}
+
+/// What the caller of a direct `eval` allows its code (PerformEval, ECMA-262
+/// §19.2.1.1 steps 6 to 10, and the private names of the classes around the
+/// call, §19.2.1.3 steps 4 to 7). [`Default`] is an indirect eval's, and a
+/// script's: nothing beyond what a `Script` allows.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct EvalContext {
+    /// strictCaller: the caller is strict mode code, so the eval code is too
+    /// (step 12).
+    pub strict: bool,
+    /// inFunction: `new.target` is allowed (step 11.e).
+    pub in_function: bool,
+    /// inMethod: `super.x` is allowed (step 11.f).
+    pub in_method: bool,
+    /// inDerivedConstructor: `super()` is allowed (step 11.g).
+    pub in_derived_constructor: bool,
+    /// inClassFieldInitializer: `arguments` is not allowed (step 11.h).
+    pub in_class_field_initializer: bool,
+    /// The private names of the classes around the call, each as
+    /// [`private_name_at`] reads it: the privateIdentifiers of
+    /// EvalDeclarationInstantiation step 6, which AllPrivateIdentifiersValid
+    /// (step 7) checks the code's against.
+    pub private_names: Vec<Vec<u32>>,
+}
+
+/// As [`check`], for a `Script` that is eval code (PerformEval step 11): the
+/// early errors of a script, with the ones steps 11.e to 11.h and 12 add or
+/// lift for the caller `cx`, and the private names of the classes around the
+/// call declared (EvalDeclarationInstantiation step 7). `EvalContext::default()`
+/// is [`check`] itself.
+pub fn check_in(src: &[u32], ast: &Ast, module: bool, cx: &EvalContext) -> Result<(), ParseError> {
     let mut c = Chk {
         src,
         nodes: &ast.nodes,
         labels: Vec::new(),
-        privates: Vec::new(),
+        privates: cx.private_names.clone(),
     };
     let root = ast.root as usize;
-    let strict = module || c.has_use_strict(c.ch(root));
+    let strict = module || cx.strict || c.has_use_strict(c.ch(root));
     let env = Env {
         strict,
         module,
@@ -87,10 +120,10 @@ pub fn check(src: &[u32], ast: &Ast, module: bool) -> Result<(), ParseError> {
         await_: module,
         in_loop: false,
         in_breakable: false,
-        super_prop: false,
-        super_call: false,
-        new_target: false,
-        no_arguments: false,
+        super_prop: cx.in_method,
+        super_call: cx.in_derived_constructor,
+        new_target: cx.in_function,
+        no_arguments: cx.in_class_field_initializer,
         no_yield_await: false,
         derived: false,
     };
@@ -99,6 +132,15 @@ pub fn check(src: &[u32], ast: &Ast, module: bool) -> Result<(), ParseError> {
     } else {
         Err(ParseError::Syntax)
     }
+}
+
+/// The name of the private identifier whose token starts at `start` of `src`
+/// (the `#` included or not as the lexer gives it), as
+/// [`EvalContext::private_names`] holds it.
+pub fn private_name_at(src: &[u32], start: usize) -> Vec<u32> {
+    lex(src, start, Goal::InputElementDiv, true)
+        .map(|t| t.name)
+        .unwrap_or_default()
 }
 
 fn is_assignment_pattern(k: K) -> bool {
