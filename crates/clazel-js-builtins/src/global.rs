@@ -1,11 +1,11 @@
 //! The function and value properties of the global object (§19†):
-//! `globalThis`, `isNaN`, `isFinite`, `parseInt`, `parseFloat`. (`undefined`,
-//! `NaN` and `Infinity` are made by the VM.)
+//! `globalThis`, `eval`, `isNaN`, `isFinite`, `parseInt`, `parseFloat`.
+//! (`undefined`, `NaN` and `Infinity` are made by the VM.)
 
 use crate::util::{METHOD, arg, define, method, number};
 use clazel_js_heap::value::Value;
 use clazel_js_number::parse::is_str_whitespace;
-use clazel_js_vm::interp::{Abrupt, Vm};
+use clazel_js_vm::interp::{Abrupt, Intrinsic, Vm};
 use clazel_js_vm::numeric::{narrow, to_int32};
 
 /// Installs the global functions.
@@ -16,11 +16,21 @@ pub fn install(vm: &mut Vm) -> Result<(), Abrupt> {
     let g = vm.global();
     // §19.1.1†: `globalThis` is writable, not enumerable, configurable.
     define(vm, g, "globalThis", g, METHOD)?;
+    let eval_fn = method(vm, g, "eval", 1, eval)?;
+    vm.set_intrinsic(Intrinsic::Eval, eval_fn);
     method(vm, g, "isFinite", 1, is_finite)?;
     method(vm, g, "isNaN", 1, is_nan)?;
     let parse_float_fn = method(vm, g, "parseFloat", 1, parse_float)?;
     let parse_int_fn = method(vm, g, "parseInt", 2, parse_int)?;
     crate::number::share_parse_functions(vm, parse_float_fn, parse_int_fn)
+}
+
+/// `eval ( x )`, §19.2.1: "Return ? PerformEval(x, false, false)", the
+/// indirect eval; PerformEval (§19.2.1.1) is the VM's
+/// ([`Vm::perform_eval`]). A direct eval does not call this function: the
+/// VM's `DirectEval` op compares its callee with `%eval%`.
+fn eval(vm: &mut Vm, _this: Value, args: &[Value]) -> Result<Value, Abrupt> {
+    vm.perform_eval(arg(args, 0))
 }
 
 /// `isNaN ( number )`, §19.2.3†:

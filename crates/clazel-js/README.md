@@ -70,7 +70,8 @@ return an error, so they record it and the next fallible call returns it.
   long-lived root, and `Member` is reported by its owner.
 - **The `Host` hooks.** None is called: they are what promises, modules,
   `Date`, `eval` of strings and `FinalizationRegistry` call, and the VM has
-  none of them. The engine's job queue works (`Scope::enqueue_job_internal`,
+  none of them (`eval` and the `Function` constructors run, and their
+  HostEnsureCanCompileStrings allows every string). The engine's job queue works (`Scope::enqueue_job_internal`,
   `run_job`, `run_jobs`) but nothing makes a job yet, so `run_jobs` returns 0.
 - **Exotic hooks of `HostObject`** are not called: a host object is an
   ordinary object with its data beside it.

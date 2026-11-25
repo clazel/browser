@@ -6,8 +6,8 @@
 //! - [`object`]: `Object` (§20.1†) with every function of §20.1.2† and
 //!   `Object.prototype` (§20.1.3†, with Annex B's `__proto__` and the legacy
 //!   accessor methods);
-//! - [`function`]: `Function` (§20.2†, whose constructor needs the compiler
-//!   and so throws `NotYet`) and `Function.prototype.call`, `apply`, `bind`,
+//! - [`function`]: `Function` (§20.2†, whose constructor is the VM's
+//!   CreateDynamicFunction) and `Function.prototype.call`, `apply`, `bind`,
 //!   `@@hasInstance`;
 //! - [`error`]: `Error` and the `TypeError`, `RangeError`, `SyntaxError` and
 //!   `ReferenceError` native errors (§20.5†), which the VM's own throws use;
@@ -41,8 +41,8 @@
 //! - [`date`]: `Date` (§21.4†) over the host's clock and time zone
 //!   (`Vm::world`), with the fixed offset and `en-US` fallbacks of 7.0(b);
 //! - [`reflect`]: `Reflect` (§28.1†);
-//! - [`global`]: `globalThis`, `isNaN`, `isFinite`, `parseInt`, `parseFloat`
-//!   (§19†).
+//! - [`global`]: `globalThis`, `eval` (`%eval%`, the VM's PerformEval),
+//!   `isNaN`, `isFinite`, `parseInt`, `parseFloat` (§19†).
 //!
 //! # What this slice does not have, all listed
 //!
@@ -56,7 +56,9 @@
 //!   are an open pull request), so a huge sparse index or a long `shift` is
 //!   slow, not wrong.
 //! - **`Function.prototype` is an ordinary object**, not a function (a
-//!   `typeof Function.prototype` of `"object"`).
+//!   `typeof Function.prototype` of `"object"`), without the `caller` and
+//!   `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†) and
+//!   without `toString` (§20.2.3.5).
 //! - **A `String` wrapper object has no index properties**, only `length`
 //!   (a String exotic object's `[[GetOwnProperty]]`, §10.4.3.1†, is a later
 //!   slice): `Object('ab')[0]` is `undefined`, and the generic `Array`
