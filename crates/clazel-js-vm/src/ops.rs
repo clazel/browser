@@ -279,8 +279,8 @@ pub enum HandlerId {
     /// `delete` of an identifier that resolves to the global environment, §13.5.1.2† and
     /// DeleteBinding §9.1.1.4.7†.
     DeleteGlobal,
-    /// A call of `eval` that may be a direct eval: EvaluateCall §13.3.6.2†, PerformEval §19.2.1.1†
-    /// and EvalDeclarationInstantiation §19.2.1.3†, through the host's compile path.
+    /// A call of `eval` that may be a direct eval: EvaluateCall §13.3.6.2, PerformEval §19.2.1.1
+    /// and EvalDeclarationInstantiation §19.2.1.3, through the host's compile path.
     DirectEval,
     /// GetBindingValue of a Module Environment Record's indirect binding, §9.1.1.5.1†.
     GetImportBinding,
@@ -1598,42 +1598,66 @@ pub enum Op {
     /// 1: the `with` object or undefined), `args` the arguments, and `env` the current environment
     /// object (the innermost scope of the code that has one, §9.1.1.1; see below).
     /// The handler does what step 6 says. "If SameValue(func, %eval%) is true" is false, this is an
-    /// ordinary call of `callee` (EvaluateCall steps 4 to 6). If it is true: "If argList has no
-    /// elements, return undefined" (step 6.d.i); evalArg is the first argument, strictCaller is
-    /// `consts[k].strict` ("Let strictCaller be IsStrict of this CallExpression", step 6.d.iii),
-    /// and the result is "? PerformEval(evalArg, strictCaller, true)" (step 6.d.vi), §19.2.1.1†: an
-    /// evalArg that is not a String is the result (step 2); otherwise it is parsed as an eval
-    /// script, with `inFunction`, `inMethod`, `inDerivedConstructor` and `inClassFieldInitializer`
-    /// taken from the record (steps 5 to 9, which make `new.target`, `super.x`, `super()` and
-    /// `arguments` early errors where the caller does not allow them), a SyntaxError of the parse
-    /// being thrown in the running realm (step 10).
+    /// ordinary call of `callee` (EvaluateCall steps 4 to 6), which the handler makes and waits
+    /// for. If it is true: "If argList has no elements, return undefined" (step 6.d.i); evalArg is
+    /// the first argument, strictCaller is `consts[k].strict` ("Let strictCaller be IsStrict of
+    /// this CallExpression", step 6.d.iii), and the result is "? PerformEval(evalArg,
+    /// strictCaller, true)" (step 6.d.vi). PerformEval, §19.2.1.1: an evalArg that is not a String
+    /// is the result (step 2); HostEnsureCanCompileStrings (step 5, §19.2.1.2) is the host's
+    /// default, which allows every string; otherwise it is parsed as a Script, with `inFunction`,
+    /// `inMethod`, `inDerivedConstructor` and `inClassFieldInitializer` taken from the record (steps
+    /// 6 to 10, which with step 11.e to 11.h make `new.target`, `super.x`, `super()` and
+    /// `arguments` early errors where the caller does not allow them), and a SyntaxError of the
+    /// parse is thrown in the running realm (step 11.b). The eval code is strict if strictCaller is
+    /// true or it starts with a Use Strict Directive (steps 12 and 13, strictEval).
     /// The host compile path. The handler hands the parsed eval script and the record `consts[k]`
-    /// to the compiler's entry for eval code, `compile::compile_eval(ast, source, &EvalScopeInfo)`
-    /// (not yet written: the interpreter, 7.8, is its first user), which returns a Program whose
-    /// main function runs as the eval code. The record, built by the compiler from what scope
-    /// analysis knows at the call, lists the scopes from the innermost out to the script, each with
-    /// its kind and, for each name it binds, the slot of the name in the scope's environment object
-    /// and what kind of binding it is. It lists only scopes that have an environment object,
-    /// because the compiler gave every binding of every enclosing scope an environment slot when
-    /// the function has a direct eval: an enclosing function's registers are gone otherwise. Names
-    /// of eval code that it does not declare itself resolve through that list, one `GetEnvParent`
-    /// per scope that precedes the one that binds them, as the compiler's own references do; names
-    /// that none binds are globals. The caller's `this`, `new.target` and function are bindings in
-    /// the list (of kinds This, NewTarget and Callee) that eval code reads for `this`, `new.target`
-    /// and `super`. The eval code is strict if strictCaller is true or it starts with a Use Strict
-    /// Directive (step 21: strictEval). A strict eval has its own variable scope (step 24: "If
-    /// strictEval is true, set varEnv to lexEnv"), so its `var`s and functions are not visible
-    /// outside; a sloppy eval's declarations are made by EvalDeclarationInstantiation (§19.2.1.3†):
-    /// in the script's global code they are properties of the global object
-    /// (CreateGlobalVarBinding(vn, true), configurable), and in a function they are properties of
-    /// the variable object of the nearest scope of kind EvalVars, an environment slot that the
-    /// function's entry filled with a null-prototype object (CreateMutableBinding(vn, true), so
-    /// deletable); every reference that the compiler could not resolve inside the function consults
-    /// that object with [`Op::WithHas`] first. The step-3 early errors (a `var` of eval code
-    /// colliding with a lexical binding of a scope between the call and the variable scope,
-    /// §19.2.1.3† step 3.d) are the handler's SyntaxError, from the same list. `let`, `const` and
-    /// `class` declarations of the eval code are in a new scope of its own (step 25). The result of
-    /// the op is the completion value of the eval code (step 30).
+    /// to the compiler's entry for eval code, `compile::compile_eval`, which returns a Program whose
+    /// main function runs as the eval code, and the eval code's var-scoped declarations. The
+    /// record, built by the compiler from what scope analysis knows at the call, lists the scopes
+    /// from the innermost out to the script, each with its kind and, for each name it binds, the
+    /// slot of the name in the scope's environment object and what kind of binding it is. It lists
+    /// only scopes that have an environment object, because the compiler gave every binding of
+    /// every enclosing scope an environment slot when the function has a direct eval: an enclosing
+    /// function's registers are gone otherwise. For a call in the parameter expressions of a
+    /// function that has them, the function's scope is listed as a parameter scope: its names (the
+    /// parameters and `arguments`) are the environment FunctionDeclarationInstantiation §10.2.11
+    /// step 20 makes for them, which lies between the call and varEnv (the function's own
+    /// environment, whose variable object the scope also holds). Names of eval code that it does
+    /// not declare itself resolve through that list, one `GetEnvParent` per scope that precedes the
+    /// one that binds them, as the compiler's own references do; names that none binds are globals. The caller's
+    /// `this`, `new.target` and function are bindings in the list (of kinds This, NewTarget and
+    /// Callee) that eval code reads for `this`, `new.target` and `super`; at the top level of a
+    /// script there is none, and `this` is the global object. A strict eval has its own variable
+    /// scope (step 18: "If strictEval is true, set varEnv to lexEnv"), so its `var`s and functions
+    /// are bindings of the eval code, not visible outside. A sloppy eval's var-scoped declarations
+    /// are made by EvalDeclarationInstantiation (§19.2.1.3) in varEnv, the caller's variable
+    /// environment (step 16.b): in the script's global code the global environment, and in a
+    /// function the variable object of the nearest scope of kind EvalVars (the first scope of the
+    /// record that has a variable object), an environment slot that the function's entry filled
+    /// with a null-prototype object; every reference that the compiler could not resolve inside
+    /// the function consults that object with [`Op::WithHas`] first. A declared name that the
+    /// variable scope binds itself (a parameter, a `var`, `arguments`) is that binding, and nothing
+    /// is created for it. Of EvalDeclarationInstantiation, the handler does steps 3, 10, 12, 13,
+    /// 17 and 18, in that order, before the eval code runs: the SyntaxError of step 3.a.i.1 (a
+    /// global lexical declaration of a var name, HasLexicalDeclaration §9.1.1.4.12) and of step
+    /// 3.d.i.2.a (a var name that a scope of the record between the call and varEnv binds, other
+    /// than a `with` statement's and, as the web-compatibility step allows, a `catch` clause's: the
+    /// compiler finds it from the record), the TypeErrors of CanDeclareGlobalFunction §9.1.1.4.15
+    /// (step 10) and CanDeclareGlobalVar §9.1.1.4.14 (step 12), then the bindings: for each name
+    /// that the web-compatibility step 13 (Annex B.3.2's functions in blocks) adds, of
+    /// declaredFunctionNames (step 17) and of declaredVarNames (step 18), CreateGlobalVarBinding(N,
+    /// true) (§9.1.1.4.16: configurable) or, for a function, CreateGlobalFunctionBinding(N,
+    /// undefined, true)'s DefinePropertyOrThrow (§9.1.1.4.17) when varEnv is the global
+    /// environment, and otherwise a property with the value undefined of the variable object, if it
+    /// has none (CreateMutableBinding(N, true) and InitializeBinding(N, undefined): deletable). Then
+    /// it runs the main function as a closure over `env` with `this` the global object. The main
+    /// function's prologue creates the eval code's own scope (PerformEval step 16.a's lexEnv, with
+    /// the bindings of `let`, `const` and `class`, EvalDeclarationInstantiation step 16) and does
+    /// the rest of step 17: each function of functionsToInitialize is instantiated over that scope
+    /// (InstantiateFunctionObject) and stored in varEnv by SetMutableBinding (for the global
+    /// environment, CreateGlobalFunctionBinding's [[Set]], over the property the handler defined).
+    /// The result of the op is the completion value of the eval code, undefined when it is
+    /// empty (step 30).
     DirectEval {
         /// The register written.
         dst: nat,
