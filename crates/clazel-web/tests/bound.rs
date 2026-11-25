@@ -208,7 +208,7 @@ fn only(mut requests: Vec<Request>) -> Result<Request> {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 70 s of Miri time per test (292 s before attribute functions were made lazily and shape lookups indexed), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn an_inline_script_changes_the_document() -> Test {
     let mut h = Harness::new(
@@ -229,7 +229,7 @@ fn an_inline_script_changes_the_document() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 70 s of Miri time per test (292 s before attribute functions were made lazily and shape lookups indexed), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn lifecycle_events_reach_listeners_in_order() -> Test {
     let mut h = Harness::new(
@@ -248,7 +248,7 @@ fn lifecycle_events_reach_listeners_in_order() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 70 s of Miri time per test (292 s before attribute functions were made lazily and shape lookups indexed), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn defer_runs_after_the_document_and_before_domcontentloaded() -> Test {
     let mut h = Harness::new(
@@ -275,7 +275,7 @@ fn defer_runs_after_the_document_and_before_domcontentloaded() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 70 s of Miri time per test (292 s before attribute functions were made lazily and shape lookups indexed), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn timers_run_when_due_and_in_order() -> Test {
     let mut h = Harness::new(
@@ -305,7 +305,7 @@ fn timers_run_when_due_and_in_order() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 70 s of Miri time per test (292 s before attribute functions were made lazily and shape lookups indexed), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn an_interval_repeats_until_it_is_cleared() -> Test {
     let mut h = Harness::new(
@@ -325,7 +325,7 @@ fn an_interval_repeats_until_it_is_cleared() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 70 s of Miri time per test (292 s before attribute functions were made lazily and shape lookups indexed), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn a_timer_changes_the_document() -> Test {
     let mut h = Harness::new(
@@ -342,7 +342,7 @@ fn a_timer_changes_the_document() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 70 s of Miri time per test (292 s before attribute functions were made lazily and shape lookups indexed), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn microtasks_run_when_a_script_ends_and_before_the_next_task() -> Test {
     let mut h = Harness::new(
@@ -362,7 +362,7 @@ fn microtasks_run_when_a_script_ends_and_before_the_next_task() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 70 s of Miri time per test (292 s before attribute functions were made lazily and shape lookups indexed), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn animation_frames_run_when_the_page_renders() -> Test {
     let mut h = Harness::new(
@@ -382,7 +382,7 @@ fn animation_frames_run_when_the_page_renders() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 70 s of Miri time per test (292 s before attribute functions were made lazily and shape lookups indexed), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn an_exception_is_reported_and_the_next_script_runs() -> Test {
     let mut h = Harness::new(
@@ -402,7 +402,7 @@ fn an_exception_is_reported_and_the_next_script_runs() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 70 s of Miri time per test (292 s before attribute functions were made lazily and shape lookups indexed), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn an_exception_in_a_timer_is_reported_and_the_loop_goes_on() -> Test {
     let mut h = Harness::new(
@@ -421,7 +421,7 @@ fn an_exception_in_a_timer_is_reported_and_the_loop_goes_on() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 70 s of Miri time per test (292 s before attribute functions were made lazily and shape lookups indexed), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn an_external_script_is_fetched_and_runs_in_order() -> Test {
     let mut h = Harness::new(
@@ -451,7 +451,7 @@ fn an_external_script_is_fetched_and_runs_in_order() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 70 s of Miri time per test (292 s before attribute functions were made lazily and shape lookups indexed), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn a_failed_fetch_fires_error_and_the_page_goes_on() -> Test {
     let mut h = Harness::new(
@@ -467,7 +467,7 @@ fn a_failed_fetch_fires_error_and_the_page_goes_on() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 70 s of Miri time per test (292 s before attribute functions were made lazily and shape lookups indexed), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn console_location_and_history_reach_the_hooks() -> Test {
     let mut h = Harness::new(
@@ -496,7 +496,7 @@ fn console_location_and_history_reach_the_hooks() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 70 s of Miri time per test (292 s before attribute functions were made lazily and shape lookups indexed), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn cookies_and_storage_go_through_the_hooks() -> Test {
     let mut h = Harness::new(
@@ -513,7 +513,7 @@ fn cookies_and_storage_go_through_the_hooks() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 70 s of Miri time per test (292 s before attribute functions were made lazily and shape lookups indexed), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn a_javascript_url_runs_in_the_page() -> Test {
     let mut h = Harness::new("<!DOCTYPE html><body><p id=out>x</p>")?;
@@ -529,7 +529,7 @@ fn a_javascript_url_runs_in_the_page() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 70 s of Miri time per test (292 s before attribute functions were made lazily and shape lookups indexed), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn document_write_in_a_script_is_reported_not_run() -> Test {
     let mut h = Harness::new(
@@ -545,7 +545,7 @@ fn document_write_in_a_script_is_reported_not_run() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 70 s of Miri time per test (292 s before attribute functions were made lazily and shape lookups indexed), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn a_string_handler_runs_as_a_script() -> Test {
     let mut h =
