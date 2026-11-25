@@ -1038,7 +1038,7 @@ pub open spec fn ml_acao_response(v: Seq<u8>) -> clazel_http::message::spec::Res
     }
 }
 
-/// The CORS check fails without `Access-Control-Allow-Origin` (Fetch §4.9
+/// The CORS check fails without `Access-Control-Allow-Origin` (Fetch §4.10
 /// step 2).
 pub proof fn ml_cors_no_header(origin: Seq<u8>)
     ensures

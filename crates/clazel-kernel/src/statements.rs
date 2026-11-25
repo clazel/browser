@@ -1095,6 +1095,49 @@ pub open spec fn readable_end(
     }
 }
 
+/// `theorem_orb` (item 7.16, 7.0(c) S1): whatever the network shell
+/// reports on the connection of a "no-cors" sub-fetch (a style sheet, a
+/// script, or a `Fetch` in mode "no-cors"), every frame the step gives a
+/// renderer is for the sub-fetch's renderer, and is the sub-fetch's failure
+/// frame ([`failed_frame_of`]: `StyleFailed`, `ScriptFailed` or
+/// `FetchFailed`) unless the transducer ended with a response that is basic
+/// or that opaque-response blocking allows ([`orb_passed`]). So a renderer
+/// receives a cross-origin response to a "no-cors" request (whole, for a
+/// sheet or a script; as an opaque response, for `fetch()`) only if ORB
+/// allowed it.
+pub open spec fn orb_statement(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns,
+    fetch: FetchFns,
+    s: State,
+    renderer: nat,
+    serial: nat,
+    hop: nat,
+    input: NetInput,
+) -> bool {
+    let out = step(rules, urls, fetch, s, Event::SubNet { renderer, serial, hop, input }).1;
+    match subnet_target(s, renderer, serial) {
+        Some(f) => (f.api is None || f.api == Some(mode_no_cors())) ==> {
+            let (fs, actions, ops) = clazel_fetch::transducer::spec::step(fetch.http, fetch.urls, f.fetch, input, subfetch_jar(fetch, s, f), s.now);
+            forall|k: int|
+                0 <= k < out.len() && (#[trigger] out[k]) is ToRenderer ==> {
+                    &&& out[k]->ToRenderer_id == renderer
+                    &&& (out[k]->ToRenderer_bytes == failed_frame_of(f) || orb_passed(fetch, f.lock, fs.req.origin_tainted, actions))
+                }
+        },
+        None => true,
+    }
+}
+
+/// The fetch ended (its first ending action) with a response that is basic
+/// ([`basic_response`]) or that ORB allows ([`orb_allows`]).
+pub open spec fn orb_passed(fetch: FetchFns, lock: clazel_origin::spec::Origin, tainted: bool, actions: Seq<NetAction>) -> bool {
+    match end_action(actions) {
+        Some(clazel_fetch::transducer::spec::Action::Done { url, response }) => basic_response(fetch, lock, tainted, url) || orb_allows(response),
+        _ => false,
+    }
+}
+
 /// `theorem_forbidden_headers` (item 7.16): for the shipped cookie rules
 /// (`fetch.urls.rules == rules`), every request a sub-fetch sends
 /// (`SubSend`, whatever the event) and every request a navigation sends on a
