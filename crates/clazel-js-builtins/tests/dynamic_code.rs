@@ -200,6 +200,46 @@ fn direct_eval() -> Result<(), String> {
 }
 
 #[test]
+fn direct_eval_in_every_kind_of_function() -> Result<(), String> {
+    check(&[
+        // A generator's eval, between two yields.
+        (
+            "function* g(a) { yield eval('a + 1'); yield eval('var b = a * 2; b'); } var it = g(5); var r = [it.next().value, it.next().value].join();",
+            "6,10",
+        ),
+        // An async function's.
+        (
+            "async function f(a) { await null; return eval('a + 1'); } var r; f(1).then(v => { r = v; });",
+            "2",
+        ),
+        // A class field initializer's `this`, and `arguments` is an early error there.
+        (
+            "class C { x = eval('this') === this; } var r = new C().x;",
+            "true",
+        ),
+        (
+            "class C { x = (() => { try { eval('arguments'); return 'no'; } catch (e) { return e.constructor.name; } })(); } var r = new C().x;",
+            "SyntaxError",
+        ),
+        // `super()` in a derived constructor, through eval.
+        (
+            "class A { constructor() { this.a = 1; } } class B extends A { constructor() { eval('super()'); } } var r = new B().a;",
+            "1",
+        ),
+        // A private name of the class around the call.
+        (
+            "class C { #p = 4; m() { return eval('this.#p'); } } var r = new C().m();",
+            "4",
+        ),
+        // A `let` of the caller in its temporal dead zone.
+        (
+            "function f() { try { eval('x'); } catch (e) { return e.constructor.name; } let x; } var r = f();",
+            "ReferenceError",
+        ),
+    ])
+}
+
+#[test]
 fn with_statement() -> Result<(), String> {
     check(&[
         ("var o = { x: 1 }; var r; with (o) { r = x; }", "1"),
