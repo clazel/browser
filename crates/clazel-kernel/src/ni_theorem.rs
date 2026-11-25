@@ -10,6 +10,8 @@ use vstd::prelude::*;
 verus! {
 
 /// **`lemma_navigate_declassify`.**
+#[verifier::spinoff_prover]
+#[verifier::rlimit(200)]
 pub proof fn lemma_navigate_declassify(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s1: State, s2: State, e: Event)
     requires
         crate::noninterference::rel(rules, urls, d, s1, s2),
@@ -74,6 +76,23 @@ pub proof fn lemma_navigate_declassify(rules: Seq<clazel_psl::spec::Rule>, urls:
             reveal(Seq::filter);
             assert(crate::noninterference::outputs_for(rules, d, s2, s2b, o2) == Seq::<Output>::empty());
         }
+    } else if let Some(clazel_ipc::message::spec::Message::OpenTab { url }) = decode_renderer_frame(bytes) {
+        // Item 7.16: the declassified event is the host's `OpenTab` of the
+        // resolved URL, without a script.
+        assert(r.committed);
+        crate::popup_rel::lemma_popup_resolved(rules, urls, fetch, s1, r, url);
+        let resolved = crate::popup_rel::popup_resolved(urls, s1, r, url)->Some_0;
+        assert(dn == (Event::OpenTab { url: resolved, script: None }));
+        assert(step(rules, urls, fetch, s1, e) == handle_message(rules, urls, fetch, s1, r, clazel_ipc::message::spec::Message::OpenTab { url }));
+        crate::unwinding::lemma_open_tab_consistency(rules, urls, fetch, d, s1, s2, resolved, None);
+        let (o1s, oo1) = open_tab(rules, urls, fetch, s1, resolved, None);
+        let (o2s, oo2) = open_tab(rules, urls, fetch, s2, resolved, None);
+        assert(s2b == o2s && o2 == oo2);
+        assert(o1 == oo1);
+        // The activation spent is the sender's, of another domain.
+        crate::popup_rel::lemma_acts_forget_other(rules, o1s.acts, r.id, r.lock, d);
+        crate::popup_rel::lemma_rel_acts_update(rules, urls, d, o1s, o2s, forget_activation(o1s.acts, r.id, r.lock), o2s.acts);
+        crate::unwind_base::lemma_outputs_for_same_rb(rules, urls, d, s1, s2, s1b, s2b, o1, o2);
     }
 }
 
@@ -176,7 +195,7 @@ pub proof fn lemma_kept_step(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
             assert(crate::domain::event_domain(rules, s1, e) is Some);
             if d2 != d {
                 assert(crate::domain::declassified(urls, s1, e) == Some(e));
-                assert(crate::domain::declassified(urls, s1, e) matches Some(x) ==> (x is NavigateTab || x is SubmitTab));
+                assert(crate::domain::declassified(urls, s1, e) matches Some(x) ==> (x is NavigateTab || x is SubmitTab || x is OpenTab));
                 assert(false);
             }
             crate::unwinding_d::lemma_d_event(rules, urls, fetch, d, s1, s2, id, bytes);

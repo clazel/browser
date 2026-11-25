@@ -66,8 +66,18 @@ pub proof fn lemma_local_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
                 }
             }
         }
+        // Item 7.16: a popup that opens a tab has a declassified part.
+        if let clazel_ipc::message::spec::Message::OpenTab { url } = m {
+            crate::popup_rel::lemma_popup_resolved(rules, urls, fetch, s, r, url);
+            if crate::popup_rel::popup_resolved(urls, s, r, url) is Some {
+                assert(false);
+            }
+        }
         if is_sub_request(m) {
             crate::subfetch_rel::lemma_fetch_sub_shape(rules, urls, fetch, s, r, m is FetchScript, sub_request_id(m), sub_request_url(m));
+        }
+        if m is Fetch {
+            crate::api_rel::lemma_api_msg_shape(rules, urls, fetch, s, r, m);
         }
     } else {
         crate::net_theorems::lemma_closes_of_tab(s.conns, r.tab);
@@ -110,6 +120,13 @@ pub proof fn lemma_local_table(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns,
                 if let Some(resolved) = (urls.resolve)(r.url, relative) {
                     assert(false);
                 }
+            }
+        }
+        // Item 7.16: a popup that opens a tab has a declassified part.
+        if let clazel_ipc::message::spec::Message::OpenTab { url } = m {
+            crate::popup_rel::lemma_popup_resolved(rules, urls, fetch, s, r, url);
+            if crate::popup_rel::popup_resolved(urls, s, r, url) is Some {
+                assert(false);
             }
         }
     }
@@ -252,12 +269,29 @@ pub proof fn lemma_local_respect_renderer(rules: Seq<clazel_psl::spec::Rule>, ur
         if let Some(clazel_ipc::message::spec::Message::Title { title }) = accepted_message(r, bytes) {
             crate::surface_rel::lemma_titles_set_other(rules, s1.titles, r.id, r.lock, title, d);
         }
+        // Item 7.16: an `UpdateUrl` sets a document URL under the sender's
+        // lock, of another domain.
+        if let Some(clazel_ipc::message::spec::Message::UpdateUrl { replace, url }) = accepted_message(r, bytes) {
+            crate::url_rel::lemma_update_url_shape(urls, s1, r, url);
+            if url.len() > 0 {
+                if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+                    if let Some(resolved) = (urls.resolve)(r.url, relative) {
+                        crate::url_rel::lemma_doc_urls_set_other(rules, s1.doc_urls, r.id, r.lock, resolved, d);
+                    }
+                }
+            }
+        }
         // Items 5.19 and 7.16: a `FetchStyle` or `FetchScript` changes only
         // its sender's sub-fetches and counts, of another domain.
         if let Some(m2) = accepted_message(r, bytes) {
             if is_sub_request(m2) {
                 crate::subfetch_rel::lemma_fetch_sub_shape(rules, urls, fetch, s1, r, m2 is FetchScript, sub_request_id(m2), sub_request_url(m2));
                 crate::subfetch_rel::lemma_fetch_sub_other(rules, urls, fetch, d, s1, r, m2 is FetchScript, sub_request_id(m2), sub_request_url(m2));
+            }
+            // Item 7.16: a `Fetch` likewise.
+            if m2 is Fetch {
+                crate::api_rel::lemma_api_msg_shape(rules, urls, fetch, s1, r, m2);
+                crate::api_rel::lemma_api_msg_other(rules, urls, fetch, d, s1, r, m2);
             }
         }
         crate::unwinding_d::lemma_rel_same_table(rules, urls, d, s1, s2, s1b, s2);

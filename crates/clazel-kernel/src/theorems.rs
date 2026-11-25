@@ -98,6 +98,8 @@ pub proof fn lemma_navigate_tab_outputs(urls: UrlFns, s: State, tab: nat, url: S
 }
 
 /// **`theorem_reply_only_to_sender`.**
+#[verifier::spinoff_prover]
+#[verifier::rlimit(40)]
 pub proof fn theorem_reply_only_to_sender(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat, bytes: Seq<u8>)
     requires
         reachable(rules, urls, fetch, s),
@@ -142,6 +144,20 @@ pub proof fn theorem_reply_only_to_sender(rules: Seq<clazel_psl::spec::Rule>, ur
             Some(m) => {
                 if let clazel_ipc::message::spec::Message::Display { title, text, links } = m {
                     lemma_reply_display(rules, urls, fetch, s, id, bytes, i);
+                } else if m is UpdateUrl {
+                    // Item 7.16: an `UpdateUrl` has no output.
+                    crate::url_rel::lemma_update_url_shape(urls, s, r, m->UpdateUrl_url);
+                } else if let clazel_ipc::message::spec::Message::OpenTab { url } = m {
+                    // Item 7.16: a popup is the host's `OpenTab`: the new renderer
+                    // is spawned and told, and nothing else is sent.
+                    crate::popup_rel::lemma_popup_resolved(rules, urls, fetch, s, r, url);
+                    if let Some(resolved) = crate::popup_rel::popup_resolved(urls, s, r, url) {
+                        crate::popup_rel::lemma_open_tab_outputs(rules, urls, fetch, s, resolved);
+                    }
+                } else if m is Fetch {
+                    // Item 7.16: a `Fetch` answers its sender and asks for
+                    // its sender's sub-fetch connections only.
+                    crate::api_rel::lemma_api_msg_shape(rules, urls, fetch, s, r, m);
                 } else if is_sub_request(m) {
                     // Items 5.19 and 7.16: a `FetchStyle` or `FetchScript`
                     // answers its sender and asks for its sender's sub-fetch
@@ -235,7 +251,7 @@ proof fn lemma_reply_display(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
     let r = s.renderers[i];
     let m = accepted_message(r, bytes)->Some_0;
     let out = step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1;
-    assert(out == seq![Output::Show { tab: r.tab, url: r.url, title: m->Display_title, text: m->Display_text, links: m->Display_links }]);
+    assert(out == seq![Output::Show { tab: r.tab, url: doc_url_of(s.doc_urls, r), title: m->Display_title, text: m->Display_text, links: m->Display_links }]);
 }
 
 /// Two renderers of a well-formed table with the same tab are the same.

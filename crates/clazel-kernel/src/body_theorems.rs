@@ -515,9 +515,21 @@ pub proof fn lemma_from_renderer_bodies(rules: Seq<clazel_psl::spec::Rule>, urls
                             },
                         },
                     },
+                    // Item 7.16: a popup adds a tab with no body.
+                    clazel_ipc::message::spec::Message::OpenTab { url } => {
+                        crate::popup_rel::lemma_popup_resolved(rules, urls, fetch, s, r, url);
+                        match crate::popup_rel::popup_resolved(urls, s, r, url) {
+                            None => lemma_bodies_refl(s.renderers, crate::statements::event_submitted(s, e)),
+                            Some(resolved) => {
+                                lemma_open_tab_bodies(rules, urls, fetch, s, resolved, None);
+                                lemma_bodies_weaken(s.renderers, from_renderer(rules, urls, fetch, s, id, bytes).0.renderers, crate::statements::event_submitted(s, e));
+                            },
+                        }
+                    },
                     _ => {
                         // `accepted_message` is the decoded message, and a
-                        // navigation event decodes to a `Navigate` or a `Submit`.
+                        // navigation event decodes to a `Navigate`, a `Submit`
+                        // or an `OpenTab`.
                         assert(decode_renderer_frame(bytes) == Some(m));
                         assert(false);
                     },

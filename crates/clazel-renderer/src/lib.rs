@@ -34,6 +34,7 @@ pub mod hostile;
 pub mod launch;
 pub mod page;
 pub mod pipeline;
+pub mod popup;
 pub mod sandbox;
 
 use std::fmt;

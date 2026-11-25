@@ -3,7 +3,7 @@
 use core::cell::Cell;
 use core::marker::PhantomData;
 
-use clazel_js_vm::interp::{Abrupt, Config as VmConfig, Terminator as VmTerminator, Vm};
+use clazel_js_vm::interp::{Abrupt, Config as VmConfig, Terminator as VmTerminator, Vm, World};
 
 use crate::error::{Error, Result};
 use crate::host::{DefaultHost, Host};
@@ -304,6 +304,20 @@ pub struct Runtime {
     _not_sync: PhantomData<Cell<()>>,
 }
 
+/// The VM's [`World`] questions, answered by the host: `Date.now()` and
+/// `new Date()` read `Host::now_ms`, and `LocalTZA` is `Host::local_tza`
+/// (phase-7.md 7.0(b): the browser's answer is a fixed offset). A runtime
+/// whose state is missing has no host, and the answer is the epoch and UTC.
+fn world_hook(vm: &mut Vm, question: World) -> f64 {
+    match vm.embedder_mut::<State>() {
+        Some(state) => match question {
+            World::NowMs => state.host.now_ms(),
+            World::LocalTza { time_ms, is_utc } => state.host.local_tza(time_ms, is_utc),
+        },
+        None => 0.0,
+    }
+}
+
 impl Runtime {
     /// Builds a runtime. The `host` is taken for the life of the runtime;
     /// reach it again with [`Runtime::host_mut`] or, from inside a native
@@ -345,6 +359,7 @@ impl Runtime {
         };
         vm.set_embedder(State::new(Box::new(host), limits));
         vm.set_lazy_accessor_maker(crate::state::make_lazy_accessor);
+        vm.set_world_hook(world_hook);
         Ok(Runtime {
             limits,
             terminator,

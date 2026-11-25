@@ -18,7 +18,7 @@
 //! Each handler's contract is the clause of ECMA-262 it cites; the evidence is
 //! the Test262 run in `tests/test262_run.rs`.
 
-use crate::bytecode::{Const, ErrorKind, FunctionKind, VarScoped};
+use crate::bytecode::{Const, ErrorKind, Flavor, FunctionKind, VarScoped};
 use crate::heap::{ACCESSOR, Cell, Found, ObjKind};
 use crate::interp::{Abrupt, ArithOp, Hint, Intrinsic, Rel, Vm};
 use crate::numeric::{self, Num, num};
@@ -880,7 +880,7 @@ impl Vm {
     /// (§10.2.10†): a closure over `env` of function `code`, with `length` and
     /// `name`. (`prototype` comes with `[[Construct]]`, not yet.)
     pub(crate) fn new_closure(&mut self, code: usize, env: Value) -> Result<Value, Abrupt> {
-        let (length, name_value, name_units, code_kind) = {
+        let (length, name_value, name_units, code_kind, flavor) = {
             let f = self
                 .codes
                 .get(code)
@@ -890,6 +890,7 @@ impl Vm {
                 f.name_value,
                 f.code.name.clone(),
                 f.code.kind,
+                f.code.flavor,
             )
         };
         let name_value = match name_value {
@@ -904,7 +905,20 @@ impl Vm {
             }
         };
         let code_u32 = u32::try_from(code).map_err(|_| Abrupt::Internal("function index"))?;
-        let proto = self.atoms.function_proto;
+        // OrdinaryFunctionCreate §10.2.3† step 1, functionPrototype: the
+        // intrinsic of the function's kind (§15.5.4†, §15.6.4†, §15.8.3†);
+        // `%Function.prototype%` while the built-ins have not installed it.
+        let kind_proto = match flavor {
+            Flavor::Plain => Value::UNDEFINED,
+            Flavor::Generator => self.intrinsic(Intrinsic::GeneratorFunctionPrototype),
+            Flavor::Async => self.intrinsic(Intrinsic::AsyncFunctionPrototype),
+            Flavor::AsyncGenerator => self.intrinsic(Intrinsic::AsyncGeneratorFunctionPrototype),
+        };
+        let proto = if self.heap.is_object(kind_proto) {
+            kind_proto
+        } else {
+            self.atoms.function_proto
+        };
         let f = self.heap.new_object(
             proto,
             ObjKind::Closure {
@@ -917,7 +931,29 @@ impl Vm {
         self.heap
             .define(f, kl, Value::int32(len), CONFIGURABLE_ONLY)?;
         self.heap.define(f, kn, name_value, CONFIGURABLE_ONLY)?;
-        if is_constructor_kind(code_kind) {
+        if matches!(flavor, Flavor::Generator | Flavor::AsyncGenerator) {
+            // InstantiateGeneratorFunctionObject §15.5.3† (and the expression
+            // and method forms, and §15.6.3† for async generators): "Let
+            // prototype be OrdinaryObjectCreate(%GeneratorFunction.prototype.
+            // prototype%). Perform ! DefinePropertyOrThrow(F, "prototype",
+            // PropertyDescriptor { [[Value]]: prototype, [[Writable]]: true,
+            // [[Enumerable]]: false, [[Configurable]]: false })". It has no
+            // `constructor`.
+            let which = if flavor == Flavor::Generator {
+                Intrinsic::GeneratorPrototype
+            } else {
+                Intrinsic::AsyncGeneratorPrototype
+            };
+            let gp = self.intrinsic(which);
+            let gp = if self.heap.is_object(gp) {
+                gp
+            } else {
+                self.atoms.object_proto
+            };
+            let p = self.heap.new_object(gp, ObjKind::Plain)?;
+            let kp = self.atoms.k_prototype;
+            self.heap.define(f, kp, p, Attrs(Attrs::WRITABLE))?;
+        } else if flavor == Flavor::Plain && is_constructor_kind(code_kind) {
             // MakeConstructor, §10.2.5†: `prototype` is a fresh object whose
             // `constructor` is the function (writable, not enumerable, not
             // configurable on the function; writable and configurable on the
@@ -990,11 +1026,16 @@ impl Vm {
             }
             _ => return Err(self.type_error("value is not a constructor")),
         };
-        let kind = self
+        let (kind, flavor) = self
             .codes
             .get(usize::try_from(code).map_err(|_| Abrupt::Internal("code index"))?)
-            .map(|c| c.code.kind)
+            .map(|c| (c.code.kind, c.code.flavor))
             .ok_or(Abrupt::Internal("code index"))?;
+        // A generator, async function or async generator has no
+        // [[Construct]] (§15.5.4†, §15.6.4†, §15.8.3†: no MakeConstructor).
+        if flavor != Flavor::Plain {
+            return Err(self.type_error("value is not a constructor"));
+        }
         match kind {
             FunctionKind::Normal | FunctionKind::Class => {
                 self.construct_closure(f, code, args, ret, new_target, false)?;
@@ -1055,10 +1096,11 @@ impl Vm {
                 .ok()
                 .and_then(|i| self.codes.get(i))
                 .is_some_and(|c| {
-                    matches!(
-                        c.code.kind,
-                        FunctionKind::Normal | FunctionKind::Class | FunctionKind::Derived
-                    )
+                    c.code.flavor == Flavor::Plain
+                        && matches!(
+                            c.code.kind,
+                            FunctionKind::Normal | FunctionKind::Class | FunctionKind::Derived
+                        )
                 }),
             Some(ObjKind::Native(i)) => self.native(i).is_ok_and(|n| n.1),
             Some(ObjKind::Bound(i)) => self

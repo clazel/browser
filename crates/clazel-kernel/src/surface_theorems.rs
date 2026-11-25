@@ -78,6 +78,7 @@ proof fn lemma_storage_call_no_surface(s: State, r: Renderer, m: clazel_ipc::mes
 proof fn lemma_from_renderer_no_surface(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat, bytes: Seq<u8>)
     requires
         crate::invariant::renderers_wf(urls, s.renderers, s.next_id),
+        !crate::popup_rel::popup_opens(urls, s, id, bytes),
     ensures
         no_surface(step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1),
 {
@@ -122,6 +123,10 @@ proof fn lemma_from_renderer_no_surface(rules: Seq<clazel_psl::spec::Rule>, urls
                 clazel_ipc::message::spec::Message::FetchStyle { .. } | clazel_ipc::message::spec::Message::FetchScript { .. } => {
                     crate::subfetch_rel::lemma_fetch_sub_shape(rules, urls, fetch, s, r, m is FetchScript, sub_request_id(m), sub_request_url(m));
                 },
+                // Item 7.16.
+                clazel_ipc::message::spec::Message::Fetch { .. } => {
+                    crate::api_rel::lemma_api_msg_shape(rules, urls, fetch, s, r, m);
+                },
                 _ => {},
             },
         }
@@ -153,7 +158,18 @@ proof fn lemma_no_paint_from_renderer(rules: Seq<clazel_psl::spec::Rule>, urls: 
     crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
     match e {
         Event::FromRenderer { id, bytes } => {
-            lemma_from_renderer_no_surface(rules, urls, fetch, s, id, bytes);
+            if crate::popup_rel::popup_opens(urls, s, id, bytes) {
+                // Item 7.16: a popup is the host's `OpenTab`, which paints nothing.
+                let i = find_by_id(s.renderers, id, 0)->Some_0;
+                crate::invariant::lemma_find_by_id(s.renderers, id, 0);
+                if let Some(clazel_ipc::message::spec::Message::OpenTab { url }) = accepted_message(s.renderers[i], bytes) {
+                    crate::popup_rel::lemma_popup_resolved(rules, urls, fetch, s, s.renderers[i], url);
+                    let resolved = crate::popup_rel::popup_resolved(urls, s, s.renderers[i], url)->Some_0;
+                    lemma_no_paint_open_tab(rules, urls, fetch, s, Event::OpenTab { url: resolved, script: None });
+                }
+            } else {
+                lemma_from_renderer_no_surface(rules, urls, fetch, s, id, bytes);
+            }
         },
         _ => {},
     }
@@ -424,7 +440,7 @@ pub proof fn lemma_paint_address_bar(rules: Seq<clazel_psl::spec::Rule>, urls: U
             crate::net_theorems::lemma_closes_of_tab(s.conns, r.tab);
             let closes = closes_of_tab(s.conns, r.tab);
             assert forall|k: int| 0 <= k < out.len() && (#[trigger] out[k]) is Paint implies exists|i2: int|
-                0 <= i2 < s.renderers.len() && s.renderers[i2].id == id && s.renderers[i2].committed && out[k]->Paint_url == s.renderers[i2].url
+                0 <= i2 < s.renderers.len() && s.renderers[i2].id == id && s.renderers[i2].committed && out[k]->Paint_url == doc_url_of(s.doc_urls, s.renderers[i2])
                     && out[k]->Paint_tab == s.renderers[i2].tab && out[k]->Paint_title == title_of(s.titles, s.renderers[i2]) by {
                 if k > 0 {
                     assert(out[k] == closes[k - 1]);
@@ -432,7 +448,7 @@ pub proof fn lemma_paint_address_bar(rules: Seq<clazel_psl::spec::Rule>, urls: U
             }
         } else {
             assert forall|k: int| 0 <= k < out.len() && (#[trigger] out[k]) is Paint implies exists|i2: int|
-                0 <= i2 < s.renderers.len() && s.renderers[i2].id == id && s.renderers[i2].committed && out[k]->Paint_url == s.renderers[i2].url
+                0 <= i2 < s.renderers.len() && s.renderers[i2].id == id && s.renderers[i2].committed && out[k]->Paint_url == doc_url_of(s.doc_urls, s.renderers[i2])
                     && out[k]->Paint_tab == s.renderers[i2].tab && out[k]->Paint_title == title_of(s.titles, s.renderers[i2]) by {
                 assert(k == 0);
             }
@@ -489,6 +505,15 @@ pub proof fn theorem_input_only_to_own_tab(rules: Seq<clazel_psl::spec::Rule>, u
     ensures
         crate::statements::input_only_to_own_tab_statement(rules, urls, fetch, s, tab, input),
 {
+    // Item 7.16: only the activation of the tab's renderer changes.
+    if let Some(i) = find_by_tab(s.renderers, tab, 0) {
+        let r = s.renderers[i];
+        if r.committed && is_activating_input(input) {
+            assert(step(rules, urls, fetch, s, Event::Input { tab, input }).0 == (State { acts: set_activation(s.acts, r.id, r.lock, activation_window()), ..s }));
+        } else {
+            assert(step(rules, urls, fetch, s, Event::Input { tab, input }).0 == s);
+        }
+    }
 }
 
 /// **`theorem_viewport_only_to_own_tab`** (item 5.18).
@@ -696,7 +721,21 @@ pub proof fn theorem_channel_only_own_tab(rules: Seq<clazel_psl::spec::Rule>, ur
     crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
     match e {
         Event::FromRenderer { id, bytes } => {
-            lemma_from_renderer_no_surface(rules, urls, fetch, s, id, bytes);
+            if crate::popup_rel::popup_opens(urls, s, id, bytes) {
+                // Item 7.16: a popup is the host's `OpenTab`: its outputs are
+                // the same, and the statement reads the event only for a
+                // `Resize` and a `GpuExited`.
+                let i = find_by_id(s.renderers, id, 0)->Some_0;
+                crate::invariant::lemma_find_by_id(s.renderers, id, 0);
+                if let Some(clazel_ipc::message::spec::Message::OpenTab { url }) = accepted_message(s.renderers[i], bytes) {
+                    crate::popup_rel::lemma_popup_resolved(rules, urls, fetch, s, s.renderers[i], url);
+                    let resolved = crate::popup_rel::popup_resolved(urls, s, s.renderers[i], url)->Some_0;
+                    lemma_channel_open_tab(rules, urls, fetch, s, resolved, None);
+                    assert(step(rules, urls, fetch, s, Event::OpenTab { url: resolved, script: None }).1 == step(rules, urls, fetch, s, e).1);
+                }
+            } else {
+                lemma_from_renderer_no_surface(rules, urls, fetch, s, id, bytes);
+            }
         },
         Event::OpenTab { url, script } => {
             lemma_channel_open_tab(rules, urls, fetch, s, url, script);

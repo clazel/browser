@@ -259,6 +259,293 @@ pub fn set_title_exec(ts: &[TitledRecord], id: u64, lock: &clazel_origin::exec::
 }
 
 // ---------------------------------------------------------------------
+// Document URLs (item 7.16).
+// ---------------------------------------------------------------------
+
+/// [`doc_url_of`] reads past entries that are not the renderer's.
+proof fn lemma_doc_url_of_skip(ds: Seq<DocUrl>, r: Renderer, k: int)
+    requires
+        0 <= k < ds.len(),
+        !(ds[k].id == r.id && ds[k].lock == r.lock),
+    ensures
+        doc_url_of(ds.skip(k), r) == doc_url_of(ds.skip(k + 1), r),
+{
+    assert(ds.skip(k)[0] == ds[k]);
+    assert(ds.skip(k).drop_first() =~= ds.skip(k + 1));
+}
+
+/// [`doc_url_of`]: the URL of renderer `r`'s document.
+pub fn doc_url_of_exec(ds: &[DocUrlRecord], r: &RendererRecord) -> (out: Vec<u32>)
+    ensures
+        out@ == doc_url_of(doc_urls_view(ds@), r@),
+{
+    let ghost dv = doc_urls_view(ds@);
+    let mut k: usize = 0;
+    proof {
+        assert(dv.skip(0) =~= dv);
+    }
+    while k < ds.len()
+        invariant
+            k <= ds.len(),
+            dv == doc_urls_view(ds@),
+            doc_url_of(dv, r@) == doc_url_of(dv.skip(k as int), r@),
+        decreases ds.len() - k,
+    {
+        if let Some(t) = ds.get(k) {
+            proof {
+                assert(dv[k as int] == t@);
+                assert(dv.skip(k as int)[0] == t@);
+            }
+            if t.id == r.id && origin_eq_exec(&t.lock, &r.lock) {
+                return copy(t.url.as_slice());
+            }
+            proof {
+                lemma_doc_url_of_skip(dv, r@, k as int);
+            }
+        }
+        // Never saturates: k < ds.len().
+        k = k.saturating_add(1);
+    }
+    proof {
+        assert(dv.skip(ds.len() as int) =~= Seq::<DocUrl>::empty());
+    }
+    copy(r.url.as_slice())
+}
+
+/// A copy of a document URL entry.
+fn clone_doc_url(t: &DocUrlRecord) -> (out: DocUrlRecord)
+    ensures
+        out@ == t@,
+{
+    DocUrlRecord { id: t.id, lock: clone_origin(&t.lock), url: copy(t.url.as_slice()) }
+}
+
+/// [`forget_doc_url`]: the entries that are not renderer `id`'s with `lock`.
+pub fn forget_doc_url_exec(ds: &[DocUrlRecord], id: u64, lock: &clazel_origin::exec::ParsedOrigin) -> (out: Vec<DocUrlRecord>)
+    ensures
+        doc_urls_view(out@) == forget_doc_url(doc_urls_view(ds@), id as nat, lock@),
+{
+    let ghost dv = doc_urls_view(ds@);
+    let mut out: Vec<DocUrlRecord> = Vec::new();
+    let mut k: usize = 0;
+    proof {
+        reveal(Seq::filter);
+        assert(dv.take(0) =~= Seq::<DocUrl>::empty());
+        assert(doc_urls_view(out@) =~= Seq::<DocUrl>::empty());
+    }
+    while k < ds.len()
+        invariant
+            k <= ds.len(),
+            dv == doc_urls_view(ds@),
+            doc_urls_view(out@) == dv.take(k as int).filter(|x: DocUrl| !(x.id == id as nat && x.lock == lock@)),
+        decreases ds.len() - k,
+    {
+        if let Some(t) = ds.get(k) {
+            proof {
+                reveal(Seq::filter);
+                assert(dv.take(k as int + 1).drop_last() =~= dv.take(k as int));
+                assert(dv.take(k as int + 1).last() == t@);
+            }
+            if !(t.id == id && origin_eq_exec(&t.lock, lock)) {
+                let ghost before = out@;
+                let c = clone_doc_url(t);
+                out.push(c);
+                proof {
+                    assert(doc_urls_view(out@) =~= doc_urls_view(before).push(t@));
+                }
+            }
+        }
+        // Never saturates: k < ds.len().
+        k = k.saturating_add(1);
+    }
+    proof {
+        assert(dv.take(ds.len() as int) =~= dv);
+    }
+    out
+}
+
+/// [`set_doc_url`]: renderer `id`'s document URL, under `lock`, is `url`.
+pub fn set_doc_url_exec(ds: &[DocUrlRecord], id: u64, lock: &clazel_origin::exec::ParsedOrigin, url: Vec<u32>) -> (out: Vec<DocUrlRecord>)
+    ensures
+        doc_urls_view(out@) == set_doc_url(doc_urls_view(ds@), id as nat, lock@, url@),
+{
+    let mut out = forget_doc_url_exec(ds, id, lock);
+    let ghost before = out@;
+    let entry = DocUrlRecord { id, lock: clone_origin(lock), url };
+    let ghost ev = entry@;
+    out.push(entry);
+    proof {
+        assert(doc_urls_view(out@) =~= doc_urls_view(before).push(ev));
+    }
+    out
+}
+
+// ---------------------------------------------------------------------
+// Activations (item 7.16).
+// ---------------------------------------------------------------------
+
+/// [`activation_left`] reads past entries that are not the renderer's.
+proof fn lemma_activation_left_skip(acts: Seq<Activation>, r: Renderer, k: int)
+    requires
+        0 <= k < acts.len(),
+        !(acts[k].id == r.id && acts[k].lock == r.lock),
+    ensures
+        activation_left(acts.skip(k), r) == activation_left(acts.skip(k + 1), r),
+{
+    assert(acts.skip(k)[0] == acts[k]);
+    assert(acts.skip(k).drop_first() =~= acts.skip(k + 1));
+}
+
+/// [`activation_left`]: the ticks left of renderer `r`'s activation.
+pub fn activation_left_exec(acts: &[ActivationRecord], r: &RendererRecord) -> (out: u64)
+    ensures
+        out as nat == activation_left(acts_view(acts@), r@),
+{
+    let ghost av = acts_view(acts@);
+    let mut k: usize = 0;
+    proof {
+        assert(av.skip(0) =~= av);
+    }
+    while k < acts.len()
+        invariant
+            k <= acts.len(),
+            av == acts_view(acts@),
+            activation_left(av, r@) == activation_left(av.skip(k as int), r@),
+        decreases acts.len() - k,
+    {
+        if let Some(t) = acts.get(k) {
+            proof {
+                assert(av[k as int] == t@);
+                assert(av.skip(k as int)[0] == t@);
+            }
+            if t.id == r.id && origin_eq_exec(&t.lock, &r.lock) {
+                return t.left;
+            }
+            proof {
+                lemma_activation_left_skip(av, r@, k as int);
+            }
+        }
+        // Never saturates: k < acts.len().
+        k = k.saturating_add(1);
+    }
+    proof {
+        assert(av.skip(acts.len() as int) =~= Seq::<Activation>::empty());
+    }
+    0
+}
+
+/// A copy of an activation entry.
+fn clone_activation(t: &ActivationRecord) -> (out: ActivationRecord)
+    ensures
+        out@ == t@,
+{
+    ActivationRecord { id: t.id, lock: clone_origin(&t.lock), left: t.left }
+}
+
+/// [`forget_activation`]: the entries that are not renderer `id`'s with
+/// `lock`.
+pub fn forget_activation_exec(acts: &[ActivationRecord], id: u64, lock: &clazel_origin::exec::ParsedOrigin) -> (out: Vec<ActivationRecord>)
+    ensures
+        acts_view(out@) == forget_activation(acts_view(acts@), id as nat, lock@),
+{
+    let ghost av = acts_view(acts@);
+    let mut out: Vec<ActivationRecord> = Vec::new();
+    let mut k: usize = 0;
+    proof {
+        reveal(Seq::filter);
+        assert(av.take(0) =~= Seq::<Activation>::empty());
+        assert(acts_view(out@) =~= Seq::<Activation>::empty());
+    }
+    while k < acts.len()
+        invariant
+            k <= acts.len(),
+            av == acts_view(acts@),
+            acts_view(out@) == av.take(k as int).filter(|x: Activation| !(x.id == id as nat && x.lock == lock@)),
+        decreases acts.len() - k,
+    {
+        if let Some(t) = acts.get(k) {
+            proof {
+                reveal(Seq::filter);
+                assert(av.take(k as int + 1).drop_last() =~= av.take(k as int));
+                assert(av.take(k as int + 1).last() == t@);
+            }
+            if !(t.id == id && origin_eq_exec(&t.lock, lock)) {
+                let ghost before = out@;
+                let c = clone_activation(t);
+                out.push(c);
+                proof {
+                    assert(acts_view(out@) =~= acts_view(before).push(t@));
+                }
+            }
+        }
+        // Never saturates: k < acts.len().
+        k = k.saturating_add(1);
+    }
+    proof {
+        assert(av.take(acts.len() as int) =~= av);
+    }
+    out
+}
+
+/// [`set_activation`]: renderer `id`'s activation, under `lock`, has `left`
+/// ticks left.
+pub fn set_activation_exec(acts: &[ActivationRecord], id: u64, lock: &clazel_origin::exec::ParsedOrigin, left: u64) -> (out: Vec<ActivationRecord>)
+    ensures
+        acts_view(out@) == set_activation(acts_view(acts@), id as nat, lock@, left as nat),
+{
+    let mut out = forget_activation_exec(acts, id, lock);
+    let ghost before = out@;
+    let entry = ActivationRecord { id, lock: clone_origin(lock), left };
+    let ghost ev = entry@;
+    out.push(entry);
+    proof {
+        assert(acts_view(out@) =~= acts_view(before).push(ev));
+    }
+    out
+}
+
+/// [`age_activations`]: one tick of the clock.
+pub fn age_activations_exec(acts: &[ActivationRecord]) -> (out: Vec<ActivationRecord>)
+    ensures
+        acts_view(out@) == age_activations(acts_view(acts@)),
+{
+    let ghost av = acts_view(acts@);
+    let mut out: Vec<ActivationRecord> = Vec::new();
+    let mut k: usize = 0;
+    while k < acts.len()
+        invariant
+            k <= acts.len(),
+            av == acts_view(acts@),
+            out@.len() == k,
+            forall|j: int| 0 <= j < k ==> (#[trigger] out@[j])@ == (Activation { left: if av[j].left > 0 { (av[j].left - 1) as nat } else { 0 }, ..av[j] }),
+        decreases acts.len() - k,
+    {
+        if let Some(t) = acts.get(k) {
+            let left = t.left.saturating_sub(1);
+            let ghost before = out@;
+            out.push(ActivationRecord { id: t.id, lock: clone_origin(&t.lock), left });
+            proof {
+                assert(av[k as int] == t@);
+                assert forall|j: int| 0 <= j < k + 1 implies (#[trigger] out@[j])@ == (Activation {
+                    left: if av[j].left > 0 { (av[j].left - 1) as nat } else { 0 },
+                    ..av[j]
+                }) by {
+                    if j < k {
+                        assert(out@[j] == before[j]);
+                    }
+                }
+            }
+        }
+        // Never saturates: k < acts.len().
+        k = k.saturating_add(1);
+    }
+    proof {
+        assert(acts_view(out@) =~= age_activations(av));
+    }
+    out
+}
+
+// ---------------------------------------------------------------------
 // Outputs.
 // ---------------------------------------------------------------------
 
@@ -386,17 +673,35 @@ pub fn user_input_exec(s: StateRecord, tab: u64, input: (u64, u64, u64, bool, u6
             tab as nat,
             UserInput { kind: input.0, x: input.1, y: input.2, negative: input.3, delta: input.4, key: input.5 },
         ),
-        out.0 == s,
+        out.0.renderers@ == s.renderers@,
+        out.0.jar@ == s.jar@,
+        out.0.storage@ == s.storage@,
+        out.0.conns@ == s.conns@,
+        out.0.subfetches@ == s.subfetches@,
+        out.0.subcounts@ == s.subcounts@,
+        out.0.gpu == s.gpu,
+        out.0.next_id == s.next_id,
+        out.0.next_conn == s.next_conn,
+        out.0.now == s.now,
 {
     match find_by_tab_exec(s.renderers.as_slice(), tab) {
         None => (s, no_outputs()),
         Some(i) => {
-            let id = match s.renderers.get(i) {
-                Some(r) => r.id,
-                None => 0,
+            let (id, activates) = match s.renderers.get(i) {
+                Some(r) => (r.id, r.committed && (input.0 == 0 || input.0 == 2)),
+                None => (0, false),
             };
             let (kind, x, y, negative, delta, key) = input;
             let bytes = reply_frame_exec(&Msg::Input { kind, x, y, negative, delta, key });
+            let mut s = s;
+            if activates {
+                // Item 7.16: a click or a key to a committed renderer is a user
+                // activation of it.
+                if let Some(r) = s.renderers.get(i) {
+                    let acts = set_activation_exec(s.acts.as_slice(), r.id, &r.lock, 1000);
+                    s.acts = acts;
+                }
+            }
             (s, one_output(OutputRecord::ToRenderer { id, bytes }))
         },
     }
@@ -451,7 +756,7 @@ pub fn from_gpu_exec<F: FetchFnsExec>(s: StateRecord, id: u64, bytes: &[u8]) -> 
                     let (vw, vh, _vs) = viewport_of_exec(s.viewports.as_slice(), tab);
                     if width <= vw && height <= vh {
                         let (url, title) = match s.renderers.get(i) {
-                            Some(r) => (copy(r.url.as_slice()), title_of_exec(s.titles.as_slice(), r)),
+                            Some(r) => (doc_url_of_exec(s.doc_urls.as_slice(), r), title_of_exec(s.titles.as_slice(), r)),
                             None => (Vec::new(), Vec::new()),
                         };
                         let outs = one_output(OutputRecord::Paint { tab, url, title, buffer, width, height });

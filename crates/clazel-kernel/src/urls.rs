@@ -111,7 +111,23 @@ pub open spec fn resolve_scalar(dp: clazel_url::host::spec::DomainParser, base: 
     }
 }
 
-/// The kernel's URL functions with the domain parser `dp`: the three
+/// The scheme "javascript", as code points.
+pub open spec fn javascript_scheme() -> Seq<u32> {
+    seq![0x6Au32, 0x61, 0x76, 0x61, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74]
+}
+
+/// `is_javascript` on a scalar value string (item 7.16): it parses (URL
+/// §4.4, no base) to a URL whose scheme is `javascript`. The parser
+/// lowercases the scheme, so one comparison covers every case of the
+/// input's.
+pub open spec fn is_javascript_scalar(dp: clazel_url::host::spec::DomainParser, input: Seq<u32>) -> bool {
+    match parse_absolute(dp, input) {
+        Some(url) => url.scheme == javascript_scheme(),
+        None => false,
+    }
+}
+
+/// The kernel's URL functions with the domain parser `dp`: the four
 /// functions above, guarded to the strings the parser accepts as input and
 /// (for `resolve`) to a scalar value result (see the modelling choices).
 pub open spec fn urls_with(dp: clazel_url::host::spec::DomainParser) -> UrlFns {
@@ -126,6 +142,7 @@ pub open spec fn urls_with(dp: clazel_url::host::spec::DomainParser) -> UrlFns {
         } else {
             seq![]
         },
+        is_javascript: |url: Seq<u32>| clazel_encoding::utf8::spec::all_scalar_values(url) && is_javascript_scalar(dp, url),
         resolve: |base: Seq<u32>, input: Seq<u32>| if clazel_encoding::utf8::spec::all_scalar_values(base)
             && clazel_encoding::utf8::spec::all_scalar_values(input) {
             match resolve_scalar(dp, base, input) {

@@ -40,6 +40,7 @@ use clazel_js_heap::symbol as wk;
 use clazel_js_heap::value::Value;
 use clazel_js_vm::heap::ObjKind;
 use clazel_js_vm::interp::{Abrupt, Intrinsic, Vm};
+use clazel_js_vm::suspend::{Capability, PromiseOps};
 
 /// The tags of this module's host objects.
 const TAG_PROMISE: u32 = 0x5001;
@@ -73,10 +74,10 @@ const REJECTED: i32 = 2;
 
 /// A PromiseCapability Record (§27.2.1.1†).
 #[derive(Clone, Copy)]
-struct Cap {
-    promise: Value,
-    resolve: Value,
-    reject: Value,
+pub(crate) struct Cap {
+    pub(crate) promise: Value,
+    pub(crate) resolve: Value,
+    pub(crate) reject: Value,
 }
 
 /// The state of a Promise, as an embedder sees it.
@@ -133,7 +134,32 @@ pub fn install(vm: &mut Vm) -> Result<(), Abrupt> {
     vm.set_intrinsic(Intrinsic::PromiseReactionJob, job);
     let job = vm.new_native("", 3, promise_resolve_thenable_job)?;
     vm.set_intrinsic(Intrinsic::PromiseResolveThenableJob, job);
+    vm.set_promise_ops(PromiseOps {
+        new_capability: ops_new_capability,
+        resolve: ops_resolve,
+        then: ops_then,
+    });
     crate::util::global(vm, "Promise", ctor)
+}
+
+/// NewPromiseCapability(%Promise%), for `await` and async functions
+/// ([`PromiseOps`]).
+fn ops_new_capability(vm: &mut Vm) -> Result<Capability, Abrupt> {
+    let c = vm.intrinsic(Intrinsic::PromiseConstructor);
+    let cap = new_promise_capability(vm, c)?;
+    Ok((cap.promise, cap.resolve, cap.reject))
+}
+
+/// PromiseResolve(%Promise%, x), for `await` ([`PromiseOps`]).
+fn ops_resolve(vm: &mut Vm, x: Value) -> Result<Value, Abrupt> {
+    let c = vm.intrinsic(Intrinsic::PromiseConstructor);
+    promise_resolve(vm, c, x)
+}
+
+/// PerformPromiseThen(promise, onFulfilled, onRejected), for `await`
+/// ([`PromiseOps`]).
+fn ops_then(vm: &mut Vm, p: Value, f: Value, r: Value) -> Result<(), Abrupt> {
+    perform_promise_then(vm, p, f, r, None).map(|_| ())
 }
 
 // -----------------------------------------------------------------------
@@ -444,7 +470,7 @@ fn promise_resolve_thenable_job(
 /// 11. Set promiseCapability.[[Resolve]] to resolvingFunctions.[[Resolve]].
 /// 12. Set promiseCapability.[[Reject]] to resolvingFunctions.[[Reject]].
 /// 13. Return promiseCapability.
-fn new_promise_capability(vm: &mut Vm, c: Value) -> Result<Cap, Abrupt> {
+pub(crate) fn new_promise_capability(vm: &mut Vm, c: Value) -> Result<Cap, Abrupt> {
     if !vm.is_constructor(c) {
         return Err(vm.type_error("Promise capability constructor is not a constructor"));
     }
@@ -517,7 +543,7 @@ fn capability_executor(vm: &mut Vm, _this: Value, args: &[Value]) -> Result<Valu
 /// 12. Set promise.[[PromiseIsHandled]] to true.
 /// 13. If resultCapability is undefined, then a. Return undefined.
 /// 14. Else, a. Return resultCapability.[[Promise]].
-fn perform_promise_then(
+pub(crate) fn perform_promise_then(
     vm: &mut Vm,
     promise: Value,
     on_fulfilled: Value,
@@ -579,7 +605,7 @@ fn perform_promise_then(
 /// 2. Let promiseCapability be ? NewPromiseCapability(C).
 /// 3. Perform ? Call(promiseCapability.[[Resolve]], undefined, « x »).
 /// 4. Return promiseCapability.[[Promise]].
-fn promise_resolve(vm: &mut Vm, c: Value, x: Value) -> Result<Value, Abrupt> {
+pub(crate) fn promise_resolve(vm: &mut Vm, c: Value, x: Value) -> Result<Value, Abrupt> {
     if is_promise(vm, x) {
         let x_constructor = get(vm, x, "constructor")?;
         if crate::util::same_value(vm, x_constructor, c) {

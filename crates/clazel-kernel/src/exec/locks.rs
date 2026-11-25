@@ -174,6 +174,9 @@ pub fn lock_of_url_exec<U: UrlFnsExec>(urls: &U, url: &[u32], id: u64) -> (r: Op
     ensures
         origin_opt_view(r) == lock_of_url(urls.urls(), url@, id as nat),
 {
+    if urls.is_javascript(url) {
+        return None;
+    }
     match urls.origin_of(url) {
         Some(o) => lock_of_origin_exec(o, id),
         None => None,

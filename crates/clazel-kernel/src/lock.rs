@@ -358,6 +358,8 @@ pub proof fn lemma_stable_same(urls: UrlFns, rs: Seq<Renderer>, next_id: nat)
 }
 
 /// **`theorem_lock_is_committed_origin`, part 2.**
+#[verifier::spinoff_prover]
+#[verifier::rlimit(100)]
 pub proof fn theorem_lock_set_only_by_navigation(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
     requires
         reachable(rules, urls, fetch, s),
@@ -401,6 +403,16 @@ pub proof fn theorem_lock_set_only_by_navigation(rules: Seq<clazel_psl::spec::Ru
                                 if lock_of_url(urls, resolved, s.next_id) is Some {
                                     lemma_begin_stable(rules, urls, fetch, s, r.tab, resolved, clazel_fetch::request::spec::get_req());
                                 }
+                            }
+                        }
+                    }
+                    // Item 7.16: a popup is a new renderer, with a new id, as the
+                    // host's `OpenTab` makes it.
+                    if let Some(clazel_ipc::message::spec::Message::OpenTab { url }) = accepted_message(r, bytes) {
+                        crate::popup_rel::lemma_popup_resolved(rules, urls, fetch, s, r, url);
+                        if let Some(resolved) = crate::popup_rel::popup_resolved(urls, s, r, url) {
+                            if let Some(lock) = lock_of_url(urls, resolved, s.next_id) {
+                                lemma_open_tab_stable(rules, urls, fetch, s, resolved, None, lock);
                             }
                         }
                     }

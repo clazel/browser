@@ -1,4 +1,4 @@
-//! The units.extend(key_text.units());nterpreter loop (phase-7.md item 7.8, first slice).
+//! The interpreter loop (phase-7.md item 7.8, first slice).
 //!
 //! [`Vm`] owns the frame region ([`crate::frame`]), the heap
 //! ([`crate::heap`]) and the loaded code. [`Vm::run`] and [`Vm::call`] push a
@@ -209,6 +209,23 @@ pub enum Intrinsic {
     WeakMapPrototype,
     /// `%WeakSet.prototype%` (§24.4.3†).
     WeakSetPrototype,
+    /// `%GeneratorFunction.prototype%` (§27.3.3†): the [[Prototype]] of
+    /// generator functions.
+    GeneratorFunctionPrototype,
+    /// `%GeneratorPrototype%`, `%GeneratorFunction.prototype.prototype%`
+    /// (§27.5.1†): the prototype of a generator object whose function's
+    /// `prototype` is not an Object.
+    GeneratorPrototype,
+    /// `%AsyncFunction.prototype%` (§27.7.3†).
+    AsyncFunctionPrototype,
+    /// `%AsyncGeneratorFunction.prototype%` (§27.4.3†).
+    AsyncGeneratorFunctionPrototype,
+    /// `%AsyncGeneratorPrototype%` (§27.6.1†).
+    AsyncGeneratorPrototype,
+    /// `%AsyncFromSyncIteratorPrototype%` (§27.1.6.2†).
+    AsyncFromSyncIteratorPrototype,
+    /// `%Date.prototype%` (§21.4.4†).
+    DatePrototype,
 }
 
 /// The most natives that may run one inside another, until
@@ -234,7 +251,30 @@ pub const DEFAULT_NESTING_DEPTH: u32 = 512;
 pub const DEFAULT_REGEXP_BACKTRACK: u64 = 1 << 20;
 
 /// How many [`Intrinsic`]s there are.
-const INTRINSICS: usize = 31;
+const INTRINSICS: usize = 38;
+
+/// What a built-in asks the embedder about the world ([`Vm::world`]): the two
+/// host-defined answers `Date` needs, which `clazel-js` forwards to its
+/// `Host` (`now_ms` and `local_tza`). The built-ins never read the clock or
+/// the time zone themselves.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum World {
+    /// The current time in milliseconds since the Unix epoch.
+    NowMs,
+    /// ECMA-262's `LocalTZA ( t, isUTC )` (§21.4.1.26†): the local time zone's
+    /// offset from UTC in milliseconds at `time_ms`, which is a UTC time if
+    /// `is_utc` and a local time otherwise.
+    LocalTza {
+        /// The time to convert.
+        time_ms: f64,
+        /// Whether `time_ms` is a UTC time.
+        is_utc: bool,
+    },
+}
+
+/// The embedder's answer to a [`World`] question, installed with
+/// [`Vm::set_world_hook`].
+pub type WorldHook = fn(&mut Vm, World) -> f64;
 
 /// The hint of ToPrimitive (§7.1.1†).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -298,6 +338,17 @@ pub(crate) struct LoadedFn {
 pub struct Script {
     /// The index of the script's own function in the VM's code table.
     pub main: u32,
+}
+
+/// How an exception's unwinding ended (see `Vm::unwind`).
+enum Unwound {
+    /// A handler caught it, or a suspendable frame settled its object with it
+    /// and returned to its caller.
+    Caught,
+    /// It left the entry frame.
+    Escaped,
+    /// A suspendable entry frame settled its object with it and returned.
+    Done(Value),
 }
 
 /// What the loop does after an op.
@@ -393,6 +444,9 @@ pub struct Vm {
     /// Makes the functions of a lazy accessor pair, see
     /// [`Vm::set_lazy_accessor_maker`].
     pub(crate) lazy_accessor_maker: Option<LazyAccessorMaker>,
+    /// The embedder's answers about the clock and the time zone, see
+    /// [`Vm::set_world_hook`].
+    pub(crate) world_hook: Option<WorldHook>,
     /// Host objects, the slots of native functions and the job queue
     /// ([`crate::host`]).
     pub(crate) host: crate::host::HostState,
@@ -486,6 +540,7 @@ impl Vm {
             atoms,
             embedder: None,
             lazy_accessor_maker: None,
+            world_hook: None,
             host: crate::host::HostState::default(),
         })
     }
@@ -505,6 +560,22 @@ impl Vm {
     /// looks at it. Dropping the VM drops it.
     pub fn set_embedder<T: Any + Send>(&mut self, data: T) {
         self.embedder = Some(Box::new(data));
+    }
+
+    /// Installs the embedder's answers to [`World`] questions (the clock and
+    /// the time zone, for `Date`).
+    pub fn set_world_hook(&mut self, hook: WorldHook) {
+        self.world_hook = Some(hook);
+    }
+
+    /// Asks the embedder about the world. A VM without a hook has no clock
+    /// and no time zone: the time is `0` (the epoch) and the offset is `0`
+    /// (UTC), so `Date` still works and is deterministic.
+    pub fn world(&mut self, question: World) -> f64 {
+        match self.world_hook {
+            Some(hook) => hook(self, question),
+            None => 0.0,
+        }
     }
 
     /// The embedder's state, if it is a `T`.
@@ -841,7 +912,7 @@ impl Vm {
         self.codes.get(code).ok_or(Abrupt::Internal("code index"))
     }
 
-    fn set_frame(&mut self, fp: usize, pc: usize, cur: usize) -> Result<(), Abrupt> {
+    pub(crate) fn set_frame(&mut self, fp: usize, pc: usize, cur: usize) -> Result<(), Abrupt> {
         let f = self.func(cur)?;
         let size =
             frame_size(f.code.nparams, f.code.nregs).ok_or(Abrupt::Internal("frame size"))?;
@@ -887,6 +958,10 @@ impl Vm {
             // Step 6.b: ToObject(thisArgument), the wrapper object.
             self.to_object(this)?
         };
+        // A generator's, async function's or async generator's frame is
+        // suspendable (`crate::suspend`); an async function's starts with its
+        // promise (AsyncFunctionStart §27.7.5.1†).
+        let (frame_kind, suspendable) = self.suspendable_entry(code, frame_kind)?;
         self.charge()?;
         let size = frame_size(nparams, nregs).ok_or(Abrupt::Internal("frame size"))?;
         let ret_value = match ret {
@@ -916,6 +991,7 @@ impl Vm {
             self.region.set_reg(base, r, *a)?;
         }
         self.set_frame(base, 0, code)?;
+        self.suspendable_entered(base, suspendable);
         if let Some(f) = self.codes.get_mut(code) {
             f.entries = f.entries.saturating_add(1);
         }
@@ -968,19 +1044,21 @@ impl Vm {
             match self.report_heap_limit(stepped) {
                 Ok(Flow::Continue) => {}
                 Ok(Flow::Done(v)) => return Ok(v),
-                Err(Abrupt::Throw(v)) => {
-                    if !self.unwind(v)? {
-                        return Err(Abrupt::Throw(v));
-                    }
-                }
+                Err(Abrupt::Throw(v)) => match self.unwind(v)? {
+                    Unwound::Caught => {}
+                    Unwound::Escaped => return Err(Abrupt::Throw(v)),
+                    Unwound::Done(r) => return Ok(r),
+                },
                 Err(e) => return Err(e),
             }
         }
     }
 
-    /// Unwinds a thrown value: true if a handler caught it (the running frame
-    /// and `pc` are now the handler's), false if it left the entry frame.
-    fn unwind(&mut self, exc: Value) -> Result<bool, Abrupt> {
+    /// Unwinds a thrown value: caught by a handler (the running frame and `pc`
+    /// are now the handler's), or by an async function's or async generator's
+    /// frame, which settles its promise and returns (`crate::suspend`), or
+    /// left the entry frame.
+    fn unwind(&mut self, exc: Value) -> Result<Unwound, Abrupt> {
         loop {
             let pc = u32::try_from(self.pc).map_err(|_| Abrupt::Internal("pc"))?;
             let target = self
@@ -994,11 +1072,16 @@ impl Vm {
                 self.exception = exc;
                 let target = usize::try_from(t).map_err(|_| Abrupt::Internal("pc"))?;
                 self.pc = target;
-                return Ok(true);
+                return Ok(Unwound::Caught);
+            }
+            match self.suspendable_throw(exc)? {
+                Some(Flow::Continue) => return Ok(Unwound::Caught),
+                Some(Flow::Done(v)) => return Ok(Unwound::Done(v)),
+                None => {}
             }
             match self.pop_frame()? {
                 Some(()) => {}
-                None => return Ok(false),
+                None => return Ok(Unwound::Escaped),
             }
         }
     }
@@ -1028,10 +1111,15 @@ impl Vm {
             KIND_PLAIN => v,
             KIND_CONSTRUCT if self.heap.is_object(v) => v,
             KIND_CONSTRUCT => self.region.header(self.fp, crate::frame::HDR_THIS)?,
-            _ => {
-                return Err(Abrupt::NotYet("return from a suspendable frame".into()));
-            }
+            _ => return self.suspendable_return(v),
         };
+        self.return_to_caller(v)
+    }
+
+    /// Leaves the running frame with `v`: to the caller's call op, whose
+    /// destination register receives `v`, or out of the loop for a frame with
+    /// no caller in the region.
+    pub(crate) fn return_to_caller(&mut self, v: Value) -> Result<Flow, Abrupt> {
         let ret = unpack_ret(self.region.header(self.fp, HDR_RET)?)
             .ok_or(Abrupt::Internal("return address"))?;
         match ret {
@@ -1865,7 +1953,14 @@ impl Vm {
                 let v = self.create_rest_array(from)?;
                 self.w(dst, v)?;
             }
-            other => return Err(Abrupt::NotYet(op_name(&other))),
+            // Generators, async functions and the iteration ops of `yield*`
+            // and `for await` (`crate::suspend`).
+            other => {
+                return match self.step_suspend(&other)? {
+                    Some(flow) => Ok(flow),
+                    None => Err(Abrupt::NotYet(op_name(&other))),
+                };
+            }
         }
         self.pc = next;
         Ok(Flow::Continue)

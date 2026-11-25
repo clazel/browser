@@ -62,6 +62,9 @@ pub(crate) struct HostState {
     pub(crate) entry_args: HashMap<usize, Vec<Value>>,
     /// The class ops' tables (`crate::class`).
     pub(crate) class: crate::class::ClassState,
+    /// The suspendable frames, async generator queues and Promise operations
+    /// (`crate::suspend`).
+    pub(crate) suspend: crate::suspend::SuspendState,
 }
 
 /// The most jobs one [`Vm::run_jobs`] runs: a promise chain that enqueues
@@ -142,7 +145,7 @@ impl Vm {
         self.host_object(obj).map(|h| h.slots.as_slice())
     }
 
-    fn host_object(&self, obj: Value) -> Option<&HostObject> {
+    pub(crate) fn host_object(&self, obj: Value) -> Option<&HostObject> {
         match self.heap.obj(obj)?.kind {
             ObjKind::Host(i) => self.host.objects.get(usize::try_from(i).ok()?),
             _ => None,
@@ -163,7 +166,7 @@ impl Vm {
         self.host_object_mut(obj).map(|h| &mut h.table)
     }
 
-    fn host_object_mut(&mut self, obj: Value) -> Option<&mut HostObject> {
+    pub(crate) fn host_object_mut(&mut self, obj: Value) -> Option<&mut HostObject> {
         match self.heap.obj(obj)?.kind {
             ObjKind::Host(i) => self.host.objects.get_mut(usize::try_from(i).ok()?),
             _ => None,

@@ -601,8 +601,8 @@
     {
       "id": "show-under-another-url",
       "file": "src/spec.rs",
-      "find": "Output::Show { tab: r.tab, url: r.url, title, text, links }",
-      "replace": "Output::Show { tab: r.tab, url: r.url.drop_last(), title, text, links }",
+      "find": "Output::Show { tab: r.tab, url: doc_url_of(s.doc_urls, r), title, text, links }",
+      "replace": "Output::Show { tab: r.tab, url: doc_url_of(s.doc_urls, r).drop_last(), title, text, links }",
       "expect": "killed",
       "module": "mutation_lemmas",
       "reason": "A Display is shown under an address that is not the sender's committed URL: ml_display_shows, the core of theorem_address_bar_integrity, is false.",
@@ -615,8 +615,8 @@
     {
       "id": "show-on-the-senders-id",
       "file": "src/spec.rs",
-      "find": "Output::Show { tab: r.tab, url: r.url, title, text, links }",
-      "replace": "Output::Show { tab: r.id, url: r.url, title, text, links }",
+      "find": "Output::Show { tab: r.tab, url: doc_url_of(s.doc_urls, r), title, text, links }",
+      "replace": "Output::Show { tab: r.id, url: doc_url_of(s.doc_urls, r), title, text, links }",
       "expect": "killed",
       "module": "mutation_lemmas",
       "reason": "A Display is shown for the tab whose id is the sender's renderer id, which after a cross-origin navigation is not the sender's tab: ml_display_shows, the core of theorem_show_only_own_tab, is false.",
@@ -629,7 +629,7 @@
     {
       "id": "display-before-commit",
       "file": "src/spec.rs",
-      "find": "Some(m) => if (m is Display || m is Title || m is FetchStyle || m is FetchScript || m is Submit) && !r.committed { None } else { Some(m) },",
+      "find": "Some(m) => if (m is Display || m is Title || m is FetchStyle || m is FetchScript || m is Submit || m is UpdateUrl || m is OpenTab || m is Fetch) && !r.committed {\n            None\n        } else {\n            Some(m)\n        },",
       "replace": "Some(m) => Some(m),",
       "expect": "killed",
       "module": "mutation_lemmas",
@@ -699,8 +699,8 @@
     {
       "id": "paint-tab-is-renderer-id",
       "file": "src/spec.rs",
-      "find": "(s, seq![Output::Paint { tab: r.tab, url: r.url,",
-      "replace": "(s, seq![Output::Paint { tab: r.id, url: r.url,",
+      "find": "(s, seq![Output::Paint { tab: r.tab, url: doc_url_of(s.doc_urls, r),",
+      "replace": "(s, seq![Output::Paint { tab: r.id, url: doc_url_of(s.doc_urls, r),",
       "expect": "killed",
       "module": "surface_rel",
       "reason": "A Paint names the renderer's id as its tab: another tab's content area would show it. ml_gpu_paint (what theorem_paint_only_own_tab and theorem_address_bar_integrity rest on) is false.",
@@ -755,8 +755,8 @@
     {
       "id": "input-to-next-renderer",
       "file": "src/spec.rs",
-      "find": "Some(i) => (s, seq![Output::ToRenderer { id: s.renderers[i].id, bytes: input_frame(input) }]),",
-      "replace": "Some(i) => (s, seq![Output::ToRenderer { id: s.renderers[i].id + 1, bytes: input_frame(input) }]),",
+      "find": "(State { acts, ..s }, seq![Output::ToRenderer { id: r.id, bytes: input_frame(input) }])",
+      "replace": "(State { acts, ..s }, seq![Output::ToRenderer { id: r.id + 1, bytes: input_frame(input) }])",
       "expect": "killed",
       "module": "mutation_lemmas",
       "reason": "The user's input on a tab goes to the renderer of the next id: ml_user_input (theorem_input_only_to_own_tab) is false.",
@@ -856,8 +856,8 @@
     {
       "id": "subfetch-at-once-unlimited",
       "file": "src/spec.rs",
-      "find": "live_subfetches(s.subfetches, r.id, r.lock) >= max_subfetches_at_once() || ",
-      "replace": "",
+      "find": "    let refused = (s, reply_failed(r, script, request));\n    if live_subfetches(s.subfetches, r.id, r.lock) >= max_subfetches_at_once() || in_document >= max_subfetches_per_document() || serial\n        >= max_subfetch_serial() {",
+      "replace": "    let refused = (s, reply_failed(r, script, request));\n    if in_document >= max_subfetches_per_document() || serial\n        >= max_subfetch_serial() {",
       "expect": "killed",
       "module": "mutation_lemmas",
       "reason": "A renderer with max_subfetches_at_once sub-fetches in flight may start another: ml_fetch_style_refused (what theorem_subfetch_limits rests on) is false.",
@@ -870,8 +870,8 @@
     {
       "id": "subfetch-per-document-unlimited",
       "file": "src/spec.rs",
-      "find": "in_document >= max_subfetches_per_document() || ",
-      "replace": "",
+      "find": "    let refused = (s, reply_failed(r, script, request));\n    if live_subfetches(s.subfetches, r.id, r.lock) >= max_subfetches_at_once() || in_document >= max_subfetches_per_document() || serial\n        >= max_subfetch_serial() {",
+      "replace": "    let refused = (s, reply_failed(r, script, request));\n    if live_subfetches(s.subfetches, r.id, r.lock) >= max_subfetches_at_once() || serial\n        >= max_subfetch_serial() {",
       "expect": "killed",
       "module": "mutation_lemmas",
       "reason": "A document that has started max_subfetches_per_document sub-fetches may start another: ml_fetch_style_refused (what theorem_subfetch_limits rests on) is false.",
@@ -884,8 +884,8 @@
     {
       "id": "subfetch-serial-unbounded",
       "file": "src/spec.rs",
-      "find": " || serial\n        >= max_subfetch_serial()",
-      "replace": "",
+      "find": "    let refused = (s, reply_failed(r, script, request));\n    if live_subfetches(s.subfetches, r.id, r.lock) >= max_subfetches_at_once() || in_document >= max_subfetches_per_document() || serial\n        >= max_subfetch_serial() {",
+      "replace": "    let refused = (s, reply_failed(r, script, request));\n    if live_subfetches(s.subfetches, r.id, r.lock) >= max_subfetches_at_once() || in_document >= max_subfetches_per_document() {",
       "expect": "killed",
       "module": "mutation_lemmas",
       "reason": "A renderer whose serial counter is at its bound may start another sub-fetch, whose serial the exec kernel cannot represent: ml_fetch_style_refused is false.",
@@ -1075,6 +1075,443 @@
         "file": "src/mutation_lemmas.rs",
         "lemma": "ml_gpu_rule2(-1, -2, 0)",
         "witness": "ml_exit(ml_gpu_exit_state(Some(ml_rec(false, true, seq![-1int, -2int])), false, Seq::<SiteExit>::empty(), 0))[0] == Output::Spawn { id: 0, policy: Policy::GpuSoftware }"
+      }
+    },
+    {
+      "id": "url-update-any-origin",
+      "file": "src/spec.rs",
+      "find": "Some(resolved) => if r.lock is Tuple && lock_of_url(urls, resolved, r.id) == Some(r.lock) {",
+      "replace": "Some(resolved) => if r.lock is Tuple {",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "An UpdateUrl is accepted whatever the URL's origin, so pushState could put another site's URL in the address bar. ml_update_url_checked (the core of theorem_url_update_same_origin) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_update_url_checked(ml_urls_no_origin(), init_state(), ml_renderer(0, ml_tuple(seq![0x68u32, 0x74, 0x74, 0x70])), seq![0x62u8])",
+        "witness": "update_url(ml_urls_no_origin(), init_state(), ml_renderer(0, ml_tuple(seq![0x68u32, 0x74, 0x74, 0x70])), seq![0x62u8]).0.doc_urls.len() == 1 && lock_of_url(ml_urls_no_origin(), update_url(ml_urls_no_origin(), init_state(), ml_renderer(0, ml_tuple(seq![0x68u32, 0x74, 0x74, 0x70])), seq![0x62u8]).0.doc_urls.last().url, 0) is None",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "url-update-opaque-lock",
+      "file": "src/spec.rs",
+      "find": "Some(resolved) => if r.lock is Tuple && lock_of_url(urls, resolved, r.id) == Some(r.lock) {",
+      "replace": "Some(resolved) => if lock_of_url(urls, resolved, r.id) == Some(r.lock) {",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "An opaque-origin renderer's UpdateUrl is accepted: every opaque URL has its lock (lock_of_url gives Opaque(its id) to any opaque origin), so a data: document could show any opaque URL. ml_update_url_checked is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_update_url_checked(ml_urls_opaque(), init_state(), ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), seq![0x62u8])",
+        "witness": "update_url(ml_urls_opaque(), init_state(), ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), seq![0x62u8]).0.doc_urls.len() == 1 && !(ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)).lock is Tuple)",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "doc-url-set-keeps-old",
+      "file": "src/spec.rs",
+      "find": "forget_doc_url(ds, id, lock).push(DocUrl { id, lock, url })",
+      "replace": "ds.push(DocUrl { id, lock, url })",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "A second UpdateUrl leaves the first entry in place, and doc_url_of reads the first: the address bar keeps the old URL. ml_doc_url_set is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_doc_url_set(seq![DocUrl { id: 0, lock: clazel_origin::spec::Origin::Opaque(0nat), url: seq![0x61u32] }], ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), seq![0x62u32])",
+        "witness": "doc_url_of(set_doc_url(seq![DocUrl { id: 0, lock: clazel_origin::spec::Origin::Opaque(0nat), url: seq![0x61u32] }], 0, clazel_origin::spec::Origin::Opaque(0nat), seq![0x62u32]), ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat))) == seq![0x61u32] && seq![0x61u32] != seq![0x62u32]",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "show-under-committed-url",
+      "file": "src/spec.rs",
+      "find": "Output::Show { tab: r.tab, url: doc_url_of(s.doc_urls, r), title, text, links }",
+      "replace": "Output::Show { tab: r.tab, url: r.url, title, text, links }",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "A Display is shown under the committed URL after an accepted pushState: the address line is not the document's URL. ml_display_shows (the core of theorem_address_bar_integrity, restated for item 7.16) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_display_shows(Seq::<clazel_psl::spec::Rule>::empty(), crate::counterexamples::ce_urls(), crate::counterexamples::ce_fetch(), ml_doc_state(clazel_origin::spec::Origin::Opaque(0nat), seq![0x62u32]), ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), Seq::<u8>::empty(), Seq::<u8>::empty(), Seq::<Seq<u8>>::empty())",
+        "witness": "handle_message(Seq::<clazel_psl::spec::Rule>::empty(), crate::counterexamples::ce_urls(), crate::counterexamples::ce_fetch(), ml_doc_state(clazel_origin::spec::Origin::Opaque(0nat), seq![0x62u32]), ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), clazel_ipc::message::spec::Message::Display { title: Seq::<u8>::empty(), text: Seq::<u8>::empty(), links: Seq::<Seq<u8>>::empty() }).1[0]->Show_url == seq![0x61u32] && doc_url_of(ml_doc_state(clazel_origin::spec::Origin::Opaque(0nat), seq![0x62u32]).doc_urls, ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat))) == seq![0x62u32] && seq![0x61u32] != seq![0x62u32]",
+        "reveal": []
+      }
+    },
+    {
+      "id": "paint-under-committed-url",
+      "file": "src/spec.rs",
+      "find": "(s, seq![Output::Paint { tab: r.tab, url: doc_url_of(s.doc_urls, r),",
+      "replace": "(s, seq![Output::Paint { tab: r.tab, url: r.url,",
+      "expect": "killed",
+      "module": "surface_rel",
+      "reason": "A Paint is labelled with the committed URL after an accepted pushState. ml_gpu_paint (what theorem_address_bar_integrity's second half rests on) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_gpu_paint(State { doc_urls: seq![DocUrl { id: 1, lock: clazel_origin::spec::Origin::Opaque(1nat), url: seq![0x62u32] }], ..ml_gpu_state(true, true) }, 1, ml_frame_ready(0))",
+        "witness": "from_gpu(State { doc_urls: seq![DocUrl { id: 1, lock: clazel_origin::spec::Origin::Opaque(1nat), url: seq![0x62u32] }], ..ml_gpu_state(true, true) }, 1, ml_frame_ready(0)).1.len() == 1 && from_gpu(State { doc_urls: seq![DocUrl { id: 1, lock: clazel_origin::spec::Origin::Opaque(1nat), url: seq![0x62u32] }], ..ml_gpu_state(true, true) }, 1, ml_frame_ready(0)).1[0] is Paint && find_by_id((State { doc_urls: seq![DocUrl { id: 1, lock: clazel_origin::spec::Origin::Opaque(1nat), url: seq![0x62u32] }], ..ml_gpu_state(true, true) }).renderers, 1, 0) == Some(0int) && (State { doc_urls: seq![DocUrl { id: 1, lock: clazel_origin::spec::Origin::Opaque(1nat), url: seq![0x62u32] }], ..ml_gpu_state(true, true) }).renderers.len() > 0 && from_gpu(State { doc_urls: seq![DocUrl { id: 1, lock: clazel_origin::spec::Origin::Opaque(1nat), url: seq![0x62u32] }], ..ml_gpu_state(true, true) }, 1, ml_frame_ready(0)).1[0]->Paint_url == seq![0x61u32] && doc_url_of((State { doc_urls: seq![DocUrl { id: 1, lock: clazel_origin::spec::Origin::Opaque(1nat), url: seq![0x62u32] }], ..ml_gpu_state(true, true) }).doc_urls, (State { doc_urls: seq![DocUrl { id: 1, lock: clazel_origin::spec::Origin::Opaque(1nat), url: seq![0x62u32] }], ..ml_gpu_state(true, true) }).renderers[0]) == seq![0x62u32] && seq![0x61u32] != seq![0x62u32]",
+        "reveal": []
+      }
+    },
+    {
+      "id": "commit-keeps-doc-url",
+      "file": "src/spec.rs",
+      "find": "doc_urls: forget_doc_url(s.doc_urls, old.id, old.lock),",
+      "replace": "doc_urls: s.doc_urls,",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "A same-origin commit keeps the old document's pushState URL, so the address bar names a URL the new document never had. ml_commit_forgets_doc_url is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_commit_forgets_doc_url(ml_urls_tuple(), ml_commit_state(), 0, seq![0x63u32], script_document(Seq::<u8>::empty()), 0, ml_tuple(seq![0x68u32, 0x74, 0x74, 0x70]))",
+        "witness": "ml_commit_state().doc_urls.len() == 1 && forget_doc_url(ml_commit_state().doc_urls, 0, ml_tuple(seq![0x68u32, 0x74, 0x74, 0x70])).len() == 0",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "update-url-before-commit",
+      "file": "src/spec.rs",
+      "find": "|| m is Submit || m is UpdateUrl || m is OpenTab || m is Fetch) && !r.committed",
+      "replace": "|| m is Submit || m is OpenTab || m is Fetch) && !r.committed",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "A renderer that has committed nothing may send UpdateUrl. ml_uncommitted_update_url, the case theorem_url_update_same_origin's committed sender rests on, is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_uncommitted_update_url(Renderer { committed: false, ..ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)) }, seq![0x00u8, 0x00, 0x00, 0x04, 0x83, 0x11, 0xF4, 0x60])",
+        "witness": "decode_renderer_frame(seq![0x00u8, 0x00, 0x00, 0x04, 0x83, 0x11, 0xF4, 0x60]) == Some(clazel_ipc::message::spec::Message::UpdateUrl { replace: false, url: Seq::<u8>::empty() }) && accepted_message(Renderer { committed: false, ..ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)) }, seq![0x00u8, 0x00, 0x00, 0x04, 0x83, 0x11, 0xF4, 0x60]) is Some",
+        "reveal": []
+      }
+    },
+    {
+      "id": "cors-check-no-header",
+      "file": "src/spec.rs",
+      "module": "mutation_lemmas",
+      "find": "        // 2.\n        None => false,",
+      "replace": "        // 2.\n        None => true,",
+      "expect": "killed",
+      "reason": "A response without Access-Control-Allow-Origin passes the CORS check: a cross-origin body reaches the renderer. ml_cors_no_header (what theorem_cors_read rests on) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_cors_no_header(seq![0x62u8])",
+        "witness": "cors_check(ml_response(seq![0x62u8]), seq![0x62u8])"
+      }
+    },
+    {
+      "id": "cors-check-any-origin",
+      "file": "src/spec.rs",
+      "module": "mutation_lemmas",
+      "find": "        Some(v) => v == lit_star() || v == origin,",
+      "replace": "        Some(v) => true,",
+      "expect": "killed",
+      "reason": "Any Access-Control-Allow-Origin passes the CORS check, even another origin's. ml_cors_mismatch is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_cors_mismatch()",
+        "witness": "cors_check(ml_acao_response(seq![0x61u8]), seq![0x62u8])"
+      }
+    },
+    {
+      "id": "readable-ignores-mode",
+      "file": "src/spec.rs",
+      "module": "mutation_lemmas",
+      "find": "|| (mode == mode_cors() && cors_check(response, request_origin(lock, tainted)))",
+      "replace": "|| (cors_check(response, request_origin(lock, tainted)))",
+      "expect": "killed",
+      "reason": "A \"no-cors\" request reads a cross-origin body that the server allowed for CORS: no-cors must give an opaque response. ml_no_cors_not_readable is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_no_cors_not_readable(clazel_origin::spec::Origin::Opaque(0nat), clazel_fetch::transducer::examples::url_a(None), ml_acao_response(seq![0x2Au8]))",
+        "witness": "(ml_fetch_cross().urls.origin)(clazel_fetch::transducer::examples::url_a(None)) != clazel_origin::spec::Origin::Opaque(0nat) && api_readable(ml_fetch_cross(), clazel_origin::spec::Origin::Opaque(0nat), mode_no_cors(), false, clazel_fetch::transducer::examples::url_a(None), ml_acao_response(seq![0x2Au8]))"
+      }
+    },
+    {
+      "id": "readable-ignores-taint",
+      "file": "src/spec.rs",
+      "module": "mutation_lemmas",
+      "find": "((fetch.urls.origin)(url) == lock && !tainted)",
+      "replace": "((fetch.urls.origin)(url) == lock)",
+      "expect": "killed",
+      "reason": "A response that came back to the origin through a cross-origin redirect counts as basic (Fetch taints it). ml_tainted_not_basic is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_tainted_not_basic(clazel_fetch::transducer::examples::url_a(None), ml_response(seq![0x62u8]))",
+        "witness": "api_readable(ml_fetch_cross(), clazel_origin::spec::Origin::Opaque(9nat), mode_same_origin(), true, clazel_fetch::transducer::examples::url_a(None), ml_response(seq![0x62u8]))"
+      }
+    },
+    {
+      "id": "no-cors-gives-body",
+      "file": "src/spec.rs",
+      "module": "mutation_lemmas",
+      "find": "        } else if mode == mode_no_cors() {\n            fetch_opaque_frames(request)",
+      "replace": "        } else if mode == mode_no_cors() {\n            fetch_frames(request, response)",
+      "expect": "killed",
+      "reason": "A cross-origin \"no-cors\" response is handed over whole instead of opaque: the renderer reads another site's body. ml_no_cors_opaque is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_no_cors_opaque(clazel_fetch::transducer::examples::url_a(None), ml_response(seq![0x62u8]))",
+        "witness": "api_end(ml_fetch_cross(), clazel_origin::spec::Origin::Opaque(0nat), 1, mode_no_cors(), false, seq![clazel_fetch::transducer::spec::Action::Done { url: clazel_fetch::transducer::examples::url_a(None), response: ml_response(seq![0x62u8]) }]) != fetch_opaque_frames(1)"
+      }
+    },
+    {
+      "id": "fetch-before-commit",
+      "file": "src/spec.rs",
+      "module": "mutation_lemmas",
+      "find": "|| m is UpdateUrl || m is OpenTab || m is Fetch) && !r.committed",
+      "replace": "|| m is UpdateUrl || m is OpenTab) && !r.committed",
+      "expect": "killed",
+      "reason": "A renderer that has committed nothing may send Fetch. ml_uncommitted_fetch is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_uncommitted_fetch(Renderer { committed: false, ..ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)) }, seq![0x00u8, 0x00, 0x00, 0x0E, 0x88, 0x14, 0x01, 0x63, 0x47, 0x45, 0x54, 0x62, 0x2F, 0x61, 0x40, 0x40, 0x01, 0x80])",
+        "witness": "decode_renderer_frame(seq![0x00u8, 0x00, 0x00, 0x0E, 0x88, 0x14, 0x01, 0x63, 0x47, 0x45, 0x54, 0x62, 0x2F, 0x61, 0x40, 0x40, 0x01, 0x80]) is Some && decode_renderer_frame(seq![0x00u8, 0x00, 0x00, 0x0E, 0x88, 0x14, 0x01, 0x63, 0x47, 0x45, 0x54, 0x62, 0x2F, 0x61, 0x40, 0x40, 0x01, 0x80])->Some_0 is Fetch && accepted_message(Renderer { committed: false, ..ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)) }, seq![0x00u8, 0x00, 0x00, 0x0E, 0x88, 0x14, 0x01, 0x63, 0x47, 0x45, 0x54, 0x62, 0x2F, 0x61, 0x40, 0x40, 0x01, 0x80]) is Some"
+      }
+    },
+    {
+      "id": "api-keeps-forbidden-headers",
+      "file": "src/spec.rs",
+      "module": "mutation_lemmas",
+      "find": "headers: clazel_fetch::request::spec::filter_author_headers(lines),",
+      "replace": "headers: lines,",
+      "expect": "killed",
+      "reason": "The kernel passes the page's Cookie header on to the request it builds. ml_api_request_drops_cookie is false (and the request would not be built at all).",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_api_request_drops(ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), clazel_fetch::request::spec::lit_get(), Seq::<u8>::empty(), Seq::<u8>::empty(), mode_cors(), seq![0x43u8, 0x6F, 0x6F, 0x6B, 0x69, 0x65], seq![0x61u8])",
+        "witness": "submit_request(ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), clazel_fetch::request::spec::lit_get(), Seq::<u8>::empty(), Seq::<u8>::empty()) is Some && clazel_fetch::request::spec::author_header_dropped(seq![0x43u8, 0x6F, 0x6F, 0x6B, 0x69, 0x65]) && api_request(ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), clazel_fetch::request::spec::lit_get(), Seq::<u8>::empty(), Seq::<u8>::empty(), mode_cors(), seq![seq![0x43u8, 0x6F, 0x6F, 0x6B, 0x69, 0x65], seq![0x61u8]]) is Some && api_request(ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), clazel_fetch::request::spec::lit_get(), Seq::<u8>::empty(), Seq::<u8>::empty(), mode_cors(), seq![seq![0x43u8, 0x6F, 0x6F, 0x6B, 0x69, 0x65], seq![0x61u8]])->Some_0.headers.len() == 1",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "same-origin-mode-crosses",
+      "file": "src/spec.rs",
+      "module": "mutation_lemmas",
+      "find": "(mode == mode_same_origin() || !needs_no_preflight(req))",
+      "replace": "(!needs_no_preflight(req))",
+      "expect": "killed",
+      "reason": "A \"same-origin\" Fetch of another origin starts (Fetch §4.1 step 12 makes it a network error). ml_same_origin_refused is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_same_origin_refused(Seq::<clazel_psl::spec::Rule>::empty(), ml_urls_resolving(), crate::counterexamples::ce_fetch(), ml_state_one(), ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), 1, clazel_fetch::request::spec::lit_get(), seq![0x61u8], Seq::<u8>::empty(), Seq::<u8>::empty(), Seq::<Seq<u8>>::empty(), seq![0x61u32], seq![0x61u32], clazel_fetch::transducer::examples::url_a(None))",
+        "witness": "clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(seq![0x61u8]) == Some(seq![0x61u32]) && (crate::counterexamples::ce_fetch().parse)(seq![0x61u32]) == Some(clazel_fetch::transducer::examples::url_a(None)) && (crate::counterexamples::ce_fetch().urls.origin)(clazel_fetch::transducer::examples::url_a(None)) != clazel_origin::spec::Origin::Opaque(0nat) && fetch_api(Seq::<clazel_psl::spec::Rule>::empty(), ml_urls_resolving(), crate::counterexamples::ce_fetch(), ml_state_one(), ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), 1, clazel_fetch::request::spec::lit_get(), seq![0x61u8], Seq::<u8>::empty(), Seq::<u8>::empty(), mode_same_origin(), Seq::<Seq<u8>>::empty()).0.subfetches.len() == 1",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "popup-ignores-activation",
+      "file": "src/spec.rs",
+      "find": "    if activation_left(s.acts, r) == 0 {\n        (s, seq![])\n    } else {\n        match clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {\n            None => (s, seq![]),\n            Some(relative) => match (urls.resolve)(r.url, relative) {\n                None => (s, seq![]),\n                Some(resolved) => popup_result(",
+      "replace": "    if false {\n        (s, seq![])\n    } else {\n        match clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {\n            None => (s, seq![]),\n            Some(relative) => match (urls.resolve)(r.url, relative) {\n                None => (s, seq![]),\n                Some(resolved) => popup_result(",
+      "expect": "killed",
+      "module": "popup_mutation_lemmas",
+      "reason": "A renderer opens a tab without any activation the kernel recorded: a page could open as many tabs as it likes. mp_popup_refused (the core of theorem_popup_needs_input) is false.",
+      "certificate": {
+        "file": "src/popup_mutation_lemmas.rs",
+        "lemma": "mp_popup_refused(Seq::<clazel_psl::spec::Rule>::empty(), crate::mutation_lemmas::ml_urls_opaque(), crate::mutation_lemmas::ml_fetch_unparsed(), mp_state(0), mp_renderer(), seq![0x61u8])",
+        "witness": "open_tab_from(Seq::<clazel_psl::spec::Rule>::empty(), crate::mutation_lemmas::ml_urls_opaque(), crate::mutation_lemmas::ml_fetch_unparsed(), mp_state(0), mp_renderer(), seq![0x61u8]).0.next_id == 2",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "popup-keeps-activation",
+      "file": "src/spec.rs",
+      "find": "(State { acts: forget_activation(s1.acts, r.id, r.lock), ..s1 }, out)",
+      "replace": "(s1, out)",
+      "expect": "killed",
+      "module": "popup_mutation_lemmas",
+      "reason": "A popup leaves the activation it used, so one click opens any number of tabs: mp_popup_spends is false.",
+      "certificate": {
+        "file": "src/popup_mutation_lemmas.rs",
+        "lemma": "mp_popup_spends(Seq::<clazel_psl::spec::Rule>::empty(), crate::mutation_lemmas::ml_urls_opaque(), crate::mutation_lemmas::ml_fetch_unparsed(), mp_state(5), mp_renderer(), seq![0x61u32])",
+        "witness": "activation_left(popup_result(Seq::<clazel_psl::spec::Rule>::empty(), crate::mutation_lemmas::ml_urls_opaque(), crate::mutation_lemmas::ml_fetch_unparsed(), mp_state(5), mp_renderer(), seq![0x61u32]).0.acts, mp_renderer()) == 5",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "popup-spends-wrong-activation",
+      "file": "src/spec.rs",
+      "find": "(State { acts: forget_activation(s1.acts, r.id, r.lock), ..s1 }, out)",
+      "replace": "(State { acts: forget_activation(s1.acts, r.id + 1, r.lock), ..s1 }, out)",
+      "expect": "killed",
+      "module": "popup_mutation_lemmas",
+      "reason": "A popup spends the activation of the next renderer, not its own: the sender keeps its activation. mp_popup_spends is false.",
+      "certificate": {
+        "file": "src/popup_mutation_lemmas.rs",
+        "lemma": "mp_popup_spends(Seq::<clazel_psl::spec::Rule>::empty(), crate::mutation_lemmas::ml_urls_opaque(), crate::mutation_lemmas::ml_fetch_unparsed(), mp_state(5), mp_renderer(), seq![0x61u32])",
+        "witness": "activation_left(popup_result(Seq::<clazel_psl::spec::Rule>::empty(), crate::mutation_lemmas::ml_urls_opaque(), crate::mutation_lemmas::ml_fetch_unparsed(), mp_state(5), mp_renderer(), seq![0x61u32]).0.acts, mp_renderer()) == 5",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "scroll-activates",
+      "file": "src/spec.rs",
+      "find": "    input.kind == 0 || input.kind == 2\n",
+      "replace": "    input.kind == 0 || input.kind == 1 || input.kind == 2\n",
+      "expect": "killed",
+      "module": "popup_mutation_lemmas",
+      "reason": "A scroll is a user activation (HTML does not count it): a page that scrolls under the pointer could open tabs. mp_scroll_no_activation is false.",
+      "certificate": {
+        "file": "src/popup_mutation_lemmas.rs",
+        "lemma": "mp_scroll_no_activation(mp_state_none(), 0, mp_scroll())",
+        "witness": "user_input(mp_state_none(), 0, mp_scroll()).0.acts.len() == 1",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "activation-before-commit",
+      "file": "src/spec.rs",
+      "find": "let acts = if r.committed && is_activating_input(input) {",
+      "replace": "let acts = if is_activating_input(input) {",
+      "expect": "killed",
+      "module": "popup_mutation_lemmas",
+      "reason": "An input to a renderer with no document yet is recorded as an activation. mp_uncommitted_input is false.",
+      "certificate": {
+        "file": "src/popup_mutation_lemmas.rs",
+        "lemma": "mp_uncommitted_input(mp_state_uncommitted(), 0, mp_click(), 0)",
+        "witness": "user_input(mp_state_uncommitted(), 0, mp_click()).0.acts.len() == 1",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "activation-for-wrong-renderer",
+      "file": "src/spec.rs",
+      "find": "set_activation(s.acts, r.id, r.lock, activation_window())",
+      "replace": "set_activation(s.acts, r.id + 1, r.lock, activation_window())",
+      "expect": "killed",
+      "module": "popup_mutation_lemmas",
+      "reason": "An input gives the activation to the renderer of the next id, not the one it was delivered to. mp_input_activates_own is false.",
+      "certificate": {
+        "file": "src/popup_mutation_lemmas.rs",
+        "lemma": "mp_input_activates_own(mp_state_none(), 0, mp_click(), 0)",
+        "witness": "activation_left(user_input(mp_state_none(), 0, mp_click()).0.acts, mp_renderer()) == 0",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "activation-window-empty",
+      "file": "src/spec.rs",
+      "find": "pub open spec fn activation_window() -> nat {\n    1000\n}",
+      "replace": "pub open spec fn activation_window() -> nat {\n    0\n}",
+      "expect": "killed",
+      "module": "popup_mutation_lemmas",
+      "reason": "The window is empty, so no input ever lets a popup open (or, with the other rules, every popup is dead on arrival): mp_window_positive is false.",
+      "certificate": {
+        "file": "src/popup_mutation_lemmas.rs",
+        "lemma": "mp_window_positive()",
+        "witness": "activation_window() == 0"
+      }
+    },
+    {
+      "id": "tick-keeps-activation",
+      "file": "src/spec.rs",
+      "find": "now, acts: age_activations(s.acts), ..s }, seq![])",
+      "replace": "now, acts: s.acts, ..s }, seq![])",
+      "expect": "killed",
+      "module": "popup_mutation_lemmas",
+      "reason": "A Tick does not age the activations: an input would allow a popup for ever. mp_tick_ages is false.",
+      "certificate": {
+        "file": "src/popup_mutation_lemmas.rs",
+        "lemma": "mp_tick_ages(mp_state(5), 1, 0)",
+        "witness": "tick(mp_state(5), 1).0.acts[0].left == 5",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "commit-keeps-activation",
+      "file": "src/spec.rs",
+      "find": "acts: forget_activation(s.acts, old.id, old.lock),\n                        ..s\n                    }, seq![",
+      "replace": "acts: s.acts,\n                        ..s\n                    }, seq![",
+      "expect": "killed",
+      "module": "popup_mutation_lemmas",
+      "reason": "A same-origin commit keeps the old document's activation, which the new document then uses. mp_commit_forgets_activation is false.",
+      "certificate": {
+        "file": "src/popup_mutation_lemmas.rs",
+        "lemma": "mp_commit_forgets_activation(crate::mutation_lemmas::ml_urls_tuple(), mp_commit_state(), 0, seq![0x63u32], script_document(Seq::<u8>::empty()), 0, crate::mutation_lemmas::ml_tuple(seq![0x68u32, 0x74, 0x74, 0x70]))",
+        "witness": "mp_commit_state().acts.len() == 1 && forget_activation(mp_commit_state().acts, 0, crate::mutation_lemmas::ml_tuple(seq![0x68u32, 0x74, 0x74, 0x70])).len() == 0",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "popup-before-commit",
+      "file": "src/spec.rs",
+      "find": "m is UpdateUrl || m is OpenTab || m is Fetch) && !r.committed",
+      "replace": "m is UpdateUrl || m is Fetch) && !r.committed",
+      "expect": "killed",
+      "module": "popup_mutation_lemmas",
+      "reason": "A renderer that has committed nothing may send OpenTab. mp_uncommitted_popup, the case theorem_popup_needs_input's committed sender rests on, is false.",
+      "certificate": {
+        "file": "src/popup_mutation_lemmas.rs",
+        "lemma": "mp_uncommitted_popup(mp_uncommitted(), seq![0x00u8, 0x00, 0x00, 0x03, 0x82, 0x15, 0x60])",
+        "witness": "decode_renderer_frame(seq![0x00u8, 0x00, 0x00, 0x03, 0x82, 0x15, 0x60]) == Some(clazel_ipc::message::spec::Message::OpenTab { url: Seq::<u8>::empty() }) && accepted_message(mp_uncommitted(), seq![0x00u8, 0x00, 0x00, 0x03, 0x82, 0x15, 0x60]) is Some"
+      }
+    },
+    {
+      "id": "declassified-popup-without-activation",
+      "file": "src/domain.rs",
+      "find": "Some(clazel_ipc::message::spec::Message::OpenTab { url }) => if !r.committed || activation_left(s.acts, r) == 0 {",
+      "replace": "Some(clazel_ipc::message::spec::Message::OpenTab { url }) => if !r.committed {",
+      "expect": "killed",
+      "module": "popup_mutation_lemmas",
+      "reason": "A refused popup of another domain still has a declassified part, so a purge opens a tab the real run did not (the activation is in the sender's domain): mp_declassified_needs_activation is false.",
+      "certificate": {
+        "file": "src/popup_mutation_lemmas.rs",
+        "lemma": "mp_declassified_needs_activation(crate::mutation_lemmas::ml_urls_opaque(), mp_state_none(), 0, seq![0x00u8, 0x00, 0x00, 0x03, 0x82, 0x15, 0x60], 0)",
+        "witness": "decode_renderer_frame(seq![0x00u8, 0x00, 0x00, 0x03, 0x82, 0x15, 0x60]) == Some(clazel_ipc::message::spec::Message::OpenTab { url: Seq::<u8>::empty() }) && find_by_id(mp_state_none().renderers, 0, 0) == Some(0int) && crate::domain::declassified(crate::mutation_lemmas::ml_urls_opaque(), mp_state_none(), Event::FromRenderer { id: 0, bytes: seq![0x00u8, 0x00, 0x00, 0x03, 0x82, 0x15, 0x60] }) is Some"
+      }
+    },
+    {
+      "id": "lock-allows-javascript",
+      "file": "src/spec.rs",
+      "find": "if (urls.is_javascript)(url) {\n        None\n    } else {",
+      "replace": "if false {\n        None\n    } else {",
+      "expect": "killed",
+      "module": "popup_mutation_lemmas",
+      "reason": "A javascript: URL gets a lock, so a tab can be opened or a document committed at one. mp_javascript_refused is false.",
+      "certificate": {
+        "file": "src/popup_mutation_lemmas.rs",
+        "lemma": "mp_javascript_refused(mp_urls_js(), seq![0x61u32], 0)",
+        "witness": "lock_of_url(mp_urls_js(), seq![0x61u32], 0) is Some"
+      }
+    },
+    {
+      "id": "javascript-scheme-constant",
+      "file": "src/urls.rs",
+      "find": "seq![0x6Au32, 0x61, 0x76, 0x61, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74]\n}",
+      "replace": "seq![0x6Au32, 0x61, 0x76, 0x61, 0x73, 0x63, 0x72, 0x69, 0x70, 0x75]\n}",
+      "expect": "killed",
+      "module": "popup_mutation_lemmas",
+      "reason": "The scheme the shipped kernel refuses is not javascript: mp_javascript_scheme is false.",
+      "certificate": {
+        "file": "src/popup_mutation_lemmas.rs",
+        "lemma": "mp_javascript_scheme()",
+        "witness": "crate::urls::javascript_scheme() != seq![0x6Au32, 0x61, 0x76, 0x61, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74]"
       }
     }
   ]

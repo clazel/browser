@@ -82,13 +82,16 @@ pub open spec fn show_only_own_tab_statement(rules: Seq<clazel_psl::spec::Rule>,
 
 /// `theorem_address_bar_integrity`: whatever frame `bytes` renderer `id`
 /// sends, every `Show` it gives is labelled with the tab and the URL the
-/// kernel holds for `id`, and `id` is committed, so the URL is the one the
-/// kernel committed there: nothing in the message reaches the address line.
+/// kernel holds for `id`'s document, and `id` is committed, so the URL is
+/// the one the kernel committed there or (item 7.16, restated) one an
+/// accepted `UpdateUrl` set ([`doc_url_of`]), whose origin is the
+/// renderer's lock (`theorem_url_update_same_origin`): nothing in the
+/// `Display` message reaches the address line.
 pub open spec fn address_bar_integrity_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat, bytes: Seq<u8>) -> bool {
     let out = step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1;
     forall|k: int|
         0 <= k < out.len() && (#[trigger] out[k]) is Show ==> exists|i: int|
-            0 <= i < s.renderers.len() && s.renderers[i].id == id && s.renderers[i].committed && out[k]->Show_url == s.renderers[i].url
+            0 <= i < s.renderers.len() && s.renderers[i].id == id && s.renderers[i].committed && out[k]->Show_url == doc_url_of(s.doc_urls, s.renderers[i])
                 && out[k]->Show_tab == s.renderers[i].tab
 }
 
@@ -343,7 +346,8 @@ pub open spec fn net_jar_frame_statement(rules: Seq<clazel_psl::spec::Rule>, url
 }
 
 /// The tab an event is about, for connections: the sender's tab for a
-/// `FromRenderer` of a renderer that exists, the tab of a `NavigateTab`, the
+/// `FromRenderer` of a renderer that exists (item 7.16: the tab a popup opens,
+/// for its accepted `OpenTab`), the tab of a `NavigateTab`, the
 /// tab an `OpenTab` without a script opens (whose fetch it starts, item
 /// 4.12), the tab of the renderer that exits, the owner of the
 /// connection of a `Net` (when it is open), and (item 5.18) the tab of the
@@ -351,8 +355,13 @@ pub open spec fn net_jar_frame_statement(rules: Seq<clazel_psl::spec::Rule>, url
 /// events are about no tab.
 pub open spec fn event_tab(s: State, e: Event) -> Option<nat> {
     match e {
-        Event::FromRenderer { id, .. } => match find_by_id(s.renderers, id, 0) {
-            Some(i) => Some(s.renderers[i].tab),
+        Event::FromRenderer { id, bytes } => match find_by_id(s.renderers, id, 0) {
+            // Item 7.16: a popup's fetch is the new tab's, as an `OpenTab`'s.
+            Some(i) => if accepted_message(s.renderers[i], bytes) matches Some(clazel_ipc::message::spec::Message::OpenTab { .. }) {
+                Some(s.next_id)
+            } else {
+                Some(s.renderers[i].tab)
+            },
             None => None,
         },
         Event::NavigateTab { tab, .. } => Some(tab),
@@ -426,7 +435,9 @@ pub open spec fn navigation_event(e: Event) -> bool {
         Event::SubmitTab { .. } => true,
         Event::Net { .. } => true,
         Event::FromRenderer { bytes, .. } => decode_renderer_frame(bytes) matches Some(clazel_ipc::message::spec::Message::Navigate { .. })
-            || decode_renderer_frame(bytes) matches Some(clazel_ipc::message::spec::Message::Submit { .. }),
+            || decode_renderer_frame(bytes) matches Some(clazel_ipc::message::spec::Message::Submit { .. })
+            // Item 7.16: a popup adds a renderer (a new tab).
+            || decode_renderer_frame(bytes) matches Some(clazel_ipc::message::spec::Message::OpenTab { .. }),
         _ => false,
     }
 }
@@ -655,8 +666,10 @@ pub open spec fn paint_only_own_tab_statement(rules: Seq<clazel_psl::spec::Rule>
 /// half; the first is [`address_bar_integrity_statement`], for `Show`):
 /// whatever frame `bytes` the GPU process of renderer `id` sends, every
 /// `Paint` it gives is labelled with the tab, the URL and the title the
-/// kernel holds for `id`, and `id` is committed, so the URL is the one the
-/// kernel committed there: nothing in the message reaches the address bar.
+/// kernel holds for `id` (the URL its document's, item 7.16, as for `Show`),
+/// and `id` is committed, so the URL is the one the kernel committed there
+/// or one an accepted `UpdateUrl` set: nothing in the message reaches the
+/// address bar.
 /// The frame's sender is the GPU process paired with `id`, whose lock is the
 /// document's origin. With [`paint_only_own_tab_statement`] (no other event
 /// paints), this covers every message content from either process.
@@ -664,7 +677,7 @@ pub open spec fn paint_address_bar_statement(rules: Seq<clazel_psl::spec::Rule>,
     let out = step(rules, urls, fetch, s, Event::FromGpu { id, bytes }).1;
     forall|k: int|
         0 <= k < out.len() && (#[trigger] out[k]) is Paint ==> exists|i: int|
-            0 <= i < s.renderers.len() && s.renderers[i].id == id && s.renderers[i].committed && out[k]->Paint_url == s.renderers[i].url
+            0 <= i < s.renderers.len() && s.renderers[i].id == id && s.renderers[i].committed && out[k]->Paint_url == doc_url_of(s.doc_urls, s.renderers[i])
                 && out[k]->Paint_tab == s.renderers[i].tab && out[k]->Paint_title == title_of(s.titles, s.renderers[i])
 }
 
@@ -723,14 +736,22 @@ pub open spec fn gpu_restarted(s: State, e: Event, x: nat) -> bool {
 }
 
 /// `theorem_input_only_to_own_tab`: the user's input on `tab` changes no
-/// state and gives exactly one output, the `Input` frame to `tab`'s
-/// renderer, or none if the tab has no renderer.
+/// state but (item 7.16, restated) the transient user activation of the
+/// tab's renderer, which a click or a key to a committed one sets to the
+/// window ([`set_activation`]), and gives exactly one output, the `Input`
+/// frame to `tab`'s renderer, or none if the tab has no renderer.
 pub open spec fn input_only_to_own_tab_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, input: UserInput) -> bool {
     let (s1, out) = step(rules, urls, fetch, s, Event::Input { tab, input });
-    &&& s1 == s
     &&& match find_by_tab(s.renderers, tab, 0) {
-        None => out == Seq::<Output>::empty(),
-        Some(i) => out == seq![Output::ToRenderer { id: s.renderers[i].id, bytes: input_frame(input) }],
+        None => s1 == s && out == Seq::<Output>::empty(),
+        Some(i) => {
+            &&& s1 == (if s.renderers[i].committed && is_activating_input(input) {
+                State { acts: set_activation(s.acts, s.renderers[i].id, s.renderers[i].lock, activation_window()), ..s }
+            } else {
+                s
+            })
+            &&& out == seq![Output::ToRenderer { id: s.renderers[i].id, bytes: input_frame(input) }]
+        },
     }
 }
 
@@ -779,6 +800,18 @@ pub open spec fn viewport_only_to_own_tab_statement(
 /// `Tick` sends only `StyleFailed`, each to the renderer of a sub-fetch that
 /// is live at the tick. (A `FetchStyle`'s refusal goes to its sender:
 /// `theorem_reply_only_to_sender`.)
+/// The frames sub-fetch `f` may be answered with: its failure frame
+/// ([`failed_frame_of`]), or, for a style sheet or script fetch, its kind's
+/// frames of some document, and, for a `Fetch` (item 7.16), an opaque
+/// response or the `Fetch*` frames of some response.
+pub open spec fn sub_answer(f: SubFetch, bytes: Seq<u8>) -> bool {
+    bytes == failed_frame_of(f) || match f.api {
+        None => exists|doc: Document| bytes == #[trigger] sub_frames(f.script, f.request, doc),
+        Some(_) => bytes == fetch_opaque_frames(f.request) || exists|response: clazel_http::message::spec::Response|
+            bytes == #[trigger] fetch_frames(f.request, response),
+    }
+}
+
 pub open spec fn subfetch_only_to_requester_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> bool {
     let out = step(rules, urls, fetch, s, e).1;
     forall|k: int|
@@ -787,14 +820,13 @@ pub open spec fn subfetch_only_to_requester_statement(rules: Seq<clazel_psl::spe
                 Some(f) => {
                     &&& out[k]->ToRenderer_id == renderer
                     &&& subfetch_live(s, f)
-                    &&& (out[k]->ToRenderer_bytes == sub_failed_frame(f.script, f.request) || exists|doc: Document|
-                        out[k]->ToRenderer_bytes == #[trigger] sub_frames(f.script, f.request, doc))
+                    &&& sub_answer(f, out[k]->ToRenderer_bytes)
                 },
                 None => false,
             },
             Event::Tick { time } => exists|j: int|
                 0 <= j < s.subfetches.len() && s.subfetches[j].renderer == out[k]->ToRenderer_id && subfetch_live(tick(s, time).0, s.subfetches[j])
-                    && out[k]->ToRenderer_bytes == sub_failed_frame(s.subfetches[j].script, s.subfetches[j].request),
+                    && out[k]->ToRenderer_bytes == failed_frame_of(s.subfetches[j]),
             _ => true,
         }
 }
@@ -951,6 +983,233 @@ pub open spec fn script_fetch_shape_statement(rules: Seq<clazel_psl::spec::Rule>
             },
             _ => true,
         },
+    }
+}
+
+// ---------------------------------------------------------------------
+// URL updates (phase-7.md item 7.16).
+// ---------------------------------------------------------------------
+
+/// `theorem_url_update_same_origin` (item 7.16), the step: whatever frame
+/// `bytes` renderer `id` sends, if it is an `UpdateUrl` the kernel accepts
+/// (the sender is committed), then it has no output, and it either changes
+/// nothing or changes only the sender's document URL ([`set_doc_url`] under
+/// the sender's id and lock), to a URL `u` whose origin is the sender's lock,
+/// a tuple origin: `pushState` and `replaceState` change a tab's URL only
+/// to one with the same origin. The renderers (their committed URLs and
+/// locks), the jar, storage, connections, counters and every other table
+/// are unchanged.
+pub open spec fn url_update_same_origin_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat, bytes: Seq<u8>) -> bool {
+    let (s1, out) = step(rules, urls, fetch, s, Event::FromRenderer { id, bytes });
+    match find_by_id(s.renderers, id, 0) {
+        None => true,
+        Some(i) => match accepted_message(s.renderers[i], bytes) {
+            Some(clazel_ipc::message::spec::Message::UpdateUrl { replace, url }) => {
+                let r = s.renderers[i];
+                &&& r.committed
+                &&& out.len() == 0
+                &&& (s1 == s || exists|u: Seq<u32>|
+                    s1 == (State { doc_urls: set_doc_url(s.doc_urls, id, r.lock, u), ..s }) && r.lock is Tuple && (urls.origin_of)(u) == Some(r.lock))
+            },
+            _ => true,
+        },
+    }
+}
+
+/// `theorem_url_update_same_origin` (item 7.16), the state: in every
+/// reachable state, the URL of every renderer's document ([`doc_url_of`],
+/// what `Show` and `Paint` label its tab with) has the renderer's lock as
+/// its lock, as its committed URL has (`theorem_lock_is_committed_origin`):
+/// the address bar still names the document's origin.
+pub open spec fn address_bar_origin_statement(urls: UrlFns, s: State) -> bool {
+    forall|i: int|
+        0 <= i < s.renderers.len() ==> lock_of_url(urls, doc_url_of(s.doc_urls, #[trigger] s.renderers[i]), s.renderers[i].id) == Some(s.renderers[i].lock)
+}
+
+// ---------------------------------------------------------------------
+// `fetch()` and XHR (phase-7.md item 7.16).
+// ---------------------------------------------------------------------
+
+/// `theorem_cors_read` (item 7.16): whatever the network shell reports on a
+/// `Fetch`'s connection, every frame the step gives its renderer is
+/// `FetchFailed`, an opaque filtered response (no body), or the frames of
+/// the response the transducer ended with, and then that response is one
+/// the renderer may read ([`api_readable`]): a basic response, or, in mode
+/// "cors", one that passed the CORS check. So a renderer receives the body
+/// of a cross-origin response only if the CORS check passed; a "no-cors"
+/// request never gives it one.
+pub open spec fn cors_read_statement(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns,
+    fetch: FetchFns,
+    s: State,
+    renderer: nat,
+    serial: nat,
+    hop: nat,
+    input: NetInput,
+) -> bool {
+    let out = step(rules, urls, fetch, s, Event::SubNet { renderer, serial, hop, input }).1;
+    match subnet_target(s, renderer, serial) {
+        Some(f) => f.api is Some ==> {
+            let (fs, actions, ops) = clazel_fetch::transducer::spec::step(fetch.http, fetch.urls, f.fetch, input, subfetch_jar(fetch, s, f), s.now);
+            forall|k: int|
+                0 <= k < out.len() && (#[trigger] out[k]) is ToRenderer ==> {
+                    &&& out[k]->ToRenderer_id == renderer
+                    &&& (out[k]->ToRenderer_bytes == fetch_failed_frame(f.request) || out[k]->ToRenderer_bytes == fetch_opaque_frames(f.request) || readable_end(
+                        fetch,
+                        f.lock,
+                        f.api->Some_0,
+                        fs.req.origin_tainted,
+                        f.request,
+                        actions,
+                        out[k]->ToRenderer_bytes,
+                    ))
+                }
+        },
+        None => true,
+    }
+}
+
+/// `bytes` are the frames of the response the fetch ended with (`Done`, the
+/// first ending action), and the renderer may read that response
+/// ([`api_readable`]).
+pub open spec fn readable_end(
+    fetch: FetchFns,
+    lock: clazel_origin::spec::Origin,
+    mode: u64,
+    tainted: bool,
+    request: u64,
+    actions: Seq<NetAction>,
+    bytes: Seq<u8>,
+) -> bool {
+    match end_action(actions) {
+        Some(clazel_fetch::transducer::spec::Action::Done { url, response }) => bytes == fetch_frames(request, response) && api_readable(
+            fetch,
+            lock,
+            mode,
+            tainted,
+            url,
+            response,
+        ),
+        _ => false,
+    }
+}
+
+/// `theorem_forbidden_headers` (item 7.16): for the shipped cookie rules
+/// (`fetch.urls.rules == rules`), every request a sub-fetch sends
+/// (`SubSend`, whatever the event) and every request a navigation sends on a
+/// `Net` event (`Send`) is the wire form
+/// ([`clazel_fetch::transducer::contract::is_wire_request`]) of a request
+/// whose page headers name nothing Fetch forbids (§2.2.2, `Cookie`, `Origin`
+/// and `Host` among them) and nothing the client sets itself
+/// ([`clazel_fetch::request::spec::author_headers_ok`]). The page's headers
+/// are the only lines a renderer chooses (`Origin`, `Cookie`, `Host` and the
+/// rest are the kernel's), so no forbidden header a renderer supplied leaves
+/// the kernel on them. (A navigation's request is sent only when the shell
+/// reports its connection open, a `Net` event; that other events give no
+/// `Send` is not part of this statement.)
+pub open spec fn forbidden_headers_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> bool {
+    let out = step(rules, urls, fetch, s, e).1;
+    fetch.urls.rules == rules ==> forall|k: int|
+        0 <= k < out.len() ==> match #[trigger] out[k] {
+            Output::SubSend { bytes, .. } => header_safe_wire(bytes),
+            Output::Send { bytes, .. } => e is Net ==> header_safe_wire(bytes),
+            _ => true,
+        }
+}
+
+/// `bytes` is the wire form of a request whose page headers are all ones
+/// this client may send.
+pub open spec fn header_safe_wire(bytes: Seq<u8>) -> bool {
+    exists|url: clazel_url::url::spec::Url, req: clazel_fetch::request::spec::Req, cookie: Seq<u8>|
+        #![trigger clazel_fetch::transducer::contract::is_wire_request(url, req, cookie, bytes)]
+        clazel_fetch::transducer::contract::is_wire_request(url, req, cookie, bytes) && clazel_fetch::request::spec::author_headers_ok(req.headers)
+}
+
+// ---------------------------------------------------------------------
+// Popups and `javascript:` URLs (phase-7.md item 7.16).
+// ---------------------------------------------------------------------
+
+/// Tab `t` is the tab of some renderer of `rs`.
+pub open spec fn tab_open(rs: Seq<Renderer>, t: nat) -> bool {
+    exists|j: int| 0 <= j < rs.len() && (#[trigger] rs[j]).tab == t
+}
+
+/// The step from `s` to `s1` opened a tab: some renderer of `s1` is in a tab
+/// no renderer of `s` was in. (A navigation replaces a tab's renderer, and
+/// keeps its tab.)
+pub open spec fn new_tab_in(s: State, s1: State) -> bool {
+    exists|i: int| 0 <= i < s1.renderers.len() && !tab_open(s.renderers, (#[trigger] s1.renderers[i]).tab)
+}
+
+/// The number of `Tick` events in `t`: the kernel's clock steps, which
+/// measure the activation window ([`activation_window`]).
+pub open spec fn tick_count(t: Seq<Event>) -> nat
+    decreases t.len(),
+{
+    if t.len() == 0 {
+        0
+    } else {
+        tick_count(t.drop_first()) + (if t[0] is Tick { 1nat } else { 0nat })
+    }
+}
+
+/// `theorem_popup_needs_input` (item 7.16), the step: whatever frame `bytes`
+/// renderer `id` sends, if the kernel opens a tab on it, the frame is a
+/// committed renderer's `OpenTab`, the kernel held a live activation for the
+/// sender before the step (its own record, [`activation_left`] above 0), and
+/// the step spent it. A frame that finds no live activation opens no tab.
+pub open spec fn popup_needs_activation_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat, bytes: Seq<u8>) -> bool {
+    let s1 = step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).0;
+    new_tab_in(s, s1) ==> match find_by_id(s.renderers, id, 0) {
+        None => false,
+        Some(i) => {
+            let r = s.renderers[i];
+            &&& r.committed
+            &&& accepted_message(r, bytes) matches Some(clazel_ipc::message::spec::Message::OpenTab { .. })
+            &&& activation_left(s.acts, r) > 0
+            &&& activation_left(s1.acts, r) == 0
+        },
+    }
+}
+
+/// `theorem_popup_needs_input` (item 7.16), the trace, with the window stated
+/// as a number of kernel steps (see the modelling choices): over every run
+/// from the kernel's first state, `u` and then the frame `bytes` of renderer
+/// `id`, if that frame opens a tab, then an `Input` event of the user in `u`
+/// was delivered to renderer `id` (the kernel's step on it sent `id` the
+/// `Input` frame: the renderer was in the tab the host named), the input was
+/// a click or a key, and fewer than [`activation_window`] `Tick` events
+/// follow it in `u`. So a tab a renderer opens follows a user input to that
+/// renderer within the window, and a renderer that was never given an input
+/// opens none.
+pub open spec fn popup_needs_input_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, u: Seq<Event>, id: nat, bytes: Seq<u8>) -> bool {
+    let s = run_state(rules, urls, fetch, init_state(), u);
+    let s1 = step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).0;
+    new_tab_in(s, s1) ==> exists|j: int|
+        0 <= j < u.len() && (#[trigger] u[j]) is Input && is_activating_input(u[j]->Input_input) && step(rules, urls, fetch, run_state(rules, urls, fetch, init_state(), u.take(j)), u[j]).1
+            == seq![Output::ToRenderer { id, bytes: input_frame(u[j]->Input_input) }] && tick_count(u.subrange(j + 1, u.len() as int)) < activation_window()
+}
+
+/// `theorem_no_javascript_url` (item 7.16), the state: in every reachable
+/// state no renderer, committed or not, holds a URL whose scheme is
+/// `javascript` ([`UrlFns::is_javascript`]), and neither does any document
+/// URL an `UpdateUrl` set. So the address bar never shows one and no
+/// renderer is ever committed at one.
+pub open spec fn no_javascript_url_statement(urls: UrlFns, s: State) -> bool {
+    &&& forall|i: int| 0 <= i < s.renderers.len() ==> !(urls.is_javascript)((#[trigger] s.renderers[i]).url)
+    &&& forall|k: int| 0 <= k < s.doc_urls.len() ==> !(urls.is_javascript)((#[trigger] s.doc_urls[k]).url)
+}
+
+/// `theorem_no_javascript_url` (item 7.16), the entry points: a `javascript:`
+/// URL typed into a new tab (the host's `OpenTab`, with or without a script)
+/// changes nothing and sends nothing, a commit at one changes nothing, and
+/// a renderer's `Navigate`, `Submit`, `OpenTab` and `UpdateUrl` to one start
+/// no navigation and open no tab (`lock_of_url` refuses it).
+pub open spec fn javascript_refused_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, url: Seq<u32>, script: Option<Seq<u8>>, tab: nat, doc: Document) -> bool {
+    (urls.is_javascript)(url) ==> {
+        &&& step(rules, urls, fetch, s, Event::OpenTab { url, script }) == (s, seq![])
+        &&& navigate_tab(urls, s, tab, url, doc) == (s, seq![])
     }
 }
 

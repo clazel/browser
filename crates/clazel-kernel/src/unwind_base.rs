@@ -632,6 +632,16 @@ pub proof fn lemma_step_gpu_frame(rules: Seq<clazel_psl::spec::Rule>, urls: UrlF
                     if is_sub_request(m) {
                         crate::subfetch_rel::lemma_fetch_sub_shape(rules, urls, fetch, s, r, m is FetchScript, sub_request_id(m), sub_request_url(m));
                     }
+                    if m is Fetch {
+                        crate::api_rel::lemma_api_msg_shape(rules, urls, fetch, s, r, m);
+                    }
+                    // Item 7.16: a popup is the host's `OpenTab`.
+                    if let clazel_ipc::message::spec::Message::OpenTab { url } = m {
+                        crate::popup_rel::lemma_popup_resolved(rules, urls, fetch, s, r, url);
+                        if let Some(resolved) = crate::popup_rel::popup_resolved(urls, s, r, url) {
+                            lemma_open_tab_frame(rules, urls, fetch, s, resolved, None);
+                        }
+                    }
                 }
             }
         },
@@ -715,6 +725,13 @@ pub proof fn lemma_jar_no_public_suffix_step(rules: Seq<clazel_psl::spec::Rule>,
                                         lemma_navigation_frame(rules, urls, fetch, s, r.tab, resolved, clazel_fetch::request::spec::get_req(), script_document(seq![]));
                                     }
                                 }
+                            }
+                        },
+                        // Item 7.16: a popup is the host's `OpenTab`.
+                        clazel_ipc::message::spec::Message::OpenTab { url } => {
+                            crate::popup_rel::lemma_popup_resolved(rules, urls, fetch, s, r, url);
+                            if let Some(resolved) = crate::popup_rel::popup_resolved(urls, s, r, url) {
+                                lemma_open_tab_frame(rules, urls, fetch, s, resolved, None);
                             }
                         },
                         _ => {},
