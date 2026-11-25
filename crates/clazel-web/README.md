@@ -76,6 +76,15 @@ Tier 0, target tier 0: safe Rust, tested, nothing proven. So far:
     `close`, `currentScript`), `performance.now`, and one wrapper object
     per node. Item 7.12 replaces it.
 
+  A page made for a parsed document (`Page::for_document`) installs its
+  bindings in the realm when something first needs them: before the first
+  source text is compiled for it (a script element, an event handler
+  content attribute, a `javascript:` URL), before a node is wrapped, or
+  when the embedder asks for the engine. Script cannot tell, because
+  nothing observes a realm before code runs in it (`bound.rs`'s
+  `ensure_bindings` has the argument, `tests/bound.rs` the checks); a
+  document with no script never pays for them.
+
   The events the page fires (`load`, `DOMContentLoaded`, `readystatechange`,
   `error`) are dispatched to the listeners and `on*` handlers of the page's
   bindings, in order, after the step that fired them (the "recorded, not

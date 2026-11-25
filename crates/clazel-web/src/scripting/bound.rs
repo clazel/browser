@@ -51,7 +51,7 @@ use clazel_webidl::generated::bindings::InterfaceId;
 
 use super::dom;
 use super::element::report;
-use super::state::{Doc, EventTarget, PageState, Walk, state};
+use super::state::{Bindings, Doc, EventTarget, PageState, Walk, state};
 use super::time::{Clock, performance_now_ms};
 use super::{Page, Readiness};
 use crate::event_loop::{CallbackId, EventLoop, Host as LoopHostTrait, TimerCall};
@@ -95,7 +95,8 @@ const MAX_ITERATIONS: usize = 100_000;
 impl Page {
     /// A page for a document the renderer has parsed (with the scripting
     /// flag on): the bindings, `console`, the timers and the rest are
-    /// installed, and nothing runs until [`Page::run`].
+    /// installed when something first needs them (`ensure_bindings`), and
+    /// nothing runs until [`Page::run`].
     ///
     /// # Errors
     /// What `clazel-js` returns.
@@ -118,15 +119,27 @@ impl Page {
         let realm = rt.scope(|scope| -> Result<Realm> {
             let realm = scope.create_realm(RealmOptions::default())?;
             state(scope)?.realm = Some(realm.clone());
-            clazel_webidl::generated::bindings::install::<page::Page>(scope, &realm)?;
-            page::console::install(scope, &realm)?;
-            install(scope, &realm)?;
+            // The bindings themselves wait for the first thing that needs
+            // them (`ensure_bindings`).
             // Item 7.14: the parser-made `on*` content attributes are event
             // handlers from the start, in tree order.
             page::handlers::scan(scope.host_mut::<page::Page>()?);
             Ok(realm)
         })?;
         Ok(Page { rt, realm })
+    }
+
+    /// Whether the realm has its bindings yet: false until something needs
+    /// them (`ensure_bindings` lists what does), so false for as long as a
+    /// document with no script is only shown and clicked on. An embedder
+    /// can use it to tell whether a page has run any script machinery; it
+    /// never installs them itself.
+    ///
+    /// # Errors
+    /// What `clazel-js` returns.
+    pub fn bindings_installed(&mut self) -> Result<bool> {
+        self.rt
+            .scope(|scope| Ok(state(scope)?.bindings == Bindings::Installed))
     }
 
     /// Runs `source` as a classic script named `name` in the page's realm
@@ -551,6 +564,67 @@ fn clear_timer(scope: &mut Scope<'_>, args: &Args<'_>) -> Result<()> {
         st.callbacks.remove(&cid);
     }
     Ok(())
+}
+
+/// Installs the bindings of a [`Page::for_document`] page in its realm, the
+/// first time something needs them: every exposed interface with
+/// `DOMException` and the global object as the `Window`
+/// (`clazel_webidl::generated::bindings::install`), `console`, and what this
+/// module adds ([`install`]). Does nothing once that is done, and nothing
+/// for a page without bindings ([`Page::new`], or `page::Page` used alone,
+/// whose `into_runtime` installs them itself).
+///
+/// **Why later is the same as at once.** HTML makes the realm's global
+/// object and its interfaces when the document's `Window` is made (HTML
+/// §7.3.? "creating a new browsing context", step "create a new
+/// realm"). Their only observers are scripts: source text compiled and run
+/// in the realm, and the functions and objects such a script made or was
+/// handed. So the bindings are installed before any source text is compiled
+/// for the realm (classic and module scripts, `javascript:` URLs and timer
+/// strings, all through `element::create_classic_script` or
+/// `module::create_javascript_module_script`; event handler content
+/// attributes, `page::handlers`), before a node's wrapper is made
+/// (`globals::wrapper`), and before the embedder is handed the engine
+/// ([`Page::runtime`]). A listener or a callback is a value some script
+/// made, so one exists only after this ran. Everything else the page does
+/// (firing events nothing listens to, activation behaviour, form controls,
+/// focus) is Rust over the tree and needs no realm, so a document with no
+/// script never pays for a thousand interface members. The installation
+/// itself is unchanged, so the global object's own property keys are in the
+/// same order.
+///
+/// The embedder can tell: the heap is charged when this runs
+/// (`Runtime::heap_used`), and a failure (the heap limit) is reported by
+/// the first script instead of [`Page::for_document`]; the page then runs
+/// no script, as a page whose engine stopped.
+///
+/// # Errors
+/// What installing returns; after a failure, `OutOfMemory` again if that
+/// was it and `WrongType` otherwise.
+pub(crate) fn ensure_bindings(scope: &mut Scope<'_>) -> Result<()> {
+    let Some(st) = scope.host_mut::<page::Page>()?.script.as_deref_mut() else {
+        return Ok(());
+    };
+    if !st.bound {
+        return Ok(());
+    }
+    match st.bindings {
+        Bindings::Installed => return Ok(()),
+        Bindings::Failed(true) => return Err(Error::OutOfMemory),
+        Bindings::Failed(false) => return Err(Error::WrongType("installed bindings")),
+        Bindings::Pending => {}
+    }
+    let installed = (|| -> Result<()> {
+        let realm = super::state::realm(scope)?;
+        clazel_webidl::generated::bindings::install::<page::Page>(scope, &realm)?;
+        page::console::install(scope, &realm)?;
+        install(scope, &realm)
+    })();
+    state(scope)?.bindings = match &installed {
+        Ok(()) => Bindings::Installed,
+        Err(e) => Bindings::Failed(matches!(e, Error::OutOfMemory)),
+    };
+    installed
 }
 
 /// Installs what [`Page::for_document`] adds to the bindings (module docs).

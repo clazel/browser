@@ -39,6 +39,7 @@
 //! and the page goes on with the next one, as it would after an exception.
 
 mod bound;
+pub(crate) use bound::ensure_bindings;
 pub mod dom;
 mod element;
 mod encodings;
@@ -136,8 +137,12 @@ impl Page {
     }
 
     /// The engine, for an embedder that adds globals of its own (item
-    /// 7.12's bindings; tests' logging functions).
+    /// 7.12's bindings; tests' logging functions). A
+    /// [`Page::for_document`] page installs its bindings first, so that
+    /// what the embedder adds comes after them, as it always has; if that
+    /// fails, the first script reports it.
     pub fn runtime(&mut self) -> &mut Runtime {
+        let _ = self.rt.scope(bound::ensure_bindings);
         &mut self.rt
     }
 

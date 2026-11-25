@@ -83,6 +83,7 @@ pub(crate) fn wrapper<'s>(scope: &mut Scope<'s>, node: usize) -> Result<Local<'s
     let st = state(scope)?;
     if st.bound {
         // The bindings' wrapper of the node.
+        super::ensure_bindings(scope)?;
         return clazel_webidl::platform::wrap::<crate::page::Page>(
             scope,
             crate::page::Page::node_key(node),

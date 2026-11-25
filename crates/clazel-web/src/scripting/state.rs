@@ -280,6 +280,9 @@ pub(crate) struct PageState {
     /// nodes are the generated interfaces' objects, and timers and the rest
     /// of `bound.rs` exist.
     pub(crate) bound: bool,
+    /// Whether a bound page's realm has its bindings yet
+    /// (`bound::ensure_bindings`).
+    pub(crate) bindings: Bindings,
     /// A document that was parsed before its scripts ran: the script
     /// elements still to be reached, in tree order (`parser::walk`).
     pub(crate) walk: Option<Walk>,
@@ -358,6 +361,7 @@ impl PageState {
             clock,
             time_origin_us,
             bound: false,
+            bindings: Bindings::Pending,
             walk: None,
             event_loop: crate::event_loop::EventLoop::default(),
             callbacks: HashMap::new(),
@@ -404,6 +408,19 @@ impl PageState {
             });
         }
     }
+}
+
+/// Where a bound page's realm stands (`bound::ensure_bindings`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Bindings {
+    /// Nothing has needed the realm yet: its global object has only the
+    /// engine's built-ins.
+    Pending,
+    /// The interfaces, `console` and the rest are installed.
+    Installed,
+    /// Installing them failed part of the way (`true`: out of memory), so
+    /// nothing may run in the realm.
+    Failed(bool),
 }
 
 /// The page's realm.

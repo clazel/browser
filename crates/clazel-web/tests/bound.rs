@@ -208,7 +208,7 @@ fn only(mut requests: Vec<Request>) -> Result<Request> {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn an_inline_script_changes_the_document() -> Test {
     let mut h = Harness::new(
@@ -229,7 +229,7 @@ fn an_inline_script_changes_the_document() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn lifecycle_events_reach_listeners_in_order() -> Test {
     let mut h = Harness::new(
@@ -248,7 +248,7 @@ fn lifecycle_events_reach_listeners_in_order() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn defer_runs_after_the_document_and_before_domcontentloaded() -> Test {
     let mut h = Harness::new(
@@ -275,7 +275,7 @@ fn defer_runs_after_the_document_and_before_domcontentloaded() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn timers_run_when_due_and_in_order() -> Test {
     let mut h = Harness::new(
@@ -305,7 +305,7 @@ fn timers_run_when_due_and_in_order() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn an_interval_repeats_until_it_is_cleared() -> Test {
     let mut h = Harness::new(
@@ -325,7 +325,7 @@ fn an_interval_repeats_until_it_is_cleared() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn a_timer_changes_the_document() -> Test {
     let mut h = Harness::new(
@@ -342,7 +342,7 @@ fn a_timer_changes_the_document() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn microtasks_run_when_a_script_ends_and_before_the_next_task() -> Test {
     let mut h = Harness::new(
@@ -362,7 +362,7 @@ fn microtasks_run_when_a_script_ends_and_before_the_next_task() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn animation_frames_run_when_the_page_renders() -> Test {
     let mut h = Harness::new(
@@ -382,7 +382,7 @@ fn animation_frames_run_when_the_page_renders() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn an_exception_is_reported_and_the_next_script_runs() -> Test {
     let mut h = Harness::new(
@@ -402,7 +402,7 @@ fn an_exception_is_reported_and_the_next_script_runs() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn an_exception_in_a_timer_is_reported_and_the_loop_goes_on() -> Test {
     let mut h = Harness::new(
@@ -421,7 +421,7 @@ fn an_exception_in_a_timer_is_reported_and_the_loop_goes_on() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn an_external_script_is_fetched_and_runs_in_order() -> Test {
     let mut h = Harness::new(
@@ -451,7 +451,7 @@ fn an_external_script_is_fetched_and_runs_in_order() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn a_failed_fetch_fires_error_and_the_page_goes_on() -> Test {
     let mut h = Harness::new(
@@ -467,7 +467,7 @@ fn a_failed_fetch_fires_error_and_the_page_goes_on() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn console_location_and_history_reach_the_hooks() -> Test {
     let mut h = Harness::new(
@@ -496,7 +496,7 @@ fn console_location_and_history_reach_the_hooks() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn cookies_and_storage_go_through_the_hooks() -> Test {
     let mut h = Harness::new(
@@ -513,7 +513,7 @@ fn cookies_and_storage_go_through_the_hooks() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn a_javascript_url_runs_in_the_page() -> Test {
     let mut h = Harness::new("<!DOCTYPE html><body><p id=out>x</p>")?;
@@ -529,7 +529,7 @@ fn a_javascript_url_runs_in_the_page() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn document_write_in_a_script_is_reported_not_run() -> Test {
     let mut h = Harness::new(
@@ -545,7 +545,7 @@ fn document_write_in_a_script_is_reported_not_run() -> Test {
 #[test]
 #[cfg_attr(
     miri,
-    ignore = "builds a page with every generated WebIDL interface installed: about 290 s of Miri time per test, almost all binding installation; a_page_with_the_bindings_runs_a_script stays"
+    ignore = "builds a page with every generated WebIDL interface installed: about 190 s of Miri time per test (292 s before attribute functions were made lazily), most of it binding installation; a_page_with_the_bindings_runs_a_script stays"
 )]
 fn a_string_handler_runs_as_a_script() -> Test {
     let mut h =
@@ -555,5 +555,173 @@ fn a_string_handler_runs_as_a_script() -> Test {
     h.page.run_event_loop()?;
     assert_eq!(h.r()?, "7");
     assert!(h.logs().is_empty());
+    Ok(())
+}
+
+// ---- The bindings are installed by the first thing that needs them ---------
+
+impl Harness {
+    /// The element whose `id` attribute is `id`, without the engine.
+    fn node(&mut self, id: &str) -> Result<usize> {
+        let want: Vec<u32> = id.chars().map(u32::from).collect();
+        let found = self.page.with_document(|arena| {
+            (0..arena.len()).find(|&n| match arena.kind(n) {
+                clazel_dom::exec::ExecKind::Element { attributes, .. } => attributes
+                    .iter()
+                    .any(|a| a.local_name == [0x69, 0x64] && a.value == want),
+                _ => false,
+            })
+        })?;
+        found.ok_or(clazel_js::Error::WrongType("no such element"))
+    }
+
+    fn click_on(&mut self, id: &str) -> Result<()> {
+        let target = self.node(id)?;
+        self.page.click(clazel_web::page::input::MouseInput {
+            target,
+            ..clazel_web::page::input::MouseInput::default()
+        })
+    }
+}
+
+/// A document with no script is loaded, clicked, typed into and scrolled
+/// without its realm ever getting the bindings: everything the page does by
+/// itself (the load events nothing listens to, a link's activation
+/// behaviour, a text control's editing) is Rust over the tree. This runs
+/// under Miri, where the bindings' installation is most of a page's cost.
+#[test]
+fn a_document_with_no_script_never_installs_the_bindings() -> Test {
+    let mut h = Harness::new(
+        "<!DOCTYPE html><title>t</title><body><a id=a href='next.html'>link</a>\
+         <form action='/go'><input id=i name=q><button id=b>go</button></form>",
+    )?;
+    assert!(!h.page.bindings_installed()?);
+    assert_eq!(h.page.run()?, Progress::Loaded);
+    assert!(h.page.take_requests()?.is_empty());
+    h.page.run_event_loop()?;
+    h.page.update_the_rendering()?;
+    // A click on the link navigates, as with the bindings.
+    h.click_on("a")?;
+    assert_eq!(
+        h.calls(),
+        vec![HookCall::Navigate {
+            url: "https://example.test/dir/next.html".to_owned(),
+            replace: false
+        }]
+    );
+    // Typing into the focused control changes its value.
+    let i = h.node("i")?;
+    h.click_on("i")?;
+    assert_eq!(h.page.focused()?, Some(i));
+    h.page.key(clazel_web::page::input::KeyInput {
+        key: "k".to_owned(),
+        ..clazel_web::page::input::KeyInput::default()
+    })?;
+    assert_eq!(h.page.control_value(i)?, "k");
+    h.page
+        .wheel(clazel_web::page::input::WheelInput::default())?;
+    h.page.scrolled()?;
+    assert!(h.page.take_reports()?.is_empty());
+    assert!(!h.page.bindings_installed()?);
+    // The first script finds the whole platform.
+    h.page.run_source(
+        "late.js",
+        "var r = [typeof Document, document.title, document.getElementById('i').tagName, \
+         typeof setTimeout, typeof console.log, document.readyState].join('|');",
+    )?;
+    assert!(h.page.bindings_installed()?);
+    assert_eq!(h.r()?, "function|t|INPUT|function|function|complete");
+    Ok(())
+}
+
+/// Each way source text reaches the realm installs the bindings first: a
+/// script element, an event handler content attribute (compiled when its
+/// event is first dispatched), a `javascript:` URL, a module script, and
+/// the embedder asking for the engine.
+#[test]
+#[cfg_attr(
+    miri,
+    ignore = "five pages that each install every generated WebIDL interface: minutes of Miri time; a_document_with_no_script_never_installs_the_bindings and clazel-web's a_page_with_the_bindings_runs_a_script run there"
+)]
+fn the_first_need_installs_the_bindings() -> Test {
+    // A script element.
+    let mut h = Harness::new("<!DOCTYPE html><body><script>var r = typeof Node;</script>")?;
+    assert!(!h.page.bindings_installed()?);
+    h.page.run()?;
+    assert!(h.page.bindings_installed()?);
+    assert_eq!(h.r()?, "function");
+
+    // An event handler content attribute: not at load (nothing fires at the
+    // paragraph), but when the click is dispatched to it.
+    let mut h = Harness::new(
+        "<!DOCTYPE html><body><p id=p onclick=\"this.textContent = typeof event + ':' + (this instanceof HTMLParagraphElement)\">x</p>",
+    )?;
+    h.page.run()?;
+    assert!(!h.page.bindings_installed()?);
+    h.click_on("p")?;
+    assert!(h.page.bindings_installed()?);
+    assert_eq!(h.text_of("p")?, "object:true");
+    assert!(h.logs().is_empty());
+
+    // The body's `onload`: compiled when `load` fires at the window.
+    let mut h = Harness::new("<!DOCTYPE html><body onload=\"window.r = document.readyState\">")?;
+    assert!(!h.page.bindings_installed()?);
+    h.page.run()?;
+    assert!(h.page.bindings_installed()?);
+    assert_eq!(h.r()?, "complete");
+
+    // A `javascript:` URL.
+    let mut h = Harness::new("<!DOCTYPE html><body><p id=out>x</p>")?;
+    h.page.run()?;
+    assert!(!h.page.bindings_installed()?);
+    h.page.evaluate_javascript_url(
+        "javascript:document.getElementById('out').textContent%3D'ran'%3B",
+    )?;
+    assert!(h.page.bindings_installed()?);
+    assert_eq!(h.text_of("out")?, "ran");
+
+    // The embedder asking for the engine, to add to the global object or to
+    // read it: what it sees is the installed realm.
+    let mut h = Harness::new("<!DOCTYPE html><body>")?;
+    h.page.run()?;
+    assert!(!h.page.bindings_installed()?);
+    let realm = h.page.realm().clone();
+    let has = h.page.runtime().scope(|scope| {
+        let g = scope.global(&realm)?;
+        scope.has_property(g, Key::Str("HTMLElement"))
+    })?;
+    assert!(has);
+    assert!(h.page.bindings_installed()?);
+    Ok(())
+}
+
+/// The global object is the same whenever the bindings were installed: its
+/// own property keys, in order, for a page whose first script is a script
+/// element and for one that was loaded and clicked first.
+#[test]
+#[cfg_attr(
+    miri,
+    ignore = "two pages that each install every generated WebIDL interface and list the global object's keys: minutes of Miri time"
+)]
+fn the_global_object_is_the_same_whenever_the_bindings_come() -> Test {
+    const KEYS: &str = "var r = Object.getOwnPropertyNames(this).join(',') + '|' + \
+        Object.getOwnPropertyNames(Document.prototype).join(',') + '|' + \
+        Object.getOwnPropertyNames(Object.getPrototypeOf(this)).join(',') + '|' + \
+        Object.keys(this).join(',');";
+    let mut early = Harness::new(&format!(
+        "<!DOCTYPE html><body><a id=a href='#x'>l</a><script>{KEYS}</script>"
+    ))?;
+    early.page.run()?;
+    let early = early.r()?;
+    let mut late = Harness::new("<!DOCTYPE html><body><a id=a href='#x'>l</a>")?;
+    late.page.run()?;
+    late.click_on("a")?;
+    late.page.run_event_loop()?;
+    assert!(!late.page.bindings_installed()?);
+    late.page.run_source("keys.js", KEYS)?;
+    let late = late.r()?;
+    assert!(early.contains("HTMLElement") && early.contains("setTimeout"));
+    // `r` itself is the last key in both.
+    assert_eq!(late, early);
     Ok(())
 }

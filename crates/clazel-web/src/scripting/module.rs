@@ -106,6 +106,8 @@ fn create_javascript_module_script(
     name: &str,
 ) -> Result<ModuleScript> {
     let text = dom::text(source);
+    // The realm's bindings, before the first source text is compiled for it.
+    super::bound::ensure_bindings(scope)?;
     let realm = realm(scope)?;
     let meta = ScriptMeta {
         base_url: base.to_owned(),

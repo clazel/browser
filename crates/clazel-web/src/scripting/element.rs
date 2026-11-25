@@ -628,6 +628,8 @@ pub(crate) fn create_classic_script(
     //    surrogate (only `document.write` can put one in the input stream)
     //    becomes U+FFFD, as the engine takes Rust text.
     let text = dom::text(source);
+    // The realm's bindings, before the first source text is compiled for it.
+    super::bound::ensure_bindings(scope)?;
     let realm = realm(scope)?;
     let meta = module::ScriptMeta { base_url: base };
     match scope.compile_script(

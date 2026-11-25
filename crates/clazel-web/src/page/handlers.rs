@@ -433,6 +433,8 @@ const SINK: &str = "__clazel_event_handler__";
 /// `Err(Thrown)`.
 fn compile<'s>(scope: &mut Scope<'s>, text: &[u32]) -> Result<Option<Local<'s>>> {
     let body = points_to_string(text);
+    // The realm's bindings, before the first source text is compiled for it.
+    crate::scripting::ensure_bindings(scope)?;
     let realm = scope.current_realm()?;
     // The body alone, in a block inside a function: a `}` that would end the
     // wrapper below early does not balance here.
