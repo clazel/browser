@@ -89,6 +89,12 @@ fn json_parse() -> Result<(), String> {
             "var r; try { JSON.parse(undefined); } catch (e) { r = e.name; }",
             "SyntaxError",
         ),
+    ])
+}
+
+#[test]
+fn json_parse_nesting_and_reviver() -> Result<(), String> {
+    check(&[
         // The nesting bound: 600 levels is a SyntaxError, 100 is fine.
         (
             "var s = ''; for (var i = 0; i < 600; i++) s += '['; for (var i = 0; i < 600; i++) s += ']'; var r; try { JSON.parse(s); } catch (e) { r = e.name; }",

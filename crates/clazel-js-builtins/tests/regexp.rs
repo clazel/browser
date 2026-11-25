@@ -201,7 +201,7 @@ fn exec_and_test() -> Result<(), String> {
 }
 
 #[test]
-fn string_match_search_split_replace() -> Result<(), String> {
+fn string_match_and_match_all() -> Result<(), String> {
     check(&[
         ("var r = 'abcabc'.match(/b/).index;", "1"),
         ("var r = 'abcabc'.match(/b/g).join();", "b,b"),
@@ -229,6 +229,12 @@ fn string_match_search_split_replace() -> Result<(), String> {
             "true",
         ),
         ("var r = Array.from('aa'.matchAll('a')).length;", "2"),
+    ])
+}
+
+#[test]
+fn string_search_and_split() -> Result<(), String> {
+    check(&[
         // search
         (
             "var r = 'abc'.search(/c/) + ':' + 'abc'.search(/x/) + ':' + 'abc'.search('b');",
@@ -254,6 +260,12 @@ fn string_match_search_split_replace() -> Result<(), String> {
             "var r = '\\u{1F600}x'.split(/(?:)/u).length + ':' + '\\u{1F600}x'.split(/(?:)/).length;",
             "2:3",
         ),
+    ])
+}
+
+#[test]
+fn string_replace_and_replace_all() -> Result<(), String> {
+    check(&[
         // replace
         ("var r = 'abc'.replace(/b/, 'X');", "aXc"),
         ("var r = 'abab'.replace(/b/g, 'X');", "aXaX"),

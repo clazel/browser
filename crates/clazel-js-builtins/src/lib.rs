@@ -31,6 +31,8 @@
 //! - [`json`]: `JSON.parse` and `JSON.stringify` (§25.5†) over `clazel-json`;
 //! - [`math`]: the pure functions of `Math` (§21.3†);
 //! - [`promise`]: `Promise` (§27.2†) over the VM's job queue;
+//! - [`generator`]: the prototypes of generators, async functions and async
+//!   generators (§27.3† to §27.7†), and `%AsyncFromSyncIteratorPrototype%`;
 //! - [`regexp`]: `RegExp` (§22.2†) over `clazel-js-regexp`, with the
 //!   `@@match`, `@@matchAll`, `@@replace`, `@@search` and `@@split` methods
 //!   the `String` methods use;
@@ -49,7 +51,7 @@
 //! - **Weak collections do not collect** (see [`collections`]) and `WeakRef` and
 //!   `FinalizationRegistry` are absent until the collector (item 7.6).
 //! - **No `Iterator` constructor or iterator helpers** (§27.1.3†), no
-//!   generators' `%GeneratorPrototype%`, no `Array.fromAsync`.
+//!   `Array.fromAsync`.
 //! - **Array elements are ordinary shape properties** (the heap's elements
 //!   are an open pull request), so a huge sparse index or a long `shift` is
 //!   slow, not wrong.
@@ -78,6 +80,7 @@ pub mod collections;
 pub mod date;
 pub mod error;
 pub mod function;
+pub mod generator;
 pub mod global;
 pub mod iterator;
 pub mod json;
@@ -111,6 +114,7 @@ pub fn install(vm: &mut Vm) -> Result<(), Abrupt> {
     math::install(vm)?;
     json::install(vm)?;
     promise::install(vm)?;
+    generator::install(vm)?;
     regexp::install(vm)?;
     collections::install(vm)?;
     date::install(vm)?;

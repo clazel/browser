@@ -209,6 +209,20 @@ pub proof fn lemma_handler_never_fast(s: State, op: Op)
 {
 }
 
+/// A `Return` from a generator's or async function's frame (kind
+/// suspendable) never takes the fast path: it calls the `Return` handler,
+/// which completes the generator or settles the promise
+/// (`crate::suspend`). The interpreter relies on this to leave such a frame
+/// only through the handler.
+pub proof fn lemma_suspendable_return_not_fast(s: State, src: nat)
+    requires
+        kind_of(s.region[(s.fp + hdr_argc()) as int]) == kind_suspendable(),
+    ensures
+        !fast_path(s, Op::Return { src }),
+        step(s, Op::Return { src }) == handler(HandlerId::Return, s, Op::Return { src }),
+{
+}
+
 // ---------------------------------------------------------------------
 // Core ops keep the machine well-formed
 // ---------------------------------------------------------------------

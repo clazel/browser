@@ -341,6 +341,21 @@ fn run_one(case: &Case, src: &[u32], goal: SourceGoal) -> Outcome {
                         .into(),
                 );
             }
+            // Destructuring, spread and `for`-`of` iterate arrays through
+            // `Array.prototype[@@iterator]`, a built-in (7.9) this runner does
+            // not install; so does a test that expects another error from
+            // them through `assert.throws`.
+            if name.as_deref() == Some("TypeError")
+                && msg.as_deref() == Some("object is not iterable")
+            {
+                return Outcome::Xfail(NOT_ITERABLE.into());
+            }
+            if name.as_deref() == Some("Test262Error")
+                && msg.as_deref()
+                    == Some("Expected a different error, got TypeError: object is not iterable")
+            {
+                return Outcome::Xfail(NOT_ITERABLE.into());
+            }
             if name.as_deref() == Some("TypeError")
                 && let Some(m) = &msg
                 && m == "Cannot convert object to primitive value"
@@ -378,6 +393,9 @@ fn runs(case: &Case) -> Vec<(SourceGoal, bool)> {
         vec![(SourceGoal::Script, false), (SourceGoal::Script, true)]
     }
 }
+
+/// The class of a test that iterates an array without the built-ins.
+const NOT_ITERABLE: &str = "iterates an array (Array.prototype[@@iterator] is a built-in of 7.9, not installed in this runner)";
 
 /// The harness files the native harness stands in for.
 const NATIVE_INCLUDES: [&str; 2] = ["assert.js", "sta.js"];
