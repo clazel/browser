@@ -409,11 +409,11 @@ const KNOWN_GAPS: &[(&str, &str)] = &[
     ),
     (
         "language/directive-prologue/10.1.1-11-s.js",
-        "calls eval, which is not there yet (a built-in, 7.9); the test catches the ReferenceError and asserts it is a SyntaxError (reached since `instanceof` runs, item 7.12)",
+        "calls eval, a built-in (7.9) that this runner does not install (conformance_builtins runs the test); the test catches the ReferenceError and asserts it is a SyntaxError (reached since `instanceof` runs, item 7.12)",
     ),
     (
         "language/comments/S7.4_A5.js",
-        "calls eval, which is not there yet (a built-in, 7.9); the test's own catch turns the ReferenceError into a bare Test262Error, so the runner cannot class it by name (reached since array literals run, #290)",
+        "calls eval, a built-in (7.9) that this runner does not install (conformance_builtins runs the test); the test's own catch turns the ReferenceError into a bare Test262Error, so the runner cannot class it by name (reached since array literals run, #290)",
     ),
 ];
 
