@@ -5,14 +5,21 @@
 
 use clazel_js::{Config, DefaultHost, Key, Limits, RealmOptions, Runtime, Source};
 
+/// How many statements [`big_script`] has. Each is six AST nodes, so 64 are
+/// 384 nodes, half as many again as the compiler's threshold; Miri runs
+/// that many, because it parses and compiles the script twice at about
+/// 0.7 s of its time a statement (the 200 took 406 s there, measured).
+const STATEMENTS: usize = if cfg!(miri) { 64 } else { 200 };
+
 /// A script over both size thresholds (64 code points to parse, 256 AST
-/// nodes to compile).
+/// nodes to compile): if it were under either, the test's count of threads
+/// would be short and it would fail.
 fn big_script() -> String {
     let mut s = String::new();
-    for i in 0..200 {
+    for i in 0..STATEMENTS {
         s.push_str(&format!("var v{i} = {i} + 1;\n"));
     }
-    s.push_str("var r = v199;");
+    s.push_str(&format!("var r = v{};", STATEMENTS.saturating_sub(1)));
     s
 }
 
@@ -33,7 +40,7 @@ fn inline_parsing_makes_no_thread_and_the_default_does() -> Result<(), clazel_js
     // The default: a big script is parsed on a thread of its own, and so is
     // its compilation (the counter is how this test sees it).
     let before = clazel_js_syntax::exec::big_stack_threads();
-    assert_eq!(run()?, "200");
+    assert_eq!(run()?, STATEMENTS.to_string());
     assert!(
         clazel_js_syntax::exec::big_stack_threads() >= before.saturating_add(2),
         "the default makes a parser thread and a compiler thread"
@@ -42,7 +49,7 @@ fn inline_parsing_makes_no_thread_and_the_default_does() -> Result<(), clazel_js
     clazel_js::set_inline_parsing(true);
     assert!(clazel_js_syntax::exec::inline());
     let before = clazel_js_syntax::exec::big_stack_threads();
-    assert_eq!(run()?, "200");
+    assert_eq!(run()?, STATEMENTS.to_string());
     assert_eq!(
         clazel_js_syntax::exec::big_stack_threads(),
         before,

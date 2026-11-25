@@ -181,7 +181,7 @@ fn the_gpu_process_reads_what_the_renderer_writes() -> Result<(), RunError> {
     input.push(viewport(100, 40));
     let w = Shared::default();
     let mut list = Vec::new();
-    run_graphics(Cursor::new(frames(&input)), w, &mut list, &fonts())?;
+    run_graphics(Cursor::new(frames(&input)), w.clone(), &mut list, &fonts())?;
     let started = Gpu::start(SoftBackend::new(), Launch::SOFTWARE).ok();
     assert!(started.is_some());
     let Some((gpu, _)) = started else {
@@ -207,7 +207,18 @@ fn the_gpu_process_reads_what_the_renderer_writes() -> Result<(), RunError> {
     assert!(rest.is_empty());
     assert_eq!(frames_drawn.len(), 1);
     let first = frames_drawn.first().map(|f| f.pixels.clone());
-    assert_eq!(first, Some(draw(&run(&input)?, 100, 40)));
+    // The test's own draw, of a second run of the renderer over the same
+    // input. Under Miri it draws the bytes the first run wrote instead: the
+    // second run is another 71 s of Miri time there (parse, style, layout
+    // and glyph masks; measured, 324 s with it and 252 s without), and what
+    // Miri is here for is the GPU process's reader and the two draws, which
+    // both still run.
+    let own = if cfg!(miri) {
+        sent_of(&w, &list)
+    } else {
+        run(&input)?
+    };
+    assert_eq!(first, Some(draw(&own, 100, 40)));
     Ok(())
 }
 
@@ -726,6 +737,32 @@ fn draw_one(s: &Sent, n: usize, width: u32, height: u32) -> Vec<u8> {
 const BLUE: [u8; 4] = [0, 0, 255, 255];
 const GREEN: [u8; 4] = [0, 255, 0, 255];
 
+/// The width of the viewport of the tests that draw a first frame and a
+/// second and read the pixel at (5, 5) of each. Nothing they assert is to
+/// the right of that pixel, and the software backend's time is in the
+/// pixels: under Miri a 100 by 50 frame is 42 s of its time (measured:
+/// `a_click_runs_the_handler_of_the_element_under_the_pointer` took 254 s
+/// with no draw, 369 s with one draw of both frames and 440 s with the first
+/// frame drawn alone as well).
+const NARROW: u64 = 16;
+
+/// The pixel at (5, 5) is `first` in the first list drawn alone and `last`
+/// after every list, on a `NARROW` by `height` viewport.
+///
+/// Under Miri the first list is not also drawn alone: the draw of every
+/// list draws it, through the same backend, before the others, so Miri
+/// still interprets its drawing, and a second GPU with one more frame is
+/// another 72 s of its time for a pixel the native run reads.
+/// `a_script_changes_the_document_before_the_first_paint` and
+/// `inline_styles_to_pixels` read a first frame's pixels there.
+fn assert_frames(s: &Sent, height: u32, first: [u8; 4], last: [u8; 4]) {
+    let width = u32::try_from(NARROW).unwrap_or(u32::MAX);
+    if !cfg!(miri) {
+        assert_eq!(pixel(&draw_one(s, 0, width, height), width, 5, 5), first);
+    }
+    assert_eq!(pixel(&draw(s, width, height), width, 5, 5), last);
+}
+
 /// A blue square, which a script turns green.
 const SQUARE: &str = "<!DOCTYPE html><body style='margin:0'>\
 <div id=d style='width:10px;height:10px;background:#0000ff'></div>";
@@ -753,13 +790,12 @@ fn a_script_changes_the_document_before_the_first_paint() -> Result<(), RunError
 fn a_timer_changes_the_document_and_the_page_is_painted_again() -> Result<(), RunError> {
     let html = format!("{SQUARE}<script>setTimeout(function () {{ {TURN_GREEN} }}, 50);</script>");
     let mut input = commit(&html, "text/html");
-    input.push(viewport(100, 40));
+    input.push(viewport(NARROW, 40));
     let s = run_steps(vec![bytes(&input), Step::Idle(20), Step::Idle(40)])?;
     // Blue, then (after 60 ms on the page's clock) green.
     assert_eq!(s.lists.len(), 2);
     assert!(all_valid(&s));
-    assert_eq!(pixel(&draw_one(&s, 0, 100, 40), 100, 5, 5), BLUE);
-    assert_eq!(pixel(&draw(&s, 100, 40), 100, 5, 5), GREEN);
+    assert_frames(&s, 40, BLUE, GREEN);
     Ok(())
 }
 
@@ -805,7 +841,7 @@ fn a_clicked_javascript_link_runs_its_script() -> Result<(), RunError> {
         <a href=\"javascript:document.getElementById('d').setAttribute('style','width:10px;height:10px;background:%2300ff00')\" \
         style='display:block;height:20px'>go</a>";
     let mut input = commit(html, "text/html");
-    input.push(viewport(100, 50));
+    input.push(viewport(NARROW, 50));
     input.push(Msg::Input {
         kind: 0,
         x: 5,
@@ -821,8 +857,7 @@ fn a_clicked_javascript_link_runs_its_script() -> Result<(), RunError> {
         s.kernel
     );
     assert_eq!(s.lists.len(), 2);
-    assert_eq!(pixel(&draw_one(&s, 0, 100, 50), 100, 5, 5), BLUE);
-    assert_eq!(pixel(&draw(&s, 100, 50), 100, 5, 5), GREEN);
+    assert_frames(&s, 50, BLUE, GREEN);
     Ok(())
 }
 
@@ -857,7 +892,7 @@ fn navigation_and_history_are_the_kernels_messages() -> Result<(), RunError> {
 fn an_external_script_is_a_fetch_script() -> Result<(), RunError> {
     let html = format!("{SQUARE}<script src=/app.js></script><script src=/gone.js></script>");
     let mut input = commit(&html, "text/html");
-    input.push(viewport(100, 40));
+    input.push(viewport(NARROW, 40));
     let answers = [
         Msg::ScriptResponse {
             request: 1,
@@ -895,8 +930,7 @@ fn an_external_script_is_a_fetch_script() -> Result<(), RunError> {
             }
         ]
     );
-    assert_eq!(pixel(&draw_one(&s, 0, 100, 40), 100, 5, 5), BLUE);
-    assert_eq!(pixel(&draw(&s, 100, 40), 100, 5, 5), GREEN);
+    assert_frames(&s, 40, BLUE, GREEN);
     Ok(())
 }
 
@@ -933,7 +967,7 @@ fn a_script_waits_for_the_kernel_without_losing_its_other_messages() -> Result<(
 // ---- Events and input (item 7.14) -----------------------------------------------
 
 /// A 100 by 20 blue block that `onclick` turns green, at the top of a page
-/// with a 100 by 50 viewport.
+/// with a viewport 50 high.
 const CLICKABLE: &str = "<!DOCTYPE html><body style='margin:0'>\
     <div id=d style='width:100px;height:20px;background:#0000ff' \
     onclick=\"this.setAttribute('style','width:100px;height:20px;background:#00ff00')\"></div>";
@@ -962,20 +996,33 @@ fn key_msg(key: u64) -> Msg {
 
 /// The element under the pointer gets the click (hit-tested through the
 /// layout), its `onclick` handler changes the document, and the page is
-/// painted again; a click on nothing reaches the document element only.
+/// painted again. (A click on nothing is
+/// `a_bare_canvas_click_runs_no_handler`: a page a test, each page being
+/// minutes of Miri time.)
 #[test]
 fn a_click_runs_the_handler_of_the_element_under_the_pointer() -> Result<(), RunError> {
     let mut input = commit(CLICKABLE, "text/html");
-    input.push(viewport(100, 50));
+    input.push(viewport(NARROW, 50));
     input.push(click_at(5, 5));
     let s = run(&input)?;
     assert_eq!(s.lists.len(), 2);
-    assert_eq!(pixel(&draw_one(&s, 0, 100, 50), 100, 5, 5), BLUE);
-    assert_eq!(pixel(&draw(&s, 100, 50), 100, 5, 5), GREEN);
+    assert_frames(&s, 50, BLUE, GREEN);
+    Ok(())
+}
 
-    // Below the block, on the canvas: not on it.
+/// A click below the block, on the canvas, is not on the block: it reaches
+/// the document element only, no handler runs and nothing is painted again.
+///
+/// The name sorts first among this module's tests on purpose. Miri runs
+/// them on one thread in name order, and the first to lay out a page also
+/// parses the user-agent style sheets for the process (66 s of Miri time,
+/// measured: every page test is that much longer run alone). This is the
+/// lightest page here (91 s), so that cost falls on it and not on a test
+/// that is near the 300 s limit already.
+#[test]
+fn a_bare_canvas_click_runs_no_handler() -> Result<(), RunError> {
     let mut input = commit(CLICKABLE, "text/html");
-    input.push(viewport(100, 50));
+    input.push(viewport(NARROW, 50));
     input.push(click_at(5, 40));
     let s = run(&input)?;
     assert_eq!(s.lists.len(), 1, "a click below the block is not on it");
@@ -1041,35 +1088,46 @@ fn a_click_on_a_submit_button_submits_the_form() -> Result<(), RunError> {
     Ok(())
 }
 
-/// A page can cancel the wheel: its scroll then does not happen (no new
-/// list); a `scroll` listener runs when it does, and its change is painted.
-#[test]
-fn wheel_can_be_canceled_and_scroll_is_an_event() -> Result<(), RunError> {
-    let scroll = |negative: bool, delta: u64| Msg::Input {
+/// A wheel input at (5, 5).
+fn wheel_at_5_5(delta: u64) -> Msg {
+    Msg::Input {
         kind: 1,
         x: 5,
         y: 5,
-        negative,
+        negative: false,
         delta,
         key: 0,
-    };
+    }
+}
+
+/// A page can cancel the wheel: its scroll then does not happen (no new
+/// list). (With `a_scroll_is_an_event_and_its_change_is_painted` this was
+/// one test of two pages; a page a test, each being minutes of Miri time.)
+#[test]
+fn a_canceled_wheel_does_not_scroll() -> Result<(), RunError> {
     let canceled = "<!DOCTYPE html><body style='margin:0'>\
         <div onwheel='return false' style='height:500px;background:#0000ff'></div>";
     let mut input = commit(canceled, "text/html");
     input.push(viewport(10, 50));
-    input.push(scroll(false, 100));
+    input.push(wheel_at_5_5(100));
     let s = run(&input)?;
     // The handler ran, so the page was painted again (it could have changed
     // something), but not scrolled: the same list.
     assert!(s.lists.len() <= 2);
     assert_eq!(s.lists.first(), s.lists.last(), "canceled: no scroll");
+    Ok(())
+}
 
+/// A `scroll` listener runs when the wheel scrolls the page, and its change
+/// is painted.
+#[test]
+fn a_scroll_is_an_event_and_its_change_is_painted() -> Result<(), RunError> {
     let scrolled = "<!DOCTYPE html><body style='margin:0' \
         onscroll=\"document.getElementById('m').setAttribute('style','height:500px;background:#00ff00')\">\
         <div id=m style='height:500px;background:#0000ff'></div>";
     let mut input = commit(scrolled, "text/html");
     input.push(viewport(10, 50));
-    input.push(scroll(false, 100));
+    input.push(wheel_at_5_5(100));
     let s = run(&input)?;
     // The first paint, then the scroll (with the handler's change) painted
     // once.
