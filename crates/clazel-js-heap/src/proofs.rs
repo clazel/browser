@@ -555,3 +555,120 @@ fn gc_mark_shapes_is_the_least_closed_set() {
         }
     }
 }
+
+// ---- Fifth slice: the shape property index ---------------------------------
+//
+// `shape::contract`, on one index table (`shape::index::Table`), the
+// structure every lookup goes through. Bounds, stated: a table of up to
+// `PUSHES` entries, each key any key below `KEYS` (so refused duplicates
+// occur) with any attributes; lookups of any `u32` key (so misses are
+// covered) at any slot count up to the table's length.
+// - `index_table_push_lookup`: after the pushes, the table is well formed
+//   (X2), a push is refused exactly when the key is already there (X4's
+//   refusal), the entries are the accepted pushes in order, and a lookup
+//   at any prefix length `n` is `contract::spec_lookup` of the first `n`
+//   entries, with any slot found below `n` (X3). Lookups at a prefix are
+//   what every shape on a shared table does (X1 makes the prefix its chain).
+// - `index_search_any`: the binary search under the table, for every sorted
+//   list of up to four keys of any value and any key.
+// NOT proven by Kani: `Table::truncate` (X5's shortening), `Index` as a
+// whole (its table list, `extend`'s choice between appending and copying,
+// and `retain`'s bookkeeping) and
+// `Shapes` (its transitions and dictionaries are hash maps). Harnesses over
+// trees of shapes through `Index`, with the parents chosen symbolically or
+// in a fixed form, ran for 25 minutes to over 3 hours without finishing and
+// were dropped; so was one of `Table::truncate` (after two or three pushes,
+// to any length or to one), which took CBMC to 10 to 18 GB within a minute,
+// past CI's 16 GB runner. `shape::tests::the_index_agrees_with_the_parent_walk_on_random_trees`
+// checks `Shapes::lookup` against the parent walk and `spec_lookup` on
+// random trees with sweeps, and every table well formed.
+
+use crate::shape::contract::spec_lookup;
+use crate::shape::index::Table;
+use crate::shape::{Attrs, Error as ShapeError};
+
+/// Keys pushed are below this.
+const KEYS: u32 = 3;
+
+/// Pushes in a harness's table.
+const PUSHES: usize = 3;
+
+/// Pushes `pushes` (at most `PUSHES`) entries of any key below `KEYS` and any attributes,
+/// checking each refusal against the model; returns the table, the model
+/// of its entries and their number.
+fn any_table(pushes: usize) -> (Table, [(Key, Attrs); PUSHES], usize) {
+    let mut t = Table::default();
+    let mut model = [(Key(0), Attrs(0)); PUSHES];
+    let mut len = 0usize;
+    for _ in 0..pushes.min(PUSHES) {
+        let k: u32 = kani::any();
+        kani::assume(k < KEYS);
+        let p = (Key(k), Attrs(kani::any()));
+        let had = spec_lookup(&model[..len], p.0).is_some();
+        match t.push(p.0, p.1) {
+            Ok(()) => {
+                assert!(!had);
+                model[len] = p;
+                len += 1;
+            }
+            Err(e) => {
+                assert_eq!(e, ShapeError::Exists);
+                assert!(had);
+            }
+        }
+    }
+    (t, model, len)
+}
+
+/// X2, and X3 at any prefix of the model.
+fn check_table(t: &Table, model: &[(Key, Attrs)]) {
+    assert!(t.well_formed());
+    assert_eq!(t.entries(), model);
+    let n: u32 = kani::any();
+    kani::assume(n as usize <= model.len());
+    let q = Key(kani::any());
+    let got = t.lookup(n, q);
+    assert_eq!(got, spec_lookup(&model[..n as usize], q));
+    if let Some((slot, _)) = got {
+        assert!(slot < n);
+    }
+}
+
+#[kani::proof]
+#[kani::unwind(5)]
+fn index_table_push_lookup() {
+    let (t, model, len) = any_table(PUSHES);
+    check_table(&t, &model[..len]);
+}
+
+/// The index's binary search (X3's bounds) over every sorted list of up to
+/// four distinct keys of any value, for any key: it finds exactly a key
+/// the list has, at its position, and otherwise returns the position that
+/// keeps the list sorted, never past its end.
+#[kani::proof]
+#[kani::unwind(6)]
+fn index_search_any() {
+    let len: usize = kani::any();
+    kani::assume(len <= 4);
+    let mut sorted = [(Key(0), 0u32); 4];
+    for i in 0..4 {
+        sorted[i] = (Key(kani::any()), kani::any());
+        if i > 0 {
+            kani::assume(sorted[i - 1].0.0 < sorted[i].0.0);
+        }
+    }
+    let list = &sorted[..len];
+    let key = Key(kani::any());
+    match crate::shape::index::search(list, key) {
+        Ok(at) => {
+            assert!(at < len);
+            assert_eq!(list[at].0, key);
+        }
+        Err(at) => {
+            assert!(at <= len);
+            assert!(list.iter().all(|&(k, _)| k != key));
+            assert!(at == 0 || list[at - 1].0.0 < key.0);
+            assert!(at == len || key.0 < list[at].0.0);
+        }
+    }
+}
