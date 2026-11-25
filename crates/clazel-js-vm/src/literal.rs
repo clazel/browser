@@ -98,6 +98,17 @@ pub fn regex_at(
     Ok((to_utf16(body), to_utf16(flags)))
 }
 
+/// UTF-16 code units to code points (CodePointAt §11.1.4†: a surrogate pair is
+/// one code point; a lone surrogate is kept).
+pub fn from_utf16(units: &[u16]) -> Vec<u32> {
+    char::decode_utf16(units.iter().copied())
+        .map(|r| match r {
+            Ok(c) => u32::from(c),
+            Err(e) => u32::from(e.unpaired_surrogate()),
+        })
+        .collect()
+}
+
 /// Code points to UTF-16 code units (§6.1.4: a code point above U+FFFF is a
 /// surrogate pair; a lone surrogate is kept).
 pub fn to_utf16(cps: &[u32]) -> Vec<u16> {

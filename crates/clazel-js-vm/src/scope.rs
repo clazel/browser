@@ -290,6 +290,41 @@ pub struct Analysis {
     /// The binding `*default*` of an `export default` of an expression, an
     /// anonymous function or an anonymous class, or [`NONE`].
     pub default_binding: u32,
+    /// For eval code ([`analyze_eval`]): how many scopes of the caller the
+    /// analysis starts with, scopes `0..outer`, outermost first; 0 otherwise.
+    pub outer: u32,
+    /// For eval code: what the caller and the code are.
+    pub eval: Option<EvalAnalysis>,
+}
+
+/// The function that the caller's scopes of eval code belong to: none of the
+/// eval code's ([`Analysis::funcs`] has no entry for it).
+pub const OUTER_FUNC: u32 = u32::MAX - 1;
+
+/// What scope analysis knows of eval code ([`analyze_eval`]).
+#[derive(Clone, Debug)]
+pub struct EvalAnalysis {
+    /// strictEval (PerformEval §19.2.1.1 steps 12 and 13): the eval code is
+    /// strict, so its `var`s and functions are its own bindings (step 18:
+    /// varEnv is lexEnv).
+    pub strict: bool,
+    /// The caller's scope that is varEnv for sloppy eval code in a function
+    /// (the first scope of the record with a variable object), or [`NONE`]
+    /// when varEnv is the global environment or the code is strict.
+    pub var_scope: u32,
+    /// The record calls that scope a parameter scope
+    /// ([`crate::bytecode::EvalScopeKind::Parameters`]): its names are not
+    /// varEnv's but an environment between the call and varEnv.
+    pub var_scope_params: bool,
+    /// The caller's facts, for a direct eval inside this eval code
+    /// (`EvalScopeInfo`'s `in_function` and the rest).
+    pub in_function: bool,
+    /// As [`EvalAnalysis::in_function`].
+    pub in_method: bool,
+    /// As [`EvalAnalysis::in_function`].
+    pub in_derived_constructor: bool,
+    /// As [`EvalAnalysis::in_function`].
+    pub in_class_field_initializer: bool,
 }
 
 /// The node at `i`.
@@ -447,6 +482,8 @@ fn has_use_strict(ast: &Ast, src: &[u32], stmts: &[u32]) -> Result<bool, Compile
 /// The analysis in progress.
 struct Builder<'a> {
     ast: &'a Ast,
+    /// Each node's parent ([`NONE`] for the root), until the passes take it.
+    parent: Vec<u32>,
     a: Analysis,
     intern: HashMap<Vec<u32>, u32>,
 }
@@ -541,6 +578,132 @@ impl Builder<'_> {
 
 /// Runs scope analysis over `ast`, whose source text is `src` (code points).
 pub fn analyze(ast: &Ast, src: &[u32]) -> Result<Analysis, CompileError> {
+    let mut b = builder(ast)?;
+    run_passes(&mut b, src, NONE)?;
+    Ok(b.a)
+}
+
+/// Runs scope analysis over eval code (`ast`, a script parsed from `src`)
+/// that a direct eval runs with the caller's scopes `info`, or that an
+/// indirect eval runs (`info` with no scope and nothing allowed).
+///
+/// The caller's scopes become scopes `0..outer` of the analysis, outermost
+/// first, belonging to no function of the code ([`OUTER_FUNC`]) and already
+/// laid out: each binding is captured, in the slot the record gives, and a
+/// `with` statement's object and a function's variable object are bindings
+/// too, so the code's references resolve through them as a nested function's
+/// do. The code's own scope is inside the innermost of them. Strict code
+/// (strictEval) has a function scope, which holds its `var`s, functions and
+/// lexical declarations (PerformEval §19.2.1.1 step 18). Sloppy code has a
+/// script scope that holds only its lexical declarations (step 16.a, lexEnv):
+/// its `var`s and functions are varEnv's, which the handler and the code's
+/// prologue make (EvalDeclarationInstantiation §19.2.1.3), and a reference to
+/// one resolves as a global or through the variable object.
+pub fn analyze_eval(
+    ast: &Ast,
+    src: &[u32],
+    info: &crate::bytecode::EvalScopeInfo,
+) -> Result<Analysis, CompileError> {
+    use crate::bytecode::{EvalBinding, EvalScopeKind};
+    let mut b = builder(ast)?;
+    let this_name = b.intern(vec![u32::MAX])?;
+    let nt_name = b.intern(vec![u32::MAX - 2])?;
+    let callee_name = b.intern(vec![u32::MAX - 3])?;
+    let vars_name = b.intern(vec![u32::MAX - 4])?;
+    let with_name = b.intern(vec![u32::MAX - 5])?;
+    let mut parent = NONE;
+    let mut var_scope = NONE;
+    let mut params_scopes = Vec::new();
+    for es in info.scopes.iter().rev() {
+        let sid = u32::try_from(b.a.scopes.len()).map_err(|_| CompileError::TooLarge("scopes"))?;
+        let kind = match es.kind {
+            EvalScopeKind::Script => SKind::Script,
+            EvalScopeKind::Module => SKind::Module,
+            EvalScopeKind::Function => SKind::Function,
+            EvalScopeKind::Block => SKind::Block,
+            EvalScopeKind::Class => SKind::Class,
+            EvalScopeKind::With => SKind::With,
+            EvalScopeKind::Parameters => SKind::Function,
+        };
+        b.a.scopes.push(Scope {
+            parent,
+            func: OUTER_FUNC,
+            kind,
+            strict: info.strict,
+            bindings: Vec::new(),
+            names: HashMap::new(),
+            funcs: Vec::new(),
+            env_size: 1,
+        });
+        let mut size: u32 = 1;
+        let mut add = |b: &mut Builder<'_>, name: u32, kind: BKind, slot: u32| {
+            let bid = b.declare(sid, name, kind)?;
+            let bd = b.binding_mut(bid)?;
+            bd.captured = true;
+            bd.slot = slot;
+            size = size.max(slot.saturating_add(1));
+            Ok::<u32, CompileError>(bid)
+        };
+        for en in &es.names {
+            let (kind, name) = match en.kind {
+                EvalBinding::Var => (BKind::Var, None),
+                EvalBinding::Let => (BKind::Let, None),
+                EvalBinding::Const => (BKind::Const, None),
+                EvalBinding::Catch => (BKind::Catch, None),
+                EvalBinding::FuncName => (BKind::FuncName, None),
+                EvalBinding::Arguments => (BKind::Arguments, None),
+                EvalBinding::PrivateName => (BKind::PrivateName, None),
+                EvalBinding::Import => (BKind::Import, None),
+                EvalBinding::This => (BKind::This, Some(this_name)),
+                EvalBinding::DerivedThis => (BKind::DerivedThis, Some(this_name)),
+                EvalBinding::NewTarget => (BKind::NewTarget, Some(nt_name)),
+                EvalBinding::Callee => (BKind::Callee, Some(callee_name)),
+            };
+            let name = match name {
+                Some(n) => n,
+                None => b.intern(literal::from_utf16(&en.name))?,
+            };
+            add(&mut b, name, kind, en.slot)?;
+        }
+        if es.kind == EvalScopeKind::With {
+            let bid = add(&mut b, with_name, BKind::WithObject, 0)?;
+            b.a.dyn_binding.insert(sid, bid);
+        }
+        if es.kind == EvalScopeKind::Parameters {
+            params_scopes.push(sid);
+        }
+        if let Some(slot) = es.var_object {
+            let bid = add(&mut b, vars_name, BKind::EvalVars, slot)?;
+            b.a.dyn_binding.insert(sid, bid);
+        }
+        b.scope_mut(sid)?.env_size = size;
+        parent = sid;
+    }
+    // The innermost scope of the record with a variable object is varEnv
+    // (PerformEval step 16.b: the running context's VariableEnvironment).
+    for sid in (0..b.a.scopes.len()).rev() {
+        let s = u32::try_from(sid).map_err(|_| CompileError::TooLarge("scopes"))?;
+        if b.scope(s)?.kind == SKind::Function && b.a.dyn_binding.contains_key(&s) {
+            var_scope = s;
+            break;
+        }
+    }
+    b.a.outer = u32::try_from(b.a.scopes.len()).map_err(|_| CompileError::TooLarge("scopes"))?;
+    b.a.eval = Some(EvalAnalysis {
+        strict: info.strict,
+        var_scope,
+        var_scope_params: params_scopes.contains(&var_scope),
+        in_function: info.in_function,
+        in_method: info.in_method,
+        in_derived_constructor: info.in_derived_constructor,
+        in_class_field_initializer: info.in_class_field_initializer,
+    });
+    run_passes(&mut b, src, parent)?;
+    Ok(b.a)
+}
+
+/// A builder over `ast` with every table empty.
+fn builder(ast: &Ast) -> Result<Builder<'_>, CompileError> {
     let n = ast.nodes.len();
     let mut parent = vec![NONE; n];
     for (i, nd) in ast.nodes.iter().enumerate() {
@@ -550,8 +713,9 @@ pub fn analyze(ast: &Ast, src: &[u32]) -> Result<Analysis, CompileError> {
             }
         }
     }
-    let mut b = Builder {
+    Ok(Builder {
         ast,
+        parent,
         a: Analysis {
             names: Vec::new(),
             scopes: Vec::new(),
@@ -572,21 +736,50 @@ pub fn analyze(ast: &Ast, src: &[u32]) -> Result<Analysis, CompileError> {
             eval_calls: Vec::new(),
             implicit_blocks: HashMap::new(),
             default_binding: NONE,
+            outer: 0,
+            eval: None,
         },
         intern: HashMap::new(),
-    };
-    names_pass(&mut b, src)?;
-    scopes_pass(&mut b, src, &parent)?;
-    derived_pass(&mut b, src)?;
-    declare_pass(&mut b, &parent)?;
-    with_pass(&mut b)?;
-    var_arguments_pass(&mut b)?;
-    annexb_pass(&mut b)?;
-    funcname_pass(&mut b)?;
-    reference_pass(&mut b, &parent)?;
-    eval_pass(&mut b)?;
-    finish_pass(&mut b)?;
-    Ok(b.a)
+    })
+}
+
+/// The passes of scope analysis; the root's scope is inside `root_owner`
+/// (the innermost scope of an eval's caller, or [`NONE`]).
+fn run_passes(b: &mut Builder<'_>, src: &[u32], root_owner: u32) -> Result<(), CompileError> {
+    let parent = std::mem::take(&mut b.parent);
+    let b = &mut *b;
+    names_pass(b, src)?;
+    scopes_pass(b, src, &parent, root_owner)?;
+    if let Some(ev) = b.a.eval.clone() {
+        // strictEval (PerformEval steps 12 and 13) is the root scope's
+        // strictness: the caller's, or the code's Use Strict Directive. Strict
+        // eval code's `var`s and functions are its own (step 18), as a
+        // function's are.
+        let root =
+            b.a.own_scope
+                .get(b.ast.root as usize)
+                .copied()
+                .unwrap_or(NONE);
+        let strict = b.scope(root)?.strict;
+        if strict {
+            b.scope_mut(root)?.kind = SKind::Function;
+        }
+        b.a.eval = Some(EvalAnalysis {
+            strict,
+            var_scope: if strict { NONE } else { ev.var_scope },
+            ..ev
+        });
+    }
+    derived_pass(b, src)?;
+    declare_pass(b, &parent)?;
+    with_pass(b)?;
+    var_arguments_pass(b)?;
+    annexb_pass(b)?;
+    funcname_pass(b)?;
+    reference_pass(b, &parent)?;
+    eval_pass(b)?;
+    finish_pass(b)?;
+    Ok(())
 }
 
 /// Interns the name of every identifier and label node.
@@ -619,7 +812,12 @@ fn names_pass(b: &mut Builder<'_>, src: &[u32]) -> Result<(), CompileError> {
 }
 
 /// Creates the scopes and functions, parents first.
-fn scopes_pass(b: &mut Builder<'_>, src: &[u32], parent: &[u32]) -> Result<(), CompileError> {
+fn scopes_pass(
+    b: &mut Builder<'_>,
+    src: &[u32],
+    parent: &[u32],
+    root_owner: u32,
+) -> Result<(), CompileError> {
     let ast = b.ast;
     let n = ast.nodes.len();
     let mut ctx = vec![NONE; n];
@@ -628,7 +826,7 @@ fn scopes_pass(b: &mut Builder<'_>, src: &[u32], parent: &[u32]) -> Result<(), C
         let i32_ = u32::try_from(i).map_err(|_| CompileError::TooLarge("nodes"))?;
         let p = parent.get(i).copied().unwrap_or(NONE);
         let owner = if p == NONE {
-            NONE
+            root_owner
         } else {
             let pn = node(ast, p as usize)?;
             let outer_first = (matches!(
@@ -728,7 +926,9 @@ fn scopes_pass(b: &mut Builder<'_>, src: &[u32], parent: &[u32]) -> Result<(), C
             let sid =
                 u32::try_from(b.a.scopes.len()).map_err(|_| CompileError::TooLarge("scopes"))?;
             let inherited_strict = if owner == NONE {
-                false
+                // Eval code with no scope of its caller in the record: the
+                // caller's strictness (strictCaller, PerformEval step 12).
+                b.a.eval.as_ref().is_some_and(|e| e.strict)
             } else {
                 b.scope(owner)?.strict
             };
@@ -988,7 +1188,7 @@ fn declare_pass(b: &mut Builder<'_>, parent: &[u32]) -> Result<(), CompileError>
                     Some(p) if p != NONE => node(ast, p as usize)?.op == AOp::Const,
                     _ => false,
                 };
-                let at_top = b.scope(owner)?.kind == SKind::Script;
+                let at_top = b.scope(owner)?.kind == SKind::Script && b.a.eval.is_none();
                 for id in bound_idents(ast, target)? {
                     let name = b.a.name_of.get(id as usize).copied().unwrap_or(NONE);
                     if at_top {
@@ -1071,7 +1271,7 @@ fn declare_pass(b: &mut Builder<'_>, parent: &[u32]) -> Result<(), CompileError>
                 if let Some(name) = first_name {
                     if nd.kind == NodeKind::ClassDeclaration {
                         // The declaration's own binding, like a `let`.
-                        if b.scope(owner)?.kind == SKind::Script {
+                        if b.scope(owner)?.kind == SKind::Script && b.a.eval.is_none() {
                             b.a.global_lexicals.push((name, false));
                         } else {
                             let bid = b.declare(owner, name, BKind::Let)?;
@@ -1206,10 +1406,46 @@ fn annexb_pass(b: &mut Builder<'_>) -> Result<(), CompileError> {
         {
             blocked = true;
         }
+        // Sloppy eval code (EvalDeclarationInstantiation §19.2.1.3 step 13,
+        // Annex B.3.2.3): a binding of the name in a scope of the caller
+        // between the call and varEnv (not a `with` statement's, and not a
+        // `catch` clause's: step 13.b.ii.4.a.i.1.a) stops it too; a `var` or a
+        // parameter of varEnv itself is the variable it assigns.
+        let mut existing = None;
+        let eval_root =
+            b.a.eval.is_some() && b.a.own_scope.get(ast.root as usize).copied() == Some(fs);
+        if eval_root && !blocked {
+            let var_scope = b.a.eval.as_ref().map_or(NONE, |e| e.var_scope);
+            let mut s = fsc.parent;
+            while s != NONE && s != var_scope {
+                let sc = b.scope(s)?;
+                if sc.kind != SKind::With
+                    && let Some(&bid) = sc.names.get(&name)
+                    && b.a.bindings.get(bid as usize).map(|bd| bd.kind) != Some(BKind::Catch)
+                {
+                    blocked = true;
+                }
+                s = sc.parent;
+            }
+            if var_scope != NONE
+                && let Some(&bid) = b.scope(var_scope)?.names.get(&name)
+            {
+                let params = b.a.eval.as_ref().is_some_and(|e| e.var_scope_params);
+                match b.a.bindings.get(bid as usize).map(|bd| bd.kind) {
+                    Some(BKind::Let | BKind::Const) => blocked = true,
+                    Some(BKind::Var | BKind::Arguments) if params => blocked = true,
+                    Some(BKind::Var | BKind::Arguments) => existing = Some(bid),
+                    _ => {}
+                }
+            }
+        }
         if blocked {
             continue;
         }
-        let target = if fsc.kind == SKind::Script {
+        let fsc = b.scope(fs)?;
+        let target = if let Some(bid) = existing {
+            Target::Binding(bid)
+        } else if fsc.kind == SKind::Script {
             Target::Global(name)
         } else {
             Target::Binding(b.declare(fs, name, BKind::Var)?)
@@ -1259,12 +1495,34 @@ fn home_func(b: &Builder<'_>, owner: u32) -> Result<(u32, u32), CompileError> {
     Ok((here, f))
 }
 
+/// The binding `name` of the caller's scopes of eval code, as seen from
+/// `owner`, or [`NONE`].
+fn outer_binding(b: &mut Builder<'_>, owner: u32, name: u32) -> Result<u32, CompileError> {
+    let r = b.resolve(owner, name)?;
+    let outer = b.a.outer;
+    match b.a.bindings.get(r as usize) {
+        Some(bd) if bd.scope < outer => Ok(r),
+        _ => Ok(NONE),
+    }
+}
+
 /// The binding through which `this` is read at `owner`, or [`NONE`] to read
 /// the frame's `this`: needed in an arrow function (the home function keeps
 /// `this` in a captured binding) and in a derived constructor (where it is
 /// the hole until `super()` returns).
 fn this_binding(b: &mut Builder<'_>, owner: u32) -> Result<u32, CompileError> {
     let (here, home) = home_func(b, owner)?;
+    // Eval code reads the caller's `this` (PerformEval §19.2.1.1: the eval
+    // context has no `this` binding of its own, so GetThisEnvironment §9.4.3
+    // finds the caller's), a binding of the caller's scopes when the caller is
+    // in a function, and the global object's otherwise.
+    if home == 0 && b.a.eval.is_some() {
+        let name = b.intern(vec![u32::MAX])?;
+        let r = outer_binding(b, owner, name)?;
+        if r != NONE {
+            return Ok(r);
+        }
+    }
     let derived =
         b.a.funcs
             .get(home as usize)
@@ -1301,6 +1559,14 @@ fn carried_binding(
     kind: BKind,
 ) -> Result<u32, CompileError> {
     let (here, home) = home_func(b, owner)?;
+    // Eval code reads the caller's `new.target` and function (for `super`).
+    if home == 0 && b.a.eval.is_some() {
+        let name = b.intern(vec![tag])?;
+        let r = outer_binding(b, owner, name)?;
+        if r != NONE {
+            return Ok(r);
+        }
+    }
     if here == home {
         return Ok(NONE);
     }
@@ -1683,7 +1949,9 @@ fn reference_pass(b: &mut Builder<'_>, parent: &[u32]) -> Result<(), CompileErro
 
 /// Assigns environment slots, and computes `contains_assign`.
 fn finish_pass(b: &mut Builder<'_>) -> Result<(), CompileError> {
-    for s in 0..b.a.scopes.len() {
+    // An eval caller's scopes keep the slots the record gave them.
+    let first = usize::try_from(b.a.outer).map_err(|_| CompileError::TooLarge("scopes"))?;
+    for s in first..b.a.scopes.len() {
         let ids: Vec<u32> =
             b.a.scopes
                 .get(s)

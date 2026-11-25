@@ -10,18 +10,17 @@
 //! resume it. Each method's comment quotes the algorithm it covers; the
 //! resumption algorithms are quoted where the VM implements them.
 //!
-//! # Differences from the standard, all listed
-//!
-//! - **The constructors `%GeneratorFunction%`, `%AsyncFunction%` and
-//!   `%AsyncGeneratorFunction%`** (§27.3.1.1†, §27.7.1.1†, §27.4.1.1†) are
-//!   CreateDynamicFunction, which compiles source text, as `Function` does:
-//!   not yet (they throw "not implemented", as `Function` does).
+//! The constructors `%GeneratorFunction%`, `%AsyncFunction%` and
+//! `%AsyncGeneratorFunction%` (§27.3.1.1, §27.7.1.1, §27.4.1.1) are
+//! CreateDynamicFunction (§20.2.1.1.1), which the VM does
+//! ([`Vm::create_dynamic_function`]), as `Function` does.
 
 use crate::promise::{Cap, new_promise_capability, perform_promise_then, promise_resolve};
 use crate::symbol::to_string_tag;
 use crate::util::{CONFIGURABLE_ONLY, CONSTANT, arg, caught, define, method, new_object_with};
 use clazel_js_heap::symbol as wk;
 use clazel_js_heap::value::Value;
+use clazel_js_vm::eval::DynamicKind;
 use clazel_js_vm::heap::ObjKind;
 use clazel_js_vm::interp::{Abrupt, Intrinsic, Vm};
 use clazel_js_vm::suspend::{ResumeMode, TAG_ASYNC_FROM_SYNC};
@@ -126,28 +125,25 @@ fn function_family(
     to_string_tag(vm, proto, name)
 }
 
-/// `GeneratorFunction ( ...parameterArgs, bodyArg )`, §27.3.1.1†:
-/// CreateDynamicFunction, which needs the compiler at run time; not yet.
-fn generator_function(_vm: &mut Vm, _this: Value, _args: &[Value]) -> Result<Value, Abrupt> {
-    Err(Abrupt::NotYet(
-        "the GeneratorFunction constructor (CreateDynamicFunction needs the compiler)".into(),
-    ))
+/// `GeneratorFunction ( ...parameterArgs, bodyArg )`, §27.3.1.1:
+/// 1. Let C be the active function object.
+/// 2. If bodyArg is not present, set bodyArg to the empty String.
+/// 3. Return ? CreateDynamicFunction(C, NewTarget, generator, parameterArgs,
+///    bodyArg).
+fn generator_function(vm: &mut Vm, _this: Value, args: &[Value]) -> Result<Value, Abrupt> {
+    vm.create_dynamic_function(DynamicKind::Generator, args)
 }
 
-/// `AsyncFunction ( ...parameterArgs, bodyArg )`, §27.7.1.1†: as
-/// `GeneratorFunction`.
-fn async_function(_vm: &mut Vm, _this: Value, _args: &[Value]) -> Result<Value, Abrupt> {
-    Err(Abrupt::NotYet(
-        "the AsyncFunction constructor (CreateDynamicFunction needs the compiler)".into(),
-    ))
+/// `AsyncFunction ( ...parameterArgs, bodyArg )`, §27.7.1.1: as
+/// `GeneratorFunction`, with kind async.
+fn async_function(vm: &mut Vm, _this: Value, args: &[Value]) -> Result<Value, Abrupt> {
+    vm.create_dynamic_function(DynamicKind::Async, args)
 }
 
-/// `AsyncGeneratorFunction ( ...parameterArgs, bodyArg )`, §27.4.1.1†: as
-/// `GeneratorFunction`.
-fn async_generator_function(_vm: &mut Vm, _this: Value, _args: &[Value]) -> Result<Value, Abrupt> {
-    Err(Abrupt::NotYet(
-        "the AsyncGeneratorFunction constructor (CreateDynamicFunction needs the compiler)".into(),
-    ))
+/// `AsyncGeneratorFunction ( ...parameterArgs, bodyArg )`, §27.4.1.1: as
+/// `GeneratorFunction`, with kind async-generator.
+fn async_generator_function(vm: &mut Vm, _this: Value, args: &[Value]) -> Result<Value, Abrupt> {
+    vm.create_dynamic_function(DynamicKind::AsyncGenerator, args)
 }
 
 /// `%AsyncIteratorPrototype% [ @@asyncIterator ] ( )`, §27.1.3.1†.

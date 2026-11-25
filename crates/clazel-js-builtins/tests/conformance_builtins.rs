@@ -543,9 +543,10 @@ fn runs(case: &Case) -> Vec<(SourceGoal, bool)> {
 /// The harness files the native harness stands in for.
 const NATIVE_INCLUDES: [&str; 2] = ["assert.js", "sta.js"];
 
-/// The directories of generators and async functions (items 7.7 to 7.9),
-/// whose counts are printed each on its own.
-const SUSPEND_DIRS: [&str; 10] = [
+/// The directories of generators and async functions (items 7.7 to 7.9), and
+/// of `eval`, `with` and the `Function` constructors, whose counts are printed
+/// each on its own.
+const SUSPEND_DIRS: [&str; 17] = [
     "language/statements/generators",
     "language/statements/async-function",
     "language/statements/async-generator",
@@ -556,6 +557,13 @@ const SUSPEND_DIRS: [&str; 10] = [
     "language/expressions/await",
     "language/expressions/yield",
     "built-ins/AsyncFromSyncIteratorPrototype",
+    "built-ins/eval",
+    "language/eval-code",
+    "language/statements/with",
+    "built-ins/Function",
+    "built-ins/GeneratorFunction",
+    "built-ins/AsyncFunction",
+    "built-ins/AsyncGeneratorFunction",
 ];
 
 /// Tests that run and give a different result for a known reason, each with
@@ -564,18 +572,6 @@ const KNOWN_GAPS: &[(&str, &str)] = &[
     (
         "language/identifier-resolution/assign-to-global-undefined.js",
         "strict assignment to an unresolvable reference throws before the right-hand side runs (§13.15.2 step 1.a, ResolveBinding first); SetGlobal checks when it runs, after it, and the op list has no resolve-first op",
-    ),
-    (
-        "language/directive-prologue/10.1.1-11-s.js",
-        "calls eval, which is not there yet (a built-in, 7.9); the test catches the ReferenceError and asserts `err instanceof SyntaxError`, so the runner cannot class it by name (reached since `instanceof` runs)",
-    ),
-    (
-        "language/expressions/async-function/named-strict-error-reassign-fn-name-in-body-in-eval.js",
-        "calls eval, which is not there yet (a built-in, 7.9); the test catches the ReferenceError and asserts `error instanceof TypeError`, so the runner cannot class it by name",
-    ),
-    (
-        "language/expressions/async-generator/named-strict-error-reassign-fn-name-in-body-in-eval.js",
-        "calls eval, which is not there yet (a built-in, 7.9); the test catches the ReferenceError and asserts `error instanceof TypeError`, so the runner cannot class it by name",
     ),
     (
         "language/expressions/yield/formal-parameters-after-reassignment-non-strict.js",
@@ -589,15 +585,197 @@ const KNOWN_GAPS: &[(&str, &str)] = &[
         "language/statements/generators/restricted-properties.js",
         "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
     ),
+];
+
+/// `Function` tests (vendored with the `Function` constructors) that run and
+/// fail for a known difference of `%Function.prototype%`, each with its reason:
+/// expected failures.
+const FUNCTION_PROTOTYPE_GAPS: &[(&str, &str)] = &[
     (
-        "language/comments/S7.4_A5.js",
-        "calls eval, which is not there yet (a built-in, 7.9); the test's own catch turns the ReferenceError into a bare Test262Error, so the runner cannot class it by name (reached since array literals run, #290)",
+        "built-ins/Function/15.3.5-1gs.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/15.3.5-2gs.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/15.3.5.4_2-11gs.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/15.3.5.4_2-13gs.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/15.3.5.4_2-15gs.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/15.3.5.4_2-17gs.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/15.3.5.4_2-19gs.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/15.3.5.4_2-1gs.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/15.3.5.4_2-21gs.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/15.3.5.4_2-22gs.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/15.3.5.4_2-23gs.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/15.3.5.4_2-24gs.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/15.3.5.4_2-25gs.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/15.3.5.4_2-26gs.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/15.3.5.4_2-27gs.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/15.3.5.4_2-28gs.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/15.3.5.4_2-29gs.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/15.3.5.4_2-3gs.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/15.3.5.4_2-48gs.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/15.3.5.4_2-50gs.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/15.3.5.4_2-52gs.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/15.3.5.4_2-54gs.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/15.3.5.4_2-5gs.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/15.3.5.4_2-7gs.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/15.3.5.4_2-9gs.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/StrictFunction_restricted-properties.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/prototype/S15.3.3.1_A1.js",
+        "%Function.prototype% is an ordinary object, not a built-in function that accepts any arguments and returns undefined (§20.2.3†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/prototype/S15.3.4_A1.js",
+        "%Function.prototype% is an ordinary object, not a built-in function that accepts any arguments and returns undefined (§20.2.3†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/prototype/S15.3.4_A2_T1.js",
+        "%Function.prototype% is an ordinary object, not a built-in function that accepts any arguments and returns undefined (§20.2.3†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/prototype/S15.3.4_A2_T2.js",
+        "%Function.prototype% is an ordinary object, not a built-in function that accepts any arguments and returns undefined (§20.2.3†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/prototype/S15.3.4_A2_T3.js",
+        "%Function.prototype% is an ordinary object, not a built-in function that accepts any arguments and returns undefined (§20.2.3†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/prototype/bind/15.3.4.5-20-2.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/prototype/bind/15.3.4.5-20-3.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/prototype/bind/15.3.4.5-21-2.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/prototype/bind/15.3.4.5-21-3.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/prototype/bind/BoundFunction_restricted-properties.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/prototype/bind/S15.3.4.5_A1.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/prototype/bind/S15.3.4.5_A2.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/prototype/caller-arguments/accessor-properties.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
+    ),
+    (
+        "built-ins/Function/prototype/toString/S15.3.4.2_A12.js",
+        "`Function.prototype.toString` (§20.2.3.5) is not installed yet, so `Object.prototype.toString` answers for it and throws no TypeError for a `this` that is not callable",
+    ),
+    (
+        "built-ins/Function/prototype/toString/S15.3.4.2_A13.js",
+        "`Function.prototype.toString` (§20.2.3.5) is not installed yet, so `Object.prototype.toString` answers for it and throws no TypeError for a `this` that is not callable",
+    ),
+    (
+        "built-ins/Function/prototype/toString/S15.3.4.2_A14.js",
+        "`Function.prototype.toString` (§20.2.3.5) is not installed yet, so `Object.prototype.toString` answers for it and throws no TypeError for a `this` that is not callable",
+    ),
+    (
+        "built-ins/Function/prototype/toString/S15.3.4.2_A16.js",
+        "`Function.prototype.toString` (§20.2.3.5) is not installed yet, so `Object.prototype.toString` answers for it and throws no TypeError for a `this` that is not callable",
+    ),
+    (
+        "built-ins/GeneratorFunction/instance-restricted-properties.js",
+        "%Function.prototype% is an ordinary object without the `caller` and `arguments` accessors of AddRestrictedFunctionProperties (§10.2.4†), a listed difference of the built-ins",
     ),
 ];
 
 /// Classifies a test that is not run, or `None` if it should be.
 fn not_run(case: &Case) -> Option<String> {
-    if let Some((_, why)) = KNOWN_GAPS.iter().find(|(p, _)| *p == case.path) {
+    if let Some((_, why)) = KNOWN_GAPS
+        .iter()
+        .chain(FUNCTION_PROTOTYPE_GAPS)
+        .find(|(p, _)| *p == case.path)
+    {
         return Some((*why).to_string());
     }
     if let Expect::Fail(reason) = case.expect {
@@ -638,6 +816,7 @@ fn test262_through_the_interpreter() -> Result<(), String> {
         if let Some(d) = SUSPEND_DIRS
             .iter()
             .find(|d| path.starts_with(&format!("{d}/")))
+            && !keys.iter().any(|k| k == d)
         {
             keys.push((*d).to_string());
         }

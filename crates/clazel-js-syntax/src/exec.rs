@@ -9,6 +9,7 @@
 use crate::api::ParseError;
 use crate::arena_d::{Derivation, check_derivation_canon};
 use crate::ast::{Ast, Node, NodeKind};
+pub use crate::early::EvalContext;
 use crate::parser::Parser;
 use crate::spec::SourceGoal;
 
@@ -36,14 +37,35 @@ pub fn parse_checked_early(
     src: &[u32],
     goal: SourceGoal,
 ) -> Result<(Ast, Derivation, Derivation), ParseError> {
+    parse_checked_in(src, goal, &EvalContext::default())
+}
+
+/// Parses `src` as eval code (ECMA-262 §19.2.1.1 PerformEval step 11.a: "Let
+/// script be ParseText(x, Script)"), with the early errors that steps 11.e to
+/// 11.h and the strictness that step 12 give for the caller `cx`
+/// ([`crate::early::check_in`]). An indirect eval passes
+/// `EvalContext::default()`, which is [`parse`] with the `Script` goal.
+///
+/// Not part of [`crate::spec`], whose early errors are a `Script`'s with no
+/// caller: this entry is only tested (`tests/parser.rs`), as the early errors
+/// are.
+pub fn parse_eval(src: &[u32], cx: &EvalContext) -> Result<Ast, ParseError> {
+    parse_checked_in(src, SourceGoal::Script, cx).map(|(ast, _, _)| ast)
+}
+
+fn parse_checked_in(
+    src: &[u32],
+    goal: SourceGoal,
+    cx: &EvalContext,
+) -> Result<(Ast, Derivation, Derivation), ParseError> {
     // Recursion is bounded by `MAX_DEPTH` nested nodes, each a few frames; a
     // thread with room for that is cheaper than a stack overflow. Short
     // sources cannot nest that deep.
     const SMALL: usize = 64;
     if src.len() <= SMALL {
-        return parse_inner(src, goal);
+        return parse_inner(src, goal, cx);
     }
-    let run = || parse_inner(src, goal);
+    let run = || parse_inner(src, goal, cx);
     std::thread::scope(|s| {
         match std::thread::Builder::new()
             .stack_size(256 * 1024 * 1024)
@@ -56,7 +78,11 @@ pub fn parse_checked_early(
     })
 }
 
-fn parse_inner(src: &[u32], goal: SourceGoal) -> Result<(Ast, Derivation, Derivation), ParseError> {
+fn parse_inner(
+    src: &[u32],
+    goal: SourceGoal,
+    cx: &EvalContext,
+) -> Result<(Ast, Derivation, Derivation), ParseError> {
     let module = goal == SourceGoal::Module;
     let mut p = Parser::new(src, module)?;
     let root = p.parse_program()?;
@@ -67,7 +93,7 @@ fn parse_inner(src: &[u32], goal: SourceGoal) -> Result<(Ast, Derivation, Deriva
     // The arena check first: it bounds the height, which bounds the recursion of
     // the early errors.
     let ast = crate::check::finish(nodes, src.len())?;
-    crate::early::check(src, &ast, module)?;
+    crate::early::check_in(src, &ast, module, cx)?;
     let mut gaps = vec![crate::spec::Ins::None; p.rec.len().saturating_add(1)];
     for (at, ins) in p.gap_events.iter() {
         if let Some(g) = gaps.get_mut(*at) {

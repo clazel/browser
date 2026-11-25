@@ -38,7 +38,11 @@
 //!   `for`-`in` and the spread calls;
 //! - [`suspend`]: generators, async functions and async generators, whose
 //!   frames are copied to a heap object on suspend and back on resume, and
-//!   the iteration ops of `yield*` and `for await`.
+//!   the iteration ops of `yield*` and `for await`;
+//! - [`eval`]: the handlers of `with` and `delete` of a variable, and the
+//!   host compile paths: direct and indirect `eval` (PerformEval) and the
+//!   `Function` constructors (CreateDynamicFunction), which parse and compile
+//!   source text at run time.
 //!
 //! The crate depends on no browser crate, as phase-7.md's "The engine as a
 //! library" requires: `clazel-js-lexer` and `clazel-js-syntax`, and the
@@ -51,6 +55,7 @@ pub mod bytecode;
 pub(crate) mod class;
 pub mod collections;
 pub mod compile;
+pub mod eval;
 pub mod examples;
 pub mod frame;
 pub mod handlers;

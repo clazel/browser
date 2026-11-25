@@ -6,6 +6,7 @@ use crate::util::{
     to_integer_or_infinity,
 };
 use clazel_js_heap::value::Value;
+use clazel_js_vm::eval::DynamicKind;
 use clazel_js_vm::interp::{Abrupt, Intrinsic, Vm};
 
 /// Installs `Function` and the methods of `Function.prototype`.
@@ -33,12 +34,17 @@ pub fn install(vm: &mut Vm) -> Result<(), Abrupt> {
     crate::util::global(vm, "Function", ctor)
 }
 
-/// `Function ( ...parameterArgs, bodyArg )`, §20.2.1.1†: CreateDynamicFunction
-/// compiles source text, which needs the compiler; `NotYet`.
-fn function(_vm: &mut Vm, _this: Value, _args: &[Value]) -> Result<Value, Abrupt> {
-    Err(Abrupt::NotYet(
-        "the Function constructor (CreateDynamicFunction needs the compiler)".into(),
-    ))
+/// `Function ( ...parameterArgs, bodyArg )`, §20.2.1.1:
+/// 1. Let C be the active function object.
+/// 2. If bodyArg is not present, set bodyArg to the empty String.
+/// 3. Return ? CreateDynamicFunction(C, NewTarget, normal, parameterArgs,
+///    bodyArg).
+///
+/// CreateDynamicFunction (§20.2.1.1.1) is the VM's
+/// ([`Vm::create_dynamic_function`], which reads C and NewTarget from the
+/// running native and takes an empty argument list as an absent bodyArg).
+fn function(vm: &mut Vm, _this: Value, args: &[Value]) -> Result<Value, Abrupt> {
+    vm.create_dynamic_function(DynamicKind::Normal, args)
 }
 
 /// `Function.prototype [ @@hasInstance ] ( V )`, §20.2.3.6†:
