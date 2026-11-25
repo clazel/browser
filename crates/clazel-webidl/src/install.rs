@@ -5,7 +5,9 @@
 //!
 //! <https://webidl.spec.whatwg.org/#es-interfaces>
 
-use clazel_js::{Args, Callable, Key, Local, PropertyDescriptor, Result, Scope};
+use std::sync::Arc;
+
+use clazel_js::{Args, Callable, Key, Local, NativeFn, PropertyDescriptor, Result, Scope};
 
 /// A native function body, as `clazel_js::Scope::shared_function` takes it.
 pub trait Body:
@@ -129,6 +131,11 @@ pub fn constant(
 /// the setter "set <name>" (§3.7.5.1† step "Perform SetFunctionName(F, id,
 /// "get")", §3.7.5.2†).
 ///
+/// The property is created here; its two function objects are made when
+/// something first needs them, which script cannot observe
+/// (`clazel_js::Scope::define_accessor` says why). A page has about 550
+/// attributes and uses few of them.
+///
 /// # Errors
 /// What `clazel-js` returns.
 pub fn attribute(
@@ -139,28 +146,8 @@ pub fn attribute(
     setter: Option<Box<dyn Body>>,
     unforgeable: bool,
 ) -> Result<()> {
-    let get = function(scope, &format!("get {name}"), 0, getter)?;
-    let set = match setter {
-        Some(s) => Some(scope.shared_function(
-            &format!("set {name}"),
-            1,
-            Callable::Function,
-            move |scope, args| s(scope, args),
-        )?),
-        None => None,
-    };
-    let undefined = scope.undefined();
-    scope.define_property(
-        target,
-        Key::Str(name),
-        PropertyDescriptor {
-            get: Some(get),
-            set: Some(set.unwrap_or(undefined)),
-            enumerable: Some(true),
-            configurable: Some(!unforgeable),
-            ..PropertyDescriptor::default()
-        },
-    )
+    let setter = setter.map(|s| -> Arc<NativeFn> { Arc::new(move |scope, args| s(scope, args)) });
+    scope.define_accessor(target, name, getter, setter, true, !unforgeable)
 }
 
 /// A regular or static operation (WebIDL §3.7.6†): { [[Value]]: F,

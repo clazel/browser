@@ -23,7 +23,11 @@ embedding API ("The engine as a library").
   resolves overloads, calls the trait and converts the result; and the code
   that installs the interface object, the interface prototype object, the
   constants, attributes and operations (WebIDL §3.7†). Every trait method
-  has a default that throws a `NotSupportedError` naming the member.
+  has a default that throws a `NotSupportedError` naming the member. An
+  attribute's property is created at installation; its getter and setter
+  function objects are made when first needed (`clazel-js`'s
+  `Scope::define_accessor`), which script cannot observe and which spares
+  a page about 940 function objects it never uses.
 - **Conversions** (`src/convert.rs`): WebIDL §3.2† for every type the
   exposed IDL uses: `any`, `undefined`, `boolean`, the integer types with
   `[EnforceRange]` and `[Clamp]` (ConvertToInt), `float`, `double` and their
