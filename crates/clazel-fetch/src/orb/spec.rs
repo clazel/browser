@@ -78,6 +78,7 @@ verus! {
 
 /// The result of the opaque-response-safelist check (see the modelling
 /// choices).
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Verdict {
     /// The check returns true: the response may reach the page.
     Allowed,

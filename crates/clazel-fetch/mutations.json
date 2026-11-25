@@ -1265,6 +1265,146 @@
         "lemma": "super::examples_headers::lemma_headers_04()",
         "witness": "request_for_req(super::examples_headers::ex_url(), super::examples_headers::ex_get_with(seq![super::examples_headers::ex_line(seq![0x41u8, 0x63, 0x63, 0x65, 0x70, 0x74])], false)) is Some"
       }
+    },
+    {
+      "id": "orb-safelisted-blocked",
+      "file": "src/orb/spec.rs",
+      "module": "orb::lemmas",
+      "find": "            //      then return true.\"\n            Verdict::Allowed",
+      "replace": "            //      then return true.\"\n            Verdict::Blocked",
+      "expect": "killed",
+      "reason": "Step 3.1 blocks a JavaScript, CSS or SVG response: a cross-origin script could not load. lemma_safelisted_allowed is false.",
+      "certificate": {
+        "file": "src/orb/lemmas.rs",
+        "lemma": "lemma_safelisted_allowed(super::examples::ex_response(200, seq![super::examples::ex_ct_javascript()], super::examples::ex_x()))",
+        "witness": "opaque_response_safelist_check(super::examples::ex_response(200, seq![super::examples::ex_ct_javascript()], super::examples::ex_x())) is Blocked && extract_a_mime_type(super::examples::ex_response(200, seq![super::examples::ex_ct_javascript()], super::examples::ex_x()).fields) is Some && is_opaque_response_safelisted(extract_a_mime_type(super::examples::ex_response(200, seq![super::examples::ex_ct_javascript()], super::examples::ex_x()).fields)->Some_0)"
+      }
+    },
+    {
+      "id": "orb-never-sniffed-allowed",
+      "file": "src/orb/spec.rs",
+      "module": "orb::lemmas",
+      "find": "            //      MIME type, then return false.\"\n            Verdict::Blocked",
+      "replace": "            //      MIME type, then return false.\"\n            Verdict::Allowed",
+      "expect": "killed",
+      "reason": "Step 3.2 allows a never-sniffed type (a PDF reaches a no-cors page). lemma_never_sniffed_blocked is false.",
+      "certificate": {
+        "file": "src/orb/lemmas.rs",
+        "lemma": "lemma_never_sniffed_blocked(super::examples::ex_response(200, seq![super::examples::ex_ct_pdf()], super::examples::ex_gif()))",
+        "witness": "opaque_response_safelist_check(super::examples::ex_response(200, seq![super::examples::ex_ct_pdf()], super::examples::ex_gif())) is Allowed && extract_a_mime_type(super::examples::ex_response(200, seq![super::examples::ex_ct_pdf()], super::examples::ex_gif()).fields) is Some && !is_opaque_response_safelisted(extract_a_mime_type(super::examples::ex_response(200, seq![super::examples::ex_ct_pdf()], super::examples::ex_gif()).fields)->Some_0) && is_opaque_response_blocklisted_never_sniffed(extract_a_mime_type(super::examples::ex_response(200, seq![super::examples::ex_ct_pdf()], super::examples::ex_gif()).fields)->Some_0)"
+      }
+    },
+    {
+      "id": "orb-nosniff-blocklisted-ignored",
+      "file": "src/orb/spec.rs",
+      "module": "orb::lemmas",
+      "find": "} else if nosniff && (is_opaque_response_blocklisted(m) ||",
+      "replace": "} else if false && (is_opaque_response_blocklisted(m) ||",
+      "expect": "killed",
+      "reason": "Step 3.4 is skipped: HTML with nosniff whose first bytes look like an image is allowed by step 10. lemma_nosniff_blocklisted_blocked is false.",
+      "certificate": {
+        "file": "src/orb/lemmas.rs",
+        "lemma": "lemma_nosniff_blocklisted_blocked(super::examples::ex_response(200, seq![super::examples::ex_ct_html(), super::examples::ex_nosniff()], super::examples::ex_gif()))",
+        "witness": "opaque_response_safelist_check(super::examples::ex_response(200, seq![super::examples::ex_ct_html(), super::examples::ex_nosniff()], super::examples::ex_gif())) is Allowed && extract_a_mime_type(super::examples::ex_response(200, seq![super::examples::ex_ct_html(), super::examples::ex_nosniff()], super::examples::ex_gif()).fields) is Some && !is_opaque_response_safelisted(extract_a_mime_type(super::examples::ex_response(200, seq![super::examples::ex_ct_html(), super::examples::ex_nosniff()], super::examples::ex_gif()).fields)->Some_0) && is_opaque_response_blocklisted(extract_a_mime_type(super::examples::ex_response(200, seq![super::examples::ex_ct_html(), super::examples::ex_nosniff()], super::examples::ex_gif()).fields)->Some_0) && determine_nosniff(super::examples::ex_response(200, seq![super::examples::ex_ct_html(), super::examples::ex_nosniff()], super::examples::ex_gif()).fields)"
+      }
+    },
+    {
+      "id": "orb-partial-allowed",
+      "file": "src/orb/spec.rs",
+      "module": "orb::lemmas",
+      "find": "    if status == 206 {\n        // 5.",
+      "replace": "    if false {\n        // 5.",
+      "expect": "killed",
+      "reason": "Step 5 is skipped: an untyped 206 nobody asked for is allowed by step 13. lemma_partial_blocked is false.",
+      "certificate": {
+        "file": "src/orb/lemmas.rs",
+        "lemma": "lemma_partial_blocked(super::examples::ex_response(206, Seq::<clazel_http::field::spec::FieldLine>::empty(), super::examples::ex_x()))",
+        "witness": "opaque_response_safelist_check(super::examples::ex_response(206, Seq::<clazel_http::field::spec::FieldLine>::empty(), super::examples::ex_x())) is Allowed && extract_a_mime_type(super::examples::ex_response(206, Seq::<clazel_http::field::spec::FieldLine>::empty(), super::examples::ex_x()).fields) is None"
+      }
+    },
+    {
+      "id": "orb-media-allowed",
+      "file": "src/orb/spec.rs",
+      "module": "orb::lemmas",
+      "find": "            //    then return false.\" It is \"N/A\".\n            Verdict::Blocked",
+      "replace": "            //    then return false.\" It is \"N/A\".\n            Verdict::Allowed",
+      "expect": "killed",
+      "reason": "Step 8.1 allows bytes that sniff as audio or video although no media request was made. lemma_media_bytes_blocked is false.",
+      "certificate": {
+        "file": "src/orb/lemmas.rs",
+        "lemma": "lemma_media_bytes_blocked(super::examples::ex_response(200, Seq::<clazel_http::field::spec::FieldLine>::empty(), super::examples::ex_id3()))",
+        "witness": "opaque_response_safelist_check(super::examples::ex_response(200, Seq::<clazel_http::field::spec::FieldLine>::empty(), super::examples::ex_id3())) is Allowed && extract_a_mime_type(super::examples::ex_response(200, Seq::<clazel_http::field::spec::FieldLine>::empty(), super::examples::ex_id3()).fields) is None && clazel_mime::sniff::spec::audio_or_video_type_pattern_matching(first_1024_bytes(super::examples::ex_response(200, Seq::<clazel_http::field::spec::FieldLine>::empty(), super::examples::ex_id3()).body)) is Some"
+      }
+    },
+    {
+      "id": "orb-image-blocked",
+      "file": "src/orb/spec.rs",
+      "module": "orb::lemmas",
+      "find": "            //     does not return undefined, then return true.\"\n            Verdict::Allowed",
+      "replace": "            //     does not return undefined, then return true.\"\n            Verdict::Blocked",
+      "expect": "killed",
+      "reason": "Step 10 blocks image bytes: cross-origin images without a type could not load. lemma_image_bytes_allowed is false.",
+      "certificate": {
+        "file": "src/orb/lemmas.rs",
+        "lemma": "lemma_image_bytes_allowed(super::examples::ex_response(200, Seq::<clazel_http::field::spec::FieldLine>::empty(), super::examples::ex_gif()))",
+        "witness": "opaque_response_safelist_check(super::examples::ex_response(200, Seq::<clazel_http::field::spec::FieldLine>::empty(), super::examples::ex_gif())) is Blocked && extract_a_mime_type(super::examples::ex_response(200, Seq::<clazel_http::field::spec::FieldLine>::empty(), super::examples::ex_gif()).fields) is None && super::examples::ex_response(200, Seq::<clazel_http::field::spec::FieldLine>::empty(), super::examples::ex_gif()).status_line.status != 206 && clazel_mime::sniff::spec::audio_or_video_type_pattern_matching(first_1024_bytes(super::examples::ex_response(200, Seq::<clazel_http::field::spec::FieldLine>::empty(), super::examples::ex_gif()).body)) is None && clazel_mime::sniff::spec::image_type_pattern_matching(first_1024_bytes(super::examples::ex_response(200, Seq::<clazel_http::field::spec::FieldLine>::empty(), super::examples::ex_gif()).body)) is Some"
+      }
+    },
+    {
+      "id": "orb-js-check-allowed",
+      "file": "src/orb/spec.rs",
+      "module": "orb::lemmas",
+      "find": "                    //     JSON given response.\"\n                    Verdict::JavaScriptCheck",
+      "replace": "                    //     JSON given response.\"\n                    Verdict::Allowed",
+      "expect": "killed",
+      "reason": "Step 15 allows without the JavaScript check: an HTML page reaches a no-cors fetch. lemma_typed_needs_js_check is false.",
+      "certificate": {
+        "file": "src/orb/lemmas.rs",
+        "lemma": "lemma_typed_needs_js_check(super::examples::ex_response(200, seq![super::examples::ex_ct_html()], super::examples::ex_x()))",
+        "witness": "opaque_response_safelist_check(super::examples::ex_response(200, seq![super::examples::ex_ct_html()], super::examples::ex_x())) is Allowed && extract_a_mime_type(super::examples::ex_response(200, seq![super::examples::ex_ct_html()], super::examples::ex_x()).fields) is Some && !is_opaque_response_safelisted(extract_a_mime_type(super::examples::ex_response(200, seq![super::examples::ex_ct_html()], super::examples::ex_x()).fields)->Some_0) && clazel_mime::sniff::spec::image_type_pattern_matching(first_1024_bytes(super::examples::ex_response(200, seq![super::examples::ex_ct_html()], super::examples::ex_x()).body)) is None"
+      }
+    },
+    {
+      "id": "orb-untyped-blocked",
+      "file": "src/orb/spec.rs",
+      "module": "orb::lemmas",
+      "find": "                // 13. \"If mimeType is failure, then return true.\"\n                None => Verdict::Allowed,",
+      "replace": "                // 13. \"If mimeType is failure, then return true.\"\n                None => Verdict::Blocked,",
+      "expect": "killed",
+      "reason": "Step 13 blocks a response without a usable type: style sheets served without one could not load. lemma_untyped_allowed is false.",
+      "certificate": {
+        "file": "src/orb/lemmas.rs",
+        "lemma": "lemma_untyped_allowed(super::examples::ex_response(200, Seq::<clazel_http::field::spec::FieldLine>::empty(), super::examples::ex_x()))",
+        "witness": "opaque_response_safelist_check(super::examples::ex_response(200, Seq::<clazel_http::field::spec::FieldLine>::empty(), super::examples::ex_x())) is Blocked && extract_a_mime_type(super::examples::ex_response(200, Seq::<clazel_http::field::spec::FieldLine>::empty(), super::examples::ex_x()).fields) is None && !determine_nosniff(super::examples::ex_response(200, Seq::<clazel_http::field::spec::FieldLine>::empty(), super::examples::ex_x()).fields) && is_ok_status(super::examples::ex_response(200, Seq::<clazel_http::field::spec::FieldLine>::empty(), super::examples::ex_x()).status_line.status) && super::examples::ex_response(200, Seq::<clazel_http::field::spec::FieldLine>::empty(), super::examples::ex_x()).status_line.status != 206 && clazel_mime::sniff::spec::audio_or_video_type_pattern_matching(first_1024_bytes(super::examples::ex_response(200, Seq::<clazel_http::field::spec::FieldLine>::empty(), super::examples::ex_x()).body)) is None"
+      }
+    },
+    {
+      "id": "extract-first-value-wins",
+      "file": "src/orb/spec.rs",
+      "module": "orb::examples",
+      "find": "                extract_loop(values, i + 1, Some(t))",
+      "replace": "                if mime_type is Some { extract_loop(values, i + 1, mime_type) } else { extract_loop(values, i + 1, Some(t)) }",
+      "expect": "killed",
+      "reason": "Extract a MIME type keeps the first valid value instead of the last (Fetch \u00a73.5 step 6.3 sets mimeType on every one). example_extract_last_wins is false.",
+      "certificate": {
+        "file": "src/orb/lemmas.rs",
+        "lemma": "super::examples::example_extract_last_wins()",
+        "witness": "extract_a_mime_type(seq![super::examples::ex_ct_html_then_plain()]) is Some && clazel_mime::mime_type::spec::essence(extract_a_mime_type(seq![super::examples::ex_ct_html_then_plain()])->Some_0) != lit_text_plain()"
+      }
+    },
+    {
+      "id": "nosniff-any-value",
+      "file": "src/orb/spec.rs",
+      "module": "orb::examples",
+      "find": "        Some(values) => values.len() > 0 && clazel_http::field::spec::ascii_lowercase(values[0]) == lit_nosniff(),",
+      "replace": "        Some(values) => true,",
+      "expect": "killed",
+      "reason": "Any X-Content-Type-Options value counts as nosniff (Fetch \u00a73.6 step 3 compares the first value with \"nosniff\"). example_nosniff_value is false.",
+      "certificate": {
+        "file": "src/orb/lemmas.rs",
+        "lemma": "super::examples::example_nosniff_value()",
+        "witness": "determine_nosniff(seq![super::examples::ex_options_foo()])"
+      }
     }
   ]
 }
