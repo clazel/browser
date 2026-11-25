@@ -439,13 +439,17 @@ pub fn from_property_descriptor(vm: &mut Vm, desc: Option<PropDesc>) -> Result<V
 
 /// `[[GetOwnProperty]] ( P )` as a complete Property Descriptor: OrdinaryGetOwnProperty
 /// (§10.1.5.1†).
-fn get_own_property(vm: &Vm, obj: Value, k: Key) -> Result<Option<PropDesc>, Abrupt> {
+fn get_own_property(vm: &mut Vm, obj: Value, k: Key) -> Result<Option<PropDesc>, Abrupt> {
     vm.own_property_descriptor(obj, k)
 }
 
 /// Whether an own property exists and is enumerable.
 fn is_enumerable_own(vm: &Vm, obj: Value, k: Key) -> Result<bool, Abrupt> {
-    Ok(get_own_property(vm, obj, k)?.is_some_and(|d| d.enumerable == Some(true)))
+    // The attribute alone: an accessor's functions are not needed (and a
+    // lazy pair's are not made) to answer this.
+    Ok(vm
+        .get_own_property(obj, k)?
+        .is_some_and(|(attrs, _)| attrs.0 & Attrs::ENUMERABLE != 0))
 }
 
 /// `Object.getOwnPropertyDescriptor ( O, P )`, §20.1.2.8†:

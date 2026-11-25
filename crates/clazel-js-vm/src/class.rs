@@ -355,10 +355,7 @@ impl Vm {
                     .heap
                     .slot(f.holder, f.slot)
                     .ok_or(Abrupt::Internal("property slot"))?;
-                let (_, setter) = self
-                    .heap
-                    .accessor(pair)
-                    .ok_or(Abrupt::Internal("accessor pair"))?;
+                let (_, setter) = self.accessor_pair(pair)?;
                 if setter == Value::UNDEFINED {
                     Ok(false)
                 } else {
