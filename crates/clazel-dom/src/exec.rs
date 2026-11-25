@@ -666,6 +666,56 @@ impl Arena {
         }
     }
 
+    /// DOM §4.10 "replace data" of all of a `CharacterData` node's data
+    /// ([`set_data_ensures`]): the `data` setter.
+    pub fn set_data(&mut self, n: usize, data: Vec<u32>)
+        requires
+            set_data_requires(old(self)@, n),
+        ensures
+            set_data_ensures(old(self)@, n, data@, final(self)@),
+    {
+        let ghost s0 = self.nodes@;
+        let ghost d = data@;
+        let mut y = self.take(n);
+        let mut kind = ExecKind::DocumentFragment { host: None };
+        core::mem::swap(&mut y.kind, &mut kind);
+        y.kind = match kind {
+            ExecKind::Text { .. } => ExecKind::Text { data },
+            ExecKind::Comment { .. } => ExecKind::Comment { data },
+            ExecKind::ProcessingInstruction { target, .. } => ExecKind::ProcessingInstruction { target, data },
+            other => other,
+        };
+        self.put(n, y, Ghost(s0));
+        proof {
+            lemma_view_update(s0, n as int, y);
+            assert(self@.nodes =~= set_data(old(self)@, n, d).nodes);
+        }
+    }
+
+    /// Node `n`'s wrapper slot becomes `w` ([`set_wrapper_ensures`]).
+    pub fn set_wrapper(&mut self, n: usize, w: Option<usize>)
+        requires
+            set_wrapper_requires(old(self)@, n),
+        ensures
+            set_wrapper_ensures(old(self)@, n, match w {
+                Some(x) => Some(x as nat),
+                None => None,
+            }, final(self)@),
+    {
+        let ghost s0 = self.nodes@;
+        let mut y = self.take(n);
+        y.wrapper = w;
+        self.put(n, y, Ghost(s0));
+        proof {
+            lemma_view_update(s0, n as int, y);
+            let ghost wv = match w {
+                Some(x) => Some(x as nat),
+                None => None,
+            };
+            assert(self@.nodes =~= set_wrapper(old(self)@, n, wv).nodes);
+        }
+    }
+
     /// DOM §4.9 "append an attribute" ([`append_attribute_ensures`]).
     pub fn append_attribute(&mut self, e: usize, attr: ExecAttr)
         requires
@@ -752,7 +802,7 @@ impl Arena {
         self.node(n).children.as_slice()
     }
 
-    /// The wrapper slot of node `n` (always none in Phase 4).
+    /// The wrapper slot of node `n` (none until [`Self::set_wrapper`]).
     pub fn wrapper(&self, n: usize) -> (r: Option<usize>)
         requires
             valid(self@, n),

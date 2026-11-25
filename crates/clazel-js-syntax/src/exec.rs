@@ -6,11 +6,44 @@
 //! [`crate::check::finish`] (proven) accepts the arena only if it is well
 //! formed, inside the source text and within [`MAX_DEPTH`].
 
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
 use crate::api::ParseError;
 use crate::arena_d::{Derivation, check_derivation_canon};
 use crate::ast::{Ast, Node, NodeKind};
 use crate::parser::Parser;
 use crate::spec::SourceGoal;
+
+/// Whether parsing and compiling stay on the calling thread. See [`set_inline`].
+static INLINE: AtomicBool = AtomicBool::new(false);
+/// How many big-stack threads [`parse_checked_early`] and the compiler have made.
+static SPAWNED: AtomicUsize = AtomicUsize::new(0);
+
+/// An embedder that cannot make a thread (a sandboxed renderer, whose seccomp
+/// filter kills the process at `clone`) sets this before it is confined: large
+/// sources are then parsed, and large programs compiled, on the calling thread,
+/// as they already are when no thread can be had (`Err(_) => run()`), so the
+/// calling thread's stack must be big enough for `MAX_DEPTH`. The default is
+/// off: nothing changes for anyone who does not call it.
+pub fn set_inline(on: bool) {
+    INLINE.store(on, Ordering::Relaxed);
+}
+
+/// Whether [`set_inline`] is on.
+pub fn inline() -> bool {
+    INLINE.load(Ordering::Relaxed)
+}
+
+/// Counts one big-stack thread made (the parser's and the compiler's helpers
+/// call it just before they spawn), so a test can see that none was.
+pub fn note_big_stack_thread() {
+    SPAWNED.fetch_add(1, Ordering::Relaxed);
+}
+
+/// How many big-stack threads have been made so far in this process.
+pub fn big_stack_threads() -> usize {
+    SPAWNED.load(Ordering::Relaxed)
+}
 
 /// Parses `src` (code points) as a `Script` or `Module`.
 ///
@@ -40,10 +73,11 @@ pub fn parse_checked_early(
     // thread with room for that is cheaper than a stack overflow. Short
     // sources cannot nest that deep.
     const SMALL: usize = 64;
-    if src.len() <= SMALL {
+    if src.len() <= SMALL || inline() {
         return parse_inner(src, goal);
     }
     let run = || parse_inner(src, goal);
+    note_big_stack_thread();
     std::thread::scope(|s| {
         match std::thread::Builder::new()
             .stack_size(256 * 1024 * 1024)

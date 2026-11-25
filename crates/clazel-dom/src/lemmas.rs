@@ -2021,6 +2021,135 @@ pub proof fn theorem_append_data_wf(doc: Document, n: NodeId, data: Seq<u32>)
     lemma_set_kind_wf(doc, paths, n, k);
 }
 
+/// [`set_wrapper`] keeps the arena well formed, with the same witness: no
+/// clause of [`wf_with`] reads a wrapper slot.
+pub proof fn lemma_set_wrapper_wf(doc: Document, paths: Seq<Seq<NodeId>>, x: NodeId, w: Option<nat>)
+    requires
+        wf_with(doc, paths),
+        valid(doc, x),
+    ensures
+        wf_with(set_wrapper(doc, x, w), paths),
+{
+    let n = doc.nodes.len();
+    let d = set_wrapper(doc, x, w);
+    lemma_wf_split(doc, paths);
+    assert forall|i: int| 0 <= i < n implies (#[trigger] d.nodes[i]).parent == doc.nodes[i].parent
+        && d.nodes[i].children == doc.nodes[i].children
+        && d.nodes[i].kind == doc.nodes[i].kind by {}
+    assert forall|i: int| 0 < i < n implies !(#[trigger] d.nodes[i].kind is Document) by {
+        assert(!(doc.nodes[i].kind is Document));
+    }
+    assert forall|i: int| 0 <= i < n && (#[trigger] d.nodes[i]).kind is Element && d.nodes[i].kind->Element_template_contents is Some implies {
+        let f = d.nodes[i].kind->Element_template_contents->Some_0;
+        &&& f < n
+        &&& d.nodes[f as int].kind is DocumentFragment
+        &&& d.nodes[f as int].kind->DocumentFragment_host == Some(i as NodeId)
+    } by {
+        assert(doc.nodes[i].kind is Element);
+        let f = doc.nodes[i].kind->Element_template_contents->Some_0;
+        assert(d.nodes[f as int].kind == doc.nodes[f as int].kind);
+    }
+    assert forall|i: int| 0 <= i < n && (#[trigger] d.nodes[i]).kind is DocumentFragment && d.nodes[i].kind->DocumentFragment_host is Some implies {
+        let h = d.nodes[i].kind->DocumentFragment_host->Some_0;
+        &&& h < n
+        &&& d.nodes[h as int].kind is Element
+        &&& d.nodes[h as int].kind->Element_template_contents == Some(i as NodeId)
+    } by {
+        assert(doc.nodes[i].kind is DocumentFragment);
+        let h = doc.nodes[i].kind->DocumentFragment_host->Some_0;
+        assert(d.nodes[h as int].kind == doc.nodes[h as int].kind);
+    }
+    assert forall|i: int| 0 <= i < n && (#[trigger] d.nodes[i]).kind is Element && d.nodes[i].kind->Element_form_owner is Some implies
+        d.nodes[i].kind->Element_form_owner->Some_0 < n by {
+        assert(doc.nodes[i].kind is Element);
+    }
+    assert(d.nodes[0].kind == doc.nodes[0].kind);
+    assert(wf_kinds(d));
+    assert forall|i: int| 0 <= i < n && (#[trigger] d.nodes[i]).parent is Some implies {
+        let r = d.nodes[i].parent->Some_0;
+        &&& r < n
+        &&& d.nodes[r as int].children.contains(i as NodeId)
+    } by {
+        assert(doc.nodes[i].parent is Some);
+        let r = doc.nodes[i].parent->Some_0;
+        assert(d.nodes[r as int].children == doc.nodes[r as int].children);
+    }
+    assert forall|i: int, j: int| 0 <= i < n && 0 <= j < d.nodes[i].children.len() implies {
+        let c = (#[trigger] d.nodes[i].children[j]);
+        &&& c < n
+        &&& d.nodes[c as int].parent == Some(i as NodeId)
+    } by {
+        assert(doc.nodes[i].children[j] == d.nodes[i].children[j]);
+        let c = doc.nodes[i].children[j];
+        assert(d.nodes[c as int].parent == doc.nodes[c as int].parent);
+    }
+    assert forall|i: int| 0 <= i < n implies (#[trigger] d.nodes[i]).children.no_duplicates() by {
+        assert(doc.nodes[i].children.no_duplicates());
+    }
+    assert forall|i: int| 0 <= i < n && (#[trigger] d.nodes[i]).children.len() > 0 implies may_have_children(d.nodes[i].kind) by {
+        assert(doc.nodes[i].children.len() > 0);
+    }
+    assert forall|i: int| 0 <= i < n && (#[trigger] d.nodes[i]).kind is DocumentFragment implies d.nodes[i].parent is None by {
+        assert(doc.nodes[i].kind is DocumentFragment);
+    }
+    assert(wf_links(d));
+    assert forall|i: int| 0 <= i < n implies #[trigger] paths[i] == match d.nodes[i].parent {
+        None => seq![i as NodeId],
+        Some(r) => paths[r as int].push(i as NodeId),
+    } by {
+        assert(paths[i] == match doc.nodes[i].parent {
+            None => seq![i as NodeId],
+            Some(r) => paths[r as int].push(i as NodeId),
+        });
+    }
+    assert(wf_paths(d, paths));
+    lemma_wf_split(d, paths);
+}
+
+/// DOM §4.10 "replace data" of all of a node's data keeps the arena well
+/// formed. The node keeps its kind (and a processing instruction its
+/// target), its data is `data`, and nothing else changes.
+pub proof fn theorem_set_data_wf(doc: Document, n: NodeId, data: Seq<u32>)
+    requires
+        super::contract::set_data_requires(doc, n),
+    ensures
+        wf(set_data(doc, n, data)),
+        set_data(doc, n, data).nodes.len() == doc.nodes.len(),
+        doc.nodes[n as int].kind is Text ==> set_data(doc, n, data).nodes[n as int].kind == (NodeKind::Text { data }),
+        doc.nodes[n as int].kind is Comment ==> set_data(doc, n, data).nodes[n as int].kind == (NodeKind::Comment { data }),
+        doc.nodes[n as int].kind is ProcessingInstruction ==> set_data(doc, n, data).nodes[n as int].kind == (NodeKind::ProcessingInstruction {
+            target: doc.nodes[n as int].kind->ProcessingInstruction_target,
+            data,
+        }),
+        set_data(doc, n, data).nodes[n as int].parent == doc.nodes[n as int].parent,
+        set_data(doc, n, data).nodes[n as int].children == doc.nodes[n as int].children,
+        set_data(doc, n, data).nodes[n as int].wrapper == doc.nodes[n as int].wrapper,
+        forall|x: int| 0 <= x < doc.nodes.len() && x != n ==> #[trigger] set_data(doc, n, data).nodes[x] == doc.nodes[x],
+{
+    let paths = lemma_wf_witness(doc);
+    let k = set_data(doc, n, data).nodes[n as int].kind;
+    assert(set_data(doc, n, data) == set_kind(doc, n, k));
+    lemma_set_kind_wf(doc, paths, n, k);
+}
+
+/// Setting a wrapper slot keeps the arena well formed; the node's slot is
+/// `w`, and every kind, parent, children list and other wrapper is kept.
+pub proof fn theorem_set_wrapper_wf(doc: Document, n: NodeId, w: Option<nat>)
+    requires
+        super::contract::set_wrapper_requires(doc, n),
+    ensures
+        wf(set_wrapper(doc, n, w)),
+        set_wrapper(doc, n, w).nodes.len() == doc.nodes.len(),
+        set_wrapper(doc, n, w).nodes[n as int].wrapper == w,
+        set_wrapper(doc, n, w).nodes[n as int].kind == doc.nodes[n as int].kind,
+        set_wrapper(doc, n, w).nodes[n as int].parent == doc.nodes[n as int].parent,
+        set_wrapper(doc, n, w).nodes[n as int].children == doc.nodes[n as int].children,
+        forall|x: int| 0 <= x < doc.nodes.len() && x != n ==> #[trigger] set_wrapper(doc, n, w).nodes[x] == doc.nodes[x],
+{
+    let paths = lemma_wf_witness(doc);
+    lemma_set_wrapper_wf(doc, paths, n, w);
+}
+
 /// DOM §4.9 "append an attribute" keeps the arena well formed, and the
 /// element's attribute list is its old one followed by `attr`.
 /// [`theorem_append_attribute_frame`] says what is kept.

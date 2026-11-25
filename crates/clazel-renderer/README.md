@@ -3,12 +3,80 @@
 The renderer process. Its first act is to enter the OS sandbox
 (`sandbox::enter`, Phase 2), before it reads a byte. Then it takes the
 documents the kernel commits to it (`Commit`, `Body` frames, `BodyEnd`;
-phase-4.md item 4.12): a user script (kind 1) runs as in Phase 2, and a
-document (kind 0) goes through the document pipeline of phase-4.md item 4.13
-and is sent back as one `Display`.
+phase-4.md item 4.12): a user script (kind 1) is JavaScript, run in an empty
+document (item 7.17 retired Phase 2's line format), and a document (kind 0)
+goes through the document pipeline of phase-4.md item 4.13 and is sent back as
+one `Display`.
 
 Tier 0: tests only. The pipeline is glue; every step that reads the page's
 bytes is a function of the crate that proves it, at that crate's own tier.
+
+## The page's scripts and event loop (item 7.17)
+
+The graphical renderer (`run_graphics`, `page/`) hands the parsed tree to
+`clazel-web`'s page (`scripting::Page::for_document`: HTML's script processing
+over the generated WebIDL bindings) and keeps it running:
+
+- **Before the first paint** the document's scripts run, in tree order, with
+  the processing model of item 7.15 (`async`, `defer`, `nomodule`,
+  parser-blocking scripts, modules, `document.currentScript`, the load events).
+  An external script is a `FetchScript { request, url }` (the page's own ids
+  from 1, the absolute URL); the kernel's `ScriptResponse`, `ScriptBody`,
+  `ScriptEnd` or `ScriptFailed` give it back. A page waits for no script to be
+  painted: a script that arrives later changes the page and it is painted again.
+- **The event loop** (`Scripts::tick`, run by the renderer's loop between the
+  kernel's messages): timers (`setTimeout`, `setInterval`), tasks, microtasks
+  (`queueMicrotask`, promise jobs) and `requestAnimationFrame` callbacks (run
+  when the page is about to be painted). The clock is the page's
+  (`clazel_web::scripting::time::Clock`; a test moves its own).
+- **After a script changed the document** the style sources and the title are
+  collected again (`Page::settle`), the page is laid out and painted again, and
+  `Title` is sent if it changed. A linked sheet answered earlier is read again
+  from what it answered; a `link` that a script adds is not fetched (it is as a
+  failed one).
+- **The kernel's messages from script**: `location.href = …` is `Navigate`;
+  `history.pushState` and `replaceState` are `UpdateUrl`; `document.cookie` and
+  `localStorage` are Phase 2's messages, each read waiting for its answer in the
+  middle of the script; `console` goes to standard error. A `javascript:` URL
+  (a link that was clicked, or `location` set to one) is run by the page and is
+  never a `Navigate`.
+- **The socket is shared** by the loop and the natives (`page/link.rs`): a
+  message that arrives while a native waits for its answer is kept and read
+  next. The binary sets a 20 ms read timeout on its end of the socket before it
+  enters the sandbox (the renderer can make no thread and no `poll` call after
+  it), so the loop gets a turn between the kernel's messages; where the
+  descriptor is not a socket (Windows), timers run when a message arrives.
+
+What is not done: scripts see the whole document, not the part the parser had
+built when it reached them, and `document.write` in a parser-inserted script is
+reported and does nothing (the incremental driver cannot hand its tree to a
+script to change; `clazel-web/src/scripting/parser.rs` says what it needs); a
+`script` element that a script inserts does not run (item 7.13's insertion
+steps); `fetch()` and `XMLHttpRequest` (item 7.16's `Fetch`); a pending
+`requestAnimationFrame` animation is not kept going without another event.
+
+**Events and input** (item 7.14, `clazel-web`'s `scripting::input`): in a page
+that runs scripts, a click `Input` is hit-tested through layout (`Page::
+hit_test`: the deepest element or text node whose client rectangle holds the
+point, the later of two equally deep ones, else the document element) and
+becomes `mousemove`, `mousedown`, `mouseup` and `click` at it, with the
+default actions a click nobody cancels has: a link is `Navigate` (a
+`javascript:` URL is run by the page), a submit button submits its form
+(`Navigate` for a `GET`, `Submit` for a `POST`), a checkbox toggles, focus
+moves. A scroll `Input` is a cancelable `wheel` event first; if it was not
+canceled the page scrolls and gets a `scroll` event; the page is painted
+again when a listener ran. A key `Input` (`kind` 2; `key` is a Unicode
+scalar, 8, 9, 13, 27 and 127 for Backspace, Tab, Enter, Escape and Delete,
+0xF700 to 0xF703 for the arrows, as `NSEvent.characters` gives them) goes to
+the focused element, or the body, with the default actions of Tab, Enter,
+Backspace and text. The host's window sends no key `Input` yet, and its
+`Input` has no modifier keys, button or pointer position for moves. A page
+without scripts (its engine did not start, or a `text/plain` document) keeps
+the old hit-the-link-regions click. Hit testing ignores `z-index`, clipping,
+`visibility` and `pointer-events`. User activation (HTML §6.4†) is the
+page's (`clazel-web`'s `user_activation`); the kernel's own record for item
+7.16's `theorem_popup_needs_input` is the kernel's, from the `Input` it
+forwards.
 
 ## The GPU process's list socket (item 5.23), for item 5.20
 
@@ -143,8 +211,8 @@ socket:
 12. `Title` when the title changes.
 
 `Viewport` lays out and paints again; `Input` scrolls (clamped to the page)
-and paints again, or hit-tests a click against the links' regions and sends
-`Navigate`; a key does nothing yet. `src/page/mod.rs` lists every modelling
+and paints again, or (item 7.14) hit-tests a click through the layout and
+gives the events to the page (above), or gives a key to the focused element. `src/page/mod.rs` lists every modelling
 choice; `src/page/state.rs` states each state and contract.
 
 ### Decisions taken for 5.20
@@ -164,7 +232,8 @@ choice; `src/page/state.rs` states each state and contract.
   collapsed), at most 1,024 characters, sent when it differs from the last
   one sent.
 - **Scroll** is vertical, clamped to the page's height; a click goes to the
-  topmost link region; a key does nothing.
+  element under it (item 7.14; in a page without scripts, to the topmost
+  link region).
 - **Masks** stay live in the GPU process across lists under ids the
   renderer gives, within 5.17a's limits (65,536 masks, 64 MiB): uploaded
   once, freed only when a frame's new masks would pass a limit; a frame's
@@ -188,8 +257,9 @@ choice; `src/page/state.rs` states each state and contract.
   non-ok responses, for this to be exact.
 - **`<base href>` and sheets**: the kernel resolves a sheet's `href` against
   the document's URL, not its base URL.
-- **Keys**: a key `Input` still does nothing; the host (5.23) sends Space,
-  Page Up/Down and Up/Down as scrolls instead.
+- **Keys**: a key `Input` reaches a page that runs scripts (item 7.14); the
+  host (5.23) still sends Space, Page Up/Down and Up/Down as scrolls instead,
+  and no key `Input`.
 
 ### Memory (item 5.20's terms, added to 4.13's above)
 

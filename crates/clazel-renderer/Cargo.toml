@@ -39,6 +39,11 @@ clazel-font = { path = "../clazel-font" }
 clazel-layout = { path = "../clazel-layout" }
 clazel-glyph-mask = { path = "../clazel-glyph-mask" }
 clazel-displaylist = { path = "../clazel-displaylist" }
+# The page's scripts (phase-7.md items 7.15 and 7.17): the web platform
+# (`clazel-web`'s scripting over the generated bindings, its event loop) and
+# the engine's embedding API for its limits (`clazel-js`). Our own crates.
+clazel-web = { path = "../clazel-web" }
+clazel-js = { path = "../clazel-js" }
 
 # Verification tier (docs/VERIFICATION.md). Tier 0: tests only. The sandbox
 # calls are audited (docs/SYS-AUDITS.md) and exercised by the integration

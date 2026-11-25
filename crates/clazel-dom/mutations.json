@@ -183,6 +183,34 @@
       "module": "lemmas"
     },
     {
+      "id": "set-data-keeps-old",
+      "file": "src/spec.rs",
+      "find": "NodeKind::Text { .. } => NodeKind::Text { data },",
+      "replace": "NodeKind::Text { data: old } => NodeKind::Text { data: old },",
+      "expect": "killed",
+      "reason": "the data setter leaves a text's old data: theorem_set_data_wf (a text's data becomes the given data) is false when they differ.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_set_data_replaces()",
+        "witness": "set_data(ml_doc_data(), 1, seq![2u32]).nodes[1].kind->Text_data[0] == 1u32"
+      },
+      "module": "lemmas"
+    },
+    {
+      "id": "set-wrapper-ignored",
+      "file": "src/spec.rs",
+      "find": "Node { wrapper: w, ..doc.nodes[n as int] }",
+      "replace": "doc.nodes[n as int]",
+      "expect": "killed",
+      "reason": "setting a wrapper slot changes nothing: theorem_set_wrapper_wf (the slot is the given id) is false for a node with no wrapper.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_set_wrapper_sets()",
+        "witness": "set_wrapper(ml_doc_data(), 1, Some(7nat)).nodes[1].wrapper is None"
+      },
+      "module": "lemmas"
+    },
+    {
       "id": "fragments-cannot-have-children",
       "file": "src/spec.rs",
       "find": "k is Document || k is Element || k is DocumentFragment",

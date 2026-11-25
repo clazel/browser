@@ -406,13 +406,7 @@ impl Runtime {
     pub fn run_jobs(&mut self) -> Result<u64> {
         let runtime = self.runtime_id();
         let mut scope = Scope::new(&mut self.vm, runtime);
-        scope.check_deferred()?;
-        let mut ran: u64 = 0;
-        while let Some(job) = scope.pop_job() {
-            scope.run_job(job)?;
-            ran = ran.saturating_add(1);
-        }
-        Ok(ran)
+        scope.run_jobs()
     }
 
     /// A handle that stops this runtime from another thread. Every call gives

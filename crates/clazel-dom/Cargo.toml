@@ -56,6 +56,12 @@ theorems = [
     "theorem_pre_insert_wf",
     "theorem_replace_wf",
     "theorem_replace_all_wf",
+    # Item 7.12: the data setter and the wrapper slot (src/lemmas.rs and
+    # src/host_acyclic_lemmas.rs).
+    "theorem_set_data_wf",
+    "theorem_set_wrapper_wf",
+    "theorem_set_data_host_acyclic",
+    "theorem_set_wrapper_host_acyclic",
     # The children rules of steps 5 and 6 (src/validity_lemmas.rs).
     "theorem_pre_insert_children_rules",
     "theorem_replace_children_rules",

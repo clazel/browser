@@ -32,11 +32,17 @@
 //!   the touch target lists do not exist; a `DocumentFragment`'s `host` is
 //!   ignored by "get the parent"; slots and the closed-tree flag are not
 //!   modelled; `clearTargets` never applies.
-//! - **Not modelled yet** (item 7.14's other bullets): activation behavior
-//!   and legacy-pre-activation behavior, the legacy `window.event` global,
-//!   and the `webkit`-prefixed legacy event types of "invoke". The return
-//!   value is the "canceled flag" result, which the default actions will
-//!   read.
+//! - **Activation behavior** (item 7.14): "dispatch" asks the [`Host`]
+//!   whether the target (and, for a bubbling `click`, an ancestor) has
+//!   activation behavior, and runs its legacy-pre-activation behavior
+//!   before the capturing pass and its activation behavior (or
+//!   legacy-canceled-activation behavior) after the flags are unset. An
+//!   event is an "activation event" if it is a `MouseEvent` object
+//!   ([`Event::set_mouse_event`]) of type `click`. What a node's behavior is
+//!   belongs to HTML and is in [`crate::activation`].
+//! - **Not modelled yet**: the legacy `window.event` global, and the
+//!   `webkit`-prefixed legacy event types of "invoke". The return value is
+//!   the "canceled flag" result.
 //! - "Get the parent" of a node is its parent in the arena. For a Document
 //!   with no parent it is the Window if the host says the document has one
 //!   ([`Host::has_window`]) and the event is not `load`; the Window's own
@@ -58,6 +64,9 @@ pub enum TargetId {
     Node(usize),
     /// The `Window` of a document's browsing context.
     Window,
+    /// Another event target that is not a node (`new EventTarget()`, an
+    /// `AbortSignal`), by the caller's id. "Get the parent" of it is null.
+    Object(u64),
 }
 
 /// What a listener's callback is: supplied by the caller, compared for
@@ -124,6 +133,9 @@ pub struct Event {
     initialized: bool,
     dispatching: bool,
     path: Vec<TargetId>,
+    /// "event is a MouseEvent object" (DOM §2.9† "dispatch"'s
+    /// isActivationEvent): set by the host that made the event.
+    mouse_event: bool,
 }
 
 impl Event {
@@ -147,7 +159,19 @@ impl Event {
             initialized: true,
             dispatching: false,
             path: Vec::new(),
+            mouse_event: false,
         }
+    }
+
+    /// Marks the event as one that implements `MouseEvent` (or inherits
+    /// it), which DOM §2.9† "dispatch" asks of an activation event.
+    pub fn set_mouse_event(&mut self, value: bool) {
+        self.mouse_event = value;
+    }
+
+    /// Whether the event is a `MouseEvent` object ([`Event::set_mouse_event`]).
+    pub fn is_mouse_event(&self) -> bool {
+        self.mouse_event
     }
 
     /// An event the user agent made (`isTrusted` true).
@@ -234,7 +258,24 @@ impl Event {
     pub fn stop_immediate_propagation_flag(&self) -> bool {
         self.stop_immediate_propagation
     }
-    /// Whether the "dispatch flag" is set.
+    /// Whether the "initialized flag" is set.
+    pub fn is_initialized(&self) -> bool {
+        self.initialized
+    }
+
+    /// `dispatchEvent` step 2: "Initialize event's isTrusted attribute to
+    /// false."
+    pub fn set_untrusted(&mut self) {
+        self.is_trusted = false;
+    }
+
+    /// An event the user agent fires (DOM §2.10† "fire an event": "Set
+    /// event's isTrusted attribute to true").
+    pub fn set_trusted(&mut self) {
+        self.is_trusted = true;
+    }
+
+    /// Whether the event is being dispatched (its dispatch flag).
     pub fn is_dispatching(&self) -> bool {
         self.dispatching
     }
@@ -468,6 +509,7 @@ fn default_passive_value(arena: &Arena, type_: &[u32], target: TargetId) -> bool
     let node = match target {
         TargetId::Window => return true,
         TargetId::Node(n) => n,
+        TargetId::Object(_) => return false,
     };
     if node >= arena.len() {
         return false;
@@ -543,6 +585,53 @@ pub trait Host {
     fn has_window(&self, document: usize, event: &Event) -> bool {
         let _ = (document, event);
         false
+    }
+
+    /// DOM §2.9† "activation behavior": whether the node has it (HTML's
+    /// `a` with an `href`, a submit button, a checkbox, and so on: see
+    /// [`crate::activation`]). Asked of the target and, for a bubbling
+    /// `click`, of its ancestors.
+    fn has_activation_behavior(&mut self, node: usize) -> bool {
+        let _ = node;
+        false
+    }
+
+    /// DOM §2.9† "legacy-pre-activation behavior" of `node`, run before the
+    /// event is dispatched to any listener (a checkbox's toggle).
+    fn legacy_pre_activation_behavior(&mut self, node: usize) {
+        let _ = node;
+    }
+
+    /// DOM §2.9† "legacy-canceled-activation behavior" of `node`, run after
+    /// the dispatch if the event was canceled (a checkbox's restore).
+    fn legacy_canceled_activation_behavior(&mut self, node: usize) {
+        let _ = node;
+    }
+
+    /// DOM §2.9† "activation behavior" of `node` with the event, run after
+    /// the dispatch if the event was not canceled (following a link,
+    /// submitting a form).
+    ///
+    /// `listeners` is the page's listener table, which dispatch holds while
+    /// it runs: the behavior may fire events of its own (`input`, `change`,
+    /// `submit`), which need it, so the host puts it back for the length of
+    /// the call.
+    fn activation_behavior(&mut self, node: usize, event: &Event, listeners: &mut Listeners) {
+        let _ = (node, event, listeners);
+    }
+
+    /// Called for each item of the path just before its listeners are
+    /// taken ("Let listeners be a clone of event's currentTarget attribute
+    /// value's event listener list"), so that the host can bring a target's
+    /// event handlers (HTML §8.1.8†: `on*` content attributes) up to date in
+    /// `listeners`.
+    fn prepare_listeners(
+        &mut self,
+        target: TargetId,
+        event_type: &[u32],
+        listeners: &mut Listeners,
+    ) {
+        let _ = (target, event_type, listeners);
     }
 }
 
@@ -667,8 +756,41 @@ pub fn dispatch_path(
     event: &mut Event,
     host: &mut dyn Host,
 ) -> bool {
+    // "Let isActivationEvent be true, if event is a MouseEvent object and
+    // event's type attribute is "click"; otherwise false."
+    let is_activation_event = event.mouse_event && is_ascii_text("click", &event.type_);
+    // "If isActivationEvent is true and target has activation behavior,
+    // then set activationTarget to target." and, in the loop over the
+    // parents, "If isActivationEvent is true, event's bubbles attribute is
+    // true, activationTarget is null, and parent has activation behavior,
+    // then set activationTarget to parent." (With no shadow DOM every
+    // parent is in the target's tree, so that is the branch every parent
+    // takes; the Window has no activation behavior.)
+    let mut activation_target: Option<usize> = None;
+    if is_activation_event {
+        for (i, item) in path.iter().enumerate() {
+            let TargetId::Node(n) = item.invocation_target else {
+                continue;
+            };
+            if i > 0 && !event.bubbles {
+                break;
+            }
+            if host.has_activation_behavior(n) {
+                activation_target = Some(n);
+                break;
+            }
+        }
+    }
+    // "Set event's dispatch flag to true." (It is set first in the
+    // standard; nothing between reads it.)
     event.dispatching = true;
     event.path = path.iter().map(|i| i.invocation_target).collect();
+    // "If activationTarget is non-null and activationTarget has
+    // legacy-pre-activation behavior, then run activationTarget's
+    // legacy-pre-activation behavior."
+    if let Some(a) = activation_target {
+        host.legacy_pre_activation_behavior(a);
+    }
 
     // Capturing pass.
     for i in (0..path.len()).rev() {
@@ -704,6 +826,19 @@ pub fn dispatch_path(
     event.dispatching = false;
     event.stop_propagation = false;
     event.stop_immediate_propagation = false;
+
+    // "If activationTarget is non-null, then: 1. If event's canceled flag is
+    // unset, then run activationTarget's activation behavior with event.
+    // 2. Otherwise, if activationTarget has legacy-canceled-activation
+    // behavior, then run activationTarget's legacy-canceled-activation
+    // behavior."
+    if let Some(a) = activation_target {
+        if event.canceled {
+            host.legacy_canceled_activation_behavior(a);
+        } else {
+            host.activation_behavior(a, event, listeners);
+        }
+    }
 
     // "Return false if event's canceled flag is set, and true otherwise."
     !event.canceled
@@ -743,6 +878,7 @@ fn invoke(
     // "Initialize event's currentTarget attribute to struct's invocation
     // target."
     event.current_target = Some(item.invocation_target);
+    host.prepare_listeners(item.invocation_target, &event.type_, listeners);
     // "Let listeners be a clone of event's currentTarget attribute value's
     // event listener list."
     let snapshot: Vec<Listener> = listeners.listeners(item.invocation_target).to_vec();

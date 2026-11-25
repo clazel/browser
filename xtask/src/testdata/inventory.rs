@@ -61,6 +61,7 @@ pub const WEBREF_IDL_FILES: &[&str] = &[
     "dom.idl",
     "fetch.idl",
     "html.idl",
+    "pointerevents.idl",
     "storage.idl",
     "uievents.idl",
     "url.idl",

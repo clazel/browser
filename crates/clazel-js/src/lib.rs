@@ -34,6 +34,15 @@ mod scope;
 mod state;
 mod value;
 
+/// Makes the engine parse and compile on the calling thread, never on a
+/// helper thread of its own, for an embedder that cannot make threads once it
+/// is sandboxed (see `clazel_js_syntax::exec::set_inline`). The calling
+/// thread must have the stack for the deepest source the parser accepts
+/// (`MAX_DEPTH`): the renderer runs on a 256 MiB one.
+pub fn set_inline_parsing(on: bool) {
+    clazel_js_syntax::exec::set_inline(on);
+}
+
 pub use code::{
     ImportAttribute, LoadPayload, Module, ModuleRequest, ModuleStatus, Realm, RealmOptions,
     Referrer, Script, Source,

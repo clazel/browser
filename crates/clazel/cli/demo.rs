@@ -12,12 +12,13 @@ use clazel::Host;
 const LIMIT: Duration = Duration::from_secs(60);
 
 /// a.test: a `localStorage` item and a cookie with `Domain=a.test`.
-const A: &str = "cookie-set session=alpha; Domain=a.test; Path=/\ncookie-get\nstorage-set owner alpha\nstorage-get owner";
+const A: &str = "document.cookie = 'session=alpha; Domain=a.test; Path=/'; document.cookie; \
+    localStorage.setItem('owner', 'alpha'); localStorage.getItem('owner');";
 /// b.test: the same names, other values.
-const B: &str =
-    "cookie-set session=beta; Path=/\ncookie-get\nstorage-set owner beta\nstorage-get owner";
+const B: &str = "document.cookie = 'session=beta; Path=/'; document.cookie; \
+    localStorage.setItem('owner', 'beta'); localStorage.getItem('owner');";
 /// x.a.test: reads without writing.
-const X: &str = "cookie-get\nstorage-get owner";
+const X: &str = "document.cookie; localStorage.getItem('owner');";
 
 /// What renderer `id` was answered, in order: `"text"` or `null`.
 fn answers(host: &Host, id: u64) -> Vec<String> {

@@ -30,15 +30,15 @@ fn sorted_and_unique(names: Vec<&str>) -> bool {
 /// generator changes them, and this test is where that is noticed.
 #[test]
 fn counts() -> T {
-    check(INTERFACES.len() == 233, "interfaces")?;
+    check(INTERFACES.len() == 236, "interfaces")?;
     check(
         INTERFACES.iter().filter(|i| i.callback).count() == 3,
         "callback interfaces",
     )?;
     check(NAMESPACES.len() == 1, "namespaces")?;
-    check(DICTIONARIES.len() == 73, "dictionaries")?;
+    check(DICTIONARIES.len() == 76, "dictionaries")?;
     check(
-        DICTIONARIES.iter().map(|d| d.members.len()).sum::<usize>() == 210,
+        DICTIONARIES.iter().map(|d| d.members.len()).sum::<usize>() == 237,
         "dictionary members",
     )?;
     check(ENUMS.len() == 45, "enums")?;
@@ -48,19 +48,19 @@ fn counts() -> T {
     )?;
     check(TYPEDEFS.len() == 22, "typedefs")?;
     check(CALLBACKS.len() == 10, "callbacks")?;
-    check(EXTERNAL.len() == 37, "external names")?;
+    check(EXTERNAL.len() == 35, "external names")?;
     check(
         INTERFACES.iter().map(|i| i.attributes.len()).sum::<usize>()
-            == 1512 - namespace_members()?.0,
+            == 1577 - namespace_members()?.0,
         "attributes",
     )?;
     check(
         INTERFACES.iter().map(|i| i.operations.len()).sum::<usize>()
-            == 731 - namespace_members()?.1,
+            == 738 - namespace_members()?.1,
         "operations",
     )?;
     check(
-        INTERFACES.iter().map(|i| i.constants.len()).sum::<usize>() == 89 - namespace_members()?.2,
+        INTERFACES.iter().map(|i| i.constants.len()).sum::<usize>() == 92 - namespace_members()?.2,
         "constants",
     )?;
     check(
@@ -68,7 +68,7 @@ fn counts() -> T {
             .iter()
             .map(|i| i.constructors.len())
             .sum::<usize>()
-            == 131,
+            == 134,
         "constructors",
     )?;
     check(
