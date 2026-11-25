@@ -244,3 +244,164 @@ fn a_cross_origin_request_that_needs_a_preflight_is_refused() {
     let out = fetch(&mut k, id, "GET", "/api", 1, &["odd"]);
     assert_eq!(out, vec![Out::To(id, failed())]);
 }
+
+// ---------------------------------------------------------------------
+// Opaque-response blocking (`theorem_orb`).
+// ---------------------------------------------------------------------
+
+#[test]
+fn a_cross_origin_no_cors_response_orb_blocks_is_a_network_error() {
+    let mut k = Kernel::new();
+    let id = page(&mut k);
+    fetch(&mut k, id, "GET", "http://other.test/x.pdf", 2, &[]);
+    sent(&mut k, id);
+    let out = sub_net(
+        &mut k,
+        id,
+        InputBuf::Bytes(response_with("Content-Type: application/pdf", b"%PDF-1.7")),
+    );
+    assert_eq!(out, vec![Out::SubClose(id, 0, 1), Out::To(id, failed())]);
+}
+
+#[test]
+fn a_cors_response_is_not_put_through_orb() {
+    // ORB is for opaque responses only: a CORS-allowed JSON body is read.
+    let mut k = Kernel::new();
+    let id = page(&mut k);
+    fetch(&mut k, id, "GET", "http://other.test/d.json", 1, &[]);
+    sent(&mut k, id);
+    let out = sub_net(
+        &mut k,
+        id,
+        InputBuf::Bytes(response_with(
+            "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *",
+            b"{}",
+        )),
+    );
+    let read = matches!(
+        out.as_slice(),
+        [_, Out::Frames(_, msgs)] if msgs.iter().any(|m| matches!(m, Msg::FetchBody { bytes, .. } if bytes == b"{}"))
+    );
+    assert!(read, "{out:?}");
+}
+
+fn fetch_script(k: &mut Kernel, id: u64, url: &str) -> Vec<Out> {
+    k.send(
+        id,
+        &Msg::FetchScript {
+            request: 9,
+            url: t(url),
+        },
+    )
+}
+
+fn fetch_style(k: &mut Kernel, id: u64, url: &str) -> Vec<Out> {
+    k.send(
+        id,
+        &Msg::FetchStyle {
+            request: 9,
+            url: t(url),
+        },
+    )
+}
+
+/// The frames the renderer is given when a response with the fields `head`
+/// and the body `body` arrives on a sub-fetch just started.
+fn answer(k: &mut Kernel, id: u64, head: &str, body: &[u8]) -> Vec<Msg> {
+    sent(k, id);
+    let mut out = sub_net(k, id, InputBuf::Bytes(response_with(head, body)));
+    match (out.pop(), out.as_slice()) {
+        (Some(Out::Frames(_, msgs)), [Out::SubClose(..)]) => msgs,
+        (Some(Out::To(_, msg)), [Out::SubClose(..)]) => vec![msg],
+        _ => Vec::new(),
+    }
+}
+
+#[test]
+fn a_cross_origin_script_orb_blocks_fails() {
+    // An intranet HTML page asked for as a script, with nosniff.
+    let mut k = Kernel::new();
+    let id = page(&mut k);
+    fetch_script(&mut k, id, "http://intranet.test/");
+    let msgs = answer(
+        &mut k,
+        id,
+        "Content-Type: text/html\r\nX-Content-Type-Options: nosniff",
+        b"<p>secret",
+    );
+    assert_eq!(msgs, vec![Msg::ScriptFailed { request: 9 }]);
+    // Without nosniff it reaches ORB's JavaScript check, which is not run:
+    // blocked too.
+    let mut k = Kernel::new();
+    let id = page(&mut k);
+    fetch_script(&mut k, id, "http://intranet.test/");
+    let msgs = answer(&mut k, id, "Content-Type: text/html", b"<p>secret");
+    assert_eq!(msgs, vec![Msg::ScriptFailed { request: 9 }]);
+}
+
+#[test]
+fn a_cross_origin_script_with_a_javascript_type_is_given_whole() {
+    let mut k = Kernel::new();
+    let id = page(&mut k);
+    fetch_script(&mut k, id, "http://cdn.test/lib.js");
+    let msgs = answer(&mut k, id, "Content-Type: text/javascript", b"f()");
+    assert_eq!(
+        msgs,
+        vec![
+            Msg::ScriptResponse {
+                request: 9,
+                content_type: t("text/javascript")
+            },
+            Msg::ScriptBody {
+                request: 9,
+                bytes: t("f()")
+            },
+            Msg::ScriptEnd { request: 9 },
+        ]
+    );
+}
+
+#[test]
+fn a_same_origin_script_is_not_put_through_orb() {
+    let mut k = Kernel::new();
+    let id = page(&mut k);
+    fetch_script(&mut k, id, "/x");
+    let msgs = answer(
+        &mut k,
+        id,
+        "Content-Type: text/html\r\nX-Content-Type-Options: nosniff",
+        b"<p>",
+    );
+    assert!(
+        matches!(msgs.first(), Some(Msg::ScriptResponse { .. })),
+        "{msgs:?}"
+    );
+}
+
+#[test]
+fn cross_origin_style_sheets_pass_orb_by_type_or_by_its_absence() {
+    // text/css is safelisted.
+    let mut k = Kernel::new();
+    let id = page(&mut k);
+    fetch_style(&mut k, id, "http://cdn.test/s.css");
+    let msgs = answer(&mut k, id, "Content-Type: text/css", b"p{}");
+    assert!(
+        matches!(msgs.first(), Some(Msg::StyleResponse { .. })),
+        "{msgs:?}"
+    );
+    // No type at all: ORB step 13 allows it.
+    let mut k = Kernel::new();
+    let id = page(&mut k);
+    fetch_style(&mut k, id, "http://cdn.test/s.css");
+    let msgs = answer(&mut k, id, "X-A: 1", b"p{}");
+    assert!(
+        matches!(msgs.first(), Some(Msg::StyleResponse { .. })),
+        "{msgs:?}"
+    );
+    // JSON is blocked.
+    let mut k = Kernel::new();
+    let id = page(&mut k);
+    fetch_style(&mut k, id, "http://api.test/me");
+    let msgs = answer(&mut k, id, "Content-Type: application/json", b"{}");
+    assert_eq!(msgs, vec![Msg::StyleFailed { request: 9 }]);
+}

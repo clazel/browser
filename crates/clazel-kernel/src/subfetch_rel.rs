@@ -798,6 +798,9 @@ pub proof fn lemma_d_subnet(
             step(rules, urls, fetch, s2, Event::SubNet { renderer, serial, hop, input }).0,
         ),
 {
+    // How a sub-fetch ends is read only through the two lemmas below
+    // (item 7.16); unfolding it here ran out of time.
+    hide(api_end);
     let e = Event::SubNet { renderer, serial, hop, input };
     let bytes = Seq::<u8>::empty();
     assert(crate::domain::event_domain(rules, s1, Event::FromRenderer { id: renderer, bytes }) == Some(d));
@@ -835,6 +838,10 @@ pub proof fn lemma_d_subnet(
                 let g = SubFetch { fetch: fsa, hop: ha, ..f };
                 // Item 7.16: a `Fetch`'s answer reads the ending action only.
                 lemma_end_action_same_but_sends(aa, ab);
+                crate::api_theorems::lemma_orb_end_by_end_action(fetch, f, fsa, aa, ab, enda);
+                if let Some(mode) = f.api {
+                    crate::api_theorems::lemma_api_end_by_end_action(fetch, f.lock, f.request, mode, fsa.req.origin_tainted, aa, ab);
+                }
                 assert(fsa == fsb);
                 assert(api_finish(fetch, f, fsa, aa, enda) == api_finish(fetch, f, fsb, ab, endb));
                 if let Some(frames) = api_finish(fetch, f, fsa, aa, enda) {
@@ -958,6 +965,8 @@ pub proof fn lemma_local_respect_subnet(rules: Seq<clazel_psl::spec::Rule>, urls
             let (fsa, aa, opsa) = clazel_fetch::transducer::spec::step(fetch.http, fetch.urls, f.fetch, input, ja, s1.now);
             let (ha, outa, enda) = sub_actions(renderer, serial, f.request, f.script, hop, aa);
             lemma_sub_actions_outputs(renderer, serial, f.request, f.script, hop, aa);
+            // Item 7.16: ORB ends a sub-fetch exactly when its actions do.
+            crate::exec::api::lemma_orb_end(fetch, f, fsa, aa, enda);
             // `f` is `r`'s: its lock is `r`'s, of `d2`.
             crate::invariant::lemma_find_by_id(s1.renderers, renderer, 0);
             assert(f.lock == r.lock);

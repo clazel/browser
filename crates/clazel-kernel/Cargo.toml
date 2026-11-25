@@ -150,6 +150,11 @@ theorems = [
     # The statements are in `statements.rs`; the proofs in `api_theorems.rs`.
     "theorem_cors_read",
     "theorem_forbidden_headers",
+    # Phase 7 item 7.16: opaque-response blocking (`clazel_fetch::orb`) on
+    # every "no-cors" sub-fetch: style sheets, scripts and `Fetch` in mode
+    # "no-cors". The statement is in `statements.rs`; the proof in
+    # `api_theorems.rs`.
+    "theorem_orb",
     # Phase 7 item 7.16: popups (`OpenTab` from a renderer, allowed only with
     # the kernel's own record of a user input within a window of clock ticks)
     # and `javascript:` URLs (`lock_of_url` refuses them). The statements are

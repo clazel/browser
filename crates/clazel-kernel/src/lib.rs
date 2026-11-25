@@ -18,6 +18,8 @@
 //!   what a committed renderer is given; [`commit_theorems`]: a renderer is
 //!   committed only after the kernel sent it a commit.
 //! - [`gpu_theorems`]: item 5.17c's crash policy theorems.
+//! - [`orb`]: whether opaque-response blocking lets a response through
+//!   (item 7.16), kept out of every other proof's context.
 //! - [`urls`]: the URL functions of the shipped kernel (item 2.13), built from
 //!   the real URL parser; [`exec::real_urls`] is their executable
 //!   implementation and `step_real`, the function the host shell calls;
@@ -46,6 +48,7 @@ pub mod net_theorems;
 pub mod net_wf;
 pub mod ni_theorem;
 pub mod noninterference;
+pub mod orb;
 pub mod popup_frame;
 pub mod popup_mutation_lemmas;
 pub mod popup_rel;

@@ -18,6 +18,9 @@ clazel-origin = { path = "../clazel-origin" }
 clazel-psl = { path = "../clazel-psl" }
 # A `Location` value is UTF-8 decoded before the URL parser (transducer::real).
 clazel-encoding = { path = "../clazel-encoding" }
+# ORB (item 7.16) reads a response's MIME type, its groups and the sniffed
+# image and media signatures with `clazel-mime`.
+clazel-mime = { path = "../clazel-mime" }
 
 [dev-dependencies]
 # The reference engines of tests/conformance_differential.rs: rust-url (the

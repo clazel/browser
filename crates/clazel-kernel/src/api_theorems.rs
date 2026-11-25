@@ -115,6 +115,127 @@ pub proof fn theorem_cors_read(
     }
 }
 
+/// The frames [`sub_actions`] ends with are those of the first ending
+/// action: a sheet's or script's frames of its response for `Done`, the
+/// failure frame for `Fail`, none if no action ends the fetch.
+pub proof fn lemma_sub_actions_end_action(id: nat, serial: nat, request: u64, script: bool, hop: nat, actions: Seq<NetAction>)
+    ensures
+        ({
+            let end = sub_actions(id, serial, request, script, hop, actions).2;
+            match end_action(actions) {
+                None => end is None,
+                Some(clazel_fetch::transducer::spec::Action::Done { url, response }) => end == Some(sub_frames(script, request, response_document(response))),
+                Some(_) => end == Some(sub_failed_frame(script, request)),
+            }
+        }),
+    decreases actions.len(),
+{
+    if actions.len() > 0 {
+        let rest = actions.drop_first();
+        match actions[0] {
+            clazel_fetch::transducer::spec::Action::Connect { .. } => lemma_sub_actions_end_action(id, serial, request, script, hop + 1, rest),
+            clazel_fetch::transducer::spec::Action::Send(_) => lemma_sub_actions_end_action(id, serial, request, script, hop, rest),
+            clazel_fetch::transducer::spec::Action::Close => lemma_sub_actions_end_action(id, serial, request, script, hop, rest),
+            _ => {},
+        }
+    }
+}
+
+/// [`orb_end`] reads the actions only through their first ending action.
+pub proof fn lemma_orb_end_by_end_action(fetch: FetchFns, f: SubFetch, fs: FetchState, a: Seq<NetAction>, b: Seq<NetAction>, end: Option<Seq<u8>>)
+    requires
+        end_action(a) == end_action(b),
+    ensures
+        orb_end(fetch, f, fs, a, end) == orb_end(fetch, f, fs, b, end),
+{
+    reveal(orb_end);
+}
+
+/// [`api_end`] reads the actions only through their first ending action.
+pub proof fn lemma_api_end_by_end_action(
+    fetch: FetchFns,
+    lock: clazel_origin::spec::Origin,
+    request: u64,
+    mode: u64,
+    tainted: bool,
+    a: Seq<NetAction>,
+    b: Seq<NetAction>,
+)
+    requires
+        end_action(a) == end_action(b),
+    ensures
+        api_end(fetch, lock, request, mode, tainted, a) == api_end(fetch, lock, request, mode, tainted, b),
+{
+}
+
+/// The frames a "no-cors" sub-fetch ends with ([`api_finish`] of the frames
+/// [`sub_actions`] gave) are its failure frame, or the fetch ended with a
+/// response that is basic or that ORB allows.
+pub proof fn lemma_orb_finish(fetch: FetchFns, f: SubFetch, fs: FetchState, id: nat, serial: nat, hop: nat, actions: Seq<NetAction>)
+    requires
+        f.api is None || f.api == Some(mode_no_cors()),
+    ensures
+        ({
+            let end = sub_actions(id, serial, f.request, f.script, hop, actions).2;
+            api_finish(fetch, f, fs, actions, end) matches Some(frames) ==> (frames == failed_frame_of(f) || crate::statements::orb_passed(
+                fetch,
+                f.lock,
+                fs.req.origin_tainted,
+                actions,
+            ))
+        }),
+{
+    reveal(orb_end);
+    lemma_sub_actions_end_action(id, serial, f.request, f.script, hop, actions);
+}
+
+/// **`theorem_orb`** (phase-7.md item 7.16).
+pub proof fn theorem_orb(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns,
+    fetch: FetchFns,
+    s: State,
+    renderer: nat,
+    serial: nat,
+    hop: nat,
+    input: NetInput,
+)
+    ensures
+        crate::statements::orb_statement(rules, urls, fetch, s, renderer, serial, hop, input),
+{
+    let out = step(rules, urls, fetch, s, Event::SubNet { renderer, serial, hop, input }).1;
+    if let Some(f) = subnet_target(s, renderer, serial) {
+        if f.api is None || f.api == Some(mode_no_cors()) {
+            crate::subfetch_rel::lemma_subnet_target_key(s, renderer, serial);
+            if subfetch_live(s, f) && hop != 0 && f.hop == hop {
+                let (fs, actions, ops) = clazel_fetch::transducer::spec::step(fetch.http, fetch.urls, f.fetch, input, subfetch_jar(fetch, s, f), s.now);
+                let (h, out0, end) = sub_actions(renderer, serial, f.request, f.script, hop, actions);
+                lemma_sub_actions_no_frames(renderer, serial, f.request, f.script, hop, actions);
+                lemma_orb_finish(fetch, f, fs, renderer, serial, hop, actions);
+                let end2 = api_finish(fetch, f, fs, actions, end);
+                match end2 {
+                    None => {
+                        assert(out == out0);
+                    },
+                    Some(frames) => {
+                        assert(out == out0 + seq![Output::ToRenderer { id: f.renderer, bytes: frames }]);
+                        assert forall|k: int| 0 <= k < out.len() && (#[trigger] out[k]) is ToRenderer implies {
+                            &&& out[k]->ToRenderer_id == renderer
+                            &&& (out[k]->ToRenderer_bytes == failed_frame_of(f) || crate::statements::orb_passed(fetch, f.lock, fs.req.origin_tainted, actions))
+                        } by {
+                            if k < out0.len() {
+                                assert(out[k] == out0[k]);
+                            } else {
+                                assert(out[k] == Output::ToRenderer { id: f.renderer, bytes: frames });
+                            }
+                        }
+                    },
+                }
+            }
+        }
+    }
+}
+
 /// A request on the wire was built ([`clazel_fetch::request::spec::req_ok`]),
 /// so its page headers are all ones this client may send.
 pub proof fn lemma_wire_headers_ok(url: clazel_url::url::spec::Url, req: clazel_fetch::request::spec::Req, cookie: Seq<u8>, bytes: Seq<u8>)

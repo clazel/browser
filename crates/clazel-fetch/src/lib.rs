@@ -4,8 +4,11 @@
 //! GET, one per connection, no cookies yet), and [`transducer`] is the
 //! client state machine the network shell drives: from the URL and the
 //! events of its connections to the actions to carry out, following
-//! redirects. The response is read by `clazel_http::message`. Tier: see
+//! redirects. The response is read by `clazel_http::message`. Item 7.16:
+//! [`orb`] is opaque-response blocking, the check a cross-origin "no-cors"
+//! response passes before a page may have it. Tier: see
 //! `[package.metadata.clazel]` in `Cargo.toml` and `docs/VERIFICATION.md`.
 
+pub mod orb;
 pub mod request;
 pub mod transducer;

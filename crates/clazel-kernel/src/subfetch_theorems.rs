@@ -840,6 +840,8 @@ pub proof fn lemma_sub_net_tables(rules: Seq<clazel_psl::spec::Rule>, fetch: Fet
         if subfetch_live(s, f) && hop != 0 && f.hop == hop {
             let (fsa, actions, ops) = clazel_fetch::transducer::spec::step(fetch.http, fetch.urls, f.fetch, input, subfetch_jar(fetch, s, f), s.now);
             let (h, out, end) = sub_actions(renderer, serial, f.request, f.script, hop, actions);
+            // Item 7.16: ORB ends a sub-fetch exactly when its actions do.
+            crate::exec::api::lemma_orb_end(fetch, f, fsa, actions, end);
             let g = SubFetch { fetch: fsa, hop: h, ..f };
             if end is Some {
                 lemma_drop_table(s.subfetches, g, id, lock);
@@ -1266,6 +1268,9 @@ pub proof fn theorem_subfetch_only_to_requester(rules: Seq<clazel_psl::spec::Rul
                     let end2 = api_finish(fetch, f, fsa, actions, end);
                     if let Some(mode) = f.api {
                         crate::api_theorems::lemma_api_end_cases(fetch, f.lock, f.request, mode, fsa.req.origin_tainted, actions);
+                    } else {
+                        // Item 7.16: ORB keeps the frames or fails the fetch.
+                        crate::exec::api::lemma_orb_end(fetch, f, fsa, actions, end);
                     }
                     assert forall|k: int| 0 <= k < out.len() && (#[trigger] out[k]) is ToRenderer implies {
                         &&& out[k]->ToRenderer_id == renderer
@@ -1281,6 +1286,11 @@ pub proof fn theorem_subfetch_only_to_requester(rules: Seq<clazel_psl::spec::Rul
                                 let response = end_action(actions)->Some_0->Done_response;
                                 assert(b == fetch_frames(f.request, response));
                             }
+                        } else {
+                            let b = out[k]->ToRenderer_bytes;
+                            assert(end2 == Some(b));
+                            assert(end is Some);
+                            assert(b == end->Some_0 || b == sub_failed_frame(f.script, f.request));
                         }
                     }
                 }
@@ -1315,6 +1325,7 @@ pub proof fn lemma_credentials_subnet(rules: Seq<clazel_psl::spec::Rule>, urls: 
                 let jar = subfetch_jar(fetch, s, f);
                 let (fsa, actions, ops) = clazel_fetch::transducer::spec::step(fetch.http, fetch.urls, f.fetch, input, jar, s.now);
                 let (h, o, end) = sub_actions(renderer, serial, f.request, f.script, hop, actions);
+                crate::exec::api::lemma_orb_end(fetch, f, fsa, actions, end);
                 clazel_fetch::transducer::theorems::lemma_sends_only_on_connected(fetch.http, fetch.urls, f.fetch, input, jar, s.now);
                 clazel_fetch::transducer::theorems::theorem_wire_cookies(fetch.http, fetch.urls, f.fetch, input, jar, s.now);
                 if clazel_fetch::transducer::theorems::no_sends(actions) {

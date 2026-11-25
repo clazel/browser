@@ -343,6 +343,7 @@ dependencies = [
  "clazel-cookie",
  "clazel-encoding",
  "clazel-http",
+ "clazel-mime",
  "clazel-origin",
  "clazel-psl",
  "clazel-url",

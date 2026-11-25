@@ -247,7 +247,8 @@ type }`, `FetchBody` frames and `FetchEnd`, or `FetchFailed`.
    cross-origin hop) or, in mode "cors", one that passed the CORS check
    (`*` or the byte-serialized request origin, `null` after a cross-origin
    hop) is read; in mode "no-cors" anything else is an opaque response
-   (status 0, no body); otherwise `FetchFailed`.
+   (status 0, no body) if opaque-response blocking allows it (below) and
+   `FetchFailed` if not; otherwise `FetchFailed`.
 
 ### Theorems
 
@@ -271,8 +272,47 @@ re-proven with `Fetch` in the renderer's messages.
   redirects (307, 308) to another origin keeps its body and type there.
 - Fetch's method-override rule (§2.2.2 step 3) is over-approximated: the
   three names are dropped whatever their value.
-- `FetchScript`'s cross-origin responses are still handed over whole
-  (opaque-response blocking is not built).
+
+## Opaque-response blocking (phase-7.md item 7.16, 7.0(c) S1)
+
+Style sheets, scripts and `Fetch` in mode "no-cors" are "no-cors" requests.
+A response to one that is not basic (its final URL is not of the lock's
+origin, or a redirect left the origin) has response tainting "opaque", and
+passes ORB's opaque-response-safelist check (`clazel_fetch::orb`, the
+algorithm of whatwg/fetch pull request #1442, which is not merged) before a
+renderer learns anything of it. A response the check blocks is a network
+error: `StyleFailed`, `ScriptFailed` or `FetchFailed`. A response it allows
+is handed over as before: whole to a style sheet or script fetch, as an
+opaque response (no status, type or body) to `fetch()`.
+
+### Decisions (taken here, from the plan's goals; each is also in `src/spec.rs`)
+
+1. **The check's last step is not run.** "Determine if response is
+   JavaScript and not JSON" parses the whole body as a script. A response
+   that reaches it (a type that is not safelisted, blocklisted or media,
+   such as `text/plain` or `application/octet-stream`, and bytes that do not
+   sniff as an image) is blocked. This is stricter than ORB: a cross-origin
+   script served with a wrong type fails to load here.
+2. **A final response with a redirect status** (a 3xx without `Location`)
+   is checked too, where Fetch's HTTP fetch step 4 exempts it.
+3. **Every 206 is an invalid partial response** (ORB step 5): no request
+   here carries `Range`.
+
+### Theorems
+
+`theorem_orb`: whatever the network shell reports on a "no-cors" sub-fetch's
+connection, every frame the step gives a renderer is the sub-fetch's
+failure frame unless the transducer ended with a response that is basic or
+that ORB allows. `theorem_cors_read` and `theorem_subfetch_only_to_requester`
+are unchanged in statement.
+
+### Not done
+
+- The no-cors media request state is always "N/A" (there are no media
+  elements), so audio and video bytes are always blocked.
+- ORB's own WPT tests (`fetch/orb/`) need script and are not run; the
+  check is tested by hand in `clazel-fetch/tests/orb.rs` and through the
+  kernel in `tests/fetch_api.rs`.
 
 ## Popups and `javascript:` URLs (phase-7.md item 7.16)
 
@@ -347,9 +387,6 @@ activations in its relation.
   fixes no key code).
 - The renderer is not told that a popup was refused (`window.open` would
   return `null`).
-- Opaque-response blocking for `FetchScript` (and for `Fetch`'s no-cors
-  responses) is not built: it needs Phase 6's ORB (6.17), which is not in
-  this line.
 - No CORS preflight and no credentials mode "include" (see `fetch()` above).
 - The table keeps the entry of a renderer that was replaced, killed or
   exited (never read again: ids are not reused).
