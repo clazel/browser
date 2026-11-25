@@ -446,7 +446,7 @@
 //!   [`basic_response`]) has response tainting "opaque", and Fetch's HTTP
 //!   fetch step 4 runs ORB's opaque-response-safelist check on it
 //!   (`clazel_fetch::orb`). A response the check does not allow
-//!   ([`orb_allows`]) is a network error: the renderer gets `StyleFailed`
+//!   ([`crate::orb::orb_allows`]) is a network error: the renderer gets `StyleFailed`
 //!   or `ScriptFailed` instead of the response ([`orb_end`]). Two choices,
 //!   both in the blocking direction (listed): the check's last step
 //!   ("determine if response is JavaScript and not JSON", which parses the
@@ -478,7 +478,7 @@
 //! request-headers, CORS-unsafe request-header bytes, forbidden
 //! request-headers), §2.2.6 (opaque filtered responses), §4.1 main fetch
 //! (steps 12 and 14), §4.4 HTTP fetch step 4.4 and §4.10 CORS check; and
-//! opaque-response blocking ([`orb_allows`]) as `clazel_fetch::orb` pins it.
+//! opaque-response blocking ([`crate::orb::orb_allows`]) as `clazel_fetch::orb` pins it.
 //!
 //! - **`Fetch` is a sub-fetch** ([`fetch_api`]): a committed renderer's
 //!   request runs as a [`SubFetch`] with `api` set to its mode, so it shares
@@ -508,7 +508,7 @@
 //!   origin, `null` after a cross-origin hop) is `FetchResponse { status,
 //!   content type }`, `FetchBody` frames and `FetchEnd`; in mode "no-cors"
 //!   anything else is an opaque filtered response (status 0, no body) if
-//!   ORB allows it ([`orb_allows`], as for scripts above) and `FetchFailed`
+//!   ORB allows it ([`crate::orb::orb_allows`], as for scripts above) and `FetchFailed`
 //!   if not; in the other modes anything else, and every `Fail`, is
 //!   `FetchFailed`. A "no-cors" `Fetch` never gives the renderer a
 //!   cross-origin body; ORB decides only whether it learns of one.
@@ -3389,14 +3389,6 @@ pub open spec fn end_action(actions: Seq<NetAction>) -> Option<NetAction>
     }
 }
 
-/// ORB lets `response` through (item 7.16): the opaque-response-safelist
-/// check (`clazel_fetch::orb`) returns true. The check's last step,
-/// "determine if response is JavaScript and not JSON", is not run: a
-/// response that reaches it is blocked (listed).
-pub open spec fn orb_allows(response: clazel_http::message::spec::Response) -> bool {
-    clazel_fetch::orb::spec::opaque_response_safelist_check(response) is Allowed
-}
-
 /// The response a request with origin `lock` ended with at `url`, with
 /// redirect-taint `tainted`, is basic (Fetch §4.1 main fetch step 12: the
 /// current URL's origin is the request's origin and the response tainting
@@ -3412,13 +3404,13 @@ pub open spec fn basic_response(fetch: FetchFns, lock: clazel_origin::spec::Orig
 /// ([`api_readable`]) is [`fetch_frames`]; otherwise mode "same-origin"
 /// and mode "cors" give a network error (`FetchFailed`) and mode "no-cors"
 /// an opaque filtered response ([`fetch_opaque_frames`]) if ORB allows the
-/// response ([`orb_allows`]; the pull request's HTTP fetch step 4.4) and a
+/// response ([`crate::orb::orb_allows`]; the pull request's HTTP fetch step 4.4) and a
 /// network error if not. A `Fail` is a network error.
 pub open spec fn api_end(fetch: FetchFns, lock: clazel_origin::spec::Origin, request: u64, mode: u64, tainted: bool, actions: Seq<NetAction>) -> Seq<u8> {
     match end_action(actions) {
         Some(clazel_fetch::transducer::spec::Action::Done { url, response }) => if api_readable(fetch, lock, mode, tainted, url, response) {
             fetch_frames(request, response)
-        } else if mode == mode_no_cors() && orb_allows(response) {
+        } else if mode == mode_no_cors() && crate::orb::orb_allows(response) {
             fetch_opaque_frames(request)
         } else {
             fetch_failed_frame(request)
@@ -3430,12 +3422,14 @@ pub open spec fn api_end(fetch: FetchFns, lock: clazel_origin::spec::Origin, req
 /// ORB on the end of a style sheet or script fetch (both mode "no-cors"):
 /// `end`, the frames [`sub_actions`] gave, unless the fetch ended with a
 /// response that is not basic ([`basic_response`]: response tainting
-/// "opaque") and that ORB does not allow ([`orb_allows`]), which is a
-/// network error: `StyleFailed` or `ScriptFailed`.
+/// "opaque") and that ORB does not allow ([`crate::orb::orb_allows`]), which is a
+/// network error: `StyleFailed` or `ScriptFailed`. Opaque, so the step's
+/// unfolding stays small; the proofs that read it reveal it.
+#[verifier::opaque]
 pub open spec fn orb_end(fetch: FetchFns, f: SubFetch, fs: FetchState, actions: Seq<NetAction>, end: Option<Seq<u8>>) -> Option<Seq<u8>> {
     match (end, end_action(actions)) {
         (Some(_), Some(clazel_fetch::transducer::spec::Action::Done { url, response })) => if !basic_response(fetch, f.lock, fs.req.origin_tainted, url)
-            && !orb_allows(response) {
+            && !crate::orb::orb_allows(response) {
             Some(sub_failed_frame(f.script, f.request))
         } else {
             end
@@ -3451,7 +3445,8 @@ pub open spec fn orb_end(fetch: FetchFns, f: SubFetch, fs: FetchState, actions: 
 pub open spec fn api_finish(fetch: FetchFns, f: SubFetch, fs: FetchState, actions: Seq<NetAction>, end: Option<Seq<u8>>) -> Option<Seq<u8>> {
     match (f.api, end) {
         (Some(mode), Some(_)) => Some(api_end(fetch, f.lock, f.request, mode, fs.req.origin_tainted, actions)),
-        _ => orb_end(fetch, f, fs, actions, end),
+        (None, Some(_)) => orb_end(fetch, f, fs, actions, end),
+        _ => end,
     }
 }
 

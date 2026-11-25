@@ -1081,12 +1081,84 @@ pub proof fn ml_tainted_not_basic(url: clazel_url::url::spec::Url, response: cla
 
 /// A "no-cors" `Fetch` that ends cross-origin gives an opaque response:
 /// the renderer never gets its body.
-pub proof fn ml_no_cors_opaque(url: clazel_url::url::spec::Url, response: clazel_http::message::spec::Response)
+pub proof fn ml_no_cors_opaque(url: clazel_url::url::spec::Url)
     ensures
-        api_end(ml_fetch_cross(), clazel_origin::spec::Origin::Opaque(0nat), 1, mode_no_cors(), false, seq![clazel_fetch::transducer::spec::Action::Done { url, response }])
-            == fetch_opaque_frames(1),
+        api_end(
+            ml_fetch_cross(),
+            clazel_origin::spec::Origin::Opaque(0nat),
+            1,
+            mode_no_cors(),
+            false,
+            seq![clazel_fetch::transducer::spec::Action::Done { url, response: ml_response(seq![0x62u8]) }],
+        ) == fetch_opaque_frames(1),
 {
     reveal_with_fuel(end_action, 2);
+    crate::orb::lemma_orb_allows(ml_response(seq![0x62u8]));
+    // ORB allows it: no type, status 200, one byte that sniffs as nothing
+    // (step 13).
+    assert(clazel_fetch::orb::spec::opaque_response_safelist_check(ml_response(seq![0x62u8])) is Allowed) by (compute_only);
+}
+
+/// A cross-origin PDF (`clazel_fetch::orb::examples`), which ORB blocks.
+pub open spec fn ml_pdf_response() -> clazel_http::message::spec::Response {
+    clazel_fetch::orb::examples::ex_response(200, seq![clazel_fetch::orb::examples::ex_ct_pdf()], clazel_fetch::orb::examples::ex_gif())
+}
+
+/// A "no-cors" `Fetch` of a cross-origin response ORB blocks is a network
+/// error, not an opaque response.
+pub proof fn ml_no_cors_orb_blocks(url: clazel_url::url::spec::Url)
+    ensures
+        api_end(
+            ml_fetch_cross(),
+            clazel_origin::spec::Origin::Opaque(0nat),
+            1,
+            mode_no_cors(),
+            false,
+            seq![clazel_fetch::transducer::spec::Action::Done { url, response: ml_pdf_response() }],
+        ) == fetch_failed_frame(1),
+{
+    reveal_with_fuel(end_action, 2);
+    crate::orb::lemma_orb_allows(ml_pdf_response());
+    clazel_fetch::orb::examples::example_pdf_blocked();
+}
+
+/// A style sheet fetch whose response is cross-origin and ORB blocks ends
+/// in `StyleFailed`, whatever frames the transducer's end gave.
+pub proof fn ml_orb_blocks_sheet(url: clazel_url::url::spec::Url, b: Seq<u8>)
+    ensures
+        orb_end(
+            ml_fetch_cross(),
+            ml_subfetch(0, clazel_origin::spec::Origin::Opaque(0nat), false),
+            ml_subfetch(0, clazel_origin::spec::Origin::Opaque(0nat), false).fetch,
+            seq![clazel_fetch::transducer::spec::Action::Done { url, response: ml_pdf_response() }],
+            Some(b),
+        ) == Some(sub_failed_frame(false, 0)),
+{
+    reveal_with_fuel(end_action, 2);
+    crate::orb::lemma_orb_allows(ml_pdf_response());
+    reveal(orb_end);
+    clazel_fetch::orb::examples::example_pdf_blocked();
+}
+
+/// A response that came back to the lock's origin through a cross-origin
+/// redirect (redirect-taint set) is not basic: ORB still checks it.
+pub proof fn ml_orb_checks_tainted(url: clazel_url::url::spec::Url, b: Seq<u8>)
+    ensures
+        orb_end(
+            ml_fetch_cross(),
+            ml_subfetch(0, clazel_origin::spec::Origin::Opaque(9nat), false),
+            FetchState {
+                req: clazel_fetch::request::spec::Req { origin_tainted: true, ..ml_subfetch(0, clazel_origin::spec::Origin::Opaque(9nat), false).fetch.req },
+                ..ml_subfetch(0, clazel_origin::spec::Origin::Opaque(9nat), false).fetch
+            },
+            seq![clazel_fetch::transducer::spec::Action::Done { url, response: ml_pdf_response() }],
+            Some(b),
+        ) == Some(sub_failed_frame(false, 0)),
+{
+    reveal_with_fuel(end_action, 2);
+    crate::orb::lemma_orb_allows(ml_pdf_response());
+    reveal(orb_end);
+    clazel_fetch::orb::examples::example_pdf_blocked();
 }
 
 /// A renderer that is not committed may not send `Fetch`.

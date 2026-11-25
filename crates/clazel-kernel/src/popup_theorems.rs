@@ -261,6 +261,12 @@ pub proof fn lemma_run_acts(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fe
             ) || act_witness(rules, urls, fetch, s0, t, run_state(rules, urls, fetch, s0, t).acts[k]),
     decreases t.len(),
 {
+    // Sub-fetches (and item 7.16's ORB on how they end) have nothing to do
+    // with activations (`lemma_step_origin` says how an entry changes);
+    // hidden to keep the step's unfolding within the rlimit.
+    hide(api_finish);
+    hide(sub_net);
+    hide(fetch_api);
     let fin = run_state(rules, urls, fetch, s0, t);
     if t.len() == 0 {
         assert forall|k: int| 0 <= k < fin.acts.len() && (#[trigger] fin.acts[k]).left > 0 implies act_kept(s0, t, fin.acts[k]) by {

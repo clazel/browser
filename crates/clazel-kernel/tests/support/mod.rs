@@ -103,7 +103,7 @@ pub enum Out {
     GarbledGpu(u64),
     /// Several frames to a renderer in one write that are not a commit: a
     /// fetched style sheet's `StyleResponse`, `StyleBody`s and `StyleEnd`
-    /// (item 5.19).
+    /// (item 5.19), or a script's or a `Fetch`'s (item 7.16).
     Frames(u64, Vec<Msg>),
     /// A sub-fetch connection asked for (item 5.19): renderer, serial, hop,
     /// host, port, TLS.
@@ -151,7 +151,11 @@ impl Kernel {
                     Some(msgs)
                         if matches!(
                             msgs.first(),
-                            Some(Msg::StyleResponse { .. } | Msg::FetchResponse { .. })
+                            Some(
+                                Msg::StyleResponse { .. }
+                                    | Msg::FetchResponse { .. }
+                                    | Msg::ScriptResponse { .. }
+                            )
                         ) =>
                     {
                         Out::Frames(id, msgs)

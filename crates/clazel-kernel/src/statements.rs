@@ -1130,10 +1130,10 @@ pub open spec fn orb_statement(
 }
 
 /// The fetch ended (its first ending action) with a response that is basic
-/// ([`basic_response`]) or that ORB allows ([`orb_allows`]).
+/// ([`basic_response`]) or that ORB allows ([`crate::orb::orb_allows`]).
 pub open spec fn orb_passed(fetch: FetchFns, lock: clazel_origin::spec::Origin, tainted: bool, actions: Seq<NetAction>) -> bool {
     match end_action(actions) {
-        Some(clazel_fetch::transducer::spec::Action::Done { url, response }) => basic_response(fetch, lock, tainted, url) || orb_allows(response),
+        Some(clazel_fetch::transducer::spec::Action::Done { url, response }) => basic_response(fetch, lock, tainted, url) || crate::orb::orb_allows(response),
         _ => false,
     }
 }

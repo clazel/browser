@@ -270,6 +270,94 @@ pub fn api_readable_exec<F: FetchFnsExec>(
     ok
 }
 
+/// [`crate::orb::orb_allows`]: the opaque-response-safelist check allows `response`.
+pub fn orb_allows_exec(response: &clazel_http::message::types::ResponseBuf) -> (r: bool)
+    ensures
+        r == crate::orb::orb_allows(response@),
+{
+    proof {
+        crate::orb::lemma_orb_allows(response@);
+    }
+    let v = clazel_fetch::orb::check::opaque_response_safelist_check(response);
+    matches!(v, clazel_fetch::orb::spec::Verdict::Allowed)
+}
+
+/// The fetch ended (its first ending action) with a response that is not
+/// basic and that ORB does not allow: what [`orb_end`] turns into a failure.
+pub open spec fn orb_blocks(fetch: FetchFns, lock: clazel_origin::spec::Origin, tainted: bool, actions: Seq<NetAction>) -> bool {
+    match end_action(actions) {
+        Some(clazel_fetch::transducer::spec::Action::Done { url, response }) => !basic_response(fetch, lock, tainted, url) && !crate::orb::orb_allows(response),
+        _ => false,
+    }
+}
+
+/// [`orb_end`] is [`orb_blocks`] applied to the frames a sub-fetch ended
+/// with.
+pub proof fn lemma_orb_end(fetch: FetchFns, f: SubFetch, fs: FetchState, actions: Seq<NetAction>, end: Option<Seq<u8>>)
+    ensures
+        orb_end(fetch, f, fs, actions, end) == (if end is Some && orb_blocks(fetch, f.lock, fs.req.origin_tainted, actions) {
+            Some(sub_failed_frame(f.script, f.request))
+        } else {
+            end
+        }),
+{
+    reveal(orb_end);
+}
+
+/// [`orb_blocks`].
+pub fn orb_blocks_exec<F: FetchFnsExec>(fetch: &F, lock: &ParsedOrigin, tainted: bool, actions: &[ActionBuf]) -> (r: bool)
+    ensures
+        r == orb_blocks(fetch.fetch(), lock@, tainted, clazel_fetch::transducer::types::actions_view(actions@)),
+{
+    let ghost av = clazel_fetch::transducer::types::actions_view(actions@);
+    let mut k: usize = 0;
+    proof {
+        assert(av.skip(0) =~= av);
+    }
+    while k < actions.len()
+        invariant
+            k <= actions.len(),
+            av == clazel_fetch::transducer::types::actions_view(actions@),
+            end_action(av) == end_action(av.skip(k as int)),
+        decreases actions.len() - k,
+    {
+        if let Some(a) = actions.get(k) {
+            proof {
+                assert(av[k as int] == a@);
+                assert(av.skip(k as int)[0] == a@);
+            }
+            match a {
+                ActionBuf::Done { url, response } => {
+                    proof {
+                        assert(end_action(av.skip(k as int)) == Some(a@));
+                    }
+                    let u = fetch.url_fns();
+                    let o = u.origin(url);
+                    let basic = !tainted && origin_eq_exec(&o, lock);
+                    return !basic && !orb_allows_exec(response);
+                },
+                ActionBuf::Fail(_) => {
+                    proof {
+                        assert(end_action(av.skip(k as int)) == Some(a@));
+                    }
+                    return false;
+                },
+                _ => {
+                    proof {
+                        lemma_end_action_skip(av, k as int);
+                    }
+                },
+            }
+        }
+        // Never saturates: k < actions.len().
+        k = k.saturating_add(1);
+    }
+    proof {
+        assert(av.skip(actions.len() as int) =~= Seq::<NetAction>::empty());
+    }
+    false
+}
+
 /// [`end_action`] reads past actions that do not end the fetch.
 proof fn lemma_end_action_skip(actions: Seq<NetAction>, k: int)
     requires
@@ -311,7 +399,7 @@ pub fn api_end_exec<F: FetchFnsExec>(fetch: &F, lock: &ParsedOrigin, request: u6
                     }
                     if api_readable_exec(fetch, lock, mode, tainted, url, response) {
                         return fetch_frames_exec(request, response);
-                    } else if mode == 2 {
+                    } else if mode == 2 && orb_allows_exec(response) {
                         return fetch_opaque_frames_exec(request);
                     } else {
                         return fetch_failed_frame_exec(request);

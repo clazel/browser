@@ -1019,13 +1019,21 @@ pub fn sub_net_exec<F: FetchFnsExec>(fetch: &F, s: StateRecord, renderer: u64, s
         Some(mode) => Some(super::api::api_end_exec(fetch, &f.lock, f.request, mode, fs.req.origin_tainted, actions.as_slice())),
         None => None,
     };
+    // Item 7.16: a style sheet or script ends in ORB.
+    let blocked = super::api::orb_blocks_exec(fetch, &f.lock, fs.req.origin_tainted, actions.as_slice());
     let (h2, out, end) = sub_actions_exec(renderer, serial, f.request, f.script, hop, actions);
     let end = match (f.api, end) {
         (Some(_), Some(_)) => api_frames,
+        (None, Some(e)) => if blocked {
+            Some(sub_failed_frame_exec(f.script, f.request))
+        } else {
+            Some(e)
+        },
         (_, e) => e,
     };
     proof {
         let e0 = sub_actions(renderer as nat, serial as nat, f.request, f.script, hop as nat, av).2;
+        super::api::lemma_orb_end(fetch.fetch(), fv, fs@, av, e0);
         assert(match end {
             Some(v) => api_finish(fetch.fetch(), fv, fs@, av, e0) == Some(v@),
             None => api_finish(fetch.fetch(), fv, fs@, av, e0) is None,
