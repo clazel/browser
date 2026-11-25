@@ -29,14 +29,19 @@ primitives and strings (UTF-16 exact), `kind` and the `as_*`, `to_*` and `is_*`
 conversions, `strict_equals`, `same_value`, `instance_of`; `new_object`, `get`,
 `set`, `has_property`, `define_property` (data properties),
 `get_prototype_of`, `set_prototype_of`, `get_method`, `call`, `construct`;
-accessor properties (`define_property` with `get`/`set`, `get_own_property`),
+accessor properties (`define_property` with `get`/`set`, `get_own_property`;
+`define_accessor` from native closures, whose two function objects are made
+when something first needs them, which script cannot observe: the method's
+documentation says why, and `tests/lazy_accessors.rs` runs each first use on
+a lazy and an eager object and compares),
 `delete_property`, `new_array`, `new_array_from` and `is_array` (item 7.12
 needed them: WebIDL attributes are accessors);
 `function`, `shared_function` (re-entrant), `define_method`, `Args`,
 `new_host_object` with `host_data`,
 `get_prototype_from_constructor`, `host_mut`, `check_terminated`; errors,
 `new_exception`, `throw_error`, `throw`, `report`, `Error::Thrown`;
-`create_realm` (once), `global`, realm and script host data; `compile_script`,
+`create_realm` (once), `global`, realm and script host data; `Scope::run_jobs`
+(a microtask checkpoint from inside a scope, item 7.15); `compile_script`,
 `run_script`, `eval_script`; `Handle`, `Weak`, `Member`; `gc` and
 `clear_kept_objects` as no-ops.
 
@@ -54,12 +59,9 @@ return an error, so they record it and the next fallible call returns it.
 - **No completion value.** `run_script` and `eval_script` return `undefined`
   because the compiler's script has no completion value. Results go out
   through globals or native functions.
-- **Re-entrance.** A closure made by `function` that JavaScript re-enters
-  while it runs gets `Error::Busy`, because the closures are stored in the VM
-  they borrow (the table is where a plain function pointer can find it).
-  `shared_function` takes a `Sync` closure, which the runtime shares with each
-  call, so it can be re-entered: open question 14's proposal, added beside
-  `function` rather than in its place.
+- **Re-entrance** works: a native closure that JavaScript re-enters while
+  it runs runs again, nested. That needed `Sync` on the closures (open
+  question 14, answered as its proposal said).
 - **Rooting.** There is no collector in this tree (open pull requests), so
   nothing is ever freed: `Local`, `Handle`, `Weak` and `Member` are checked
   (the runtime they belong to, the arena's generation) but root nothing;
@@ -332,7 +334,7 @@ interpreter only, which is complete.
 | Browser need | API |
 |---|---|
 | Install `window`, `document`, `console` | `create_realm` with a host-object global; `global`; `define_property`, `define_method` |
-| Interface objects and prototypes (7.12) | `function` with `Callable::Constructor`; `get_prototype_from_constructor`; `define_property`; `set_prototype_of` |
+| Interface objects and prototypes (7.12) | `function` with `Callable::Constructor`; `get_prototype_from_constructor`; `define_property`; `define_accessor` (attributes); `set_prototype_of` |
 | Wrappers, one per platform object (7.12, 7.13) | `new_host_object` with typed data; `Weak` for the side table; `Host::trace_roots` for nodes in a tree |
 | `NodeList[0]`, `HTMLCollection.name` | `HostObject`'s exotic hooks |
 | WebIDL conversions (3.2) | `to_number`, `to_string`, `to_boolean`, `to_object`, `is_callable`, `get_method`, `iterate`, `string_utf16`, `bigint_from_*` |
@@ -425,14 +427,11 @@ look at each.
     variant remains only for a page that catches the error and allocates
     again until the reserve is spent too, and for a limit too small for the
     built-ins or for compiling a script.
-14. **Native closures and re-entrance.** `Scope::function` takes `Fn + Send`.
-    Re-entering a running closure needs it shared with the call that is
-    running, which for a `Send` runtime means `Fn + Send + Sync` (an `Arc`),
-    or a runtime that is not `Send`. With `Send` alone the implementation
-    stores each closure in the VM's embedder slot and takes it out while it
-    runs, so a re-entrant call is `Error::Busy`. Proposal: add `Sync` to the
-    bound (the browser's closures hold ids, not `Rc`s, as open question 3
-    already asks of the host).
+14. **Native closures and re-entrance.** Answered: `Scope::function` takes
+    `Fn + Send + Sync`, and the table holds each closure in an `Arc` that a
+    call clones, so a re-entrant call runs (HTML's `document.write`, item
+    7.15, needs it). The browser's closures hold ids, not `Rc`s, as open
+    question 3 already asks of the host.
 15. **Infallible constructors that cannot work yet.** `bigint_from_*`,
     `new_symbol` and `well_known_symbol` return a `Local`, not a `Result`, so
     when the VM lacks the type the error is held for the next fallible call.

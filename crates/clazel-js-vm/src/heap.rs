@@ -8,8 +8,10 @@
 //! shape, a prototype, and what kind of object it is), a declarative
 //! environment, and the iterator records of the iteration ops. It holds data
 //! properties and accessor properties (an accessor's slot holds a
-//! [`Cell::Accessor`] with its getter and setter, and its attributes carry
-//! [`ACCESSOR`]); elements and exotic objects come with the later slices.
+//! [`Cell::Accessor`] with its getter and setter, or a
+//! [`Cell::LazyAccessor`] until they are first needed, and its attributes
+//! carry [`ACCESSOR`]); elements and exotic objects come with the later
+//! slices.
 //! Nothing here is collected: the collector is item 7.6.
 //!
 //! A property key is a [`Key`]: an interned string, or a Symbol encoded by
@@ -30,8 +32,8 @@ use clazel_js_heap::value::Value;
 pub const MAX_PROTO_DEPTH: usize = 100_000;
 
 /// The attribute bit of an accessor property (§6.1.7.1† Table 4): the
-/// property's slot holds a [`Cell::Accessor`] and not a value, and its
-/// `WRITABLE` bit is clear (an accessor property has no `[[Writable]]`).
+/// property's slot holds a [`Cell::Accessor`] (or a [`Cell::LazyAccessor`])
+/// and not a value, and its `WRITABLE` bit is clear (an accessor property has no `[[Writable]]`).
 /// `clazel-js-heap`'s shapes store the bits without reading them.
 pub const ACCESSOR: u8 = 8;
 
@@ -196,6 +198,14 @@ pub enum Cell {
         /// `[[Set]]`.
         set: Value,
     },
+    /// An accessor pair whose `[[Get]]` and `[[Set]]` function objects have
+    /// not been made yet: the embedder's number for them
+    /// (`Vm::define_lazy_accessor`). The first operation that needs either
+    /// function has them made and turns this cell into a [`Cell::Accessor`]
+    /// in place (`Vm::accessor_pair`), so the property's slot, and with it
+    /// the identity of the functions from then on, never changes. Like an
+    /// `Accessor`, it is never a language value.
+    LazyAccessor(u32),
 }
 
 /// Why a heap operation failed.
@@ -312,7 +322,7 @@ fn cell_bytes(cell: &Cell) -> u64 {
             .saturating_mul(8),
         // A Symbol's description is a string cell of its own, counted there;
         // an iterator record holds a few values and no growing buffer.
-        Cell::Symbol(_) | Cell::Iter(_) | Cell::Accessor { .. } => 0,
+        Cell::Symbol(_) | Cell::Iter(_) | Cell::Accessor { .. } | Cell::LazyAccessor(_) => 0,
     };
     CELL_BYTES.saturating_add(payload)
 }
@@ -425,12 +435,51 @@ impl Heap {
         self.alloc(Cell::Accessor { get, set })
     }
 
-    /// The getter and setter an accessor pair holds.
+    /// The getter and setter an accessor pair holds: `None` for a pair
+    /// that is still lazy (`Vm::accessor_pair` makes its functions first).
     #[must_use]
     pub fn accessor(&self, v: Value) -> Option<(Value, Value)> {
         match self.cell(v)? {
             Cell::Accessor { get, set } => Some((*get, *set)),
             _ => None,
+        }
+    }
+
+    /// Allocates an accessor pair whose functions the embedder makes when
+    /// they are first needed; `id` is the embedder's number for them.
+    ///
+    /// # Errors
+    /// [`HeapError::Full`] if the arena is full.
+    pub fn new_lazy_accessor(&mut self, id: u32) -> Result<Value, HeapError> {
+        self.alloc(Cell::LazyAccessor(id))
+    }
+
+    /// The embedder's number of a lazy accessor pair, if `v` is one.
+    #[must_use]
+    pub fn lazy_accessor(&self, v: Value) -> Option<u32> {
+        match self.cell(v)? {
+            Cell::LazyAccessor(id) => Some(*id),
+            _ => None,
+        }
+    }
+
+    /// Turns the lazy accessor pair `v` into the pair of `get` and `set`,
+    /// in place.
+    ///
+    /// # Errors
+    /// [`HeapError::Corrupt`] if `v` is not a lazy accessor pair.
+    pub fn fill_lazy_accessor(
+        &mut self,
+        v: Value,
+        get: Value,
+        set: Value,
+    ) -> Result<(), HeapError> {
+        match self.cell_mut(v) {
+            Some(cell @ Cell::LazyAccessor(_)) => {
+                *cell = Cell::Accessor { get, set };
+                Ok(())
+            }
+            _ => Err(HeapError::Corrupt),
         }
     }
 

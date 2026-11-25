@@ -131,6 +131,10 @@ impl From<HeapError> for Abrupt {
 /// is `undefined` for a call and the constructor for a `new`.
 pub type NativeFn = fn(&mut Vm, Value, &[Value]) -> Result<Value, Abrupt>;
 
+/// Makes the `[[Get]]` and `[[Set]]` of a lazy accessor pair from the
+/// embedder's number for it (`Vm::set_lazy_accessor_maker`).
+pub type LazyAccessorMaker = fn(&mut Vm, u32) -> Result<(Value, Value), Abrupt>;
+
 /// The objects a realm's built-ins share (§6.1.7.4† "Well-Known Intrinsic
 /// Objects"). [`Vm::new`] makes the first two; `clazel-js-builtins` installs
 /// the others with [`Vm::set_intrinsic`]. The VM reads them where the
@@ -437,6 +441,9 @@ pub struct Vm {
     pub(crate) atoms: Atoms,
     /// The embedder's state (`clazel-js`'s runtime), see [`Vm::set_embedder`].
     pub(crate) embedder: Option<Box<dyn Any + Send>>,
+    /// Makes the functions of a lazy accessor pair, see
+    /// [`Vm::set_lazy_accessor_maker`].
+    pub(crate) lazy_accessor_maker: Option<LazyAccessorMaker>,
     /// The embedder's answers about the clock and the time zone, see
     /// [`Vm::set_world_hook`].
     pub(crate) world_hook: Option<WorldHook>,
@@ -532,6 +539,7 @@ impl Vm {
             regexp_backtrack_limit: DEFAULT_REGEXP_BACKTRACK,
             atoms,
             embedder: None,
+            lazy_accessor_maker: None,
             world_hook: None,
             host: crate::host::HostState::default(),
         })

@@ -21,7 +21,7 @@
 //! [`ACCESSOR`] bit and a pair cell in the slot).
 
 use crate::heap::{ACCESSOR, length_value};
-use crate::interp::{Abrupt, Intrinsic, Vm};
+use crate::interp::{Abrupt, Intrinsic, LazyAccessorMaker, Vm};
 use crate::numeric::to_uint32;
 use clazel_js_heap::shape::Attrs;
 use clazel_js_heap::string::Key;
@@ -212,7 +212,7 @@ impl Vm {
     /// # Errors
     /// [`Abrupt::Internal`] if the heap is corrupt.
     pub fn own_property_descriptor(
-        &self,
+        &mut self,
         obj: Value,
         key: Key,
     ) -> Result<Option<PropDesc>, Abrupt> {
@@ -222,11 +222,94 @@ impl Vm {
         if attrs.0 & ACCESSOR == 0 {
             return Ok(Some(PropDesc::data(v, attrs)));
         }
-        let (get, set) = self
-            .heap
-            .accessor(v)
-            .ok_or(Abrupt::Internal("accessor pair"))?;
+        let (get, set) = self.accessor_pair(v)?;
         Ok(Some(PropDesc::accessor(get, set, attrs)))
+    }
+
+    /// The `[[Get]]` and `[[Set]]` of the accessor pair a property's slot
+    /// holds. The functions of a lazy pair ([`Vm::define_lazy_accessor`])
+    /// are made here, the first time anything needs either of them, and the
+    /// pair keeps them from then on: every later call gives the same two
+    /// function objects.
+    ///
+    /// # Errors
+    /// What making the functions returns ([`Abrupt::OutOfMemory`] or the
+    /// heap limit's `RangeError`), or [`Abrupt::Internal`] if `pair` is not
+    /// an accessor pair.
+    pub fn accessor_pair(&mut self, pair: Value) -> Result<(Value, Value), Abrupt> {
+        if let Some(found) = self.heap.accessor(pair) {
+            return Ok(found);
+        }
+        let id = self
+            .heap
+            .lazy_accessor(pair)
+            .ok_or(Abrupt::Internal("accessor pair"))?;
+        let make = self
+            .lazy_accessor_maker
+            .ok_or(Abrupt::Internal("lazy accessor maker"))?;
+        let (get, set) = make(self, id)?;
+        self.heap.fill_lazy_accessor(pair, get, set)?;
+        Ok((get, set))
+    }
+
+    /// Sets the function that makes the `[[Get]]` and `[[Set]]` of a lazy
+    /// accessor pair from the number [`Vm::define_lazy_accessor`] was given:
+    /// each a function object or `undefined`. It is called at most once for
+    /// a pair that it returns `Ok` for, must not run JavaScript, and must
+    /// make what an eager definition would have made, so that script cannot
+    /// tell when the functions were created.
+    pub fn set_lazy_accessor_maker(&mut self, make: LazyAccessorMaker) {
+        self.lazy_accessor_maker = Some(make);
+    }
+
+    /// Defines the own accessor property `key` of `obj` with the attributes
+    /// `enumerable` and `configurable`, leaving its `[[Get]]` and `[[Set]]`
+    /// function objects to be made by the embedder's maker
+    /// ([`Vm::set_lazy_accessor_maker`]), which gets `id`, when something
+    /// first needs them ([`Vm::accessor_pair`]).
+    ///
+    /// The property itself is created now, as `OrdinaryDefineOwnProperty`
+    /// (§10.1.6.1†) creates one that does not exist yet
+    /// (ValidateAndApplyPropertyDescriptor §10.1.6.3† step 2.c: "create an
+    /// own accessor property named P of object O whose [[Get]], [[Set]],
+    /// [[Enumerable]], and [[Configurable]] attributes are set to the value
+    /// of the corresponding field in Desc"), so the object's property order
+    /// and the property's attributes are those of an eager definition.
+    ///
+    /// Returns `false`, having done nothing, unless that step applies as
+    /// written: `obj` is an extensible object that is not an Array exotic
+    /// object and has no own property `key`. The caller then defines the
+    /// property the ordinary way.
+    ///
+    /// # Errors
+    /// [`Abrupt::OutOfMemory`], or [`Abrupt::Internal`] if the heap is
+    /// corrupt.
+    pub fn define_lazy_accessor(
+        &mut self,
+        obj: Value,
+        key: Key,
+        id: u32,
+        enumerable: bool,
+        configurable: bool,
+    ) -> Result<bool, Abrupt> {
+        if self.lazy_accessor_maker.is_none()
+            || self.heap.obj(obj).is_none()
+            || self.heap.is_array_object(obj)
+            || !self.heap.is_extensible(obj)
+            || self.get_own_property(obj, key)?.is_some()
+        {
+            return Ok(false);
+        }
+        let mut bits = ACCESSOR;
+        if enumerable {
+            bits |= Attrs::ENUMERABLE;
+        }
+        if configurable {
+            bits |= Attrs::CONFIGURABLE;
+        }
+        let pair = self.heap.new_lazy_accessor(id)?;
+        self.heap.define(obj, key, pair, Attrs(bits))?;
+        Ok(true)
     }
 
     /// `ValidateAndApplyPropertyDescriptor` (§10.1.6.3†) when Desc or the

@@ -24,6 +24,7 @@
 
 use crate::model::{External, ForeignIncludes};
 
+pub mod bindings;
 mod callbacks;
 pub use callbacks::CALLBACKS;
 mod dictionaries;
@@ -56,8 +57,6 @@ pub static EXTERNAL: &[External] = &[
     External { name: "MathMLElement", defined_by: "MathML Core" },
     External { name: "MediaSource", defined_by: "Media Source Extensions" },
     External { name: "MediaStream", defined_by: "Media Capture and Streams" },
-    External { name: "MouseEvent", defined_by: "UI Events (not in the vendored `uievents.idl`)" },
-    External { name: "MouseEventInit", defined_by: "UI Events (not in the vendored `uievents.idl`)" },
     External { name: "PerformanceEntry", defined_by: "Performance Timeline" },
     External { name: "ReadableStream", defined_by: "Streams" },
     External { name: "ReferrerPolicy", defined_by: "Referrer Policy" },

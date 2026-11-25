@@ -143,4 +143,50 @@ pub open spec fn parse_fragment_real_from(
         )
 }
 
+// ---------------------------------------------------------------------
+// The incremental driver (Phase 7 item 7.15, `exec::incremental`)
+
+/// The parser after it has been given `tokens`, one at a time, from `p`, and
+/// every action the steps asked for, in order: the spec's one-token step
+/// ([`dispatch`]) folded over the tokens, the last token last.
+pub open spec fn dispatch_seq(env: EncFns, p: Parser, tokens: Seq<Token>) -> (Parser, Seq<Action>)
+    decreases tokens.len(),
+{
+    if tokens.len() == 0 {
+        (p, seq![])
+    } else {
+        let (q, a) = dispatch_seq(env, p, tokens.drop_last());
+        let (r, b) = dispatch(env, q, tokens.last());
+        (r, a + b)
+    }
+}
+
+/// Contract for `exec::incremental::Incremental::new`: the parser is the
+/// spec's initial parser (§13.2.4) for the document's URL, the scripting
+/// flag and the confidence.
+pub open spec fn incremental_new_ensures(url: Seq<u32>, scripting: bool, tentative: bool, p: Parser) -> bool {
+    p == new_parser(url, scripting, tentative)
+}
+
+/// What one call of `exec::incremental::Incremental::pump` did, in the
+/// three ways it can return. `paused` is the kind of return: 0 for "the
+/// steps asked for actions" (`Pause::Actions`), 1 for "the tokenizer reached
+/// the insertion point or the end of an input stream that is not closed"
+/// (`Pause::InsertionPoint`), 2 for "the parser has stopped"
+/// (`Pause::Stopped`).
+///
+/// In every case the parser after is the parser before given some tokens
+/// by the spec's step, and `actions` are what those steps asked for. Which
+/// tokens they are, and that they are the tokenizer's output over the
+/// input, is not stated: with `document.write` editing the input stream
+/// there is no spec `parse` to compare against (see the module's
+/// modelling choices).
+pub open spec fn incremental_pump_ensures(env: EncFns, before: Parser, after: Parser, actions: Seq<Action>, paused: nat) -> bool {
+    &&& exists|tokens: Seq<Token>| #[trigger] dispatch_seq(env, before, tokens) == (after, actions)
+    &&& paused == 0 ==> actions.len() > 0
+    &&& paused == 1 ==> actions.len() == 0 && !after.stopped
+    &&& paused == 2 ==> actions.len() == 0 && after.stopped
+    &&& paused <= 2
+}
+
 } // verus!

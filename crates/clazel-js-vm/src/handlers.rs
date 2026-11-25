@@ -548,10 +548,7 @@ impl Vm {
         if f.attrs.0 & ACCESSOR == 0 {
             return Ok(v);
         }
-        let (getter, _) = self
-            .heap
-            .accessor(v)
-            .ok_or(Abrupt::Internal("accessor pair"))?;
+        let (getter, _) = self.accessor_pair(v)?;
         if getter == Value::UNDEFINED {
             return Ok(Value::UNDEFINED);
         }
@@ -578,10 +575,7 @@ impl Vm {
             .heap
             .slot(f.holder, f.slot)
             .ok_or(Abrupt::Internal("property slot"))?;
-        let (_, setter) = self
-            .heap
-            .accessor(pair)
-            .ok_or(Abrupt::Internal("accessor pair"))?;
+        let (_, setter) = self.accessor_pair(pair)?;
         if setter == Value::UNDEFINED {
             return Ok(Some(false));
         }

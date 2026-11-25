@@ -390,7 +390,7 @@ pub fn files(m: &Model) -> Vec<(String, String)> {
     for l in HEADER.lines() {
         let _ = writeln!(mod_rs, "{}", l.trim_end());
     }
-    mod_rs.push_str("\nuse crate::model::{External, ForeignIncludes};\n\n");
+    mod_rs.push_str("\nuse crate::model::{External, ForeignIncludes};\n\npub mod bindings;\n");
     for (module, table) in [
         ("callbacks", "CALLBACKS"),
         ("dictionaries", "DICTIONARIES"),
@@ -425,6 +425,7 @@ pub fn files(m: &Model) -> Vec<(String, String)> {
     mod_rs.push_str("];\n");
     vec![
         ("mod.rs".to_owned(), mod_rs),
+        ("bindings.rs".to_owned(), super::glue::emit(m, HEADER)),
         (
             "interfaces.rs".to_owned(),
             table(

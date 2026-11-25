@@ -2,7 +2,8 @@
 //! to encoded display lists that `clazel-displaylist`'s validator accepts,
 //! drawn to pixels by `clazel-gpu`'s software backend.
 
-use std::io::Cursor;
+use std::io::{Cursor, Write};
+use std::sync::{Arc, Mutex};
 
 use clazel_displaylist::exec::{ExecItem, Validator, decode};
 use clazel_gpu::soft::SoftBackend;
@@ -20,6 +21,29 @@ const DEJAVU: &[u8] =
 fn fonts() -> Fonts {
     // The embedded bytes, not a leaked copy: Miri reports each leak.
     Fonts::from_static(vec![DEJAVU])
+}
+
+/// A writer the test can read after the renderer owns it.
+#[derive(Clone, Default)]
+struct Shared(Arc<Mutex<Vec<u8>>>);
+
+impl Write for Shared {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if let Ok(mut v) = self.0.lock() {
+            v.extend_from_slice(buf);
+        }
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl Shared {
+    fn bytes(&self) -> Vec<u8> {
+        self.0.lock().map(|v| v.clone()).unwrap_or_default()
+    }
 }
 
 fn frames(msgs: &[Msg]) -> Vec<u8> {
@@ -75,11 +99,11 @@ fn split_frames(bytes: &[u8]) -> Vec<Vec<u8>> {
 /// Run `input` through the graphical renderer with the vendored DejaVu
 /// Serif.
 fn run(input: &[Msg]) -> Result<Sent, RunError> {
-    let mut w = Vec::new();
+    let w = Shared::default();
     let mut list = Vec::new();
-    run_graphics(&mut Cursor::new(frames(input)), &mut w, &mut list, &fonts())?;
+    run_graphics(Cursor::new(frames(input)), w.clone(), &mut list, &fonts())?;
     // The kernel's frames keep their length prefix for `decode_framed`.
-    let kernel = split_frames(&w)
+    let kernel = split_frames(&w.bytes())
         .into_iter()
         .filter_map(|body| {
             let mut frame = u32::try_from(body.len())
@@ -155,14 +179,9 @@ const STYLED: &str = "<!DOCTYPE html><title>  A \n page </title>\
 fn the_gpu_process_reads_what_the_renderer_writes() -> Result<(), RunError> {
     let mut input = commit(STYLED, "text/html");
     input.push(viewport(100, 40));
-    let mut w = Vec::new();
+    let w = Shared::default();
     let mut list = Vec::new();
-    run_graphics(
-        &mut Cursor::new(frames(&input)),
-        &mut w,
-        &mut list,
-        &fonts(),
-    )?;
+    run_graphics(Cursor::new(frames(&input)), w.clone(), &mut list, &fonts())?;
     let started = Gpu::start(SoftBackend::new(), Launch::SOFTWARE).ok();
     assert!(started.is_some());
     let Some((gpu, _)) = started else {
@@ -188,7 +207,18 @@ fn the_gpu_process_reads_what_the_renderer_writes() -> Result<(), RunError> {
     assert!(rest.is_empty());
     assert_eq!(frames_drawn.len(), 1);
     let first = frames_drawn.first().map(|f| f.pixels.clone());
-    assert_eq!(first, Some(draw(&run(&input)?, 100, 40)));
+    // The test's own draw, of a second run of the renderer over the same
+    // input. Under Miri it draws the bytes the first run wrote instead: the
+    // second run is another 71 s of Miri time there (parse, style, layout
+    // and glyph masks; measured, 324 s with it and 252 s without), and what
+    // Miri is here for is the GPU process's reader and the two draws, which
+    // both still run.
+    let own = if cfg!(miri) {
+        sent_of(&w, &list)
+    } else {
+        run(&input)?
+    };
+    assert_eq!(first, Some(draw(&own, 100, 40)));
     Ok(())
 }
 
@@ -330,6 +360,32 @@ fn clicks_follow_links() -> Result<(), RunError> {
         vec![&Msg::Navigate {
             url: b"http://a.example/dir/next?x=1".to_vec()
         }]
+    );
+    Ok(())
+}
+
+/// A click on a `javascript:` link sends no `Navigate`: the URL is the
+/// page's to evaluate (item 7.15), and the kernel never sees it.
+#[test]
+fn javascript_links_are_not_navigations() -> Result<(), RunError> {
+    let mut input = commit(
+        "<!DOCTYPE html><body style='margin:0'><a href='JavaScript:alert(1)' style='display:block;height:20px'>js</a>",
+        "text/html",
+    );
+    input.push(viewport(100, 50));
+    input.push(Msg::Input {
+        kind: 0,
+        x: 5,
+        y: 5,
+        negative: false,
+        delta: 0,
+        key: 0,
+    });
+    let s = run(&input)?;
+    assert!(
+        !s.kernel.iter().any(|m| matches!(m, Msg::Navigate { .. })),
+        "{:?}",
+        s.kernel
     );
     Ok(())
 }
@@ -567,5 +623,530 @@ fn the_stylesheet_content_type_quirk() -> Result<(), RunError> {
     assert!(!green("<!DOCTYPE html>", "s.css")?);
     assert!(green("", "s.css")?);
     assert!(!green("", "http://other.example/s.css")?);
+    Ok(())
+}
+
+// ---- The page's scripts (phase-7.md items 7.15 and 7.17) --------------------
+
+use std::collections::VecDeque;
+use std::io::Read;
+
+use clazel_web::scripting::time::Clock;
+
+use crate::run_graphics_with;
+
+/// A clock the test moves.
+#[derive(Clone, Default)]
+struct TestClock(Arc<Mutex<u64>>);
+
+impl Clock for TestClock {
+    fn now_us(&mut self) -> u64 {
+        self.0.lock().map_or(0, |v| *v)
+    }
+}
+
+/// One thing the kernel's socket does: deliver bytes, or have nothing for
+/// `ms` milliseconds (a read that times out, with the clock moving).
+enum Step {
+    Bytes(Vec<u8>),
+    Idle(u64),
+}
+
+/// The kernel's socket, scripted.
+struct Steps {
+    queue: VecDeque<Step>,
+    clock: TestClock,
+}
+
+impl Read for Steps {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        match self.queue.pop_front() {
+            None => Ok(0),
+            Some(Step::Idle(ms)) => {
+                if let Ok(mut t) = self.clock.0.lock() {
+                    *t = t.saturating_add(ms.saturating_mul(1000));
+                }
+                Err(std::io::Error::from(std::io::ErrorKind::TimedOut))
+            }
+            Some(Step::Bytes(mut bytes)) => {
+                let n = bytes.len().min(buf.len());
+                let rest = bytes.split_off(n);
+                buf.get_mut(..n).unwrap_or_default().copy_from_slice(&bytes);
+                if !rest.is_empty() {
+                    self.queue.push_front(Step::Bytes(rest));
+                }
+                Ok(n)
+            }
+        }
+    }
+}
+
+fn bytes(msgs: &[Msg]) -> Step {
+    Step::Bytes(frames(msgs))
+}
+
+/// The frames the renderer wrote, as the kernel decodes them, and the lists
+/// as the GPU process reads them.
+fn sent_of(w: &Shared, list: &[u8]) -> Sent {
+    let kernel = split_frames(&w.bytes())
+        .into_iter()
+        .filter_map(|body| {
+            let mut frame = u32::try_from(body.len())
+                .unwrap_or(0)
+                .to_be_bytes()
+                .to_vec();
+            frame.extend_from_slice(&body);
+            decode_framed(&frame)
+        })
+        .collect();
+    let mut raw = Vec::new();
+    let mut rest = list;
+    while let Ok(Some((_, l))) = clazel_gpu::channel::read_list(&mut rest) {
+        raw.push(l);
+    }
+    assert!(rest.is_empty(), "bytes left after the last list");
+    let lists = raw.iter().map(|b| decode(b).unwrap_or_default()).collect();
+    Sent { kernel, lists, raw }
+}
+
+/// Runs the renderer over `steps` with a clock they move.
+fn run_steps(steps: Vec<Step>) -> Result<Sent, RunError> {
+    let clock = TestClock::default();
+    let reader = Steps {
+        queue: steps.into(),
+        clock: clock.clone(),
+    };
+    let w = Shared::default();
+    let mut list = Vec::new();
+    run_graphics_with(reader, w.clone(), &mut list, &fonts(), &mut || {
+        Box::new(clock.clone())
+    })?;
+    Ok(sent_of(&w, &list))
+}
+
+/// The pixels of list `n` alone, as `draw` makes them for all of them.
+fn draw_one(s: &Sent, n: usize, width: u32, height: u32) -> Vec<u8> {
+    let one = Sent {
+        kernel: Vec::new(),
+        lists: s.lists.get(n).cloned().into_iter().collect(),
+        raw: s.raw.get(n).cloned().into_iter().collect(),
+    };
+    draw(&one, width, height)
+}
+
+const BLUE: [u8; 4] = [0, 0, 255, 255];
+const GREEN: [u8; 4] = [0, 255, 0, 255];
+
+/// The width of the viewport of the tests that draw a first frame and a
+/// second and read the pixel at (5, 5) of each. Nothing they assert is to
+/// the right of that pixel, and the software backend's time is in the
+/// pixels: under Miri a 100 by 50 frame is 42 s of its time (measured:
+/// `a_click_runs_the_handler_of_the_element_under_the_pointer` took 254 s
+/// with no draw, 369 s with one draw of both frames and 440 s with the first
+/// frame drawn alone as well).
+const NARROW: u64 = 16;
+
+/// The pixel at (5, 5) is `first` in the first list drawn alone and `last`
+/// after every list, on a `NARROW` by `height` viewport.
+///
+/// Under Miri the first list is not also drawn alone: the draw of every
+/// list draws it, through the same backend, before the others, so Miri
+/// still interprets its drawing, and a second GPU with one more frame is
+/// another 72 s of its time for a pixel the native run reads.
+/// `a_script_changes_the_document_before_the_first_paint` and
+/// `inline_styles_to_pixels` read a first frame's pixels there.
+fn assert_frames(s: &Sent, height: u32, first: [u8; 4], last: [u8; 4]) {
+    let width = u32::try_from(NARROW).unwrap_or(u32::MAX);
+    if !cfg!(miri) {
+        assert_eq!(pixel(&draw_one(s, 0, width, height), width, 5, 5), first);
+    }
+    assert_eq!(pixel(&draw(s, width, height), width, 5, 5), last);
+}
+
+/// A blue square, which a script turns green.
+const SQUARE: &str = "<!DOCTYPE html><body style='margin:0'>\
+<div id=d style='width:10px;height:10px;background:#0000ff'></div>";
+
+/// The script that turns the square green.
+const TURN_GREEN: &str = "document.getElementById('d').setAttribute('style', \
+'width:10px;height:10px;background:#00ff00');";
+
+/// The document is laid out and painted with what a script changed (the
+/// script runs before the first paint).
+#[test]
+fn a_script_changes_the_document_before_the_first_paint() -> Result<(), RunError> {
+    let html = format!("{SQUARE}<script>{TURN_GREEN}</script>");
+    let mut input = commit(&html, "text/html");
+    input.push(viewport(100, 40));
+    let s = run(&input)?;
+    assert_eq!(s.lists.len(), 1);
+    assert_eq!(pixel(&draw(&s, 100, 40), 100, 5, 5), GREEN);
+    Ok(())
+}
+
+/// A timer changes the document later, and the page is styled, laid out and
+/// painted again.
+#[test]
+fn a_timer_changes_the_document_and_the_page_is_painted_again() -> Result<(), RunError> {
+    let html = format!("{SQUARE}<script>setTimeout(function () {{ {TURN_GREEN} }}, 50);</script>");
+    let mut input = commit(&html, "text/html");
+    input.push(viewport(NARROW, 40));
+    let s = run_steps(vec![bytes(&input), Step::Idle(20), Step::Idle(40)])?;
+    // Blue, then (after 60 ms on the page's clock) green.
+    assert_eq!(s.lists.len(), 2);
+    assert!(all_valid(&s));
+    assert_frames(&s, 40, BLUE, GREEN);
+    Ok(())
+}
+
+#[test]
+fn a_timer_that_is_not_due_does_not_run() -> Result<(), RunError> {
+    let html = format!("{SQUARE}<script>setTimeout(function () {{ {TURN_GREEN} }}, 500);</script>");
+    let mut input = commit(&html, "text/html");
+    input.push(viewport(100, 40));
+    let s = run_steps(vec![bytes(&input), Step::Idle(20)])?;
+    assert_eq!(s.lists.len(), 1);
+    Ok(())
+}
+
+/// A title a script changes goes to the kernel.
+#[test]
+fn a_title_a_script_sets_goes_to_the_kernel() -> Result<(), RunError> {
+    let html = "<!DOCTYPE html><title>old</title><body>\
+         <script>setTimeout(function () { document.querySelector('title')\
+         .textContent = 'new'; }, 10);</script>";
+    let mut input = commit(html, "text/html");
+    input.push(viewport(100, 40));
+    let s = run_steps(vec![bytes(&input), Step::Idle(20)])?;
+    assert_eq!(
+        s.kernel,
+        vec![
+            Msg::Title {
+                title: b"old".to_vec()
+            },
+            Msg::Title {
+                title: b"new".to_vec()
+            }
+        ]
+    );
+    Ok(())
+}
+
+/// A `javascript:` link the page drew runs in the page when it is clicked,
+/// the kernel never sees a `Navigate` for it, and the page is painted again.
+#[test]
+fn a_clicked_javascript_link_runs_its_script() -> Result<(), RunError> {
+    let html = "<!DOCTYPE html><body style='margin:0'>\
+        <div id=d style='width:10px;height:10px;background:#0000ff'></div>\
+        <a href=\"javascript:document.getElementById('d').setAttribute('style','width:10px;height:10px;background:%2300ff00')\" \
+        style='display:block;height:20px'>go</a>";
+    let mut input = commit(html, "text/html");
+    input.push(viewport(NARROW, 50));
+    input.push(Msg::Input {
+        kind: 0,
+        x: 5,
+        y: 15,
+        negative: false,
+        delta: 0,
+        key: 0,
+    });
+    let s = run(&input)?;
+    assert!(
+        !s.kernel.iter().any(|m| matches!(m, Msg::Navigate { .. })),
+        "{:?}",
+        s.kernel
+    );
+    assert_eq!(s.lists.len(), 2);
+    assert_frames(&s, 50, BLUE, GREEN);
+    Ok(())
+}
+
+/// A script that sets `location.href` makes the kernel's `Navigate`, and
+/// `pushState` its `UpdateUrl`.
+#[test]
+fn navigation_and_history_are_the_kernels_messages() -> Result<(), RunError> {
+    let html = "<!DOCTYPE html><body><script>\
+        history.pushState(null, '', '/dir/two');\
+        history.replaceState(null, '', '/dir/three');\
+        location.href = '/next';</script>";
+    let input = commit(html, "text/html");
+    let s = run(&input)?;
+    assert!(s.kernel.contains(&Msg::UpdateUrl {
+        replace: false,
+        url: b"http://a.example/dir/two".to_vec()
+    }));
+    assert!(s.kernel.contains(&Msg::UpdateUrl {
+        replace: true,
+        url: b"http://a.example/dir/three".to_vec()
+    }));
+    assert!(s.kernel.contains(&Msg::Navigate {
+        url: b"http://a.example/next".to_vec()
+    }));
+    Ok(())
+}
+
+/// An external script is a `FetchScript`; the kernel's `ScriptResponse`,
+/// `ScriptBody` and `ScriptEnd` give it to the page, which runs it and is
+/// painted again; `ScriptFailed` is a network error.
+#[test]
+fn an_external_script_is_a_fetch_script() -> Result<(), RunError> {
+    let html = format!("{SQUARE}<script src=/app.js></script><script src=/gone.js></script>");
+    let mut input = commit(&html, "text/html");
+    input.push(viewport(NARROW, 40));
+    let answers = [
+        Msg::ScriptResponse {
+            request: 1,
+            content_type: b"text/javascript".to_vec(),
+        },
+        Msg::ScriptBody {
+            request: 1,
+            bytes: b"document.getElementById('d').setAttribute('style',".to_vec(),
+        },
+        Msg::ScriptBody {
+            request: 1,
+            bytes: b"'width:10px;height:10px;background:#00ff00');".to_vec(),
+        },
+        Msg::ScriptEnd { request: 1 },
+        Msg::ScriptFailed { request: 2 },
+    ];
+    let s = run_steps(vec![bytes(&input), bytes(&answers)])?;
+    let fetches: Vec<&Msg> = s
+        .kernel
+        .iter()
+        .filter(|m| matches!(m, Msg::FetchScript { .. }))
+        .collect();
+    // The second script is a parser-blocking one too: it is fetched when
+    // the first has run, not before.
+    assert_eq!(
+        fetches,
+        vec![
+            &Msg::FetchScript {
+                request: 1,
+                url: b"http://a.example/app.js".to_vec()
+            },
+            &Msg::FetchScript {
+                request: 2,
+                url: b"http://a.example/gone.js".to_vec()
+            }
+        ]
+    );
+    assert_frames(&s, 40, BLUE, GREEN);
+    Ok(())
+}
+
+/// `document.cookie` and `localStorage` wait for the kernel's answer in the
+/// middle of the script, while the kernel's other messages (a `Viewport`
+/// sent before the answer) wait their turn.
+#[test]
+fn a_script_waits_for_the_kernel_without_losing_its_other_messages() -> Result<(), RunError> {
+    let html = "<!DOCTYPE html><body style='margin:0'>\
+        <script>document.cookie = 'a=1'; var c = document.cookie;\
+        localStorage.setItem('k', 'v');</script>";
+    let mut input = commit(html, "text/html");
+    // The answers come after a `Viewport`, which is read while they are
+    // awaited.
+    input.push(viewport(60, 30));
+    input.push(Msg::CookieValue {
+        cookie_string: b"a=1".to_vec(),
+    });
+    input.push(Msg::StorageLengthValue { length: 1 });
+    let s = run(&input)?;
+    assert!(s.kernel.contains(&Msg::CookieSet {
+        cookie_string: b"a=1".to_vec()
+    }));
+    assert!(s.kernel.contains(&Msg::CookieGet));
+    assert!(s.kernel.contains(&Msg::StorageSetItem {
+        key: b"k".to_vec(),
+        value: b"v".to_vec()
+    }));
+    // The `Viewport` was not lost: the page was laid out for it.
+    assert_eq!(s.lists.len(), 1);
+    Ok(())
+}
+
+// ---- Events and input (item 7.14) -----------------------------------------------
+
+/// A 100 by 20 blue block that `onclick` turns green, at the top of a page
+/// with a viewport 50 high.
+const CLICKABLE: &str = "<!DOCTYPE html><body style='margin:0'>\
+    <div id=d style='width:100px;height:20px;background:#0000ff' \
+    onclick=\"this.setAttribute('style','width:100px;height:20px;background:#00ff00')\"></div>";
+
+fn click_at(x: u64, y: u64) -> Msg {
+    Msg::Input {
+        kind: 0,
+        x,
+        y,
+        negative: false,
+        delta: 0,
+        key: 0,
+    }
+}
+
+fn key_msg(key: u64) -> Msg {
+    Msg::Input {
+        kind: 2,
+        x: 0,
+        y: 0,
+        negative: false,
+        delta: 0,
+        key,
+    }
+}
+
+/// The element under the pointer gets the click (hit-tested through the
+/// layout), its `onclick` handler changes the document, and the page is
+/// painted again. (A click on nothing is
+/// `a_bare_canvas_click_runs_no_handler`: a page a test, each page being
+/// minutes of Miri time.)
+#[test]
+fn a_click_runs_the_handler_of_the_element_under_the_pointer() -> Result<(), RunError> {
+    let mut input = commit(CLICKABLE, "text/html");
+    input.push(viewport(NARROW, 50));
+    input.push(click_at(5, 5));
+    let s = run(&input)?;
+    assert_eq!(s.lists.len(), 2);
+    assert_frames(&s, 50, BLUE, GREEN);
+    Ok(())
+}
+
+/// A click below the block, on the canvas, is not on the block: it reaches
+/// the document element only, no handler runs and nothing is painted again.
+///
+/// The name sorts first among this module's tests on purpose. Miri runs
+/// them on one thread in name order, and the first to lay out a page also
+/// parses the user-agent style sheets for the process (66 s of Miri time,
+/// measured: every page test is that much longer run alone). This is the
+/// lightest page here (91 s), so that cost falls on it and not on a test
+/// that is near the 300 s limit already.
+#[test]
+fn a_bare_canvas_click_runs_no_handler() -> Result<(), RunError> {
+    let mut input = commit(CLICKABLE, "text/html");
+    input.push(viewport(NARROW, 50));
+    input.push(click_at(5, 40));
+    let s = run(&input)?;
+    assert_eq!(s.lists.len(), 1, "a click below the block is not on it");
+    Ok(())
+}
+
+/// A handler that returns false cancels the click: the link is not followed.
+#[test]
+fn a_canceled_click_is_not_a_navigation() -> Result<(), RunError> {
+    let html = "<!DOCTYPE html><body style='margin:0'>\
+        <a href='next' onclick='return false' style='display:block;height:20px'>go</a>\
+        <a href='other' style='display:block;height:20px'>go</a>";
+    let mut input = commit(html, "text/html");
+    input.push(viewport(100, 50));
+    input.push(click_at(5, 5));
+    input.push(click_at(5, 25));
+    let s = run(&input)?;
+    let navigations: Vec<&Msg> = s
+        .kernel
+        .iter()
+        .filter(|m| matches!(m, Msg::Navigate { .. }))
+        .collect();
+    assert_eq!(
+        navigations,
+        vec![&Msg::Navigate {
+            url: b"http://a.example/dir/other".to_vec()
+        }]
+    );
+    Ok(())
+}
+
+/// A click on a submit button submits its form: a `GET` is the kernel's
+/// `Navigate` with the entry list in the query, a `POST` its `Submit`.
+#[test]
+fn a_click_on_a_submit_button_submits_the_form() -> Result<(), RunError> {
+    let html = "<!DOCTYPE html><body style='margin:0'>\
+        <form action='s'><input type=hidden name=q value='a b'>\
+        <button name=go value=1 style='display:block;width:80px;height:20px'>Go</button></form>\
+        <form method=post action='p'><input type=hidden name=q value=2>\
+        <button style='display:block;width:80px;height:20px'>Post</button></form>";
+    let mut input = commit(html, "text/html");
+    input.push(viewport(100, 60));
+    input.push(click_at(5, 5));
+    input.push(click_at(5, 25));
+    let s = run(&input)?;
+    assert!(
+        s.kernel.contains(&Msg::Navigate {
+            url: b"http://a.example/dir/s?q=a+b&go=1".to_vec()
+        }),
+        "{:?}",
+        s.kernel
+    );
+    assert!(
+        s.kernel.contains(&Msg::Submit {
+            url: b"http://a.example/dir/p".to_vec(),
+            method: b"POST".to_vec(),
+            content_type: b"application/x-www-form-urlencoded".to_vec(),
+            body: b"q=2".to_vec(),
+        }),
+        "{:?}",
+        s.kernel
+    );
+    Ok(())
+}
+
+/// A wheel input at (5, 5).
+fn wheel_at_5_5(delta: u64) -> Msg {
+    Msg::Input {
+        kind: 1,
+        x: 5,
+        y: 5,
+        negative: false,
+        delta,
+        key: 0,
+    }
+}
+
+/// A page can cancel the wheel: its scroll then does not happen (no new
+/// list). (With `a_scroll_is_an_event_and_its_change_is_painted` this was
+/// one test of two pages; a page a test, each being minutes of Miri time.)
+#[test]
+fn a_canceled_wheel_does_not_scroll() -> Result<(), RunError> {
+    let canceled = "<!DOCTYPE html><body style='margin:0'>\
+        <div onwheel='return false' style='height:500px;background:#0000ff'></div>";
+    let mut input = commit(canceled, "text/html");
+    input.push(viewport(10, 50));
+    input.push(wheel_at_5_5(100));
+    let s = run(&input)?;
+    // The handler ran, so the page was painted again (it could have changed
+    // something), but not scrolled: the same list.
+    assert!(s.lists.len() <= 2);
+    assert_eq!(s.lists.first(), s.lists.last(), "canceled: no scroll");
+    Ok(())
+}
+
+/// A `scroll` listener runs when the wheel scrolls the page, and its change
+/// is painted.
+#[test]
+fn a_scroll_is_an_event_and_its_change_is_painted() -> Result<(), RunError> {
+    let scrolled = "<!DOCTYPE html><body style='margin:0' \
+        onscroll=\"document.getElementById('m').setAttribute('style','height:500px;background:#00ff00')\">\
+        <div id=m style='height:500px;background:#0000ff'></div>";
+    let mut input = commit(scrolled, "text/html");
+    input.push(viewport(10, 50));
+    input.push(wheel_at_5_5(100));
+    let s = run(&input)?;
+    // The first paint, then the scroll (with the handler's change) painted
+    // once.
+    assert_eq!(s.lists.len(), 2, "the scroll painted once");
+    Ok(())
+}
+
+/// Tab focuses the first input and a typed character goes into it: the
+/// page's `oninput` runs and its change is painted.
+#[test]
+fn keys_reach_the_focused_input() -> Result<(), RunError> {
+    let html = "<!DOCTYPE html><body style='margin:0'>\
+        <input id=i oninput=\"document.getElementById('d').setAttribute('style','width:100px;height:20px;background:#00ff00')\">\
+        <div id=d style='width:100px;height:20px;background:#0000ff'></div>";
+    let mut input = commit(html, "text/html");
+    input.push(viewport(100, 50));
+    input.push(key_msg(9));
+    input.push(key_msg(u64::from(b'a')));
+    let s = run(&input)?;
+    assert_eq!(s.lists.len(), 2);
     Ok(())
 }

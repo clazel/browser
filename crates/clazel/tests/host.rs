@@ -232,7 +232,7 @@ fn the_renderer_id_comes_from_the_socket_and_replies_go_to_the_sender() {
 #[cfg_attr(miri, ignore = "spawns processes")]
 fn a_cross_origin_navigation_is_kill_spawn_commit_and_a_same_origin_one_is_a_commit() {
     let mut host = stub("exec cat > /dev/null".to_owned());
-    host.route = Some(serve("cookie-get"));
+    host.route = Some(serve("document.cookie"));
     host.open_tab("http://a.example/", "");
     host.navigate_tab(0, "http://a.example/other");
     wait_log(&mut host, "renderer 0 <- commit \"http://a.example/other\"");
@@ -290,7 +290,9 @@ fn real_host() -> Host {
 #[cfg_attr(miri, ignore = "spawns processes and calls the OS sandbox")]
 fn a_sandboxed_renderer_runs_a_script_end_to_end() {
     let mut host = real_host();
-    let script = "cookie-set a=1; Path=/\ncookie-get\nstorage-set k v\nstorage-get k\nstorage-length\nstorage-key 0\nstorage-remove k\nstorage-key 0";
+    let script = "document.cookie = 'a=1; Path=/'; document.cookie; \
+        localStorage.setItem('k', 'v'); localStorage.getItem('k'); localStorage.length; \
+        localStorage.key(0); localStorage.removeItem('k'); localStorage.key(0);";
     host.open_tab("https://example.com/", script);
     assert!(host.run(LONG), "{:#?}", host.log);
     let log = host.log.join("\n");
@@ -320,16 +322,14 @@ fn a_sandboxed_renderer_runs_a_script_end_to_end() {
 #[cfg_attr(miri, ignore = "spawns processes and calls the OS sandbox")]
 fn a_bad_script_is_reported_with_the_renderers_stderr() {
     let mut host = real_host();
-    host.open_tab("https://example.com/", "cookie-get\nfly");
+    host.open_tab("https://example.com/", "document.cookie; fly();");
     assert!(host.run(LONG), "{:#?}", host.log);
     let log = host.log.join("\n");
     let sandbox_refused = cfg!(target_os = "linux")
         && log.contains("exit status: 71; stderr: clazel-renderer: sandbox layer");
     assert!(
         sandbox_refused
-            || log.contains(
-                "exit status: 64; stderr: clazel-renderer: script line 2: unknown operation"
-            ),
+            || log.contains("exit status: 0; stderr: clazel-renderer: uncaught ReferenceError"),
         "{log}"
     );
 }
@@ -428,7 +428,7 @@ fn serve_tls(body: &'static str) -> (SocketAddr, std::sync::mpsc::Receiver<bool>
 #[cfg_attr(miri, ignore = "spawns processes")]
 fn an_https_navigation_goes_through_the_kernel_and_tls() {
     let mut host = stub("exec cat > /dev/null".to_owned());
-    let (addr, closes) = serve_tls("cookie-get");
+    let (addr, closes) = serve_tls("document.cookie");
     host.route = Some(addr);
     host.trust(test_root);
     host.open_tab("https://test.example/", "");

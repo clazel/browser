@@ -358,6 +358,7 @@ impl Runtime {
             flag: vm.terminator(),
         };
         vm.set_embedder(State::new(Box::new(host), limits));
+        vm.set_lazy_accessor_maker(crate::state::make_lazy_accessor);
         vm.set_world_hook(world_hook);
         Ok(Runtime {
             limits,
@@ -406,13 +407,7 @@ impl Runtime {
     pub fn run_jobs(&mut self) -> Result<u64> {
         let runtime = self.runtime_id();
         let mut scope = Scope::new(&mut self.vm, runtime);
-        scope.check_deferred()?;
-        let mut ran: u64 = 0;
-        while let Some(job) = scope.pop_job() {
-            scope.run_job(job)?;
-            ran = ran.saturating_add(1);
-        }
-        Ok(ran)
+        scope.run_jobs()
     }
 
     /// A handle that stops this runtime from another thread. Every call gives

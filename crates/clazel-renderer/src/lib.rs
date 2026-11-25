@@ -1,24 +1,30 @@
 //! The renderer (phase-2.md item 2.15; the document pipeline of phase-4.md
-//! item 4.13).
+//! item 4.13; the page's scripts and event loop, phase-7.md item 7.17).
 //!
 //! The binary's first act is [`sandbox::enter`], before it reads a byte;
 //! then it reads frames from its socket (standard input, with the same
 //! socket as standard output) and waits for a committed document: a
 //! `Commit`, its `Body` frames and `BodyEnd` (phase-4.md item 4.12).
 //!
-//! - Kind 1, a user script (the Phase 2 path): it runs the script in the
-//!   body ([`script`]): for each operation it sends the renderer-to-kernel
-//!   message and reads the kernel's reply. It prints nothing about the
-//!   results: the host shell sees every request and reply on the socket and
-//!   prints them, so the renderer needs no channel besides the one the
-//!   kernel also reads. It exits when the script is done; the host sees the
-//!   socket close.
+//! - Kind 1, a user script (the Phase 2 path): the body is JavaScript, which
+//!   runs in an empty document at the committed URL. Its `document.cookie`
+//!   and `localStorage` are the kernel's Phase 2 messages, sent by script
+//!   ([`page::scripts`]); the host shell sees every request and reply on the
+//!   socket and prints them, so the renderer needs no channel besides the
+//!   one the kernel also reads. It exits when the script and what it queued
+//!   for now are done; the host sees the socket close. (Phase 2's line
+//!   format, `cookie-get` and the rest, is retired: item 7.17.)
 //! - Kind 0, a document: the document pipeline ([`pipeline`]: content
 //!   type, encoding, the HTML parser, the document base URL and the text
 //!   layout) gives one `Display`, made to fit one frame ([`pipeline::fit`]);
 //!   then the renderer waits for the next document (a same-origin
 //!   navigation commits into the same renderer). The socket closing while
-//!   it waits is the end of the tab, not an error.
+//!   it waits is the end of the tab, not an error. The text path runs no
+//!   page scripts.
+//! - Kind 0 in the graphical renderer ([`run_graphics`], [`page`]): the
+//!   document's scripts run, and the event loop keeps running them (timers,
+//!   tasks, microtasks, fetched scripts, a clicked `javascript:` link); the
+//!   page is styled, laid out and painted again after a script changed it.
 //!
 //! An `Error` while it waits (a navigation that failed, item 3.7) changes
 //! nothing: the renderer keeps its document and waits on.
@@ -30,14 +36,16 @@ pub mod page;
 pub mod pipeline;
 pub mod popup;
 pub mod sandbox;
-pub mod script;
 
 use std::fmt;
 use std::io::{self, Read, Write};
+use std::sync::Arc;
 
 use clazel_ipc::frame::codec::payload_length;
-use clazel_ipc::message::codec::{Msg, decode_framed, encode_framed};
-use script::Op;
+use clazel_ipc::message::codec::{Msg, decode_framed};
+use clazel_web::page::input::{KeyInput, MouseInput, WheelInput};
+use clazel_web::scripting::time::{Clock, SystemClock};
+use page::link::{Link, LinkHandle, lock};
 
 /// Why the renderer stopped.
 #[derive(Debug)]
@@ -46,8 +54,8 @@ pub enum RunError {
     Io(io::Error),
     /// The kernel sent something the protocol does not allow here.
     Protocol(&'static str),
-    /// The script in the `Commit` is not a script.
-    Script(script::ScriptError),
+    /// The script engine could not start.
+    Engine(String),
 }
 
 impl fmt::Display for RunError {
@@ -55,7 +63,7 @@ impl fmt::Display for RunError {
         match self {
             RunError::Io(e) => write!(f, "socket: {e}"),
             RunError::Protocol(why) => write!(f, "protocol: {why}"),
-            RunError::Script(e) => write!(f, "script line {}: {}", e.line, e.reason),
+            RunError::Engine(why) => write!(f, "script engine: {why}"),
         }
     }
 }
@@ -66,17 +74,18 @@ impl From<io::Error> for RunError {
     }
 }
 
-/// Read one whole message; the length is checked against `MAX_FRAME` from
-/// the first 4 bytes, before the payload is read.
-fn read_message<R: Read>(r: &mut R) -> Result<Msg, RunError> {
-    let mut header = [0u8; 4];
-    r.read_exact(&mut header)?;
-    let len = payload_length(&header).ok_or(RunError::Protocol("frame over MAX_FRAME"))?;
-    let mut frame = header.to_vec();
-    let mut payload = vec![0u8; len];
-    r.read_exact(&mut payload)?;
-    frame.extend_from_slice(&payload);
-    decode_framed(&frame).ok_or(RunError::Protocol("frame does not decode"))
+/// The next message, waiting for it: the link's inbox first. `Ok(None)` is
+/// the socket closed between messages, which is the end of the tab.
+fn next_message(link: &LinkHandle) -> Result<Option<Msg>, RunError> {
+    loop {
+        let polled = lock(link).poll();
+        match polled {
+            Ok(Some(m)) => return Ok(Some(m)),
+            Ok(None) => {}
+            Err(RunError::Io(e)) if e.kind() == io::ErrorKind::UnexpectedEof => return Ok(None),
+            Err(e) => return Err(e),
+        }
+    }
 }
 
 /// The most body octets a renderer takes: `clazel-http`'s 64 MiB limit on a
@@ -96,9 +105,22 @@ pub struct Document {
     pub body: Vec<u8>,
 }
 
-/// Wait for the next committed document: skip `Error`s, take a `Commit`,
-/// then its `Body` frames up to `BodyEnd`. `None` if the socket closes
-/// before a `Commit`.
+/// Read one whole message; the length is checked against `MAX_FRAME` from
+/// the first 4 bytes, before the payload is read.
+fn read_message<R: Read>(r: &mut R) -> Result<Msg, RunError> {
+    let mut header = [0u8; 4];
+    r.read_exact(&mut header)?;
+    let len = payload_length(&header).ok_or(RunError::Protocol("frame over MAX_FRAME"))?;
+    let mut frame = header.to_vec();
+    let mut payload = vec![0u8; len];
+    r.read_exact(&mut payload)?;
+    frame.extend_from_slice(&payload);
+    decode_framed(&frame).ok_or(RunError::Protocol("frame does not decode"))
+}
+
+/// Wait for the next committed document on a plain reader: skip `Error`s,
+/// take a `Commit`, then its `Body` frames up to `BodyEnd`. `None` if the
+/// socket closes before a `Commit`.
 pub fn next_document<R: Read>(r: &mut R) -> Result<Option<Document>, RunError> {
     let (url, content_type, kind) = loop {
         match read_message(r) {
@@ -134,11 +156,27 @@ pub fn next_document<R: Read>(r: &mut R) -> Result<Option<Document>, RunError> {
     }))
 }
 
-fn send<W: Write>(w: &mut W, m: &Msg) -> Result<(), RunError> {
-    let frame = encode_framed(m).ok_or(RunError::Protocol("message over MAX_FRAME"))?;
-    w.write_all(&frame)?;
-    w.flush()?;
-    Ok(())
+/// [`next_document`] on the renderer's link.
+fn next_document_on(link: &LinkHandle) -> Result<Option<Document>, RunError> {
+    let (url, content_type, kind) = loop {
+        match next_message(link)? {
+            Some(Msg::Commit {
+                url,
+                content_type,
+                kind,
+            }) => break (url, content_type, kind),
+            Some(Msg::Error { .. }) => {}
+            Some(_) => return Err(RunError::Protocol("expected Commit")),
+            None => return Ok(None),
+        }
+    };
+    let body = read_body(link)?;
+    Ok(Some(Document {
+        url,
+        content_type,
+        kind,
+        body,
+    }))
 }
 
 /// The width [`run`] lays documents out at: the terminal width most hosts
@@ -146,30 +184,34 @@ fn send<W: Write>(w: &mut W, m: &Msg) -> Result<(), RunError> {
 pub const DEFAULT_WIDTH: usize = 80;
 
 /// [`run_with_width`] at [`DEFAULT_WIDTH`].
-pub fn run<R: Read, W: Write>(r: &mut R, w: &mut W) -> Result<usize, RunError> {
+pub fn run<R: Read + Send + 'static, W: Write + Send + 'static>(
+    r: R,
+    w: W,
+) -> Result<usize, RunError> {
     run_with_width(r, w, DEFAULT_WIDTH)
 }
 
 /// Take committed documents until a script (kind 1) is run or the socket
 /// closes: a document (kind 0) goes through the pipeline and is displayed
-/// `width` columns wide (0: no wrapping), a script's operations are each
-/// sent and their replies read. Returns the number of operations run.
-pub fn run_with_width<R: Read, W: Write>(
-    r: &mut R,
-    w: &mut W,
+/// `width` columns wide (0: no wrapping), a script is run. Returns 1 if a
+/// script was run, else 0.
+pub fn run_with_width<R: Read + Send + 'static, W: Write + Send + 'static>(
+    r: R,
+    w: W,
     width: usize,
 ) -> Result<usize, RunError> {
+    let link = Link::shared(r, w);
     loop {
-        let Some(doc) = next_document(r)? else {
+        let Some(doc) = next_document_on(&link)? else {
             return Ok(0);
         };
         match doc.kind {
-            1 => return run_script(r, w, &doc.body),
+            1 => return run_user_script(&link, &doc.url, &doc.body, Box::new(SystemClock::new())),
             0 => {
                 let shown = pipeline::render(&doc.url, &doc.content_type, &doc.body, width);
                 // The body and its tree are gone; only the page is kept.
                 drop(doc);
-                send(w, &pipeline::fit(shown))?;
+                lock(&link).send(&pipeline::fit(shown))?;
             }
             _ => return Err(RunError::Protocol("unknown document kind")),
         }
@@ -177,18 +219,21 @@ pub fn run_with_width<R: Read, W: Write>(
 }
 
 /// The body of a committed document: its `Body` frames up to `BodyEnd`.
-fn read_body<R: Read>(r: &mut R) -> Result<Vec<u8>, RunError> {
+fn read_body(link: &LinkHandle) -> Result<Vec<u8>, RunError> {
     let mut body = Vec::new();
     loop {
-        match read_message(r)? {
-            Msg::Body { bytes } => {
+        match next_message(link)? {
+            Some(Msg::Body { bytes }) => {
                 if body.len().saturating_add(bytes.len()) > MAX_BODY {
                     return Err(RunError::Protocol("body over 64 MiB"));
                 }
                 body.extend_from_slice(&bytes);
             }
-            Msg::BodyEnd => return Ok(body),
-            _ => return Err(RunError::Protocol("expected Body or BodyEnd")),
+            Some(Msg::BodyEnd) => return Ok(body),
+            Some(_) => return Err(RunError::Protocol("expected Body or BodyEnd")),
+            None => {
+                return Err(RunError::Io(io::Error::from(io::ErrorKind::UnexpectedEof)));
+            }
         }
     }
 }
@@ -212,102 +257,172 @@ fn send_list<L: Write>(
     Ok(())
 }
 
-/// A sheet of the current page answered (a body, or `None` for a failure):
-/// if that makes the page ready and there is a viewport, lay it out and
-/// paint it.
-fn sheet_answered<L: Write>(
-    current: &mut Option<page::Page>,
-    request: u64,
-    response: Option<(&[u8], &[u8])>,
-    view: Option<page::View>,
-    fonts: &page::fonts::Fonts,
-    list: &mut L,
-    cache: &mut page::frame::MaskCache,
-) -> Result<(), RunError> {
-    let Some(p) = current.as_mut() else {
-        return Ok(());
+/// A key of `Input` (`kind` 2) as the page's key input (item 7.14). The
+/// schema calls the field "the key's code" and leaves its meaning to the
+/// renderer and the host: here it is what a text field's `NSEvent`
+/// `characters` give, a Unicode scalar value for a character, the ASCII
+/// control codes for Backspace (8), Tab (9), Enter (13) and Escape (27),
+/// 127 for Delete, and the private-use values 0xF700 to 0xF703 for the arrow
+/// keys (up, down, left, right). Any other value is no key. (The host's
+/// window sends no key `Input` yet: `clazel-window`'s keys are the browser's
+/// own, phase-5.md item 5.23.)
+fn key_input(key: u64) -> Option<KeyInput> {
+    let name = match key {
+        8 => "Backspace".to_owned(),
+        9 => "Tab".to_owned(),
+        13 => "Enter".to_owned(),
+        27 => "Escape".to_owned(),
+        127 => "Delete".to_owned(),
+        0xF700 => "ArrowUp".to_owned(),
+        0xF701 => "ArrowDown".to_owned(),
+        0xF702 => "ArrowLeft".to_owned(),
+        0xF703 => "ArrowRight".to_owned(),
+        k => {
+            let c = char::from_u32(u32::try_from(k).ok()?)?;
+            if c.is_control() || ('\u{E000}'..='\u{F8FF}').contains(&c) {
+                return None;
+            }
+            c.to_string()
+        }
     };
-    if p.answer(request, response)
-        && let Some(v) = view
-    {
-        p.lay_out(v, fonts);
-        send_list(list, p, v, fonts, cache)?;
-    }
-    Ok(())
+    Some(KeyInput {
+        key: name,
+        ..KeyInput::default()
+    })
 }
 
-/// The graphical renderer (phase-5.md item 5.20, `page`): take committed
-/// documents and the kernel's `Viewport` and `Input`; for a document, send
-/// `Title` to the kernel (`w`) when the title changes and write a display
-/// list to the GPU process (`list`) for every viewport, scroll and
-/// document; for a click on a link, send `Navigate`. A script (kind 1) runs
-/// as in [`run`]. Returns the number of script operations run.
-pub fn run_graphics<R: Read, W: Write, L: Write>(
-    r: &mut R,
-    w: &mut W,
-    list: &mut L,
-    fonts: &page::fonts::Fonts,
-) -> Result<usize, RunError> {
-    let mut current: Option<page::Page> = None;
-    let mut view: Option<page::View> = None;
-    let mut cache = page::frame::MaskCache::default();
-    let mut shown_title: Option<String> = None;
-    // Style sheet answers being received (item 5.19): request id to the
-    // response's content type and the body so far.
-    let mut sheets: std::collections::HashMap<u64, (Vec<u8>, Vec<u8>)> =
-        std::collections::HashMap::new();
-    loop {
-        let m = match read_message(r) {
-            Ok(m) => m,
-            Err(RunError::Io(e)) if e.kind() == io::ErrorKind::UnexpectedEof => return Ok(0),
-            Err(e) => return Err(e),
+/// The graphical renderer's state: the current page, the viewport, what the
+/// GPU process holds, and the style sheet answers being received.
+struct Graphics<'a, L: Write> {
+    link: LinkHandle,
+    list: &'a mut L,
+    fonts: &'a page::fonts::Fonts,
+    make_clock: &'a mut dyn FnMut() -> Box<dyn Clock>,
+    current: Option<page::Page>,
+    view: Option<page::View>,
+    cache: page::frame::MaskCache,
+    shown_title: Option<String>,
+    /// Style sheet answers being received (item 5.19): request id to the
+    /// response's content type and the body so far.
+    sheets: std::collections::HashMap<u64, (Vec<u8>, Vec<u8>)>,
+}
+
+impl<L: Write> Graphics<'_, L> {
+    /// Sends `Title` to the kernel if the page's differs from the last sent.
+    fn send_title(&mut self) -> Result<(), RunError> {
+        let Some(p) = self.current.as_ref() else {
+            return Ok(());
         };
+        if self.shown_title.as_deref() != Some(p.title.as_str()) {
+            let title = p.title.clone().into_bytes();
+            lock(&self.link).send(&Msg::Title { title })?;
+            self.shown_title = Some(p.title.clone());
+        }
+        Ok(())
+    }
+
+    /// Lays the page out and writes its list, if there is a viewport.
+    fn paint(&mut self) -> Result<(), RunError> {
+        let (Some(p), Some(v)) = (self.current.as_mut(), self.view) else {
+            return Ok(());
+        };
+        p.lay_out(v, self.fonts);
+        send_list(self.list, p, v, self.fonts, &mut self.cache)
+    }
+
+    /// A script ran (`ran`): the animation frames that paint would run, the
+    /// restyle (`Page::settle`), the title, and a new list if the page
+    /// changed.
+    fn scripts_ran(&mut self, ran: bool) -> Result<(), RunError> {
+        let Some(p) = self.current.as_mut() else {
+            return Ok(());
+        };
+        if ran && self.view.is_some() {
+            p.update_the_rendering()?;
+        }
+        if !p.settle() {
+            return Ok(());
+        }
+        self.send_title()?;
+        self.paint()
+    }
+
+    /// A sheet of the current page answered (a body, or `None` for a
+    /// failure): if that makes the page ready and there is a viewport, lay
+    /// it out and paint it.
+    fn sheet_answered(
+        &mut self,
+        request: u64,
+        response: Option<(&[u8], &[u8])>,
+    ) -> Result<(), RunError> {
+        let Some(p) = self.current.as_mut() else {
+            return Ok(());
+        };
+        if p.answer(request, response) {
+            // Scripts that ran while the sheets were awaited changed the
+            // document: its sources are collected again first.
+            p.settle();
+            self.send_title()?;
+            self.paint()?;
+        }
+        Ok(())
+    }
+
+    /// A committed document: the previous page, its lists and its sheets
+    /// are gone; the new one's `FetchStyle`s are sent, its scripts run and
+    /// it is painted.
+    fn commit(&mut self, url: &[u8], content_type: &[u8], body: &[u8]) -> Result<(), RunError> {
+        drop(self.current.take());
+        self.sheets.clear();
+        let env = page::ScriptEnv {
+            link: Arc::clone(&self.link),
+            clock: (self.make_clock)(),
+        };
+        let mut p = page::Page::load_scripted(url, content_type, body, self.view, env);
+        // HTML's render-blocking style sheets: a `FetchStyle` each;
+        // the page is painted once every one is answered.
+        for (request, url) in p.requests() {
+            lock(&self.link).send(&Msg::FetchStyle { request, url })?;
+        }
+        p.start_scripts()?;
+        self.current = Some(p);
+        // The first settle collects what the scripts changed.
+        if let Some(p) = self.current.as_mut() {
+            p.settle();
+        }
+        self.send_title()?;
+        self.paint()
+    }
+
+    /// One message of the kernel. `Some(n)`: a user script ran, and the
+    /// renderer is done.
+    fn handle(&mut self, m: Msg) -> Result<Option<usize>, RunError> {
         match m {
             Msg::Commit {
                 url,
                 content_type,
                 kind,
             } => {
-                let body = read_body(r)?;
+                let body = read_body(&self.link)?;
                 match kind {
-                    1 => return run_script(r, w, &body),
+                    1 => {
+                        let clock = (self.make_clock)();
+                        return run_user_script(&self.link, &url, &body, clock).map(Some);
+                    }
                     0 => {}
                     _ => return Err(RunError::Protocol("unknown document kind")),
                 }
-                // The previous page, its lists and its sheets are gone first.
-                drop(current.take());
-                sheets.clear();
-                let mut p = page::Page::load(&url, &content_type, &body, view);
-                drop(body);
-                // HTML's render-blocking style sheets: a `FetchStyle` each;
-                // the page is painted once every one is answered.
-                for (request, url) in p.requests() {
-                    send(w, &Msg::FetchStyle { request, url })?;
-                }
-                if shown_title.as_deref() != Some(p.title.as_str()) {
-                    send(
-                        w,
-                        &Msg::Title {
-                            title: p.title.clone().into_bytes(),
-                        },
-                    )?;
-                    shown_title = Some(p.title.clone());
-                }
-                if let Some(v) = view {
-                    p.lay_out(v, fonts);
-                    send_list(list, &p, v, fonts, &mut cache)?;
-                }
-                current = Some(p);
+                self.commit(&url, &content_type, &body)?;
             }
             Msg::Error { .. } => {}
             Msg::StyleResponse {
                 request,
                 content_type,
             } => {
-                sheets.insert(request, (content_type, Vec::new()));
+                self.sheets.insert(request, (content_type, Vec::new()));
             }
             Msg::StyleBody { request, bytes } => {
-                let over = match sheets.get_mut(&request) {
+                let over = match self.sheets.get_mut(&request) {
                     Some((_, body)) if body.len().saturating_add(bytes.len()) <= MAX_BODY => {
                         body.extend_from_slice(&bytes);
                         false
@@ -317,39 +432,58 @@ pub fn run_graphics<R: Read, W: Write, L: Write>(
                 };
                 // A sheet over the body limit is failed (README, memory).
                 if over {
-                    sheets.remove(&request);
-                    sheet_answered(&mut current, request, None, view, fonts, list, &mut cache)?;
+                    self.sheets.remove(&request);
+                    self.sheet_answered(request, None)?;
                 }
             }
             Msg::StyleEnd { request } => {
-                let answer = sheets.remove(&request);
-                let response = answer.as_ref().map(|(t, b)| (t.as_slice(), b.as_slice()));
-                if response.is_some() {
-                    sheet_answered(
-                        &mut current,
-                        request,
-                        response,
-                        view,
-                        fonts,
-                        list,
-                        &mut cache,
-                    )?;
+                if let Some((content_type, body)) = self.sheets.remove(&request) {
+                    self.sheet_answered(request, Some((&content_type, &body)))?;
                 }
             }
             Msg::StyleFailed { request } => {
-                sheets.remove(&request);
-                sheet_answered(&mut current, request, None, view, fonts, list, &mut cache)?;
+                self.sheets.remove(&request);
+                self.sheet_answered(request, None)?;
+            }
+            Msg::ScriptResponse {
+                request,
+                content_type,
+            } => {
+                if let Some(p) = self.current.as_mut() {
+                    p.script_response(request, content_type)?;
+                }
+            }
+            Msg::ScriptBody { request, bytes } => {
+                let ran = match self.current.as_mut() {
+                    Some(p) => p.script_body(request, &bytes)?,
+                    None => false,
+                };
+                self.scripts_ran(ran)?;
+            }
+            Msg::ScriptEnd { request } => {
+                let ran = match self.current.as_mut() {
+                    Some(p) => p.script_end(request)?,
+                    None => false,
+                };
+                self.scripts_ran(ran)?;
+            }
+            Msg::ScriptFailed { request } => {
+                let ran = match self.current.as_mut() {
+                    Some(p) => p.script_failed(request)?,
+                    None => false,
+                };
+                self.scripts_ran(ran)?;
             }
             Msg::Viewport {
                 width,
                 height,
                 scale,
             } => {
-                view = page::View::new(width, height, scale);
-                if let (Some(p), Some(v)) = (current.as_mut(), view) {
-                    p.lay_out(v, fonts);
-                    send_list(list, p, v, fonts, &mut cache)?;
+                self.view = page::View::new(width, height, scale);
+                if let Some(p) = self.current.as_mut() {
+                    p.settle();
                 }
+                self.paint()?;
             }
             Msg::Input {
                 kind,
@@ -357,65 +491,239 @@ pub fn run_graphics<R: Read, W: Write, L: Write>(
                 y,
                 negative,
                 delta,
-                ..
-            } => {
-                let (Some(p), Some(v)) = (current.as_mut(), view) else {
-                    continue;
-                };
-                match kind {
-                    // A click: hit-test, and follow a link.
-                    0 => {
-                        if let Some(url) = p.click(x, y) {
-                            send(
-                                w,
-                                &Msg::Navigate {
-                                    url: url.into_bytes(),
-                                },
-                            )?;
-                        }
-                    }
-                    // A scroll: move and paint again.
-                    1 => {
-                        let before = p.scroll;
-                        p.scroll_by(negative, delta);
-                        if p.scroll != before {
-                            send_list(list, p, v, fonts, &mut cache)?;
-                        }
-                    }
-                    // A key: nothing in this phase.
-                    _ => {}
+                key,
+            } => self.input(kind, x, y, negative, delta, key)?,
+            _ => return Err(RunError::Protocol("unexpected message")),
+        }
+        Ok(None)
+    }
+
+    /// `Input`: a click follows a link (a `javascript:` URL runs in the
+    /// page), a scroll moves the viewport.
+    fn input(
+        &mut self,
+        kind: u64,
+        x: u64,
+        y: u64,
+        negative: bool,
+        delta: u64,
+        key: u64,
+    ) -> Result<(), RunError> {
+        let (Some(p), Some(v)) = (self.current.as_mut(), self.view) else {
+            return Ok(());
+        };
+        let scale = i64::from(v.scale.max(1));
+        let css = |d: u64| {
+            i32::try_from(
+                i64::try_from(d)
+                    .unwrap_or(i64::MAX)
+                    .checked_div(scale)
+                    .unwrap_or(0),
+            )
+            .unwrap_or(0)
+        };
+        match kind {
+            // A click, in a page that runs scripts (item 7.14): the element
+            // under the pointer gets the mouse events, and a click nobody
+            // cancels does its default action: a link is followed (a
+            // `javascript:` URL the page drew is the page's own to run, HTML
+            // "navigate": item 7.15, never a navigation for the kernel), a
+            // form is submitted, a checkbox toggled, focus moved.
+            0 if p.has_scripts() => {
+                if let Some(target) = p.hit_test(v, self.fonts, x, y) {
+                    let ran = p.dispatch_click(MouseInput {
+                        target,
+                        client_x: css(x),
+                        client_y: css(y),
+                        screen_x: css(x),
+                        screen_y: css(y),
+                        ..MouseInput::default()
+                    })?;
+                    self.scripts_ran(ran)?;
                 }
             }
-            _ => return Err(RunError::Protocol("unexpected message")),
+            // A click in a page without scripts: hit-test, and follow a
+            // link.
+            0 => {
+                if let Some(url) = p.click(x, y) {
+                    if page::scripts::is_javascript_url(&url) {
+                        let ran = p.follow_javascript_url(&url)?;
+                        self.scripts_ran(ran)?;
+                    } else {
+                        lock(&self.link).send(&Msg::Navigate {
+                            url: url.into_bytes(),
+                        })?;
+                    }
+                }
+            }
+            // A scroll: the `wheel` event first (a page can cancel it), then
+            // move, tell the page (`scroll`) and paint again.
+            1 => {
+                let scrolls = if p.has_scripts() {
+                    let target = p.hit_test(v, self.fonts, x, y);
+                    match target {
+                        Some(target) => {
+                            let d = f64::from(css(delta));
+                            let (scrolls, ran) = p.dispatch_wheel(WheelInput {
+                                target,
+                                client_x: css(x),
+                                client_y: css(y),
+                                delta_y: if negative { -d } else { d },
+                                ..WheelInput::default()
+                            })?;
+                            self.scripts_ran(ran)?;
+                            scrolls
+                        }
+                        None => true,
+                    }
+                } else {
+                    true
+                };
+                let Some(p) = self.current.as_mut() else {
+                    return Ok(());
+                };
+                if scrolls {
+                    let before = p.scroll;
+                    p.scroll_by(negative, delta);
+                    if p.scroll != before {
+                        // A `scroll` listener may change the page: then it
+                        // is laid out and painted at the new position,
+                        // once; else the list for the new position is sent.
+                        if p.dispatch_scrolled()? {
+                            self.scripts_ran(true)?;
+                        } else {
+                            send_list(self.list, p, v, self.fonts, &mut self.cache)?;
+                        }
+                    }
+                }
+            }
+            // A key (item 7.14): the page's focused element, or the body,
+            // gets the key events and their default actions.
+            2 if p.has_scripts() => {
+                if let Some(input) = key_input(key) {
+                    let ran = p.dispatch_key(input)?;
+                    self.scripts_ran(ran)?;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// The event loop's turn: what the scripts have due runs, and the page
+    /// is painted again if they changed it.
+    fn turn(&mut self) -> Result<(), RunError> {
+        let Some(p) = self.current.as_mut() else {
+            return Ok(());
+        };
+        let ran = p.tick()?;
+        self.scripts_ran(ran)
+    }
+}
+
+/// The graphical renderer (phase-5.md item 5.20, `page`; phase-7.md item
+/// 7.17): take committed documents and the kernel's `Viewport` and `Input`;
+/// for a document, send `Title` to the kernel when the title changes and
+/// write a display list to the GPU process (`list`) for every viewport,
+/// scroll, document and change a script makes; run the document's scripts
+/// and the event loop that keeps them running; for a click on a link, send
+/// `Navigate` (or run its `javascript:` URL). A script (kind 1) runs as in
+/// [`run`]. Returns the number of scripts run.
+///
+/// The socket is owned: a script that reads `document.cookie` waits for the
+/// kernel's answer in the middle of its own run, so the page's natives and
+/// this loop share it ([`page::link`]). A reader that returns `WouldBlock`
+/// or `TimedOut` lets the loop's timers run while it waits.
+pub fn run_graphics<R: Read + Send + 'static, W: Write + Send + 'static, L: Write>(
+    r: R,
+    w: W,
+    list: &mut L,
+    fonts: &page::fonts::Fonts,
+) -> Result<usize, RunError> {
+    run_graphics_with(r, w, list, fonts, &mut || Box::new(SystemClock::new()))
+}
+
+/// [`run_graphics`] with the page clocks `make_clock` makes, one per
+/// document (a test's clock moves when the test says).
+pub fn run_graphics_with<R: Read + Send + 'static, W: Write + Send + 'static, L: Write>(
+    r: R,
+    w: W,
+    list: &mut L,
+    fonts: &page::fonts::Fonts,
+    make_clock: &mut dyn FnMut() -> Box<dyn Clock>,
+) -> Result<usize, RunError> {
+    let mut g = Graphics {
+        link: Link::shared(r, w),
+        list,
+        fonts,
+        make_clock,
+        current: None,
+        view: None,
+        cache: page::frame::MaskCache::default(),
+        shown_title: None,
+        sheets: std::collections::HashMap::new(),
+    };
+    loop {
+        g.turn()?;
+        let polled = lock(&g.link).poll();
+        let m = match polled {
+            Ok(Some(m)) => m,
+            // Nothing yet: the next turn of the event loop.
+            Ok(None) => continue,
+            Err(RunError::Io(e)) if e.kind() == io::ErrorKind::UnexpectedEof => return Ok(0),
+            Err(e) => return Err(e),
+        };
+        if let Some(n) = g.handle(m)? {
+            return Ok(n);
         }
     }
 }
 
-/// Run a script: send each operation and read its reply.
-fn run_script<R: Read, W: Write>(r: &mut R, w: &mut W, script: &[u8]) -> Result<usize, RunError> {
-    let ops = script::parse(script).map_err(RunError::Script)?;
-    for op in &ops {
-        send(w, &op.to_message())?;
-        match op {
-            Op::CookieGet | Op::StorageGet(_) | Op::StorageKey(_) | Op::StorageLength => {
-                read_message(r)?;
-            }
-            Op::StorageSet(..) => {
-                send(w, &Msg::StorageLength)?;
-                if matches!(read_message(r)?, Msg::Error { .. }) {
-                    read_message(r)?;
-                }
-            }
-            Op::CookieSet(_) | Op::StorageRemove(_) | Op::StorageClear => {}
-        }
-    }
-    Ok(ops.len())
+/// Run a user script (kind 1): the body is JavaScript, run in an empty
+/// document at `url`, with the kernel's cookie and storage messages behind
+/// `document.cookie` and `localStorage`. What it queued to run at once
+/// (microtasks, timers due now) runs; later timers do not. Returns 1.
+fn run_user_script(
+    link: &LinkHandle,
+    url: &[u8],
+    body: &[u8],
+    clock: Box<dyn Clock>,
+) -> Result<usize, RunError> {
+    let mut scripts = page::scripts::Scripts::empty(url, Arc::clone(link), clock)?;
+    scripts.run_source(&String::from_utf8_lossy(body))?;
+    scripts.tick()?;
+    Ok(1)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Msg, RunError, encode_framed, run};
-    use std::io::Cursor;
+    use super::{Msg, RunError, run};
+    use clazel_ipc::message::codec::encode_framed;
+    use std::io::{Cursor, Write};
+    use std::sync::{Arc, Mutex};
+
+    /// A writer the test can read after the renderer owns it.
+    #[derive(Clone, Default)]
+    struct Shared(Arc<Mutex<Vec<u8>>>);
+
+    impl Write for Shared {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            if let Ok(mut v) = self.0.lock() {
+                v.extend_from_slice(buf);
+            }
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl Shared {
+        fn bytes(&self) -> Vec<u8> {
+            self.0.lock().map(|v| v.clone()).unwrap_or_default()
+        }
+    }
 
     fn frames(msgs: &[Msg]) -> Vec<u8> {
         msgs.iter()
@@ -443,15 +751,15 @@ mod tests {
     fn exchange(script: &str, replies: Vec<Msg>) -> Result<Vec<u8>, RunError> {
         let mut input = commit(1, script.as_bytes(), 3);
         input.extend(replies);
-        let mut sent = Vec::new();
-        run(&mut Cursor::new(frames(&input)), &mut sent)?;
-        Ok(sent)
+        let sent = Shared::default();
+        run(Cursor::new(frames(&input)), sent.clone())?;
+        Ok(sent.bytes())
     }
 
     #[test]
     fn a_read_waits_for_its_answer_and_a_write_does_not() -> Result<(), RunError> {
         let sent = exchange(
-            "cookie-set a=1\ncookie-get\nstorage-clear",
+            "document.cookie = 'a=1'; document.cookie; localStorage.clear();",
             vec![Msg::CookieValue {
                 cookie_string: b"a=1".to_vec(),
             }],
@@ -473,7 +781,7 @@ mod tests {
     fn set_item_is_followed_by_a_length_barrier() -> Result<(), RunError> {
         // Success: one answer, to the barrier.
         let ok = exchange(
-            "storage-set k v\nstorage-get k",
+            "localStorage.setItem('k', 'v'); localStorage.getItem('k');",
             vec![
                 Msg::StorageLengthValue { length: 1 },
                 Msg::StorageValue {
@@ -496,7 +804,7 @@ mod tests {
         // Failure: the `setItem` error, then the barrier's answer, which the
         // next read must not mistake for its own.
         let failed = exchange(
-            "storage-set k v\nstorage-get k",
+            "try { localStorage.setItem('k', 'v'); } catch (e) {} localStorage.getItem('k');",
             vec![
                 Msg::Error { code: 1 },
                 Msg::StorageLengthValue { length: 0 },
@@ -508,16 +816,38 @@ mod tests {
     }
 
     #[test]
+    fn a_script_reads_every_storage_member() -> Result<(), RunError> {
+        let sent = exchange(
+            "localStorage.key(0); localStorage.length; localStorage.removeItem('k');",
+            vec![
+                Msg::StorageValue {
+                    value: Some(b"k".to_vec()),
+                },
+                Msg::StorageLengthValue { length: 1 },
+            ],
+        )?;
+        assert_eq!(
+            sent,
+            frames(&[
+                Msg::StorageKey { index: 0 },
+                Msg::StorageLength,
+                Msg::StorageRemoveItem { key: b"k".to_vec() }
+            ])
+        );
+        Ok(())
+    }
+
+    #[test]
     fn a_document_is_displayed_and_the_renderer_waits_for_the_next() -> Result<(), RunError> {
         // Item 4.13: each document goes through the pipeline. No content
         // type: the first is sniffed as HTML, the empty one as text.
         let mut input = vec![Msg::Error { code: 5 }];
         input.extend(commit(0, b"<title>T</title><p>page <a href=b>x</a></p>", 4));
         input.extend(commit(0, b"", 4));
-        let mut sent = Vec::new();
-        assert_eq!(run(&mut Cursor::new(frames(&input)), &mut sent)?, 0);
+        let sent = Shared::default();
+        assert_eq!(run(Cursor::new(frames(&input)), sent.clone())?, 0);
         assert_eq!(
-            sent,
+            sent.bytes(),
             frames(&[
                 Msg::Display {
                     title: b"T".to_vec(),
@@ -537,7 +867,7 @@ mod tests {
     #[test]
     fn protocol_violations_stop_the_script() {
         assert!(matches!(
-            exchange("cookie-get", vec![]),
+            exchange("document.cookie", vec![]),
             Err(RunError::Io(_))
         ));
         // A document whose body does not end.
@@ -547,21 +877,21 @@ mod tests {
             cookie_string: Vec::new(),
         });
         assert!(matches!(
-            run(&mut Cursor::new(frames(&unended)), &mut Vec::new()),
+            run(Cursor::new(frames(&unended)), Shared::default()),
             Err(RunError::Protocol(_))
         ));
+        // Phase 2's line format is gone: a body that is not JavaScript is a
+        // script that throws, which is reported (to the host's log), not a
+        // reason for the renderer to stop. It sent nothing.
+        assert!(matches!(exchange("cookie-get\nfly", vec![]), Ok(sent) if sent.is_empty()));
+        let not_commit = Cursor::new(frames(&[Msg::CookieGet]));
         assert!(matches!(
-            exchange("nonsense", vec![]),
-            Err(RunError::Script(_))
-        ));
-        let mut not_commit = Cursor::new(frames(&[Msg::CookieGet]));
-        assert!(matches!(
-            run(&mut not_commit, &mut Vec::new()),
+            run(not_commit, Shared::default()),
             Err(RunError::Protocol(_))
         ));
-        let mut huge = Cursor::new(vec![0xff, 0xff, 0xff, 0xff]);
+        let huge = Cursor::new(vec![0xff, 0xff, 0xff, 0xff]);
         assert!(matches!(
-            run(&mut huge, &mut Vec::new()),
+            run(huge, Shared::default()),
             Err(RunError::Protocol(_))
         ));
     }

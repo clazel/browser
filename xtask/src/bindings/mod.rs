@@ -1,5 +1,5 @@
-//! `cargo xtask bindings`: the WebIDL parser and the generated interface
-//! model of `clazel-webidl` (Phase 7 item 7.12, first slice).
+//! `cargo xtask bindings`: the WebIDL parser, the generated interface model
+//! and the generated binding glue of `clazel-webidl` (Phase 7 item 7.12).
 //!
 //! The vendored IDL of the DOM, HTML, Fetch, XHR, URL and Storage standards,
 //! UI Events and CSSOM (`crates/clazel-webidl/tests/data/webref-idl/`, item
@@ -9,9 +9,10 @@
 //! following the grammar of WebIDL §2), merged into one model (`resolve.rs`)
 //! and written as plain Rust data into
 //! `crates/clazel-webidl/src/generated/` (`emit.rs`). The data types are
-//! `crates/clazel-webidl/src/model.rs`. Nothing there is engine code: the
-//! item's binding glue (conversions, wrappers, overload resolution) comes
-//! with `clazel-js`'s embedding API (7.8) and is generated from this model.
+//! `crates/clazel-webidl/src/model.rs`. From the same model `glue.rs` writes
+//! `bindings.rs`, the binding glue over `clazel-js`'s embedding API: a trait
+//! per exposed interface, the native functions that convert and call it, and
+//! the code that installs interface objects and prototypes.
 //!
 //! `cargo xtask bindings` rewrites the files; `check` and `verify` fail if
 //! a vendored file is missing from the inventory or differs from it, if any
@@ -24,6 +25,7 @@
 //! of the generated data.
 
 mod emit;
+mod glue;
 mod lexer;
 mod model;
 mod parser;
@@ -152,7 +154,7 @@ mod tests {
             );
             count = count.saturating_add(1);
         }
-        assert_eq!(count, 8);
+        assert_eq!(count, 9);
         let model = load(&dir);
         assert!(model.is_ok(), "{:?}", model.err());
     }
