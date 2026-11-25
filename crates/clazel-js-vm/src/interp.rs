@@ -222,6 +222,9 @@ pub enum Intrinsic {
     AsyncFromSyncIteratorPrototype,
     /// `%Date.prototype%` (§21.4.4†).
     DatePrototype,
+    /// `%eval%` (§19.2.1): the function a direct eval compares the callee
+    /// with (CallExpression evaluation §13.3.6.1 step 6.b).
+    Eval,
 }
 
 /// The most natives that may run one inside another, until
@@ -247,7 +250,7 @@ pub const DEFAULT_NESTING_DEPTH: u32 = 512;
 pub const DEFAULT_REGEXP_BACKTRACK: u64 = 1 << 20;
 
 /// How many [`Intrinsic`]s there are.
-const INTRINSICS: usize = 38;
+const INTRINSICS: usize = 39;
 
 /// What a built-in asks the embedder about the world ([`Vm::world`]): the two
 /// host-defined answers `Date` needs, which `clazel-js` forwards to its
@@ -1650,6 +1653,80 @@ impl Vm {
                 let v = self.r(src)?;
                 let o = self.to_object(v)?;
                 self.w(dst, o)?;
+            }
+            // The Object Environment Record of a `with` statement or of a
+            // sloppy function's variable object, and `delete` of a global
+            // (`crate::eval`).
+            Instr::WithHas { dst, obj, key } => {
+                let (o, key) = (self.r(obj)?, self.key_const(key)?);
+                let found = self.with_has(o, key)?;
+                self.w(dst, Value::boolean(found))?;
+            }
+            Instr::WithGet {
+                dst,
+                obj,
+                key,
+                strict,
+            } => {
+                let (o, key) = (self.r(obj)?, self.key_const(key)?);
+                let v = self.with_get(o, key, strict)?;
+                self.w(dst, v)?;
+            }
+            Instr::WithSet {
+                obj,
+                key,
+                val,
+                strict,
+            } => {
+                let (o, key, v) = (self.r(obj)?, self.key_const(key)?, self.r(val)?);
+                self.with_set(o, key, v, strict)?;
+            }
+            Instr::WithDelete { dst, obj, key } => {
+                let (o, key) = (self.r(obj)?, self.key_const(key)?);
+                let ok = self.with_delete(o, key)?;
+                self.w(dst, Value::boolean(ok))?;
+            }
+            Instr::DeleteGlobal { dst, key } => {
+                let key = self.key_const(key)?;
+                let ok = self.delete_global(key)?;
+                self.w(dst, Value::boolean(ok))?;
+            }
+            // A call of `eval` that may be a direct eval (`crate::eval`).
+            Instr::DirectEval {
+                dst,
+                callee,
+                this,
+                args,
+                argc,
+                env,
+                k,
+            } => {
+                let (f, t, e) = (self.r(callee)?, self.r(this)?, self.r(env)?);
+                let mut vals = Vec::with_capacity(usize::try_from(argc).unwrap_or(0));
+                for i in 0..argc {
+                    let reg = args
+                        .checked_add(i)
+                        .ok_or(Abrupt::Internal("argument register"))?;
+                    vals.push(self.r(reg)?);
+                }
+                self.charge()?;
+                let v = self.direct_eval(f, t, &vals, e, k)?;
+                self.w(dst, v)?;
+            }
+            Instr::DirectEvalSpread {
+                dst,
+                callee,
+                this,
+                args,
+                env,
+                k,
+            } => {
+                let (f, t, e) = (self.r(callee)?, self.r(this)?, self.r(env)?);
+                let arr = self.r(args)?;
+                let vals = self.spread_arguments(arr)?;
+                self.charge()?;
+                let v = self.direct_eval(f, t, &vals, e, k)?;
+                self.w(dst, v)?;
             }
             Instr::ForInIterator { dst, src } => {
                 let v = self.r(src)?;

@@ -366,8 +366,21 @@ impl<'a> Cg<'a> {
         );
         let mut scopes = Vec::new();
         let mut s = self.f.cur_scope;
+        // Whether the walk came up through a function's body scope.
+        let mut from_body = false;
         while s != NONE {
             let sc = self.scope(s)?;
+            // A call in the parameter expressions of a function that has a
+            // body scope (§10.2.11 step 20): the function's scope is the
+            // parameters' environment, not varEnv.
+            let params = sc.kind == SKind::Function
+                && !from_body
+                && self
+                    .an
+                    .scopes
+                    .iter()
+                    .any(|b| b.kind == SKind::Body && b.parent == s);
+            from_body = sc.kind == SKind::Body;
             if sc.has_env() {
                 let mut names = Vec::new();
                 for &b in &sc.bindings {
@@ -398,6 +411,7 @@ impl<'a> Cg<'a> {
                     });
                 }
                 let kind = match sc.kind {
+                    SKind::Function if params => EvalScopeKind::Parameters,
                     SKind::Script => EvalScopeKind::Script,
                     SKind::Module => EvalScopeKind::Module,
                     SKind::Function | SKind::Body => EvalScopeKind::Function,
@@ -418,6 +432,21 @@ impl<'a> Cg<'a> {
                 });
             }
             s = sc.parent;
+        }
+        // A direct eval inside eval code, outside any function of it, has the
+        // facts of the eval code's caller (PerformEval §19.2.1.1 step 10 reads
+        // GetThisEnvironment, which eval code does not have).
+        if f == 0
+            && let Some(ev) = &self.an.eval
+        {
+            return Ok(EvalScopeInfo {
+                strict: cur.strict,
+                in_function: ev.in_function,
+                in_method: ev.in_method,
+                in_derived_constructor: ev.in_derived_constructor,
+                in_class_field_initializer: ev.in_class_field_initializer,
+                scopes,
+            });
         }
         Ok(EvalScopeInfo {
             strict: cur.strict,

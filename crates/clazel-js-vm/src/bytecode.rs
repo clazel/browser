@@ -343,6 +343,12 @@ pub enum EvalScopeKind {
     Class,
     /// A `with` statement's: slot 0 holds the object.
     With,
+    /// The scope of a function whose parameters have expressions, for a call
+    /// in those expressions: its names (the parameters and `arguments`) are
+    /// the environment FunctionDeclarationInstantiation (§10.2.11) step 20
+    /// makes for them, which lies between the call and varEnv (the function's
+    /// environment, whose variable object the scope's `var_object` holds).
+    Parameters,
 }
 
 /// A name bound in an [`EvalScope`], in a slot of its environment object.

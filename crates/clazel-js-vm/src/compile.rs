@@ -45,6 +45,12 @@
 //!   `eval` with a spread argument ([`Instr::DirectEvalSpread`]), and a function
 //!   declaration as the body of an `if` (Annex B.3.4†, treated as in a block of
 //!   its own) or of a label.
+//! - **Code compiled at run time** (`eval`): [`compile_eval`] compiles eval
+//!   code against the record of its caller's scopes, with its completion value
+//!   and the part of EvalDeclarationInstantiation (§19.2.1.3) that is code;
+//!   [`compile_dynamic_function`] compiles the function of
+//!   CreateDynamicFunction (§20.2.1.1.1). Both are in `compile/eval.rs`, whose
+//!   header says how the work is split with the VM's handler.
 //!
 //! # What it does not compile yet
 //!
@@ -53,7 +59,7 @@
 //! every source of the vendored Test262 subset compiles. Linking and evaluating
 //! a module (ResolveExport, GetExportedNames, InitializeEnvironment, the
 //! cyclic and asynchronous evaluation algorithms of §16.2.1.5†) are the
-//! runtime's (7.8), and `compile_eval` is not written (see below).
+//! runtime's (7.8).
 //!
 //! # Known gaps in what it compiles
 //!
@@ -72,13 +78,14 @@
 //!   is resolved before the right side of an assignment to it, an update or a
 //!   call (§13.15.2 step 1.a), but not for the target of a destructuring
 //!   assignment or a `for` head, which look it up when they store.
-//! - Sloppy direct eval in a parameter expression declares its `var`s in the
-//!   function's variable object, where §19.2.1.3† would use the parameters'
-//!   own environment (§10.2.11† step 20).
-//! - Direct eval's host compile path (`compile_eval`, see
-//!   [`crate::ops::Op::DirectEval`]) is specified, not written: eval code is not
-//!   compiled yet, only the call and the record of the scopes it needs. The same
-//!   goes for `import()` in eval code.
+//! - `import()` in eval code compiles to [`Instr::ImportCall`] as elsewhere,
+//!   but the eval code's program belongs to no script or module of its own,
+//!   which GetActiveScriptOrModule (§9.4.1†) would give as the referrer; the
+//!   interpreter does not run that op yet.
+//! - A named function expression's own name is a binding of its function's
+//!   scope, so `var` of that name in sloppy eval code inside it assigns that
+//!   (immutable) binding, where §19.2.1.3 step 18 makes a new variable of the
+//!   function's varEnv.
 //! - A labelled function declaration is compiled as a function declaration at
 //!   its position, which is Annex B.3.2†'s reading; `if (x) l: function f() {}`
 //!   does not parse.
@@ -141,11 +148,14 @@ use clazel_js_syntax::ast::{Ast, Node, NodeKind, Op as AOp};
 use std::collections::HashMap;
 
 mod classes;
+mod eval;
 mod exports;
 mod loops;
 mod misc;
 mod patterns;
 mod suspend;
+
+pub use eval::{EvalDecls, EvalProgram, compile_dynamic_function, compile_eval};
 
 /// Why a script was not compiled.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -212,7 +222,7 @@ pub fn compile_module(ast: &Ast, src: &[u32]) -> Result<ModuleProgram, CompileEr
 fn with_stack<T: Send>(
     ast: &Ast,
     src: &[u32],
-    f: fn(&Ast, &[u32]) -> Result<T, CompileError>,
+    f: impl Fn(&Ast, &[u32]) -> Result<T, CompileError> + Sync,
 ) -> Result<T, CompileError> {
     // Compilation recurses once per level of the AST (at most MAX_DEPTH of
     // them, each a few frames): a program that deep needs a bigger stack than
@@ -455,6 +465,9 @@ struct FnState {
     fscope: u32,
     /// The parameter list is a simple one (plain identifiers).
     simple_params: bool,
+    /// For eval code's main function: the register holding the completion
+    /// value of the statements run so far (see `Cg::stmt`).
+    completion: Option<Reg>,
 }
 
 impl FnState {
@@ -481,6 +494,7 @@ impl FnState {
             nparams,
             fscope: NONE,
             simple_params: true,
+            completion: None,
         }
     }
 }
@@ -1742,12 +1756,22 @@ impl<'a> Cg<'a> {
         // The environment the closure was created in (§10.2.3 [[Environment]]).
         let base = self.alloc()?;
         self.f.base_env = base;
-        if self.f.kind == FunctionKind::Script {
+        // Eval code is the main function of its program, and runs as a
+        // closure over the caller's environment (PerformEval §19.2.1.1 step
+        // 16.a: lexEnv's outer environment).
+        let eval_main = self.f.kind == FunctionKind::Script && self.an.eval.is_some();
+        if self.f.kind == FunctionKind::Script && !eval_main {
             self.emit(Instr::LoadUndefined { dst: base }, start)?;
         } else {
             self.emit(Instr::GetCalleeEnv { dst: base }, start)?;
         }
-        if self.f.kind == FunctionKind::Script {
+        if eval_main {
+            // The completion value of the eval code (PerformEval steps 29.a
+            // and 30): see `Cg::stmt`.
+            let c = self.alloc()?;
+            self.emit(Instr::LoadUndefined { dst: c }, start)?;
+            self.f.completion = Some(c);
+        } else if self.f.kind == FunctionKind::Script {
             self.declare_globals(sc_id, start)?;
         }
         if self.f.kind == FunctionKind::Module {
@@ -1755,6 +1779,9 @@ impl<'a> Cg<'a> {
         }
         self.enter_scope(sc_id, start)?;
         self.function_prologue(nd, start)?;
+        if eval_main {
+            self.eval_functions(sc_id, start)?;
+        }
         // The body's own scope, when the parameters have expressions (§10.2.11†
         // step 28).
         let body_scope = match body {
@@ -1798,6 +1825,9 @@ impl<'a> Cg<'a> {
         if body_scope != NONE {
             self.exit_scope(body_scope)?;
         }
+        if let Some(c) = self.f.completion {
+            return self.emit_return(c, end);
+        }
         let m = self.mark();
         let t = self.alloc()?;
         self.emit(Instr::LoadUndefined { dst: t }, end)?;
@@ -1828,11 +1858,35 @@ impl<'a> Cg<'a> {
     fn stmt(&mut self, n: u32, labels: &[u32]) -> R<()> {
         let nd = self.node(n)?;
         let sp = self.sp(n);
+        // The completion value of eval code (§6.2.4.4 UpdateEmpty and the
+        // Evaluation of each statement): an expression statement's value is
+        // the completion value; a declaration, an empty statement or a block
+        // of them leaves it; `if`, the loops, `switch`, `try` and `with` start
+        // from undefined, which their body's value replaces (each ends in
+        // UpdateEmpty(C, undefined): §14.6.2, §14.7.1.2, §14.12.4, §14.15.3,
+        // §14.11.2).
+        if let Some(c) = self.f.completion
+            && matches!(
+                nd.kind,
+                NodeKind::IfStatement
+                    | NodeKind::WhileStatement
+                    | NodeKind::DoWhileStatement
+                    | NodeKind::ForStatement
+                    | NodeKind::ForInStatement
+                    | NodeKind::ForOfStatement
+                    | NodeKind::SwitchStatement
+                    | NodeKind::TryStatement
+                    | NodeKind::WithStatement
+            )
+        {
+            self.emit(Instr::LoadUndefined { dst: c }, sp)?;
+        }
         match nd.kind {
             NodeKind::EmptyStatement | NodeKind::DebuggerStatement => Ok(()),
             NodeKind::ExpressionStatement => {
                 let e = self.child(nd, 0)?;
-                self.expr_to(e, None, true)
+                let dst = self.f.completion;
+                self.expr_to(e, dst, true)
             }
             NodeKind::VariableStatement | NodeKind::VariableDeclarationList => {
                 for &d in &nd.children {
@@ -2082,6 +2136,22 @@ impl<'a> Cg<'a> {
         self.read_binding(block_b, self.node(n)?.end, t, sp)?;
         match target {
             Target::Binding(b) => self.init_binding(b, t, sp)?,
+            // Sloppy eval code in a function: varEnv is the caller's variable
+            // object (B.3.2.3's replacement of FunctionDeclaration evaluation:
+            // "Perform ? gEnv.SetMutableBinding(F, fObj, false)").
+            Target::Global(g) if self.eval_var_scope() != NONE => {
+                let key = self.konst(Const::String(self.name_units(g)?))?;
+                let obj = self.eval_var_object(sp)?;
+                self.emit(
+                    Instr::WithSet {
+                        obj,
+                        key,
+                        val: t,
+                        strict: false,
+                    },
+                    sp,
+                )?;
+            }
             Target::Global(g) => {
                 let key = self.konst(Const::String(self.name_units(g)?))?;
                 let ic = self.ic();
@@ -2490,7 +2560,18 @@ impl<'a> Cg<'a> {
                 _ => return Err(CompileError::Internal("control stack")),
             };
             let fb = self.child(self.node(fin)?, 0)?;
-            self.stmt(fb, &[])?;
+            // A `finally` block that completes normally leaves the completion
+            // value as the `try` block or the `catch` left it (§14.15.3: "If F
+            // is a normal completion, set F to C"): its own expression
+            // statements write a scratch register.
+            let saved = self.f.completion;
+            if saved.is_some() {
+                let scratch = self.alloc()?;
+                self.f.completion = Some(scratch);
+            }
+            let r = self.stmt(fb, &[]);
+            self.f.completion = saved;
+            r?;
             // Dispatch on how the finally was entered: 1 rethrows, each later
             // code continues a `break`, `continue` or `return` from here.
             let fsp = self.sp(fin);
