@@ -1250,14 +1250,14 @@
       "id": "no-cors-gives-body",
       "file": "src/spec.rs",
       "module": "mutation_lemmas",
-      "find": "        } else if mode == mode_no_cors() {\n            fetch_opaque_frames(request)",
-      "replace": "        } else if mode == mode_no_cors() {\n            fetch_frames(request, response)",
+      "find": "        } else if mode == mode_no_cors() && crate::orb::orb_allows(response) {\n            fetch_opaque_frames(request)",
+      "replace": "        } else if mode == mode_no_cors() && crate::orb::orb_allows(response) {\n            fetch_frames(request, response)",
       "expect": "killed",
       "reason": "A cross-origin \"no-cors\" response is handed over whole instead of opaque: the renderer reads another site's body. ml_no_cors_opaque is false.",
       "certificate": {
-        "file": "src/mutation_lemmas.rs",
-        "lemma": "ml_no_cors_opaque(clazel_fetch::transducer::examples::url_a(None), ml_response(seq![0x62u8]))",
-        "witness": "api_end(ml_fetch_cross(), clazel_origin::spec::Origin::Opaque(0nat), 1, mode_no_cors(), false, seq![clazel_fetch::transducer::spec::Action::Done { url: clazel_fetch::transducer::examples::url_a(None), response: ml_response(seq![0x62u8]) }]) != fetch_opaque_frames(1)"
+        "file": "src/orb.rs",
+        "lemma": "crate::mutation_lemmas::ml_no_cors_opaque(clazel_fetch::transducer::examples::url_a(None))",
+        "witness": "api_end(crate::mutation_lemmas::ml_fetch_cross(), clazel_origin::spec::Origin::Opaque(0nat), 1, mode_no_cors(), false, seq![clazel_fetch::transducer::spec::Action::Done { url: clazel_fetch::transducer::examples::url_a(None), response: crate::mutation_lemmas::ml_response(seq![0x62u8]) }]) != fetch_opaque_frames(1)"
       }
     },
     {
@@ -1298,7 +1298,7 @@
       "find": "(mode == mode_same_origin() || !needs_no_preflight(req))",
       "replace": "(!needs_no_preflight(req))",
       "expect": "killed",
-      "reason": "A \"same-origin\" Fetch of another origin starts (Fetch §4.1 step 12 makes it a network error). ml_same_origin_refused is false.",
+      "reason": "A \"same-origin\" Fetch of another origin starts (Fetch \u00a74.1 step 12 makes it a network error). ml_same_origin_refused is false.",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
         "lemma": "ml_same_origin_refused(Seq::<clazel_psl::spec::Rule>::empty(), ml_urls_resolving(), crate::counterexamples::ce_fetch(), ml_state_one(), ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), 1, clazel_fetch::request::spec::lit_get(), seq![0x61u8], Seq::<u8>::empty(), Seq::<u8>::empty(), Seq::<Seq<u8>>::empty(), seq![0x61u32], seq![0x61u32], clazel_fetch::transducer::examples::url_a(None))",
@@ -1512,6 +1512,54 @@
         "file": "src/popup_mutation_lemmas.rs",
         "lemma": "mp_javascript_scheme()",
         "witness": "crate::urls::javascript_scheme() != seq![0x6Au32, 0x61, 0x76, 0x61, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74]"
+      }
+    },
+    {
+      "id": "no-cors-opaque-without-orb",
+      "file": "src/spec.rs",
+      "module": "mutation_lemmas",
+      "find": "        } else if mode == mode_no_cors() && crate::orb::orb_allows(response) {",
+      "replace": "        } else if mode == mode_no_cors() {",
+      "expect": "killed",
+      "reason": "A \"no-cors\" Fetch is answered with an opaque response whatever ORB says, so a page learns that a cross-origin PDF or HTML page exists where Fetch gives a network error. ml_no_cors_orb_blocks (what theorem_orb rests on for Fetch) is false.",
+      "certificate": {
+        "file": "src/orb.rs",
+        "lemma": "crate::mutation_lemmas::ml_no_cors_orb_blocks(clazel_fetch::transducer::examples::url_a(None))",
+        "witness": "api_end(crate::mutation_lemmas::ml_fetch_cross(), clazel_origin::spec::Origin::Opaque(0nat), 1, mode_no_cors(), false, seq![clazel_fetch::transducer::spec::Action::Done { url: clazel_fetch::transducer::examples::url_a(None), response: crate::mutation_lemmas::ml_pdf_response() }]) != fetch_failed_frame(1)"
+      }
+    },
+    {
+      "id": "orb-skipped-for-subfetches",
+      "file": "src/spec.rs",
+      "module": "mutation_lemmas",
+      "find": "if !basic_response(fetch, f.lock, fs.req.origin_tainted, url)\n            && !crate::orb::orb_allows(response) {",
+      "replace": "if false {",
+      "expect": "killed",
+      "reason": "A cross-origin style sheet or script reaches the renderer whole whatever ORB says (a PDF or an intranet page read as a script). ml_orb_blocks_sheet (what theorem_orb rests on) is false.",
+      "certificate": {
+        "file": "src/orb.rs",
+        "lemma": "crate::mutation_lemmas::ml_orb_blocks_sheet(clazel_fetch::transducer::examples::url_a(None), seq![0x00u8])",
+        "witness": "orb_end(crate::mutation_lemmas::ml_fetch_cross(), crate::mutation_lemmas::ml_subfetch(0, clazel_origin::spec::Origin::Opaque(0nat), false), crate::mutation_lemmas::ml_subfetch(0, clazel_origin::spec::Origin::Opaque(0nat), false).fetch, seq![clazel_fetch::transducer::spec::Action::Done { url: clazel_fetch::transducer::examples::url_a(None), response: crate::mutation_lemmas::ml_pdf_response() }], Some(seq![0x00u8])) != Some(sub_failed_frame(false, 0))",
+        "reveal": [
+          "orb_end"
+        ]
+      }
+    },
+    {
+      "id": "basic-ignores-taint",
+      "file": "src/spec.rs",
+      "module": "mutation_lemmas",
+      "find": "    !tainted && (fetch.urls.origin)(url) == lock",
+      "replace": "    (fetch.urls.origin)(url) == lock",
+      "expect": "killed",
+      "reason": "A response that came back to the lock's origin through a cross-origin redirect counts as basic and skips ORB (Fetch taints it opaque). ml_orb_checks_tainted is false.",
+      "certificate": {
+        "file": "src/orb.rs",
+        "lemma": "crate::mutation_lemmas::ml_orb_checks_tainted(clazel_fetch::transducer::examples::url_a(None), seq![0x00u8])",
+        "witness": "orb_end(crate::mutation_lemmas::ml_fetch_cross(), crate::mutation_lemmas::ml_subfetch(0, clazel_origin::spec::Origin::Opaque(9nat), false), FetchState { req: clazel_fetch::request::spec::Req { origin_tainted: true, ..crate::mutation_lemmas::ml_subfetch(0, clazel_origin::spec::Origin::Opaque(9nat), false).fetch.req }, ..crate::mutation_lemmas::ml_subfetch(0, clazel_origin::spec::Origin::Opaque(9nat), false).fetch }, seq![clazel_fetch::transducer::spec::Action::Done { url: clazel_fetch::transducer::examples::url_a(None), response: crate::mutation_lemmas::ml_pdf_response() }], Some(seq![0x00u8])) != Some(sub_failed_frame(false, 0))",
+        "reveal": [
+          "orb_end"
+        ]
       }
     }
   ]
