@@ -57,6 +57,10 @@ pub(crate) struct State {
     /// The closures behind native functions, by the function object's bits.
     /// `None` while the closure runs (see the module docs).
     pub(crate) natives: HashMap<u64, Arc<NativeFn>>,
+    /// The accessors defined with `Scope::define_accessor` whose function
+    /// objects have not been needed yet, by the number their property's
+    /// lazy pair holds; `None` once [`make_lazy_accessor`] has made them.
+    pub(crate) lazy_accessors: Vec<Option<LazyAccessor>>,
     /// The Rust data of host objects, by the object's bits.
     pub(crate) host_objects: HashMap<u64, Box<dyn HostObject>>,
     pub(crate) realm_host_defined: Option<Box<dyn Any + Send>>,
@@ -75,6 +79,60 @@ pub(crate) struct State {
     pub(crate) pending: Option<Error>,
 }
 
+/// The closures of an accessor property whose function objects are made
+/// when they are first needed (`Scope::define_accessor`).
+pub(crate) struct LazyAccessor {
+    /// The property's name: the getter is named `get <name>` and the setter
+    /// `set <name>`.
+    pub(crate) name: Box<str>,
+    pub(crate) get: Arc<NativeFn>,
+    pub(crate) set: Option<Arc<NativeFn>>,
+}
+
+/// The name of an accessor's getter or setter function (ECMA-262 §10.2.9†
+/// SetFunctionName step 5: "If prefix is present, then a. Set name to the
+/// string-concatenation of prefix, the code unit 0x0020 (SPACE), and name").
+pub(crate) fn accessor_function_name(prefix: &str, name: &str) -> String {
+    format!("{prefix} {name}")
+}
+
+/// The VM's maker of lazy accessor pairs (`Vm::set_lazy_accessor_maker`):
+/// the getter and setter function objects of entry `id` of
+/// [`State::lazy_accessors`], made exactly as `Scope::define_accessor`
+/// makes them when it cannot defer (`get <name>` of length 0, `set <name>`
+/// of length 1 or `undefined`). The entry is cleared only once both exist,
+/// so a failure (the heap limit) leaves the pair lazy and a later use tries
+/// again.
+pub(crate) fn make_lazy_accessor(vm: &mut Vm, id: u32) -> Result<(Value, Value), Abrupt> {
+    const GONE: Abrupt = Abrupt::Internal("a lazy accessor of no runtime");
+    let index = usize::try_from(id).map_err(|_| GONE)?;
+    let (name, get, set) = vm
+        .embedder::<State>()
+        .and_then(|state| state.lazy_accessors.get(index)?.as_ref())
+        .map(|entry| {
+            (
+                entry.name.clone(),
+                Arc::clone(&entry.get),
+                entry.set.clone(),
+            )
+        })
+        .ok_or(GONE)?;
+    let getter = vm.new_native(&accessor_function_name("get", &name), 0, trampoline)?;
+    let setter = match set {
+        Some(_) => vm.new_native(&accessor_function_name("set", &name), 1, trampoline)?,
+        None => Value::UNDEFINED,
+    };
+    let state = vm.embedder_mut::<State>().ok_or(GONE)?;
+    state.natives.insert(getter.bits(), get);
+    if let Some(set) = set {
+        state.natives.insert(setter.bits(), set);
+    }
+    if let Some(entry) = state.lazy_accessors.get_mut(index) {
+        *entry = None;
+    }
+    Ok((getter, setter))
+}
+
 impl State {
     pub(crate) fn new(host: Box<dyn Host>, limits: Limits) -> State {
         let token = Arc::new(());
@@ -85,6 +143,7 @@ impl State {
             host,
             limits,
             natives: HashMap::new(),
+            lazy_accessors: Vec::new(),
             host_objects: HashMap::new(),
             realm_host_defined: None,
             script_host_defined: HashMap::new(),

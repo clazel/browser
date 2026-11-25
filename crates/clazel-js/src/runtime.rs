@@ -344,6 +344,7 @@ impl Runtime {
             flag: vm.terminator(),
         };
         vm.set_embedder(State::new(Box::new(host), limits));
+        vm.set_lazy_accessor_maker(crate::state::make_lazy_accessor);
         Ok(Runtime {
             limits,
             terminator,

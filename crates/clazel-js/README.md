@@ -29,7 +29,11 @@ primitives and strings (UTF-16 exact), `kind` and the `as_*`, `to_*` and `is_*`
 conversions, `strict_equals`, `same_value`, `instance_of`; `new_object`, `get`,
 `set`, `has_property`, `define_property` (data properties),
 `get_prototype_of`, `set_prototype_of`, `get_method`, `call`, `construct`;
-accessor properties (`define_property` with `get`/`set`, `get_own_property`),
+accessor properties (`define_property` with `get`/`set`, `get_own_property`;
+`define_accessor` from native closures, whose two function objects are made
+when something first needs them, which script cannot observe: the method's
+documentation says why, and `tests/lazy_accessors.rs` runs each first use on
+a lazy and an eager object and compares),
 `delete_property`, `new_array`, `new_array_from` and `is_array` (item 7.12
 needed them: WebIDL attributes are accessors);
 `function`, `shared_function` (re-entrant), `define_method`, `Args`,
@@ -330,7 +334,7 @@ interpreter only, which is complete.
 | Browser need | API |
 |---|---|
 | Install `window`, `document`, `console` | `create_realm` with a host-object global; `global`; `define_property`, `define_method` |
-| Interface objects and prototypes (7.12) | `function` with `Callable::Constructor`; `get_prototype_from_constructor`; `define_property`; `set_prototype_of` |
+| Interface objects and prototypes (7.12) | `function` with `Callable::Constructor`; `get_prototype_from_constructor`; `define_property`; `define_accessor` (attributes); `set_prototype_of` |
 | Wrappers, one per platform object (7.12, 7.13) | `new_host_object` with typed data; `Weak` for the side table; `Host::trace_roots` for nodes in a tree |
 | `NodeList[0]`, `HTMLCollection.name` | `HostObject`'s exotic hooks |
 | WebIDL conversions (3.2) | `to_number`, `to_string`, `to_boolean`, `to_object`, `is_callable`, `get_method`, `iterate`, `string_utf16`, `bigint_from_*` |

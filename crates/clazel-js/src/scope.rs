@@ -21,7 +21,7 @@ use crate::code::{
 use crate::error::{Error, ErrorKind, ErrorReport, Exception, Result, not_implemented};
 use crate::host::Host;
 use crate::native::{Args, Callable, HostObject};
-use crate::state::{State, abrupt_to_error, trampoline};
+use crate::state::{LazyAccessor, State, abrupt_to_error, accessor_function_name, trampoline};
 use crate::value::{
     Handle, Key, Local, Member, PromiseState, PropertyDescriptor, ValueKind, Weak, WellKnownSymbol,
 };
@@ -936,6 +936,17 @@ impl<'s> Scope<'s> {
         callable: Callable,
         f: impl for<'a> Fn(&mut Scope<'a>, &Args<'a>) -> Result<Local<'a>> + Send + Sync + 'static,
     ) -> Result<Local<'s>> {
+        self.function_of(name, length, callable, Arc::new(f))
+    }
+
+    /// [`Scope::function`] for a closure that is already shared.
+    fn function_of(
+        &mut self,
+        name: &str,
+        length: u32,
+        callable: Callable,
+        shared: Arc<crate::native::NativeFn>,
+    ) -> Result<Local<'s>> {
         self.check_deferred()?;
         let length = i32::try_from(length).unwrap_or(i32::MAX);
         let made = match callable {
@@ -943,9 +954,103 @@ impl<'s> Scope<'s> {
             Callable::Constructor => self.vm.new_native_constructor(name, length, trampoline),
         };
         let function = self.run(made)?;
-        let shared: Arc<crate::native::NativeFn> = Arc::new(f);
         self.state_mut()?.natives.insert(function.bits(), shared);
         Ok(self.lv(function))
+    }
+
+    /// Defines the accessor property `name` of `object` from native
+    /// closures, as a built-in accessor is defined: `[[Get]]` is a function
+    /// named `get <name>` with `length` 0 running `getter`, `[[Set]]` a
+    /// function named `set <name>` with `length` 1 running `setter` (or
+    /// `undefined` without one), and the property is
+    /// `{ [[Enumerable]]: enumerable, [[Configurable]]: configurable }`.
+    /// It is `DefinePropertyOrThrow` (ECMA-262 §7.3.8†) with that
+    /// descriptor, so it throws a `TypeError` where that does.
+    ///
+    /// **The two function objects are made when they are first needed.**
+    /// When the property is new (the usual case: an interface's prototype
+    /// being filled in), it is created at once, in its place in the
+    /// object's property order and with its attributes, but the functions
+    /// are not: the first `[[Get]]` or `[[Set]]` through the property, or
+    /// the first `[[GetOwnProperty]]` of it, makes both, and the property
+    /// holds those two objects from then on. A page's bindings define about
+    /// a thousand accessors and a script uses a handful, which is why.
+    ///
+    /// Script cannot tell this from making them here. Creating a built-in
+    /// function (§10.3.4† CreateBuiltinFunction) runs no script and changes
+    /// no object but the new one, so when it happens is visible only through
+    /// the function itself, and nothing reaches the function without going
+    /// through the property: every operation that reads `[[Get]]` or
+    /// `[[Set]]` makes them first, and operations that do not (the keys of
+    /// `[[OwnPropertyKeys]]` §10.1.11.1†, `[[HasProperty]]`, the attributes)
+    /// see the property that is already there. The functions' identity is
+    /// stable once made, their `name`, `length` and `[[Prototype]]` are the
+    /// same as an eager function's, and there is one realm. What does
+    /// differ is the embedder's view: the heap is charged for the functions
+    /// when they are made ([`Runtime::heap_used`](crate::Runtime::heap_used)),
+    /// so a heap limit reached then is reported at that use, as for any
+    /// other allocation.
+    ///
+    /// When the property cannot simply be created (the object has one of
+    /// that name already, is not extensible, or is an Array), the functions
+    /// are made now and the definition takes `DefinePropertyOrThrow`'s
+    /// ordinary path.
+    pub fn define_accessor(
+        &mut self,
+        object: Local<'_>,
+        name: &str,
+        getter: impl for<'a> Fn(&mut Scope<'a>, &Args<'a>) -> Result<Local<'a>> + Send + Sync + 'static,
+        setter: Option<Arc<crate::native::NativeFn>>,
+        enumerable: bool,
+        configurable: bool,
+    ) -> Result<()> {
+        self.check_deferred()?;
+        let o = self.object(object)?;
+        let k = self.heap_key(Key::Str(name))?;
+        let getter: Arc<crate::native::NativeFn> = Arc::new(getter);
+        let state = self.state_mut()?;
+        if let Ok(id) = u32::try_from(state.lazy_accessors.len()) {
+            state.lazy_accessors.push(Some(LazyAccessor {
+                name: name.into(),
+                get: Arc::clone(&getter),
+                set: setter.clone(),
+            }));
+            let deferred = self
+                .vm
+                .define_lazy_accessor(o, k, id, enumerable, configurable);
+            if self.run(deferred)? {
+                return Ok(());
+            }
+            // Not deferred: the entry was the last one pushed, and nothing
+            // refers to it.
+            self.state_mut()?.lazy_accessors.pop();
+        }
+        let get = self.function_of(
+            &accessor_function_name("get", name),
+            0,
+            Callable::Function,
+            getter,
+        )?;
+        let set = match setter {
+            Some(setter) => self.function_of(
+                &accessor_function_name("set", name),
+                1,
+                Callable::Function,
+                setter,
+            )?,
+            None => self.undefined(),
+        };
+        self.define_property(
+            object,
+            Key::Str(name),
+            PropertyDescriptor {
+                get: Some(get),
+                set: Some(set),
+                enumerable: Some(enumerable),
+                configurable: Some(configurable),
+                ..PropertyDescriptor::default()
+            },
+        )
     }
 
     /// As [`Scope::function`]. Every native closure is now `Sync` and
