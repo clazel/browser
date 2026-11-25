@@ -640,14 +640,17 @@ mod tests {
 
     #[test]
     fn the_index_agrees_with_the_parent_walk_on_random_trees() -> Result<(), Error> {
-        let rounds = if cfg!(miri) { 3 } else { 60 };
+        // Under Miri (about 180 s at 3 rounds of 60 steps) a smaller run that
+        // still sweeps twice per round.
+        let rounds = if cfg!(miri) { 2 } else { 60 };
+        let sweep_every = if cfg!(miri) { 20 } else { 50 };
         let mut rng = Lcg(7);
         for _ in 0..rounds {
             let mut t = Shapes::new();
             // Few keys and long lines: branches, shared tables, copies, and
             // (with a high cutoff count) dictionary shapes.
             let keys = 1 + u32::try_from(rng.below(12)).unwrap_or(0);
-            let steps = if cfg!(miri) { 60 } else { 400 };
+            let steps = if cfg!(miri) { 40 } else { 400 };
             for step in 0..steps {
                 let issued = u64::try_from(t.issued()).unwrap_or(1);
                 let from = ShapeId(1 + u32::try_from(rng.below(issued)).unwrap_or(0));
@@ -665,7 +668,7 @@ mod tests {
                     }
                     Err(e) => return Err(e),
                 }
-                if step % 50 == 49 {
+                if step % sweep_every == sweep_every - 1 {
                     // Keep a random set closed under parents (GC10).
                     let mut keep: Vec<bool> = (0..t.issued()).map(|_| rng.below(3) != 0).collect();
                     for i in (0..t.issued()).rev() {

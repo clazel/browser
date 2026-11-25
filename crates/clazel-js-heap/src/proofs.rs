@@ -569,18 +569,17 @@ fn gc_mark_shapes_is_the_least_closed_set() {
 //   at any prefix length `n` is `contract::spec_lookup` of the first `n`
 //   entries, with any slot found below `n` (X3). Lookups at a prefix are
 //   what every shape on a shared table does (X1 makes the prefix its chain).
-// - `index_table_truncate`: after the pushes and a truncation to any
-//   length (what `retain` does, X5), the same holds of the shorter table,
-//   and the kept entries are unchanged; one more push then appends at the
-//   new end (an in-place extension after a collection).
 // - `index_search_any`: the binary search under the table, for every sorted
 //   list of up to four keys of any value and any key.
-// NOT proven by Kani: `Index` as a whole (its table list, `extend`'s
-// choice between appending and copying, and `retain`'s bookkeeping) and
+// NOT proven by Kani: `Table::truncate` (X5's shortening), `Index` as a
+// whole (its table list, `extend`'s choice between appending and copying,
+// and `retain`'s bookkeeping) and
 // `Shapes` (its transitions and dictionaries are hash maps). Harnesses over
 // trees of shapes through `Index`, with the parents chosen symbolically or
 // in a fixed form, ran for 25 minutes to over 3 hours without finishing and
-// were dropped. `shape::tests::the_index_agrees_with_the_parent_walk_on_random_trees`
+// were dropped; so was one of `Table::truncate` (after two or three pushes,
+// to any length or to one), which took CBMC to 10 to 18 GB within a minute,
+// past CI's 16 GB runner. `shape::tests::the_index_agrees_with_the_parent_walk_on_random_trees`
 // checks `Shapes::lookup` against the parent walk and `spec_lookup` on
 // random trees with sweeps, and every table well formed.
 
@@ -594,14 +593,14 @@ const KEYS: u32 = 3;
 /// Pushes in a harness's table.
 const PUSHES: usize = 3;
 
-/// Pushes `PUSHES` entries of any key below `KEYS` and any attributes,
+/// Pushes `pushes` (at most `PUSHES`) entries of any key below `KEYS` and any attributes,
 /// checking each refusal against the model; returns the table, the model
 /// of its entries and their number.
-fn any_table() -> (Table, [(Key, Attrs); PUSHES], usize) {
+fn any_table(pushes: usize) -> (Table, [(Key, Attrs); PUSHES], usize) {
     let mut t = Table::default();
     let mut model = [(Key(0), Attrs(0)); PUSHES];
     let mut len = 0usize;
-    for _ in 0..PUSHES {
+    for _ in 0..pushes.min(PUSHES) {
         let k: u32 = kani::any();
         kani::assume(k < KEYS);
         let p = (Key(k), Attrs(kani::any()));
@@ -638,23 +637,8 @@ fn check_table(t: &Table, model: &[(Key, Attrs)]) {
 #[kani::proof]
 #[kani::unwind(5)]
 fn index_table_push_lookup() {
-    let (t, model, len) = any_table();
+    let (t, model, len) = any_table(PUSHES);
     check_table(&t, &model[..len]);
-}
-
-#[kani::proof]
-#[kani::unwind(5)]
-fn index_table_truncate() {
-    let (mut t, model, len) = any_table();
-    let keep: u32 = kani::any();
-    kani::assume(keep as usize <= len);
-    t.truncate(keep);
-    check_table(&t, &model[..keep as usize]);
-    // One more push appends at the new end.
-    let p = (Key(KEYS), Attrs(kani::any()));
-    assert!(t.push(p.0, p.1).is_ok());
-    assert_eq!(t.lookup(keep + 1, p.0), Some((keep, p.1)));
-    assert!(t.well_formed());
 }
 
 /// The index's binary search (X3's bounds) over every sorted list of up to
